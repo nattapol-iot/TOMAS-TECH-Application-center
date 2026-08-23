@@ -265,6 +265,7 @@ table,
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -311,6 +312,19 @@ table,
 .nav-item.active {
   background: var(--navy-700);
   color: var(--n-0);
+}
+
+/* Accent bar anchors the active item to the rail. */
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--sp-4));
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand-300);
 }
 
 .nav-item.active .icon,
@@ -585,11 +599,17 @@ table,
    Metrics
    ========================================================================== */
 
+/* One divided panel instead of four floating cards — the row reads as a single
+   summary band, which is what it is. */
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--sp-4);
   margin-bottom: var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .metric-card {
@@ -597,16 +617,16 @@ table,
   gap: var(--sp-3);
   align-items: flex-start;
   padding: var(--sp-5);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  border-right: 1px solid var(--line);
+  transition: background var(--dur) var(--ease);
+}
+
+.metric-card:last-child {
+  border-right: 0;
 }
 
 .metric-card:hover {
-  border-color: var(--n-300);
-  box-shadow: var(--shadow-md);
+  background: var(--n-25);
 }
 
 .metric-icon {
@@ -709,14 +729,17 @@ table,
   overflow-x: auto;
 }
 
+/* Fixed layout + colgroup widths: a dashboard row must never wrap, so column
+   widths are declared rather than negotiated from content. */
 table {
   width: 100%;
-  min-width: 820px;
+  min-width: 760px;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 th {
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
   border-block: 1px solid var(--line);
   background: var(--n-25);
   color: var(--n-500);
@@ -729,10 +752,21 @@ th {
 }
 
 td {
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--line-soft);
   font-size: var(--fs-xs);
   vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Two-line primary cell: title above, identifier below, both truncated. */
+td > strong,
+td > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 tbody tr {
@@ -823,16 +857,26 @@ td > span {
   color: var(--brand-700);
 }
 
-/* Status pills */
+/* Status pills — a leading dot reads as state at a glance, before the label. */
 .status {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   width: max-content;
-  padding: 5px var(--sp-2);
+  padding: 4px var(--sp-2) 4px 7px;
   border-radius: var(--r-pill);
   font-size: var(--fs-3xs);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.status::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .status.blue {
@@ -894,13 +938,63 @@ td > span {
   max-width: 34ch;
 }
 
+/* Cost-by-category bars — derived from the loaded cost items. */
+.breakdown {
+  display: grid;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-5) var(--sp-5);
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-2) var(--sp-4);
+  align-items: baseline;
+}
+
+.breakdown-row > span {
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+}
+
+.breakdown-row > strong {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdown-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  overflow: hidden;
+}
+
+.breakdown-track b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 400ms var(--ease);
+}
+
+.breakdown-track b.c0 { background: var(--brand-500); }
+.breakdown-track b.c1 { background: var(--brand-300); }
+.breakdown-track b.c2 { background: #4a8fd4; }
+.breakdown-track b.c3 { background: #e0a437; }
+.breakdown-track b.c4 { background: #8b7fd4; }
+.breakdown-track b.c5 { background: var(--n-400); }
+
 /* ==========================================================================
    Dashboard side column
    ========================================================================== */
 
+.left-stack,
 .right-stack {
   display: grid;
   gap: var(--sp-5);
+  align-content: start;
 }
 
 .attention-item {
@@ -1122,22 +1216,28 @@ td > span {
   font-weight: 600;
 }
 
+/* Segmented control rather than an underline — reads as a control, not a link
+   row, and gives the active tab a real surface. */
 .tabs {
-  display: flex;
-  gap: var(--sp-1);
+  display: inline-flex;
+  gap: 2px;
   margin-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--line);
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--n-100);
 }
 
 .tabs button {
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) var(--sp-4);
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   font-size: var(--fs-xs);
   font-weight: 600;
-  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
 
 .tabs button:hover {
@@ -1145,8 +1245,9 @@ td > span {
 }
 
 .tabs button.active {
-  border-color: var(--brand-500);
-  color: var(--brand-600);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
 }
 
 .cost-table td:nth-last-child(-n + 3) {

@@ -277,6 +277,14 @@ function EstimateTable({ estimates, onOpen }: { estimates: Estimate[]; onOpen: (
   return (
     <div className="table-wrap">
       <table>
+        <colgroup>
+          <col style={{ width: "36%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "11%" }} />
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "6%" }} />
+        </colgroup>
         <thead>
           <tr>
             <th>Estimate / Project</th>
@@ -291,8 +299,8 @@ function EstimateTable({ estimates, onOpen }: { estimates: Estimate[]; onOpen: (
           {estimates.map((e) => (
             <tr key={e.id}>
               <td>
-                <strong>{e.project_name}</strong>
-                <span>{e.estimate_no} · {e.customer_name}</span>
+                <strong title={e.project_name}>{e.project_name}</strong>
+                <span title={`${e.estimate_no} · ${e.customer_name}`}>{e.estimate_no} · {e.customer_name}</span>
               </td>
               <td>
                 <div className="person"><i>{initials(e.engineer_name)}</i>{e.engineer_name}</div>
@@ -355,16 +363,19 @@ function Dashboard({ data, progress, waitingCount, onNew, onOpen, setView }: { d
         <Metric label="Overdue" value={String(overdue)} note="Needs attention" accent="rose" icon="alertCircle" />
       </section>
       <section className="content-grid">
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Estimate pipeline</h2>
-              <p>Current work across your team</p>
+        <div className="left-stack">
+          <article className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Estimate pipeline</h2>
+                <p>Current work across your team</p>
+              </div>
+              <button className="text-button" onClick={() => setView("estimates")}>View all<Icon name="arrowRight" /></button>
             </div>
-            <button className="text-button" onClick={() => setView("estimates")}>View all<Icon name="arrowRight" /></button>
-          </div>
-          <EstimateTable estimates={data.estimates} onOpen={onOpen} />
-        </article>
+            <EstimateTable estimates={data.estimates} onOpen={onOpen} />
+          </article>
+          <CostBreakdown items={data.costItems} />
+        </div>
         <aside className="right-stack">
           <article className="panel attention-panel">
             <div className="panel-heading">
@@ -406,6 +417,38 @@ function Dashboard({ data, progress, waitingCount, onNew, onOpen, setView }: { d
         </aside>
       </section>
     </>
+  );
+}
+
+function CostBreakdown({ items }: { items: CostItem[] }) {
+  const byCategory = new Map<string, number>();
+  items.forEach((item) => byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + item.unit_price * item.quantity));
+  const rows = [...byCategory.entries()].sort((a, b) => b[1] - a[1]);
+  const total = rows.reduce((sum, [, value]) => sum + value, 0);
+
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Cost by category</h2>
+          <p>Equipment and services on the open estimate</p>
+        </div>
+        <strong className="green-text">{money.format(total)}</strong>
+      </div>
+      {rows.length ? (
+        <div className="breakdown">
+          {rows.map(([category, value], index) => (
+            <div className="breakdown-row" key={category}>
+              <span>{category}</span>
+              <strong>{compactMoney.format(value)} · {Math.round((value / total) * 100)}%</strong>
+              <div className="breakdown-track"><b className={`c${index % 6}`} style={{ width: `${(value / total) * 100}%` }} /></div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon="package" title="Nothing to break down" message="Cost items will appear here once the estimate has equipment lines." />
+      )}
+    </article>
   );
 }
 
@@ -503,6 +546,15 @@ function DetailPage({ estimate, data, tab, setTab, total, qty, setQty, progress,
           {data.costItems.length ? (
             <div className="table-wrap">
               <table className="cost-table">
+                <colgroup>
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "22%" }} />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "12%" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Category</th>
@@ -522,8 +574,8 @@ function DetailPage({ estimate, data, tab, setTab, total, qty, setQty, progress,
                         <span className="module-chip">{i.module}</span>
                         <strong>{i.model || "—"}</strong>
                       </td>
-                      <td>{i.description}</td>
-                      <td>{i.supplier_name || "—"}</td>
+                      <td title={i.description}>{i.description}</td>
+                      <td title={i.supplier_name || undefined}>{i.supplier_name || "—"}</td>
                       <td>{compactMoney.format(i.unit_price)}</td>
                       <td>{i.quantity} {i.unit}</td>
                       <td><strong>{compactMoney.format(i.unit_price * i.quantity)}</strong></td>
@@ -549,6 +601,14 @@ function DetailPage({ estimate, data, tab, setTab, total, qty, setQty, progress,
           </div>
           <div className="table-wrap">
             <table>
+              <colgroup>
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "19%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "22%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Workforce</th>
@@ -725,6 +785,14 @@ function RatesPage({ rates }: { rates: Rate[] }) {
         {rates.length ? (
           <div className="table-wrap">
             <table>
+              <colgroup>
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "18%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Workforce type</th>
