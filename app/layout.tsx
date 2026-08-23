@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// `next/font/google` emits no stylesheet under vinext — the generated class
+// lands on <body> but the CSS variable and @font-face never ship, so the whole
+// font-family declaration that referenced it was dropped by the browser.
+// Loading the two families directly keeps dev and production identical.
+// Inter covers Latin; Noto Sans Thai covers the Thai glyphs Inter lacks.
+const GOOGLE_FONTS =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -30,11 +27,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={GOOGLE_FONTS} />
+      </head>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
