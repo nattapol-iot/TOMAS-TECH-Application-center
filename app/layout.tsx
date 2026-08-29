@@ -15,8 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "tomas-estimate-cost.example";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const image = `${protocol}://${host}/og.png`;
-  const title = "TOMAS TECH Estimate Cost";
-  const description = "Internal estimate cost workflow from assignment and checklist through Leader and Manager approval.";
+  const title = "Engineering Estimate Cost Management System";
+  const description = "Internal engineering cost control: inquiry registration, estimate cost workspace, price library, supplier quotations, revision control and engineering review.";
   return { title, description, openGraph: { title, description, images: [image] }, twitter: { card: "summary_large_image", title, description, images: [image] } };
 }
 

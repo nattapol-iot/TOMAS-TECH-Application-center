@@ -1,3 +1,3 @@
-import EstimateApp from "./EstimateApp";
+import App from "./system/App";
 
-export default function Home() { return <EstimateApp />; }
+export default function Home() { return <App />; }

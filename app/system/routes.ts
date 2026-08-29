@@ -1,0 +1,25 @@
+/* Navigation contract shared by the shell and every screen. */
+
+export type Route =
+  | { name: "dashboard" }
+  | { name: "inquiries" }
+  | { name: "inquiry-new" }
+  | { name: "inquiry"; id: string; tab?: string }
+  | { name: "estimates" }
+  | { name: "estimate"; id: string; tab?: string }
+  | { name: "price" }
+  | { name: "price-history"; id: string }
+  | { name: "quotations" }
+  | { name: "missing" }
+  | { name: "customers" }
+  | { name: "projects" }
+  | { name: "reports" }
+  | { name: "master" }
+  | { name: "rates" }
+  | { name: "audit" }
+  | { name: "settings" };
+
+export type ScreenProps = {
+  go: (route: Route) => void;
+  notify: (message: string) => void;
+};

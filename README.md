@@ -1,4 +1,45 @@
-# vinext-starter
+# Engineering Estimate Cost Management System
+
+Internal engineering application for TOMAS TECH: register customer inquiries,
+prepare and review engineering estimate cost, reuse supplier prices and control
+revisions — replacing the current Excel-based estimate process.
+
+The system controls **internal engineering cost only**. It contains no gross
+margin, profit margin, selling price, markup or commercial quotation
+calculation anywhere.
+
+## Application code
+
+| Path | Contents |
+| --- | --- |
+| `app/system/App.tsx` | Shell: login, sidebar, global search, notifications, language, routing |
+| `app/system/data.ts` | Demonstration dataset (customers, inquiries, estimates, price library, quotations, audit log, rates) |
+| `app/system/calc.ts` | Centralised calculation rules, price age, validation and revision comparison |
+| `app/system/ui.tsx` | Shared primitives — icons, badges, panels, tabs, drawers, modals, charts |
+| `app/system/screens/` | Dashboard, Inquiry, Estimate list, Estimate workspace, Price, Admin screens |
+| `app/globals.css` | Design system — navy sidebar, blue primary, green/orange/red status, dense tables |
+
+Cost is captured in three levels: **discipline** (Hardware, Software,
+Electrical, Mechanical, Robot …) → **main module** (Main Control Box, In-feed
+Conveyor …) → **items**. Each discipline is a sub-tab of the cost sheet, each
+module can be created, renamed and deleted, and items are typed straight into
+the sheet under their module.
+
+Screens included: Login · Dashboard · Inquiry List · Create Inquiry · Inquiry
+Detail · Meeting Log · Estimate Cost List · Estimate Cost Workspace · Add Cost
+Item · Engineering Man-hour · Other Project Cost · Multi-Engineer Assignment ·
+Estimate Validation · Revision History · Create Revision · Compare Revision ·
+Engineering Review · Price Library · Price Search Popup · Price History ·
+Supplier Quotation · Waiting Supplier Price · Import Excel · Copy Previous
+Estimate · Customers · Projects · Reports · Master Data · Engineering Rate
+Master · Audit Log · Settings.
+
+All screens are driven by the in-repo dataset; wiring them to the API routes
+under `app/api/` and the Drizzle schema in `db/schema.ts` is the next step.
+
+---
+
+## Platform notes (vinext starter)
 
 A clean full-stack starter running on
 [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
