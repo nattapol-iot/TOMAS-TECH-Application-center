@@ -7,16 +7,32 @@ IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'iot_team_app
     CREATE ROLE [iot_team_app_role];
 GO
 
-IF SUSER_SID(N'$(AppLogin)') IS NULL
-    THROW 51040, 'The application server login does not exist. Create it from the reviewed server-login template first.', 1;
+DECLARE @app_authentication_type nvarchar(60) = (
+    SELECT authentication_type_desc
+    FROM sys.database_principals
+    WHERE name = N'$(AppLogin)'
+);
+DECLARE @app_principal_type nvarchar(60) = (
+    SELECT type_desc
+    FROM sys.database_principals
+    WHERE name = N'$(AppLogin)'
+);
 
-IF EXISTS (
+IF @app_principal_type IS NULL AND SUSER_SID(N'$(AppLogin)') IS NULL
+    THROW 51040, 'The application principal does not exist. Create a server login, contained database user, or application role first.', 1;
+
+IF @app_authentication_type = N'INSTANCE' AND EXISTS (
     SELECT 1 FROM sys.database_principals
     WHERE name = N'$(AppLogin)' AND sid <> SUSER_SID(N'$(AppLogin)')
 )
     THROW 51041, 'The existing database user is mapped to a different login SID.', 1;
 
-IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'$(AppLogin)')
+IF @app_principal_type <> N'APPLICATION_ROLE'
+   AND @app_authentication_type IS NOT NULL
+   AND @app_authentication_type NOT IN (N'INSTANCE', N'DATABASE')
+    THROW 51042, 'The application principal must use an instance login, contained database authentication, or an application role.', 1;
+
+IF @app_authentication_type IS NULL
 BEGIN
     DECLARE @create_user nvarchar(max) = N'CREATE USER ' + QUOTENAME(N'$(AppLogin)') + N' FOR LOGIN ' + QUOTENAME(N'$(AppLogin)') + N';';
     EXEC sys.sp_executesql @create_user;

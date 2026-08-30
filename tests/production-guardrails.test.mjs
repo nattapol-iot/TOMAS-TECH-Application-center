@@ -109,7 +109,21 @@ test("production API requires the delegated Entra scope", async () => {
 });
 
 test("team-test authentication is staging-only, secret-backed, and database-scoped", async () => {
-  const [program, handler, users, sql, frontend, previewValidator, provisioning, stagingSettings] = await Promise.all([
+  const [
+    program,
+    handler,
+    users,
+    sql,
+    frontend,
+    previewValidator,
+    provisioning,
+    stagingSettings,
+    installer,
+    starter,
+    stopper,
+    addUser,
+    loginGrants,
+  ] = await Promise.all([
     readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/TeamTestAuthenticationHandler.cs", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/CurrentUserService.cs", root), "utf8"),
@@ -118,6 +132,11 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     readFile(new URL("scripts/validate-team-test-env.mjs", root), "utf8"),
     readFile(new URL("database/scripts/035_provision_team_test_user.sql", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/appsettings.Staging.json", root), "utf8"),
+    readFile(new URL("scripts/Install-TeamTestHost.ps1", root), "utf8"),
+    readFile(new URL("scripts/Start-TeamTestHost.ps1", root), "utf8"),
+    readFile(new URL("scripts/Stop-TeamTestHost.ps1", root), "utf8"),
+    readFile(new URL("scripts/Add-TeamTestUser.ps1", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
   ]);
   assert.match(program, /IsStaging\(\).*TeamTestAuthenticationHandler\.SchemeName/s);
   assert.match(program, /TeamTest authentication is allowed only in the Staging environment/);
@@ -138,6 +157,25 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
   assert.match(provisioning, /team-test:/);
   assert.match(stagingSettings, /"Mode": "TeamTest"/);
   assert.doesNotMatch(stagingSettings, /TeamTestSigningKey"\s*:\s*"[^"\s]+"/);
+  assert.match(sql, /Database application roles are allowed only in Staging TeamTest mode/);
+  assert.match(sql, /Pooling = !useApplicationRole/);
+  assert.match(sql, /sp_setapprole/);
+  assert.match(sql, /ApplicationRolePasswordPattern/);
+  assert.match(loginGrants, /APPLICATION_ROLE/);
+  assert.match(installer, /ConvertFrom-SecureString/);
+  assert.match(installer, /Integrated Security/);
+  assert.match(installer, /CREATE APPLICATION ROLE/);
+  assert.match(installer, /RuntimeRoot must stay within/);
+  assert.match(installer, /non-application-role database principal/);
+  assert.doesNotMatch(installer, /contained database authentication/i);
+  assert.match(starter, /ASPNETCORE_URLS = "http:\/\/127\.0\.0\.1:/);
+  assert.match(starter, /Database__ApplicationRolePassword/);
+  assert.match(starter, /-WindowStyle Hidden/);
+  assert.match(stopper, /CommandLine -notlike/);
+  assert.match(stopper, /refusing to stop it/);
+  assert.match(addUser, /035_provision_team_test_user\.sql/);
+  assert.match(addUser, /TeamTestSigningKey/);
+  assert.doesNotMatch(addUser, /TeamTestSigningKey\s*=\s*["'][^"']+["']/);
 });
 
 test("SQL application login stays least-privileged and secret template fails closed", async () => {

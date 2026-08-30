@@ -39,6 +39,6 @@ try {
 }
 finally {
     if ($hmac) { $hmac.Dispose() }
-    if ($keyBytes) { [Security.Cryptography.CryptographicOperations]::ZeroMemory($keyBytes) }
+    if ($keyBytes) { [Array]::Clear($keyBytes, 0, $keyBytes.Length) }
     if ($keyPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer) }
 }

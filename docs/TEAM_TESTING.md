@@ -35,6 +35,49 @@ The script creates a visibly non-production `team-test:` identity. The productio
 
 ## 2. Configure the staging API
 
+### Run the temporary API on a Windows test machine
+
+For a small UAT, the API can run on a Windows machine that also reaches the dedicated test SQL database. The installer publishes the API under `%LOCALAPPDATA%\IoTTeamCenter\TeamTest`, protects runtime secrets with Windows DPAPI, restricts that directory to the current Windows user and `SYSTEM`, and binds Kestrel only to `127.0.0.1`.
+
+```powershell
+.\scripts\Install-TeamTestHost.ps1 `
+  -SqlServer "localhost" `
+  -DatabaseName "<DEDICATED_UAT_DATABASE>" `
+  -AllowedHosts "localhost;127.0.0.1;<TAILSCALE_DNS_NAME>" `
+  -TrustServerCertificateForTeamTest
+```
+
+On a Windows-authentication-only SQL Server, the installer keeps Windows authentication and activates a least-privileged SQL application role on every API connection. It disables connection pooling for those sessions and does not enable Mixed Mode. On a Mixed Mode server, it creates/rotates a dedicated SQL login and applies the same object-level role grants.
+
+Start and stop only the installed API process with the recorded, command-line-validated PID:
+
+```powershell
+.\scripts\Start-TeamTestHost.ps1
+.\scripts\Stop-TeamTestHost.ps1
+```
+
+Provision a tester and generate that tester's personal code from the locally protected signing key:
+
+```powershell
+.\scripts\Add-TeamTestUser.ps1 `
+  -Email "<TEAM_EMAIL>" `
+  -DisplayName "<DISPLAY_NAME>" `
+  -Initials "<INITIALS>" `
+  -RoleCode "<ROLE_CODE>"
+```
+
+Do not copy `%LOCALAPPDATA%\IoTTeamCenter\TeamTest\secrets.json` to another account or machine. DPAPI binds it to the Windows account that installed the host.
+
+After the machine is connected to the company Tailscale tailnet, expose only the loopback API through private HTTPS:
+
+```powershell
+tailscale serve --bg --yes http://127.0.0.1:5105
+```
+
+Only testers allowed by the company tailnet ACL can reach this URL, and their test devices must be connected to Tailscale. The host machine must remain powered on, awake, connected to SQL Server, and connected to Tailscale throughout the test. Use `tailscale serve reset` when UAT ends.
+
+### Run on a managed staging host
+
 Publish the API to an HTTPS staging host and inject these values through the host's secret/configuration system:
 
 ```text
