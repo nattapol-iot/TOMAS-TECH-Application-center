@@ -231,3 +231,23 @@ public sealed record CreatePurchaseRequisitionRequest(
 public sealed record DecidePurchaseRequisitionRequest(string Decision, string? Comment);
 
 public sealed record ConvertPurchaseRequisitionRequest(string RowVersion, DateOnly? ExpectedDate);
+
+public sealed record GoodsReceiptLineRequest(
+    long PurchaseOrderLineId,
+    decimal ReceivedQuantity,
+    decimal AcceptedQuantity,
+    decimal DamagedQuantity,
+    decimal RejectedQuantity,
+    string? QcStatus,
+    string? LotNumber,
+    string? SerialNumber,
+    string? Location,
+    long? ProjectAllocationId,
+    bool AllowOverReceipt,
+    string? Remark);
+
+public sealed record CreateGoodsReceiptRequest(
+    long PurchaseOrderId,
+    string? DeliveryNote,
+    DateOnly? ReceivedDate,
+    IReadOnlyList<GoodsReceiptLineRequest> Lines);
