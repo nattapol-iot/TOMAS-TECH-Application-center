@@ -203,3 +203,9 @@ public sealed record CreateEngineeringRateRequest(
     DateOnly? EffectiveTo);
 
 public sealed record ApiError(string Code, string Message, object? Details = null);
+
+public sealed record GenerateBomRequest(long ProjectId);
+
+public sealed record ReleaseBomRequest(string RowVersion, string? Comment);
+
+public sealed record ReserveStockRequest(long BomLineId, decimal Quantity, DateOnly? RequiredDate);

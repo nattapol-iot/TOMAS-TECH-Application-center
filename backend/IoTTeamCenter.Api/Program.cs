@@ -213,6 +213,7 @@ app.MapEstimateCostEndpoints();
 app.MapProjectEndpoints();
 app.MapProjectDocumentEndpoints();
 app.MapInventoryEndpoints();
+app.MapBomEndpoints();
 app.MapMasterDataEndpoints();
 
 app.Run();

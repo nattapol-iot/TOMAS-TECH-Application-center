@@ -201,7 +201,7 @@ public static class EstimateEndpoints
             targetStatus: "Engineering Review", targetProgress: 90,
             inquiryStatus: "Engineering Review", inquiryProgress: 90,
             allowedStatuses: ["Draft", "Engineering Input", "Revision Required"],
-            action: "Submitted", connections, users, validate: true, requireEstimateOwner: true, cancellationToken);
+            action: "Submitted", connections, users, validate: true, requireEstimateOwner: true, forbidEstimateOwner: false, cancellationToken);
     }
 
     private static Task<IResult> ApproveAsync(long id, WorkflowRequest request, SqlConnectionFactory connections, CurrentUserService users, CancellationToken cancellationToken)
@@ -212,7 +212,7 @@ public static class EstimateEndpoints
             targetStatus: "Approved", targetProgress: 100,
             inquiryStatus: "Approved", inquiryProgress: 100,
             allowedStatuses: ["Engineering Review"],
-            action: "Approved", connections, users, validate: true, requireEstimateOwner: false, cancellationToken);
+            action: "Approved", connections, users, validate: true, requireEstimateOwner: false, forbidEstimateOwner: true, cancellationToken);
     }
 
     private static async Task<IResult> RequestRevisionAsync(
@@ -338,6 +338,7 @@ public static class EstimateEndpoints
         CurrentUserService users,
         bool validate,
         bool requireEstimateOwner,
+        bool forbidEstimateOwner,
         CancellationToken cancellationToken)
     {
         await users.DemandPermissionAsync(permission, cancellationToken);
@@ -383,6 +384,8 @@ public static class EstimateEndpoints
                 throw new ApiException(StatusCodes.Status409Conflict, "invalid_transition", $"Cannot move an estimate from '{currentStatus}' to '{targetStatus}'.");
             if (requireEstimateOwner && estimateOwnerId != actor.Id && !HasEstimateManagerOverride(actor))
                 throw new ApiException(StatusCodes.Status403Forbidden, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can submit this estimate.");
+            if (forbidEstimateOwner && estimateOwnerId == actor.Id)
+                throw new ApiException(StatusCodes.Status403Forbidden, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
             if (validate)
             {
                 var issues = await GetValidationIssuesAsync(connection, (SqlTransaction)transaction, id, cancellationToken);

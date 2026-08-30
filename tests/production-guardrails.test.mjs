@@ -187,7 +187,7 @@ test("project documents use fail-closed NAS storage, scoped access, and append-o
   assert.match(endpoints, /p\.manager_id = @actor/);
   assert.match(endpoints, /p\.lead_engineer_id = @actor/);
   assert.match(endpoints, /dbo\.project_members/);
-  assert.equal((endpoints.match(/DemandProjectReadScopeAsync\(connection, projectId, actor/g) ?? []).length, 2);
+  assert.equal((endpoints.match(/DemandProjectAccessScopeAsync\(\w+, projectId, actor/g) ?? []).length, 3);
   assert.match(endpoints, /MapGet\("\/"/);
   assert.match(endpoints, /MapPost\("\/"/);
   assert.match(endpoints, /MapGet\("\/\{documentId:long\}\/content"/);
