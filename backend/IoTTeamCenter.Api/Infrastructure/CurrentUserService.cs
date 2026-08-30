@@ -20,27 +20,38 @@ public sealed class CurrentUserService(
         var principal = httpContextAccessor.HttpContext?.User
             ?? throw new ApiException(StatusCodes.Status401Unauthorized, "unauthenticated", "Authentication is required.");
 
-        string objectId;
+        var useTeamTestAuthentication = environment.IsStaging()
+            && configuration["Authentication:Mode"] == TeamTestAuthenticationHandler.SchemeName;
+        string identityValue;
+        string identityPredicate;
         if (environment.IsDevelopment() && configuration["Authentication:Mode"] == "Development")
         {
-            objectId = httpContextAccessor.HttpContext?.Request.Headers["X-Dev-User-Id"].FirstOrDefault() ?? "dev-user";
+            identityValue = httpContextAccessor.HttpContext?.Request.Headers["X-Dev-User-Id"].FirstOrDefault() ?? "dev-user";
+            identityPredicate = "u.entra_object_id = @identity";
+        }
+        else if (useTeamTestAuthentication)
+        {
+            identityValue = principal.FindFirstValue(ClaimTypes.Email)
+                ?? throw new ApiException(StatusCodes.Status401Unauthorized, "missing_test_email", "The team-test session does not contain an email address.");
+            identityPredicate = "u.email = @identity";
         }
         else
         {
-            objectId = principal.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
+            identityValue = principal.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier")
                 ?? principal.FindFirstValue("oid")
                 ?? throw new ApiException(StatusCodes.Status401Unauthorized, "missing_oid", "The Entra token does not contain an object id.");
+            identityPredicate = "u.entra_object_id = @identity";
         }
 
         await using var connection = await connections.OpenAsync(cancellationToken);
-        await using var command = new SqlCommand("""
+        await using var command = new SqlCommand($$"""
             SELECT TOP (1)
                 u.id, u.entra_object_id, u.email, u.name, r.code, u.department, u.is_active
             FROM dbo.users u
             INNER JOIN dbo.roles r ON r.id = u.role_id
-            WHERE u.entra_object_id = @oid;
+            WHERE {{identityPredicate}} AND u.deleted_at IS NULL;
             """, connection);
-        command.Parameters.AddParameter("@oid", SqlDbType.NVarChar, objectId, 64);
+        command.Parameters.AddParameter("@identity", SqlDbType.NVarChar, identityValue, useTeamTestAuthentication ? 256 : 64);
 
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))

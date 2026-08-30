@@ -1,0 +1,84 @@
+# Team Test Mode
+
+Team Test Mode lets registered team members perform UAT without Microsoft Entra. It is intentionally limited to an ASP.NET Core `Staging` environment and a Vercel Preview deployment. Production rejects this mode at startup/build time.
+
+## Security boundary
+
+- Use a dedicated staging/UAT database. Do not point Team Test Mode at the production database.
+- Generate one random 32-256 character signing key and keep it only in the API host's secret configuration.
+- Do not put the signing key in Vercel, source control, a URL, or a chat message.
+- Generate a different access code for each registered email. A code cannot be reused to impersonate another tester.
+- Testers enter their registered email and personal temporary code. The browser keeps both only in `sessionStorage` and sends them to the HTTPS API.
+- The API resolves the email to an active `dbo.users` row. All RBAC checks and audit ownership continue to use that database user.
+- Rotate/remove the key and delete the staging deployment when UAT ends.
+
+## 1. Provision UAT users
+
+Run with a DBA identity against the dedicated UAT database. Review the email and role before confirming:
+
+```powershell
+sqlcmd -S "tcp:<SQL_FQDN>,1433" -E -N -b -r1 `
+  -i ".\database\scripts\035_provision_team_test_user.sql" `
+  -v "DatabaseName=<UAT_DATABASE>" `
+     "Email=<TEAM_EMAIL>" `
+     "DisplayName=<DISPLAY_NAME>" `
+     "Initials=<INITIALS>" `
+     "RoleCode=<ROLE_CODE>" `
+     "Department=<DEPARTMENT>" `
+     "Level=<LEVEL>" `
+     "ConfirmTeamTest=YES"
+```
+
+Available seeded roles include `Engineer`, `Project Manager`, `Engineering Manager`, `Purchasing`, `Warehouse`, `Inventory Controller`, `Sales Engineer`, `Admin`, and `Viewer`.
+
+The script creates a visibly non-production `team-test:` identity. The production baseline verifier rejects active test identities. Later, `030_provision_user.sql` can promote the same email to its real Entra object ID without changing the user ID or audit ownership.
+
+## 2. Configure the staging API
+
+Publish the API to an HTTPS staging host and inject these values through the host's secret/configuration system:
+
+```text
+ASPNETCORE_ENVIRONMENT=Staging
+AllowedHosts=<STAGING_API_HOST>
+Authentication__Mode=TeamTest
+Authentication__TeamTestSigningKey=<RANDOM_32_TO_256_CHARACTER_SECRET>
+Cors__AllowedOrigins__0=<EXACT_VERCEL_PREVIEW_ORIGIN>
+Business__TimeZoneId=SE Asia Standard Time
+ConnectionStrings__IoTTeamCenter=<UAT_SQL_CONNECTION_STRING>
+```
+
+`appsettings.Staging.json` uses local document storage under `App_Data/team-test-documents`, so NAS is not required for this temporary UAT mode. Treat uploaded test files as disposable. SQL encryption rules remain enabled.
+
+If the isolated UAT SQL Server still uses a certificate chain that the staging API host cannot validate, first install the issuing CA certificate on the staging host. As a temporary fallback only, set `Database__TrustServerCertificateForTeamTest=true`. The API accepts this override only in `Staging + TeamTest`; Production rejects it. Remove the override after the trusted SQL certificate is installed.
+
+Verify that `/health/live` and `/health/ready` succeed over HTTPS before deploying the frontend.
+
+Generate each tester's personal code from a trusted operator machine. The script prompts for the same signing key with hidden input and never writes it to the command line:
+
+```powershell
+.\scripts\New-TeamTestAccessCode.ps1 -Email "<TEAM_EMAIL>"
+```
+
+Send only that tester's generated access code through the company's approved private channel. Never send the backend signing key.
+
+## 3. Configure the Vercel Preview
+
+Set these variables for Preview only, then redeploy:
+
+```text
+NEXT_PUBLIC_APP_MODE=team-test
+NEXT_PUBLIC_AUTH_MODE=team-test
+NEXT_PUBLIC_API_BASE_URL=<STAGING_API_HTTPS_ORIGIN>
+NEXT_PUBLIC_BUSINESS_TIME_ZONE=Asia/Bangkok
+SITE_ORIGIN=<EXACT_VERCEL_PREVIEW_ORIGIN>
+```
+
+Do not configure the signing key or personal access codes in Vercel. Production must continue to use `NEXT_PUBLIC_APP_MODE=production` and `NEXT_PUBLIC_AUTH_MODE=entra`.
+
+## 4. Tester sign-in
+
+1. Open the Vercel Preview URL.
+2. Enter the exact email provisioned in the UAT database.
+3. Enter the personal temporary team-test access code.
+4. Confirm the displayed name, role, and permissions before entering test data.
+5. Use Logout and close the browser when finished.

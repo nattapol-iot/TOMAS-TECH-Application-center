@@ -84,6 +84,8 @@ test("production build validates identity and HTTPS configuration", async () => 
   assert.match(validator, /NEXT_PUBLIC_ENTRA_API_SCOPE/);
   assert.match(validator, /NEXT_PUBLIC_BUSINESS_TIME_ZONE/);
   assert.match(validator, /NEXT_PUBLIC_API_BASE_URL/);
+  assert.match(validator, /NEXT_PUBLIC_AUTH_MODE/);
+  assert.match(validator, /Team Test is forbidden/);
   assert.match(validator, /must use HTTPS/);
   assert.match(validator, /placeholder hostname/);
   assert.match(validator, /real Microsoft Entra GUID/);
@@ -104,6 +106,38 @@ test("production API requires the delegated Entra scope", async () => {
   assert.match(program, /Business:TimeZoneId/);
   assert.match(program, /Guid\.Empty/);
   assert.match(settings, /"RequiredScope": "access_as_user"/);
+});
+
+test("team-test authentication is staging-only, secret-backed, and database-scoped", async () => {
+  const [program, handler, users, sql, frontend, previewValidator, provisioning, stagingSettings] = await Promise.all([
+    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/TeamTestAuthenticationHandler.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/CurrentUserService.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/SqlConnectionFactory.cs", root), "utf8"),
+    readFile(new URL("app/system/team-test-client.ts", root), "utf8"),
+    readFile(new URL("scripts/validate-team-test-env.mjs", root), "utf8"),
+    readFile(new URL("database/scripts/035_provision_team_test_user.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/appsettings.Staging.json", root), "utf8"),
+  ]);
+  assert.match(program, /IsStaging\(\).*TeamTestAuthenticationHandler\.SchemeName/s);
+  assert.match(program, /TeamTest authentication is allowed only in the Staging environment/);
+  assert.match(program, /TeamTestSigningKey.*32-256 characters/s);
+  assert.match(handler, /X-Team-Test-Code/);
+  assert.match(handler, /X-Team-Test-Email/);
+  assert.match(handler, /HMACSHA256/);
+  assert.match(handler, /CryptographicOperations\.FixedTimeEquals/);
+  assert.match(users, /u\.email = @identity/);
+  assert.match(users, /u\.deleted_at IS NULL/);
+  assert.match(sql, /TrustServerCertificateForTeamTest/);
+  assert.match(sql, /allowed only in Staging TeamTest mode/);
+  assert.match(frontend, /sessionStorage/);
+  assert.doesNotMatch(frontend, /process\.env\.[A-Z0-9_]*ACCESS_KEY/);
+  assert.match(previewValidator, /NEXT_PUBLIC_APP_MODE.*team-test/s);
+  assert.match(previewValidator, /must use HTTPS for team testing/);
+  assert.match(provisioning, /ConfirmTeamTest/);
+  assert.match(provisioning, /team-test:/);
+  assert.match(stagingSettings, /"Mode": "TeamTest"/);
+  assert.doesNotMatch(stagingSettings, /TeamTestSigningKey"\s*:\s*"[^"\s]+"/);
 });
 
 test("SQL application login stays least-privileged and secret template fails closed", async () => {

@@ -1,4 +1,5 @@
 const required = [
+  "NEXT_PUBLIC_AUTH_MODE",
   "NEXT_PUBLIC_API_BASE_URL",
   "NEXT_PUBLIC_ENTRA_TENANT_ID",
   "NEXT_PUBLIC_ENTRA_CLIENT_ID",
@@ -10,6 +11,9 @@ const required = [
 const errors = [];
 if (process.env.NEXT_PUBLIC_APP_MODE !== "production") {
   errors.push("NEXT_PUBLIC_APP_MODE must be exactly 'production'.");
+}
+if (process.env.NEXT_PUBLIC_AUTH_MODE !== "entra") {
+  errors.push("NEXT_PUBLIC_AUTH_MODE must be exactly 'entra' in Production; Team Test is forbidden.");
 }
 for (const name of required) {
   if (!process.env[name]?.trim()) errors.push(`${name} is required.`);

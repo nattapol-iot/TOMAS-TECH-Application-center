@@ -1,9 +1,12 @@
 const target = process.env.VERCEL_TARGET_ENV ?? process.env.VERCEL_ENV;
 const explicitLocalPreview = process.env.VERCEL_PREVIEW_BUILD === "1";
 const productionAppMode = process.env.NEXT_PUBLIC_APP_MODE === "production";
+const teamTestMode = process.env.NEXT_PUBLIC_AUTH_MODE === "team-test";
 
 if (target === "production" || productionAppMode) {
   await import("./validate-production-env.mjs");
+} else if (teamTestMode) {
+  await import("./validate-team-test-env.mjs");
 } else if (target === "preview" || target === "development" || explicitLocalPreview) {
   console.log("Vercel preview build: production environment validation is deferred until promotion.");
 } else {

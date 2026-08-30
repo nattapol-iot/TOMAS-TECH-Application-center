@@ -39,7 +39,13 @@ DECLARE @role_id bigint = (SELECT id FROM dbo.roles WITH (UPDLOCK, HOLDLOCK) WHE
 IF @role_id IS NULL
     THROW 51051, 'RoleCode does not exist.', 1;
 
-IF EXISTS (SELECT 1 FROM dbo.users WITH (UPDLOCK, HOLDLOCK) WHERE email = @email AND entra_object_id <> @object_id)
+DECLARE @existing_email_object_id nvarchar(64) = (
+    SELECT entra_object_id FROM dbo.users WITH (UPDLOCK, HOLDLOCK) WHERE email = @email
+);
+
+IF @existing_email_object_id IS NOT NULL
+   AND @existing_email_object_id <> @object_id
+   AND @existing_email_object_id NOT LIKE N'team-test:%'
     THROW 51052, 'Email is already assigned to a different Entra object id.', 1;
 
 IF EXISTS (SELECT 1 FROM dbo.users WITH (UPDLOCK, HOLDLOCK) WHERE entra_object_id = @object_id)
@@ -55,6 +61,21 @@ BEGIN
         deleted_at = NULL,
         updated_at = SYSUTCDATETIME()
     WHERE entra_object_id = @object_id;
+END
+ELSE IF @existing_email_object_id LIKE N'team-test:%'
+BEGIN
+    -- Preserve the user id and audit ownership when promoting a UAT account to Entra.
+    UPDATE dbo.users
+    SET entra_object_id = @object_id,
+        name = @name,
+        initials = @initials,
+        role_id = @role_id,
+        department = @department,
+        level = @level,
+        is_active = 1,
+        deleted_at = NULL,
+        updated_at = SYSUTCDATETIME()
+    WHERE email = @email AND entra_object_id = @existing_email_object_id;
 END
 ELSE
 BEGIN

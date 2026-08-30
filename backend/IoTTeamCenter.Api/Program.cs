@@ -76,12 +76,30 @@ builder.Services.AddProblemDetails();
 
 var authenticationMode = builder.Configuration["Authentication:Mode"] ?? "Entra";
 var useDevelopmentAuthentication = builder.Environment.IsDevelopment() && authenticationMode == "Development";
+var useTeamTestAuthentication = builder.Environment.IsStaging() && authenticationMode == TeamTestAuthenticationHandler.SchemeName;
 var requiredScope = builder.Configuration["Authentication:RequiredScope"];
+if (authenticationMode == "Development" && !builder.Environment.IsDevelopment())
+    throw new InvalidOperationException("Development authentication is allowed only in the Development environment.");
+if (authenticationMode == TeamTestAuthenticationHandler.SchemeName && !builder.Environment.IsStaging())
+    throw new InvalidOperationException("TeamTest authentication is allowed only in the Staging environment.");
+if (authenticationMode is not ("Development" or TeamTestAuthenticationHandler.SchemeName or "Entra"))
+    throw new InvalidOperationException("Authentication:Mode must be Development, TeamTest, or Entra.");
+
 if (useDevelopmentAuthentication)
 {
     builder.Services
         .AddAuthentication("Development")
         .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>("Development", _ => { });
+}
+else if (useTeamTestAuthentication)
+{
+    var teamTestSigningKey = builder.Configuration["Authentication:TeamTestSigningKey"];
+    if (string.IsNullOrWhiteSpace(teamTestSigningKey) || teamTestSigningKey.Length < 32 || teamTestSigningKey.Length > 256)
+        throw new InvalidOperationException("Authentication:TeamTestSigningKey must contain 32-256 characters in TeamTest mode.");
+
+    builder.Services
+        .AddAuthentication(TeamTestAuthenticationHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, TeamTestAuthenticationHandler>(TeamTestAuthenticationHandler.SchemeName, _ => { });
 }
 else
 {
@@ -123,7 +141,7 @@ else
 builder.Services.AddAuthorization(options =>
 {
     var policy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser();
-    if (!useDevelopmentAuthentication)
+    if (!useDevelopmentAuthentication && !useTeamTestAuthentication)
     {
         policy.RequireAssertion(context => context.User.FindAll("scp")
             .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))

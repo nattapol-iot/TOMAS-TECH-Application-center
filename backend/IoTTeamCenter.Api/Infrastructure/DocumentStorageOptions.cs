@@ -44,7 +44,9 @@ public sealed class DocumentStorageOptions
 
         if (string.IsNullOrWhiteSpace(mode) || (mode is not ("Nas" or "Local")))
             throw new InvalidOperationException("DocumentStorage:Mode must be either 'Nas' or 'Local' (case-sensitive).");
-        if (!environment.IsDevelopment() && mode != "Nas")
+        var useLocalTeamTestStorage = environment.IsStaging()
+            && configuration["Authentication:Mode"] == TeamTestAuthenticationHandler.SchemeName;
+        if (!environment.IsDevelopment() && !useLocalTeamTestStorage && mode != "Nas")
             throw new InvalidOperationException("DocumentStorage:Mode must be 'Nas' in Production.");
         if (string.IsNullOrWhiteSpace(configuredRoot))
             throw new InvalidOperationException("DocumentStorage:RootPath is required.");

@@ -1,6 +1,7 @@
 "use client";
 
 import { acquireApiToken } from "./auth-client";
+import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -304,10 +305,17 @@ export class ApiClientError extends Error {
 
 async function authorizedFetch(path: string, init?: RequestInit, timeoutMs = 30_000) {
   if (!IS_API_CONFIGURED) throw new Error("NEXT_PUBLIC_API_BASE_URL is missing or invalid.");
-  const token = await acquireApiToken();
   const headers = new Headers(init?.headers);
   if (!headers.has("Accept")) headers.set("Accept", "application/json");
-  headers.set("Authorization", `Bearer ${token}`);
+  if (IS_TEAM_TEST_MODE) {
+    const session = getTeamTestSession();
+    if (!session) throw new Error("Team test session is missing. Please sign in again.");
+    headers.set("X-Team-Test-Email", session.email);
+    headers.set("X-Team-Test-Code", session.accessCode);
+  } else {
+    const token = await acquireApiToken();
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   if (typeof init?.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const timeout = AbortSignal.timeout(timeoutMs);
   const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;

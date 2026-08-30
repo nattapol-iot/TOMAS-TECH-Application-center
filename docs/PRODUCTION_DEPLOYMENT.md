@@ -84,6 +84,8 @@ At the network layer:
 
 ## 2. Microsoft Entra configuration
 
+Temporary UAT without Entra must use the isolated Staging-only workflow in `docs/TEAM_TESTING.md`. Team Test Mode is forbidden for the Production API, Production Vercel target, and production database.
+
 Create two single-tenant app registrations. Do not reuse one registration for both responsibilities.
 
 ### API app registration

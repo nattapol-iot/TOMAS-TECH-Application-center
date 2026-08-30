@@ -22,11 +22,18 @@ public sealed class SqlConnectionFactory(IConfiguration configuration, IWebHostE
                 "ConnectionStrings:IoTTeamCenter is required. Configure it with an environment variable or secret store; never commit credentials.");
         }
 
+        var trustDevelopmentCertificate = environment.IsDevelopment()
+            && configuration.GetValue<bool>("Database:TrustServerCertificateForDevelopment");
+        var trustTeamTestCertificate = environment.IsStaging()
+            && configuration["Authentication:Mode"] == TeamTestAuthenticationHandler.SchemeName
+            && configuration.GetValue<bool>("Database:TrustServerCertificateForTeamTest");
+        if (configuration.GetValue<bool>("Database:TrustServerCertificateForTeamTest") && !trustTeamTestCertificate)
+            throw new InvalidOperationException("Database:TrustServerCertificateForTeamTest is allowed only in Staging TeamTest mode.");
+
         var builder = new SqlConnectionStringBuilder(value)
         {
             Encrypt = SqlConnectionEncryptOption.Mandatory,
-            TrustServerCertificate = environment.IsDevelopment()
-                && configuration.GetValue<bool>("Database:TrustServerCertificateForDevelopment"),
+            TrustServerCertificate = trustDevelopmentCertificate || trustTeamTestCertificate,
             PersistSecurityInfo = false,
             Pooling = true,
             ApplicationName = "IoTTeamCenter.Api"
