@@ -216,6 +216,8 @@ app.MapInventoryEndpoints();
 app.MapBomEndpoints();
 app.MapPurchaseRequisitionEndpoints();
 app.MapGoodsReceiptEndpoints();
+app.MapMaterialIssueEndpoints();
+app.MapStockControlEndpoints();
 app.MapMasterDataEndpoints();
 
 app.Run();

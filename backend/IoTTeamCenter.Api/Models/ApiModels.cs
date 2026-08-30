@@ -251,3 +251,25 @@ public sealed record CreateGoodsReceiptRequest(
     string? DeliveryNote,
     DateOnly? ReceivedDate,
     IReadOnlyList<GoodsReceiptLineRequest> Lines);
+
+public sealed record MaterialIssueLineRequest(
+    long BomLineId,
+    decimal RequestedQuantity,
+    string? Location,
+    string? Purpose);
+
+public sealed record CreateMaterialIssueRequest(
+    long BomId,
+    DateOnly RequiredDate,
+    string? Purpose,
+    IReadOnlyList<MaterialIssueLineRequest> Lines);
+
+public sealed record DecideMaterialIssueRequest(string Decision, string? Comment);
+
+public sealed record ReturnMaterialRequest(long LineId, decimal Quantity, string Reason);
+
+public sealed record CreateStockAdjustmentRequest(long ItemId, decimal QuantityChange, string Reason);
+
+public sealed record DecideStockAdjustmentRequest(string Decision, string? Comment);
+
+public sealed record ReleaseQuarantineRequest(long ItemId, decimal Quantity, string Outcome, string Reason);
