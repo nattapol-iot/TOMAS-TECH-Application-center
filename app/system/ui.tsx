@@ -229,11 +229,12 @@ export function SearchInput({ value, onChange, placeholder }: { value: string; o
 export function Select({ label, value, options, onChange, width }: {
   label: string; value: string; options: string[]; onChange: (v: string) => void; width?: number;
 }) {
+  const t = useT();
   return (
     <label className="select-field" style={width ? { width } : undefined}>
-      <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      <span className="sr-only">{t(label)}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={t(label)}>
+        {options.map((option) => <option key={option} value={option}>{t(option)}</option>)}
       </select>
       <Icon name="chevronDown" />
     </label>

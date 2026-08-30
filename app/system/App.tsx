@@ -3,12 +3,15 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   CURRENT_USER, ESTIMATES, INQUIRIES, MISSING_PRICES, NOTIFICATIONS,
-  PRICE_LIBRARY, PRODUCT, PURCHASE_REQUISITIONS, QUOTATIONS, USERS,
+  PRICE_LIBRARY, PRODUCT, PROJECT_DOCS, PROJECT_FOLDERS, PROJECTS, PURCHASE_REQUISITIONS,
+  QUOTATIONS, USERS,
 } from "./data";
 import { money } from "./calc";
 import { Badge, Icon, Toast, type IconName } from "./ui";
 import { BrandLockup, BrandMark } from "./Brand";
 import { LANGUAGES, LanguageContext, translate, type Lang } from "./i18n";
+import { SessionContext, sessionForRole, type Session } from "./session";
+import { useScheduleStore } from "./store";
 import type { Route } from "./routes";
 import Dashboard from "./screens/Dashboard";
 import { InquiryCreate, InquiryDetail, InquiryList } from "./screens/Inquiry";
@@ -17,14 +20,19 @@ import Workspace from "./screens/Workspace";
 import { MissingPrices, PriceHistory, PriceLibrary, Quotations } from "./screens/Price";
 import ResourcePlan from "./screens/Resource";
 import { PurchaseDetail, PurchaseList } from "./screens/Purchase";
-import { AuditLogScreen, Customers, MasterData, Projects, RateMaster, Reports, Settings } from "./screens/Admin";
+import { ProjectDetail, ProjectList } from "./screens/Project";
+import ProjectSchedule from "./screens/Schedule";
+import MyWork, { myRows } from "./screens/MyWork";
+import { AuditLogScreen, Customers, MasterData, RateMaster, Reports, Settings } from "./screens/Admin";
 
 const NAV: { group?: string; items: { route: Route; label: string; icon: IconName; badge?: number; hot?: boolean }[] }[] = [
   {
     items: [
       { route: { name: "dashboard" }, label: "Dashboard", icon: "grid" },
+      { route: { name: "my-work" }, label: "My Work", icon: "user" },
       { route: { name: "inquiries" }, label: "Inquiry", icon: "inbox", badge: INQUIRIES.length },
       { route: { name: "estimates" }, label: "Estimate Cost", icon: "file", badge: ESTIMATES.length },
+      { route: { name: "projects" }, label: "Projects", icon: "folder", badge: PROJECTS.filter((project) => project.status !== "Closed").length },
     ],
   },
   {
@@ -46,7 +54,6 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
     group: "ORGANISATION",
     items: [
       { route: { name: "customers" }, label: "Customers", icon: "users" },
-      { route: { name: "projects" }, label: "Projects", icon: "folder" },
       { route: { name: "reports" }, label: "Reports", icon: "chart" },
     ],
   },
@@ -63,6 +70,7 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
 
 export default function App() {
   const [signedIn, setSignedIn] = useState(false);
+  const [session, setSession] = useState<Session>(sessionForRole("Engineer"));
   const [route, setRoute] = useState<Route>({ name: "dashboard" });
   const [toast, setToast] = useState("");
   const [language, setLanguage] = useState<Lang>("EN");
@@ -103,6 +111,11 @@ export default function App() {
 
   const results = useGlobalSearch(query);
   const unread = NOTIFICATIONS.filter((entry) => entry.unread).length;
+  const schedule = useScheduleStore();
+  const myUrgent = useMemo(() => {
+    const rows = myRows(schedule.tasks, schedule.updates, session.user.id);
+    return rows.filter((row) => row.status !== "Done" && (row.isLate || row.status === "Blocked" || row.needsForecast || row.isStale)).length;
+  }, [schedule.version, session.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const language$ = useMemo(
     () => ({ lang: language, setLang: setLanguage, t: (text: string) => translate(text, language) }),
     [language],
@@ -112,13 +125,14 @@ export default function App() {
   if (!signedIn) {
     return (
       <LanguageContext.Provider value={language$}>
-        <Login onSignIn={() => setSignedIn(true)} />
+        <Login onSignIn={(role) => { setSession(sessionForRole(role)); setSignedIn(true); }} />
       </LanguageContext.Provider>
     );
   }
 
   return (
     <LanguageContext.Provider value={language$}>
+    <SessionContext.Provider value={session}>
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
@@ -145,7 +159,9 @@ export default function App() {
                   >
                     <Icon name={item.icon} />
                     <span>{t(item.label)}</span>
-                    {item.badge ? <em className={item.hot ? "hot" : undefined}>{item.badge}</em> : null}
+                    {item.route.name === "my-work" && myUrgent
+                      ? <em className="hot">{myUrgent}</em>
+                      : item.badge ? <em className={item.hot ? "hot" : undefined}>{item.badge}</em> : null}
                   </button>
                 );
               })}
@@ -154,10 +170,10 @@ export default function App() {
         </nav>
 
         <div className="sidebar-user">
-          <span className="avatar sm">{CURRENT_USER.initials}</span>
+          <span className="avatar sm">{session.user.initials}</span>
           <div>
-            <strong>{CURRENT_USER.name}</strong>
-            <span>{CURRENT_USER.department} · {CURRENT_USER.role}</span>
+            <strong>{session.user.name}</strong>
+            <span>{session.user.department} · {session.role}</span>
           </div>
           <button type="button" aria-label={t("Sign out")} onClick={() => setSignedIn(false)}><Icon name="logout" /></button>
         </div>
@@ -240,10 +256,10 @@ export default function App() {
 
             <div className="menu-wrap">
               <button className="topbar-user" type="button" onClick={() => setUserOpen((value) => !value)}>
-                <span className="avatar sm">{CURRENT_USER.initials}</span>
+                <span className="avatar sm">{session.user.initials}</span>
                 <span>
-                  {CURRENT_USER.name}
-                  <small>{CURRENT_USER.role} · {CURRENT_USER.department}</small>
+                  {session.user.name}
+                  <small>{session.role} · {session.user.department}</small>
                 </span>
                 <Icon name="chevronDown" />
               </button>
@@ -273,7 +289,10 @@ export default function App() {
           {route.name === "purchase" ? <PurchaseList go={go} notify={notify} /> : null}
           {route.name === "pr" ? <PurchaseDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
           {route.name === "customers" ? <Customers go={go} notify={notify} /> : null}
-          {route.name === "projects" ? <Projects go={go} notify={notify} /> : null}
+          {route.name === "projects" ? <ProjectList go={go} notify={notify} /> : null}
+          {route.name === "project" ? <ProjectDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
+          {route.name === "schedule" ? <ProjectSchedule key={route.id} id={route.id} initialView={route.view} go={go} notify={notify} /> : null}
+          {route.name === "my-work" ? <MyWork go={go} notify={notify} /> : null}
           {route.name === "reports" ? <Reports go={go} notify={notify} /> : null}
           {route.name === "master" ? <MasterData go={go} notify={notify} /> : null}
           {route.name === "rates" ? <RateMaster go={go} notify={notify} /> : null}
@@ -286,6 +305,7 @@ export default function App() {
 
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
     </div>
+    </SessionContext.Provider>
     </LanguageContext.Provider>
   );
 }
@@ -314,6 +334,25 @@ function useGlobalSearch(query: string) {
       });
     }
 
+    // A project matches on its number, its name and on any document filed in
+    // one of its folders, so searching a drawing number opens the project.
+    const projects = PROJECTS.filter((project) =>
+      `${project.no} ${project.name} ${project.poNo} ${project.inquiryNo} ${project.site}`.toLowerCase().includes(needle)
+      || PROJECT_DOCS.some((doc) => doc.projectId === project.id && doc.name.toLowerCase().includes(needle)));
+    if (projects.length) {
+      groups.push({
+        label: "Project",
+        items: projects.slice(0, 4).map((project) => {
+          const hit = PROJECT_DOCS.find((doc) => doc.projectId === project.id && doc.name.toLowerCase().includes(needle));
+          const folder = hit ? PROJECT_FOLDERS.find((entry) => entry.code === hit.folder) : undefined;
+          return {
+            key: project.id, title: `${project.no} — ${project.name}`,
+            detail: hit ? `${hit.name} · ${folder?.code}. ${folder?.name}` : `${project.projectType} · ${project.site}`,
+            icon: "folder" as const, route: { name: "project" as const, id: project.id }, badge: project.status,
+          };
+        }),
+      });
+    }
     // An estimate matches on its own identifiers and on any equipment inside
     // it — searching "KV-8000" has to surface the estimates that used it.
     const estimates = ESTIMATES.filter((estimate) =>
@@ -380,6 +419,7 @@ function isActive(route: Route, target: Route) {
   if (target.name === "estimates" && route.name === "estimate") return true;
   if (target.name === "price" && route.name === "price-history") return true;
   if (target.name === "purchase" && route.name === "pr") return true;
+  if (target.name === "projects" && (route.name === "project" || route.name === "schedule")) return true;
   return false;
 }
 
@@ -396,7 +436,7 @@ const notifTone = (kind: string) =>
    Login
    -------------------------------------------------------------------------- */
 
-function Login({ onSignIn }: { onSignIn: () => void }) {
+function Login({ onSignIn }: { onSignIn: (role: string) => void }) {
   const { t } = useContext(LanguageContext);
   const [email, setEmail] = useState(CURRENT_USER.email);
   const [password, setPassword] = useState("");
@@ -430,7 +470,7 @@ function Login({ onSignIn }: { onSignIn: () => void }) {
       </aside>
 
       <div className="login-form-wrap">
-        <form className="login-form" onSubmit={(event) => { event.preventDefault(); onSignIn(); }}>
+        <form className="login-form" onSubmit={(event) => { event.preventDefault(); onSignIn(role); }}>
           <h1>{t("Sign in")}</h1>
           <p>{t("Use your company account to open the estimate workspace.")}</p>
 

@@ -9,7 +9,7 @@ import {
 import { estimateTotals, formatDate, moneyShort, userName } from "../calc";
 import {
   Badge, BarChart, Donut, EmptyState, Field, GridControls, HBarList, Icon, Modal, Pagination, Panel,
-  PageHeader, Person, Pill, ProgressCell, SearchInput, Select, Tabs, Toolbar, toneOf, usePaged,
+  PageHeader, Person, Pill, SearchInput, Select, Tabs, Toolbar, toneOf, usePaged,
 } from "../ui";
 import type { ScreenProps } from "../routes";
 
@@ -50,59 +50,6 @@ export function Customers({ go, notify }: ScreenProps) {
                     <td>{customer.site}</td>
                     <td className="num">{customer.inquiries}</td>
                     <td className="num">{open}</td>
-                    <td><span className="row-action"><Icon name="chevronRight" /></span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-    </>
-  );
-}
-
-/* ==========================================================================
-   Projects
-   ========================================================================== */
-
-export function Projects({ go }: ScreenProps) {
-  const [type, setType] = useState("All project types");
-  const rows = ESTIMATES.filter((estimate) => type === "All project types" || estimate.projectType === type);
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="DELIVERY"
-        title="Projects"
-        subtitle="Approved estimates become project cost baselines — this is the bridge to project planning."
-      />
-      <Toolbar>
-        <Select label="Project type" value={type} onChange={setType} options={["All project types", ...PROJECT_TYPES]} />
-      </Toolbar>
-      <Panel title={`${rows.length} projects`} subtitle="Estimated cost is the internal engineering baseline, never a selling price" flush>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Project</th><th>Customer</th><th>Type</th><th>Estimate</th><th>Rev.</th><th>Owner</th><th className="num">Material</th><th className="num">Engineering</th><th className="num">Total Cost</th><th>Progress</th><th>Status</th><th aria-label="Action" /></tr>
-            </thead>
-            <tbody>
-              {rows.map((estimate) => {
-                const totals = estimateTotals(estimate);
-                const customer = CUSTOMERS.find((c) => c.id === estimate.customerId);
-                return (
-                  <tr key={estimate.id} className="clickable" onClick={() => go({ name: "estimate", id: estimate.id })}>
-                    <td><strong>{estimate.projectName}</strong></td>
-                    <td>{customer?.code}</td>
-                    <td>{estimate.projectType}</td>
-                    <td className="mono">{estimate.no}</td>
-                    <td><span className="pill">{estimate.revision}</span></td>
-                    <td>{userName(estimate.ownerId)}</td>
-                    <td className="num">{moneyShort(totals.material)}</td>
-                    <td className="num">{moneyShort(totals.engineering)}</td>
-                    <td className="num"><strong>{moneyShort(totals.total)}</strong></td>
-                    <td style={{ minWidth: 110 }}><ProgressCell value={estimate.progress} /></td>
-                    <td><Badge tone={toneOf(estimate.status)}>{estimate.status}</Badge></td>
                     <td><span className="row-action"><Icon name="chevronRight" /></span></td>
                   </tr>
                 );

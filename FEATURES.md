@@ -8,7 +8,7 @@ back-end can be built from it without reading the UI code.
 - Front end: React 19 on vinext, all screens under `app/system/`
 - Data today: in-repo dataset (`app/system/data.ts`) — no persistence yet
 - Calculation today: `app/system/calc.ts` — **must move to the server**
-- Last updated: 30 Aug 2026
+- Last updated: 30 Aug 2026 (project management + schedule/My Work added)
 
 **Golden rule:** this system controls internal engineering cost only. Gross
 margin, profit margin, gross profit, selling price, customer selling price,
@@ -36,7 +36,10 @@ effort and cost completeness.
 | Planning | **Resource Plan** | `resources` | `screens/Resource.tsx` | Assignment Gantt + workload heat grid |
 | Planning | **Purchase Requisition** | `purchase` / `pr` | `screens/Purchase.tsx` | PR list, PR detail, create PR from estimate |
 | Organisation | Customers | `customers` | `screens/Admin.tsx` | Customer master view |
-| Organisation | Projects | `projects` | `screens/Admin.tsx` | Awarded projects and their cost baseline |
+| — | **Projects** | `projects` | `screens/Project.tsx` | Won projects, folder completeness, delivery watch |
+| — | **Project Workspace** | `project` | `screens/Project.tsx` | Tabs: Overview, Documents (15 folders), To do list, Schedule, Cost, Team |
+| — | **Schedule Workspace** | `schedule` | `screens/Schedule.tsx` | The WBS plan: Sheet + Timeline, Internal/Customer view, Updates, Baseline |
+| — | **My Work** | `my-work` | `screens/MyWork.tsx` | Every task assigned to the signed-in member, across all projects, one-click updates |
 | Organisation | Reports | `reports` | `screens/Admin.tsx` | 13 reports, Excel/PDF export |
 | Administration | Master Data | `master` | `screens/Admin.tsx` | 14 master tabs |
 | Administration | Engineering Rate | `rates` | `screens/Admin.tsx` | Employee / rate master |
@@ -44,7 +47,8 @@ effort and cost completeness.
 | Administration | Settings | `settings` | `screens/Admin.tsx` | Users & roles, notifications, numbering, storage, general |
 
 Global chrome: sidebar navigation, global search (Ctrl-K) across inquiry,
-estimate, price library, supplier quotation and engineer; notification menu;
+estimate, **project and project document**, price library, supplier quotation
+and engineer; notification menu;
 TH / EN / JP switch; user menu.
 
 ---
@@ -177,6 +181,111 @@ type), `ENGINEERING_ACTIVITIES` (19), `ENGINEER_LEVELS` (6), `DEPARTMENTS` (7),
 
 ---
 
+### 2.11 Project *(new)*
+
+A project is created when an inquiry is won and the customer PO arrives. It
+carries the PJ number and reproduces, inside the application, the folder
+structure the team already keeps on OneDrive — so nobody has to change how
+they file anything.
+
+```
+Project        id, no (PJ…), name, customerId, projectType, status,
+               managerId, leadEngineerId, members[],
+               inquiryNo, estimateId, poNo, poDate,
+               startDate, targetDelivery, actualDelivery, progress,
+               site, remark, folderPath
+ProjectDoc     id, projectId, folder (00–14), name, type, size,
+               uploadedBy, uploadedAt, remark
+ProjectTask    id, projectId, title, ownerId, due, status, priority,
+               folder, remark
+ProjectMilestone  id, projectId, name, folder, start, end, progress, owner
+```
+
+Status: Planning · Design · Development · Installation · Commissioning ·
+Handover · Closed · On Hold.
+Task status: Open · In Progress · Blocked · Done. Priority: Urgent · High ·
+Normal · Low. Document type: PDF · Excel · Word · PowerPoint · Drawing ·
+Image · Video · Other.
+
+**The fifteen standard folders** (`PROJECT_FOLDERS`, fixed list, created with
+every project, never renamed by a user):
+
+| Code | Folder | Holds |
+| --- | --- | --- |
+| 00 | To do list | Open points and actions for the team |
+| 01 | Concept Design and Proposal | Concept, proposal and customer presentation |
+| 02 | Drawing | Layout, GA, electrical and mechanical drawings |
+| 03 | Estimate cost | Approved estimate export and cost sheets |
+| 04 | Quote | Supplier quotations collected for the project |
+| 05 | PO | Customer PO and purchase orders raised |
+| 06 | Specifications and Documentation | Specification, standard and requirement |
+| 07 | Development | Program, configuration and source |
+| 08 | Schedule | Project plan and milestone tracking |
+| 09 | Installation | Site installation record |
+| 10 | Report | Test, commissioning and progress reports |
+| 11 | Manual and Document | Operation and maintenance manuals |
+| 12 | DATA & EXAMPLE | Sample data, test data, examples |
+| 13 | Pic and Video | Site photo and video record |
+| 14 | Ref | Reference from other projects |
+
+Folders 04 (Quote) and 05 (PO) store **documents only**. No amount from a
+customer PO or a commercial quotation is ever read into a field — the golden
+rule holds here as everywhere else.
+
+`folderPath` is the human path shown in the header, e.g.
+`IoT Team - Documents / Project - 2026 / [PJ260152] Katolec - Ink Jet Machine (Modify)`.
+It is display text; the real address is `storage_key` (section 10).
+
+---
+### 2.12 Project schedule *(new)*
+
+Replaces both spreadsheets of the old process: the customer-facing "Plan"
+sheet AND every member's private "Task list" are ONE task tree per project.
+The customer plan is a filter (`visibility`), a member's list is a filter
+(`picIds`), and the master Gantt is a projection — a member update cannot
+fail to reach the master plan because there is nothing to propagate between.
+
+```
+ScheduleTask      id, projectId, parentId ("" = phase), order,
+                  kind: phase | task | detail,
+                  name, milestone, origin: PM | Member, createdBy,
+                  visibility: Customer | Internal,
+                  -- PLAN lane (project manager) --
+                  planStart, planDays, startMode: manual | linked,
+                  predecessorId, lagDays, picIds[], picExternal, planManDays,
+                  -- BASELINE lane (written only by freeze) --
+                  baselineStart, baselineEnd, baselineDays, baselineRev,
+                  -- PROGRESS lane (task owner) --
+                  actualStart, actualEnd, forecastEnd, percentDone, status,
+                  blockedReason, note, actualManDays, updatedBy, updatedAt
+ScheduleUpdate    append-only: field, from, to, comment, requestDays,
+                  answer ("" | Accepted | Rejected), answerBy, answerNote
+ScheduleBaseline  rev, label, takenAt, takenBy, reason, taskCount, promisedFinish
+ScheduleTemplate  the team's standard phase trees (Robot 9 phases, Traceability 6)
+HOLIDAYS          Thai public holidays, excluded from every work-day count
+```
+
+Row kinds mirror the Excel template exactly:
+- **phase** — Excel level 1. A formula row: start `=MIN(children)`, end
+  `=MAX(children)`, % from the leaves. Editable by nobody, PM included.
+- **task** — Excel level 2. The commitment. The PM owns the PLAN lane, the
+  PIC owns the PROGRESS lane. A task keeps its own plan window and forecast
+  even when the owner breaks it into details.
+- **detail** — Sheet 2's "Work detail ( Please input your task )". Created by
+  the member, always `visibility: Internal`, clamped to the parent window.
+  The moment a task has details, its % stops being typed and becomes the
+  work-day-weighted roll-up of the details.
+
+**Derived, never stored:** WBS numbers, END dates, work-day counts, every
+parent roll-up and every variance figure. `resolveSchedule` (calc.ts) is one
+pure pass; a stored roll-up is a roll-up that goes stale.
+
+**Money boundary:** the schedule stores `planManDays` / `actualManDays` and
+nothing else numeric. No calc function takes a schedule row and a rate.
+Effort overrun reads "+6 MD vs plan"; the cost consequence lives on the
+estimate, where it already is.
+
+---
 ## 3. Numbering standards
 
 | Document | Pattern | Example | Notes |
@@ -186,6 +295,7 @@ type), `ENGINEERING_ACTIVITIES` (19), `ENGINEER_LEVELS` (6), `DEPARTMENTS` (7),
 | Revision | `R00`, `R01`, … | R02 | Per estimate |
 | Supplier quotation | `SQ-YYMM-XXXX` | SQ-2608-0012 | |
 | Purchase requisition | `PR-YYMM-XXXX` | PR-2608-0001 | *(new)* |
+| **Project** *(new)* | `PJYYNNNN` | PJ260152 | `YY` = Buddhist-era style year in use today, `NNNN` running per year; issued when the inquiry is won |
 | **Item code** *(new)* | `<CAT>-<MOD>-<NNN>` | ME-IFC-001 | Running number **inside a module** |
 
 ### Item code rules (`calc.ts`)
@@ -282,6 +392,42 @@ per engineer      = committed MD, average utilisation, peak utilisation,
 
 ---
 
+### 4.7 Schedule arithmetic (`resolveSchedule`) *(new)*
+
+Excel-exact, with `HOLIDAYS` excluded:
+```
+END        = START + DAYS - 1                  (calendar days)
+WORK DAYS  = NETWORKDAYS(START, END)           (Mon–Fri minus HOLIDAYS)
+linked FS  : planStart = nextWorkDay(pred.planEnd + 1 + lag)   -- the "=F27+1" formula
+leaf window: start = actualStart || planStart
+             end   = actualEnd || forecastEnd || planEnd
+phase      : start = MIN(children.start), end = MAX(children.end)
+task+details: keeps its OWN plan window and forecast; % and status roll up
+percent    : Σ(leaf% × leaf.workDays) / Σ(leaf.workDays)  over the whole subtree
+status     : all Done → Done · any Blocked → Blocked · any started → In Progress
+variance   : networkDaysSigned(baselineEnd, end)   (signed WORK days)
+expected%  : elapsed work days / plan work days, clamped 0..100; drift = % - expected
+flags      : isLate (end < today, not Done) · needsForecast (past planEnd, no
+             forecast) · isStale (In Progress, untouched > 5 work days)
+```
+Link resolution reads the predecessor's PLAN end, never its actual end — a
+member finishing late moves the bar and the forecast, never the customer's
+dates. Dependency cycles are detected and flagged, manual dates kept.
+
+### 4.8 Schedule permissions (`schedulePermission`)
+
+| Field | phase | PM on task | PIC on their task | Member's own detail |
+| --- | --- | --- | --- | --- |
+| plan dates, predecessor, PIC, visibility | computed / PM | edit | read (as text) | edit, clamped to parent |
+| % done, status, actuals, forecast, note | rolled | edit | **edit** | **edit** |
+| add detail under the task | — | yes | **yes** | sibling |
+| freeze / re-baseline, accept requests | PM only | | | |
+
+Non-editable fields render as text, never as disabled inputs, and the store's
+`patchTask` re-checks the permission — the rule survives any UI path.
+A member can never move a task's dates: they raise a **request for more days**
+(`requestDays` on the update log), the PM accepts or rejects, and only an
+accepted request changes `planDays`.
 ## 5. Workflows and statuses
 
 ### 5.1 Estimate workflow
@@ -311,6 +457,49 @@ Draft → Submitted → Approved → Ordered
 
 ---
 
+### 5.4 Project workflow *(new)*
+
+```
+Inquiry won → Project created → Planning → Design → Development →
+Installation → Commissioning → Handover → Closed
+                                     ↘ On Hold (any point, reversible)
+```
+
+1. Creating a project copies number, customer, project type, estimate link and
+   inquiry number from the approved estimate, then creates the fifteen folders
+   in one step — both in the database and on OneDrive / SharePoint.
+2. `progress` is maintained on the project; milestone progress is separate and
+   lives on `ProjectMilestone` (folder 08).
+3. A project is late when `targetDelivery < today` and status is not Closed —
+   the row and the delivery date turn red in the list and the header.
+4. Purchase requisitions raised against the project's estimate appear on the
+   Cost tab; committed value is the sum of PR lines (`qty × unitCost`).
+5. Closing a project requires the same document completeness the team already
+   expects: report (10) and manual (11) present. Enforce server side when the
+   status moves to Handover or Closed.
+
+---
+### 5.5 Schedule workflow *(new)*
+
+```
+PO arrives → PM applies the phase template (or builds the WBS by hand)
+          → assigns PIC per task → freezes Baseline Rev 1 (the promise)
+Members   → My Work: percent strip 0·25·50·75·100, Start today, Finish today,
+            blocked reason (required), forecast date (required once late),
+            + Add my task (their own detail rows, always Internal)
+          → Request more days: changes nothing until the PM accepts
+PM weekly → Updates tab: request queue + who moved what + not-updated-5-days
+          → Baseline tab: row-by-row slip in signed work days
+          → Audience toggle → Customer view → export (Customer rows only,
+            baseline dates, internal detail and member rows hidden)
+Scope change → Re-baseline with a mandatory reason; every rev is kept
+```
+
+The Updates feed is append-only and doubles as the audit trail and the
+Monday-meeting agenda. Requests are updates with `requestDays > 0` and an
+empty `answer` — one array, one queue.
+
+---
 ## 6. Validation rules (`validateEstimate`)
 
 Critical errors (block submit and approval):
@@ -387,6 +576,19 @@ addressed by a **storage key**, not a file path, so Microsoft 365 / SharePoint
 today can be swapped for the company NAS later without touching the estimate
 database. Folder pattern in Settings: `/{Year}/{Customer}/{InquiryNo}/{DocumentCategory}/`.
 
+**Project documents** *(new)* follow the team's existing OneDrive layout:
+
+```
+IoT Team - Documents / Project - {Year} / [{ProjectNo}] {ProjectName} / {NN}. {FolderName}
+```
+
+The application does not replace OneDrive — it indexes it. A `ProjectDoc` row
+is a pointer (storage key + metadata), so a file uploaded through the folder
+browser lands in the same OneDrive folder the team opens from Explorer, and a
+file dropped into OneDrive directly must appear in the browser after a sync.
+Implement with the Microsoft Graph drive API: one drive item per project, the
+fifteen children created at project creation, delta sync into `project_docs`.
+
 ---
 
 ## 11. What the back end has to provide
@@ -408,6 +610,18 @@ supplier_quotations, quotation_files
 missing_prices
 work_items                   (resource plan)
 purchase_requisitions, pr_lines
+projects                     (no, customer, type, status, manager, lead, dates, progress, folder_path)
+project_members              (project_id, user_id, role_on_project)
+project_folders              (fixed 00–14 reference list)
+project_docs                 (project_id, folder, name, type, size, storage_key, uploaded_by, uploaded_at)
+project_tasks                (project_id, title, owner, due, status, priority, folder)
+project_milestones           (project_id, name, folder, start, end, progress, owner) -- superseded by schedule_tasks
+schedule_tasks               (project_id, parent_id, order, kind, name, visibility, origin,
+                              plan lane / baseline lane / progress lane — see section 2.12)
+schedule_updates             (append only: field, from, to, comment, request_days, answer)
+schedule_baselines           (project_id, rev, label, taken_at, taken_by, reason, promised_finish)
+schedule_templates           (name, project_type, rows json)
+holidays                     (date)
 audit_log                    (append only)
 notifications
 ```
@@ -423,6 +637,18 @@ notifications
 - `GET /resource-plan?from=&weeks=` → work items + capacity
 - `POST /purchase-requisitions` (from estimate item ids) and status transitions
 - `GET /reports/:key` for the 13 reports, plus Excel and PDF export
+- `POST /projects` (from an approved estimate) → creates the project **and** its fifteen folders
+- `GET /projects?status=&customer=&owner=` and `GET /projects/:id`
+- `GET /projects/:id/docs?folder=` · `POST /projects/:id/docs` (upload) · `GET /docs/:id/link` (OneDrive share link)
+- CRUD for `project_tasks` and `project_milestones`
+- `GET /search?q=` must also match project number, project name, PO number and **document file name**
+- `GET /projects/:id/schedule` → resolved rows (run `resolveSchedule` server-side)
+- `PATCH /schedule-tasks/:id` — enforced by `schedulePermission`, appends to `schedule_updates`
+- `POST /schedule-tasks` (add task / member detail) · `DELETE /schedule-tasks/:id` (cascades)
+- `POST /projects/:id/baseline` (freeze / re-baseline, reason required after rev 1)
+- `POST /schedule-requests/:updateId/answer` (accept adds the days, reject changes nothing)
+- `GET /my-work` → the signed-in member's rows across projects, with the urgency flags
+- `GET /projects/:id/schedule/export?audience=customer` → values-only workbook, Customer rows, baseline dates
 
 ### Rules that must be enforced server side
 1. All arithmetic in section 4 — the client only displays returned values.
@@ -430,6 +656,10 @@ notifications
 3. Item code generation and re-issue (section 3).
 4. Numbering and uniqueness for INQ / EST / SQ / PR.
 5. Validation before submit and approve.
+6. Project number issue, folder creation (all fifteen, always) and the OneDrive mirror.
+7. No amount is ever read out of a document in folders 04 (Quote) or 05 (PO).
+8. All schedule arithmetic in 4.7, the permission matrix in 4.8, and the rule that
+   an accepted request is the only path by which a member changes a plan date.
 6. Locking of approved revisions.
 7. Audit entries for every field change, with previous value, new value and reason.
 8. Frozen estimate snapshot on PR lines.
@@ -477,5 +707,10 @@ names, part numbers — is never translated.
 | `app/system/ui.tsx` | Icons, badges, panels, tabs, drawer, modal, charts |
 | `app/system/App.tsx` | Shell, navigation, routing, global search |
 | `app/system/screens/` | One file per screen area |
+| `app/system/screens/Project.tsx` | Project list and project workspace (folder browser, to do list, schedule, cost, team) |
+| `app/system/screens/Schedule.tsx` | Schedule workspace: banded WBS sheet, timeline with baseline/slip, updates, baseline variance |
+| `app/system/screens/MyWork.tsx` | The member's screen: urgent queue, one-click updates, own detail rows, request more days |
+| `app/system/store.ts` | Client schedule store — the single write seam; its functions map 1:1 onto the future API |
+| `app/system/session.ts` | Who is signed in (login role → demonstration user) |
 | `app/globals.css` | Design system, with a "Company template alignment (PEGASUS)" section at the end that re-skins it to the house admin style: white sidebar under a blue logo block, Bootstrap button colours, DataTables-style grids with status-coloured rows |
 | `app/system/Brand.tsx` | TOMAS TECH logo as inline SVG (light and dark tone) |

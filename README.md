@@ -1,8 +1,9 @@
 # IoT Team Center — Engineering Estimate Cost Management System
 
 Internal engineering application for TOMAS TECH: register customer inquiries,
-prepare and review engineering estimate cost, reuse supplier prices and control
-revisions — replacing the current Excel-based estimate process.
+prepare and review engineering estimate cost, reuse supplier prices, control
+revisions and run the won project through to handover — replacing the current
+Excel-and-OneDrive process.
 
 The system controls **internal engineering cost only**. It contains no gross
 margin, profit margin, selling price, markup or commercial quotation
@@ -22,7 +23,7 @@ the suggested tables and endpoints, and what is still mock.
 | `app/system/data.ts` | Demonstration dataset (customers, inquiries, estimates, price library, quotations, audit log, rates) |
 | `app/system/calc.ts` | Centralised calculation rules, price age, validation and revision comparison |
 | `app/system/ui.tsx` | Shared primitives — icons, badges, panels, tabs, drawers, modals, charts |
-| `app/system/screens/` | Dashboard, Inquiry, Estimate list, Estimate workspace, Price, Admin screens |
+| `app/system/screens/` | Dashboard, Inquiry, Estimate list, Estimate workspace, Price, Resource, Purchase, Project, Admin screens |
 | `app/globals.css` | Design system — navy sidebar, blue primary, green/orange/red status, dense tables |
 
 Material cost is captured in three levels: **discipline** (Hardware, Software,
@@ -38,14 +39,34 @@ man-hour it needs plus the travel, accommodation and per diem that come with it,
 and man-hour bought from a supplier carries its supplier and quotation number
 instead of a master rate.
 
+Once an inquiry is won it becomes a **project** with its PJ number and the
+same fifteen folders the team keeps on OneDrive (`00. To do list` …
+`14. Ref`). The project workspace holds all of it in one place: a folder
+browser over the documents, the to do list (folder 00) as an editable sheet,
+the schedule (folder 08) as a milestone Gantt, the link back to the estimate
+and its purchase requisitions, and the team on the job. Global search reaches
+project numbers, project names, PO numbers and document file names, so a
+drawing is one search away from the folder it lives in.
+
+After the PO the **project schedule** replaces the old two-file Gantt: one
+WBS tree per project (phase → task → work detail, exactly the Excel template
+columns — WBS, PIC, PREDECESSOR, START, END, DAYS, % DONE, WORK DAYS with
+NETWORKDAYS and =F27+1 dependencies). The PM owns the PLAN lane, each member
+owns the PROGRESS lane of their own rows, and **My Work** gives every member
+a one-click update queue — the master Gantt, the PM view and the customer
+plan are projections of the same rows, so nothing has to be copied between
+files ever again. Baselines freeze the promise; slip is measured in work
+days, and a member who needs more time requests days instead of moving dates.
+
 Screens included: Login · Dashboard · Inquiry List · Create Inquiry · Inquiry
 Detail · Meeting Log · Estimate Cost List · Estimate Cost Workspace · Add Cost
 Item · Engineering Man-hour · Other Project Cost · Multi-Engineer Assignment ·
 Estimate Validation · Revision History · Create Revision · Compare Revision ·
 Engineering Review · Price Library · Price Search Popup · Price History ·
 Supplier Quotation · Waiting Supplier Price · Import Excel · Copy Previous
-Estimate · Customers · Projects · Reports · Master Data · Engineering Rate
-Master · Audit Log · Settings.
+Estimate · Resource Plan · Purchase Requisition · Customers · Projects ·
+Project Workspace · Schedule Workspace · My Work · Reports · Master Data ·
+Engineering Rate Master · Audit Log · Settings.
 
 All screens are driven by the in-repo dataset; wiring them to the API routes
 under `app/api/` and the Drizzle schema in `db/schema.ts` is the next step.

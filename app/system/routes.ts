@@ -16,6 +16,9 @@ export type Route =
   | { name: "pr"; id: string }
   | { name: "customers" }
   | { name: "projects" }
+  | { name: "project"; id: string }
+  | { name: "schedule"; id: string; view?: string }
+  | { name: "my-work" }
   | { name: "reports" }
   | { name: "master" }
   | { name: "rates" }

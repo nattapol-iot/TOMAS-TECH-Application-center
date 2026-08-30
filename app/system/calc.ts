@@ -9,9 +9,11 @@
 
 import type {
   CostItem, CostType, Estimate, ExpenseLine, ManhourLine, ManhourProvider, OtherCostLine,
-  PrLine, PurchaseRequisition, User, WorkItem,
+  PrLine, Project, PurchaseRequisition, Role, ScheduleStatus, ScheduleTask, ScheduleUpdate,
+  User, WorkItem,
 } from "./data";
-import { CAPACITY_PER_WEEK, COST_STRUCTURE, RATES, USERS } from "./data";
+import { CAPACITY_PER_WEEK, COST_STRUCTURE, HOLIDAYS, RATES, USERS } from "./data";
+import type { Tone } from "./ui";
 
 /** The system "today". Fixed so the demonstration data stays reproducible. */
 export const TODAY = new Date("2026-08-29T09:00:00+07:00");
@@ -811,5 +813,322 @@ export function prTotals(pr: PurchaseRequisition) {
     variance: total - estimated,
     variancePercent: estimated ? ((total - estimated) / estimated) * 100 : 0,
     unlinked: pr.lines.filter((line) => !line.estimateItemId).length,
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Project schedule — the spreadsheet's arithmetic, made server-portable
+
+   Everything here is pure. WBS numbers, END dates, work-day counts, parent
+   roll-ups, dependency starts and every variance figure are DERIVED on every
+   pass — a stored roll-up is a roll-up that goes stale, which is exactly the
+   two-file problem this module replaces.
+   -------------------------------------------------------------------------- */
+
+export const TODAY_ISO = isoDate(TODAY);
+
+export const addDays = (iso: string, n: number) => isoDate(new Date(toDate(iso).getTime() + n * DAY));
+
+/** Whole calendar days from a to b (negative when b is earlier). */
+export const diffDays = (a: string, b: string) => Math.round((toDate(b).getTime() - toDate(a).getTime()) / DAY);
+
+/** Excel: END = START + DAYS - 1 (calendar days, minimum 1). */
+export const endFromDays = (start: string, days: number) => addDays(start, Math.max(1, days) - 1);
+
+export const daysFromEnd = (start: string, end: string) => Math.max(1, diffDays(start, end) + 1);
+
+const HOLIDAY_SET = new Set(HOLIDAYS);
+
+export const isWorkDay = (iso: string) => {
+  const weekday = toDate(iso).getDay();
+  return weekday !== 0 && weekday !== 6 && !HOLIDAY_SET.has(iso);
+};
+
+/** Excel NETWORKDAYS: working days from start to end, both inclusive. */
+export function networkDays(start: string, end: string) {
+  if (!start || !end || toDate(end) < toDate(start)) return 0;
+  let count = 0;
+  for (let t = toDate(start).getTime(); t <= toDate(end).getTime(); t += DAY) {
+    if (isWorkDay(isoDate(new Date(t)))) count += 1;
+  }
+  return count;
+}
+
+/** Signed work days from a to b: + when b is later. */
+export const networkDaysSigned = (a: string, b: string) =>
+  (toDate(b) >= toDate(a) ? networkDays(a, b) - 1 : -(networkDays(b, a) - 1));
+
+export function nextWorkDay(iso: string) {
+  let day = iso;
+  while (!isWorkDay(day)) day = addDays(day, 1);
+  return day;
+}
+
+/* ---- The resolved row every schedule screen renders ---------------------- */
+
+export type ScheduleRow = ScheduleTask & {
+  wbs: string;
+  depth: number;
+  hasChildren: boolean;
+  /** Effective window: what the bar draws (actuals and forecasts included). */
+  start: string;
+  end: string;
+  /** Plan window: what the customer was promised (roll-up of plan dates only). */
+  planEndDate: string;
+  days: number;
+  workDays: number;
+  doneLeaves: number;
+  totalLeaves: number;
+  expectedPercent: number;
+  drift: number;
+  varianceDays: number;
+  isLate: boolean;
+  isStale: boolean;
+  needsForecast: boolean;
+  pinned: boolean;
+  circular: boolean;
+  openRequests: number;
+};
+
+/**
+ * Resolve one project's tree: WBS numbers, dependency starts, roll-ups and
+ * health flags — the whole spreadsheet recalculation in one pure pass.
+ */
+export function resolveSchedule(tasks: ScheduleTask[], projectId: string, updates: ScheduleUpdate[] = []): ScheduleRow[] {
+  const mine = tasks.filter((entry) => entry.projectId === projectId);
+  const byId = new Map(mine.map((entry) => [entry.id, entry]));
+
+  // Orphan sweep: a half-deleted subtree degrades to top level, never a blank screen.
+  const parentOf = (entry: ScheduleTask) => (entry.parentId && byId.has(entry.parentId) ? entry.parentId : "");
+  const children = new Map<string, ScheduleTask[]>();
+  for (const entry of mine) {
+    const key = parentOf(entry);
+    children.set(key, [...(children.get(key) ?? []), entry]);
+  }
+  for (const list of children.values()) list.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+
+  type Resolved = {
+    planStart: string; planEnd: string; start: string; end: string;
+    actualStart: string; actualEnd: string;
+    baselineStart: string; baselineEnd: string;
+    percent: number; status: ScheduleStatus;
+    doneLeaves: number; totalLeaves: number; weight: number; weighted: number;
+    planManDays: number; actualManDays: number;
+    circular: boolean;
+  };
+  const memo = new Map<string, Resolved>();
+  const visiting = new Set<string>();
+
+  const resolve = (entry: ScheduleTask): Resolved => {
+    const cached = memo.get(entry.id);
+    if (cached) return cached;
+    if (visiting.has(entry.id)) {
+      // Dependency cycle — keep manual dates and flag it.
+      const end = endFromDays(entry.planStart, entry.planDays);
+      return {
+        planStart: entry.planStart, planEnd: end, start: entry.planStart, end,
+        actualStart: entry.actualStart, actualEnd: entry.actualEnd,
+        baselineStart: entry.baselineStart, baselineEnd: entry.baselineEnd,
+        percent: entry.percentDone, status: entry.status,
+        doneLeaves: 0, totalLeaves: 1, weight: 1, weighted: entry.percentDone,
+        planManDays: entry.planManDays, actualManDays: entry.actualManDays, circular: true,
+      };
+    }
+    visiting.add(entry.id);
+
+    const kids = (children.get(entry.id) ?? []).filter((kid) => kid.status !== "Cancelled");
+    let resolved: Resolved;
+
+    if (kids.length) {
+      // Parent roll-up. A PHASE is the Excel formula row — start = MIN(children),
+      // end = MAX(children), nothing of its own. A TASK with member details keeps
+      // its OWN plan window and forecast (the PM's commitment); only progress and
+      // status roll up from the details underneath it.
+      const parts = kids.map(resolve);
+      const min = (values: string[]) => values.filter(Boolean).sort()[0] ?? "";
+      const max = (values: string[]) => values.filter(Boolean).sort().slice(-1)[0] ?? "";
+      const weight = parts.reduce((sum, p) => sum + p.weight, 0);
+      const weighted = parts.reduce((sum, p) => sum + p.weighted, 0);
+      const allDone = parts.every((p) => p.status === "Done");
+      const isFormulaRow = entry.kind === "phase" || !entry.planStart;
+
+      let planStart: string;
+      let planEnd: string;
+      let start: string;
+      let end: string;
+      if (isFormulaRow) {
+        planStart = min(parts.map((p) => p.planStart));
+        planEnd = max(parts.map((p) => p.planEnd));
+        start = min(parts.map((p) => p.start));
+        end = max(parts.map((p) => p.end));
+      } else {
+        planStart = entry.planStart;
+        planEnd = endFromDays(planStart, entry.planDays);
+        start = entry.actualStart || min([planStart, ...parts.map((p) => p.start)]);
+        end = entry.actualEnd || entry.forecastEnd || max([planEnd, ...parts.map((p) => p.end)]);
+      }
+
+      resolved = {
+        planStart, planEnd, start, end,
+        actualStart: isFormulaRow ? min(parts.map((p) => p.actualStart)) : entry.actualStart || min(parts.map((p) => p.actualStart)),
+        actualEnd: allDone ? (isFormulaRow ? max(parts.map((p) => p.actualEnd)) : entry.actualEnd || max(parts.map((p) => p.actualEnd))) : "",
+        baselineStart: isFormulaRow ? min(parts.map((p) => p.baselineStart)) : entry.baselineStart,
+        baselineEnd: isFormulaRow ? max(parts.map((p) => p.baselineEnd)) : entry.baselineEnd,
+        percent: weight ? Math.round(weighted / weight) : Math.round(parts.reduce((s, p) => s + p.percent, 0) / parts.length),
+        status: allDone ? "Done"
+          : parts.some((p) => p.status === "Blocked") ? "Blocked"
+            : parts.some((p) => p.status === "In Progress" || p.percent > 0 || p.actualStart) ? "In Progress"
+              : "Not Started",
+        doneLeaves: parts.reduce((sum, p) => sum + p.doneLeaves, 0),
+        totalLeaves: parts.reduce((sum, p) => sum + p.totalLeaves, 0),
+        weight, weighted,
+        planManDays: entry.planManDays + parts.reduce((sum, p) => sum + p.planManDays, 0),
+        actualManDays: entry.actualManDays + parts.reduce((sum, p) => sum + p.actualManDays, 0),
+        circular: parts.some((p) => p.circular),
+      };
+    } else {
+      // Leaf. A linked start follows its predecessor's PLAN end (the "=F27+1"
+      // formula) — a member finishing late moves the bar, never the plan.
+      let planStart = entry.planStart;
+      let circular = false;
+      if (entry.startMode === "linked" && entry.predecessorId && byId.has(entry.predecessorId)) {
+        const pred = resolve(byId.get(entry.predecessorId)!);
+        circular = pred.circular;
+        planStart = nextWorkDay(addDays(pred.planEnd, 1 + entry.lagDays));
+      }
+      const planEnd = endFromDays(planStart, entry.planDays);
+      const start = entry.actualStart || planStart;
+      const end = entry.actualEnd || entry.forecastEnd || (toDate(start) > toDate(planEnd) ? endFromDays(start, entry.planDays) : planEnd);
+      const wd = networkDays(planStart, planEnd) || 1;
+      resolved = {
+        planStart, planEnd, start, end,
+        actualStart: entry.actualStart, actualEnd: entry.actualEnd,
+        baselineStart: entry.baselineStart, baselineEnd: entry.baselineEnd,
+        percent: entry.percentDone, status: entry.status,
+        doneLeaves: entry.status === "Done" ? 1 : 0, totalLeaves: 1,
+        weight: wd, weighted: entry.percentDone * wd,
+        planManDays: entry.planManDays, actualManDays: entry.actualManDays, circular,
+      };
+    }
+
+    visiting.delete(entry.id);
+    memo.set(entry.id, resolved);
+    return resolved;
+  };
+
+  const openByTask = new Map<string, number>();
+  for (const update of updates) {
+    if (update.requestDays > 0 && update.answer === "") {
+      openByTask.set(update.taskId, (openByTask.get(update.taskId) ?? 0) + 1);
+    }
+  }
+
+  // Flatten in WBS order and attach the derived numbers.
+  const rows: ScheduleRow[] = [];
+  const walk = (parentId: string, prefix: string, depth: number) => {
+    (children.get(parentId) ?? []).forEach((entry, index) => {
+      const wbs = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
+      const r = resolve(entry);
+      const kids = children.get(entry.id) ?? [];
+      const workDays = networkDays(r.start, r.end);
+      const expected = workDays > 0 && toDate(r.start) <= TODAY
+        ? Math.min(100, Math.round((networkDays(r.start, toDate(r.end) < TODAY ? r.end : TODAY_ISO) / workDays) * 100))
+        : 0;
+      const late = r.status !== "Done" && entry.status !== "Cancelled" && !!r.end && toDate(r.end) < TODAY;
+      rows.push({
+        ...entry,
+        wbs, depth, hasChildren: kids.length > 0,
+        planStart: r.planStart, planEndDate: r.planEnd,
+        start: r.start, end: r.end,
+        actualStart: r.actualStart, actualEnd: r.actualEnd,
+        baselineStart: r.baselineStart, baselineEnd: r.baselineEnd,
+        percentDone: r.percent, status: r.status,
+        planManDays: r.planManDays, actualManDays: r.actualManDays,
+        days: r.start && r.end ? daysFromEnd(r.start, r.end) : 0,
+        workDays,
+        doneLeaves: r.doneLeaves, totalLeaves: r.totalLeaves,
+        expectedPercent: expected,
+        drift: r.percent - expected,
+        varianceDays: r.baselineEnd && r.end ? networkDaysSigned(r.baselineEnd, r.end) : 0,
+        isLate: late,
+        isStale: r.status === "In Progress" && kids.length === 0 && networkDays(entry.updatedAt, TODAY_ISO) > 5,
+        needsForecast: (kids.length === 0 || entry.kind === "task") && r.status !== "Done" && entry.status !== "Cancelled"
+          && !!r.planEnd && toDate(r.planEnd) < TODAY && !entry.forecastEnd && !entry.actualEnd,
+        pinned: entry.startMode === "manual" && !!entry.predecessorId,
+        circular: r.circular,
+        openRequests: openByTask.get(entry.id) ?? 0,
+      });
+      walk(entry.id, wbs, depth + 1);
+    });
+  };
+  walk("", "", 1);
+  return rows;
+}
+
+/** The root summary a header or a project list needs. */
+export function scheduleSummary(rows: ScheduleRow[]) {
+  const top = rows.filter((row) => row.depth === 1);
+  if (!top.length) return null;
+  const leaves = rows.filter((row) => !row.hasChildren && row.status !== "Cancelled");
+  const min = (values: string[]) => values.filter(Boolean).sort()[0] ?? "";
+  const max = (values: string[]) => values.filter(Boolean).sort().slice(-1)[0] ?? "";
+  const start = min(top.map((row) => row.start));
+  const end = max(top.map((row) => row.end));
+  const baselineEnd = max(top.map((row) => row.baselineEnd));
+  const weight = leaves.reduce((sum, row) => sum + (networkDays(row.planStart, row.planEndDate) || 1), 0);
+  const weighted = leaves.reduce((sum, row) => sum + row.percentDone * (networkDays(row.planStart, row.planEndDate) || 1), 0);
+  return {
+    start, end, baselineEnd,
+    workDays: networkDays(start, end),
+    percent: weight ? Math.round(weighted / weight) : 0,
+    varianceDays: baselineEnd && end ? networkDaysSigned(baselineEnd, end) : 0,
+    late: leaves.filter((row) => row.isLate).length,
+    blocked: leaves.filter((row) => row.status === "Blocked").length,
+    taskCount: leaves.length,
+    doneCount: leaves.filter((row) => row.status === "Done").length,
+  };
+}
+
+export const scheduleTone = (row: ScheduleRow): Tone =>
+  (row.status === "Done" ? "green"
+    : row.status === "Blocked" || row.isLate ? "red"
+      : row.drift < -15 ? "red"
+        : row.drift < -5 ? "amber"
+          : row.status === "In Progress" ? "blue" : "slate");
+
+/* ---- Who may edit what --------------------------------------------------- */
+
+export type SchedulePermission = {
+  /** planStart, planDays, predecessor, link — the dates the customer sees. */
+  canEditPlan: boolean;
+  /** name, kind, visibility, PIC, structure. */
+  canEditIdentity: boolean;
+  /** percentDone, status, actuals, forecast, note — the owner's lane. */
+  canEditProgress: boolean;
+  canAddDetail: boolean;
+  canDelete: boolean;
+  canBaseline: boolean;
+  isManager: boolean;
+};
+
+export function schedulePermission(user: User, role: Role, project: Project, row?: ScheduleRow): SchedulePermission {
+  const readOnly = role === "Viewer" || role === "Sales Engineer" || project.status === "Closed";
+  const isManager = !readOnly
+    && (role === "Engineering Manager" || role === "Admin"
+      || (role === "Project Manager" && project.managerId === user.id));
+  const isPic = !!row && row.picIds.includes(user.id);
+  const isLead = project.leadEngineerId === user.id;
+  const isMine = !!row && row.origin === "Member" && row.createdBy === user.id;
+  const isDetail = row?.kind === "detail";
+  const isPhase = row?.kind === "phase" || (!!row && row.hasChildren);
+  return {
+    // Phase dates are computed for everybody — they are the =E9/=F12 formula cells.
+    canEditPlan: !readOnly && !isPhase && (isManager || (isMine && isDetail)),
+    canEditIdentity: !readOnly && (isManager || (isMine && isDetail)),
+    canEditProgress: !readOnly && !isPhase && (isManager || isPic || isLead || (isMine && isDetail)),
+    canAddDetail: !readOnly && !!row && row.kind === "task" && (isManager || isPic),
+    canDelete: !readOnly && (isManager || (isMine && isDetail && !row?.hasChildren)),
+    canBaseline: isManager,
+    isManager,
   };
 }

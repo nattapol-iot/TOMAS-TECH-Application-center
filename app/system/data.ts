@@ -1332,3 +1332,708 @@ export const ESTIMATE_LEAD_TIME = [
   { type: "WMS", days: 14 },
   { type: "Traceability", days: 7 },
 ];
+
+/* --------------------------------------------------------------------------
+   Project management
+
+   A won inquiry becomes a project with its own number (PJ26xxxx). The team
+   already files everything in OneDrive under fifteen standard folders per
+   project; the application mirrors exactly that structure so nobody has to
+   learn a new filing system — every document, task and milestone hangs off the
+   same folder codes.
+   -------------------------------------------------------------------------- */
+
+export const PROJECT_FOLDERS: { code: string; name: string; hint: string }[] = [
+  { code: "00", name: "To do list", hint: "Open points and actions for the team" },
+  { code: "01", name: "Concept Design and Proposal", hint: "Concept, proposal and customer presentation" },
+  { code: "02", name: "Drawing", hint: "Layout, GA, electrical and mechanical drawing" },
+  { code: "03", name: "Estimate cost", hint: "Estimate cost sheet and its revisions" },
+  { code: "04", name: "Quote", hint: "Commercial documents — filed, not priced here" },
+  { code: "05", name: "PO", hint: "Customer purchase order document" },
+  { code: "06", name: "Specifications and Documentation", hint: "Specification, standard and requirement" },
+  { code: "07", name: "Development", hint: "Program, source and development notes" },
+  { code: "08", name: "Schedule", hint: "Project schedule and milestone plan" },
+  { code: "09", name: "Installation", hint: "Site installation record and checklist" },
+  { code: "10", name: "Report", hint: "Progress, test and handover report" },
+  { code: "11", name: "Manual and Document", hint: "Operation and maintenance manual" },
+  { code: "12", name: "DATA & EXAMPLE", hint: "Sample data, master data and examples" },
+  { code: "13", name: "Pic and Video", hint: "Site photo and video record" },
+  { code: "14", name: "Ref", hint: "Reference from other projects" },
+];
+
+export const PROJECT_STATUSES = [
+  "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "Closed", "On Hold",
+] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+export type Project = {
+  id: string;
+  /** PJ + year + running number, as used on the OneDrive folder name. */
+  no: string;
+  name: string;
+  customerId: string;
+  projectType: string;
+  status: ProjectStatus;
+  managerId: string;
+  leadEngineerId: string;
+  members: string[];
+  inquiryNo: string;
+  estimateId: string;
+  /** Customer PO number — the document reference only, never its value. */
+  poNo: string;
+  poDate: string;
+  startDate: string;
+  targetDelivery: string;
+  actualDelivery: string;
+  progress: number;
+  site: string;
+  remark: string;
+  /** Where the same project lives on OneDrive / SharePoint. */
+  folderPath: string;
+};
+
+export const DOC_TYPES = ["PDF", "Excel", "Word", "PowerPoint", "Drawing", "Image", "Video", "Other"] as const;
+export type DocType = (typeof DOC_TYPES)[number];
+
+export type ProjectDoc = {
+  id: string;
+  projectId: string;
+  /** Folder code from PROJECT_FOLDERS. */
+  folder: string;
+  name: string;
+  type: DocType;
+  size: string;
+  uploadedBy: string;
+  uploadedAt: string;
+  remark: string;
+};
+
+export const TASK_STATUSES = ["Open", "In Progress", "Blocked", "Done"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export type ProjectTask = {
+  id: string;
+  projectId: string;
+  title: string;
+  ownerId: string;
+  due: string;
+  status: TaskStatus;
+  priority: Priority;
+  folder: string;
+  remark: string;
+};
+
+export type ProjectMilestone = {
+  id: string;
+  projectId: string;
+  name: string;
+  folder: string;
+  start: string;
+  end: string;
+  progress: number;
+  owner: string;
+};
+
+export const PROJECTS: Project[] = [
+  {
+    id: "p1", no: "PJ260152", name: "Katolec - Ink Jet Machine (Modify)", customerId: "c4", projectType: "Automation",
+    status: "Development", managerId: "u7", leadEngineerId: "u2", members: ["u2", "u3", "u4"],
+    inquiryNo: "INQ-2608-0001", estimateId: "e1", poNo: "PO-KTL-26-0451", poDate: "2026-08-18",
+    startDate: "2026-08-20", targetDelivery: "2026-12-19", actualDelivery: "", progress: 42,
+    site: "Ayutthaya — Hi-Tech Industrial Estate", remark: "Modify existing ink jet marking line.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260152] Katolec - Ink Jet Machine (Modify)",
+  },
+  {
+    id: "p2", no: "PJ260104", name: "JCU - Robot Palletizer project", customerId: "c2", projectType: "Robot",
+    status: "Installation", managerId: "u7", leadEngineerId: "u10", members: ["u10", "u5", "u4", "u1"],
+    inquiryNo: "INQ-2608-0009", estimateId: "e5", poNo: "PO-JCU-26-0088", poDate: "2026-07-02",
+    startDate: "2026-07-08", targetDelivery: "2026-09-30", actualDelivery: "", progress: 78,
+    site: "Chonburi — Amata City", remark: "Palletizer cell with safety fence and conveyor.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260104] JCU - Robot Palletizer project",
+  },
+  {
+    id: "p3", no: "PJ260052", name: "Monitoring Traceability System & PM Management for TBGT", customerId: "c1",
+    projectType: "Traceability", status: "Commissioning", managerId: "u7", leadEngineerId: "u1", members: ["u1", "u3"],
+    inquiryNo: "INQ-2608-0004", estimateId: "e2", poNo: "PO-TBGT-26-0210", poDate: "2026-05-14",
+    startDate: "2026-05-20", targetDelivery: "2026-09-12", actualDelivery: "", progress: 88,
+    site: "Rayong — Eastern Seaboard", remark: "Traceability plus preventive maintenance dashboard.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260052] Monitoring Traceability System & PM Management for TBGT",
+  },
+  {
+    id: "p4", no: "PJ260067", name: "Inspection Machine for SIAM GOSHI", customerId: "c6", projectType: "Vision",
+    status: "Design", managerId: "u7", leadEngineerId: "u5", members: ["u5", "u2"],
+    inquiryNo: "INQ-2608-0006", estimateId: "e3", poNo: "PO-SGS-26-0117", poDate: "2026-08-06",
+    startDate: "2026-08-12", targetDelivery: "2027-01-16", actualDelivery: "", progress: 24,
+    site: "Chachoengsao — Bangpakong", remark: "Vision inspection with reject station.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260067] Inspection Machine for SIAM GOSHI",
+  },
+  {
+    id: "p5", no: "PJ260050", name: "Production management system for JCU", customerId: "c2", projectType: "Software",
+    status: "Handover", managerId: "u7", leadEngineerId: "u3", members: ["u3", "u1"],
+    inquiryNo: "INQ-2607-0018", estimateId: "e4", poNo: "PO-JCU-26-0061", poDate: "2026-04-09",
+    startDate: "2026-04-15", targetDelivery: "2026-08-29", actualDelivery: "2026-08-26", progress: 100,
+    site: "Chonburi — Amata City", remark: "Production dashboard and shift report.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260050] Production management system for JCU",
+  },
+  {
+    id: "p6", no: "PJ260035", name: "Traceability system for TOYO ADVANCED", customerId: "c5", projectType: "Traceability",
+    status: "On Hold", managerId: "u7", leadEngineerId: "u2", members: ["u2"],
+    inquiryNo: "INQ-2608-0011", estimateId: "e6", poNo: "", poDate: "",
+    startDate: "2026-06-01", targetDelivery: "2026-11-28", actualDelivery: "", progress: 18,
+    site: "Lamphun", remark: "Waiting customer decision on line 3 scope.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260035] Traceability system for TOYO ADVANCED",
+  },
+  {
+    id: "p7", no: "PJ260025", name: "Shipping dashboard monitor for AHT", customerId: "c3", projectType: "IoT",
+    status: "Closed", managerId: "u7", leadEngineerId: "u1", members: ["u1", "u3"],
+    inquiryNo: "INQ-2606-0233", estimateId: "e2", poNo: "PO-AHT-26-0033", poDate: "2026-03-11",
+    startDate: "2026-03-18", targetDelivery: "2026-06-28", actualDelivery: "2026-06-24", progress: 100,
+    site: "Samut Prakan — Bangna", remark: "Closed and handed over.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260025] Shipping dashboard monitor for AHT",
+  },
+];
+
+export const PROJECT_DOCS: ProjectDoc[] = [
+  // PJ260152 Katolec
+  { id: "d1", projectId: "p1", folder: "01", name: "Concept-Proposal-Katolec-InkJet-Rev2.pptx", type: "PowerPoint", size: "8.4 MB", uploadedBy: "Trin Tintanee", uploadedAt: "2026-08-21", remark: "Presented on 22-Aug" },
+  { id: "d2", projectId: "p1", folder: "02", name: "GA-Drawing-InkJet-Line-RevA.dwg", type: "Drawing", size: "3.1 MB", uploadedBy: "Sarawut Chaiyo", uploadedAt: "2026-08-24", remark: "" },
+  { id: "d3", projectId: "p1", folder: "03", name: "EST-2608-0001_R02_EstimateCost.xlsx", type: "Excel", size: "412 KB", uploadedBy: "Nattaphon Prasert", uploadedAt: "2026-08-26", remark: "Exported from the estimate workspace" },
+  { id: "d4", projectId: "p1", folder: "04", name: "Quotation-Katolec-2608.pdf", type: "PDF", size: "620 KB", uploadedBy: "Chatchai Pimsen", uploadedAt: "2026-08-14", remark: "Filed for reference only" },
+  { id: "d5", projectId: "p1", folder: "05", name: "PO-KTL-26-0451.pdf", type: "PDF", size: "540 KB", uploadedBy: "Chatchai Pimsen", uploadedAt: "2026-08-18", remark: "" },
+  { id: "d6", projectId: "p1", folder: "06", name: "Customer-Spec-InkJet-Marking.pdf", type: "PDF", size: "2.2 MB", uploadedBy: "Trin Tintanee", uploadedAt: "2026-08-20", remark: "" },
+  { id: "d7", projectId: "p1", folder: "07", name: "PLC-Program-KV8000-v0.3.zip", type: "Other", size: "14.8 MB", uploadedBy: "Trin Tintanee", uploadedAt: "2026-08-28", remark: "Work in progress" },
+  { id: "d8", projectId: "p1", folder: "08", name: "Project-Schedule-PJ260152.xlsx", type: "Excel", size: "180 KB", uploadedBy: "Areeya Boonmee", uploadedAt: "2026-08-22", remark: "" },
+  { id: "d9", projectId: "p1", folder: "12", name: "Sample-Part-Data.csv", type: "Excel", size: "96 KB", uploadedBy: "Kanokwan Sirisuk", uploadedAt: "2026-08-27", remark: "" },
+  { id: "d10", projectId: "p1", folder: "13", name: "Site-Survey-Photos-2026-08-19.zip", type: "Image", size: "48 MB", uploadedBy: "Peerapat Wongchai", uploadedAt: "2026-08-19", remark: "" },
+  { id: "d11", projectId: "p1", folder: "14", name: "Ref-PJ250107-Traceability-NTMT.pdf", type: "PDF", size: "1.4 MB", uploadedBy: "Trin Tintanee", uploadedAt: "2026-08-20", remark: "Similar past project" },
+
+  // PJ260104 JCU palletizer
+  { id: "d12", projectId: "p2", folder: "02", name: "Palletizer-Cell-Layout-RevC.dwg", type: "Drawing", size: "4.6 MB", uploadedBy: "Sarawut Chaiyo", uploadedAt: "2026-07-15", remark: "" },
+  { id: "d13", projectId: "p2", folder: "03", name: "EST-2608-0005_R00_EstimateCost.xlsx", type: "Excel", size: "388 KB", uploadedBy: "Thanaphon Rit", uploadedAt: "2026-07-04", remark: "" },
+  { id: "d14", projectId: "p2", folder: "05", name: "PO-JCU-26-0088.pdf", type: "PDF", size: "480 KB", uploadedBy: "Chatchai Pimsen", uploadedAt: "2026-07-02", remark: "" },
+  { id: "d15", projectId: "p2", folder: "07", name: "Robot-Program-Backup-2026-08-20.zip", type: "Other", size: "22 MB", uploadedBy: "Thanaphon Rit", uploadedAt: "2026-08-20", remark: "" },
+  { id: "d16", projectId: "p2", folder: "09", name: "Installation-Checklist-Week1.xlsx", type: "Excel", size: "142 KB", uploadedBy: "Peerapat Wongchai", uploadedAt: "2026-08-25", remark: "" },
+  { id: "d17", projectId: "p2", folder: "09", name: "Site-Wiring-Record.pdf", type: "PDF", size: "1.1 MB", uploadedBy: "Peerapat Wongchai", uploadedAt: "2026-08-27", remark: "" },
+  { id: "d18", projectId: "p2", folder: "10", name: "Weekly-Progress-Report-W35.pdf", type: "PDF", size: "760 KB", uploadedBy: "Areeya Boonmee", uploadedAt: "2026-08-28", remark: "" },
+  { id: "d19", projectId: "p2", folder: "13", name: "Installation-Photos-W35.zip", type: "Image", size: "63 MB", uploadedBy: "Thanaphon Rit", uploadedAt: "2026-08-28", remark: "" },
+
+  // PJ260052 TBGT
+  { id: "d20", projectId: "p3", folder: "06", name: "Traceability-Interface-Spec-v1.2.pdf", type: "PDF", size: "1.9 MB", uploadedBy: "Kanokwan Sirisuk", uploadedAt: "2026-06-11", remark: "" },
+  { id: "d21", projectId: "p3", folder: "07", name: "Dashboard-Source-v2.1.zip", type: "Other", size: "31 MB", uploadedBy: "Kanokwan Sirisuk", uploadedAt: "2026-08-12", remark: "" },
+  { id: "d22", projectId: "p3", folder: "10", name: "SAT-Report-Draft.docx", type: "Word", size: "540 KB", uploadedBy: "Nattaphon Prasert", uploadedAt: "2026-08-26", remark: "Waiting customer sign-off" },
+  { id: "d23", projectId: "p3", folder: "11", name: "Operation-Manual-TH-EN.pdf", type: "PDF", size: "6.8 MB", uploadedBy: "Kanokwan Sirisuk", uploadedAt: "2026-08-24", remark: "" },
+
+  // PJ260067 SIAM GOSHI
+  { id: "d24", projectId: "p4", folder: "01", name: "Concept-Vision-Inspection.pptx", type: "PowerPoint", size: "5.2 MB", uploadedBy: "Sarawut Chaiyo", uploadedAt: "2026-08-14", remark: "" },
+  { id: "d25", projectId: "p4", folder: "03", name: "EST-2608-0003_R01_EstimateCost.xlsx", type: "Excel", size: "352 KB", uploadedBy: "Trin Tintanee", uploadedAt: "2026-08-24", remark: "" },
+  { id: "d26", projectId: "p4", folder: "06", name: "Inspection-Criteria-DQS-08.pdf", type: "PDF", size: "2.4 MB", uploadedBy: "Trin Tintanee", uploadedAt: "2026-08-18", remark: "" },
+
+  // PJ260050 JCU production management
+  { id: "d27", projectId: "p5", folder: "10", name: "Handover-Report-Signed.pdf", type: "PDF", size: "3.4 MB", uploadedBy: "Areeya Boonmee", uploadedAt: "2026-08-26", remark: "Customer signed" },
+  { id: "d28", projectId: "p5", folder: "11", name: "User-Manual-Production-Dashboard.pdf", type: "PDF", size: "5.1 MB", uploadedBy: "Kanokwan Sirisuk", uploadedAt: "2026-08-20", remark: "" },
+  { id: "d29", projectId: "p5", folder: "13", name: "Handover-Ceremony.mp4", type: "Video", size: "120 MB", uploadedBy: "Areeya Boonmee", uploadedAt: "2026-08-26", remark: "" },
+];
+
+export const PROJECT_TASKS: ProjectTask[] = [
+  { id: "pt1", projectId: "p1", title: "Confirm ink jet controller model with Katolec", ownerId: "u2", due: "2026-09-02", status: "In Progress", priority: "High", folder: "06", remark: "" },
+  { id: "pt2", projectId: "p1", title: "Issue PR for marking head and cabling", ownerId: "u4", due: "2026-09-05", status: "Open", priority: "High", folder: "05", remark: "PR-2609-0003 draft" },
+  { id: "pt3", projectId: "p1", title: "Finish GA drawing revision B", ownerId: "u5", due: "2026-09-08", status: "Open", priority: "Normal", folder: "02", remark: "" },
+  { id: "pt4", projectId: "p1", title: "Prepare test data set for trial run", ownerId: "u3", due: "2026-09-15", status: "Open", priority: "Low", folder: "12", remark: "" },
+  { id: "pt5", projectId: "p1", title: "Kick-off meeting minutes to customer", ownerId: "u7", due: "2026-08-25", status: "Done", priority: "Normal", folder: "00", remark: "" },
+
+  { id: "pt6", projectId: "p2", title: "Complete safety fence installation", ownerId: "u5", due: "2026-09-03", status: "In Progress", priority: "Urgent", folder: "09", remark: "" },
+  { id: "pt7", projectId: "p2", title: "Robot teaching for 3 pallet patterns", ownerId: "u10", due: "2026-09-06", status: "Open", priority: "High", folder: "07", remark: "" },
+  { id: "pt8", projectId: "p2", title: "Weekly progress report W36", ownerId: "u7", due: "2026-09-04", status: "Open", priority: "Normal", folder: "10", remark: "" },
+  { id: "pt9", projectId: "p2", title: "Waiting customer power supply at site", ownerId: "u4", due: "2026-09-01", status: "Blocked", priority: "Urgent", folder: "09", remark: "Customer facility team" },
+
+  { id: "pt10", projectId: "p3", title: "SAT with customer QA", ownerId: "u1", due: "2026-09-05", status: "In Progress", priority: "High", folder: "10", remark: "" },
+  { id: "pt11", projectId: "p3", title: "Hand over operation manual", ownerId: "u3", due: "2026-09-10", status: "Open", priority: "Normal", folder: "11", remark: "" },
+
+  { id: "pt12", projectId: "p4", title: "Confirm inspection criteria with customer QA", ownerId: "u5", due: "2026-09-09", status: "Open", priority: "High", folder: "06", remark: "" },
+  { id: "pt13", projectId: "p4", title: "Camera and lens selection study", ownerId: "u2", due: "2026-09-12", status: "In Progress", priority: "Normal", folder: "01", remark: "" },
+];
+
+export const PROJECT_MILESTONES: ProjectMilestone[] = [
+  { id: "pm1", projectId: "p1", name: "Concept & proposal", folder: "01", start: "2026-08-20", end: "2026-09-05", progress: 100, owner: "u2" },
+  { id: "pm2", projectId: "p1", name: "Design & drawing", folder: "02", start: "2026-09-01", end: "2026-09-30", progress: 45, owner: "u5" },
+  { id: "pm3", projectId: "p1", name: "Procurement", folder: "05", start: "2026-09-08", end: "2026-10-24", progress: 10, owner: "u4" },
+  { id: "pm4", projectId: "p1", name: "Development & FAT", folder: "07", start: "2026-10-05", end: "2026-11-21", progress: 0, owner: "u2" },
+  { id: "pm5", projectId: "p1", name: "Installation & commissioning", folder: "09", start: "2026-11-23", end: "2026-12-12", progress: 0, owner: "u4" },
+  { id: "pm6", projectId: "p1", name: "Report & handover", folder: "10", start: "2026-12-14", end: "2026-12-19", progress: 0, owner: "u7" },
+
+  { id: "pm7", projectId: "p2", name: "Design & drawing", folder: "02", start: "2026-07-08", end: "2026-07-31", progress: 100, owner: "u5" },
+  { id: "pm8", projectId: "p2", name: "Procurement", folder: "05", start: "2026-07-15", end: "2026-08-14", progress: 100, owner: "u4" },
+  { id: "pm9", projectId: "p2", name: "Assembly & FAT", folder: "07", start: "2026-08-03", end: "2026-08-21", progress: 100, owner: "u10" },
+  { id: "pm10", projectId: "p2", name: "Site installation", folder: "09", start: "2026-08-24", end: "2026-09-12", progress: 60, owner: "u4" },
+  { id: "pm11", projectId: "p2", name: "Commissioning & SAT", folder: "10", start: "2026-09-14", end: "2026-09-26", progress: 0, owner: "u10" },
+  { id: "pm12", projectId: "p2", name: "Handover", folder: "11", start: "2026-09-28", end: "2026-09-30", progress: 0, owner: "u7" },
+];
+
+/* ==========================================================================
+   Project schedule (folder 08)
+
+   One WBS tree per project replaces both spreadsheets: the customer-facing
+   "Plan" sheet AND every member's private "Task list". The customer plan is a
+   filter (visibility), a member's list is a filter (picIds), and the master
+   Gantt is a projection — so a member update can never fail to reach the
+   master plan, because there is nothing to propagate between.
+
+   Nothing here is money. The schedule carries work days and man-days only;
+   cost lives on the estimate.
+   ========================================================================== */
+
+export const SCHEDULE_KINDS = ["phase", "task", "detail"] as const;
+export type ScheduleKind = (typeof SCHEDULE_KINDS)[number];
+// phase  = Excel level 1. Roll-up row: dates and % are computed, never typed.
+// task   = Excel level 2. The commitment: PM owns the dates, the PIC owns progress.
+// detail = Sheet 2's "Work detail ( Please input your task )": the member owns it.
+
+export const SCHEDULE_STATUSES = ["Not Started", "In Progress", "Blocked", "Done", "Cancelled"] as const;
+export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
+
+export type ScheduleTask = {
+  id: string;
+  projectId: string;
+  /** "" = level 1 (phase). WBS numbers are derived from the tree, never stored. */
+  parentId: string;
+  /** Sibling sort key, seeded 10/20/30 so an insert never renumbers. */
+  order: number;
+  kind: ScheduleKind;
+  name: string;
+  /** Milestones (design review, buyoff, go-live) draw as a diamond. */
+  milestone: boolean;
+  origin: "PM" | "Member";
+  createdBy: string;
+  /** Customer rows appear on the exported plan; Internal rows never leave the team. */
+  visibility: "Customer" | "Internal";
+
+  /* ---- PLAN lane — the project manager ---- */
+  planStart: string;
+  /** DAYS column: calendar days, END = START + DAYS - 1 exactly as the sheet. */
+  planDays: number;
+  /** linked = start follows the predecessor like "=F27+1"; manual = typed date. */
+  startMode: "manual" | "linked";
+  predecessorId: string;
+  /** Calendar days of lag after the predecessor finishes. */
+  lagDays: number;
+  picIds: string[];
+  /** Customer or supplier PIC, verbatim from the plan: "JCU", "Hik", "RNB"… */
+  picExternal: string;
+  planManDays: number;
+
+  /* ---- BASELINE lane — written only by freezing a baseline ---- */
+  baselineStart: string;
+  baselineEnd: string;
+  baselineDays: number;
+  /** Which revision froze this row; 0 = added after the current baseline. */
+  baselineRev: number;
+
+  /* ---- PROGRESS lane — the task owner ---- */
+  actualStart: string;
+  actualEnd: string;
+  /** The owner's honest finish date when the plan date is no longer true. */
+  forecastEnd: string;
+  percentDone: number;
+  status: ScheduleStatus;
+  blockedReason: string;
+  note: string;
+  actualManDays: number;
+  updatedBy: string;
+  updatedAt: string;
+};
+
+/** Append-only: the update feed, the audit trail AND the request-more-days queue. */
+export type ScheduleUpdate = {
+  id: string;
+  projectId: string;
+  taskId: string;
+  by: string;
+  at: string;
+  field: "percentDone" | "status" | "actualStart" | "actualEnd" | "forecastEnd"
+    | "note" | "plan" | "baseline" | "created" | "deleted" | "request";
+  from: string;
+  to: string;
+  comment: string;
+  /** > 0 = a member asking for more days. Changes no date until the PM accepts. */
+  requestDays: number;
+  answer: "" | "Accepted" | "Rejected";
+  answerBy: string;
+  answerNote: string;
+};
+
+export type ScheduleBaseline = {
+  id: string;
+  projectId: string;
+  rev: number;
+  label: string;
+  takenAt: string;
+  takenBy: string;
+  reason: string;
+  taskCount: number;
+  promisedFinish: string;
+};
+
+export type ScheduleTemplateRow = {
+  /** "1" = phase, "1.1" = task under the first phase. */
+  path: string;
+  name: string;
+  days: number;
+  visibility: "Customer" | "Internal";
+  milestone?: boolean;
+  /** Start the row the work day after the previous sibling ends. */
+  linkPrev?: boolean;
+};
+
+export type ScheduleTemplate = { id: string; name: string; projectType: string; rows: ScheduleTemplateRow[] };
+
+/** Thai public holidays — excluded from every work-day count. */
+export const HOLIDAYS: string[] = [
+  "2026-01-01", "2026-02-11", "2026-04-06", "2026-04-13", "2026-04-14", "2026-04-15",
+  "2026-05-01", "2026-05-04", "2026-06-03", "2026-07-28", "2026-08-12", "2026-10-13",
+  "2026-10-23", "2026-12-05", "2026-12-10", "2026-12-31",
+  "2027-01-01", "2027-02-01", "2027-04-06", "2027-04-13", "2027-04-14", "2027-04-15",
+];
+
+/** The nine phases of the team's own robot plan, ready to apply on day one. */
+export const SCHEDULE_TEMPLATES: ScheduleTemplate[] = [
+  {
+    id: "tpl-robot", name: "Machine / Robot project (9 phases)", projectType: "Robot",
+    rows: [
+      { path: "1", name: "Kick-off & Requirements", days: 0, visibility: "Customer" },
+      { path: "1.1", name: "P/O Confirmation", days: 3, visibility: "Customer" },
+      { path: "1.2", name: "Requirements confirmation", days: 7, visibility: "Customer" },
+      { path: "1.3", name: "Data organization / confirmation", days: 7, visibility: "Customer" },
+      { path: "2", name: "Design", days: 0, visibility: "Customer" },
+      { path: "2.1", name: "System Design", days: 10, visibility: "Customer" },
+      { path: "2.2", name: "Hardware Design", days: 10, visibility: "Customer" },
+      { path: "2.3", name: "Electrical Design", days: 8, visibility: "Customer" },
+      { path: "2.4", name: "Design Review (confirm advance order)", days: 1, visibility: "Customer", milestone: true, linkPrev: true },
+      { path: "2.5", name: "Drawing confirm", days: 5, visibility: "Customer", linkPrev: true },
+      { path: "3", name: "Software Development", days: 0, visibility: "Customer" },
+      { path: "3.1", name: "Software Design", days: 10, visibility: "Customer" },
+      { path: "3.2", name: "Software development", days: 20, visibility: "Customer" },
+      { path: "3.3", name: "Software test", days: 7, visibility: "Customer", linkPrev: true },
+      { path: "4", name: "Procurement", days: 0, visibility: "Customer" },
+      { path: "4.1", name: "Long lead-time order", days: 30, visibility: "Customer" },
+      { path: "4.2", name: "Parts drawing and release", days: 10, visibility: "Internal" },
+      { path: "4.3", name: "Standard parts order", days: 15, visibility: "Internal" },
+      { path: "4.4", name: "Parts receive and check", days: 5, visibility: "Customer", linkPrev: true },
+      { path: "5", name: "Assembly & Integration", days: 0, visibility: "Customer" },
+      { path: "5.1", name: "Control panel assembly", days: 7, visibility: "Customer" },
+      { path: "5.2", name: "Mechanical assembly", days: 10, visibility: "Customer" },
+      { path: "5.3", name: "Field wiring + I/O check", days: 7, visibility: "Customer", linkPrev: true },
+      { path: "5.4", name: "Adjustment", days: 5, visibility: "Customer", linkPrev: true },
+      { path: "6", name: "Factory Acceptance Test (FAT)", days: 0, visibility: "Customer" },
+      { path: "6.1", name: "Test run", days: 7, visibility: "Customer" },
+      { path: "6.2", name: "Buyoff", days: 3, visibility: "Customer", milestone: true, linkPrev: true },
+      { path: "7", name: "Shipping", days: 0, visibility: "Customer" },
+      { path: "7.1", name: "Dismantle / packing / shipping", days: 5, visibility: "Customer" },
+      { path: "8", name: "Installation & SAT", days: 0, visibility: "Customer" },
+      { path: "8.1", name: "Machine installation", days: 10, visibility: "Customer" },
+      { path: "8.2", name: "Electrical & software installation", days: 5, visibility: "Customer", linkPrev: true },
+      { path: "8.3", name: "Full unit test & adjustment", days: 10, visibility: "Customer", linkPrev: true },
+      { path: "9", name: "UAT & Handover / Go live", days: 0, visibility: "Customer" },
+      { path: "9.1", name: "User testing & training", days: 10, visibility: "Customer" },
+      { path: "9.2", name: "Go live", days: 1, visibility: "Customer", milestone: true, linkPrev: true },
+    ],
+  },
+  {
+    id: "tpl-trace", name: "Traceability / software project (6 phases)", projectType: "Traceability",
+    rows: [
+      { path: "1", name: "Kick-off & Requirements", days: 0, visibility: "Customer" },
+      { path: "1.1", name: "Requirement confirmation", days: 7, visibility: "Customer" },
+      { path: "1.2", name: "Machine data survey", days: 5, visibility: "Customer" },
+      { path: "2", name: "System Design", days: 0, visibility: "Customer" },
+      { path: "2.1", name: "Specification design", days: 7, visibility: "Customer" },
+      { path: "2.2", name: "Design review", days: 1, visibility: "Customer", milestone: true, linkPrev: true },
+      { path: "3", name: "Development", days: 0, visibility: "Customer" },
+      { path: "3.1", name: "PLC / machine interface", days: 15, visibility: "Customer" },
+      { path: "3.2", name: "Application & database", days: 20, visibility: "Customer" },
+      { path: "3.3", name: "SIT", days: 5, visibility: "Customer", linkPrev: true },
+      { path: "4", name: "Installation", days: 0, visibility: "Customer" },
+      { path: "4.1", name: "Network and hardware installation", days: 5, visibility: "Customer" },
+      { path: "4.2", name: "Software installation", days: 5, visibility: "Customer", linkPrev: true },
+      { path: "5", name: "Validation", days: 0, visibility: "Customer" },
+      { path: "5.1", name: "Data validation check", days: 5, visibility: "Customer" },
+      { path: "6", name: "UAT & Handover", days: 0, visibility: "Customer" },
+      { path: "6.1", name: "Teaching / user testing / trial", days: 10, visibility: "Customer" },
+      { path: "6.2", name: "Go live", days: 1, visibility: "Customer", milestone: true, linkPrev: true },
+    ],
+  },
+];
+
+const task = (
+  id: string, projectId: string, parentId: string, order: number, kind: ScheduleKind, name: string,
+  rest: Partial<ScheduleTask>,
+): ScheduleTask => ({
+  id, projectId, parentId, order, kind, name,
+  milestone: false, origin: "PM", createdBy: "u7", visibility: "Customer",
+  planStart: "", planDays: 1, startMode: "manual", predecessorId: "", lagDays: 0,
+  picIds: [], picExternal: "", planManDays: 0,
+  baselineStart: "", baselineEnd: "", baselineDays: 0, baselineRev: 0,
+  actualStart: "", actualEnd: "", forecastEnd: "", percentDone: 0, status: "Not Started",
+  blockedReason: "", note: "", actualManDays: 0, updatedBy: "u7", updatedAt: "2026-07-08",
+  ...rest,
+});
+
+/** Frozen with the rev-1 baseline: baseline = the plan as agreed at the PO. */
+const frozen = (start: string, days: number): Partial<ScheduleTask> => {
+  const end = new Date(new Date(`${start}T00:00:00+07:00`).getTime() + (days - 1) * 86_400_000);
+  const iso = `${end.getFullYear()}-${`${end.getMonth() + 1}`.padStart(2, "0")}-${`${end.getDate()}`.padStart(2, "0")}`;
+  return { planStart: start, planDays: days, baselineStart: start, baselineEnd: iso, baselineDays: days, baselineRev: 1 };
+};
+
+export const SCHEDULE_TASKS: ScheduleTask[] = [
+  /* ------------------------------------------------------------------
+     PJ260104 JCU — Robot Palletizer (p2). The team's real plan shape,
+     baseline Rev 1 frozen at the PO. Today is 29 Aug 2026.
+     ------------------------------------------------------------------ */
+  // 1 Kick-off & Requirements — done
+  task("st01", "p2", "", 10, "phase", "Kick-off & Requirements", {}),
+  task("st02", "p2", "st01", 10, "task", "P/O Confirmation", {
+    ...frozen("2026-07-08", 3), picExternal: "JCU", percentDone: 100, status: "Done",
+    actualStart: "2026-07-08", actualEnd: "2026-07-10", updatedBy: "u10", updatedAt: "2026-07-10",
+  }),
+  task("st03", "p2", "st01", 20, "task", "Requirements confirmation", {
+    ...frozen("2026-07-09", 7), picIds: ["u10"], picExternal: "JCU", planManDays: 5,
+    percentDone: 100, status: "Done", actualStart: "2026-07-09", actualEnd: "2026-07-16",
+    actualManDays: 5, updatedBy: "u10", updatedAt: "2026-07-16",
+  }),
+  task("st04", "p2", "st01", 30, "task", "HIKROBOT AMR specification", {
+    ...frozen("2026-07-14", 2), picIds: ["u10"], picExternal: "Hik", planManDays: 2,
+    percentDone: 100, status: "Done", actualStart: "2026-07-14", actualEnd: "2026-07-15",
+    actualManDays: 2, updatedBy: "u10", updatedAt: "2026-07-15",
+  }),
+
+  // 2 Design — done
+  task("st05", "p2", "", 20, "phase", "Design", {}),
+  task("st06", "p2", "st05", 10, "task", "System Design", {
+    ...frozen("2026-07-15", 10), picIds: ["u10"], planManDays: 8,
+    percentDone: 100, status: "Done", actualStart: "2026-07-15", actualEnd: "2026-07-24",
+    actualManDays: 8, updatedBy: "u10", updatedAt: "2026-07-24",
+  }),
+  task("st07", "p2", "st05", 20, "task", "Hardware Design — palletizer zone", {
+    ...frozen("2026-07-20", 10), picIds: ["u5"], planManDays: 8,
+    percentDone: 100, status: "Done", actualStart: "2026-07-20", actualEnd: "2026-07-30",
+    actualManDays: 9, updatedBy: "u5", updatedAt: "2026-07-30",
+  }),
+  task("st08", "p2", "st05", 30, "task", "Electrical Design", {
+    ...frozen("2026-07-22", 8), picIds: ["u4"], planManDays: 6,
+    percentDone: 100, status: "Done", actualStart: "2026-07-22", actualEnd: "2026-07-30",
+    actualManDays: 6, updatedBy: "u4", updatedAt: "2026-07-30",
+  }),
+  task("st09", "p2", "st05", 40, "task", "Design Review with JCU", {
+    ...frozen("2026-08-03", 1), milestone: true, picIds: ["u10"], picExternal: "JCU",
+    percentDone: 100, status: "Done", actualStart: "2026-08-03", actualEnd: "2026-08-03",
+    updatedBy: "u10", updatedAt: "2026-08-03",
+  }),
+  task("st10", "p2", "st05", 50, "task", "Drawing confirm", {
+    ...frozen("2026-08-04", 4), startMode: "linked", predecessorId: "st09",
+    picExternal: "JCU", percentDone: 100, status: "Done",
+    actualStart: "2026-08-04", actualEnd: "2026-08-07", updatedBy: "u10", updatedAt: "2026-08-07",
+  }),
+
+  // 3 Software Development — in progress
+  task("st11", "p2", "", 30, "phase", "Software Development", {}),
+  task("st12", "p2", "st11", 10, "task", "PLC & robot program", {
+    ...frozen("2026-07-27", 20), picIds: ["u10"], planManDays: 15,
+    percentDone: 85, status: "In Progress", actualStart: "2026-07-27",
+    actualManDays: 13, note: "Pallet pattern 4 remains", updatedBy: "u10", updatedAt: "2026-08-27",
+  }),
+  task("st13", "p2", "st11", 20, "task", "PMS / WCS integration", {
+    ...frozen("2026-08-03", 15), picIds: ["u1"], planManDays: 12,
+    percentDone: 70, status: "In Progress", actualStart: "2026-08-03",
+    actualManDays: 9, updatedBy: "u1", updatedAt: "2026-08-28",
+  }),
+  // u1 broke his task down himself — Sheet 2's "Work detail ( Please input your task )"
+  task("st14", "p2", "st13", 10, "detail", "Interface spec with JCU WMS", {
+    origin: "Member", createdBy: "u1", visibility: "Internal",
+    planStart: "2026-08-03", planDays: 4, picIds: ["u1"],
+    percentDone: 100, status: "Done", actualStart: "2026-08-03", actualEnd: "2026-08-06",
+    updatedBy: "u1", updatedAt: "2026-08-06",
+  }),
+  task("st15", "p2", "st13", 20, "detail", "Pallet pattern editor screen", {
+    origin: "Member", createdBy: "u1", visibility: "Internal",
+    planStart: "2026-08-07", planDays: 6, picIds: ["u1"],
+    percentDone: 80, status: "In Progress", actualStart: "2026-08-07",
+    updatedBy: "u1", updatedAt: "2026-08-28",
+  }),
+  task("st16", "p2", "st13", 30, "detail", "Alarm & recovery handling", {
+    origin: "Member", createdBy: "u1", visibility: "Internal",
+    planStart: "2026-08-14", planDays: 4, picIds: ["u1"],
+    percentDone: 30, status: "In Progress", actualStart: "2026-08-20",
+    updatedBy: "u1", updatedAt: "2026-08-28",
+  }),
+  task("st17", "p2", "st11", 30, "task", "Software test with line data", {
+    ...frozen("2026-08-24", 9), startMode: "linked", predecessorId: "st13",
+    picIds: ["u1", "u10"], planManDays: 6, updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+
+  // 4 Procurement — done, one internal chase row
+  task("st18", "p2", "", 40, "phase", "Procurement", {}),
+  task("st19", "p2", "st18", 10, "task", "Order robot NACHI (long lead)", {
+    ...frozen("2026-07-13", 25), picIds: ["u5"], planManDays: 2,
+    percentDone: 100, status: "Done", actualStart: "2026-07-13", actualEnd: "2026-08-06",
+    updatedBy: "u5", updatedAt: "2026-08-06",
+  }),
+  task("st20", "p2", "st18", 20, "task", "Order conveyor set + rack", {
+    ...frozen("2026-07-15", 20), picIds: ["u5"], picExternal: "RNB", planManDays: 2,
+    percentDone: 100, status: "Done", actualStart: "2026-07-15", actualEnd: "2026-08-03",
+    updatedBy: "u5", updatedAt: "2026-08-03",
+  }),
+  task("st21", "p2", "st18", 30, "task", "Chase RNB fence drawing approval", {
+    visibility: "Internal", ...frozen("2026-07-27", 5), baselineRev: 0, baselineStart: "", baselineEnd: "", baselineDays: 0,
+    picIds: ["u5"], picExternal: "RNB",
+    percentDone: 100, status: "Done", actualStart: "2026-07-27", actualEnd: "2026-07-31",
+    note: "Needed two reminders", updatedBy: "u5", updatedAt: "2026-07-31",
+  }),
+  task("st22", "p2", "st18", 40, "task", "Parts receive and check", {
+    ...frozen("2026-08-13", 5), picIds: ["u4"], planManDays: 3,
+    percentDone: 100, status: "Done", actualStart: "2026-08-13", actualEnd: "2026-08-18",
+    actualManDays: 3, updatedBy: "u4", updatedAt: "2026-08-18",
+  }),
+
+  // 5 Assembly & Integration — the live phase, one task late
+  task("st23", "p2", "", 50, "phase", "Assembly & Integration", {}),
+  task("st24", "p2", "st23", 10, "task", "Control panel assembly", {
+    ...frozen("2026-08-10", 7), picIds: ["u4"], planManDays: 5,
+    percentDone: 100, status: "Done", actualStart: "2026-08-10", actualEnd: "2026-08-17",
+    actualManDays: 5, updatedBy: "u4", updatedAt: "2026-08-17",
+  }),
+  task("st25", "p2", "st23", 20, "task", "Mechanical assembly", {
+    // Baseline said 8 days; the PM later extended the plan to 10 — the slip is visible.
+    planStart: "2026-08-17", planDays: 10,
+    baselineStart: "2026-08-17", baselineEnd: "2026-08-24", baselineDays: 8, baselineRev: 1,
+    picIds: ["u5"], planManDays: 8,
+    percentDone: 60, status: "In Progress", actualStart: "2026-08-17",
+    forecastEnd: "2026-09-01", actualManDays: 7,
+    note: "Rack anchor holes mismatch — re-drilled", updatedBy: "u5", updatedAt: "2026-08-28",
+  }),
+  task("st26", "p2", "st25", 10, "detail", "Safety fence + door switch", {
+    origin: "Member", createdBy: "u5", visibility: "Internal",
+    planStart: "2026-08-17", planDays: 4, picIds: ["u5"],
+    percentDone: 100, status: "Done", actualStart: "2026-08-17", actualEnd: "2026-08-20",
+    updatedBy: "u5", updatedAt: "2026-08-20",
+  }),
+  task("st27", "p2", "st25", 20, "detail", "Conveyor alignment + rack anchor", {
+    origin: "Member", createdBy: "u5", visibility: "Internal",
+    planStart: "2026-08-21", planDays: 6, picIds: ["u5"],
+    percentDone: 40, status: "In Progress", actualStart: "2026-08-21",
+    note: "Anchor holes off by 12 mm — re-drilling", updatedBy: "u5", updatedAt: "2026-08-28",
+  }),
+  task("st28", "p2", "st23", 30, "task", "Field wiring + I/O check", {
+    ...frozen("2026-08-27", 7), startMode: "linked", predecessorId: "st25",
+    picIds: ["u4"], planManDays: 5, updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+
+  // 6 FAT
+  task("st29", "p2", "", 60, "phase", "Factory Acceptance Test (FAT)", {}),
+  task("st30", "p2", "st29", 10, "task", "Test run — conveyor + palletizer + robot", {
+    ...frozen("2026-09-07", 5), picIds: ["u10", "u1"], planManDays: 8, updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+  task("st31", "p2", "st29", 20, "task", "Buyoff by JCU", {
+    ...frozen("2026-09-14", 3), milestone: true, startMode: "linked", predecessorId: "st30",
+    picExternal: "JCU", updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+
+  // 7 Shipping & Installation
+  task("st32", "p2", "", 70, "phase", "Shipping & Installation", {}),
+  task("st33", "p2", "st32", 10, "task", "Dismantle / packing / transport", {
+    ...frozen("2026-09-17", 3), picIds: ["u5"], planManDays: 4, updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+  task("st34", "p2", "st32", 20, "task", "Installation at JCU site", {
+    ...frozen("2026-09-21", 5), startMode: "linked", predecessorId: "st33",
+    picIds: ["u5", "u4"], planManDays: 8, updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+
+  // 8 SAT & Handover
+  task("st35", "p2", "", 80, "phase", "SAT & Handover", {}),
+  task("st36", "p2", "st35", 10, "task", "SAT & user training", {
+    ...frozen("2026-09-28", 2), picIds: ["u10", "u1"], picExternal: "JCU", planManDays: 3,
+    updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+  task("st37", "p2", "st35", 20, "task", "Go live", {
+    ...frozen("2026-09-30", 1), milestone: true, startMode: "linked", predecessorId: "st36",
+    picExternal: "JCU", updatedBy: "u7", updatedAt: "2026-07-08",
+  }),
+
+  /* ------------------------------------------------------------------
+     PJ260152 Katolec — Ink Jet Machine (p1). Planned but NOT baselined
+     yet, so the "Freeze baseline" state is visible.
+     ------------------------------------------------------------------ */
+  task("st50", "p1", "", 10, "phase", "Kick-off & Requirements", {}),
+  task("st51", "p1", "st50", 10, "task", "Requirement confirmation with Katolec", {
+    planStart: "2026-08-20", planDays: 5, picIds: ["u2"], picExternal: "Katolec", planManDays: 3,
+    percentDone: 100, status: "Done", actualStart: "2026-08-20", actualEnd: "2026-08-25",
+    updatedBy: "u2", updatedAt: "2026-08-25",
+  }),
+  task("st52", "p1", "st50", 20, "task", "Survey existing marking line", {
+    planStart: "2026-08-25", planDays: 3, picIds: ["u2", "u4"], planManDays: 4,
+    percentDone: 100, status: "Done", actualStart: "2026-08-25", actualEnd: "2026-08-27",
+    updatedBy: "u4", updatedAt: "2026-08-27",
+  }),
+  task("st53", "p1", "", 20, "phase", "Design", {}),
+  task("st54", "p1", "st53", 10, "task", "Modification design — marking head", {
+    planStart: "2026-08-28", planDays: 10, picIds: ["u2"], planManDays: 8,
+    percentDone: 20, status: "In Progress", actualStart: "2026-08-28",
+    updatedBy: "u2", updatedAt: "2026-08-28",
+  }),
+  task("st55", "p1", "st53", 20, "task", "Electrical modification design", {
+    planStart: "2026-09-02", planDays: 7, picIds: ["u4"], planManDays: 5,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st56", "p1", "st53", 30, "task", "Design review with Katolec", {
+    planStart: "2026-09-14", planDays: 1, milestone: true, startMode: "linked", predecessorId: "st54",
+    picIds: ["u2"], picExternal: "Katolec", updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st57", "p1", "", 30, "phase", "Software", {}),
+  task("st58", "p1", "st57", 10, "task", "Inkjet controller data interface", {
+    planStart: "2026-09-15", planDays: 15, picIds: ["u3"], planManDays: 12,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st59", "p1", "st57", 20, "task", "Line PLC modification", {
+    planStart: "2026-09-22", planDays: 10, picIds: ["u2"], planManDays: 8,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st60", "p1", "", 40, "phase", "Procurement", {}),
+  task("st61", "p1", "st60", 10, "task", "Order marking head + cabling", {
+    planStart: "2026-09-15", planDays: 25, picIds: ["u4"], planManDays: 2,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st62", "p1", "", 50, "phase", "Installation & Test", {}),
+  task("st63", "p1", "st62", 10, "task", "Site modification during line stop", {
+    planStart: "2026-11-16", planDays: 6, picIds: ["u2", "u4"], planManDays: 10,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st64", "p1", "st62", 20, "task", "Test run and buyoff", {
+    planStart: "2026-11-23", planDays: 5, startMode: "linked", predecessorId: "st63",
+    picIds: ["u2"], picExternal: "Katolec", planManDays: 5,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+  task("st65", "p1", "", 60, "phase", "Handover", {}),
+  task("st66", "p1", "st65", 10, "task", "Documentation & handover", {
+    planStart: "2026-12-14", planDays: 5, picIds: ["u2"], picExternal: "Katolec", planManDays: 3,
+    updatedBy: "u7", updatedAt: "2026-08-20",
+  }),
+];
+
+export const SCHEDULE_UPDATES: ScheduleUpdate[] = [
+  { id: "su01", projectId: "p2", taskId: "st25", by: "u5", at: "2026-08-28 16:40", field: "percentDone", from: "40", to: "60", comment: "Fence and door switch done, conveyor alignment in progress", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su02", projectId: "p2", taskId: "st25", by: "u5", at: "2026-08-28 16:41", field: "forecastEnd", from: "", to: "2026-09-01", comment: "Rack anchor holes mismatch — re-drilled", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su03", projectId: "p2", taskId: "st25", by: "u5", at: "2026-08-28 16:45", field: "request", from: "", to: "+3 days", comment: "Rack anchor rework — need 3 more days to finish alignment safely", requestDays: 3, answer: "", answerBy: "", answerNote: "" },
+  { id: "su04", projectId: "p2", taskId: "st13", by: "u1", at: "2026-08-28 11:20", field: "percentDone", from: "60", to: "70", comment: "Pallet pattern editor nearly done", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su05", projectId: "p2", taskId: "st12", by: "u10", at: "2026-08-27 17:05", field: "percentDone", from: "75", to: "85", comment: "Pattern 1-3 verified on simulator", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su06", projectId: "p2", taskId: "st16", by: "u1", at: "2026-08-28 11:22", field: "status", from: "Not Started", to: "In Progress", comment: "", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su07", projectId: "p2", taskId: "st12", by: "u10", at: "2026-08-21 09:10", field: "request", from: "", to: "+2 days", comment: "Robot IO map changed by HIKROBOT firmware update", requestDays: 2, answer: "Accepted", answerBy: "u7", answerNote: "Absorbed inside the software phase — test task starts 2 days later" },
+  { id: "su08", projectId: "p2", taskId: "st24", by: "u4", at: "2026-08-17 15:30", field: "actualEnd", from: "", to: "2026-08-17", comment: "Panel powered and checked", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su09", projectId: "p1", taskId: "st54", by: "u2", at: "2026-08-28 10:02", field: "percentDone", from: "0", to: "20", comment: "Head mounting concept drafted", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+  { id: "su10", projectId: "p2", taskId: "st27", by: "u5", at: "2026-08-28 16:38", field: "note", from: "", to: "Anchor holes off by 12 mm — re-drilling", comment: "", requestDays: 0, answer: "", answerBy: "", answerNote: "" },
+];
+
+export const SCHEDULE_BASELINES: ScheduleBaseline[] = [
+  {
+    id: "sb1", projectId: "p2", rev: 1, label: "Rev 1 — PO PO-JCU-26-0088",
+    takenAt: "2026-07-08", takenBy: "u7", reason: "",
+    taskCount: 22, promisedFinish: "2026-09-30",
+  },
+];
