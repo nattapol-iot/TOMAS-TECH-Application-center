@@ -116,7 +116,14 @@ test("SQL application login stays least-privileged and secret template fails clo
   assert.match(grants, /GRANT EXECUTE ON OBJECT::dbo\.issue_document_number/i);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.estimate_revisions/i);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.estimate_revisions/i);
-  assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.boms/i);
+  assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.mat_items/i);
+  assert.match(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.boms/i);
+  assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.mat_pr_approval_steps/i);
+  assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.stock_txns/i);
+  assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.stock_txns/i);
+  assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.mat_audit/i);
+  assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.mat_audit/i);
+  assert.doesNotMatch(grants, /DENY DELETE ON SCHEMA::dbo/i);
   assert.match(loginTemplate, /@password = N'<GENERATE_A_LONG_RANDOM_PASSWORD_IN_THE_SECRET_MANAGER>'/);
   assert.match(loginTemplate, /LEN\(@password\) NOT BETWEEN 24 AND 128/);
 });
@@ -154,6 +161,11 @@ test("production baseline verifier checks schema, app role, and real identities"
   assert.match(verifier, /unexpected direct database permission/);
   assert.match(verifier, /EXECUTE AS USER/);
   assert.match(verifier, /HAS_PERMS_BY_NAME\(N'dbo\.project_docs'/);
+  assert.match(verifier, /required_material_permissions/);
+  assert.match(verifier, /unexpected material-workflow write grant/);
+  assert.match(verifier, /COLLATE DATABASE_DEFAULT/);
+  assert.match(verifier, /trg_stock_txns_append_only/);
+  assert.match(verifier, /trg_mat_audit_append_only/);
   assert.match(verifier, /baseline_verification/);
 });
 
@@ -240,7 +252,7 @@ test("project documents use fail-closed NAS storage, scoped access, and append-o
 
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.project_docs/i);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.project_docs/i);
-  assert.match(grants, /REVOKE UPDATE ON OBJECT::dbo\.project_docs/i);
+  assert.match(grants, /REVOKE UPDATE, DELETE ON OBJECT::dbo\.project_docs/i);
   assert.match(verifier, /Project document metadata must not be updateable or deletable/i);
 
   assert.match(probe, /\[string\]\s+\$NasRoot/);
