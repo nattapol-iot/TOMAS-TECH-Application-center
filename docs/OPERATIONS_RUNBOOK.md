@@ -1,6 +1,6 @@
 # IoT Team Center Operations Runbook
 
-This runbook covers the production operation of the Sites frontend, the ASP.NET Core API hosted on Windows/IIS, the `IoTTeamCenter` Microsoft SQL Server database, and the company-NAS document store reached by the API through Tailscale/SMB. Replace every value in angle brackets before use and record all production changes in the team's change or incident system.
+This runbook covers the production operation of the Vercel-hosted frontend, the ASP.NET Core API hosted on Windows/IIS, the `IoTTeamCenter` Microsoft SQL Server database, and the company-NAS document store reached by the API through Tailscale/SMB. Replace every value in angle brackets before use and record all production changes in the team's change or incident system.
 
 ## Supported production scope
 
@@ -471,7 +471,7 @@ SQL/NAS cutover.
 
 ### Frontend rollback
 
-Restore the prior known-good Sites deployment and confirm its configured API URL, Entra tenant/client/scope, redirect URL, and allowed CORS origin. Then perform sign-in and read/write authorization smoke tests.
+Restore the prior known-good Vercel deployment and confirm its configured API URL, Entra tenant/client/scope, redirect URL, and allowed CORS origin. Then perform sign-in and read/write authorization smoke tests.
 
 ### Database rollback
 

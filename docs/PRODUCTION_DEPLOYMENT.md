@@ -6,7 +6,7 @@ This guide deploys the production path that exists in this repository:
 User browser
     |  Microsoft Entra sign-in and access token
     v
-OpenAI Sites / Vinext frontend
+Vercel-hosted Vinext frontend
     |  HTTPS + Bearer token (never a SQL connection)
     v
 IIS + ASP.NET Core API
@@ -20,7 +20,7 @@ IIS + ASP.NET Core API
 Microsoft SQL Server / IoTTeamCenter (structured data and file metadata)
 ```
 
-The SQL Server must not be reachable from the browser or from Sites. Only the IIS/API host may connect to SQL Server. The application must never use `sa`.
+The SQL Server must not be reachable from the browser or from Vercel. Only the IIS/API host may connect to SQL Server. The application must never use `sa`.
 
 SQL Server remains the system of record for structured business data and document
 metadata. The NAS stores file contents only. Never put live SQL Server `MDF` or
@@ -39,7 +39,7 @@ Keep these as deployment-system values; do not replace repository files with sec
 
 | Placeholder | Meaning |
 | --- | --- |
-| `<SITES_ORIGIN>` | Exact public frontend origin, for example the assigned Sites origin or approved custom origin; no path or trailing slash |
+| `<FRONTEND_ORIGIN>` | Exact public Vercel/custom frontend origin; no path or trailing slash |
 | `<API_ORIGIN>` | Exact public HTTPS API origin |
 | `<API_HOST>` | Hostname portion of the API origin, used by IIS `AllowedHosts` |
 | `<SQL_FQDN>` | Internal SQL Server DNS name matching the SQL TLS certificate; do not use the public IP or a certificate-bypassing alias |
@@ -76,7 +76,7 @@ Configure SQL Server to force encrypted connections where operationally possible
 At the network layer:
 
 - Allow TCP 1433 (or the approved fixed SQL port) only from the API host or its private subnet.
-- Do not expose SQL Server to OpenAI Sites, end-user networks, or the public Internet.
+- Do not expose SQL Server to Vercel, end-user networks, or the public Internet.
 - Allow inbound TCP 443 to the API through the approved reverse proxy/firewall path.
 - Allow the API host outbound DNS and HTTPS to the tenant's Microsoft Entra OpenID metadata and signing-key endpoints under `login.microsoftonline.com`, through the approved proxy/firewall. Test token validation after a cold start and key-cache refresh; never pin signing keys.
 - Permit SMB to `100.98.152.4` only through the approved company Tailscale path and only from the API host/service identity. Do not expose SMB to the public Internet.
@@ -98,7 +98,7 @@ Create two single-tenant app registrations. Do not reuse one registration for bo
 ### Frontend SPA app registration
 
 1. Create the SPA registration and record `<SPA_CLIENT_ID>`.
-2. Add a **Single-page application** redirect URI equal to `<SITES_ORIGIN>`. The code uses `window.location.origin`, so do not add a callback path.
+2. Add a **Single-page application** redirect URI equal to `<FRONTEND_ORIGIN>`. The code uses `window.location.origin`, so do not add a callback path.
 3. Add the API's delegated `<API_SCOPE>` under API permissions and grant tenant/admin consent according to company policy.
 4. Add `http://localhost:3000` only as a separate development redirect URI if local development is required. Never use a localhost redirect for the production release.
 5. Do not create or place a client secret in the frontend.
@@ -241,7 +241,7 @@ Inject these values through the approved server/deployment configuration and sec
 | `Authentication__ClientId` | `<API_CLIENT_ID>` (the API registration, not the SPA registration) |
 | `Authentication__Audience` | `<API_AUDIENCE>` — for the required v2 token, the API client-ID GUID |
 | `Authentication__RequiredScope` | `access_as_user` (the delegated scope name in the token's `scp` claim) |
-| `Cors__AllowedOrigins__0` | `<SITES_ORIGIN>` exactly; no wildcard, path, or trailing slash |
+| `Cors__AllowedOrigins__0` | `<FRONTEND_ORIGIN>` exactly; no wildcard, path, or trailing slash |
 | `Business__TimeZoneId` | `SE Asia Standard Time` on the Windows/IIS host |
 | `ConnectionStrings__IoTTeamCenter` | Secret connection string for `iot_team_app` |
 | `DocumentStorage__Mode` | `Nas` (Production fails closed for any other value) |
@@ -337,11 +337,11 @@ single-flight, briefly cached NAS-root existence/directory-enumeration probe und
 running API identity; it is not a disposable write/delete test or a malware-scan check.
 A 503 or TLS error is a failed deployment gate.
 
-## 7. Build and release the Sites frontend
+## 7. Build and release the Vercel frontend
 
 The frontend's `NEXT_PUBLIC_*` values are compiled into the browser bundle. They are not secrets, but they must be the real reviewed production values before the build. Changing an API origin, tenant, client ID, or scope requires a new frontend build and release.
 
-Configure the Sites build environment with:
+Configure the Vercel Production environment with:
 
 ```text
 NEXT_PUBLIC_APP_MODE=production
@@ -350,7 +350,7 @@ NEXT_PUBLIC_ENTRA_TENANT_ID=<TENANT_ID>
 NEXT_PUBLIC_ENTRA_CLIENT_ID=<SPA_CLIENT_ID>
 NEXT_PUBLIC_ENTRA_API_SCOPE=<API_SCOPE>
 NEXT_PUBLIC_BUSINESS_TIME_ZONE=Asia/Bangkok
-SITE_ORIGIN=<SITES_ORIGIN>
+SITE_ORIGIN=<FRONTEND_ORIGIN>
 ```
 
 Do not copy the zero GUIDs or example domains from `.env.example` into Production. Do not add an Entra client secret. `.openai/hosting.json` intentionally has `d1` and `r2` set to `null`; the browser uses only the HTTPS API and must not be connected directly to a database.
@@ -363,7 +363,7 @@ npm test
 npm run build
 ```
 
-`npm run build` first runs `scripts/validate-production-env.mjs`; it requires production mode, real Entra GUID/scope values, trusted HTTPS API/site origins, and rejects the supplied placeholder values. Release the resulting Vinext build with the repository's configured OpenAI Sites project and its normal reviewed release flow. Preserve the previous Sites release so it can be selected again during rollback. Do not substitute an unreviewed Wrangler/D1 deployment path.
+`vercel.json` runs `npm run build:vercel`. For the Production target this invokes `scripts/validate-production-env.mjs`, which requires production mode, real Entra GUID/scope values, trusted HTTPS API/frontend origins, and rejects the supplied placeholders. Release the reviewed commit with the normal Vercel Production workflow (`npx vercel deploy --prod` or approved CI), and preserve the previous immutable deployment for rollback. A Preview deployment is not Production evidence.
 
 After release, confirm that the actual browser origin still equals both the SPA redirect URI and `Cors__AllowedOrigins__0`. A custom-domain change requires updating Entra, API CORS, `SITE_ORIGIN`, and rebuilding the frontend.
 
@@ -371,7 +371,7 @@ After release, confirm that the actual browser origin still equals both the SPA 
 
 Perform these checks with provisioned test accounts before inviting the full team:
 
-- TLS succeeds for both Sites and API without browser or SQL certificate bypasses.
+- TLS succeeds for both the Vercel/custom frontend and API without browser or SQL certificate bypasses.
 - `/health/live` returns HTTP 200 and `/health/ready` reports schema version 5 or greater.
 - A provisioned user can sign in with the company Microsoft account and load the dashboard.
 - An unprovisioned tenant user receives no application access even if Entra authentication succeeds.
@@ -413,7 +413,7 @@ authorized download, and record the achieved RPO/RTO before production approval.
 
 ### Frontend-only rollback
 
-Select the previous immutable Sites release. Its build-time API/Entra values must still be compatible with the active API. Recheck SPA redirect URI and CORS after rollback.
+Select the previous immutable Vercel deployment. Its build-time API/Entra values must still be compatible with the active API. Recheck SPA redirect URI and CORS after rollback.
 
 ### Database-affecting rollback
 
@@ -425,7 +425,7 @@ For every future schema change, add a new forward-only numbered migration and a 
 
 Record the following in the team's controlled operations system, not in this repository:
 
-- Production Sites origin and release ID.
+- Production Vercel/custom origin and deployment ID.
 - API hostname, IIS site/app-pool name, release ID, and configuration owner.
 - Entra tenant, SPA client ID, API client ID, Application ID URI, scope, and audience.
 - SQL FQDN, instance/port, database name, application login name, and secret-vault reference (never the password).

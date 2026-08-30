@@ -124,7 +124,7 @@ Never publish development settings or development seed data.
 - [API configuration template](backend/IoTTeamCenter.Api/appsettings.json)
 
 Production deployment requires real Microsoft Entra registrations, HTTPS DNS and
-certificates for the Sites frontend and API, an IIS host, SQL Server TLS, a secure
+certificates for the Vercel frontend and API, an IIS host, SQL Server TLS, a secure
 application credential supplied through the server's secret/configuration channel,
 the Entra object ID of the first application administrator, and a confirmed NAS
 share/service identity with tested recovery. No SQL, NAS, or client-secret values

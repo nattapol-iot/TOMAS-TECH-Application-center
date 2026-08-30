@@ -10,15 +10,16 @@ const tenantId = process.env.NEXT_PUBLIC_ENTRA_TENANT_ID ?? "";
 const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID ?? "";
 const apiScope = process.env.NEXT_PUBLIC_ENTRA_API_SCOPE ?? "";
 const ZERO_GUID = "00000000-0000-0000-0000-000000000000";
-const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const apiScopeMatch = apiScope.match(/^api:\/\/([0-9a-f-]+)\/([^/\s]+)$/i);
+const apiApplicationId = apiScopeMatch?.[1] ?? "";
+const isRealGuid = (value: string) => GUID_PATTERN.test(value) && value.toLowerCase() !== ZERO_GUID;
 
 export const IS_ENTRA_CONFIGURED =
-  GUID_PATTERN.test(tenantId)
-  && GUID_PATTERN.test(clientId)
-  && tenantId.toLowerCase() !== ZERO_GUID
-  && clientId.toLowerCase() !== ZERO_GUID
-  && apiScope.toLowerCase().startsWith(`api://${clientId.toLowerCase()}/`)
-  && apiScope.length > `api://${clientId}/`.length;
+  isRealGuid(tenantId)
+  && isRealGuid(clientId)
+  && isRealGuid(apiApplicationId)
+  && Boolean(apiScopeMatch?.[2]);
 
 let instance: PublicClientApplication | null = null;
 let initialized = false;

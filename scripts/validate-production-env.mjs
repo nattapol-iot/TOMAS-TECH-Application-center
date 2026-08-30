@@ -42,7 +42,8 @@ for (const name of ["NEXT_PUBLIC_ENTRA_TENANT_ID", "NEXT_PUBLIC_ENTRA_CLIENT_ID"
 }
 
 const apiScope = process.env.NEXT_PUBLIC_ENTRA_API_SCOPE?.trim();
-if (apiScope && (!/^api:\/\/[^/\s]+\/[^/\s]+$/.test(apiScope) || apiScope.includes("00000000-0000-0000-0000-000000000000"))) {
+const apiScopeMatch = apiScope?.match(/^api:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([^/\s]+)$/i);
+if (apiScope && (!apiScopeMatch || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(apiScopeMatch[1]))) {
   errors.push("NEXT_PUBLIC_ENTRA_API_SCOPE must be a real exposed API scope in api://<application-id>/<scope> format.");
 }
 

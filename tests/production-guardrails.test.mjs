@@ -17,6 +17,8 @@ test("production entry is API-backed and has no demo fallback", async () => {
   assert.doesNotMatch(productionApp, /screens\//);
   assert.doesNotMatch(productionApp, /\/demo/);
   assert.doesNotMatch(authClient, /\/demo/);
+  assert.match(authClient, /apiApplicationId/);
+  assert.doesNotMatch(authClient, /startsWith\(`api:\/\/\$\{clientId/);
   assert.match(layout, /system\/product/);
   assert.doesNotMatch(layout, /system\/data/);
 });
