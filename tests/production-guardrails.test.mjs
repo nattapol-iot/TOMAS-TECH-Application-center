@@ -4,18 +4,55 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-test("production entry does not import the demonstration application", async () => {
-  const [page, productionApp, layout] = await Promise.all([
+test("production entry is API-backed and has no demo fallback", async () => {
+  const [page, productionApp, authClient, layout] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+    readFile(new URL("app/system/auth-client.ts", root), "utf8"),
     readFile(new URL("app/layout.tsx", root), "utf8"),
   ]);
   assert.match(page, /ProductionApp/);
   assert.doesNotMatch(page, /system\/App["']/);
   assert.doesNotMatch(productionApp, /from ["']\.\/data["']/);
   assert.doesNotMatch(productionApp, /screens\//);
+  assert.doesNotMatch(productionApp, /\/demo/);
+  assert.doesNotMatch(authClient, /\/demo/);
   assert.match(layout, /system\/product/);
   assert.doesNotMatch(layout, /system\/data/);
+});
+
+test("mock route, seed dataset, and demo-only dependency closure are absent", async () => {
+  for (const path of [
+    "app/demo/page.tsx",
+    "app/system/App.tsx",
+    "app/system/data.ts",
+    "app/system/calc.ts",
+    "app/system/store.ts",
+    "app/system/matstore.ts",
+    "app/system/session.ts",
+    "app/system/routes.ts",
+    "app/system/screens/Admin.tsx",
+    "app/system/screens/Bom.tsx",
+    "app/system/screens/Dashboard.tsx",
+    "app/system/screens/EstimateList.tsx",
+    "app/system/screens/Inquiry.tsx",
+    "app/system/screens/Inventory.tsx",
+    "app/system/screens/Issue.tsx",
+    "app/system/screens/MatApprovals.tsx",
+    "app/system/screens/MatDashboard.tsx",
+    "app/system/screens/MyWork.tsx",
+    "app/system/screens/Price.tsx",
+    "app/system/screens/PriceSearch.tsx",
+    "app/system/screens/Project.tsx",
+    "app/system/screens/Receiving.tsx",
+    "app/system/screens/Requisition.tsx",
+    "app/system/screens/Resource.tsx",
+    "app/system/screens/Schedule.tsx",
+    "app/system/screens/Workspace.tsx",
+    "lib/export-xlsx.ts",
+  ]) {
+    await assert.rejects(access(new URL(path, root)), `${path} must stay removed`);
+  }
 });
 
 test("legacy unauthenticated D1 routes and binding are absent", async () => {

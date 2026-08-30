@@ -6,9 +6,6 @@ import {
   type AccountInfo,
 } from "@azure/msal-browser";
 
-export const APP_MODE = process.env.NEXT_PUBLIC_APP_MODE === "production" ? "production" : "demo";
-export const IS_PRODUCTION_MODE = APP_MODE === "production";
-
 const tenantId = process.env.NEXT_PUBLIC_ENTRA_TENANT_ID ?? "";
 const clientId = process.env.NEXT_PUBLIC_ENTRA_CLIENT_ID ?? "";
 const apiScope = process.env.NEXT_PUBLIC_ENTRA_API_SCOPE ?? "";
@@ -28,7 +25,7 @@ let initialized = false;
 
 function assertConfigured() {
   if (!IS_ENTRA_CONFIGURED) {
-    throw new Error("Microsoft Entra ยังเป็นค่าตัวอย่าง จึงเข้าสู่ Production ไม่ได้ กรุณาใช้ /demo สำหรับทดสอบ หรือกำหนด Tenant ID, Client ID และ API scope จริง");
+    throw new Error("Microsoft Entra ยังไม่ได้กำหนดค่าจริง กรุณากำหนด Tenant ID, Client ID และ API scope ให้ครบก่อนเข้าสู่ระบบ");
   }
 }
 
@@ -54,7 +51,6 @@ async function getInstance() {
 }
 
 export async function restoreAccount(): Promise<AccountInfo | null> {
-  if (!IS_PRODUCTION_MODE) return null;
   const client = await getInstance();
   const result = await client.handleRedirectPromise();
   const account = result?.account ?? client.getActiveAccount() ?? client.getAllAccounts()[0] ?? null;

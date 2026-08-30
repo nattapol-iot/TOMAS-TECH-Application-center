@@ -20,7 +20,7 @@ share/service identity for document storage.
 ## Architecture
 
 ```text
-OpenAI Sites / vinext frontend
+Vercel-hosted vinext frontend
             |
             | HTTPS + Microsoft Entra access token
             v
@@ -67,10 +67,10 @@ The production entry point currently exposes these database-backed workflows:
 - team, role, permission, audit, and health foundations
 
 The SQL schema also contains schedule, broader document-lifecycle/scan-state, BOM, procurement, receiving,
-material issue, and stock-ledger foundations. Their prototype screens remain in the
-repository for product reference, but they are deliberately excluded from the
-production navigation until authenticated API workflows for those modules are
-finished. See [FEATURES.md](FEATURES.md) for the full domain specification.
+material issue, and stock-ledger foundations. The mock-only screens and in-browser
+seed dataset have been removed; unfinished modules remain excluded from production
+until authenticated API workflows for them are complete. See [FEATURES.md](FEATURES.md)
+for the full domain specification.
 
 ## Repository layout
 

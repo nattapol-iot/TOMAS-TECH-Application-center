@@ -4,6 +4,26 @@ import { acquireApiToken } from "./auth-client";
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
+export const IS_API_CONFIGURED = (() => {
+  try {
+    const url = new URL(apiBaseUrl);
+    const localHttp = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    const trustedProtocol = url.protocol === "https:" || localHttp;
+    const placeholderHost = url.hostname.endsWith(".invalid")
+      || url.hostname === "example.tomastc.com"
+      || url.hostname.endsWith(".example.tomastc.com");
+    return trustedProtocol
+      && !placeholderHost
+      && !url.username
+      && !url.password
+      && url.pathname === "/"
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+})();
+
 export type ApiUser = {
   id: number;
   entraObjectId: string;
@@ -283,7 +303,7 @@ export class ApiClientError extends Error {
 }
 
 async function authorizedFetch(path: string, init?: RequestInit, timeoutMs = 30_000) {
-  if (!apiBaseUrl) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
+  if (!IS_API_CONFIGURED) throw new Error("NEXT_PUBLIC_API_BASE_URL is missing or invalid.");
   const token = await acquireApiToken();
   const headers = new Headers(init?.headers);
   if (!headers.has("Accept")) headers.set("Accept", "application/json");

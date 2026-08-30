@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
-import { loadBootstrap, type BootstrapData } from "./api-client";
+import { IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
 import { PRODUCT } from "./product";
 import { Icon, Toast, type IconName } from "./ui";
 import {
@@ -28,10 +28,12 @@ const NAV: { view: View; label: string; icon: IconName; permission?: string }[] 
   { view: "team", label: "Team & Access", icon: "users", permission: "master.read" },
 ];
 
+const IS_PRODUCTION_CONFIGURED = IS_ENTRA_CONFIGURED && IS_API_CONFIGURED;
+
 export default function ProductionApp() {
   const [bootstrap, setBootstrap] = useState<BootstrapData | null>(null);
   const [view, setView] = useState<View>("dashboard");
-  const [busy, setBusy] = useState(IS_ENTRA_CONFIGURED);
+  const [busy, setBusy] = useState(IS_PRODUCTION_CONFIGURED);
   const [authError, setAuthError] = useState("");
   const [toast, setToast] = useState("");
   const [userOpen, setUserOpen] = useState(false);
@@ -41,7 +43,7 @@ export default function ProductionApp() {
   };
 
   useEffect(() => {
-    if (!IS_ENTRA_CONFIGURED) {
+    if (!IS_PRODUCTION_CONFIGURED) {
       return;
     }
     let cancelled = false;
@@ -79,7 +81,17 @@ export default function ProductionApp() {
 
   const allowedNav = useMemo(() => NAV.filter((item) => !item.permission || bootstrap?.permissions.includes(item.permission)), [bootstrap]);
 
-  if (!bootstrap) return <ProductionLogin busy={busy} error={authError} entraConfigured={IS_ENTRA_CONFIGURED} onSignIn={signIn} />;
+  if (!bootstrap) {
+    return (
+      <ProductionLogin
+        busy={busy}
+        error={authError}
+        entraConfigured={IS_ENTRA_CONFIGURED}
+        apiConfigured={IS_API_CONFIGURED}
+        onSignIn={signIn}
+      />
+    );
+  }
 
   const common = { bootstrap, notify: setToast, refreshBootstrap };
   return (
@@ -118,14 +130,42 @@ export default function ProductionApp() {
   );
 }
 
-function ProductionLogin({ busy, error, entraConfigured, onSignIn }: { busy: boolean; error: string; entraConfigured: boolean; onSignIn: () => Promise<void> }) {
+function ProductionLogin({
+  busy,
+  error,
+  entraConfigured,
+  apiConfigured,
+  onSignIn,
+}: {
+  busy: boolean;
+  error: string;
+  entraConfigured: boolean;
+  apiConfigured: boolean;
+  onSignIn: () => Promise<void>;
+}) {
+  const configured = entraConfigured && apiConfigured;
+  const missing = [
+    !entraConfigured ? "Microsoft Entra (Tenant ID, Client ID และ API scope)" : "",
+    !apiConfigured ? "HTTPS API origin" : "",
+  ].filter(Boolean).join(" และ ");
+
   return <div className="login">
     <aside className="login-aside">
       <div className="login-brand"><BrandLockup tone="dark" height={44} /><span>{PRODUCT.name}</span></div>
       <div><h2>{PRODUCT.name}</h2><p className="login-strap">Engineering Estimate Cost Management System</p><p>พื้นที่ทำงานจริงของทีม IoT สำหรับ Inquiry, Estimate, Project และ Material ที่มีสิทธิ์การเข้าถึงและ Audit trail</p><ul className="login-points"><li><Icon name="check" />Microsoft company account</li><li><Icon name="check" />SQL Server เป็นแหล่งข้อมูลกลางเพียงแห่งเดียว</li><li><Icon name="check" />Role-based access และ optimistic concurrency</li><li><Icon name="check" />เลขเอกสารไม่ซ้ำและตรวจสอบย้อนหลังได้</li></ul></div>
       <div className="login-stats"><div><strong>Entra</strong><span>Identity</span></div><div><strong>RBAC</strong><span>Access</span></div><div><strong>SQL</strong><span>System of record</span></div></div>
     </aside>
-    <div className="login-form-wrap"><form className="login-form" onSubmit={(event) => { event.preventDefault(); if (entraConfigured) void onSignIn(); }}><h1>Sign in</h1><p>ใช้บัญชี Microsoft ของบริษัทเพื่อเข้าสู่ Production workspace</p>{error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}{entraConfigured ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{busy ? "Connecting…" : "Continue with Microsoft"}</button> : <><div className="callout warning" role="status"><Icon name="alertTriangle" /><span>Production ยังล็อกอยู่ เพราะ Microsoft Entra เป็นค่าตัวอย่าง กรุณากำหนด Tenant ID, Client ID และ API scope จริงก่อนใช้งาน</span></div><a className="btn primary block" href="/demo"><Icon name="arrowRight" />เปิด Local Demo</a></>}<div className="login-role-hint"><strong>Production access</strong>บทบาทและสิทธิ์ถูกกำหนดโดยผู้ดูแล IoT Team Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน Microsoft</div></form></div>
+    <div className="login-form-wrap">
+      <form className="login-form" onSubmit={(event) => { event.preventDefault(); if (configured) void onSignIn(); }}>
+        <h1>Sign in</h1>
+        <p>ใช้บัญชี Microsoft ของบริษัทเพื่อเข้าสู่ Production workspace</p>
+        {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+        {configured
+          ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{busy ? "Connecting…" : "Continue with Microsoft"}</button>
+          : <div className="callout warning" role="status"><Icon name="alertTriangle" /><span>Production ยังล็อกอยู่จนกว่าจะกำหนดค่าจริงของ {missing}</span></div>}
+        <div className="login-role-hint"><strong>Production access</strong>บทบาทและสิทธิ์ถูกกำหนดโดยผู้ดูแล IoT Team Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน Microsoft</div>
+      </form>
+    </div>
   </div>;
 }
 
