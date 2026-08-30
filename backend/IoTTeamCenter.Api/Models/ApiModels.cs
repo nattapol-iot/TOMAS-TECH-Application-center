@@ -273,3 +273,49 @@ public sealed record CreateStockAdjustmentRequest(long ItemId, decimal QuantityC
 public sealed record DecideStockAdjustmentRequest(string Decision, string? Comment);
 
 public sealed record ReleaseQuarantineRequest(long ItemId, decimal Quantity, string Outcome, string Reason);
+
+public sealed record CreateScheduleTaskRequest(
+    string? ScheduleVersion,
+    long? ParentId,
+    int SortOrder,
+    string Kind,
+    string Name,
+    bool IsMilestone,
+    string Visibility,
+    DateOnly? PlanStart,
+    int PlanDays,
+    string StartMode,
+    long? PredecessorId,
+    int LagDays,
+    IReadOnlyList<long>? PicUserIds,
+    string? PicExternal,
+    decimal PlanManDays);
+
+public sealed record UpdateSchedulePlanRequest(
+    string? ScheduleVersion,
+    string RowVersion,
+    long? ParentId,
+    int SortOrder,
+    string Kind,
+    string Name,
+    bool IsMilestone,
+    string Visibility,
+    DateOnly? PlanStart,
+    int PlanDays,
+    string StartMode,
+    long? PredecessorId,
+    int LagDays,
+    IReadOnlyList<long>? PicUserIds,
+    string? PicExternal,
+    decimal PlanManDays);
+
+public sealed record UpdateScheduleProgressRequest(
+    string? ScheduleVersion,
+    string RowVersion,
+    decimal PercentComplete,
+    DateOnly? ActualStart,
+    DateOnly? ActualFinish,
+    string Status,
+    string? Remark);
+
+public sealed record CreateScheduleBaselineRequest(string? ScheduleVersion, string Label, string Reason);

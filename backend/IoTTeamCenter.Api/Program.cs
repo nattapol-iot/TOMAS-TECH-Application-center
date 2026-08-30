@@ -254,6 +254,7 @@ app.MapEstimateEndpoints();
 app.MapEstimateCostEndpoints();
 app.MapProjectEndpoints();
 app.MapProjectDocumentEndpoints();
+app.MapScheduleEndpoints();
 app.MapInventoryEndpoints();
 app.MapBomEndpoints();
 app.MapPurchaseRequisitionEndpoints();

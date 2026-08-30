@@ -73,6 +73,11 @@ GRANT SELECT ON OBJECT::dbo.projects TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.project_members TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.project_folders TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.project_docs TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.holidays TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.schedule_tasks TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.schedule_task_pics TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.schedule_updates TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.schedule_baselines TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.mat_items TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.boms TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.bom_lines TO [iot_team_app_role];
@@ -168,12 +173,20 @@ GRANT INSERT, UPDATE ON OBJECT::dbo.stock_adjustments TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.stock_txns TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.mat_audit TO [iot_team_app_role];
 
--- Remove legacy grants for modules that are intentionally outside this release.
-REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.holidays FROM [iot_team_app_role];
+-- Schedule planning is an explicitly reviewed module. Plan rows use
+-- rowversion, progress writes are append-audited, and the update feed and
+-- baseline history cannot be changed or deleted through this role.
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.schedule_tasks FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.schedule_task_pics FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.schedule_updates FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.schedule_baselines FROM [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.schedule_tasks TO [iot_team_app_role];
+GRANT INSERT, DELETE ON OBJECT::dbo.schedule_task_pics TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.schedule_updates TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.schedule_baselines TO [iot_team_app_role];
+
+-- Remove legacy grants for modules that are intentionally outside this release.
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.holidays FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiry_attachments FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiry_meetings FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.notifications FROM [iot_team_app_role];

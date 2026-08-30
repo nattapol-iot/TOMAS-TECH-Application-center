@@ -94,7 +94,12 @@ VALUES
     (N'mir_lines', N'SELECT'), (N'mir_lines', N'INSERT'), (N'mir_lines', N'UPDATE'),
     (N'stock_adjustments', N'SELECT'), (N'stock_adjustments', N'INSERT'), (N'stock_adjustments', N'UPDATE'),
     (N'stock_txns', N'SELECT'), (N'stock_txns', N'INSERT'),
-    (N'mat_audit', N'INSERT');
+    (N'mat_audit', N'INSERT'),
+    (N'holidays', N'SELECT'),
+    (N'schedule_tasks', N'SELECT'), (N'schedule_tasks', N'INSERT'), (N'schedule_tasks', N'UPDATE'),
+    (N'schedule_task_pics', N'SELECT'), (N'schedule_task_pics', N'INSERT'), (N'schedule_task_pics', N'DELETE'),
+    (N'schedule_updates', N'SELECT'), (N'schedule_updates', N'INSERT'),
+    (N'schedule_baselines', N'SELECT'), (N'schedule_baselines', N'INSERT');
 
 DECLARE @has_forbidden_effective_permission bit;
 EXECUTE AS USER = N'$(AppLogin)';
@@ -112,6 +117,14 @@ SELECT @has_forbidden_effective_permission = CASE WHEN
     OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.stock_txns', N'OBJECT', N'DELETE'), 0) = 1
     OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'UPDATE'), 0) = 1
     OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'DELETE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'INSERT'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'UPDATE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'DELETE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_tasks', N'OBJECT', N'DELETE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_updates', N'OBJECT', N'UPDATE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_updates', N'OBJECT', N'DELETE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_baselines', N'OBJECT', N'UPDATE'), 0) = 1
+    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_baselines', N'OBJECT', N'DELETE'), 0) = 1
     OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'INSERT'), 0) = 1
     OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'UPDATE'), 0) = 1
     OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'DELETE'), 0) = 1
@@ -214,7 +227,8 @@ IF EXISTS (
       AND object_item.name COLLATE DATABASE_DEFAULT IN (
           N'boms', N'bom_lines', N'reservations', N'mat_prs', N'mat_pr_lines',
           N'mat_pr_approval_steps', N'mat_pos', N'mat_po_lines', N'grns', N'grn_lines',
-          N'mirs', N'mir_lines', N'stock_adjustments', N'stock_txns', N'mat_audit')
+          N'mirs', N'mir_lines', N'stock_adjustments', N'stock_txns', N'mat_audit',
+          N'schedule_tasks', N'schedule_task_pics', N'schedule_updates', N'schedule_baselines')
       AND NOT EXISTS (
           SELECT 1
           FROM @required_material_permissions required
@@ -231,8 +245,7 @@ IF EXISTS (
       AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE')
       AND permission.state IN ('G', 'W')
       AND object_item.name COLLATE DATABASE_DEFAULT IN (
-          N'holidays', N'schedule_tasks', N'schedule_task_pics', N'schedule_updates',
-          N'schedule_baselines', N'inquiry_attachments', N'inquiry_meetings', N'notifications'))
+          N'holidays', N'inquiry_attachments', N'inquiry_meetings', N'notifications'))
     THROW 51083, 'The application role has write access to a module outside this release.', 1;
 
 IF EXISTS (
