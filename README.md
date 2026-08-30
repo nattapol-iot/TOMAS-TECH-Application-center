@@ -1,4 +1,4 @@
-# Engineering Estimate Cost Management System
+# IoT Team Center — Engineering Estimate Cost Management System
 
 Internal engineering application for TOMAS TECH: register customer inquiries,
 prepare and review engineering estimate cost, reuse supplier prices and control
@@ -7,6 +7,12 @@ revisions — replacing the current Excel-based estimate process.
 The system controls **internal engineering cost only**. It contains no gross
 margin, profit margin, selling price, markup or commercial quotation
 calculation anywhere.
+
+## Feature specification
+
+[FEATURES.md](FEATURES.md) is the single reference for the back end: domain model,
+numbering standards, every calculation and validation rule, workflows, roles,
+the suggested tables and endpoints, and what is still mock.
 
 ## Application code
 
@@ -19,11 +25,18 @@ calculation anywhere.
 | `app/system/screens/` | Dashboard, Inquiry, Estimate list, Estimate workspace, Price, Admin screens |
 | `app/globals.css` | Design system — navy sidebar, blue primary, green/orange/red status, dense tables |
 
-Cost is captured in three levels: **discipline** (Hardware, Software,
+Material cost is captured in three levels: **discipline** (Hardware, Software,
 Electrical, Mechanical, Robot …) → **main module** (Main Control Box, In-feed
 Conveyor …) → **items**. Each discipline is a sub-tab of the cost sheet, each
 module can be created, renamed and deleted, and items are typed straight into
 the sheet under their module.
+
+Effort follows the same shape: **cost type** (Engineering cost / Installation
+cost, each with its own standard rate) → **work package** (Site Installation,
+Commissioning …) → **activities and expenses**. A work package holds the
+man-hour it needs plus the travel, accommodation and per diem that come with it,
+and man-hour bought from a supplier carries its supplier and quotation number
+instead of a master rate.
 
 Screens included: Login · Dashboard · Inquiry List · Create Inquiry · Inquiry
 Detail · Meeting Log · Estimate Cost List · Estimate Cost Workspace · Add Cost

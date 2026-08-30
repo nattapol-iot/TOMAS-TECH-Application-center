@@ -1,6 +1,25 @@
-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M22 19.2727C22 20.779 20.779 22 19.2727 22H14.7273C13.221 22 12 20.779 12 19.2727V12H19.2727C20.779 12 22 13.221 22 14.7273V19.2727Z" fill="#68C4FF"/>
-<path d="M20 2C21.1046 2 22 2.89543 22 4V7C22 8.10457 21.1046 9 20 9H17C15.8954 9 15 8.10457 15 7V4C15 2.89543 15.8954 2 17 2H20Z" fill="#0C79D8"/>
-<path d="M7 15C8.10457 15 9 15.8954 9 17V20C9 21.1046 8.10457 22 7 22H4C2.89543 22 2 21.1046 2 20V17C2 15.8954 2.89543 15 4 15H7Z" fill="#0C79D8"/>
-<path d="M12 12H4.72727C3.22104 12 2 10.779 2 9.27273V4.72727C2 3.22104 3.22104 2 4.72727 2H9.27273C10.779 2 12 3.22104 12 4.72727V12Z" fill="#2E9EFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>TOMAS TECH</title>
+  <defs>
+    <clipPath id="globe"><circle cx="58" cy="44" r="26"/></clipPath>
+    <mask id="orbit-cut">
+      <rect width="128" height="128" fill="#fff"/>
+      <path d="M4 80C32 82 76 62 124 26 78 72 34 90 4 80Z" fill="#000" stroke="#000" stroke-width="7" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#orbit-cut)">
+    <g clip-path="url(#globe)" stroke="#0b57a4" stroke-width="4.2" fill="none">
+      <circle cx="58" cy="44" r="24"/>
+      <ellipse cx="58" cy="44" rx="8.5" ry="24"/>
+      <ellipse cx="58" cy="44" rx="17" ry="24"/>
+      <line x1="58" y1="19" x2="58" y2="69"/>
+      <line x1="33" y1="32" x2="83" y2="32"/>
+      <line x1="33" y1="44" x2="83" y2="44"/>
+      <line x1="33" y1="56" x2="83" y2="56"/>
+    </g>
+  </g>
+  <path d="M4 80C32 82 76 62 124 26 78 72 34 90 4 80Z" fill="#0b57a4"/>
+  <path d="M22 96C44 96 74 80 106 56 72 88 44 102 22 96Z" fill="#189be0"/>
+  <path d="M40 112C52 108 66 98 78 86 68 104 56 114 44 120Z" fill="#189be0" opacity="0.75"/>
+  <path d="M100 12 103.6 23.4 115 27 103.6 30.6 100 42 96.4 30.6 85 27 96.4 23.4Z" fill="#ffc20e"/>
 </svg>

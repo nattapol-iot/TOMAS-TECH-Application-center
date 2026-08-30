@@ -11,6 +11,9 @@ export type Route =
   | { name: "price-history"; id: string }
   | { name: "quotations" }
   | { name: "missing" }
+  | { name: "resources" }
+  | { name: "purchase" }
+  | { name: "pr"; id: string }
   | { name: "customers" }
   | { name: "projects" }
   | { name: "reports" }

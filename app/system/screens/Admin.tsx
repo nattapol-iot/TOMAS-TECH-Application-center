@@ -8,8 +8,8 @@ import {
 } from "../data";
 import { estimateTotals, formatDate, moneyShort, userName } from "../calc";
 import {
-  Badge, BarChart, Donut, EmptyState, Field, HBarList, Icon, Modal, Panel,
-  PageHeader, Person, Pill, ProgressCell, SearchInput, Select, Tabs, Toolbar, toneOf,
+  Badge, BarChart, Donut, EmptyState, Field, GridControls, HBarList, Icon, Modal, Pagination, Panel,
+  PageHeader, Person, Pill, ProgressCell, SearchInput, Select, Tabs, Toolbar, toneOf, usePaged,
 } from "../ui";
 import type { ScreenProps } from "../routes";
 
@@ -441,7 +441,7 @@ export function MasterData({ go, notify }: ScreenProps) {
                       <td>{user.department}</td>
                       <td>{user.level}</td>
                       <td><Badge tone="slate">{user.role}</Badge></td>
-                      <td className="num">{rate ? moneyShort(rate.daily) : "—"}</td>
+                      <td className="num">{rate ? moneyShort(rate.engineeringDaily) : "—"}</td>
                       <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
                     </tr>
                   );
@@ -541,15 +541,24 @@ function RateTable({ notify }: { notify: (message: string) => void }) {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Employee Level</th><th>Department</th><th className="num">Standard Hourly Cost</th><th className="num">Standard Daily Cost</th><th>Effective from</th><th>Status</th><th aria-label="Action" /></tr>
+            <tr>
+              <th>Employee Level</th><th>Department</th>
+              <th className="num">Engineering Hourly</th><th className="num">Engineering Daily</th>
+              <th className="num">Install. &amp; Service Hourly</th><th className="num">Install. &amp; Service Daily</th>
+              <th className="num">Service uplift</th>
+              <th>Effective from</th><th>Status</th><th aria-label="Action" />
+            </tr>
           </thead>
           <tbody>
             {RATES.map((rate) => (
               <tr key={rate.id}>
                 <td><strong>{rate.level}</strong></td>
                 <td>{rate.department}</td>
-                <td className="num">{moneyShort(rate.hourly)}</td>
-                <td className="num"><strong>{moneyShort(rate.daily)}</strong></td>
+                <td className="num">{moneyShort(rate.engineeringHourly)}</td>
+                <td className="num"><strong>{moneyShort(rate.engineeringDaily)}</strong></td>
+                <td className="num">{moneyShort(rate.installationHourly)}</td>
+                <td className="num"><strong className="amber-text">{moneyShort(rate.installationDaily)}</strong></td>
+                <td className="num muted">+{Math.round(((rate.installationDaily - rate.engineeringDaily) / rate.engineeringDaily) * 100)}%</td>
                 <td>{formatDate(rate.effective)}</td>
                 <td><Badge tone="green">Active</Badge></td>
                 <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
@@ -576,6 +585,8 @@ export function RateMaster({ notify }: ScreenProps) {
         <ul className="check-list">
           <li className="check-item"><Icon name="cpu" /><div><strong>Total Man-hour = Engineer Qty × Man-days × Hours per Day</strong><p>Hours per day defaults to 8 and can be changed per activity.</p></div></li>
           <li className="check-item"><Icon name="cpu" /><div><strong>Engineering Cost = Engineer Qty × Man-days × Daily Cost</strong><p>Or Total Hours × Hourly Cost when the activity is booked hourly.</p></div></li>
+          <li className="check-item"><Icon name="truck" /><div><strong>Installation &amp; service work uses its own rate</strong><p>Each work package is marked Engineering cost or Installation &amp; Service cost; the estimate reads the matching rate automatically, and travel, accommodation and per diem are estimated inside the package.</p></div></li>
+          <li className="check-item"><Icon name="quote" /><div><strong>Supplier man-hour is quoted, not rated</strong><p>Outsourced effort carries its supplier and quotation number instead of a master rate.</p></div></li>
           <li className="check-item"><Icon name="lock" /><div><strong>Rates are never typed on an estimate</strong><p>The estimate reads the rate from this master so two engineers cannot use different numbers.</p></div></li>
         </ul>
       </Panel>
@@ -590,6 +601,8 @@ export function RateMaster({ notify }: ScreenProps) {
 export function AuditLogScreen({ notify }: ScreenProps) {
   const [search, setSearch] = useState("");
   const [module, setModule] = useState("All modules");
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
   const modules = ["All modules", ...new Set(AUDIT_LOG.map((entry) => entry.module))];
 
   const rows = AUDIT_LOG.filter((entry) => {
@@ -598,6 +611,8 @@ export function AuditLogScreen({ notify }: ScreenProps) {
     if (module !== "All modules" && entry.module !== module) return false;
     return true;
   });
+
+  const paged = usePaged(rows, pageSize, page);
 
   return (
     <>
@@ -614,13 +629,14 @@ export function AuditLogScreen({ notify }: ScreenProps) {
         <span className="badge slate"><Icon name="lock" />Retained permanently</span>
       </Toolbar>
       <Panel title={`${rows.length} entries`} flush>
+        <GridControls pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
         <div className="table-wrap">
           <table>
             <thead>
               <tr><th>Date / Time</th><th>User</th><th>Estimate</th><th>Rev.</th><th>Module</th><th>Action</th><th>Previous Value</th><th>New Value</th><th>Reason</th></tr>
             </thead>
             <tbody>
-              {rows.map((entry) => (
+              {paged.pageRows.map((entry) => (
                 <tr key={entry.id}>
                   <td className="mono">{entry.at}</td>
                   <td><Person initials={entry.user.split(" ").map((part) => part[0]).join("")} name={entry.user} /></td>
@@ -635,6 +651,7 @@ export function AuditLogScreen({ notify }: ScreenProps) {
               ))}
             </tbody>
           </table>
+          <Pagination page={paged.current} pageCount={paged.pageCount} from={paged.from} to={paged.to} total={paged.total} onPage={setPage} />
         </div>
       </Panel>
     </>
@@ -765,6 +782,7 @@ export function Settings({ notify }: ScreenProps) {
                   <tr><td>Estimate Cost</td><td className="mono">EST-YYMM-XXXX</td><td className="mono">EST-2608-0001</td><td className="mono">EST-2608-0007</td></tr>
                   <tr><td>Revision</td><td className="mono">R00, R01, R02…</td><td className="mono">R02</td><td className="mono">R03</td></tr>
                   <tr><td>Supplier Quotation</td><td className="mono">SQ-YYMM-XXXX</td><td className="mono">SQ-2608-0001</td><td className="mono">SQ-2608-0036</td></tr>
+                  <tr><td>Purchase Requisition</td><td className="mono">PR-YYMM-XXXX</td><td className="mono">PR-2608-0001</td><td className="mono">PR-2609-0004</td></tr>
                 </tbody>
               </table>
             </div>

@@ -5,7 +5,8 @@
    modals and the small SVG charts used by the dashboard and the reports.
    ========================================================================== */
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useT } from "./i18n";
 
 /* --------------------------------------------------------------------------
    Icons — inline so glyphs render identically on every workstation.
@@ -492,4 +493,105 @@ export function Toast({ message, onDone }: { message: string; onDone: () => void
     return () => clearTimeout(timer);
   }, [message, onDone]);
   return <div className="toast" role="status"><Icon name="checkCircle" />{message}</div>;
+}
+
+/** Status colour legend, as the house template shows above its grids. */
+export function StatusLegend({ items }: { items: { label: string; kind: string }[] }) {
+  return (
+    <div className="status-legend">
+      <strong>INFO Status Color:</strong>
+      {items.map((item) => <span key={item.label} className={item.kind}>{item.label}</span>)}
+    </div>
+  );
+}
+
+/** "Show N entries" plus a grid search box, the template grid header. */
+export function GridControls({ pageSize, onPageSize, search, onSearch, right }: {
+  pageSize: number;
+  onPageSize: (value: number) => void;
+  search: string;
+  onSearch: (value: string) => void;
+  right?: React.ReactNode;
+}) {
+  const t = useT();
+  return (
+    <div className="grid-controls">
+      <span>{t("Show")}</span>
+      <select value={pageSize} onChange={(event) => onPageSize(Number(event.target.value))} aria-label={t("Rows per page")}>
+        {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+      </select>
+      <span>{t("entries")}</span>
+      {right}
+      <span className="spacer" />
+      <SearchInput value={search} onChange={onSearch} placeholder={t("Search in this grid…")} />
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Pagination
+   -------------------------------------------------------------------------- */
+
+/** Slices rows for the current page and keeps the page in range. */
+export function usePaged<T>(rows: T[], pageSize: number, page: number) {
+  return useMemo(() => {
+    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    const current = Math.min(Math.max(1, page), pageCount);
+    const from = rows.length ? (current - 1) * pageSize + 1 : 0;
+    const to = Math.min(current * pageSize, rows.length);
+    return { pageRows: rows.slice((current - 1) * pageSize, current * pageSize), pageCount, current, from, to, total: rows.length };
+  }, [rows, pageSize, page]);
+}
+
+/** Page numbers with an ellipsis once the list gets long. */
+function pageNumbers(current: number, pageCount: number): (number | "…")[] {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+  const pages: (number | "…")[] = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(pageCount - 1, current + 1);
+  if (start > 2) pages.push("…");
+  for (let page = start; page <= end; page += 1) pages.push(page);
+  if (end < pageCount - 1) pages.push("…");
+  pages.push(pageCount);
+  return pages;
+}
+
+export function Pagination({ page, pageCount, from, to, total, onPage }: {
+  page: number;
+  pageCount: number;
+  from: number;
+  to: number;
+  total: number;
+  onPage: (page: number) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="pagination">
+      <span className="pagination-info">
+        {t("Showing")} <strong>{from}</strong> {t("to")} <strong>{to}</strong> {t("of")} <strong>{total}</strong> {t("entries")}
+      </span>
+      <span className="spacer" />
+      <nav className="pager" aria-label={t("Page")}>
+        <button type="button" className="pager-btn" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          <Icon name="chevronLeft" />{t("Previous")}
+        </button>
+        {pageNumbers(page, pageCount).map((entry, index) => (entry === "…"
+          ? <span className="pager-gap" key={`gap-${index}`}>…</span>
+          : (
+            <button
+              key={entry}
+              type="button"
+              className={entry === page ? "pager-btn page active" : "pager-btn page"}
+              aria-current={entry === page ? "page" : undefined}
+              onClick={() => onPage(entry)}
+            >
+              {entry}
+            </button>
+          )))}
+        <button type="button" className="pager-btn" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>
+          {t("Next")}<Icon name="chevronRight" />
+        </button>
+      </nav>
+    </div>
+  );
 }

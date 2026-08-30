@@ -7,6 +7,18 @@
    application controls internal engineering cost only.
    ========================================================================== */
 
+/**
+ * Product identity. Every place that names the system reads from here — the
+ * sidebar, the login panel, the footer and the browser tab.
+ */
+export const PRODUCT = {
+  company: "TOMAS TECH",
+  name: "IoT Team Center",
+  tagline: "Engineering Estimate Cost",
+  full: "IoT Team Center — Engineering Estimate Cost Management System",
+  version: "v1.0",
+};
+
 export type Role =
   | "Admin"
   | "Engineering Manager"
@@ -157,16 +169,76 @@ export type SectionStatus =
   | "Completed"
   | "Reviewed";
 
+/**
+ * How the effort is classified and rated. Engineering cost is design,
+ * programming and testing; installation & service cost is the work carried out
+ * to put the system in place and service it, which carries the higher rate.
+ */
+export type CostType = "Engineering" | "Installation";
+
+/** Screen labels for the two cost types — stored short, shown in full. */
+export const COST_TYPE_LABEL: Record<CostType, string> = {
+  Engineering: "Engineering cost",
+  Installation: "Installation & Service cost",
+};
+
+export const COST_TYPE_SHORT: Record<CostType, string> = {
+  Engineering: "Engineering",
+  Installation: "Installation & Service",
+};
+
+/** Who supplies the man-hour: our own engineers or an outsourced supplier. */
+export type ManhourProvider = "Internal" | "Supplier";
+
 export type ManhourLine = {
   id: string;
+  /** Work package the effort belongs to, e.g. "Site Installation". */
+  package: string;
   activity: string;
   department: string;
   level: string;
+  costType: CostType;
+  /** Internal effort is rated from the master; supplier effort is quoted. */
+  provider: ManhourProvider;
+  /** Required when the provider is a supplier. */
+  supplier: string;
+  /** Supplier quotation the quoted rate came from, e.g. SQ-2608-0038. */
+  quotationNo: string;
+  priceDate: string;
   engineers: number;
   manDays: number;
   hoursPerDay: number;
   dailyRate: number;
   owner: string;
+  remark: string;
+};
+
+export const EXPENSE_TYPES = [
+  "Travel", "Accommodation", "Per Diem", "Transportation", "Equipment Rental", "Other",
+] as const;
+
+export type ExpenseType = (typeof EXPENSE_TYPES)[number];
+
+export const EXPENSE_UNITS = ["Trip", "Night", "Day", "Person", "Km", "Lot", "Service"];
+
+/**
+ * Non-effort cost that belongs to a work package — travel, hotel, per diem and
+ * similar. It is estimated next to the man-hour it is caused by, then reported
+ * under transportation / accommodation / other cost.
+ */
+export type ExpenseLine = {
+  id: string;
+  package: string;
+  type: ExpenseType;
+  description: string;
+  costType: CostType;
+  supplier: string;
+  reference: string;
+  qty: number;
+  unit: string;
+  unitCost: number;
+  owner: string;
+  remark: string;
 };
 
 export type OtherCostLine = {
@@ -229,6 +301,7 @@ export type Estimate = {
   contingencyRate: number;
   items: CostItem[];
   manhours: ManhourLine[];
+  expenses: ExpenseLine[];
   others: OtherCostLine[];
   assignments: Assignment[];
   revisions: Revision[];
@@ -314,8 +387,12 @@ export type RateRecord = {
   id: string;
   level: string;
   department: string;
-  hourly: number;
-  daily: number;
+  /** Standard cost for engineering work — design, programming, testing. */
+  engineeringHourly: number;
+  engineeringDaily: number;
+  /** Standard cost for installation work carried out on the system. */
+  installationHourly: number;
+  installationDaily: number;
   effective: string;
 };
 
@@ -427,7 +504,7 @@ export const MODULE_PRESETS: Record<string, string[]> = {
 export const ENGINEERING_ACTIVITIES = [
   "System Design", "PLC Programming", "HMI Programming", "Software Development",
   "Database Development", "Robot Programming", "Mechanical Design", "Electrical Design", "Drawing",
-  "FAT", "Internal Testing", "On-site Installation", "Commissioning", "SAT",
+  "Panel Wiring & Assembly", "FAT", "Internal Testing", "On-site Installation", "Commissioning", "SAT",
   "UAT Support", "Training", "Documentation", "Project Management", "Engineering Support",
 ];
 
@@ -439,20 +516,33 @@ export const ENGINEER_LEVELS = [
 export const DEPARTMENTS = ["PLC", "Software", "Electrical", "Mechanical", "Robotics", "IoT", "PMO"];
 
 export const RATES: RateRecord[] = [
-  { id: "r1", level: "Junior Engineer", department: "PLC", hourly: 313, daily: 2500, effective: "2026-01-01" },
-  { id: "r2", level: "Middle Engineer", department: "PLC", hourly: 500, daily: 4000, effective: "2026-01-01" },
-  { id: "r3", level: "Senior Engineer", department: "PLC", hourly: 625, daily: 5000, effective: "2026-01-01" },
-  { id: "r4", level: "Junior Engineer", department: "Software", hourly: 344, daily: 2750, effective: "2026-01-01" },
-  { id: "r5", level: "Middle Engineer", department: "Software", hourly: 563, daily: 4500, effective: "2026-01-01" },
-  { id: "r6", level: "Senior Engineer", department: "Software", hourly: 688, daily: 5500, effective: "2026-01-01" },
-  { id: "r7", level: "Middle Engineer", department: "Electrical", hourly: 469, daily: 3750, effective: "2026-01-01" },
-  { id: "r8", level: "Senior Engineer", department: "Electrical", hourly: 594, daily: 4750, effective: "2026-01-01" },
-  { id: "r9", level: "Middle Engineer", department: "Mechanical", hourly: 469, daily: 3750, effective: "2026-01-01" },
-  { id: "r10", level: "Senior Engineer", department: "Mechanical", hourly: 594, daily: 4750, effective: "2026-01-01" },
-  { id: "r11", level: "Middle Engineer", department: "Robotics", hourly: 531, daily: 4250, effective: "2026-01-01" },
-  { id: "r12", level: "Senior Engineer", department: "IoT", hourly: 656, daily: 5250, effective: "2026-01-01" },
-  { id: "r13", level: "Lead Engineer", department: "PMO", hourly: 750, daily: 6000, effective: "2026-01-01" },
-  { id: "r14", level: "Manager", department: "Engineering", hourly: 875, daily: 7000, effective: "2026-01-01" },
+  { id: "r1", level: "Junior Engineer", department: "PLC", engineeringHourly: 313, engineeringDaily: 2500, installationHourly: 394, installationDaily: 3150, effective: "2026-01-01" },
+  { id: "r2", level: "Middle Engineer", department: "PLC", engineeringHourly: 500, engineeringDaily: 4000, installationHourly: 625, installationDaily: 5000, effective: "2026-01-01" },
+  { id: "r3", level: "Senior Engineer", department: "PLC", engineeringHourly: 625, engineeringDaily: 5000, installationHourly: 781, installationDaily: 6250, effective: "2026-01-01" },
+  { id: "r4", level: "Junior Engineer", department: "Software", engineeringHourly: 344, engineeringDaily: 2750, installationHourly: 431, installationDaily: 3450, effective: "2026-01-01" },
+  { id: "r5", level: "Middle Engineer", department: "Software", engineeringHourly: 563, engineeringDaily: 4500, installationHourly: 706, installationDaily: 5650, effective: "2026-01-01" },
+  { id: "r6", level: "Senior Engineer", department: "Software", engineeringHourly: 688, engineeringDaily: 5500, installationHourly: 863, installationDaily: 6900, effective: "2026-01-01" },
+  { id: "r7", level: "Middle Engineer", department: "Electrical", engineeringHourly: 469, engineeringDaily: 3750, installationHourly: 588, installationDaily: 4700, effective: "2026-01-01" },
+  { id: "r8", level: "Senior Engineer", department: "Electrical", engineeringHourly: 594, engineeringDaily: 4750, installationHourly: 744, installationDaily: 5950, effective: "2026-01-01" },
+  { id: "r9", level: "Middle Engineer", department: "Mechanical", engineeringHourly: 469, engineeringDaily: 3750, installationHourly: 588, installationDaily: 4700, effective: "2026-01-01" },
+  { id: "r10", level: "Senior Engineer", department: "Mechanical", engineeringHourly: 594, engineeringDaily: 4750, installationHourly: 744, installationDaily: 5950, effective: "2026-01-01" },
+  { id: "r11", level: "Middle Engineer", department: "Robotics", engineeringHourly: 531, engineeringDaily: 4250, installationHourly: 663, installationDaily: 5300, effective: "2026-01-01" },
+  { id: "r12", level: "Senior Engineer", department: "IoT", engineeringHourly: 656, engineeringDaily: 5250, installationHourly: 819, installationDaily: 6550, effective: "2026-01-01" },
+  { id: "r13", level: "Lead Engineer", department: "PMO", engineeringHourly: 750, engineeringDaily: 6000, installationHourly: 938, installationDaily: 7500, effective: "2026-01-01" },
+  { id: "r14", level: "Manager", department: "Engineering", engineeringHourly: 875, engineeringDaily: 7000, installationHourly: 1094, installationDaily: 8750, effective: "2026-01-01" },
+];
+
+/** Work packages suggested when an engineer starts a new effort group. */
+export const PACKAGE_PRESETS: { name: string; costType: CostType }[] = [
+  { name: "Design & Engineering", costType: "Engineering" },
+  { name: "Programming & Software", costType: "Engineering" },
+  { name: "Panel Assembly & Wiring", costType: "Engineering" },
+  { name: "Factory Acceptance Test", costType: "Engineering" },
+  { name: "Documentation & Project Management", costType: "Engineering" },
+  { name: "Site Installation", costType: "Installation" },
+  { name: "Commissioning", costType: "Installation" },
+  { name: "Site Acceptance Test", costType: "Installation" },
+  { name: "Training & Handover", costType: "Installation" },
 ];
 
 export const UNITS = ["Set", "Pcs", "Lot", "Unit", "Meter", "Day", "Month", "Service"];
@@ -481,23 +571,34 @@ const items0001: CostItem[] = [
   { id: "i15", categoryCode: "05", category: "Robot", subcategory: "Robot", module: "Cobot Cell", itemCode: "RB-ROB-001", description: "Collaborative robot 6 axis / 12 kg", brand: "DENSO", model: "COBOTTA PRO 1300", specification: "Reach 1300 mm", supplier: "DENSO Wave Robotics", qty: 1, unit: "Set", unitCost: 1180000, source: "Supplier Quotation", referenceNo: "SQ-2608-0025", referenceProject: "—", priceDate: "2026-08-25", remark: "Includes controller and teach pendant", owner: "u10", status: "Completed" },
   { id: "i16", categoryCode: "05", category: "Robot", subcategory: "Gripper", module: "Cobot Cell", itemCode: "RB-GRP-001", description: "Vacuum gripper with sensor feedback", brand: "—", model: "VG-4Z", specification: "4 zone, custom pad", supplier: "TP Precision Fabrication", qty: 1, unit: "Set", unitCost: 142000, source: "Budgetary Price", referenceNo: "BQ-2608-0004", referenceProject: "—", priceDate: "2026-08-05", remark: "", owner: "u10", status: "Waiting Supplier" },
   { id: "i17", categoryCode: "08", category: "Transportation", subcategory: "Transportation", module: "Delivery", itemCode: "TR-DEL-001", description: "Delivery to Amata City and unloading", brand: "—", model: "—", specification: "6 wheel truck with crane", supplier: "Local Logistics", qty: 2, unit: "Service", unitCost: 12500, source: "Previous Project Cost", referenceNo: "PRJ-2603-0011", referenceProject: "Astemo Line 3", priceDate: "2026-03-11", remark: "", owner: "u7", status: "Completed" },
-  { id: "i18", categoryCode: "09", category: "Accommodation", subcategory: "Accommodation", module: "Site Support", itemCode: "AC-STY-001", description: "Site accommodation during commissioning", brand: "—", model: "—", specification: "2 rooms x 10 nights", supplier: "—", qty: 20, unit: "Day", unitCost: 1200, source: "Master Price", referenceNo: "MP-2601-0011", referenceProject: "—", priceDate: "2026-01-15", remark: "", owner: "u7", status: "Completed" },
 ];
 
 const manhours0001: ManhourLine[] = [
-  { id: "m1", activity: "System Design", department: "IoT", level: "Senior Engineer", engineers: 1, manDays: 8, hoursPerDay: 8, dailyRate: 5250, owner: "u1" },
-  { id: "m2", activity: "PLC Programming", department: "PLC", level: "Middle Engineer", engineers: 1, manDays: 10, hoursPerDay: 8, dailyRate: 4000, owner: "u2" },
-  { id: "m3", activity: "HMI Programming", department: "PLC", level: "Junior Engineer", engineers: 1, manDays: 6, hoursPerDay: 8, dailyRate: 2500, owner: "u2" },
-  { id: "m4", activity: "Software Development", department: "Software", level: "Senior Engineer", engineers: 2, manDays: 12, hoursPerDay: 8, dailyRate: 5500, owner: "u3" },
-  { id: "m5", activity: "Database Development", department: "Software", level: "Middle Engineer", engineers: 1, manDays: 8, hoursPerDay: 8, dailyRate: 4500, owner: "u3" },
-  { id: "m6", activity: "Electrical Design", department: "Electrical", level: "Middle Engineer", engineers: 1, manDays: 7, hoursPerDay: 8, dailyRate: 3750, owner: "u4" },
-  { id: "m7", activity: "Mechanical Design", department: "Mechanical", level: "Senior Engineer", engineers: 1, manDays: 9, hoursPerDay: 8, dailyRate: 4750, owner: "u5" },
-  { id: "m8", activity: "Robot Programming", department: "Robotics", level: "Middle Engineer", engineers: 1, manDays: 8, hoursPerDay: 8, dailyRate: 4250, owner: "u10" },
-  { id: "m9", activity: "FAT", department: "PLC", level: "Middle Engineer", engineers: 2, manDays: 3, hoursPerDay: 8, dailyRate: 4000, owner: "u2" },
-  { id: "m10", activity: "On-site Installation", department: "Electrical", level: "Middle Engineer", engineers: 2, manDays: 5, hoursPerDay: 8, dailyRate: 3750, owner: "u4" },
-  { id: "m11", activity: "Commissioning", department: "IoT", level: "Senior Engineer", engineers: 1, manDays: 6, hoursPerDay: 8, dailyRate: 5250, owner: "u1" },
-  { id: "m12", activity: "Documentation", department: "Software", level: "Junior Engineer", engineers: 1, manDays: 4, hoursPerDay: 8, dailyRate: 2750, owner: "u3" },
-  { id: "m13", activity: "Project Management", department: "PMO", level: "Lead Engineer", engineers: 1, manDays: 10, hoursPerDay: 8, dailyRate: 6000, owner: "u7" },
+  { id: "m1", package: "Design & Engineering", activity: "System Design", department: "IoT", level: "Senior Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 8, hoursPerDay: 8, dailyRate: 5250, owner: "u1", remark: "" },
+  { id: "m6", package: "Design & Engineering", activity: "Electrical Design", department: "Electrical", level: "Middle Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 7, hoursPerDay: 8, dailyRate: 3750, owner: "u4", remark: "" },
+  { id: "m7", package: "Design & Engineering", activity: "Mechanical Design", department: "Mechanical", level: "Senior Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 9, hoursPerDay: 8, dailyRate: 4750, owner: "u5", remark: "" },
+  { id: "m2", package: "Programming & Software", activity: "PLC Programming", department: "PLC", level: "Middle Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 10, hoursPerDay: 8, dailyRate: 4000, owner: "u2", remark: "" },
+  { id: "m3", package: "Programming & Software", activity: "HMI Programming", department: "PLC", level: "Junior Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 6, hoursPerDay: 8, dailyRate: 2500, owner: "u2", remark: "" },
+  { id: "m4", package: "Programming & Software", activity: "Software Development", department: "Software", level: "Senior Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 2, manDays: 12, hoursPerDay: 8, dailyRate: 5500, owner: "u3", remark: "" },
+  { id: "m5", package: "Programming & Software", activity: "Database Development", department: "Software", level: "Middle Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 8, hoursPerDay: 8, dailyRate: 4500, owner: "u3", remark: "" },
+  { id: "m8", package: "Programming & Software", activity: "Robot Programming", department: "Robotics", level: "Middle Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 8, hoursPerDay: 8, dailyRate: 4250, owner: "u10", remark: "" },
+  { id: "m15", package: "Panel Assembly & Wiring", activity: "Panel Wiring & Assembly", department: "Electrical", level: "Middle Engineer", costType: "Engineering", provider: "Supplier", supplier: "Thai Control Panel Works", quotationNo: "SQ-2608-0038", priceDate: "2026-08-26", engineers: 2, manDays: 8, hoursPerDay: 8, dailyRate: 3200, owner: "u4", remark: "Outsourced wiring team, rate per quotation" },
+  { id: "m9", package: "Factory Acceptance Test", activity: "FAT", department: "PLC", level: "Middle Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 2, manDays: 3, hoursPerDay: 8, dailyRate: 4000, owner: "u2", remark: "Customer witnesses the test at our workshop" },
+  { id: "m10", package: "Site Installation", activity: "On-site Installation", department: "Electrical", level: "Middle Engineer", costType: "Installation", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 2, manDays: 5, hoursPerDay: 8, dailyRate: 4700, owner: "u4", remark: "Amata City — night shift allowed" },
+  { id: "m16", package: "Site Installation", activity: "On-site Installation", department: "Electrical", level: "Middle Engineer", costType: "Installation", provider: "Supplier", supplier: "Thai Control Panel Works", quotationNo: "SQ-2608-0039", priceDate: "2026-08-27", engineers: 3, manDays: 4, hoursPerDay: 8, dailyRate: 3500, owner: "u4", remark: "Contractor electricians for cable pulling" },
+  { id: "m11", package: "Commissioning", activity: "Commissioning", department: "IoT", level: "Senior Engineer", costType: "Installation", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 6, hoursPerDay: 8, dailyRate: 6550, owner: "u1", remark: "" },
+  { id: "m14", package: "Commissioning", activity: "SAT", department: "PLC", level: "Middle Engineer", costType: "Installation", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 2, hoursPerDay: 8, dailyRate: 5000, owner: "u2", remark: "" },
+  { id: "m12", package: "Documentation & Project Management", activity: "Documentation", department: "Software", level: "Junior Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 4, hoursPerDay: 8, dailyRate: 2750, owner: "u3", remark: "" },
+  { id: "m13", package: "Documentation & Project Management", activity: "Project Management", department: "PMO", level: "Lead Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 10, hoursPerDay: 8, dailyRate: 6000, owner: "u7", remark: "" },
+];
+
+const expenses0001: ExpenseLine[] = [
+  { id: "x1", package: "Site Installation", type: "Travel", description: "Van transfer, engineering team to Amata City", costType: "Installation", supplier: "", reference: "", qty: 2, unit: "Trip", unitCost: 3500, owner: "u4", remark: "Round trip per week" },
+  { id: "x2", package: "Site Installation", type: "Accommodation", description: "Hotel near site, 2 rooms x 5 nights", costType: "Installation", supplier: "", reference: "", qty: 10, unit: "Night", unitCost: 1200, owner: "u4", remark: "" },
+  { id: "x3", package: "Site Installation", type: "Per Diem", description: "Site allowance, 2 engineers x 5 days", costType: "Installation", supplier: "", reference: "", qty: 10, unit: "Day", unitCost: 500, owner: "u4", remark: "Company standard rate" },
+  { id: "x4", package: "Commissioning", type: "Accommodation", description: "Hotel near site, 1 room x 8 nights", costType: "Installation", supplier: "", reference: "", qty: 8, unit: "Night", unitCost: 1200, owner: "u1", remark: "" },
+  { id: "x5", package: "Commissioning", type: "Per Diem", description: "Site allowance during commissioning and SAT", costType: "Installation", supplier: "", reference: "", qty: 8, unit: "Day", unitCost: 500, owner: "u1", remark: "" },
+  { id: "x6", package: "Commissioning", type: "Travel", description: "Fuel and expressway toll", costType: "Installation", supplier: "", reference: "", qty: 1, unit: "Lot", unitCost: 2500, owner: "u1", remark: "" },
 ];
 
 const others0001: OtherCostLine[] = [
@@ -527,9 +628,14 @@ const items0002: CostItem[] = [
 ];
 
 const manhours0002: ManhourLine[] = [
-  { id: "n1", activity: "System Design", department: "IoT", level: "Senior Engineer", engineers: 1, manDays: 5, hoursPerDay: 8, dailyRate: 5250, owner: "u1" },
-  { id: "n2", activity: "Software Development", department: "Software", level: "Middle Engineer", engineers: 1, manDays: 15, hoursPerDay: 8, dailyRate: 4500, owner: "u3" },
-  { id: "n3", activity: "On-site Installation", department: "Electrical", level: "Middle Engineer", engineers: 2, manDays: 6, hoursPerDay: 8, dailyRate: 3750, owner: "u4" },
+  { id: "n1", package: "Design & Engineering", activity: "System Design", department: "IoT", level: "Senior Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 5, hoursPerDay: 8, dailyRate: 5250, owner: "u1", remark: "" },
+  { id: "n2", package: "Programming & Software", activity: "Software Development", department: "Software", level: "Middle Engineer", costType: "Engineering", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 1, manDays: 15, hoursPerDay: 8, dailyRate: 4500, owner: "u3", remark: "" },
+  { id: "n3", package: "Site Installation", activity: "On-site Installation", department: "Electrical", level: "Middle Engineer", costType: "Installation", provider: "Internal", supplier: "", quotationNo: "", priceDate: "", engineers: 2, manDays: 6, hoursPerDay: 8, dailyRate: 4700, owner: "u4", remark: "Weekend work only — no production stop allowed" },
+];
+
+const expenses0002: ExpenseLine[] = [
+  { id: "y1", package: "Site Installation", type: "Travel", description: "Team transfer to Rayong, weekend shifts", costType: "Installation", supplier: "", reference: "", qty: 3, unit: "Trip", unitCost: 4200, owner: "u4", remark: "" },
+  { id: "y2", package: "Site Installation", type: "Accommodation", description: "Hotel 2 rooms x 3 nights", costType: "Installation", supplier: "", reference: "", qty: 6, unit: "Night", unitCost: 1100, owner: "u4", remark: "" },
 ];
 
 export const ESTIMATES: Estimate[] = [
@@ -539,7 +645,7 @@ export const ESTIMATES: Estimate[] = [
     revision: "R02", createdDate: "2026-08-10", dueDate: "2026-09-03",
     status: "Engineering Review", progress: 82, updatedAt: "2026-08-28 16:40",
     contingencyRate: 3,
-    items: items0001, manhours: manhours0001, others: others0001,
+    items: items0001, manhours: manhours0001, expenses: expenses0001, others: others0001,
     assignments: assignments0001, revisions: revisions0001,
   },
   {
@@ -548,7 +654,7 @@ export const ESTIMATES: Estimate[] = [
     revision: "R00", createdDate: "2026-08-15", dueDate: "2026-09-05",
     status: "Engineering Input", progress: 55, updatedAt: "2026-08-27 11:12",
     contingencyRate: 3,
-    items: items0002, manhours: manhours0002, others: [],
+    items: items0002, manhours: manhours0002, expenses: expenses0002, others: [],
     assignments: [
       { id: "b1", section: "01 Hardware", ownerId: "u1", supportId: "—", dueDate: "2026-09-03", status: "Completed", progress: 100, comment: "" },
       { id: "b2", section: "02 Software", ownerId: "u3", supportId: "—", dueDate: "2026-09-04", status: "In Progress", progress: 45, comment: "Dashboard layout pending customer feedback." },
@@ -564,7 +670,7 @@ export const ESTIMATES: Estimate[] = [
     revision: "R01", createdDate: "2026-08-18", dueDate: "2026-08-27",
     status: "Waiting Supplier Price", progress: 61, updatedAt: "2026-08-26 09:05",
     contingencyRate: 3,
-    items: items0002.slice(0, 2), manhours: manhours0002.slice(0, 2), others: [],
+    items: items0002.slice(0, 2), manhours: manhours0002.slice(0, 2), expenses: [], others: [],
     assignments: [
       { id: "d1", section: "01 Hardware", ownerId: "u2", supportId: "—", dueDate: "2026-08-25", status: "Waiting Supplier", progress: 55, comment: "Waiting Keyence vision quotation." },
       { id: "d2", section: "02 Software", ownerId: "u3", supportId: "—", dueDate: "2026-08-26", status: "In Progress", progress: 65, comment: "" },
@@ -580,7 +686,7 @@ export const ESTIMATES: Estimate[] = [
     revision: "R01", createdDate: "2026-07-22", dueDate: "2026-08-14",
     status: "Approved", progress: 100, updatedAt: "2026-08-14 17:30",
     contingencyRate: 3,
-    items: items0001.slice(0, 8), manhours: manhours0001.slice(0, 6), others: [],
+    items: items0001.slice(0, 8), manhours: manhours0001.slice(0, 6), expenses: [], others: [],
     assignments: [
       { id: "f1", section: "01 Hardware", ownerId: "u2", supportId: "—", dueDate: "2026-08-10", status: "Reviewed", progress: 100, comment: "" },
       { id: "f2", section: "02 Software", ownerId: "u3", supportId: "—", dueDate: "2026-08-10", status: "Reviewed", progress: 100, comment: "" },
@@ -596,7 +702,7 @@ export const ESTIMATES: Estimate[] = [
     revision: "R00", createdDate: "2026-08-24", dueDate: "2026-08-31",
     status: "Estimate Completed", progress: 96, updatedAt: "2026-08-28 08:20",
     contingencyRate: 3,
-    items: items0001.slice(10, 16), manhours: manhours0001.slice(6, 12), others: [],
+    items: items0001.slice(10, 16), manhours: manhours0001.slice(6, 12), expenses: expenses0001.slice(0, 3), others: [],
     assignments: [
       { id: "g1", section: "05 Robot", ownerId: "u10", supportId: "u5", dueDate: "2026-08-29", status: "Completed", progress: 100, comment: "" },
       { id: "g2", section: "04 Mechanical", ownerId: "u5", supportId: "—", dueDate: "2026-08-29", status: "Completed", progress: 100, comment: "" },
@@ -611,7 +717,7 @@ export const ESTIMATES: Estimate[] = [
     revision: "R00", createdDate: "2026-08-26", dueDate: "2026-08-25",
     status: "Engineering Input", progress: 34, updatedAt: "2026-08-28 13:44",
     contingencyRate: 3,
-    items: items0002.slice(2), manhours: manhours0002, others: [],
+    items: items0002.slice(2), manhours: manhours0002, expenses: expenses0002, others: [],
     assignments: [
       { id: "h1", section: "02 Software", ownerId: "u3", supportId: "u1", dueDate: "2026-08-25", status: "In Progress", progress: 34, comment: "Interface specification not received." },
     ],
@@ -813,6 +919,75 @@ export const INQUIRIES: Inquiry[] = [
    Price library
    -------------------------------------------------------------------------- */
 
+
+/**
+ * Historic inquiries, generated deterministically so the lists are long enough
+ * to page through. Real installations will have hundreds of these.
+ */
+const ARCHIVE_SEED = [
+  { project: "Press Shop Andon System", type: "IoT", customer: "c4", owner: "u1", status: "Approved" as InquiryStatus },
+  { project: "Weld Line Traceability", type: "Traceability", customer: "c1", owner: "u2", status: "Approved" as InquiryStatus },
+  { project: "Warehouse WMS Upgrade", type: "WMS", customer: "c5", owner: "u3", status: "Estimating" as InquiryStatus },
+  { project: "Injection Machine Monitoring", type: "Data Collection", customer: "c6", owner: "u1", status: "Approved" as InquiryStatus },
+  { project: "Robot Cell Retrofit", type: "Robot", customer: "c2", owner: "u10", status: "Engineering Review" as InquiryStatus },
+  { project: "Packaging Vision Check", type: "Vision", customer: "c3", owner: "u2", status: "Approved" as InquiryStatus },
+  { project: "AGV Material Feed", type: "AMR", customer: "c4", owner: "u10", status: "Cancelled" as InquiryStatus },
+  { project: "Boiler Energy Dashboard", type: "IoT", customer: "c6", owner: "u1", status: "Approved" as InquiryStatus },
+  { project: "Assembly Line PLC Renewal", type: "PLC", customer: "c1", owner: "u2", status: "Estimate Completed" as InquiryStatus },
+  { project: "Paint Shop Data Logger", type: "Data Collection", customer: "c2", owner: "u4", status: "Approved" as InquiryStatus },
+  { project: "Cold Store WCS Interface", type: "WCS", customer: "c3", owner: "u3", status: "Waiting Supplier Price" as InquiryStatus },
+  { project: "Torque Tool Traceability", type: "Traceability", customer: "c4", owner: "u2", status: "Approved" as InquiryStatus },
+  { project: "Utility Meter Rollout", type: "IoT", customer: "c5", owner: "u1", status: "Approved" as InquiryStatus },
+  { project: "Conveyor Safety Upgrade", type: "Electrical", customer: "c1", owner: "u4", status: "Estimating" as InquiryStatus },
+  { project: "Label Print & Apply Cell", type: "Automation", customer: "c3", owner: "u5", status: "Approved" as InquiryStatus },
+  { project: "Auto Warehouse Feasibility", type: "Auto Warehouse", customer: "c5", owner: "u3", status: "Engineering Review" as InquiryStatus },
+  { project: "Machine Downtime Analytics", type: "Software", customer: "c6", owner: "u3", status: "Approved" as InquiryStatus },
+  { project: "Gripper Redesign Study", type: "Mechanical", customer: "c2", owner: "u5", status: "Approved" as InquiryStatus },
+  { project: "Line 7 Control Panel", type: "Electrical", customer: "c1", owner: "u4", status: "Approved" as InquiryStatus },
+  { project: "Palletiser Retrofit", type: "Robot", customer: "c3", owner: "u10", status: "Estimate Completed" as InquiryStatus },
+];
+
+const ARCHIVE_INQUIRIES: Inquiry[] = ARCHIVE_SEED.map((seed, index) => {
+  const month = 3 + (index % 5);
+  const day = 4 + ((index * 3) % 24);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const date = `2026-${pad(month)}-${pad(day)}`;
+  const due = `2026-${pad(month + 1)}-${pad(Math.min(day + 4, 28))}`;
+  const priorities: Priority[] = ["Normal", "High", "Low", "Urgent"];
+  return {
+    id: `qa${index + 1}`,
+    no: `INQ-26${pad(month)}-${pad(index + 20)}${index % 7}`,
+    date,
+    customerId: seed.customer,
+    contact: "—",
+    projectName: seed.project,
+    projectType: seed.type,
+    rfqNo: `RFQ-26-0${100 + index}`,
+    salesOwner: "Chatchai Pimsen",
+    estimateOwnerId: seed.owner,
+    dueDate: due,
+    priority: priorities[index % priorities.length],
+    status: seed.status,
+    progress: seed.status === "Approved" ? 100 : seed.status === "Cancelled" ? 0 : 40 + ((index * 7) % 50),
+    revision: seed.status === "Approved" ? "R01" : "R00",
+    updatedAt: `${date} 16:30`,
+    requirement: "Archived inquiry kept for price and effort reference.",
+    background: "",
+    scopeSummary: seed.project,
+    technical: "",
+    targetDelivery: due,
+    siteLocation: "—",
+    standard: "",
+    special: "",
+    remark: "",
+    attachments: [],
+    meetings: [],
+  };
+});
+
+// Archived inquiries join the live list once both are defined.
+INQUIRIES.push(...ARCHIVE_INQUIRIES);
+
 export const PRICE_LIBRARY: PriceRecord[] = [
   {
     id: "p1", itemCode: "HW-PLC-001", description: "PLC CPU Unit with EtherNet/IP", brand: "KEYENCE", model: "KV-8000",
@@ -939,6 +1114,8 @@ export const QUOTATIONS: SupplierQuotation[] = [
   { id: "sq7", no: "SQ-2606-0028", supplier: "HIKROBOT Thailand", receivedDate: "2026-06-19", validUntil: "2026-08-18", inquiryNo: "INQ-2608-0009", project: "Packing Line AMR Transfer", currency: "THB", amount: 1970000, uploadedBy: "Thanaphon Rit", status: "Expired", file: "SQ-2606-0028-Hikrobot.pdf", fileType: "PDF" },
   { id: "sq8", no: "SQ-2606-0011", supplier: "Mitsubishi Electric Automation", receivedDate: "2026-06-05", validUntil: "2026-09-03", inquiryNo: "INQ-2607-0018", project: "Press Line Vision Inspection", currency: "THB", amount: 121400, uploadedBy: "Trin Tintanee", status: "Expiring", file: "SQ-2606-0011-Mitsubishi.xlsx", fileType: "Excel" },
   { id: "sq9", no: "SQ-2608-0034", supplier: "Schneider Electric Thailand", receivedDate: "2026-08-26", validUntil: "2026-10-25", inquiryNo: "INQ-2608-0004", project: "IoT Energy Monitoring Phase 2", currency: "THB", amount: 283200, uploadedBy: "Peerapat Wongchai", status: "Valid", file: "SQ-2608-0034-Schneider.pdf", fileType: "PDF" },
+  { id: "sq11", no: "SQ-2608-0038", supplier: "Thai Control Panel Works", receivedDate: "2026-08-26", validUntil: "2026-10-25", inquiryNo: "INQ-2608-0001", project: "Cobot Picking Machine", currency: "THB", amount: 51200, uploadedBy: "Peerapat Wongchai", status: "Valid", file: "SQ-2608-0038-Wiring-Manpower.pdf", fileType: "PDF" },
+  { id: "sq12", no: "SQ-2608-0039", supplier: "Thai Control Panel Works", receivedDate: "2026-08-27", validUntil: "2026-10-26", inquiryNo: "INQ-2608-0001", project: "Cobot Picking Machine", currency: "THB", amount: 42000, uploadedBy: "Peerapat Wongchai", status: "Valid", file: "SQ-2608-0039-Site-Manpower.xlsx", fileType: "Excel" },
   { id: "sq10", no: "SQ-2605-0017", supplier: "TP Precision Fabrication", receivedDate: "2026-05-28", validUntil: "2026-07-27", inquiryNo: "INQ-2605-0009", project: "TTS Robot Cell", currency: "THB", amount: 228000, uploadedBy: "Sarawut Chaiyo", status: "Superseded", file: "SQ-2605-0017-Fab.jpg", fileType: "Image" },
 ];
 
@@ -978,6 +1155,156 @@ export const NOTIFICATIONS: Notification[] = [
 /* --------------------------------------------------------------------------
    Report series (kept static so charts and tables agree)
    -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   Resource plan — what every engineer is holding, and when
+
+   One row per piece of work an engineer is committed to, whether it is an
+   inquiry being estimated, a section of an estimate, or a task on a project
+   that has already been won. This is what the Gantt and the workload views
+   read from.
+   -------------------------------------------------------------------------- */
+
+export type WorkItemType = "Inquiry" | "Estimate" | "Project";
+
+export type WorkItem = {
+  id: string;
+  type: WorkItemType;
+  ownerId: string;
+  reference: string;
+  title: string;
+  customer: string;
+  start: string;
+  end: string;
+  /** Committed effort in man-days over the period. */
+  manDays: number;
+  progress: number;
+  status: string;
+  /** Route target so a bar can be clicked through to the record. */
+  linkInquiryId?: string;
+  linkEstimateId?: string;
+};
+
+/** Working days an engineer can commit per week. */
+export const CAPACITY_PER_WEEK = 5;
+
+export const WORK_ITEMS: WorkItem[] = [
+  // Nattaphon Prasert — IoT, senior
+  { id: "w1", type: "Inquiry", ownerId: "u1", reference: "INQ-2608-0001", title: "Cobot Picking Machine — estimate owner", customer: "ASTEMO", start: "2026-08-10", end: "2026-09-03", manDays: 14, progress: 82, status: "Engineering Review", linkInquiryId: "q1", linkEstimateId: "e1" },
+  { id: "w2", type: "Inquiry", ownerId: "u1", reference: "INQ-2608-0004", title: "IoT Energy Monitoring Phase 2 — estimate owner", customer: "TTS", start: "2026-08-15", end: "2026-09-05", manDays: 5, progress: 55, status: "Estimating", linkInquiryId: "q2", linkEstimateId: "e2" },
+  { id: "w3", type: "Project", ownerId: "u1", reference: "PRJ-2606-0004", title: "FTS Traceability — commissioning support", customer: "FTS", start: "2026-09-08", end: "2026-09-25", manDays: 8, progress: 0, status: "Planned" },
+  { id: "w4", type: "Project", ownerId: "u1", reference: "PRJ-2610-0011", title: "Cobot cell commissioning (if awarded)", customer: "ASTEMO", start: "2026-10-05", end: "2026-10-16", manDays: 6, progress: 0, status: "Tentative" },
+
+  // Trin Tintanee — PLC, middle
+  { id: "w5", type: "Inquiry", ownerId: "u2", reference: "INQ-2608-0006", title: "Leak Test Data Collection — estimate owner", customer: "DENSO", start: "2026-08-18", end: "2026-08-27", manDays: 6, progress: 61, status: "Waiting Supplier Price", linkInquiryId: "q3", linkEstimateId: "e3" },
+  { id: "w6", type: "Estimate", ownerId: "u2", reference: "EST-2608-0001", title: "01 Hardware section", customer: "ASTEMO", start: "2026-08-20", end: "2026-09-01", manDays: 4, progress: 100, status: "Completed", linkEstimateId: "e1" },
+  { id: "w7", type: "Inquiry", ownerId: "u2", reference: "INQ-2608-0013", title: "Stamping Line Traceability — estimate owner", customer: "AAPICO", start: "2026-08-28", end: "2026-09-10", manDays: 7, progress: 5, status: "New", linkInquiryId: "q6" },
+  { id: "w8", type: "Project", ownerId: "u2", reference: "PRJ-2607-0018", title: "Press Line Vision — PLC programming", customer: "AAPICO", start: "2026-09-14", end: "2026-10-09", manDays: 18, progress: 0, status: "Planned" },
+
+  // Kanokwan Sirisuk — Software, senior
+  { id: "w9", type: "Inquiry", ownerId: "u3", reference: "INQ-2608-0011", title: "WMS / WCS Integration — estimate owner", customer: "FTS", start: "2026-08-25", end: "2026-08-25", manDays: 9, progress: 34, status: "Estimating", linkInquiryId: "q5", linkEstimateId: "e6" },
+  { id: "w10", type: "Estimate", ownerId: "u3", reference: "EST-2608-0001", title: "02 Software section", customer: "ASTEMO", start: "2026-08-22", end: "2026-09-04", manDays: 6, progress: 60, status: "In Progress", linkEstimateId: "e1" },
+  { id: "w11", type: "Project", ownerId: "u3", reference: "PRJ-2512-0007", title: "Meiji OEE dashboard — phase 2", customer: "MEIJI", start: "2026-09-07", end: "2026-10-02", manDays: 20, progress: 10, status: "In Progress" },
+
+  // Peerapat Wongchai — Electrical, middle
+  { id: "w12", type: "Estimate", ownerId: "u4", reference: "EST-2608-0001", title: "03 Electrical section", customer: "ASTEMO", start: "2026-08-19", end: "2026-09-01", manDays: 5, progress: 100, status: "Completed", linkEstimateId: "e1" },
+  { id: "w13", type: "Project", ownerId: "u4", reference: "PRJ-2605-0009", title: "TTS Energy — site installation", customer: "TTS", start: "2026-09-05", end: "2026-09-19", manDays: 10, progress: 0, status: "Planned" },
+  { id: "w14", type: "Inquiry", ownerId: "u4", reference: "INQ-2608-0014", title: "Line 5 Control Panel Renewal — estimate owner", customer: "ASTEMO", start: "2026-08-28", end: "2026-09-12", manDays: 6, progress: 10, status: "New", linkInquiryId: "q7" },
+
+  // Sarawut Chaiyo — Mechanical, senior
+  { id: "w15", type: "Estimate", ownerId: "u5", reference: "EST-2608-0001", title: "04 Mechanical section", customer: "ASTEMO", start: "2026-08-18", end: "2026-09-02", manDays: 9, progress: 40, status: "Waiting Supplier", linkEstimateId: "e1" },
+  { id: "w16", type: "Project", ownerId: "u5", reference: "PRJ-2605-0031", title: "TTS Robot Cell — fabrication follow-up", customer: "TTS", start: "2026-09-03", end: "2026-09-30", manDays: 12, progress: 20, status: "In Progress" },
+
+  // Thanaphon Rit — Robotics, middle
+  { id: "w17", type: "Inquiry", ownerId: "u10", reference: "INQ-2608-0009", title: "Packing Line AMR Transfer — estimate owner", customer: "MEIJI", start: "2026-08-24", end: "2026-08-31", manDays: 8, progress: 96, status: "Estimate Completed", linkInquiryId: "q4", linkEstimateId: "e5" },
+  { id: "w18", type: "Estimate", ownerId: "u10", reference: "EST-2608-0001", title: "05 Robot section", customer: "ASTEMO", start: "2026-08-20", end: "2026-09-02", manDays: 8, progress: 70, status: "In Progress", linkEstimateId: "e1" },
+  { id: "w19", type: "Project", ownerId: "u10", reference: "PRJ-2610-0011", title: "Astemo cobot — robot programming", customer: "ASTEMO", start: "2026-10-19", end: "2026-11-13", manDays: 20, progress: 0, status: "Tentative" },
+
+  // Areeya Boonmee — PMO
+  { id: "w20", type: "Project", ownerId: "u7", reference: "PMO-2608", title: "Project management — running projects", customer: "Multiple", start: "2026-08-03", end: "2026-10-30", manDays: 22, progress: 40, status: "In Progress" },
+];
+
+/* --------------------------------------------------------------------------
+   Purchase requisition
+
+   Raised once an inquiry has been won and turned into a project. Every line
+   points back at the estimate item it came from, so a rounded estimate figure
+   can be compared with what is actually being bought.
+   -------------------------------------------------------------------------- */
+
+export const PR_STATUSES = ["Draft", "Submitted", "Approved", "Ordered", "Rejected"] as const;
+export type PrStatus = (typeof PR_STATUSES)[number];
+
+export type PrLine = {
+  id: string;
+  /** Cost item this line was created from — empty when it was not estimated. */
+  estimateItemId: string;
+  itemCode: string;
+  description: string;
+  brand: string;
+  model: string;
+  specification: string;
+  supplier: string;
+  qty: number;
+  unit: string;
+  unitCost: number;
+  /** Snapshot of the estimate at the time the PR was raised. */
+  estimateQty: number;
+  estimateUnitCost: number;
+  remark: string;
+};
+
+export type PurchaseRequisition = {
+  id: string;
+  no: string;
+  projectNo: string;
+  projectName: string;
+  estimateId: string;
+  estimateNo: string;
+  revision: string;
+  customer: string;
+  requesterId: string;
+  approverId: string;
+  createdDate: string;
+  requiredDate: string;
+  status: PrStatus;
+  purpose: string;
+  lines: PrLine[];
+};
+
+export const PURCHASE_REQUISITIONS: PurchaseRequisition[] = [
+  {
+    id: "pr1", no: "PR-2608-0001", projectNo: "PRJ-2607-0018", projectName: "Press Line Vision Inspection",
+    estimateId: "e4", estimateNo: "EST-2607-0018", revision: "R01", customer: "AAPICO",
+    requesterId: "u3", approverId: "u6", createdDate: "2026-08-20", requiredDate: "2026-09-18",
+    status: "Approved", purpose: "Long lead control hardware for the vision station.",
+    lines: [
+      { id: "pl1", estimateItemId: "i1", itemCode: "HW-PLC-001", description: "PLC CPU Unit with EtherNet/IP", brand: "KEYENCE", model: "KV-8000", specification: "Ladder + Motion", supplier: "Keyence (Thailand) Co., Ltd.", qty: 1, unit: "Set", unitCost: 74800, estimateQty: 1, estimateUnitCost: 76000, remark: "Firm price after negotiation" },
+      { id: "pl2", estimateItemId: "i2", itemCode: "HW-PLC-002", description: "Expansion I/O Unit 16DI/16DO", brand: "KEYENCE", model: "KV-B16XC", specification: "24VDC sink/source", supplier: "Keyence (Thailand) Co., Ltd.", qty: 6, unit: "Pcs", unitCost: 9650, estimateQty: 4, estimateUnitCost: 9800, remark: "I/O count grew after detailed design" },
+      { id: "pl3", estimateItemId: "i4", itemCode: "HW-SEN-001", description: "Barcode Reader 2D fixed mount", brand: "KEYENCE", model: "SR-X300", specification: "Auto focus, Ethernet", supplier: "Keyence (Thailand) Co., Ltd.", qty: 2, unit: "Pcs", unitCost: 51000, estimateQty: 2, estimateUnitCost: 48500, remark: "Price moved since the estimate" },
+      { id: "pl4", estimateItemId: "", itemCode: "EL-ACC-001", description: "DIN rail, terminal and marking accessory set", brand: "Phoenix Contact", model: "—", specification: "Complete panel accessory set", supplier: "Thai Control Panel Works", qty: 1, unit: "Lot", unitCost: 8500, estimateQty: 0, estimateUnitCost: 0, remark: "Not estimated separately — was inside the rounded panel figure" },
+    ],
+  },
+  {
+    id: "pr2", no: "PR-2608-0002", projectNo: "PRJ-2610-0011", projectName: "Cobot Picking Machine",
+    estimateId: "e1", estimateNo: "EST-2608-0001", revision: "R02", customer: "ASTEMO",
+    requesterId: "u10", approverId: "u6", createdDate: "2026-08-28", requiredDate: "2026-10-02",
+    status: "Submitted", purpose: "Robot and gripper — 10 week lead time, order before kickoff.",
+    lines: [
+      { id: "pl5", estimateItemId: "i15", itemCode: "RB-ROB-001", description: "Collaborative robot 6 axis / 12 kg", brand: "DENSO", model: "COBOTTA PRO 1300", specification: "Reach 1300 mm, incl. controller", supplier: "DENSO Wave Robotics", qty: 1, unit: "Set", unitCost: 1180000, estimateQty: 1, estimateUnitCost: 1180000, remark: "As quoted SQ-2608-0025" },
+      { id: "pl6", estimateItemId: "i16", itemCode: "RB-GRP-001", description: "Vacuum gripper with sensor feedback", brand: "—", model: "VG-4Z", specification: "4 zone, 3 part variants", supplier: "TP Precision Fabrication", qty: 1, unit: "Set", unitCost: 165000, estimateQty: 1, estimateUnitCost: 142000, remark: "Budgetary price in the estimate — firm quotation is higher" },
+    ],
+  },
+  {
+    id: "pr3", no: "PR-2609-0003", projectNo: "PRJ-2610-0011", projectName: "Cobot Picking Machine",
+    estimateId: "e1", estimateNo: "EST-2608-0001", revision: "R02", customer: "ASTEMO",
+    requesterId: "u4", approverId: "u6", createdDate: "2026-08-30", requiredDate: "2026-10-20",
+    status: "Draft", purpose: "Control panel and field wiring material.",
+    lines: [
+      { id: "pl7", estimateItemId: "i11", itemCode: "EL-PNL-001", description: "Main control panel 800x1800x600", brand: "Schneider", model: "CP-MAIN-01", specification: "IP54 with air conditioner", supplier: "Thai Control Panel Works", qty: 1, unit: "Set", unitCost: 172500, estimateQty: 1, estimateUnitCost: 168000, remark: "Air conditioner upgraded to 1000 BTU" },
+    ],
+  },
+];
 
 export const MONTHLY_COST = [
   { month: "Mar", cost: 4.1, count: 9 },

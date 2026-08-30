@@ -3,25 +3,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   COST_STRUCTURE, CUSTOMERS, ENGINEERING_ACTIVITIES, ENGINEER_LEVELS, DEPARTMENTS,
-  ESTIMATES, INQUIRIES, MODULE_PRESETS, RATES, SUPPLIERS, UNITS, USERS, BRANDS,
-  type CostItem, type Estimate, type ManhourLine, type PriceRecord, type SectionStatus,
+  ESTIMATES, EXPENSE_TYPES, EXPENSE_UNITS, INQUIRIES, MODULE_PRESETS, PACKAGE_PRESETS,
+  COST_TYPE_LABEL, COST_TYPE_SHORT, QUOTATIONS, RATES, SUPPLIERS, UNITS, USERS, BRANDS,
+  type CostItem, type Estimate, type ExpenseLine, type ExpenseType, type ManhourLine,
+  type ManhourProvider, type PriceRecord, type SectionStatus, type CostType,
 } from "../data";
 import {
-  categoryTotals, countLevel, departmentEffort, estimateTotals, formatDate,
-  groupByModule, lineHours, lineManhourCost, lineTotal, moduleTotal, money,
-  moneyShort, priceAge, revisionDiff, supplierTotals, topCostItems, userName,
-  userOf, validateEstimate,
+  categoryTotals, countLevel, departmentEffort, estimateTotals, expenseTotal, formatDate,
+  groupByModule, groupByPackage, isGeneratedCode, itemCodePrefix, lineHours, lineManDays,
+  lineManhourCost, lineTotal, nextItemCode,
+  costTypeEffort, millions, moduleTotal, money, moneyShort, packageTotal, priceAge, providerEffort, rateFor,
+  summaryBlocks, type SummaryOverride, type SummaryOverrides,
+  revisionDiff, supplierTotals, topCostItems, userName, userOf, validateEstimate,
 } from "../calc";
 import {
   Badge, Donut, Drawer, EmptyState, Field, HBarList, Icon, Menu, Modal, Panel,
-  PageHeader, Person, Pill, Progress, ProgressCell, SummaryTile, Tabs, toneOf,
+  PageHeader, Person, Pill, Progress, ProgressCell, SearchInput, SummaryTile, Tabs, toneOf,
+  type IconName, type Tone,
 } from "../ui";
 import { PriceSearchModal } from "./PriceSearch";
 import { exportXlsx } from "../../../lib/export-xlsx";
 import type { ScreenProps } from "../routes";
 
 type WorkspaceTab =
-  | "cost" | "manhour" | "other" | "assignment" | "validation"
+  | "summary" | "cost" | "manhour" | "other" | "assignment" | "validation"
   | "revision" | "compare" | "review";
 
 const SECTION_STATUSES: SectionStatus[] = [
@@ -48,6 +53,39 @@ const blankItem = (categoryCode = "01", module = ""): CostItem => {
 
 export type ModuleDef = { id: string; name: string; categoryCode: string };
 export type ModuleForm = { mode: "new" | "rename"; categoryCode: string; name: string };
+
+/** A work package is the man-hour equivalent of a main module. */
+export type PackageDef = { id: string; name: string; costType: CostType };
+export type PackageForm = { mode: "new" | "rename"; name: string; costType: CostType };
+
+function packagesFromLines(manhours: ManhourLine[], expenses: ExpenseLine[]): PackageDef[] {
+  const seen = new Set<string>();
+  return [...manhours, ...expenses].reduce<PackageDef[]>((list, line) => {
+    if (!line.package || seen.has(line.package)) return list;
+    seen.add(line.package);
+    return [...list, { id: line.package, name: line.package, costType: line.costType }];
+  }, []);
+}
+
+/**
+ * Work packages to render: declared ones first — so a package created for the
+ * site trip exists before its first activity — then anything found only on the
+ * lines, and finally unassigned effort.
+ */
+function packagesInView(estimate: Estimate, packages: PackageDef[]) {
+  const found = groupByPackage(estimate.manhours, estimate.expenses);
+  const declaredGroups = packages.map((entry) => {
+    const group = found.find((candidate) => candidate.name === entry.name);
+    return { name: entry.name, costType: entry.costType, manhours: group?.manhours ?? [], expenses: group?.expenses ?? [] };
+  });
+  const extra = found
+    .filter((group) => !packages.some((entry) => entry.name === group.name))
+    .map((group) => ({
+      ...group,
+      costType: (group.manhours[0]?.costType ?? group.expenses[0]?.costType ?? "Engineering") as CostType,
+    }));
+  return [...declaredGroups, ...extra];
+}
 
 /** Seeds the module list from whatever the stored cost items already use. */
 function modulesFromItems(items: CostItem[]): ModuleDef[] {
@@ -84,11 +122,19 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
 
   const [items, setItems] = useState<CostItem[]>(base.items);
   const [manhours, setManhours] = useState<ManhourLine[]>(base.manhours);
+  const [expenses, setExpenses] = useState<ExpenseLine[]>(base.expenses);
+  const [packages, setPackages] = useState<PackageDef[]>(() => packagesFromLines(base.manhours, base.expenses));
+  const [activeCostType, setActiveCostType] = useState("all");
+  const [packageForm, setPackageForm] = useState<PackageForm | null>(null);
+  const [deletePackage, setDeletePackage] = useState<string | null>(null);
+  const [quotationTarget, setQuotationTarget] = useState<string | null>(null);
+  // Re-counts typed on the summary sheet, keyed by summary line.
+  const [summaryOverrides, setSummaryOverrides] = useState<SummaryOverrides>({});
   const [others, setOthers] = useState(base.others);
   const [assignments, setAssignments] = useState(base.assignments);
   const [contingency, setContingency] = useState(base.contingencyRate);
   const [status, setStatus] = useState(base.status);
-  const [tab, setTab] = useState<WorkspaceTab>((initialTab as WorkspaceTab) ?? "cost");
+  const [tab, setTab] = useState<WorkspaceTab>((initialTab as WorkspaceTab) ?? "summary");
   const [dirty, setDirty] = useState(false);
 
   const [modules, setModules] = useState<ModuleDef[]>(() => modulesFromItems(base.items));
@@ -106,8 +152,8 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
   const [validationOpen, setValidationOpen] = useState(false);
 
   const estimate: Estimate = useMemo(
-    () => ({ ...base, items, manhours, others, assignments, contingencyRate: contingency, status }),
-    [base, items, manhours, others, assignments, contingency, status],
+    () => ({ ...base, items, manhours, expenses, others, assignments, contingencyRate: contingency, status }),
+    [base, items, manhours, expenses, others, assignments, contingency, status],
   );
 
   const totals = estimateTotals(estimate);
@@ -116,18 +162,115 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
   const warnings = countLevel(validation, "warning");
   const locked = status === "Approved" || status === "Locked";
 
+  /**
+   * Moving a line to another category or module re-issues its item code, but
+   * only when the current code was generated — a supplier or customer part
+   * number typed by an engineer is never overwritten.
+   */
   const patchItem = (id: string, patch: Partial<CostItem>) => {
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    setItems((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      const next = { ...item, ...patch };
+      const moved = (patch.categoryCode && patch.categoryCode !== item.categoryCode)
+        || (patch.module !== undefined && patch.module !== item.module);
+      if (moved && isGeneratedCode(item.itemCode, item.categoryCode, item.module)) {
+        next.itemCode = nextItemCode(prev.filter((entry) => entry.id !== id), next.categoryCode, next.module);
+      }
+      return next;
+    }));
     setDirty(true);
   };
+  /**
+   * Patching effort re-reads the standard rate whenever the level, department
+   * or cost type changes — installation work costs more than the same work done
+   * in-house, and engineers must never type the rate themselves.
+   */
   const patchManhour = (id: string, patch: Partial<ManhourLine>) => {
-    setManhours((prev) => prev.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+    setManhours((prev) => prev.map((line) => {
+      if (line.id !== id) return line;
+      const next = { ...line, ...patch };
+      if (patch.level || patch.department || patch.costType) {
+        next.dailyRate = rateFor(next.level, next.department, next.costType).daily || next.dailyRate;
+      }
+      return next;
+    }));
     setDirty(true);
   };
 
+  const patchExpense = (id: string, patch: Partial<ExpenseLine>) => {
+    setExpenses((prev) => prev.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+    setDirty(true);
+  };
+
+  /**
+   * Adds an empty activity into a work package and focuses it. Internal effort
+   * is rated from the master; supplier effort starts at zero and waits for the
+   * quoted rate, its supplier and its quotation number.
+   */
+  function addActivity(packageName: string, costType: CostType, provider: ManhourProvider = "Internal") {
+    const level = "Middle Engineer";
+    const department = "PLC";
+    const line: ManhourLine = {
+      id: `mh-${Math.random().toString(36).slice(2, 8)}`,
+      package: packageName, activity: "System Design", department, level, costType,
+      provider, supplier: "", quotationNo: "", priceDate: provider === "Supplier" ? "2026-08-30" : "",
+      engineers: 1, manDays: 1, hoursPerDay: 8,
+      dailyRate: provider === "Supplier" ? 0 : rateFor(level, department, costType).daily,
+      owner: base.ownerId, remark: "",
+    };
+    setManhours((prev) => [...prev, line]);
+    setFocusId(line.id);
+    setDirty(true);
+  }
+
+  /** Adds a travel / accommodation / per diem line to a work package. */
+  function addExpense(packageName: string, costType: CostType) {
+    const line: ExpenseLine = {
+      id: `ex-${Math.random().toString(36).slice(2, 8)}`,
+      package: packageName, type: costType === "Installation" ? "Travel" : "Other",
+      description: "", costType, supplier: "", reference: "",
+      qty: 1, unit: costType === "Installation" ? "Trip" : "Lot",
+      unitCost: 0, owner: base.ownerId, remark: "",
+    };
+    setExpenses((prev) => [...prev, line]);
+    setFocusId(line.id);
+    setDirty(true);
+  }
+
+  /** Creates a work package, or renames one and moves its lines with it. */
+  function savePackage(form: PackageForm, name: string, costType: CostType) {
+    const clean = name.trim();
+    if (!clean) return;
+    if (form.mode === "new") {
+      if (!packages.some((entry) => entry.name === clean)) {
+        setPackages((prev) => [...prev, { id: clean, name: clean, costType }]);
+      }
+      setActiveCostType(costType);
+      notify(`Work package “${clean}” created — ${costType.toLowerCase()} rates will be applied`);
+    } else {
+      setPackages((prev) => prev.map((entry) => (entry.name === form.name ? { id: clean, name: clean, costType } : entry)));
+      setManhours((prev) => prev.map((line) => (line.package === form.name
+        ? { ...line, package: clean, costType, dailyRate: rateFor(line.level, line.department, costType).daily || line.dailyRate }
+        : line)));
+      setExpenses((prev) => prev.map((line) => (line.package === form.name ? { ...line, package: clean, costType } : line)));
+      notify(`Work package renamed to “${clean}”`);
+    }
+    setPackageForm(null);
+    setDirty(true);
+  }
+
+  function removePackage(name: string) {
+    setPackages((prev) => prev.filter((entry) => entry.name !== name));
+    setManhours((prev) => prev.filter((line) => line.package !== name));
+    setExpenses((prev) => prev.filter((line) => line.package !== name));
+    setDeletePackage(null);
+    setDirty(true);
+    notify(`Work package “${name}” removed`);
+  }
+
   /** Appends an empty line into a module and focuses its description. */
   function addRow(categoryCode: string, module = "") {
-    const row = blankItem(categoryCode, module);
+    const row = { ...blankItem(categoryCode, module), itemCode: nextItemCode(items, categoryCode, module) };
     setItems((prev) => [...prev, row]);
     setFocusId(row.id);
     setDirty(true);
@@ -147,8 +290,16 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
         module.categoryCode === form.categoryCode && module.name === form.name
           ? { ...module, id: `${form.categoryCode}|${clean}`, name: clean }
           : module));
-      setItems((prev) => prev.map((item) =>
-        item.categoryCode === form.categoryCode && item.module === form.name ? { ...item, module: clean } : item));
+      setItems((prev) => prev.map((item) => {
+        if (item.categoryCode !== form.categoryCode || item.module !== form.name) return item;
+        return {
+          ...item,
+          module: clean,
+          itemCode: isGeneratedCode(item.itemCode, item.categoryCode, item.module)
+            ? item.itemCode.replace(itemCodePrefix(item.categoryCode, item.module), itemCodePrefix(item.categoryCode, clean))
+            : item.itemCode,
+        };
+      }));
       notify(`Module renamed to “${clean}”`);
     }
     setModuleForm(null);
@@ -170,6 +321,29 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
     notify(`${base.no} ${base.revision} saved — totals recalculated by the server`);
   }
 
+  /** Exports the four-block summary — the sheet management asks for. */
+  function exportSummary() {
+    const summary = summaryBlocks(estimate, summaryOverrides);
+    const rows: (string | number | null)[][] = [
+      ["ESTIMATE COST SUMMARY — INTERNAL ENGINEERING COST"],
+      ["Project", "", base.projectName, "Estimate No.", base.no],
+      ["Customer", "", customer?.name ?? "", "Revision", base.revision],
+      ["Inquiry", "", base.inquiryNo, "Status", status],
+      [],
+      ["Cost block", "Detail", "Group", "Measure", "", "", "", "", "", "Amount (THB)"],
+    ];
+    for (const block of summary.blocks) {
+      rows.push([block.label, block.note, "", "", "", "", "", "", "", block.total]);
+      for (const line of block.lines) {
+        rows.push(["", line.detail, line.label, line.measure, "", "", "", "", "", line.total]);
+      }
+    }
+    rows.push([]);
+    for (const line of summary.other) rows.push([line.label, line.detail, "", line.measure, "", "", "", "", "", line.total]);
+    rows.push([], ["", "", "", "", "", "", "", "TOTAL ESTIMATED COST", "", summary.grandTotal]);
+    exportXlsx(rows, base.no + "_" + base.revision + "_Summary.xlsx");
+    notify("Cost summary exported to Excel");
+  }
   function exportExcel() {
     const rows: (string | number | null)[][] = [
       ["ESTIMATE COST — INTERNAL ENGINEERING COST"],
@@ -275,6 +449,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
             { label: "Import existing estimate (Excel)", icon: "upload", onClick: () => setImportOpen(true) },
             { label: "Copy from previous estimate", icon: "copy", onClick: () => setCopyOpen(true) },
             { label: "Search price library", icon: "search", onClick: () => setPriceSearch({ open: true, query: "" }) },
+            { label: "Create purchase requisition", icon: "package", onClick: () => go({ name: "purchase" }) },
             { label: "Print estimate summary", icon: "file", onClick: () => notify("Estimate summary sent to printer") },
             { label: "Freeze revision", icon: "lock", onClick: () => { setStatus("Locked"); notify("Revision frozen — a new revision is required to edit"); } },
           ]}
@@ -292,9 +467,9 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
 
       <section className="summary-strip">
         <SummaryTile label="Total Material Cost" value={moneyShort(totals.material)} note="Hardware · Software · Electrical · Mechanical · Robot" />
-        <SummaryTile label="Total Engineering Cost" value={moneyShort(totals.engineering)} note={`${totals.manDays} MD · ${totals.manHours} HR`} />
+        <SummaryTile label="Total Engineering Cost" value={moneyShort(totals.engineering)} note={`${totals.manDays} MD · engineering ${moneyShort(totals.effortEngineering)} · installation &amp; service ${moneyShort(totals.effortInstallation)}`} />
         <SummaryTile label="Total Outsource Cost" value={moneyShort(totals.outsource)} note="07 Outsource" />
-        <SummaryTile label="Total Installation Cost" value={moneyShort(totals.installation)} note="On-site installation effort" />
+        <SummaryTile label="Total Installation &amp; Service Cost" value={moneyShort(totals.installation)} note={`Installation effort + ${moneyShort(totals.siteExpense)} travel / hotel`} />
         <SummaryTile label="Total Transportation" value={moneyShort(totals.transportation)} note="08 Transportation" />
         <SummaryTile label="Other Cost" value={moneyShort(totals.other + totals.accommodation)} note="09 Accommodation · 10 Other" />
         <SummaryTile label={`Contingency ${contingency}%`} value={moneyShort(totals.contingency)} note="Applied on the cost base" />
@@ -305,6 +480,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
         active={tab}
         onChange={setTab}
         tabs={[
+          { id: "summary", label: "Summary" },
           { id: "cost", label: "Cost Items", count: items.length },
           { id: "manhour", label: "Engineering Man-hour", count: manhours.length },
           { id: "other", label: "Other Project Cost", count: others.length },
@@ -315,6 +491,32 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
           { id: "review", label: "Engineering Review" },
         ]}
       />
+
+      {tab === "summary" ? (
+        <SummaryTab
+          estimate={estimate}
+          overrides={summaryOverrides}
+          locked={locked}
+          onOverride={(key, patch) => {
+            setSummaryOverrides((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+            setDirty(true);
+          }}
+          onAddLine={(blockKey) => {
+            const key = `${blockKey}|manual|${Object.keys(summaryOverrides).length + 1}`;
+            setSummaryOverrides((prev) => ({
+              ...prev,
+              [key]: {
+                qty: 1,
+                label: "New summary line",
+                manual: { blockKey: blockKey as "hardware", detail: "Added in the summary", unitCost: 0 },
+              },
+            }));
+            setDirty(true);
+            notify("Summary line added — give it a name and a quantity");
+          }}
+          onExport={exportSummary}
+        />
+      ) : null}
 
       {tab === "cost" ? (
         <CostItemsTab
@@ -327,7 +529,13 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
           onDuplicate={(id) => {
             const source = items.find((item) => item.id === id);
             if (!source) return;
-            setItems((prev) => [...prev, { ...source, id: `copy-${Date.now()}` }]);
+            setItems((prev) => [...prev, {
+              ...source,
+              id: `copy-${Date.now()}`,
+              itemCode: isGeneratedCode(source.itemCode, source.categoryCode, source.module)
+                ? nextItemCode(prev, source.categoryCode, source.module)
+                : source.itemCode,
+            }]);
             setDirty(true);
             notify("Row duplicated");
           }}
@@ -344,17 +552,16 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
 
       {tab === "manhour" ? (
         <ManhourTab
-          estimate={estimate} locked={locked}
-          onPatch={patchManhour}
-          onAdd={() => {
-            setManhours((prev) => [...prev, {
-              id: `mh-${Date.now()}`, activity: "System Design", department: "IoT",
-              level: "Middle Engineer", engineers: 1, manDays: 1, hoursPerDay: 8,
-              dailyRate: RATES.find((r) => r.level === "Middle Engineer")?.daily ?? 4000, owner: "u1",
-            }]);
-            setDirty(true);
-          }}
+          estimate={estimate} packages={packages} locked={locked}
+          activeCostType={activeCostType} onCostType={setActiveCostType}
+          onPatch={patchManhour} onPatchExpense={patchExpense}
+          onAddActivity={addActivity} onAddExpense={addExpense}
+          onPickQuotation={(lineId) => setQuotationTarget(lineId)}
+          focusId={focusId} onFocused={() => setFocusId(null)}
+          onPackageForm={setPackageForm}
+          onDeletePackage={setDeletePackage}
           onRemove={(id) => { setManhours((prev) => prev.filter((line) => line.id !== id)); setDirty(true); }}
+          onRemoveExpense={(id) => { setExpenses((prev) => prev.filter((line) => line.id !== id)); setDirty(true); }}
         />
       ) : null}
 
@@ -392,6 +599,52 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
         />
       ) : null}
 
+      {quotationTarget ? (
+        <QuotationPickerModal
+          onClose={() => setQuotationTarget(null)}
+          onUse={(quotation) => {
+            patchManhour(quotationTarget, {
+              supplier: quotation.supplier,
+              quotationNo: quotation.no,
+              priceDate: quotation.receivedDate,
+            });
+            setQuotationTarget(null);
+            notify(`${quotation.no} attached — supplier ${quotation.supplier}`);
+          }}
+        />
+      ) : null}
+
+      {packageForm ? (
+        <PackageModal
+          form={packageForm}
+          onClose={() => setPackageForm(null)}
+          onSave={(name, costType) => savePackage(packageForm, name, costType)}
+        />
+      ) : null}
+
+      {deletePackage ? (
+        <Modal
+          title={`Delete “${deletePackage}”?`}
+          subtitle={`${manhours.filter((line) => line.package === deletePackage).length} activity(ies) and ${expenses.filter((line) => line.package === deletePackage).length} expense line(s) will be removed.`}
+          size="sm"
+          onClose={() => setDeletePackage(null)}
+          footer={
+            <>
+              <span className="spacer" />
+              <button className="btn default" type="button" onClick={() => setDeletePackage(null)}>Cancel</button>
+              <button className="btn danger" type="button" onClick={() => removePackage(deletePackage)}>
+                <Icon name="trash" />Delete work package
+              </button>
+            </>
+          }
+        >
+          <div className="info-strip amber">
+            <Icon name="alertTriangle" />
+            Removing the package also removes the travel and accommodation cost estimated under it.
+          </div>
+        </Modal>
+      ) : null}
+
       {moduleForm ? (
         <ModuleModal
           form={moduleForm}
@@ -425,6 +678,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
 
       {addOpen ? (
         <AddCostItemDrawer
+          items={items}
           modules={modules}
           onClose={() => setAddOpen(false)}
           onSearchPrice={() => setPriceSearch({ open: true, query: "" })}
@@ -825,107 +1079,653 @@ function CostItemsTab({
 }
 
 /* ==========================================================================
+   Summary — the whole estimate in four figures
+   ========================================================================== */
+
+const BLOCK_TONE: Record<string, Tone> = {
+  hardware: "blue",
+  software: "violet",
+  engineering: "green",
+  installation: "amber",
+};
+
+const BLOCK_ICON: Record<string, IconName> = {
+  hardware: "package",
+  software: "cpu",
+  engineering: "users",
+  installation: "truck",
+};
+
+function SummaryTab({ estimate, overrides, onOverride, onAddLine, locked, onExport }: {
+  estimate: Estimate;
+  overrides: SummaryOverrides;
+  onOverride: (key: string, patch: SummaryOverride) => void;
+  onAddLine: (blockKey: string) => void;
+  locked: boolean;
+  onExport: () => void;
+}) {
+  const summary = summaryBlocks(estimate, overrides);
+  const share = (value: number) => (summary.grandTotal ? Math.round((value / summary.grandTotal) * 100) : 0);
+
+  return (
+    <>
+      <section className="summary-blocks">
+        {summary.blocks.map((block) => (
+          <article className={`summary-block ${BLOCK_TONE[block.key]}`} key={block.key}>
+            <div className="summary-block-head">
+              <span className="summary-block-icon"><Icon name={BLOCK_ICON[block.key]} /></span>
+              <span className="summary-block-label">{block.label}</span>
+            </div>
+            <strong>{moneyShort(block.total)}<em>THB</em></strong>
+            <Progress value={share(block.total)} tone={BLOCK_TONE[block.key]} />
+            <div className="summary-block-foot">
+              <span>{share(block.total)}% of estimate</span>
+              <span>{block.lines.length} group(s)</span>
+            </div>
+            <p>{block.note}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="grid-main">
+        <Panel
+          title="Estimate cost summary"
+          subtitle="Four main blocks, plus everything that belongs to none of them"
+          actions={<button className="btn default sm" type="button" onClick={onExport}><Icon name="download" />Export summary</button>}
+          flush
+        >
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Cost block</th><th>What it collects</th><th className="num">Share</th><th className="num">Amount (THB)</th></tr>
+              </thead>
+              <tbody>
+                {summary.blocks.map((block) => (
+                  <tr key={block.key}>
+                    <td><Badge tone={BLOCK_TONE[block.key]}>{block.label}</Badge></td>
+                    <td className="muted">{block.note}</td>
+                    <td className="num muted">{share(block.total)}%</td>
+                    <td className="num"><strong>{moneyShort(block.total)}</strong></td>
+                  </tr>
+                ))}
+                <tr className="subtotal-row">
+                  <td colSpan={2}>Four main blocks</td>
+                  <td className="num">{share(summary.blockTotal)}%</td>
+                  <td className="num">{moneyShort(summary.blockTotal)}</td>
+                </tr>
+                {summary.other.map((line) => (
+                  <tr key={line.label}>
+                    <td>{line.label}</td>
+                    <td className="muted">{line.detail}</td>
+                    <td className="num muted">{share(line.total)}%</td>
+                    <td className="num">{moneyShort(line.total)}</td>
+                  </tr>
+                ))}
+                <tr className="subtotal-row">
+                  <td colSpan={2}>Other project cost and contingency</td>
+                  <td className="num">{share(summary.otherTotal)}%</td>
+                  <td className="num">{moneyShort(summary.otherTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="sticky-foot">
+            <div className="foot-item"><span>Hardware</span><strong>{moneyShort(summary.blocks[0].total)}</strong></div>
+            <div className="foot-item"><span>Software</span><strong>{moneyShort(summary.blocks[1].total)}</strong></div>
+            <div className="foot-item"><span>Engineering / Service</span><strong>{moneyShort(summary.blocks[2].total)}</strong></div>
+            <div className="foot-item"><span>Installation</span><strong>{moneyShort(summary.blocks[3].total)}</strong></div>
+            <div className="foot-total">
+              <span>Total estimated cost</span>
+              <strong>{moneyShort(summary.grandTotal)} THB</strong>
+            </div>
+          </div>
+        </Panel>
+
+        <div className="stack">
+          <Panel title="Share of the estimate">
+            <Donut
+              data={[
+                ...summary.blocks.map((block) => ({ label: block.label, value: block.total })),
+                ...(summary.otherTotal ? [{ label: "Other project cost", value: summary.otherTotal }] : []),
+              ]}
+              centerLabel="Total cost"
+              centerValue={millions(summary.grandTotal)}
+              format={(value) => moneyShort(value)}
+            />
+          </Panel>
+          <Panel title="Reconciliation" subtitle="What the cost tabs rolled up, and what the summary re-counted">
+            <dl className="def-list one">
+              <div><dt>Material (hardware + software)</dt><dd>{money(summary.blocks[0].total + summary.blocks[1].total)}</dd></div>
+              <div><dt>Man-hour and site expense</dt><dd>{money(summary.blocks[2].total + summary.blocks[3].total)}</dd></div>
+              <div><dt>Other project cost and contingency</dt><dd>{money(summary.otherTotal)}</dd></div>
+              <div><dt>Rolled up from the cost tabs</dt><dd>{money(summary.rolledUpTotal)}</dd></div>
+              <div><dt>Adjusted in this summary</dt><dd className={summary.adjusted ? "amber-text" : "muted"}>{summary.adjusted >= 0 ? "+" : "−"}{money(Math.abs(summary.adjusted))}</dd></div>
+              <div><dt>Summary total</dt><dd><strong>{money(summary.grandTotal)}</strong></dd></div>
+            </dl>
+            <div className={summary.adjusted === 0 ? "info-strip green" : "info-strip amber"} style={{ marginTop: 12 }}>
+              <Icon name={summary.adjusted === 0 ? "checkCircle" : "alertTriangle"} />
+              {summary.adjusted === 0
+                ? "Every line is counted once — the summary matches the cost tabs and the header total."
+                : `Quantities were re-counted here, so the summary is ${money(Math.abs(summary.adjusted))} ${summary.adjusted > 0 ? "above" : "below"} the cost tabs (header total ${money(summary.totals.total)}).`}
+            </div>
+          </Panel>
+        </div>
+      </section>
+
+      <section className="grid-2">
+        {summary.blocks.map((block) => (
+          <Panel key={block.key} title={block.label} subtitle={block.note} flush>
+            {block.lines.length ? (
+              <div className="table-wrap">
+                <table className="sheet" style={{ minWidth: 780 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 210 }}>{block.key === "hardware" || block.key === "software" ? "Main module" : block.key === "engineering" ? "Department" : "Work package"}</th>
+                      <th style={{ width: 180 }}>{block.key === "hardware" || block.key === "software" ? "Cost category" : "Content"}</th>
+                      <th className="num" style={{ width: 120 }}>Cost / unit</th>
+                      <th className="num" style={{ width: 74 }}>Qty</th>
+                      <th style={{ width: 92 }}>Unit</th>
+                      <th className="num" style={{ width: 130 }}>Total (THB)</th>
+                      <th style={{ width: 170 }}>Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.lines.map((line) => (
+                      <tr key={line.key}>
+                        <td>
+                          <input value={line.label} disabled={locked} onChange={(event) => onOverride(line.key, { label: event.target.value })} />
+                        </td>
+                        <td>
+                          <span className="cell-text muted">{line.detail}{line.measure ? ` · ${line.measure}` : ""}</span>
+                        </td>
+                        <td className="computed" title="Rolled up from the cost tabs — the cost of one set">{moneyShort(line.unitCost)}</td>
+                        <td>
+                          <input className="num" type="number" min="0" step="1" value={line.qty} disabled={locked}
+                            onChange={(event) => onOverride(line.key, { qty: Number(event.target.value) })} />
+                        </td>
+                        <td>
+                          <select value={line.unit} disabled={locked} onChange={(event) => onOverride(line.key, { unit: event.target.value })}>
+                            {UNITS.map((unit) => <option key={unit}>{unit}</option>)}
+                          </select>
+                        </td>
+                        <td className={line.qty === 1 ? "computed" : "computed amber-text"}>{moneyShort(line.total)}</td>
+                        <td>
+                          <input value={line.remark} disabled={locked} placeholder={line.qty === 1 ? "" : `Re-counted ×${line.qty}`}
+                            onChange={(event) => onOverride(line.key, { remark: event.target.value })} />
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="add-row">
+                      <td colSpan={7}>
+                        <button type="button" className="add-row-btn" disabled={locked} onClick={() => onAddLine(block.key)}>
+                          <span><Icon name="plus" />Add a line to {block.label}</span>
+                        </button>
+                      </td>
+                    </tr>
+                    <tr className="subtotal-row">
+                      <td colSpan={5}>
+                        {block.label} total
+                        {block.total !== block.rolledUp ? ` · rolled up ${moneyShort(block.rolledUp)}, re-counted here` : ""}
+                      </td>
+                      <td className="num">{moneyShort(block.total)}</td>
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState icon="table" title={`No ${block.label.toLowerCase()} yet`} message="Lines added in the cost items or man-hour tab appear here automatically." />
+            )}
+          </Panel>
+        ))}
+      </section>
+    </>
+  );
+}
+
+/* ==========================================================================
    Engineering man-hour
    ========================================================================== */
 
-function ManhourTab({ estimate, locked, onPatch, onAdd, onRemove }: {
-  estimate: Estimate; locked: boolean;
+function ManhourTab({
+  estimate, packages, locked, activeCostType, onCostType, onPatch, onPatchExpense,
+  onAddActivity, onAddExpense, onPickQuotation, onRemove, onRemoveExpense, focusId, onFocused,
+  onPackageForm, onDeletePackage,
+}: {
+  estimate: Estimate;
+  packages: PackageDef[];
+  locked: boolean;
+  activeCostType: string;
+  onCostType: (costType: string) => void;
   onPatch: (id: string, patch: Partial<ManhourLine>) => void;
-  onAdd: () => void; onRemove: (id: string) => void;
+  onPatchExpense: (id: string, patch: Partial<ExpenseLine>) => void;
+  onAddActivity: (packageName: string, costType: CostType, provider?: ManhourProvider) => void;
+  onPickQuotation: (lineId: string) => void;
+  onAddExpense: (packageName: string, costType: CostType) => void;
+  onRemove: (id: string) => void;
+  onRemoveExpense: (id: string) => void;
+  focusId: string | null;
+  onFocused: () => void;
+  onPackageForm: (form: PackageForm) => void;
+  onDeletePackage: (name: string) => void;
 }) {
   const effort = departmentEffort(estimate);
   const totals = estimateTotals(estimate);
+  const byCostType = costTypeEffort(estimate);
+
+  const groups = packagesInView(estimate, packages);
+  const visible = activeCostType === "all"
+    ? groups
+    : groups.filter((group) => group.costType === activeCostType);
+
+  const countOf = (costType: string) => (costType === "all"
+    ? estimate.manhours.length + estimate.expenses.length
+    : estimate.manhours.filter((line) => line.costType === costType).length
+      + estimate.expenses.filter((line) => line.costType === costType).length);
+
+  const orderedIds = visible.flatMap((group) => [...group.manhours.map((l) => l.id), ...group.expenses.map((l) => l.id)]);
+  const visibleManhours = visible.flatMap((group) => group.manhours);
+  const visibleExpenses = visible.flatMap((group) => group.expenses);
+  const visibleCost = visibleManhours.reduce((sum, line) => sum + lineManhourCost(line), 0)
+    + visibleExpenses.reduce((sum, line) => sum + expenseTotal(line), 0);
+
+  const expenseByType = EXPENSE_TYPES
+    .map((type) => ({ label: type, value: estimate.expenses.filter((line) => line.type === type).reduce((sum, line) => sum + expenseTotal(line), 0) }))
+    .filter((entry) => entry.value > 0);
 
   return (
     <>
       <Panel
-        title="Engineering Man-hour Cost"
-        subtitle="Select the engineer level — the daily rate comes from the Engineering Rate Master and cannot be typed over"
-        actions={<button className="btn primary sm" type="button" onClick={onAdd} disabled={locked}><Icon name="plus" />Add activity</button>}
+        title="Engineering Man-hour & Site Expense"
+        subtitle="Work package → activity → cost · engineering and installation work are rated differently, and man-hour bought from a supplier carries its quotation"
+        actions={
+          <>
+            <button className="btn default sm" type="button" disabled={locked}
+              onClick={() => onAddActivity(visible[0]?.name ?? "", (visible[0]?.costType ?? "Engineering") as CostType)}>
+              <Icon name="plus" />Add activity
+            </button>
+            <button className="btn primary sm" type="button" disabled={locked}
+              onClick={() => onPackageForm({ mode: "new", name: "", costType: activeCostType === "Installation" ? "Installation" : "Engineering" })}>
+              <Icon name="layers" />New Work Package
+            </button>
+          </>
+        }
         flush
       >
-        <div className="table-wrap">
-          <table className="sheet">
+        <div className="subtabs" role="tablist" aria-label="Cost type">
+          {[
+            { id: "all", label: "All work" },
+            { id: "Engineering", label: COST_TYPE_LABEL.Engineering },
+            { id: "Installation", label: COST_TYPE_LABEL.Installation },
+          ].map((tab) => (
+            <button key={tab.id} type="button" role="tab" aria-selected={activeCostType === tab.id}
+              className={activeCostType === tab.id ? "subtab active" : "subtab"} onClick={() => onCostType(tab.id)}>
+              {tab.id !== "all" ? <Icon name={tab.id === "Installation" ? "truck" : "cpu"} /> : null}
+              {tab.label}<em>{countOf(tab.id)}</em>
+            </button>
+          ))}
+          <span className="spacer" />
+          <span className="muted" style={{ fontSize: "var(--fs-2xs)" }}>
+            Engineering {moneyShort(totals.effortEngineering)} · Installation &amp; service {moneyShort(totals.effortInstallation)} · Supplier {moneyShort(totals.supplierManhour)} · Expense {moneyShort(totals.siteExpense)} THB
+          </span>
+        </div>
+
+        <div className="table-wrap tall">
+          <table className="sheet" style={{ minWidth: 2360 }}>
             <thead>
               <tr>
-                <th style={{ width: 200 }}>Activity</th>
+                <th style={{ width: 44 }}>No.</th>
+                <th style={{ width: 130 }}>Type</th>
+                <th style={{ width: 250 }}>Activity / Description</th>
                 <th style={{ width: 130 }}>Department</th>
-                <th style={{ width: 160 }}>Engineer Level</th>
-                <th className="num" style={{ width: 90 }}>Engineers</th>
+                <th style={{ width: 150 }}>Engineer Level</th>
+                <th style={{ width: 140 }}>Cost Type</th>
+                <th style={{ width: 190 }}>Supplier</th>
+                <th style={{ width: 150 }}>Quotation No.</th>
+                <th className="num" style={{ width: 80 }}>Qty</th>
+                <th style={{ width: 110 }}>Unit</th>
                 <th className="num" style={{ width: 90 }}>Man-days</th>
-                <th className="num" style={{ width: 110 }}>Hours / Day</th>
-                <th className="num" style={{ width: 120 }}>Daily Rate</th>
+                <th className="num" style={{ width: 95 }}>Hours / Day</th>
+                <th className="num" style={{ width: 120 }}>Rate</th>
                 <th className="num" style={{ width: 100 }}>Man-hours</th>
-                <th className="num" style={{ width: 130 }}>Estimated Cost</th>
+                <th className="num" style={{ width: 130 }}>Cost</th>
                 <th style={{ width: 150 }}>Owner</th>
-                <th style={{ width: 50 }} aria-label="Action" />
+                <th style={{ width: 180 }}>Remark</th>
+                <th style={{ width: 52 }} aria-label="Action" />
               </tr>
             </thead>
             <tbody>
-              {estimate.manhours.map((line) => (
-                <tr key={line.id}>
-                  <td>
-                    <select value={line.activity} disabled={locked} onChange={(e) => onPatch(line.id, { activity: e.target.value })}>
-                      {ENGINEERING_ACTIVITIES.map((activity) => <option key={activity}>{activity}</option>)}
-                    </select>
+              {visible.flatMap((group) => [
+                <tr className="module-row" key={`p-${group.name}`}>
+                  <td colSpan={18}>
+                    <div className="row band">
+                      <span className="module-bullet"><Icon name={group.costType === "Installation" ? "truck" : "cpu"} /></span>
+                      <strong>{group.name || "Unassigned effort"}</strong>
+                      <Badge tone={group.costType === "Installation" ? "amber" : "blue"}>{COST_TYPE_SHORT[group.costType]}</Badge>
+                      <span className="muted">
+                        {group.manhours.reduce((sum, line) => sum + lineManDays(line), 0)} MD
+                        {group.expenses.length ? ` · ${group.expenses.length} expense` : ""}
+                      </span>
+                      <strong className="num">{money(packageTotal(group))}</strong>
+                      <button type="button" className="group-action" disabled={locked}
+                        onClick={() => onAddActivity(group.name, group.costType)}>
+                        <Icon name="plus" />Add activity
+                      </button>
+                      <button type="button" className="group-action" disabled={locked}
+                        onClick={() => onAddActivity(group.name, group.costType, "Supplier")}>
+                        <Icon name="quote" />Supplier man-hour
+                      </button>
+                      <button type="button" className="group-action" disabled={locked}
+                        onClick={() => onAddExpense(group.name, group.costType)}>
+                        <Icon name="truck" />Add expense
+                      </button>
+                      {group.name ? (
+                        <>
+                          <button type="button" className="group-action" disabled={locked}
+                            onClick={() => onPackageForm({ mode: "rename", name: group.name, costType: group.costType })}>
+                            <Icon name="edit" />Rename
+                          </button>
+                          <button type="button" className="group-action danger" disabled={locked}
+                            onClick={() => onDeletePackage(group.name)}>
+                            <Icon name="trash" />Delete
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </td>
-                  <td>
-                    <select value={line.department} disabled={locked} onChange={(e) => {
-                      const rate = RATES.find((r) => r.department === e.target.value && r.level === line.level);
-                      onPatch(line.id, { department: e.target.value, dailyRate: rate?.daily ?? line.dailyRate });
-                    }}>
-                      {DEPARTMENTS.map((department) => <option key={department}>{department}</option>)}
-                    </select>
+                </tr>,
+
+                ...group.manhours.map((line) => {
+                  const master = rateFor(line.level, line.department, line.costType);
+                  const offRate = line.provider === "Internal" && master.daily !== line.dailyRate;
+                  const enterAddsRow = {
+                    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (event.key !== "Enter" || locked) return;
+                      event.preventDefault();
+                      onAddActivity(group.name, line.costType);
+                    },
+                  };
+                  return (
+                    <tr key={line.id}>
+                      <td><span className="cell-text muted">{orderedIds.indexOf(line.id) + 1}</span></td>
+                      <td>
+                        <select value={line.provider} disabled={locked} onChange={(e) => onPatch(line.id, { provider: e.target.value as ManhourProvider })}>
+                          <option value="Internal">Own engineer</option>
+                          <option value="Supplier">Supplier MH</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={line.activity}
+                          disabled={locked}
+                          onChange={(e) => onPatch(line.id, { activity: e.target.value })}
+                          ref={(element) => {
+                            if (element && focusId === line.id) {
+                              element.focus();
+                              onFocused();
+                            }
+                          }}
+                        >
+                          {ENGINEERING_ACTIVITIES.map((activity) => <option key={activity}>{activity}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select value={line.department} disabled={locked} onChange={(e) => onPatch(line.id, { department: e.target.value })}>
+                          {DEPARTMENTS.map((department) => <option key={department}>{department}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select value={line.level} disabled={locked} onChange={(e) => onPatch(line.id, { level: e.target.value })}>
+                          {ENGINEER_LEVELS.map((level) => <option key={level}>{level}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select value={line.costType} disabled={locked} onChange={(e) => onPatch(line.id, { costType: e.target.value as CostType })}>
+                          <option value="Engineering">{COST_TYPE_LABEL.Engineering}</option>
+                          <option value="Installation">{COST_TYPE_LABEL.Installation}</option>
+                        </select>
+                      </td>
+                      <td>
+                        {line.provider === "Supplier" ? (
+                          <select value={line.supplier} disabled={locked} onChange={(e) => onPatch(line.id, { supplier: e.target.value })}>
+                            <option value="">— select supplier —</option>
+                            {SUPPLIERS.map((supplier) => <option key={supplier.id}>{supplier.name}</option>)}
+                          </select>
+                        ) : <span className="cell-text muted">TOMAS TECH</span>}
+                      </td>
+                      <td>
+                        {line.provider === "Supplier" ? (
+                          <div className="quote-cell">
+                            <input
+                              {...enterAddsRow}
+                              list="quotation-list"
+                              value={line.quotationNo}
+                              disabled={locked}
+                              placeholder="Attach SQ…"
+                              onChange={(e) => onPatch(line.id, { quotationNo: e.target.value })}
+                            />
+                            <button className="row-action" type="button" title="Pick a supplier quotation"
+                              onClick={() => onPickQuotation(line.id)} disabled={locked}>
+                              <Icon name="quote" />
+                            </button>
+                          </div>
+                        ) : <span className="cell-text muted">—</span>}
+                      </td>
+                      <td><input {...enterAddsRow} className="num" type="number" min="1" value={line.engineers} disabled={locked} onChange={(e) => onPatch(line.id, { engineers: Number(e.target.value) })} /></td>
+                      <td><span className="cell-text muted">{line.provider === "Supplier" ? "Man" : "Engineer"}</span></td>
+                      <td><input {...enterAddsRow} className="num" type="number" min="0" step="0.5" value={line.manDays} disabled={locked} onChange={(e) => onPatch(line.id, { manDays: Number(e.target.value) })} /></td>
+                      <td><input {...enterAddsRow} className="num" type="number" min="1" max="12" value={line.hoursPerDay} disabled={locked} onChange={(e) => onPatch(line.id, { hoursPerDay: Number(e.target.value) })} /></td>
+                      {line.provider === "Supplier" ? (
+                        <td title="Quoted rate from the supplier quotation">
+                          <input {...enterAddsRow} className="num" type="number" min="0" step="100" value={line.dailyRate}
+                            disabled={locked} onChange={(e) => onPatch(line.id, { dailyRate: Number(e.target.value) })} />
+                        </td>
+                      ) : (
+                        <td className="computed" title={`${line.costType} rate for ${line.level} — from the Engineering Rate Master`}>
+                          {offRate ? <span className="red-text">{moneyShort(line.dailyRate)}</span> : moneyShort(line.dailyRate)}
+                        </td>
+                      )}
+                      <td className="computed">{lineHours(line)} HR</td>
+                      <td className="computed">{moneyShort(lineManhourCost(line))}</td>
+                      <td>
+                        <select value={line.owner} disabled={locked} onChange={(e) => onPatch(line.id, { owner: e.target.value })}>
+                          {USERS.filter((u) => u.role === "Engineer" || u.role === "Project Manager").map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      </td>
+                      <td><input {...enterAddsRow} value={line.remark} disabled={locked} onChange={(e) => onPatch(line.id, { remark: e.target.value })} /></td>
+                      <td>
+                        <button className="row-action" type="button" onClick={() => onRemove(line.id)} disabled={locked} aria-label="Remove activity"><Icon name="trash" /></button>
+                      </td>
+                    </tr>
+                  );
+                }),
+
+                ...group.expenses.map((line) => {
+                  const enterAddsRow = {
+                    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (event.key !== "Enter" || locked) return;
+                      event.preventDefault();
+                      onAddExpense(group.name, line.costType);
+                    },
+                  };
+                  return (
+                    <tr key={line.id} className="expense-row">
+                      <td><span className="cell-text muted">{orderedIds.indexOf(line.id) + 1}</span></td>
+                      <td>
+                        <select value={line.type} disabled={locked} onChange={(e) => onPatchExpense(line.id, { type: e.target.value as ExpenseType })}>
+                          {EXPENSE_TYPES.map((type) => <option key={type}>{type}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          {...enterAddsRow}
+                          value={line.description}
+                          disabled={locked}
+                          placeholder="e.g. Hotel near site, 2 rooms x 5 nights"
+                          onChange={(e) => onPatchExpense(line.id, { description: e.target.value })}
+                          ref={(element) => {
+                            if (element && focusId === line.id) {
+                              element.focus();
+                              onFocused();
+                            }
+                          }}
+                        />
+                      </td>
+                      <td><span className="cell-text muted">—</span></td>
+                      <td><span className="cell-text muted">—</span></td>
+                      <td>
+                        <select value={line.costType} disabled={locked} onChange={(e) => onPatchExpense(line.id, { costType: e.target.value as CostType })}>
+                          <option value="Engineering">{COST_TYPE_LABEL.Engineering}</option>
+                          <option value="Installation">{COST_TYPE_LABEL.Installation}</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input {...enterAddsRow} list="supplier-list" value={line.supplier} disabled={locked}
+                          placeholder="Vendor" onChange={(e) => onPatchExpense(line.id, { supplier: e.target.value })} />
+                      </td>
+                      <td>
+                        <input {...enterAddsRow} list="quotation-list" value={line.reference} disabled={locked}
+                          placeholder="—" onChange={(e) => onPatchExpense(line.id, { reference: e.target.value })} />
+                      </td>
+                      <td><input {...enterAddsRow} className="num" type="number" min="0" value={line.qty} disabled={locked} onChange={(e) => onPatchExpense(line.id, { qty: Number(e.target.value) })} /></td>
+                      <td>
+                        <select value={line.unit} disabled={locked} onChange={(e) => onPatchExpense(line.id, { unit: e.target.value })}>
+                          {EXPENSE_UNITS.map((unit) => <option key={unit}>{unit}</option>)}
+                        </select>
+                      </td>
+                      <td><span className="cell-text muted">—</span></td>
+                      <td><span className="cell-text muted">—</span></td>
+                      <td><input {...enterAddsRow} className="num" type="number" min="0" step="100" value={line.unitCost} disabled={locked} onChange={(e) => onPatchExpense(line.id, { unitCost: Number(e.target.value) })} /></td>
+                      <td><span className="cell-text muted">—</span></td>
+                      <td className="computed" title="Calculated by the system — Qty × Unit Cost">{moneyShort(expenseTotal(line))}</td>
+                      <td>
+                        <select value={line.owner} disabled={locked} onChange={(e) => onPatchExpense(line.id, { owner: e.target.value })}>
+                          {USERS.filter((u) => u.role === "Engineer" || u.role === "Project Manager").map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      </td>
+                      <td><input {...enterAddsRow} value={line.remark} disabled={locked} onChange={(e) => onPatchExpense(line.id, { remark: e.target.value })} /></td>
+                      <td>
+                        <button className="row-action" type="button" onClick={() => onRemoveExpense(line.id)} disabled={locked} aria-label="Remove expense"><Icon name="trash" /></button>
+                      </td>
+                    </tr>
+                  );
+                }),
+
+                <tr className="add-row" key={`a-${group.name}`}>
+                  <td colSpan={18}>
+                    <button type="button" className="add-row-btn" onClick={() => onAddActivity(group.name, group.costType)} disabled={locked}>
+                      <span><Icon name="plus" />Add activity to {group.name || "this package"}</span>
+                    </button>
                   </td>
-                  <td>
-                    <select value={line.level} disabled={locked} onChange={(e) => {
-                      const rate = RATES.find((r) => r.level === e.target.value && r.department === line.department)
-                        ?? RATES.find((r) => r.level === e.target.value);
-                      onPatch(line.id, { level: e.target.value, dailyRate: rate?.daily ?? line.dailyRate });
-                    }}>
-                      {ENGINEER_LEVELS.map((level) => <option key={level}>{level}</option>)}
-                    </select>
+                </tr>,
+                <tr className="add-row" key={`ax-${group.name}`}>
+                  <td colSpan={18}>
+                    <button type="button" className="add-row-btn expense" onClick={() => onAddExpense(group.name, group.costType)} disabled={locked}>
+                      <span><Icon name="truck" />Add travel, accommodation or other expense to {group.name || "this package"}</span>
+                    </button>
                   </td>
-                  <td><input className="num" type="number" min="1" value={line.engineers} disabled={locked} onChange={(e) => onPatch(line.id, { engineers: Number(e.target.value) })} /></td>
-                  <td><input className="num" type="number" min="0" step="0.5" value={line.manDays} disabled={locked} onChange={(e) => onPatch(line.id, { manDays: Number(e.target.value) })} /></td>
-                  <td><input className="num" type="number" min="1" max="12" value={line.hoursPerDay} disabled={locked} onChange={(e) => onPatch(line.id, { hoursPerDay: Number(e.target.value) })} /></td>
-                  <td className="computed" title="From the Engineering Rate Master">{moneyShort(line.dailyRate)}</td>
-                  <td className="computed">{lineHours(line)} HR</td>
-                  <td className="computed">{moneyShort(lineManhourCost(line))}</td>
-                  <td>
-                    <select value={line.owner} disabled={locked} onChange={(e) => onPatch(line.id, { owner: e.target.value })}>
-                      {USERS.filter((u) => u.role === "Engineer" || u.role === "Project Manager").map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <button className="row-action" type="button" onClick={() => onRemove(line.id)} disabled={locked} aria-label="Remove activity"><Icon name="trash" /></button>
+                </tr>,
+                ...(group.manhours.length || group.expenses.length ? [] : [
+                  <tr className="module-empty" key={`e-${group.name}`}>
+                    <td colSpan={18}><span>This work package is empty — add the activities and the travel or accommodation cost they need.</span></td>
+                  </tr>,
+                ]),
+                <tr className="subtotal-row" key={`s-${group.name}`}>
+                  <td colSpan={14}>{group.name || "Unassigned effort"} subtotal</td>
+                  <td className="num">{moneyShort(packageTotal(group))}</td>
+                  <td colSpan={3} />
+                </tr>,
+              ])}
+              {!visible.length ? (
+                <tr>
+                  <td colSpan={18}>
+                    <EmptyState
+                      icon="layers"
+                      title="No work package yet"
+                      message="Create a work package such as “Site Installation”, then add its activities and the travel and accommodation cost that go with them."
+                      action={
+                        <button className="btn primary" type="button" disabled={locked}
+                          onClick={() => onPackageForm({ mode: "new", name: "", costType: "Engineering" })}>
+                          <Icon name="layers" />New Work Package
+                        </button>
+                      }
+                    />
                   </td>
                 </tr>
-              ))}
-              <tr className="subtotal-row">
-                <td colSpan={7}>Total engineering effort</td>
-                <td className="num">{totals.manHours} HR</td>
-                <td className="num">{moneyShort(totals.engineering)}</td>
-                <td colSpan={2} />
-              </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
 
+        <datalist id="quotation-list">
+          {QUOTATIONS.map((quotation) => <option key={quotation.id} value={quotation.no}>{quotation.supplier} · {moneyShort(quotation.amount)} THB</option>)}
+        </datalist>
+        <datalist id="supplier-list-mh">{SUPPLIERS.map((supplier) => <option key={supplier.id} value={supplier.name} />)}</datalist>
+
         <div className="sticky-foot">
+          <div className="foot-item"><span>Engineering cost</span><strong>{moneyShort(totals.effortEngineering)}</strong></div>
+          <div className="foot-item"><span>Installation &amp; service</span><strong>{moneyShort(totals.effortInstallation)}</strong></div>
+          <div className="foot-item"><span>Supplier man-hour</span><strong>{moneyShort(totals.supplierManhour)}</strong></div>
+          <div className="foot-item"><span>Travel / hotel / per diem</span><strong>{moneyShort(totals.siteExpense)}</strong></div>
           <div className="foot-item"><span>Man-days</span><strong>{totals.manDays} MD</strong></div>
           <div className="foot-item"><span>Man-hours</span><strong>{totals.manHours} HR</strong></div>
-          <div className="foot-item"><span>Formula</span><strong>Engineers × Man-days × Hours/Day</strong></div>
           <div className="foot-total">
-            <span>Total engineering cost</span>
-            <strong>{moneyShort(totals.engineering)} THB</strong>
+            <span>{activeCostType === "all" ? "Shown" : activeCostType} subtotal</span>
+            <strong>{moneyShort(visibleCost)} THB</strong>
+          </div>
+          <div className="foot-total">
+            <span>Engineering + site expense</span>
+            <strong>{moneyShort(totals.engineering + totals.siteExpense)} THB</strong>
           </div>
         </div>
       </Panel>
 
       <div style={{ height: 14 }} />
 
-      <section className="grid-2">
+      <section className="grid-3">
+        <Panel title="Engineering vs Installation &amp; Service cost" subtitle="Same engineer, different standard rate" flush>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cost type</th><th className="num">Man-days</th><th className="num">Man-hours</th>
+                  <th className="num">Effort cost</th><th className="num">of which supplier</th><th className="num">Expense</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byCostType.map((row) => (
+                  <tr key={row.costType}>
+                    <td><Badge tone={row.costType === "Installation" ? "amber" : "blue"}>{COST_TYPE_LABEL[row.costType]}</Badge></td>
+                    <td className="num">{row.manDays} MD</td>
+                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{moneyShort(row.cost)}</td>
+                    <td className="num">{row.supplier ? moneyShort(row.supplier) : "—"}</td>
+                    <td className="num">{row.expense ? moneyShort(row.expense) : "—"}</td>
+                  </tr>
+                ))}
+                <tr className="subtotal-row">
+                  <td>Total</td>
+                  <td className="num">{totals.manDays} MD</td>
+                  <td className="num">{totals.manHours} HR</td>
+                  <td className="num">{moneyShort(totals.engineering)}</td>
+                  <td className="num">{moneyShort(totals.supplierManhour)}</td>
+                  <td className="num">{moneyShort(totals.siteExpense)}</td>
+                </tr>
+                {providerEffort(estimate).map((row) => (
+                  <tr key={row.provider}>
+                    <td><Badge tone={row.provider === "Supplier" ? "violet" : "slate"}>{row.provider === "Supplier" ? "Supplier man-hour" : "Own engineers"}</Badge></td>
+                    <td className="num">{row.manDays} MD</td>
+                    <td className="num">—</td>
+                    <td className="num">{moneyShort(row.cost)}</td>
+                    <td className="num">—</td>
+                    <td className="num">—</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+
         <Panel title="Engineering Cost Summary" subtitle="By department" flush>
           <div className="table-wrap">
             <table>
@@ -951,13 +1751,13 @@ function ManhourTab({ estimate, locked, onPatch, onAdd, onRemove }: {
             </table>
           </div>
         </Panel>
-        <Panel title="Engineering effort distribution" subtitle="Cost share by department">
-          <Donut
-            data={effort.map((row) => ({ label: row.department, value: row.cost }))}
-            centerLabel="Engineering"
-            centerValue={`${Math.round(totals.engineering / 1000)}K`}
-            format={(value) => moneyShort(value)}
-          />
+
+        <Panel title="Site expense by type" subtitle="Reported under transportation, accommodation and other cost">
+          {expenseByType.length ? (
+            <HBarList data={expenseByType} format={(value) => moneyShort(value)} />
+          ) : (
+            <EmptyState icon="truck" title="No site expense" message="Add travel, accommodation or per diem to an on-site work package." />
+          )}
         </Panel>
       </section>
     </>
@@ -1198,7 +1998,7 @@ function ValidationTab({ results, onFix }: { results: ReturnType<typeof validate
             <li className="check-item"><Icon name="cpu" /><div><strong>Total Cost = Qty × Unit Cost</strong><p>Calculated centrally; the field is read-only in the table.</p></div></li>
             <li className="check-item"><Icon name="cpu" /><div><strong>Man-hour = Engineers × Man-days × Hours/Day</strong><p>Daily rate comes from the Engineering Rate Master.</p></div></li>
             <li className="check-item"><Icon name="cpu" /><div><strong>Category Total = Σ cost items</strong><p>Subtotals are derived, never typed.</p></div></li>
-            <li className="check-item"><Icon name="cpu" /><div><strong>Estimate Total</strong><p>Material + Engineering + Outsource + Installation + Transportation + Accommodation + Other + Contingency.</p></div></li>
+            <li className="check-item"><Icon name="cpu" /><div><strong>Estimate Total</strong><p>Material + Engineering + Outsource + Installation & Service + Transportation + Accommodation + Other + Contingency.</p></div></li>
           </ul>
         </Panel>
       </div>
@@ -1438,7 +2238,7 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
           </Panel>
         </section>
 
-        <Panel title="Engineering man-hour" flush>
+        <Panel title="Engineering man-hour" subtitle="By department, and by where the work is done" flush>
           <div className="table-wrap">
             <table>
               <thead><tr><th>Department</th><th className="num">Man-days</th><th className="num">Man-hours</th><th className="num">Cost</th></tr></thead>
@@ -1454,6 +2254,14 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
                 <tr className="subtotal-row">
                   <td>Total</td><td className="num">{totals.manDays} MD</td><td className="num">{totals.manHours} HR</td><td className="num">{moneyShort(totals.engineering)}</td>
                 </tr>
+                {costTypeEffort(estimate).map((row) => (
+                  <tr key={row.costType}>
+                    <td><Badge tone={row.costType === "Installation" ? "amber" : "blue"}>{COST_TYPE_SHORT[row.costType]}</Badge></td>
+                    <td className="num">{row.manDays} MD</td>
+                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{moneyShort(row.cost)}{row.expense ? <span className="muted"> + {moneyShort(row.expense)} expense</span> : null}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1578,21 +2386,153 @@ function ModuleModal({ form, onClose, onSave }: { form: ModuleForm; onClose: () 
 
       <div className="info-strip" style={{ marginTop: 14 }}>
         <Icon name="layers" />
-        The module is created empty — add its items straight in the sheet, from the price library, or with the detailed form.
+The module is created empty — add its items straight in the sheet, from the price library, or with the detailed form. Its item codes run as <strong>{itemCodePrefix(categoryCode, name || "Module")}-001</strong>, <strong>-002</strong> and so on.
       </div>
     </Modal>
   );
 }
 
-function AddCostItemDrawer({ modules, onClose, onSave, onSearchPrice }: {
+/**
+ * Attaches a supplier quotation to an outsourced man-hour line — the same idea
+ * as picking a price from the library on the hardware side.
+ */
+function QuotationPickerModal({ onClose, onUse }: {
+  onClose: () => void;
+  onUse: (quotation: (typeof QUOTATIONS)[number]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const rows = QUOTATIONS.filter((quotation) =>
+    `${quotation.no} ${quotation.supplier} ${quotation.project} ${quotation.inquiryNo}`.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <Modal
+      title="Attach supplier quotation"
+      subtitle="Man-hour bought from a supplier must carry the quotation its rate came from"
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <span className="muted">{rows.length} quotation(s) · upload a new one from the Supplier Quotation screen</span>
+          <span className="spacer" />
+          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+        </>
+      }
+    >
+      <SearchInput value={query} onChange={setQuery} placeholder="Search quotation no., supplier or project…" />
+      <div className="table-wrap tall" style={{ marginTop: 12 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Quotation No.</th><th>Supplier</th><th>Project</th><th>Received</th>
+              <th>Valid Until</th><th className="num">Amount</th><th>Status</th><th>File</th><th aria-label="Action" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((quotation) => (
+              <tr key={quotation.id} className="clickable" onClick={() => onUse(quotation)}>
+                <td><strong className="mono">{quotation.no}</strong></td>
+                <td>{quotation.supplier}</td>
+                <td>{quotation.project}</td>
+                <td>{formatDate(quotation.receivedDate)}</td>
+                <td className={quotation.status === "Expired" ? "red-text" : undefined}>{formatDate(quotation.validUntil)}</td>
+                <td className="num">{moneyShort(quotation.amount)}</td>
+                <td><Badge tone={toneOf(quotation.status)}>{quotation.status}</Badge></td>
+                <td><span className="row"><Pill tone={quotation.fileType === "PDF" ? "red" : quotation.fileType === "Excel" ? "green" : "blue"}>{quotation.fileType}</Pill></span></td>
+                <td><button className="btn sm default" type="button" onClick={(event) => { event.stopPropagation(); onUse(quotation); }}>Use</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="info-strip" style={{ marginTop: 12 }}>
+        <Icon name="alertCircle" />
+        The quotation number, supplier and quotation date are written onto the man-hour line, so the quoted rate can always be traced back to its document.
+      </div>
+    </Modal>
+  );
+}
+
+function PackageModal({ form, onClose, onSave }: {
+  form: PackageForm;
+  onClose: () => void;
+  onSave: (name: string, costType: CostType) => void;
+}) {
+  const [name, setName] = useState(form.name);
+  const [costType, setCostType] = useState<CostType>(form.costType);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { nameRef.current?.focus(); }, []);
+  const presets = PACKAGE_PRESETS.filter((preset) => preset.costType === costType);
+  const sample = RATES.find((rate) => rate.level === "Middle Engineer" && rate.department === "Electrical");
+
+  return (
+    <Modal
+      title={form.mode === "new" ? "New work package" : `Rename “${form.name}”`}
+      subtitle={form.mode === "new"
+        ? "A work package groups the activities and the travel, hotel and per diem cost that belong together."
+        : "Every activity and expense in this package follows the new name and cost type."}
+      onClose={onClose}
+      footer={
+        <>
+          <span className="spacer" />
+          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn primary" type="button" disabled={!name.trim()} onClick={() => onSave(name, costType)}>
+            <Icon name="check" />{form.mode === "new" ? "Create package" : "Save package"}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid two">
+        <Field label="Cost type" hint="Installation & service work uses the higher standard rate">
+          <select value={costType} onChange={(event) => setCostType(event.target.value as CostType)}>
+            <option value="Engineering">{COST_TYPE_LABEL.Engineering}</option>
+            <option value="Installation">{COST_TYPE_LABEL.Installation}</option>
+          </select>
+        </Field>
+        <Field label="Package name" hint="e.g. Site Installation">
+          <input ref={nameRef} value={name} onChange={(event) => setName(event.target.value)} placeholder="Site Installation" />
+        </Field>
+      </div>
+
+      {presets.length ? (
+        <div className="form-section">
+          <div className="form-section-title"><h3>Common {COST_TYPE_SHORT[costType].toLowerCase()} packages</h3><span /></div>
+          <div className="chip-select">
+            {presets.map((preset) => (
+              <button key={preset.name} type="button" className={name === preset.name ? "chip on" : "chip"} onClick={() => setName(preset.name)}>
+                {name === preset.name ? <Icon name="check" /> : <Icon name="plus" />} {preset.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className={costType === "Installation" ? "info-strip amber" : "info-strip"} style={{ marginTop: 14 }}>
+        <Icon name={costType === "Installation" ? "truck" : "cpu"} />
+        {costType === "Installation"
+          ? `Installation & service rate applies — a Middle Electrical Engineer costs ${moneyShort(sample?.installationDaily ?? 0)} THB/day instead of ${moneyShort(sample?.engineeringDaily ?? 0)}. Travel, accommodation, per diem and supplier man-hour can be added inside the package.`
+          : `Engineering rate applies — a Middle Electrical Engineer costs ${moneyShort(sample?.engineeringDaily ?? 0)} THB/day.`}
+      </div>
+    </Modal>
+  );
+}
+
+function AddCostItemDrawer({ items, modules, onClose, onSave, onSearchPrice }: {
+  items: CostItem[];
   modules: ModuleDef[];
   onClose: () => void;
   onSave: (item: CostItem, again: boolean) => void;
   onSearchPrice: () => void;
 }) {
-  const [item, setItem] = useState<CostItem>(blankItem());
+  const [item, setItem] = useState<CostItem>(() => ({ ...blankItem(), itemCode: nextItemCode(items, "01", "") }));
   const set = <K extends keyof CostItem>(key: K, value: CostItem[K]) => setItem((prev) => ({ ...prev, [key]: value }));
   const structure = COST_STRUCTURE.find((c) => c.code === item.categoryCode);
+
+  /** Keeps the generated code in step with the category and module chosen. */
+  const retitle = (next: CostItem) => (
+    isGeneratedCode(item.itemCode, item.categoryCode, item.module)
+      ? { ...next, itemCode: nextItemCode(items, next.categoryCode, next.module) }
+      : next
+  );
 
   return (
     <Drawer
@@ -1620,7 +2560,7 @@ function AddCostItemDrawer({ modules, onClose, onSave, onSearchPrice }: {
         <Field label="Cost Category">
           <select value={item.categoryCode} onChange={(e) => {
             const next = COST_STRUCTURE.find((c) => c.code === e.target.value);
-            setItem((prev) => ({ ...prev, categoryCode: e.target.value, category: next?.name ?? prev.category, subcategory: next?.subs[0]?.name ?? "" }));
+            setItem((prev) => retitle({ ...prev, categoryCode: e.target.value, category: next?.name ?? prev.category, subcategory: next?.subs[0]?.name ?? "" }));
           }}>
             {COST_STRUCTURE.map((c) => <option key={c.code} value={c.code}>{c.code} {c.name}</option>)}
           </select>
@@ -1634,7 +2574,7 @@ function AddCostItemDrawer({ modules, onClose, onSave, onSearchPrice }: {
           <input
             list="module-list"
             value={item.module}
-            onChange={(e) => set("module", e.target.value)}
+            onChange={(e) => setItem((prev) => retitle({ ...prev, module: e.target.value }))}
             placeholder="e.g. Main Control Box"
           />
           <datalist id="module-list">
@@ -1644,7 +2584,9 @@ function AddCostItemDrawer({ modules, onClose, onSave, onSearchPrice }: {
               .map((name) => <option key={name} value={name} />)}
           </datalist>
         </Field>
-        <Field label="Item Code"><input value={item.itemCode} onChange={(e) => set("itemCode", e.target.value)} placeholder="HW-PLC-001" /></Field>
+        <Field label="Item Code" hint={`Generated as ${itemCodePrefix(item.categoryCode, item.module)}-NNN — overwrite it with a supplier part number if you prefer`}>
+          <input value={item.itemCode} onChange={(e) => set("itemCode", e.target.value)} placeholder="HW-PLC-001" />
+        </Field>
         <Field label="Brand">
           <input list="brand-list-drawer" value={item.brand} onChange={(e) => set("brand", e.target.value)} />
           <datalist id="brand-list-drawer">{BRANDS.map((brand) => <option key={brand} value={brand} />)}</datalist>

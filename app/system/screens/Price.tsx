@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { BRANDS, MISSING_PRICES, PRICE_LIBRARY, QUOTATIONS, SUPPLIERS } from "../data";
 import { daysBetween, formatDate, money, moneyShort, priceAge, userName } from "../calc";
 import {
-  Badge, EmptyState, Field, Icon, LineChart, Modal, Panel, PageHeader, Person,
-  Pill, SearchInput, Select, Sparkline, Toolbar, toneOf,
+  Badge, EmptyState, Field, GridControls, Icon, LineChart, Modal, Pagination, Panel, PageHeader, Person,
+  Pill, SearchInput, Select, Sparkline, Toolbar, toneOf, usePaged,
 } from "../ui";
 import type { ScreenProps } from "../routes";
 
@@ -18,6 +18,8 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
   const [brand, setBrand] = useState("All brands");
   const [supplier, setSupplier] = useState("All suppliers");
   const [age, setAge] = useState("All ages");
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
 
   const rows = useMemo(() => PRICE_LIBRARY.filter((record) => {
     const haystack = `${record.itemCode} ${record.description} ${record.brand} ${record.model} ${record.supplier} ${record.project} ${record.category}`.toLowerCase();
@@ -33,6 +35,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
     return true;
   }), [search, brand, supplier, age]);
 
+  const paged = usePaged(rows, pageSize, page);
   const fresh = PRICE_LIBRARY.filter((r) => priceAge(r.priceDate).days <= 90).length;
   const aging = PRICE_LIBRARY.filter((r) => { const d = priceAge(r.priceDate).days; return d > 90 && d <= 180; }).length;
   const stale = PRICE_LIBRARY.filter((r) => priceAge(r.priceDate).days > 180).length;
@@ -66,6 +69,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
       </Toolbar>
 
       <Panel title={`${rows.length} price records`} subtitle="Green 0–90 days · orange 91–180 days · red older than 180 days" flush>
+        <GridControls pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
         {rows.length ? (
           <div className="table-wrap">
             <table>
@@ -77,7 +81,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((record) => {
+                {paged.pageRows.map((record) => {
                   const recordAge = priceAge(record.priceDate);
                   return (
                     <tr key={record.id}>
@@ -107,6 +111,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
                 })}
               </tbody>
             </table>
+            <Pagination page={paged.current} pageCount={paged.pageCount} from={paged.from} to={paged.to} total={paged.total} onPage={setPage} />
           </div>
         ) : (
           <EmptyState icon="search" title="No price record found" message="Try a different brand or model, or request a supplier price instead." />
@@ -240,14 +245,18 @@ export function Quotations({ go, notify }: ScreenProps) {
   const [supplier, setSupplier] = useState("All suppliers");
   const [status, setStatus] = useState("All status");
   const [upload, setUpload] = useState(false);
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
 
-  const rows = QUOTATIONS.filter((quotation) => {
+  const quotationRows = QUOTATIONS.filter((quotation) => {
     const haystack = `${quotation.no} ${quotation.supplier} ${quotation.project} ${quotation.inquiryNo}`.toLowerCase();
     if (search && !haystack.includes(search.toLowerCase())) return false;
     if (supplier !== "All suppliers" && quotation.supplier !== supplier) return false;
     if (status !== "All status" && quotation.status !== status) return false;
     return true;
   });
+  const rows = quotationRows;
+  const quotationPage = usePaged(rows, pageSize, page);
 
   return (
     <>
@@ -270,6 +279,7 @@ export function Quotations({ go, notify }: ScreenProps) {
       </Toolbar>
 
       <Panel title={`${rows.length} supplier quotations`} subtitle="PDF, Excel and image files are accepted" flush>
+        <GridControls pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
         <div className="table-wrap">
           <table>
             <thead>
@@ -280,7 +290,7 @@ export function Quotations({ go, notify }: ScreenProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((quotation) => {
+              {quotationPage.pageRows.map((quotation) => {
                 const daysLeft = -daysBetween(quotation.validUntil);
                 return (
                   <tr key={quotation.id}>
@@ -315,6 +325,7 @@ export function Quotations({ go, notify }: ScreenProps) {
               })}
             </tbody>
           </table>
+          <Pagination page={quotationPage.current} pageCount={quotationPage.pageCount} from={quotationPage.from} to={quotationPage.to} total={quotationPage.total} onPage={setPage} />
         </div>
       </Panel>
 

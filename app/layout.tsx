@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import { PRODUCT } from "./system/data";
 
 // `next/font/google` emits no stylesheet under vinext — the generated class
 // lands on <body> but the CSS variable and @font-face never ship, so the whole
@@ -15,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "tomas-estimate-cost.example";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const image = `${protocol}://${host}/og.png`;
-  const title = "Engineering Estimate Cost Management System";
+  const title = `${PRODUCT.name} — ${PRODUCT.tagline}`;
   const description = "Internal engineering cost control: inquiry registration, estimate cost workspace, price library, supplier quotations, revision control and engineering review.";
   return { title, description, openGraph: { title, description, images: [image] }, twitter: { card: "summary_large_image", title, description, images: [image] } };
 }
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="th">
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={GOOGLE_FONTS} />

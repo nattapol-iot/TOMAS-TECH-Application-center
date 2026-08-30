@@ -1,21 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   CURRENT_USER, ESTIMATES, INQUIRIES, MISSING_PRICES, NOTIFICATIONS,
-  PRICE_LIBRARY, QUOTATIONS, USERS,
+  PRICE_LIBRARY, PRODUCT, PURCHASE_REQUISITIONS, QUOTATIONS, USERS,
 } from "./data";
 import { money } from "./calc";
 import { Badge, Icon, Toast, type IconName } from "./ui";
+import { BrandLockup, BrandMark } from "./Brand";
+import { LANGUAGES, LanguageContext, translate, type Lang } from "./i18n";
 import type { Route } from "./routes";
 import Dashboard from "./screens/Dashboard";
 import { InquiryCreate, InquiryDetail, InquiryList } from "./screens/Inquiry";
 import EstimateList from "./screens/EstimateList";
 import Workspace from "./screens/Workspace";
 import { MissingPrices, PriceHistory, PriceLibrary, Quotations } from "./screens/Price";
+import ResourcePlan from "./screens/Resource";
+import { PurchaseDetail, PurchaseList } from "./screens/Purchase";
 import { AuditLogScreen, Customers, MasterData, Projects, RateMaster, Reports, Settings } from "./screens/Admin";
-
-type Language = "TH" | "EN" | "JP";
 
 const NAV: { group?: string; items: { route: Route; label: string; icon: IconName; badge?: number; hot?: boolean }[] }[] = [
   {
@@ -31,6 +33,13 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
       { route: { name: "price" }, label: "Price Library", icon: "book" },
       { route: { name: "quotations" }, label: "Supplier Quotation", icon: "quote" },
       { route: { name: "missing" }, label: "Waiting Supplier Price", icon: "clock", badge: MISSING_PRICES.filter((m) => m.status !== "Price Updated").length, hot: true },
+    ],
+  },
+  {
+    group: "PLANNING",
+    items: [
+      { route: { name: "resources" }, label: "Resource Plan", icon: "calendar" },
+      { route: { name: "purchase" }, label: "Purchase Requisition", icon: "package", badge: PURCHASE_REQUISITIONS.filter((pr) => pr.status === "Draft" || pr.status === "Submitted").length },
     ],
   },
   {
@@ -56,7 +65,7 @@ export default function App() {
   const [signedIn, setSignedIn] = useState(false);
   const [route, setRoute] = useState<Route>({ name: "dashboard" });
   const [toast, setToast] = useState("");
-  const [language, setLanguage] = useState<Language>("EN");
+  const [language, setLanguage] = useState<Lang>("EN");
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -94,24 +103,36 @@ export default function App() {
 
   const results = useGlobalSearch(query);
   const unread = NOTIFICATIONS.filter((entry) => entry.unread).length;
+  const language$ = useMemo(
+    () => ({ lang: language, setLang: setLanguage, t: (text: string) => translate(text, language) }),
+    [language],
+  );
+  const t = language$.t;
 
-  if (!signedIn) return <Login onSignIn={() => setSignedIn(true)} />;
+  if (!signedIn) {
+    return (
+      <LanguageContext.Provider value={language$}>
+        <Login onSignIn={() => setSignedIn(true)} />
+      </LanguageContext.Provider>
+    );
+  }
 
   return (
+    <LanguageContext.Provider value={language$}>
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">T</div>
+          <BrandMark size={34} tone="dark" />
           <div>
-            <strong>TOMAS TECH</strong>
-            <span>Estimate Cost System</span>
+            <strong>{PRODUCT.company}</strong>
+            <span>{PRODUCT.name}</span>
           </div>
         </div>
 
-        <nav className="nav" aria-label="Main navigation">
+        <nav className="nav" aria-label={t("Main navigation")}>
           {NAV.map((section, index) => (
             <div key={section.group ?? index}>
-              {section.group ? <p className="nav-label">{section.group}</p> : null}
+              {section.group ? <p className="nav-label">{t(section.group)}</p> : null}
               {section.items.map((item) => {
                 const active = isActive(route, item.route);
                 return (
@@ -123,7 +144,7 @@ export default function App() {
                     onClick={() => go(item.route)}
                   >
                     <Icon name={item.icon} />
-                    <span>{item.label}</span>
+                    <span>{t(item.label)}</span>
                     {item.badge ? <em className={item.hot ? "hot" : undefined}>{item.badge}</em> : null}
                   </button>
                 );
@@ -138,7 +159,7 @@ export default function App() {
             <strong>{CURRENT_USER.name}</strong>
             <span>{CURRENT_USER.department} · {CURRENT_USER.role}</span>
           </div>
-          <button type="button" aria-label="Sign out" onClick={() => setSignedIn(false)}><Icon name="logout" /></button>
+          <button type="button" aria-label={t("Sign out")} onClick={() => setSignedIn(false)}><Icon name="logout" /></button>
         </div>
       </aside>
 
@@ -151,8 +172,8 @@ export default function App() {
               value={query}
               onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
               onFocus={() => setSearchOpen(true)}
-              placeholder="Search inquiry, estimate, customer, project, brand, model, supplier or engineer…"
-              aria-label="Global search"
+              placeholder={t("Search inquiry, estimate, customer, project, brand, model, supplier or engineer…")}
+              aria-label={t("Global search")}
             />
             <span className="kbd"><b>Ctrl</b><b>K</b></span>
             {searchOpen && query ? (
@@ -180,7 +201,7 @@ export default function App() {
 
           <div className="topbar-right">
             <div className="menu-wrap">
-              <button className="icon-btn" type="button" aria-label="Notifications" onClick={() => setNotifOpen((value) => !value)}>
+              <button className="icon-btn" type="button" aria-label={t("Notifications")} onClick={() => setNotifOpen((value) => !value)}>
                 <Icon name="bell" />
                 {unread ? <b>{unread}</b> : null}
               </button>
@@ -212,7 +233,7 @@ export default function App() {
             </div>
 
             <div className="lang-switch" role="group" aria-label="Language">
-              {(["TH", "EN", "JP"] as Language[]).map((code) => (
+              {LANGUAGES.map((code) => (
                 <button key={code} type="button" className={language === code ? "active" : ""} onClick={() => setLanguage(code)}>{code}</button>
               ))}
             </div>
@@ -228,9 +249,9 @@ export default function App() {
               </button>
               {userOpen ? (
                 <div className="menu" role="menu">
-                  <button type="button" onClick={() => { setUserOpen(false); go({ name: "settings" }); }}><Icon name="user" />Profile &amp; department</button>
-                  <button type="button" onClick={() => { setUserOpen(false); go({ name: "settings" }); }}><Icon name="settings" />Settings</button>
-                  <button type="button" onClick={() => { setUserOpen(false); setSignedIn(false); }}><Icon name="logout" />Logout</button>
+                  <button type="button" onClick={() => { setUserOpen(false); go({ name: "settings" }); }}><Icon name="user" />{t("Profile & department")}</button>
+                  <button type="button" onClick={() => { setUserOpen(false); go({ name: "settings" }); }}><Icon name="settings" />{t("Settings")}</button>
+                  <button type="button" onClick={() => { setUserOpen(false); setSignedIn(false); }}><Icon name="logout" />{t("Logout")}</button>
                 </div>
               ) : null}
             </div>
@@ -248,6 +269,9 @@ export default function App() {
           {route.name === "price-history" ? <PriceHistory key={route.id} id={route.id} go={go} notify={notify} /> : null}
           {route.name === "quotations" ? <Quotations go={go} notify={notify} /> : null}
           {route.name === "missing" ? <MissingPrices go={go} notify={notify} /> : null}
+          {route.name === "resources" ? <ResourcePlan go={go} notify={notify} /> : null}
+          {route.name === "purchase" ? <PurchaseList go={go} notify={notify} /> : null}
+          {route.name === "pr" ? <PurchaseDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
           {route.name === "customers" ? <Customers go={go} notify={notify} /> : null}
           {route.name === "projects" ? <Projects go={go} notify={notify} /> : null}
           {route.name === "reports" ? <Reports go={go} notify={notify} /> : null}
@@ -256,10 +280,13 @@ export default function App() {
           {route.name === "audit" ? <AuditLogScreen go={go} notify={notify} /> : null}
           {route.name === "settings" ? <Settings go={go} notify={notify} /> : null}
         </main>
+
+        <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version}</footer>
       </div>
 
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
     </div>
+    </LanguageContext.Provider>
   );
 }
 
@@ -352,6 +379,7 @@ function isActive(route: Route, target: Route) {
   if (target.name === "inquiries" && (route.name === "inquiry" || route.name === "inquiry-new")) return true;
   if (target.name === "estimates" && route.name === "estimate") return true;
   if (target.name === "price" && route.name === "price-history") return true;
+  if (target.name === "purchase" && route.name === "pr") return true;
   return false;
 }
 
@@ -369,6 +397,7 @@ const notifTone = (kind: string) =>
    -------------------------------------------------------------------------- */
 
 function Login({ onSignIn }: { onSignIn: () => void }) {
+  const { t } = useContext(LanguageContext);
   const [email, setEmail] = useState(CURRENT_USER.email);
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Engineer");
@@ -376,16 +405,14 @@ function Login({ onSignIn }: { onSignIn: () => void }) {
   return (
     <div className="login">
       <aside className="login-aside">
-        <div className="brand" style={{ border: "none", padding: 0 }}>
-          <div className="brand-mark">T</div>
-          <div>
-            <strong>TOMAS TECH</strong>
-            <span>Engineering Estimate Cost</span>
-          </div>
+        <div className="login-brand">
+          <BrandLockup tone="dark" height={44} />
+          <span>{PRODUCT.name}</span>
         </div>
 
         <div>
-          <h2>Engineering Estimate Cost Management System</h2>
+          <h2>{PRODUCT.name}</h2>
+          <p className="login-strap">{t("Engineering Estimate Cost Management System")}</p>
           <p>Engineers should spend their time estimating engineering work — not searching old Excel files, copying prices, checking formulas or combining costs by hand.</p>
           <ul className="login-points">
             <li><Icon name="check" />One inquiry number, one estimate number, no duplication</li>
@@ -404,19 +431,19 @@ function Login({ onSignIn }: { onSignIn: () => void }) {
 
       <div className="login-form-wrap">
         <form className="login-form" onSubmit={(event) => { event.preventDefault(); onSignIn(); }}>
-          <h1>Sign in</h1>
-          <p>Use your company account to open the estimate workspace.</p>
+          <h1>{t("Sign in")}</h1>
+          <p>{t("Use your company account to open the estimate workspace.")}</p>
 
           <div className="field">
-            <label htmlFor="login-email">Email</label>
+            <label htmlFor="login-email">{t("Email")}</label>
             <input id="login-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
           </div>
           <div className="field">
-            <label htmlFor="login-password">Password</label>
+            <label htmlFor="login-password">{t("Password")}</label>
             <input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="••••••••" />
           </div>
           <div className="field">
-            <label htmlFor="login-role">Sign in as</label>
+            <label htmlFor="login-role">{t("Sign in as")}</label>
             <select id="login-role" value={role} onChange={(event) => setRole(event.target.value)}>
               {["Engineer", "Engineering Manager", "Project Manager", "Sales Engineer", "Admin", "Viewer"].map((option) => <option key={option}>{option}</option>)}
             </select>
@@ -424,10 +451,10 @@ function Login({ onSignIn }: { onSignIn: () => void }) {
 
           <label className="checkbox-row" style={{ margin: "4px 0 10px" }}>
             <input type="checkbox" defaultChecked />
-            <span>Keep me signed in on this workstation</span>
+            <span>{t("Keep me signed in on this workstation")}</span>
           </label>
 
-          <button className="btn primary block" type="submit"><Icon name="arrowRight" />Sign in</button>
+          <button className="btn primary block" type="submit"><Icon name="arrowRight" />{t("Sign in")}</button>
 
           <div className="login-role-hint">
             <strong>Demonstration account</strong>
