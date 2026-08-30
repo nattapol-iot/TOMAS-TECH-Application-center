@@ -8,11 +8,15 @@
    ========================================================================== */
 
 import type {
-  CostItem, CostType, Estimate, ExpenseLine, ManhourLine, ManhourProvider, OtherCostLine,
-  PrLine, Project, PurchaseRequisition, Role, ScheduleStatus, ScheduleTask, ScheduleUpdate,
-  User, WorkItem,
+  BomLine, CostItem, CostType, Estimate, ExpenseLine, Grn, GrnLine, ManhourLine,
+  ManhourProvider, MatPo, MatPoLine, MatPr, MatPrLine, Mir, MirLine, OtherCostLine,
+  PrLine, Project, PurchaseRequisition, Reservation, Role, ScheduleStatus, ScheduleTask,
+  ScheduleUpdate, StockTxn, User, WorkItem,
 } from "./data";
-import { CAPACITY_PER_WEEK, COST_STRUCTURE, HOLIDAYS, RATES, USERS } from "./data";
+import {
+  BOM_LINES, BOMS, CAPACITY_PER_WEEK, COST_STRUCTURE, ESTIMATES, GRNS, HOLIDAYS,
+  MAT_ITEMS, MAT_POS, MAT_PRS, MIRS, PROJECTS, RATES, RESERVATIONS, STOCK_TXNS, USERS,
+} from "./data";
 import type { Tone } from "./ui";
 
 /** The system "today". Fixed so the demonstration data stays reproducible. */
@@ -1130,5 +1134,338 @@ export function schedulePermission(user: User, role: Role, project: Project, row
     canDelete: !readOnly && (isManager || (isMine && isDetail && !row?.hasChildren)),
     canBaseline: isManager,
     isManager,
+  };
+}
+
+/* --------------------------------------------------------------------------
+   BOM, procurement & inventory — every balance is a sum over the ledger
+
+   Nothing in this section reads a stored balance. On hand, reserved,
+   available, on order and quarantine are computed from the immutable
+   transactions, the reservations and the open purchase orders, so the same
+   quantity can never disagree between two screens — and can never be
+   overwritten by hand.
+   -------------------------------------------------------------------------- */
+
+export type StockBalance = {
+  /** Physically in the store, including quarantine. */
+  onHand: number;
+  usable: number;
+  reserved: number;
+  available: number;
+  onOrder: number;
+  quarantine: number;
+  issuedThisMonth: number;
+  lastMovement: string;
+};
+
+/** Ordered minus received, per PO line — the open commitment quantity. */
+export function poLineReceived(poLineId: string) {
+  return GRNS.flatMap((grn) => grn.lines)
+    .filter((line) => line.poLineId === poLineId)
+    .reduce((sum, line) => sum + line.receivedQty, 0);
+}
+
+export function stockBalance(itemId: string): StockBalance {
+  const txns = STOCK_TXNS.filter((txn) => txn.itemId === itemId);
+  const usable = txns.filter((txn) => txn.bucket === "stock").reduce((sum, txn) => sum + txn.qty, 0);
+  const quarantine = txns.filter((txn) => txn.bucket === "quarantine").reduce((sum, txn) => sum + txn.qty, 0);
+  const reserved = RESERVATIONS
+    .filter((rsv) => rsv.itemId === itemId && rsv.status === "Active")
+    .reduce((sum, rsv) => sum + rsv.qty, 0);
+  const onOrder = MAT_POS
+    .filter((po) => po.status !== "Closed")
+    .flatMap((po) => po.lines)
+    .filter((line) => line.itemId === itemId)
+    .reduce((sum, line) => sum + Math.max(0, line.qty - poLineReceived(line.id)), 0);
+  const monthPrefix = TODAY_ISO.slice(0, 7);
+  return {
+    onHand: usable + quarantine,
+    usable,
+    reserved,
+    available: usable - reserved,
+    onOrder,
+    quarantine,
+    issuedThisMonth: -txns
+      .filter((txn) => txn.type === "Material Issue" && txn.at.slice(0, 7) === monthPrefix)
+      .reduce((sum, txn) => sum + txn.qty, 0),
+    lastMovement: txns.map((txn) => txn.at).sort().slice(-1)[0] ?? "",
+  };
+}
+
+export const itemOf = (itemId: string) => MAT_ITEMS.find((item) => item.id === itemId);
+
+export const inventoryTone = (balance: StockBalance, reorderLevel: number): Tone =>
+  (balance.available < 0 ? "red"
+    : balance.quarantine > 0 ? "amber"
+      : balance.usable <= reorderLevel && balance.onOrder === 0 ? "amber"
+        : balance.available === 0 && balance.reserved > 0 ? "blue" : "green");
+
+/** More than 90 days without a movement and nothing reserved = slow moving. */
+export function isSlowMoving(itemId: string) {
+  const balance = stockBalance(itemId);
+  if (balance.usable <= 0 || balance.reserved > 0) return false;
+  const last = balance.lastMovement.slice(0, 10);
+  return !last || networkDays(last, TODAY_ISO) > 60;
+}
+
+/* ---- BOM line facts -------------------------------------------------------- */
+
+export type BomLineFacts = {
+  allocated: number;
+  activeReserved: number;
+  issued: number;
+  returned: number;
+  onOrder: number;
+  /** Qty required − allocated − customer supplied − open order, floored at zero. */
+  purchaseRequired: number;
+  onPrQty: number;
+  budget: number;
+  consumedValue: number;
+  status: BomLineStatus;
+};
+
+export type BomLineStatus =
+  | "Customer Supplied" | "Fully Fulfilled" | "On Order" | "Reserved"
+  | "Available in Stock" | "Partially Available" | "Purchase Required" | "Non-stock";
+
+export function bomLineFacts(line: BomLine): BomLineFacts {
+  const budget = line.qtyRequired * line.estUnitCost;
+  if (line.nonStock) {
+    return { allocated: 0, activeReserved: 0, issued: 0, returned: 0, onOrder: 0, purchaseRequired: 0, onPrQty: 0, budget, consumedValue: 0, status: "Non-stock" };
+  }
+  const reservations = RESERVATIONS.filter((rsv) => rsv.bomLineId === line.id && rsv.status !== "Released");
+  const allocated = reservations.reduce((sum, rsv) => sum + rsv.qty, 0);
+  const activeReserved = reservations.filter((rsv) => rsv.status === "Active").reduce((sum, rsv) => sum + rsv.qty, 0);
+  const mirLines = MIRS.filter((mir) => ["Issued", "Received", "Completed"].includes(mir.status))
+    .flatMap((mir) => mir.lines).filter((mirLine) => mirLine.bomLineId === line.id);
+  const issued = mirLines.reduce((sum, mirLine) => sum + mirLine.issueQty, 0);
+  const returned = mirLines.reduce((sum, mirLine) => sum + mirLine.returnedQty, 0);
+  const onOrder = MAT_POS.filter((po) => po.status !== "Closed").flatMap((po) => po.lines)
+    .filter((poLine) => poLine.bomLineId === line.id)
+    .reduce((sum, poLine) => sum + Math.max(0, poLine.qty - poLineReceived(poLine.id)), 0);
+  const onPrQty = MAT_PRS.filter((pr) => pr.status === "Draft" || pr.status === "In Approval" || pr.status === "Approved")
+    .flatMap((pr) => pr.lines).filter((prLine) => prLine.bomLineId === line.id)
+    .reduce((sum, prLine) => sum + prLine.qty, 0);
+  const netIssued = issued - returned;
+  // The spec formula, extended two ways: an already-ordered quantity does not
+  // resurface as a shortage, and neither does material that was issued without
+  // a reservation behind it (covered = the larger of the two views).
+  const covered = Math.max(allocated, netIssued + activeReserved);
+  const purchaseRequired = Math.max(0, line.qtyRequired - covered - line.customerSupplied - onOrder);
+  const unitCost = itemOf(line.itemId)?.avgUnitCost ?? line.estUnitCost;
+  const balance = line.itemId ? stockBalance(line.itemId) : null;
+
+  let status: BomLineStatus;
+  if (line.customerSupplied >= line.qtyRequired) status = "Customer Supplied";
+  else if (netIssued >= line.qtyRequired - line.customerSupplied) status = "Fully Fulfilled";
+  else if (onOrder > 0) status = "On Order";
+  else if (purchaseRequired === 0 && activeReserved > 0) status = "Reserved";
+  else if (purchaseRequired === 0) status = "Fully Fulfilled";
+  else if (balance && balance.available >= purchaseRequired && onPrQty === 0) status = "Available in Stock";
+  else if (allocated > 0 || (balance && balance.available > 0)) status = "Partially Available";
+  else status = "Purchase Required";
+
+  return { allocated, activeReserved, issued, returned, onOrder, purchaseRequired, onPrQty, budget, consumedValue: netIssued * unitCost, status };
+}
+
+export const bomStatusTone = (status: BomLineStatus): Tone =>
+  (status === "Customer Supplied" ? "slate"
+    : status === "Fully Fulfilled" || status === "Available in Stock" ? "green"
+      : status === "On Order" ? "violet"
+        : status === "Reserved" ? "blue"
+          : status === "Partially Available" ? "amber"
+            : status === "Purchase Required" ? "red" : "slate");
+
+/* ---- Project material KPIs -------------------------------------------------- */
+
+export type MatKpis = {
+  approvedBudget: number;
+  bomBudget: number;
+  reservedValue: number;
+  openCommitment: number;
+  actualConsumed: number;
+  openPrValue: number;
+  forecast: number;
+  remaining: number;
+};
+
+/** Open PO value: ordered minus received, at PO price. */
+export function projectCommitment(projectId: string) {
+  return MAT_POS.filter((po) => po.projectId === projectId && po.status !== "Closed")
+    .flatMap((po) => po.lines)
+    .reduce((sum, line) => sum + Math.max(0, line.qty - poLineReceived(line.id)) * line.unitPrice, 0);
+}
+
+export function projectConsumed(projectId: string) {
+  return STOCK_TXNS
+    .filter((txn) => txn.projectId === projectId && (txn.type === "Material Issue" || txn.type === "Material Return"))
+    .reduce((sum, txn) => sum + -txn.qty * (itemOf(txn.itemId)?.avgUnitCost ?? 0), 0);
+}
+
+export function projectReservedValue(projectId: string) {
+  return RESERVATIONS.filter((rsv) => rsv.projectId === projectId && rsv.status === "Active")
+    .reduce((sum, rsv) => sum + rsv.qty * (itemOf(rsv.itemId)?.avgUnitCost ?? 0), 0);
+}
+
+export function matKpis(projectId: string): MatKpis {
+  const project = PROJECTS.find((entry) => entry.id === projectId);
+  const estimate = ESTIMATES.find((entry) => entry.id === project?.estimateId);
+  const approvedBudget = estimate ? estimateTotals(estimate).material : 0;
+  const bomBudget = BOM_LINES.filter((line) => BOMS.some((bom) => bom.id === line.bomId && bom.projectId === projectId))
+    .reduce((sum, line) => sum + line.qtyRequired * line.estUnitCost, 0);
+  const reservedValue = projectReservedValue(projectId);
+  const openCommitment = projectCommitment(projectId);
+  const actualConsumed = projectConsumed(projectId);
+  const openPrValue = MAT_PRS
+    .filter((pr) => pr.projectId === projectId && (pr.status === "Draft" || pr.status === "In Approval" || pr.status === "Approved"))
+    .flatMap((pr) => pr.lines)
+    .reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
+  const forecast = actualConsumed + openCommitment + reservedValue;
+  return {
+    approvedBudget, bomBudget, reservedValue, openCommitment, actualConsumed, openPrValue,
+    forecast, remaining: approvedBudget - forecast,
+  };
+}
+
+/* ---- PR arithmetic ----------------------------------------------------------- */
+
+export const matPrAmount = (pr: MatPr) => pr.lines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
+export const matPrEstimateAmount = (pr: MatPr) => pr.lines.reduce((sum, line) => sum + line.qty * line.estUnitCost, 0);
+
+export function matPrVariancePct(pr: MatPr) {
+  const est = matPrEstimateAmount(pr);
+  return est ? ((matPrAmount(pr) - est) / est) * 100 : 0;
+}
+
+export const prLineVariancePct = (line: MatPrLine) =>
+  (line.estUnitCost ? ((line.unitPrice - line.estUnitCost) / line.estUnitCost) * 100 : 0);
+
+/**
+ * Budget picture for a PR: what is already spoken for, and what approving
+ * adds. A converted or rejected PR no longer adds anything — its value is
+ * already inside (or out of) the commitment.
+ */
+export function prBudgetCheck(pr: MatPr) {
+  const kpis = matKpis(pr.projectId);
+  const open = pr.status === "Draft" || pr.status === "In Approval" || pr.status === "Approved";
+  const amount = open ? matPrAmount(pr) : 0;
+  // Sibling open PRs count as spoken for — two 400k PRs against a 500k
+  // remainder must not both read "within budget".
+  const siblingOpenPr = MAT_PRS
+    .filter((sibling) => sibling.id !== pr.id && sibling.projectId === pr.projectId
+      && (sibling.status === "Draft" || sibling.status === "In Approval" || sibling.status === "Approved"))
+    .reduce((sum, sibling) => sum + matPrAmount(sibling), 0);
+  const forecastBefore = kpis.forecast + siblingOpenPr;
+  const forecastAfter = forecastBefore + amount;
+  return {
+    approvedBudget: kpis.approvedBudget,
+    committed: kpis.openCommitment + siblingOpenPr,
+    forecastBefore,
+    amount,
+    forecastAfter,
+    remainingAfter: kpis.approvedBudget - forecastAfter,
+    withinBudget: forecastAfter <= kpis.approvedBudget,
+  };
+}
+
+/** The rules that append extra approvers — thresholds live in Settings. */
+export const APPROVAL_THRESHOLDS = {
+  priceVariancePct: 10,
+  managementValue: 1_000_000,
+};
+
+export function prRuleFlags(pr: MatPr) {
+  const flags: string[] = [];
+  const check = prBudgetCheck(pr);
+  if (!check.withinBudget) flags.push("PR exceeds the remaining project budget");
+  for (const line of pr.lines) {
+    if (prLineVariancePct(line) > APPROVAL_THRESHOLDS.priceVariancePct) {
+      flags.push(`${line.partNo} unit price is ${prLineVariancePct(line).toFixed(1)}% above the estimate (limit ${APPROVAL_THRESHOLDS.priceVariancePct}%)`);
+    }
+    if (line.unplanned) flags.push(`${line.partNo} is not in the approved estimate`);
+    if (line.priceSource === "Manual") flags.push(`${line.partNo} uses a manual price`);
+    if (line.itemId) {
+      const balance = stockBalance(line.itemId);
+      if (balance.available >= line.qty) flags.push(`${line.partNo}: available stock covers this line — buying anyway needs a reason`);
+    }
+  }
+  if (matPrAmount(pr) > APPROVAL_THRESHOLDS.managementValue) flags.push(`PR value exceeds ${thb.format(APPROVAL_THRESHOLDS.managementValue)} THB`);
+  if (pr.priority === "Emergency") flags.push("Emergency purchase");
+  return flags;
+}
+
+/* ---- PO derived state ----------------------------------------------------------- */
+
+export function poFacts(po: MatPo) {
+  const ordered = po.lines.reduce((sum, line) => sum + line.qty, 0);
+  const received = po.lines.reduce((sum, line) => sum + poLineReceived(line.id), 0);
+  const value = po.lines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
+  const openValue = po.lines.reduce((sum, line) => sum + Math.max(0, line.qty - poLineReceived(line.id)) * line.unitPrice, 0);
+  const overdue = po.status !== "Received" && po.status !== "Closed" && !!po.expectedDate && toDate(po.expectedDate) < TODAY;
+  return { ordered, received, value, openValue, overdue, remaining: ordered - received };
+}
+
+/* ---- Who may do what -------------------------------------------------------------- */
+
+export type MatPermission = {
+  canEditBom: boolean;
+  canReleaseBom: boolean;
+  canReserve: boolean;
+  canCreatePr: boolean;
+  canApprove: boolean;
+  canCreatePo: boolean;
+  canReceive: boolean;
+  canIssue: boolean;
+  canApproveIssue: boolean;
+  canAdjustStock: boolean;
+  canApproveAdjustment: boolean;
+};
+
+export function matPermission(user: User, role: Role): MatPermission {
+  const manager = role === "Project Manager" || role === "Engineering Manager" || role === "Admin";
+  const engineer = role === "Engineer" || manager;
+  return {
+    canEditBom: engineer,
+    canReleaseBom: manager,
+    canReserve: engineer || role === "Inventory Controller" || role === "Warehouse",
+    canCreatePr: engineer,
+    canApprove: manager || role === "Purchasing",
+    canCreatePo: role === "Purchasing" || role === "Admin",
+    canReceive: role === "Warehouse" || role === "Admin",
+    canIssue: role === "Warehouse" || role === "Admin",
+    canApproveIssue: manager,
+    canAdjustStock: role === "Warehouse" || role === "Inventory Controller" || role === "Admin",
+    canApproveAdjustment: role === "Inventory Controller" || role === "Admin",
+  };
+}
+
+/* ---- The chain of custody, one line end to end -------------------------------------- */
+
+export type TraceChain = {
+  estimateLine?: CostItem;
+  bomLine: BomLine;
+  prLines: { pr: MatPr; line: MatPrLine }[];
+  poLines: { po: MatPo; line: MatPoLine }[];
+  grnLines: { grn: Grn; line: GrnLine }[];
+  reservations: Reservation[];
+  txns: StockTxn[];
+  mirLines: { mir: Mir; line: MirLine }[];
+};
+
+export function traceChain(bomLine: BomLine): TraceChain {
+  const estimate = ESTIMATES.find((entry) => BOMS.some((bom) => bom.id === bomLine.bomId && bom.estimateId === entry.id));
+  const prLines = MAT_PRS.flatMap((pr) => pr.lines.filter((line) => line.bomLineId === bomLine.id).map((line) => ({ pr, line })));
+  const poLines = MAT_POS.flatMap((po) => po.lines.filter((line) => line.bomLineId === bomLine.id).map((line) => ({ po, line })));
+  const poLineIds = new Set(poLines.map((entry) => entry.line.id));
+  return {
+    estimateLine: estimate?.items.find((item) => item.id === bomLine.estimateLineId),
+    bomLine,
+    prLines,
+    poLines,
+    grnLines: GRNS.flatMap((grn) => grn.lines.filter((line) => poLineIds.has(line.poLineId)).map((line) => ({ grn, line }))),
+    reservations: RESERVATIONS.filter((rsv) => rsv.bomLineId === bomLine.id),
+    txns: bomLine.itemId ? STOCK_TXNS.filter((txn) => txn.itemId === bomLine.itemId) : [],
+    mirLines: MIRS.flatMap((mir) => mir.lines.filter((line) => line.bomLineId === bomLine.id).map((line) => ({ mir, line }))),
   };
 }

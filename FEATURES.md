@@ -1,14 +1,15 @@
-# IoT Team Center — feature specification
+# IoT Team Center — legacy prototype and full-target feature specification
 
 Engineering Estimate Cost Management System for the TOMAS TECH IoT team.
 
-Single reference for everything the application does today, written so the
-back-end can be built from it without reading the UI code.
+This document preserves the original prototype and full-target scope. It is not
+the release-status source of truth. See `README.md` for the implemented
+Production Candidate scope and `docs/PRODUCTION_DEPLOYMENT.md` for its release gates.
 
-- Front end: React 19 on vinext, all screens under `app/system/`
-- Data today: in-repo dataset (`app/system/data.ts`) — no persistence yet
-- Calculation today: `app/system/calc.ts` — **must move to the server**
-- Last updated: 30 Aug 2026 (project management + schedule/My Work added)
+- Legacy prototype: React 19 screens and in-repo data under `app/system/`
+- Production Candidate: `app/system/ProductionApp.tsx` backed by ASP.NET Core and Microsoft SQL Server
+- Production estimate totals and workflow validation run on the server/database; legacy `calc.ts` is demo-only
+- Last updated: 30 Aug 2026 (project management, schedule/My Work, BOM/procurement/inventory added)
 
 **Golden rule:** this system controls internal engineering cost only. Gross
 margin, profit margin, gross profit, selling price, customer selling price,
@@ -40,6 +41,14 @@ effort and cost completeness.
 | — | **Project Workspace** | `project` | `screens/Project.tsx` | Tabs: Overview, Documents (15 folders), To do list, Schedule, Cost, Team |
 | — | **Schedule Workspace** | `schedule` | `screens/Schedule.tsx` | The WBS plan: Sheet + Timeline, Internal/Customer view, Updates, Baseline |
 | — | **My Work** | `my-work` | `screens/MyWork.tsx` | Every task assigned to the signed-in member, across all projects, one-click updates |
+| Material | **Procurement Dashboard** | `procurement` | `screens/MatDashboard.tsx` | Budget vs commitment vs actual per project, exceptions, supplier performance |
+| Material | **BOM list / workspace** | `boms` / `bom` | `screens/Bom.tsx` | BOM tree + 23-column sheet, stock columns, budget trace, allocate, generate PR |
+| Material | **Purchase Requisitions** | `purchase` / `pr` / `pr-new` | `screens/Requisition.tsx` | PR list, creation from BOM shortage, approval workspace with rule-added steps |
+| Material | **Purchase Orders** | `pos` | `screens/Receiving.tsx` | One PO per supplier from an approved PR, received-vs-ordered tracking |
+| Material | **Inventory** | `inventory` | `screens/Inventory.tsx` | Ledger-derived balances, allocation panel, adjustments queue, per-item ledger drawer |
+| Material | **Goods Receiving** | `receiving` / `grn` | `screens/Receiving.tsx` | Partial deliveries, accepted-to-stock, damage-to-quarantine |
+| Material | **Material Issues** | `issues` / `mir` | `screens/Issue.tsx` | Request → approve → pick → issue → member receipt → return |
+| Material | **Approvals** | `mat-approvals` | `screens/MatApprovals.tsx` | Every pending PR / issue / stock-adjustment decision in one queue |
 | Organisation | Reports | `reports` | `screens/Admin.tsx` | 13 reports, Excel/PDF export |
 | Administration | Master Data | `master` | `screens/Admin.tsx` | 14 master tabs |
 | Administration | Engineering Rate | `rates` | `screens/Admin.tsx` | Employee / rate master |
@@ -139,7 +148,7 @@ CAPACITY_PER_WEEK = 5   // working days an engineer can commit per week
 ```
 - `WorkItemType`: Inquiry · Estimate · Project
 
-### 2.8 Purchase requisition *(new)*
+### 2.8 Purchase requisition *(superseded by 2.13 — kept for history)*
 ```
 PurchaseRequisition: id, no, projectNo, projectName, estimateId, estimateNo,
                      revision, customer, requesterId, approverId,
@@ -286,6 +295,54 @@ Effort overrun reads "+6 MD vs plan"; the cost consequence lives on the
 estimate, where it already is.
 
 ---
+### 2.13 BOM, procurement & inventory *(new)*
+
+One chain of custody: **Estimate line → BOM line → PR line → PO line → Goods
+receipt → Stock transaction → Material issue** — every link is an id, and the
+Budget Trace modal walks the whole chain for any line.
+
+```
+MatItem          item master: itemCode, partNo, brand, unit, location,
+                 reorderLevel, avgUnitCost, leadTimeDays, preferredSupplier
+StockTxn         IMMUTABLE ledger: type (Goods Receipt | Material Issue |
+                 Material Return | Stock Transfer | Stock Adjustment | Scrap |
+                 Cycle Count Adjustment | Quarantine In/Release), signed qty,
+                 bucket (stock | quarantine), refNo, projectId, byId
+Reservation      itemId, projectId, bomLineId, qty, owner,
+                 status Active | Consumed | Released
+Bom / BomLine    section tree (HW.STD/EL/ME/PC/INF, SW, SVC, MP), qtyRequired,
+                 estUnitCost, customerSupplied, estimateLineId, owner, nonStock
+MatPr / MatPrLine  source BOM, requester, priority, approval steps[],
+                 lines with estUnitCost vs unitPrice, priceSource, snapshot stock
+MatPo / MatPoLine  one supplier per PO, born from an approved PR
+Grn / GrnLine    ordered / previously received / received / accepted / damaged /
+                 rejected, lot, serial, location, qcStatus, projectAllocation
+Mir / MirLine    bomQty, previouslyIssued, requested, issued, returned +
+                 the full actor chain (requested/approved/picked/issued/received by)
+StockAdjustment  pending until the inventory controller decides
+MatAudit         append-only: actor, role, action, entity, before, after, qty,
+                 project, reason, attachment, approver
+```
+
+**Balances are never stored.** `stockBalance(itemId)` sums the ledger:
+usable = Σ stock-bucket qty · quarantine = Σ quarantine-bucket qty ·
+onHand = usable + quarantine · reserved = Σ active reservations ·
+available = usable − reserved · onOrder = Σ (PO qty − received).
+
+**BOM line facts** (`bomLineFacts`): allocated = Σ reservations for the line,
+issued = Σ MIR issue qty, and
+`purchaseRequired = max(0, qtyRequired − allocated − customerSupplied − openOrder)`
+— the spec formula, extended with −openOrder so a released PO never resurfaces
+as a shortage. Line status priority: Customer Supplied → Fully Fulfilled →
+On Order → Reserved → Available in Stock → Partially Available → Purchase Required.
+
+**Project material KPIs** (`matKpis`): approvedBudget = estimate material
+total · actual = Σ issues − returns (at avg cost) · commitment = Σ open PO
+value · reserved = Σ active reservations value ·
+**forecast = actual + commitment + reserved** · remaining = budget − forecast.
+A converted or rejected PR adds nothing to the check (`prBudgetCheck`).
+
+---
 ## 3. Numbering standards
 
 | Document | Pattern | Example | Notes |
@@ -297,6 +354,11 @@ estimate, where it already is.
 | Purchase requisition | `PR-YYMM-XXXX` | PR-2608-0001 | *(new)* |
 | **Project** *(new)* | `PJYYNNNN` | PJ260152 | `YY` = Buddhist-era style year in use today, `NNNN` running per year; issued when the inquiry is won |
 | **Item code** *(new)* | `<CAT>-<MOD>-<NNN>` | ME-IFC-001 | Running number **inside a module** |
+| **BOM** *(new)* | `BOM-YYMM-XXXX` + `R##` | BOM-2608-0001 R01 | Revision per BOM |
+| **PO** *(new)* | `PO-YYMM-XXXX` | PO-2608-0009 | One supplier per PO |
+| **GRN** *(new)* | `GRN-YYMM-XXXX` | GRN-2608-0012 | One per delivery, partial allowed |
+| **MIR** *(new)* | `MIR-YYMM-XXXX` | MIR-2608-0008 | Material issue request |
+| **ADJ / CC** *(new)* | `ADJ-YYMM-XXXX` | ADJ-2608-0003 | Stock adjustment / cycle count |
 
 ### Item code rules (`calc.ts`)
 - `CAT` — 2 letters per category: 01 HW · 02 SW · 03 EL · 04 ME · 05 RB · 06 EN · 07 OS · 08 TR · 09 AC · 10 OT
@@ -500,6 +562,34 @@ Monday-meeting agenda. Requests are updates with `requestDays > 0` and an
 empty `answer` — one array, one queue.
 
 ---
+### 5.6 Material workflow *(new)*
+
+```
+Approved Estimate → Generate BOM → Release BOM (locked; changes need a revision)
+ → Check inventory → Reserve available stock (one qty = one project)
+ → Purchase shortage → PR (budget check + rule flags) → approval chain
+ → PO per supplier → partial/full goods receipt → QC (damage → quarantine)
+ → store + reserve for project → material issue request → project approval
+ → picking → warehouse issue (ledger − stock, reservations consumed)
+ → member receipt confirmation → consumed (actual cost) or returned (+ stock)
+```
+
+Approval chain: Requester → Section Owner → Budget Owner → Purchasing →
+(Management, auto-added by rule) → PO Creation. Steps are **auto-added** when:
+PR exceeds remaining budget · unit price > 10% over estimate · item not in the
+estimate (unplanned) · stock available but buying anyway · manual price ·
+emergency · value over 1,000,000 THB. Thresholds live in `APPROVAL_THRESHOLDS`
+(configurable in Settings later). A comment is mandatory on reject, request-
+changes and every flagged approval. **The requester can never decide their own
+document** — enforced in the store, not just hidden in the UI.
+
+Hard rules the server must keep: stock balances only via ledger transactions;
+damaged/rejected/quarantine never enter Available; receiving over the PO
+quantity needs approval; issue requests only by assigned project members, for
+BOM items, within the remaining BOM quantity; released BOMs and non-draft PRs
+are read-only; audit records are append-only.
+
+---
 ## 6. Validation rules (`validateEstimate`)
 
 Critical errors (block submit and approval):
@@ -572,22 +662,26 @@ Each rule can be switched on or off in Settings.
 
 Attachments (customer RFQ, specification, drawing, layout, meeting record,
 supplier quotation, estimate export, engineering reference, manual, other) are
-addressed by a **storage key**, not a file path, so Microsoft 365 / SharePoint
-today can be swapped for the company NAS later without touching the estimate
-database. Folder pattern in Settings: `/{Year}/{Customer}/{InquiryNo}/{DocumentCategory}/`.
+addressed by a server-generated **storage key**, not a user-supplied file path.
+SQL Server stores structured metadata and the integrity hash; the approved company
+NAS stores file bytes beneath the API's configured UNC root.
 
-**Project documents** *(new)* follow the team's existing OneDrive layout:
+**Project documents** use the standard project-folder taxonomy:
 
 ```
-IoT Team - Documents / Project - {Year} / [{ProjectNo}] {ProjectName} / {NN}. {FolderName}
+<NAS_APP_ROOT> / projects / {ProjectId} / {FolderCode} / {Year} / {Month} / {GeneratedFileId}
 ```
 
-The application does not replace OneDrive — it indexes it. A `ProjectDoc` row
-is a pointer (storage key + metadata), so a file uploaded through the folder
-browser lands in the same OneDrive folder the team opens from Explorer, and a
-file dropped into OneDrive directly must appear in the browser after a sync.
-Implement with the Microsoft Graph drive API: one drive item per project, the
-fifteen children created at project creation, delta sync into `project_docs`.
+The browser never connects to SMB directly. It lists, uploads, and downloads through
+the authenticated API; the API enforces permissions and project assignment, generates
+the relative storage key, streams bytes to/from the UNC root, and records metadata,
+SHA-256, uploader, and audit evidence in SQL. Operators and users must not drop files
+directly into this application root because files without matching SQL metadata are
+orphans. The fifteen logical folders (`00`–`14`) are created as project metadata.
+
+Production release still requires the exact NAS share/application root, a dedicated
+least-privileged service identity, Tailscale restart resilience, an approved malware
+scan/quarantine control, monitoring, and coordinated SQL/NAS backup and restore tests.
 
 ---
 
@@ -622,6 +716,13 @@ schedule_updates             (append only: field, from, to, comment, request_day
 schedule_baselines           (project_id, rev, label, taken_at, taken_by, reason, promised_finish)
 schedule_templates           (name, project_type, rows json)
 holidays                     (date)
+mat_items, stock_txns        (append-only ledger — balances are views, never columns)
+reservations                 (item, project, bom_line, qty, status)
+boms, bom_lines              (estimate_line_id link, customer_supplied, sections)
+mat_prs, mat_pr_lines        (approval steps, price source, unplanned flags)
+mat_pos, mat_po_lines, grns, grn_lines
+mirs, mir_lines              (full actor chain)
+stock_adjustments, mat_audit (append-only)
 audit_log                    (append only)
 notifications
 ```
@@ -649,6 +750,13 @@ notifications
 - `POST /schedule-requests/:updateId/answer` (accept adds the days, reject changes nothing)
 - `GET /my-work` → the signed-in member's rows across projects, with the urgency flags
 - `GET /projects/:id/schedule/export?audience=customer` → values-only workbook, Customer rows, baseline dates
+- `POST /boms` (generate from estimate) · `POST /boms/:id/release` · `POST /boms/:id/revisions`
+- `POST /reservations` (rejects qty > available) · `DELETE /reservations/:id` (release)
+- `POST /prs` (from BOM shortage) · `POST /prs/:id/submit | decide` (comment rules enforced) · `POST /prs/:id/convert`
+- `POST /grns` + `POST /grns/:id/confirm` → ledger transactions (accepted → stock, damage → quarantine)
+- `POST /mirs` · `decide` · `issue` (ledger + reservation consumption) · `receipt` · `return`
+- `POST /stock-adjustments` + `decide` (approved = ledger transaction; balances are never PATCHed)
+- `GET /items/:id/ledger` · `GET /trace?bomLineId=` (the whole custody chain)
 
 ### Rules that must be enforced server side
 1. All arithmetic in section 4 — the client only displays returned values.
@@ -658,7 +766,9 @@ notifications
 5. Validation before submit and approve.
 6. Project number issue, folder creation (all fifteen, always) and the OneDrive mirror.
 7. No amount is ever read out of a document in folders 04 (Quote) or 05 (PO).
-8. All schedule arithmetic in 4.7, the permission matrix in 4.8, and the rule that
+8. All material arithmetic in 2.13, the ledger-only stock rule, the approval
+   auto-add rules, and no self-approval anywhere.
+9. All schedule arithmetic in 4.7, the permission matrix in 4.8, and the rule that
    an accepted request is the only path by which a member changes a plan date.
 6. Locking of approved revisions.
 7. Audit entries for every field change, with previous value, new value and reason.
@@ -711,6 +821,8 @@ names, part numbers — is never translated.
 | `app/system/screens/Schedule.tsx` | Schedule workspace: banded WBS sheet, timeline with baseline/slip, updates, baseline variance |
 | `app/system/screens/MyWork.tsx` | The member's screen: urgent queue, one-click updates, own detail rows, request more days |
 | `app/system/store.ts` | Client schedule store — the single write seam; its functions map 1:1 onto the future API |
+| `app/system/matstore.ts` | Material store — reservations, PR decisions, PO conversion, receipts, issues, returns, adjustments; every mutation appends audit + ledger rows |
+| `app/system/screens/Bom.tsx` + `Requisition.tsx` + `Receiving.tsx` + `Issue.tsx` + `Inventory.tsx` + `MatDashboard.tsx` + `MatApprovals.tsx` | The material module screens |
 | `app/system/session.ts` | Who is signed in (login role → demonstration user) |
 | `app/globals.css` | Design system, with a "Company template alignment (PEGASUS)" section at the end that re-skins it to the house admin style: white sidebar under a blue logo block, Bootstrap button colours, DataTables-style grids with status-coloured rows |
 | `app/system/Brand.tsx` | TOMAS TECH logo as inline SVG (light and dark tone) |

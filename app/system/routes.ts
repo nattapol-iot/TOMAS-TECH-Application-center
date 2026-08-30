@@ -12,8 +12,19 @@ export type Route =
   | { name: "quotations" }
   | { name: "missing" }
   | { name: "resources" }
+  | { name: "procurement" }
+  | { name: "boms" }
+  | { name: "bom"; id: string }
   | { name: "purchase" }
   | { name: "pr"; id: string }
+  | { name: "pr-new"; bomId?: string }
+  | { name: "pos" }
+  | { name: "inventory" }
+  | { name: "receiving" }
+  | { name: "grn"; id: string }
+  | { name: "issues" }
+  | { name: "mir"; id: string }
+  | { name: "mat-approvals" }
   | { name: "customers" }
   | { name: "projects" }
   | { name: "project"; id: string }

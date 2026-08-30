@@ -220,7 +220,7 @@ export function SearchInput({ value, onChange, placeholder }: { value: string; o
   return (
     <label className="search-field">
       <Icon name="search" />
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <input value={value} maxLength={200} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
       {value ? <button type="button" onClick={() => onChange("")} aria-label="Clear search"><Icon name="x" /></button> : null}
     </label>
   );

@@ -1765,6 +1765,58 @@ tbody tr.diff-change:hover td { background: #fbecd6; }
 .login-form > p { color: var(--muted); margin: 6px 0 24px; }
 .login-form .field { margin-bottom: 14px; }
 .login-form .btn { margin-top: 8px; }
+.login-form .callout.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-soft);
+  color: var(--red-text);
+  font-size: var(--fs-xs);
+}
+
+/* Production-only shell and live API states */
+.production-indicator { display: flex; align-items: center; gap: 7px; color: var(--ink-soft); }
+.production-indicator strong { font-size: var(--fs-sm); }
+.production-indicator small { color: var(--muted); font-size: var(--fs-xs); }
+.status-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--n-400); box-shadow: 0 0 0 3px var(--n-100); }
+.status-dot.online { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.kpi-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.summary-strip.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.field > span:first-child { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft); }
+.row-actions { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.callout { display: flex; align-items: flex-start; gap: 9px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); font-size: var(--fs-sm); }
+.callout > .icon { flex: 0 0 auto; margin-top: 2px; }
+.callout > span { display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.callout.warning { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber-text); }
+.callout.danger { border-color: var(--red-line); background: var(--red-soft); color: var(--red-text); }
+.settings-list { display: grid; gap: 8px; }
+.settings-list > div { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line-soft); border-radius: var(--r-md); }
+.settings-list > div > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.settings-list small { color: var(--muted); }
+.setting-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: var(--r-sm); }
+.setting-icon.green { background: var(--green-soft); color: var(--green-text); }
+.setting-icon.blue { background: var(--blue-soft); color: var(--blue-text); }
+.setting-icon.violet { background: var(--violet-soft); color: var(--violet-text); }
+.production-cost-form { margin: 14px 0; padding: 14px; border: 1px solid var(--blue-line); border-radius: var(--r-lg); background: var(--blue-soft); }
+.production-document-form { margin-bottom: 14px; padding: 14px; border: 1px solid var(--blue-line); border-radius: var(--r-lg); background: var(--blue-soft); }
+.production-document-submit { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.production-document-submit small { color: var(--muted); font-size: var(--fs-xs); }
+.document-content-type, .document-folder-name { display: block; margin-top: 3px; color: var(--muted); font-size: var(--fs-2xs); }
+
+@media (max-width: 900px) {
+  .kpi-grid.three, .summary-strip.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid.three, .summary-strip.four { grid-template-columns: minmax(0, 1fr); }
+  .production-indicator small { display: none; }
+  .production-document-submit { align-items: stretch; flex-direction: column; }
+  .production-document-submit .btn { justify-content: center; }
+}
 .login-role-hint {
   margin-top: 20px;
   padding: 12px;
@@ -2517,3 +2569,126 @@ tbody tr.row-late:hover td { background: #fadada; }
 .feed .feed-row .muted { font-size: var(--fs-2xs); }
 
 .green-text { color: var(--green-text); }
+
+/* ==========================================================================
+   BOM, procurement & inventory
+   ========================================================================== */
+
+/* BOM workspace: navigator beside the sheet */
+.bom-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1180px) { .bom-layout { grid-template-columns: minmax(0, 1fr); } }
+
+.summary-strip.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1400px) { .summary-strip.six { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.strip-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.strip-stack .info-strip { margin-bottom: 0; }
+
+.bom-sheet .cell-text em { font-style: normal; font-size: var(--fs-3xs); }
+
+/* Approval timeline rail */
+.approval-rail {
+  display: flex;
+  gap: 0;
+  padding: 16px 14px;
+  overflow-x: auto;
+}
+.approval-node {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 150px;
+  position: relative;
+  padding-right: 18px;
+}
+.approval-node::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  right: 4px;
+  left: auto;
+  width: calc(100% - 140px);
+  min-width: 12px;
+  height: 2px;
+  background: var(--line);
+}
+.approval-node:last-child::after { display: none; }
+.approval-node.done::after { background: var(--green); }
+.approval-dot {
+  display: grid;
+  place-items: center;
+  width: 26px; height: 26px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--n-100);
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  border: 2px solid var(--line);
+}
+.approval-node.done .approval-dot { background: var(--green); border-color: var(--green); color: #fff; }
+.approval-node.done .approval-dot svg { width: 13px; height: 13px; }
+.approval-node.current .approval-dot { background: var(--blue); border-color: var(--blue); color: #fff; box-shadow: 0 0 0 4px var(--blue-soft); }
+.approval-node.auto .approval-dot { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-text); }
+.approval-node.skipped { opacity: 0.5; }
+.approval-node > div { min-width: 0; }
+.approval-node strong { display: block; font-size: var(--fs-xs); font-weight: 620; }
+.approval-node small { display: block; color: var(--muted); font-size: var(--fs-3xs); }
+.approval-node small svg { width: 10px; height: 10px; }
+
+/* Budget trace chain */
+.trace-chain { display: flex; flex-direction: column; gap: 0; }
+.trace-step {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 10px 0;
+  border-bottom: 1px dashed var(--line-soft);
+  align-items: flex-start;
+}
+.trace-step:last-child { border-bottom: none; }
+.trace-step p { font-size: var(--fs-xs); margin: 0 0 2px; }
+.trace-tag {
+  flex: none;
+  width: 64px;
+  text-align: center;
+  font-size: var(--fs-3xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: var(--r-sm);
+  padding: 4px 0;
+}
+.trace-tag.est { background: var(--n-100); color: var(--n-600); }
+.trace-tag.bom { background: var(--blue-soft); color: var(--blue-text); }
+.trace-tag.pr { background: var(--amber-soft); color: var(--amber-text); }
+.trace-tag.po { background: var(--violet-soft); color: var(--violet-text); }
+.trace-tag.grn { background: var(--green-soft); color: var(--green-text); }
+.trace-tag.stk { background: var(--navy-800); color: #bcd0f7; }
+.trace-tag.mir { background: var(--blue); color: #fff; }
+
+/* Budget vs commitment vs actual stacked bar */
+.budget-bar {
+  display: flex;
+  height: 14px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  overflow: hidden;
+  min-width: 180px;
+  border: 1px solid var(--line-soft);
+}
+.budget-bar .seg { height: 100%; }
+.budget-bar .seg.actual { background: var(--green); }
+.budget-bar .seg.committed { background: var(--violet); }
+.budget-bar .seg.reserved { background: var(--brand-sky); }
+
+.legend-chip { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); color: var(--muted); }
+.legend-chip::before { content: ""; width: 10px; height: 10px; border-radius: 3px; }
+.legend-chip.actual::before { background: var(--green); }
+.legend-chip.committed::before { background: var(--violet); }
+.legend-chip.reserved::before { background: var(--brand-sky); }

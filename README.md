@@ -1,175 +1,141 @@
-# IoT Team Center — Engineering Estimate Cost Management System
+# IoT Team Center
 
-Internal engineering application for TOMAS TECH: register customer inquiries,
-prepare and review engineering estimate cost, reuse supplier prices, control
-revisions and run the won project through to handover — replacing the current
-Excel-and-OneDrive process.
+Production-oriented internal application for TOMAS TECH's IoT team. It replaces the
+estimate-cost prototype's in-browser sample data with Microsoft Entra sign-in, an
+ASP.NET Core API, role-based access control, audit history, and Microsoft SQL Server
+as the system of record.
 
-The system controls **internal engineering cost only**. It contains no gross
-margin, profit margin, selling price, markup or commercial quotation
-calculation anywhere.
+The system manages **internal engineering cost only**. It does not calculate selling
+price, markup, gross margin, or profit margin.
 
-## Feature specification
+## Release status
 
-[FEATURES.md](FEATURES.md) is the single reference for the back end: domain model,
-numbering standards, every calculation and validation rule, workflows, roles,
-the suggested tables and endpoints, and what is still mock.
+This repository is a **Production Candidate**, not a completed live deployment.
+The code, schema, and local SQL workflow have passed the checks documented below,
+but go-live still requires staging evidence with the real Entra registrations,
+HTTPS domains/certificates, IIS host, least-privileged SQL login, backup/restore,
+organization-approved monitoring and recovery targets, and a tested company NAS
+share/service identity for document storage.
 
-## Application code
+## Architecture
 
-| Path | Contents |
+```text
+OpenAI Sites / vinext frontend
+            |
+            | HTTPS + Microsoft Entra access token
+            v
+ASP.NET Core API on Windows Server / IIS
+            |\
+            | \ SMB over the company Tailscale network
+            |  v
+            |  Company NAS / \\100.98.152.4\<SHARE_NAME>
+            |
+            | encrypted Microsoft.Data.SqlClient connection
+            v
+Microsoft SQL Server / IoTTeamCenter (structured system of record)
+```
+
+The browser never connects directly to SQL Server. SQL Server must only accept
+traffic from the API host, and the API must use a dedicated least-privileged database
+login rather than `sa`. SQL Server remains the system of record for structured
+business data and document metadata. The project-document API stores file contents
+on the company NAS through an exact UNC path from the IIS/API host; never place live SQL Server
+`MDF` or `LDF` files on this share and never rely on a Windows mapped drive.
+
+The company NAS manual identifies the SMB host as `\\100.98.152.4`, but it does
+not identify a share name. The exact `\\100.98.152.4\<SHARE_NAME>` root, a dedicated
+least-privileged NAS service identity, ACLs, Tailscale connectivity from the API
+host, malware scanning, monitoring, and backup/restore evidence must be supplied
+and tested before document storage is enabled. Staff access follows the company
+process: install Tailscale on Windows, sign in with the company Microsoft account,
+accept the IT device invitation, and use the NAS username/password issued by an
+administrator. Do not reuse a staff or NAS administrator credential for the API.
+
+## Production release scope
+
+The production entry point currently exposes these database-backed workflows:
+
+- Microsoft Entra sign-in and exact Entra object-ID-to-user mapping
+- dashboard and current-user bootstrap
+- inquiry search, list, status, and creation
+- estimate creation, validation, submit, approval, and revision request
+- estimate cost lines with server-calculated totals and optimistic concurrency
+- project creation from an approved estimate, including metadata for the standard 15 folders
+- record-scoped project document list, upload, and download through the API, with NAS bytes and SQL metadata/SHA-256
+- inventory item, balance, reorder, and immutable ledger views
+- authenticated creation of customer, supplier, inventory-item, and engineering-rate master data
+- team, role, permission, audit, and health foundations
+
+The SQL schema also contains schedule, broader document-lifecycle/scan-state, BOM, procurement, receiving,
+material issue, and stock-ledger foundations. Their prototype screens remain in the
+repository for product reference, but they are deliberately excluded from the
+production navigation until authenticated API workflows for those modules are
+finished. See [FEATURES.md](FEATURES.md) for the full domain specification.
+
+## Repository layout
+
+| Path | Purpose |
 | --- | --- |
-| `app/system/App.tsx` | Shell: login, sidebar, global search, notifications, language, routing |
-| `app/system/data.ts` | Demonstration dataset (customers, inquiries, estimates, price library, quotations, audit log, rates) |
-| `app/system/calc.ts` | Centralised calculation rules, price age, validation and revision comparison |
-| `app/system/ui.tsx` | Shared primitives — icons, badges, panels, tabs, drawers, modals, charts |
-| `app/system/screens/` | Dashboard, Inquiry, Estimate list, Estimate workspace, Price, Resource, Purchase, Project, Admin screens |
-| `app/globals.css` | Design system — navy sidebar, blue primary, green/orange/red status, dense tables |
+| `app/system/ProductionApp.tsx` | Authenticated production shell and permission-filtered navigation |
+| `app/system/production/` | Live API-backed screens |
+| `app/system/auth-client.ts` | Microsoft Entra SPA authentication |
+| `app/system/api-client.ts` | Bearer-token API client, timeout, and error handling |
+| `backend/IoTTeamCenter.Api/` | ASP.NET Core API for IIS |
+| `database/migrations/` | Versioned SQL Server schema migrations |
+| `database/scripts/` | Fresh deployment, login grants, user provisioning, and optional dev seed |
+| `docs/` | Production deployment and operations runbooks |
+| `tests/production-guardrails.test.mjs` | Checks preventing demo/D1 paths from returning to production |
 
-Material cost is captured in three levels: **discipline** (Hardware, Software,
-Electrical, Mechanical, Robot …) → **main module** (Main Control Box, In-feed
-Conveyor …) → **items**. Each discipline is a sub-tab of the cost sheet, each
-module can be created, renamed and deleted, and items are typed straight into
-the sheet under their module.
+## Local verification
 
-Effort follows the same shape: **cost type** (Engineering cost / Installation
-cost, each with its own standard rate) → **work package** (Site Installation,
-Commissioning …) → **activities and expenses**. A work package holds the
-man-hour it needs plus the travel, accommodation and per diem that come with it,
-and man-hour bought from a supplier carries its supplier and quotation number
-instead of a master rate.
+Prerequisites: Node.js `>=22.13.0`, .NET SDK 10, and optionally SQL Server 2019+
+with `sqlcmd` for database integration testing.
 
-Once an inquiry is won it becomes a **project** with its PJ number and the
-same fifteen folders the team keeps on OneDrive (`00. To do list` …
-`14. Ref`). The project workspace holds all of it in one place: a folder
-browser over the documents, the to do list (folder 00) as an editable sheet,
-the schedule (folder 08) as a milestone Gantt, the link back to the estimate
-and its purchase requisitions, and the team on the job. Global search reaches
-project numbers, project names, PO numbers and document file names, so a
-drawing is one search away from the folder it lives in.
-
-After the PO the **project schedule** replaces the old two-file Gantt: one
-WBS tree per project (phase → task → work detail, exactly the Excel template
-columns — WBS, PIC, PREDECESSOR, START, END, DAYS, % DONE, WORK DAYS with
-NETWORKDAYS and =F27+1 dependencies). The PM owns the PLAN lane, each member
-owns the PROGRESS lane of their own rows, and **My Work** gives every member
-a one-click update queue — the master Gantt, the PM view and the customer
-plan are projections of the same rows, so nothing has to be copied between
-files ever again. Baselines freeze the promise; slip is measured in work
-days, and a member who needs more time requests days instead of moving dates.
-
-Screens included: Login · Dashboard · Inquiry List · Create Inquiry · Inquiry
-Detail · Meeting Log · Estimate Cost List · Estimate Cost Workspace · Add Cost
-Item · Engineering Man-hour · Other Project Cost · Multi-Engineer Assignment ·
-Estimate Validation · Revision History · Create Revision · Compare Revision ·
-Engineering Review · Price Library · Price Search Popup · Price History ·
-Supplier Quotation · Waiting Supplier Price · Import Excel · Copy Previous
-Estimate · Resource Plan · Purchase Requisition · Customers · Projects ·
-Project Workspace · Schedule Workspace · My Work · Reports · Master Data ·
-Engineering Rate Master · Audit Log · Settings.
-
-All screens are driven by the in-repo dataset; wiring them to the API routes
-under `app/api/` and the Drizzle schema in `db/schema.ts` is the next step.
-
----
-
-## Platform notes (vinext starter)
-
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
-
-## Prerequisites
-
-- Node.js `>=22.13.0`
-
-## Quick Start
-
-```bash
+```powershell
 npm install
+npm test
+dotnet build .\backend\IoTTeamCenter.Api\IoTTeamCenter.Api.csproj -c Release
+```
+
+Copy `.env.example` to an ignored local environment file and replace its placeholders
+before using Microsoft sign-in. Public frontend settings are not secrets, but tenant,
+client, scope, API URL, and site origin must still match the real registrations.
+
+```powershell
 npm run dev
+```
+
+The production build fails closed when required values are missing or when public
+origins are not HTTPS:
+
+```powershell
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+For local API development only, `appsettings.Development.json` enables the explicit
+development authentication handler. This handler is unavailable in Production.
+Never publish development settings or development seed data.
 
-## Included Shape
+## Deployment
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- [Production deployment guide](docs/PRODUCTION_DEPLOYMENT.md)
+- [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Frontend environment template](.env.example)
+- [API configuration template](backend/IoTTeamCenter.Api/appsettings.json)
 
-## Workspace Auth Headers
+Production deployment requires real Microsoft Entra registrations, HTTPS DNS and
+certificates for the Sites frontend and API, an IIS host, SQL Server TLS, a secure
+application credential supplied through the server's secret/configuration channel,
+the Entra object ID of the first application administrator, and a confirmed NAS
+share/service identity with tested recovery. No SQL, NAS, or client-secret values
+belong in this repository.
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+## Security invariants
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+- Authentication is performed by Microsoft Entra; the application stores no Microsoft password.
+- Authorization is enforced again in the API from database roles and permissions.
+- Production API startup fails when Entra or CORS configuration is absent.
+- Production SQL connections require encryption and reject untrusted certificates.
+- Writes use row-version checks where concurrent edits can lose data.
+- Business numbers are allocated transactionally and audit/stock ledgers are append-only.
+- Legacy unauthenticated app routes and the prototype D1 binding are not part of production.

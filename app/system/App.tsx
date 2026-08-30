@@ -3,14 +3,16 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   CURRENT_USER, ESTIMATES, INQUIRIES, MISSING_PRICES, NOTIFICATIONS,
-  PRICE_LIBRARY, PRODUCT, PROJECT_DOCS, PROJECT_FOLDERS, PROJECTS, PURCHASE_REQUISITIONS,
-  QUOTATIONS, USERS,
+  MAT_PRS, MIRS, PRICE_LIBRARY, PRODUCT, PROJECT_DOCS, PROJECT_FOLDERS, PROJECTS,
+  QUOTATIONS, STOCK_ADJUSTMENTS, USERS,
 } from "./data";
 import { money } from "./calc";
 import { Badge, Icon, Toast, type IconName } from "./ui";
 import { BrandLockup, BrandMark } from "./Brand";
 import { LANGUAGES, LanguageContext, translate, type Lang } from "./i18n";
-import { SessionContext, sessionForRole, type Session } from "./session";
+import { SessionContext, sessionForRole, sessionFromApiUser, type Session } from "./session";
+import { IS_PRODUCTION_MODE, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
+import { loadBootstrap, type BootstrapData } from "./api-client";
 import { useScheduleStore } from "./store";
 import type { Route } from "./routes";
 import Dashboard from "./screens/Dashboard";
@@ -19,7 +21,13 @@ import EstimateList from "./screens/EstimateList";
 import Workspace from "./screens/Workspace";
 import { MissingPrices, PriceHistory, PriceLibrary, Quotations } from "./screens/Price";
 import ResourcePlan from "./screens/Resource";
-import { PurchaseDetail, PurchaseList } from "./screens/Purchase";
+import { BomList, BomWorkspace } from "./screens/Bom";
+import { PrCreate, PrDetail, PrList } from "./screens/Requisition";
+import { GrnDetail, GrnList, PoList } from "./screens/Receiving";
+import { MirDetail, MirList } from "./screens/Issue";
+import Inventory from "./screens/Inventory";
+import MatDashboard from "./screens/MatDashboard";
+import MatApprovals from "./screens/MatApprovals";
 import { ProjectDetail, ProjectList } from "./screens/Project";
 import ProjectSchedule from "./screens/Schedule";
 import MyWork, { myRows } from "./screens/MyWork";
@@ -47,7 +55,19 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
     group: "PLANNING",
     items: [
       { route: { name: "resources" }, label: "Resource Plan", icon: "calendar" },
-      { route: { name: "purchase" }, label: "Purchase Requisition", icon: "package", badge: PURCHASE_REQUISITIONS.filter((pr) => pr.status === "Draft" || pr.status === "Submitted").length },
+    ],
+  },
+  {
+    group: "MATERIAL & PROCUREMENT",
+    items: [
+      { route: { name: "procurement" }, label: "Procurement Dashboard", icon: "trendingUp" },
+      { route: { name: "boms" }, label: "BOM", icon: "layers" },
+      { route: { name: "purchase" }, label: "Purchase Requisition", icon: "package", badge: MAT_PRS.filter((pr) => pr.status === "Draft" || pr.status === "In Approval").length },
+      { route: { name: "pos" }, label: "Purchase Orders", icon: "truck" },
+      { route: { name: "inventory" }, label: "Inventory", icon: "database" },
+      { route: { name: "receiving" }, label: "Goods Receiving", icon: "download" },
+      { route: { name: "issues" }, label: "Material Issues", icon: "upload" },
+      { route: { name: "mat-approvals" }, label: "Approvals", icon: "checkCircle", badge: MAT_PRS.filter((pr) => pr.status === "In Approval").length + MIRS.filter((mir) => mir.status === "Pending Approval").length + STOCK_ADJUSTMENTS.filter((adj) => adj.status === "Pending Approval").length, hot: true },
     ],
   },
   {
@@ -68,9 +88,13 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
   },
 ];
 
-export default function App() {
+export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
+  const productionMode = IS_PRODUCTION_MODE && !forceDemo;
   const [signedIn, setSignedIn] = useState(false);
   const [session, setSession] = useState<Session>(sessionForRole("Engineer"));
+  const [bootstrap, setBootstrap] = useState<BootstrapData | null>(null);
+  const [authBusy, setAuthBusy] = useState(productionMode);
+  const [authError, setAuthError] = useState("");
   const [route, setRoute] = useState<Route>({ name: "dashboard" });
   const [toast, setToast] = useState("");
   const [language, setLanguage] = useState<Lang>("EN");
@@ -89,6 +113,35 @@ export default function App() {
   };
   const notify = (message: string) => setToast(message);
 
+  const finishProductionSignIn = async () => {
+    const data = await loadBootstrap();
+    setBootstrap(data);
+    setSession(sessionFromApiUser(data.user));
+    setSignedIn(true);
+  };
+
+  const handleMicrosoftSignIn = async () => {
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      await signInWithMicrosoft();
+      await finishProductionSignIn();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to sign in with Microsoft.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setSignedIn(false);
+    setBootstrap(null);
+    if (productionMode) {
+      try { await signOutMicrosoft(); }
+      catch (error) { setAuthError(error instanceof Error ? error.message : "Unable to sign out."); }
+    }
+  };
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -100,6 +153,24 @@ export default function App() {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
+
+  useEffect(() => {
+    if (!productionMode) return;
+    let cancelled = false;
+    const restore = async () => {
+      setAuthBusy(true);
+      try {
+        const account = await restoreAccount();
+        if (account && !cancelled) await finishProductionSignIn();
+      } catch (error) {
+        if (!cancelled) setAuthError(error instanceof Error ? error.message : "Unable to restore the Microsoft session.");
+      } finally {
+        if (!cancelled) setAuthBusy(false);
+      }
+    };
+    void restore();
+    return () => { cancelled = true; };
+  }, [productionMode]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -125,7 +196,13 @@ export default function App() {
   if (!signedIn) {
     return (
       <LanguageContext.Provider value={language$}>
-        <Login onSignIn={(role) => { setSession(sessionForRole(role)); setSignedIn(true); }} />
+        <Login
+          production={productionMode}
+          busy={authBusy}
+          error={authError}
+          onMicrosoftSignIn={handleMicrosoftSignIn}
+          onDemoSignIn={(role) => { setSession(sessionForRole(role)); setSignedIn(true); }}
+        />
       </LanguageContext.Provider>
     );
   }
@@ -161,7 +238,7 @@ export default function App() {
                     <span>{t(item.label)}</span>
                     {item.route.name === "my-work" && myUrgent
                       ? <em className="hot">{myUrgent}</em>
-                      : item.badge ? <em className={item.hot ? "hot" : undefined}>{item.badge}</em> : null}
+                      : badgeForRoute(item.route, item.badge, bootstrap) ? <em className={item.hot ? "hot" : undefined}>{badgeForRoute(item.route, item.badge, bootstrap)}</em> : null}
                   </button>
                 );
               })}
@@ -175,7 +252,7 @@ export default function App() {
             <strong>{session.user.name}</strong>
             <span>{session.user.department} · {session.role}</span>
           </div>
-          <button type="button" aria-label={t("Sign out")} onClick={() => setSignedIn(false)}><Icon name="logout" /></button>
+          <button type="button" aria-label={t("Sign out")} onClick={() => { void handleSignOut(); }}><Icon name="logout" /></button>
         </div>
       </aside>
 
@@ -267,7 +344,7 @@ export default function App() {
                 <div className="menu" role="menu">
                   <button type="button" onClick={() => { setUserOpen(false); go({ name: "settings" }); }}><Icon name="user" />{t("Profile & department")}</button>
                   <button type="button" onClick={() => { setUserOpen(false); go({ name: "settings" }); }}><Icon name="settings" />{t("Settings")}</button>
-                  <button type="button" onClick={() => { setUserOpen(false); setSignedIn(false); }}><Icon name="logout" />{t("Logout")}</button>
+                  <button type="button" onClick={() => { setUserOpen(false); void handleSignOut(); }}><Icon name="logout" />{t("Logout")}</button>
                 </div>
               ) : null}
             </div>
@@ -286,8 +363,19 @@ export default function App() {
           {route.name === "quotations" ? <Quotations go={go} notify={notify} /> : null}
           {route.name === "missing" ? <MissingPrices go={go} notify={notify} /> : null}
           {route.name === "resources" ? <ResourcePlan go={go} notify={notify} /> : null}
-          {route.name === "purchase" ? <PurchaseList go={go} notify={notify} /> : null}
-          {route.name === "pr" ? <PurchaseDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
+          {route.name === "procurement" ? <MatDashboard go={go} notify={notify} /> : null}
+          {route.name === "boms" ? <BomList go={go} notify={notify} /> : null}
+          {route.name === "bom" ? <BomWorkspace key={route.id} id={route.id} go={go} notify={notify} /> : null}
+          {route.name === "purchase" ? <PrList go={go} notify={notify} /> : null}
+          {route.name === "pr" ? <PrDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
+          {route.name === "pr-new" ? <PrCreate bomId={route.bomId} go={go} notify={notify} /> : null}
+          {route.name === "pos" ? <PoList go={go} notify={notify} /> : null}
+          {route.name === "inventory" ? <Inventory go={go} notify={notify} /> : null}
+          {route.name === "receiving" ? <GrnList go={go} notify={notify} /> : null}
+          {route.name === "grn" ? <GrnDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
+          {route.name === "issues" ? <MirList go={go} notify={notify} /> : null}
+          {route.name === "mir" ? <MirDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
+          {route.name === "mat-approvals" ? <MatApprovals go={go} notify={notify} /> : null}
           {route.name === "customers" ? <Customers go={go} notify={notify} /> : null}
           {route.name === "projects" ? <ProjectList go={go} notify={notify} /> : null}
           {route.name === "project" ? <ProjectDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
@@ -418,9 +506,21 @@ function isActive(route: Route, target: Route) {
   if (target.name === "inquiries" && (route.name === "inquiry" || route.name === "inquiry-new")) return true;
   if (target.name === "estimates" && route.name === "estimate") return true;
   if (target.name === "price" && route.name === "price-history") return true;
-  if (target.name === "purchase" && route.name === "pr") return true;
+  if (target.name === "purchase" && (route.name === "pr" || route.name === "pr-new")) return true;
+  if (target.name === "boms" && route.name === "bom") return true;
+  if (target.name === "receiving" && route.name === "grn") return true;
+  if (target.name === "issues" && route.name === "mir") return true;
   if (target.name === "projects" && (route.name === "project" || route.name === "schedule")) return true;
   return false;
+}
+
+function badgeForRoute(route: Route, fallback: number | undefined, bootstrap: BootstrapData | null) {
+  if (!bootstrap) return fallback ?? 0;
+  if (route.name === "inquiries") return bootstrap.counts.inquiries;
+  if (route.name === "estimates") return bootstrap.counts.estimates;
+  if (route.name === "projects") return bootstrap.counts.activeProjects;
+  if (route.name === "mat-approvals") return bootstrap.counts.approvals;
+  return fallback ?? 0;
 }
 
 const notifIcon = (kind: string): IconName =>
@@ -436,7 +536,19 @@ const notifTone = (kind: string) =>
    Login
    -------------------------------------------------------------------------- */
 
-function Login({ onSignIn }: { onSignIn: (role: string) => void }) {
+function Login({
+  production,
+  busy,
+  error,
+  onMicrosoftSignIn,
+  onDemoSignIn,
+}: {
+  production: boolean;
+  busy: boolean;
+  error: string;
+  onMicrosoftSignIn: () => Promise<void>;
+  onDemoSignIn: (role: string) => void;
+}) {
   const { t } = useContext(LanguageContext);
   const [email, setEmail] = useState(CURRENT_USER.email);
   const [password, setPassword] = useState("");
@@ -470,36 +582,52 @@ function Login({ onSignIn }: { onSignIn: (role: string) => void }) {
       </aside>
 
       <div className="login-form-wrap">
-        <form className="login-form" onSubmit={(event) => { event.preventDefault(); onSignIn(role); }}>
+        <form className="login-form" onSubmit={(event) => {
+          event.preventDefault();
+          if (production) void onMicrosoftSignIn();
+          else onDemoSignIn(role);
+        }}>
           <h1>{t("Sign in")}</h1>
-          <p>{t("Use your company account to open the estimate workspace.")}</p>
+          <p>{production ? t("Use your Microsoft company account to open the production workspace.") : t("Use your company account to open the estimate workspace.")}</p>
 
-          <div className="field">
-            <label htmlFor="login-email">{t("Email")}</label>
-            <input id="login-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
-          </div>
-          <div className="field">
-            <label htmlFor="login-password">{t("Password")}</label>
-            <input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="••••••••" />
-          </div>
-          <div className="field">
-            <label htmlFor="login-role">{t("Sign in as")}</label>
-            <select id="login-role" value={role} onChange={(event) => setRole(event.target.value)}>
-              {["Engineer", "Engineering Manager", "Project Manager", "Sales Engineer", "Admin", "Viewer"].map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </div>
-
-          <label className="checkbox-row" style={{ margin: "4px 0 10px" }}>
-            <input type="checkbox" defaultChecked />
-            <span>{t("Keep me signed in on this workstation")}</span>
-          </label>
-
-          <button className="btn primary block" type="submit"><Icon name="arrowRight" />{t("Sign in")}</button>
-
-          <div className="login-role-hint">
-            <strong>Demonstration account</strong>
-            Signing in as <strong>{role}</strong> opens the same workspace with that role&apos;s permissions. Engineers prepare estimates; the Engineering Manager approves cost, scope and effort — there is no margin approval in this system.
-          </div>
+          {production ? (
+            <>
+              {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+              <button className="btn primary block" type="submit" disabled={busy}>
+                <Icon name="user" />{busy ? t("Connecting to Microsoft…") : t("Continue with Microsoft")}
+              </button>
+              <div className="login-role-hint">
+                <strong>{t("Production access")}</strong>
+                {t("Your role and permissions are assigned by the IoT Team administrator. Passwords are handled by Microsoft and are never stored in this application.")}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="login-email">{t("Email")}</label>
+                <input id="login-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required />
+              </div>
+              <div className="field">
+                <label htmlFor="login-password">{t("Password")}</label>
+                <input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="••••••••" />
+              </div>
+              <div className="field">
+                <label htmlFor="login-role">{t("Sign in as")}</label>
+                <select id="login-role" value={role} onChange={(event) => setRole(event.target.value)}>
+                  {["Engineer", "Engineering Manager", "Project Manager", "Purchasing", "Warehouse", "Inventory Controller", "Sales Engineer", "Admin", "Viewer"].map((option) => <option key={option}>{option}</option>)}
+                </select>
+              </div>
+              <label className="checkbox-row" style={{ margin: "4px 0 10px" }}>
+                <input type="checkbox" defaultChecked />
+                <span>{t("Keep me signed in on this workstation")}</span>
+              </label>
+              <button className="btn primary block" type="submit"><Icon name="arrowRight" />{t("Sign in")}</button>
+              <div className="login-role-hint">
+                <strong>Demonstration account</strong>
+                Signing in as <strong>{role}</strong> opens the same workspace with that role&apos;s permissions. Engineers prepare estimates; the Engineering Manager approves cost, scope and effort — there is no margin approval in this system.
+              </div>
+            </>
+          )}
         </form>
       </div>
     </div>

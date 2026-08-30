@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.tmp/
 
 # next.js
 /.next/
@@ -30,6 +31,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +41,9 @@ yarn-error.log*
 /outputs/
 /work/
 *.tsbuildinfo
+
+# .NET build output and local-only configuration
+**/bin/
+**/obj/
+**/App_Data/
+appsettings.Local.json

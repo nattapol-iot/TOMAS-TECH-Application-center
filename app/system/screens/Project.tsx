@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import {
-  CUSTOMERS, ESTIMATES, PROJECT_DOCS, PROJECT_FOLDERS, PROJECT_MILESTONES,
-  PROJECT_STATUSES, PROJECT_TASKS, PROJECT_TYPES, PROJECTS, PURCHASE_REQUISITIONS,
+  BOMS, CUSTOMERS, ESTIMATES, MAT_PRS, PROJECT_DOCS, PROJECT_FOLDERS,
+  PROJECT_MILESTONES, PROJECT_STATUSES, PROJECT_TASKS, PROJECT_TYPES, PROJECTS,
   TASK_STATUSES, USERS, type DocType, type Priority, type Project, type ProjectStatus,
   type TaskStatus,
 } from "../data";
 import {
-  barPosition, estimateTotals, formatDate, moneyShort, resolveSchedule, scheduleSummary,
-  scheduleTone, TODAY, toDate, userName, userOf, weeksFrom,
+  barPosition, estimateTotals, formatDate, matKpis, matPrAmount, moneyShort, resolveSchedule,
+  scheduleSummary, scheduleTone, TODAY, toDate, userName, userOf, weeksFrom,
 } from "../calc";
 import { useScheduleStore } from "../store";
 import { useSession } from "../session";
@@ -728,23 +728,25 @@ function CostTab({ project, go }: { project: Project; go: ScreenProps["go"] }) {
   const t = useT();
   const estimate = ESTIMATES.find((entry) => entry.id === project.estimateId);
   const totals = estimate ? estimateTotals(estimate) : undefined;
-  const requisitions = PURCHASE_REQUISITIONS.filter((pr) => pr.estimateId === project.estimateId);
-  const committed = requisitions.reduce((sum, pr) => sum + pr.lines.reduce((inner, line) => inner + line.qty * line.unitCost, 0), 0);
+  const kpis = matKpis(project.id);
+  const requisitions = MAT_PRS.filter((pr) => pr.projectId === project.id);
+  const bom = BOMS.find((entry) => entry.projectId === project.id);
 
   return (
     <section className="grid-main">
       <Panel title={t("Estimated versus committed")} subtitle={t("Internal engineering cost only — no selling price in this system")} flush>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>{t("Cost block")}</th><th className="num">{t("Estimated")}</th><th className="num">{t("Committed by PR")}</th></tr></thead>
+            <thead><tr><th>{t("Cost block")}</th><th className="num">{t("Estimated")}</th><th className="num">{t("Actual + committed")}</th></tr></thead>
             <tbody>
-              <tr><td>{t("Material")}</td><td className="num">{totals ? moneyShort(totals.material) : "—"}</td><td className="num">{moneyShort(committed)}</td></tr>
+              <tr><td>{t("Material")}</td><td className="num">{totals ? moneyShort(totals.material) : "—"}</td><td className="num">{moneyShort(kpis.actualConsumed + kpis.openCommitment)}</td></tr>
+              <tr><td>{t("Reserved stock")}</td><td className="num muted">—</td><td className="num">{moneyShort(kpis.reservedValue)}</td></tr>
               <tr><td>{t("Engineering")}</td><td className="num">{totals ? moneyShort(totals.effortEngineering) : "—"}</td><td className="num muted">—</td></tr>
               <tr><td>{t("Installation & Service")}</td><td className="num">{totals ? moneyShort(totals.effortInstallation) : "—"}</td><td className="num muted">—</td></tr>
               <tr className="subtotal-row">
-                <td>{t("Total")}</td>
-                <td className="num">{totals ? moneyShort(totals.total) : "—"}</td>
-                <td className="num">{moneyShort(committed)}</td>
+                <td>{t("Material forecast vs budget")}</td>
+                <td className="num">{moneyShort(kpis.approvedBudget)}</td>
+                <td className="num"><strong className={kpis.remaining < 0 ? "red-text" : "green-text"}>{moneyShort(kpis.forecast)}</strong></td>
               </tr>
             </tbody>
           </table>
@@ -766,19 +768,24 @@ function CostTab({ project, go }: { project: Project; go: ScreenProps["go"] }) {
                 </button>
               </>
             ) : <p className="muted">{t("No estimate linked to this project.")}</p>}
+            {bom ? (
+              <button className="btn default block" type="button" style={{ marginTop: 8 }} onClick={() => go({ name: "bom", id: bom.id })}>
+                {t("Open BOM")} {bom.no} {bom.revision}<Icon name="arrowRight" />
+              </button>
+            ) : null}
           </div>
         </Panel>
 
-        <Panel title={t("Purchase Requisition")} subtitle={`${requisitions.length} ${t("raised")}`} flush>
+        <Panel title={t("Purchase Requisition")} subtitle={requisitions.length + " " + t("raised")} flush>
           <div className="panel-body">
             {requisitions.length ? requisitions.map((pr) => (
               <div className="file-row" key={pr.id}>
                 <span className="file-icon"><Icon name="package" /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <strong>{pr.no}</strong>
-                  <small>{pr.lines.length} {t("lines")} · {formatDate(pr.requiredDate)}</small>
+                  <small>{pr.lines.length} {t("lines")} · {moneyShort(matPrAmount(pr))} THB · {formatDate(pr.requiredDate)}</small>
                 </div>
-                <Badge tone={pr.status === "Approved" || pr.status === "Ordered" ? "green" : pr.status === "Rejected" ? "red" : "blue"}>{pr.status}</Badge>
+                <Badge tone={pr.status === "Approved" || pr.status === "Converted to PO" ? "green" : pr.status === "Rejected" ? "red" : "blue"}>{t(pr.status)}</Badge>
               </div>
             )) : <p className="muted">{t("No requisition raised yet.")}</p>}
             <button className="btn default block" type="button" style={{ marginTop: 10 }} onClick={() => go({ name: "purchase" })}>

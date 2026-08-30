@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
-import { PRODUCT } from "./system/data";
+import { PRODUCT } from "./system/product";
 
 // `next/font/google` emits no stylesheet under vinext — the generated class
 // lands on <body> but the CSS variable and @font-face never ship, so the whole
@@ -11,14 +10,24 @@ import { PRODUCT } from "./system/data";
 const GOOGLE_FONTS =
   "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "tomas-estimate-cost.example";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const image = `${protocol}://${host}/og.png`;
+export function generateMetadata(): Metadata {
+  const configuredOrigin = process.env.SITE_ORIGIN ?? "http://localhost:3000";
+  const origin = safeOrigin(configuredOrigin);
+  const image = `${origin}/og.png`;
   const title = `${PRODUCT.name} — ${PRODUCT.tagline}`;
-  const description = "Internal engineering cost control: inquiry registration, estimate cost workspace, price library, supplier quotations, revision control and engineering review.";
+  const description = "Secure internal engineering workflow for inquiry registration, estimate cost review and approval, project initiation, and inventory visibility.";
   return { title, description, openGraph: { title, description, images: [image] }, twitter: { card: "summary_large_image", title, description, images: [image] } };
+}
+
+function safeOrigin(value: string) {
+  try {
+    const url = new URL(value);
+    const localHttp = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+    if (url.protocol !== "https:" && !localHttp) return "http://localhost:3000";
+    return url.origin;
+  } catch {
+    return "http://localhost:3000";
+  }
 }
 
 export default function RootLayout({

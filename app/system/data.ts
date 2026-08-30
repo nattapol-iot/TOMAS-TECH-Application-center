@@ -7,17 +7,7 @@
    application controls internal engineering cost only.
    ========================================================================== */
 
-/**
- * Product identity. Every place that names the system reads from here — the
- * sidebar, the login panel, the footer and the browser tab.
- */
-export const PRODUCT = {
-  company: "TOMAS TECH",
-  name: "IoT Team Center",
-  tagline: "Engineering Estimate Cost",
-  full: "IoT Team Center — Engineering Estimate Cost Management System",
-  version: "v1.0",
-};
+export { PRODUCT } from "./product";
 
 export type Role =
   | "Admin"
@@ -25,6 +15,9 @@ export type Role =
   | "Project Manager"
   | "Engineer"
   | "Sales Engineer"
+  | "Purchasing"
+  | "Warehouse"
+  | "Inventory Controller"
   | "Viewer";
 
 export type User = {
@@ -420,6 +413,10 @@ export const USERS: User[] = [
   { id: "u8", name: "Chatchai Pimsen", initials: "CP", email: "chatchai.p@tomastc.com", role: "Sales Engineer", department: "Sales", level: "—" },
   { id: "u9", name: "Wanida Srisuk", initials: "WS", email: "wanida.s@tomastc.com", role: "Admin", department: "IT", level: "—" },
   { id: "u10", name: "Thanaphon Rit", initials: "TR", email: "thanaphon.r@tomastc.com", role: "Engineer", department: "Robotics", level: "Middle Engineer" },
+  { id: "u11", name: "Chakkrit Manee", initials: "CM", email: "chakkrit.m@tomastc.com", role: "Engineer", department: "Electrical", level: "Middle Engineer" },
+  { id: "u12", name: "Suchada Klinmai", initials: "SK", email: "suchada.k@tomastc.com", role: "Purchasing", department: "Purchasing", level: "—" },
+  { id: "u13", name: "Prasit Wongsa", initials: "PS", email: "prasit.w@tomastc.com", role: "Warehouse", department: "Warehouse", level: "—" },
+  { id: "u14", name: "Malee Chantra", initials: "MC", email: "malee.c@tomastc.com", role: "Inventory Controller", department: "Warehouse", level: "—" },
 ];
 
 export const CURRENT_USER = USERS[0];
@@ -554,9 +551,9 @@ export const BRANDS = ["KEYENCE", "Mitsubishi", "Siemens", "Omron", "Schneider",
    -------------------------------------------------------------------------- */
 
 const items0001: CostItem[] = [
-  { id: "i1", categoryCode: "01", category: "Hardware", subcategory: "PLC", module: "PLC Control Panel Set", itemCode: "HW-PLC-001", description: "PLC CPU Unit with EtherNet/IP", brand: "KEYENCE", model: "KV-8000", specification: "Ladder + Motion, 1000 steps/ms", supplier: "Keyence (Thailand) Co., Ltd.", qty: 1, unit: "Set", unitCost: 76000, source: "Supplier Quotation", referenceNo: "SQ-2608-0012", referenceProject: "FTS Traceability", priceDate: "2026-08-12", remark: "Quotation valid 60 days", owner: "u2", status: "Completed" },
-  { id: "i2", categoryCode: "01", category: "Hardware", subcategory: "PLC", module: "PLC Control Panel Set", itemCode: "HW-PLC-002", description: "Expansion I/O Unit 16DI/16DO", brand: "KEYENCE", model: "KV-B16XC", specification: "24VDC sink/source", supplier: "Keyence (Thailand) Co., Ltd.", qty: 4, unit: "Pcs", unitCost: 9800, source: "Supplier Quotation", referenceNo: "SQ-2608-0012", referenceProject: "FTS Traceability", priceDate: "2026-08-12", remark: "", owner: "u2", status: "Completed" },
-  { id: "i3", categoryCode: "01", category: "Hardware", subcategory: "HMI", module: "Operator Station", itemCode: "HW-HMI-001", description: "Touch Panel 12.1 inch TFT", brand: "Mitsubishi", model: "GT2712-STWD", specification: "1024x768, Ethernet + RS422", supplier: "Mitsubishi Electric Automation", qty: 1, unit: "Set", unitCost: 62500, source: "Previous Estimate", referenceNo: "EST-2604-0022", referenceProject: "AAPICO Press Line", priceDate: "2026-04-18", remark: "Confirm current list price", owner: "u2", status: "Completed" },
+  { id: "i1", categoryCode: "01", category: "Hardware", subcategory: "PLC", module: "PLC Control Panel Set", itemCode: "HW-PLC-001", description: "PLC CPU 64 I/O transistor output", brand: "Mitsubishi", model: "FX5U-64MT/ES", specification: "Ethernet built-in, 64 pt", supplier: "Mitsubishi Electric Automation", qty: 1, unit: "Set", unitCost: 28900, source: "Supplier Quotation", referenceNo: "SQ-2608-0027", referenceProject: "—", priceDate: "2026-08-20", remark: "R03 — re-specified from KEYENCE per customer standard", owner: "u2", status: "Completed" },
+  { id: "i2", categoryCode: "01", category: "Hardware", subcategory: "PLC", module: "PLC Control Panel Set", itemCode: "HW-PLC-002", description: "Expansion input unit 16DI", brand: "Mitsubishi", model: "FX5-16EX/ES", specification: "24VDC sink/source", supplier: "Mitsubishi Electric Automation", qty: 2, unit: "Pcs", unitCost: 6400, source: "Supplier Quotation", referenceNo: "SQ-2608-0027", referenceProject: "—", priceDate: "2026-08-20", remark: "", owner: "u2", status: "Completed" },
+  { id: "i3", categoryCode: "01", category: "Hardware", subcategory: "HMI", module: "Operator Station", itemCode: "HW-HMI-001", description: "Touch Panel 5.7 inch TFT", brand: "Mitsubishi", model: "GT2505-VTBD", specification: "640x480, Ethernet", supplier: "Mitsubishi Electric Automation", qty: 1, unit: "Set", unitCost: 24500, source: "Supplier Quotation", referenceNo: "SQ-2608-0027", referenceProject: "—", priceDate: "2026-08-20", remark: "", owner: "u2", status: "Completed" },
   { id: "i4", categoryCode: "01", category: "Hardware", subcategory: "Sensor", module: "Traceability Station", itemCode: "HW-SEN-001", description: "Barcode Reader 2D fixed mount", brand: "KEYENCE", model: "SR-X300", specification: "Auto focus, Ethernet", supplier: "Keyence (Thailand) Co., Ltd.", qty: 2, unit: "Pcs", unitCost: 48500, source: "Supplier Quotation", referenceNo: "SQ-2608-0012", referenceProject: "—", priceDate: "2026-08-12", remark: "", owner: "u2", status: "Completed" },
   { id: "i5", categoryCode: "01", category: "Hardware", subcategory: "Sensor", module: "Conveyor Station", itemCode: "HW-SEN-002", description: "Photoelectric sensor set", brand: "Omron", model: "E3Z-T61A", specification: "Through-beam, 15 m", supplier: "Omron Electronics", qty: 12, unit: "Pcs", unitCost: 2450, source: "Purchase Price", referenceNo: "PO-2605-0331", referenceProject: "DENSO Leak Test", priceDate: "2026-05-06", remark: "", owner: "u2", status: "Completed" },
   { id: "i6", categoryCode: "01", category: "Hardware", subcategory: "Network", module: "Network & Server", itemCode: "HW-NET-001", description: "Industrial Managed Switch 8 Port", brand: "Cisco", model: "IE-3300-8T2S", specification: "Layer 2, DIN rail", supplier: "Cisco Partner — Datacom Thai", qty: 2, unit: "Pcs", unitCost: 41200, source: "Supplier Quotation", referenceNo: "SQ-2607-0044", referenceProject: "—", priceDate: "2026-07-02", remark: "", owner: "u1", status: "Completed" },
@@ -618,7 +615,8 @@ const assignments0001: Assignment[] = [
 const revisions0001: Revision[] = [
   { id: "rv1", code: "R00", reason: "Initial Estimate", description: "First estimate issued from RFQ and kickoff meeting.", createdBy: "Nattaphon Prasert", createdAt: "2026-08-10", reviewedBy: "Yuki Tanaka", status: "Superseded", total: 2860000 },
   { id: "rv2", code: "R01", reason: "Customer Requirement Change", description: "Added safety fence and interlock door after safety review.", createdBy: "Nattaphon Prasert", createdAt: "2026-08-18", reviewedBy: "Yuki Tanaka", status: "Superseded", total: 3105000 },
-  { id: "rv3", code: "R02", reason: "Supplier Price Update", description: "Changed PLC specification to KV-8000 and updated supplier prices.", createdBy: "Trin Tintanee", createdAt: "2026-08-26", reviewedBy: "—", status: "Active", total: 0 },
+  { id: "rv3", code: "R02", reason: "Supplier Price Update", description: "Changed PLC specification to KV-8000 and updated supplier prices.", createdBy: "Trin Tintanee", createdAt: "2026-08-26", reviewedBy: "Yuki Tanaka", status: "Superseded", total: 3480000 },
+  { id: "rv4", code: "R03", reason: "Customer Requirement Change", description: "Panel re-specified to Mitsubishi per Astemo plant standard; customer supplies the safety fence. Approved for order.", createdBy: "Nattaphon Prasert", createdAt: "2026-08-05", reviewedBy: "Yuki Tanaka", status: "Active", total: 0 },
 ];
 
 const items0002: CostItem[] = [
@@ -642,8 +640,8 @@ export const ESTIMATES: Estimate[] = [
   {
     id: "e1", no: "EST-2608-0001", inquiryNo: "INQ-2608-0001", customerId: "c1",
     projectName: "Cobot Picking Machine", projectType: "Robot", ownerId: "u1",
-    revision: "R02", createdDate: "2026-08-10", dueDate: "2026-09-03",
-    status: "Engineering Review", progress: 82, updatedAt: "2026-08-28 16:40",
+    revision: "R03", createdDate: "2026-08-10", dueDate: "2026-09-03",
+    status: "Approved", progress: 100, updatedAt: "2026-08-28 16:40",
     contingencyRate: 3,
     items: items0001, manhours: manhours0001, expenses: expenses0001, others: others0001,
     assignments: assignments0001, revisions: revisions0001,
@@ -1491,6 +1489,14 @@ export const PROJECTS: Project[] = [
     site: "Samut Prakan — Bangna", remark: "Closed and handed over.",
     folderPath: "IoT Team - Documents / Project - 2026 / [PJ260025] Shipping dashboard monitor for AHT",
   },
+  {
+    id: "p8", no: "PJ260153", name: "Cobot Picking Machine", customerId: "c1", projectType: "Robot",
+    status: "Development", managerId: "u7", leadEngineerId: "u1", members: ["u1", "u11", "u4", "u10"],
+    inquiryNo: "INQ-2608-0001", estimateId: "e1", poNo: "PO-AST-26-0290", poDate: "2026-08-17",
+    startDate: "2026-08-18", targetDelivery: "2027-01-30", actualDelivery: "", progress: 18,
+    site: "Chonburi — Amata City", remark: "Cobot picking cell with vision and traceability.",
+    folderPath: "IoT Team - Documents / Project - 2026 / [PJ260153] Cobot Picking Machine",
+  },
 ];
 
 export const PROJECT_DOCS: ProjectDoc[] = [
@@ -2036,4 +2042,607 @@ export const SCHEDULE_BASELINES: ScheduleBaseline[] = [
     takenAt: "2026-07-08", takenBy: "u7", reason: "",
     taskCount: 22, promisedFinish: "2026-09-30",
   },
+];
+
+/* ==========================================================================
+   BOM, procurement & inventory control
+
+   One chain of custody from the approved estimate to the hand that receives
+   the part: Estimate line → BOM line → PR line → PO line → Goods receipt →
+   Stock transaction → Material issue. Stock balances are never stored — they
+   are computed from the immutable transaction ledger, so a balance can never
+   be overwritten and every quantity has a person and a document behind it.
+
+   Money here is INTERNAL COST only, same as everywhere else in the system.
+   ========================================================================== */
+
+/* ---- Item master ---------------------------------------------------------- */
+
+export type MatItem = {
+  id: string;
+  itemCode: string;
+  partNo: string;
+  description: string;
+  brand: string;
+  unit: string;
+  /** Default shelf in the Chonburi store. */
+  location: string;
+  reorderLevel: number;
+  avgUnitCost: number;
+  leadTimeDays: number;
+  preferredSupplier: string;
+};
+
+export const WAREHOUSES = [{ id: "wh1", name: "WH1 — Chonburi Store" }];
+
+export const MAT_ITEMS: MatItem[] = [
+  { id: "mi1", itemCode: "EL-PLC-101", partNo: "FX5U-64MT/ES", description: "PLC CPU 64 I/O transistor output", brand: "Mitsubishi", unit: "Pcs", location: "WH1-A1", reorderLevel: 1, avgUnitCost: 28900, leadTimeDays: 14, preferredSupplier: "Mitsubishi Electric Automation" },
+  { id: "mi2", itemCode: "EL-PLC-102", partNo: "FX5-16EX/ES", description: "Expansion input unit 16DI", brand: "Mitsubishi", unit: "Pcs", location: "WH1-A1", reorderLevel: 2, avgUnitCost: 6400, leadTimeDays: 14, preferredSupplier: "Mitsubishi Electric Automation" },
+  { id: "mi3", itemCode: "EL-HMI-101", partNo: "GT2505-VTBD", description: "Touch panel 5.7 inch TFT", brand: "Mitsubishi", unit: "Pcs", location: "WH1-A2", reorderLevel: 0, avgUnitCost: 24500, leadTimeDays: 21, preferredSupplier: "Mitsubishi Electric Automation" },
+  { id: "mi4", itemCode: "EL-BRK-101", partNo: "NF63-CV 3P 20A", description: "MCCB 3 pole 20 A", brand: "Mitsubishi", unit: "Pcs", location: "WH1-B1", reorderLevel: 2, avgUnitCost: 1850, leadTimeDays: 7, preferredSupplier: "RS Components Thailand" },
+  { id: "mi5", itemCode: "EL-BRK-102", partNo: "CP30-BA 5A", description: "Circuit protector 5 A", brand: "Mitsubishi", unit: "Pcs", location: "WH1-B1", reorderLevel: 4, avgUnitCost: 890, leadTimeDays: 7, preferredSupplier: "RS Components Thailand" },
+  { id: "mi6", itemCode: "EL-RLY-101", partNo: "MY4N-GS 24VDC", description: "Relay 4 pole with socket", brand: "Omron", unit: "Pcs", location: "WH1-B2", reorderLevel: 10, avgUnitCost: 320, leadTimeDays: 7, preferredSupplier: "RS Components Thailand" },
+  { id: "mi7", itemCode: "EL-PSU-101", partNo: "S8FS-G24024CD", description: "Switching power supply 24 V 10 A", brand: "Omron", unit: "Pcs", location: "WH1-B3", reorderLevel: 1, avgUnitCost: 3150, leadTimeDays: 10, preferredSupplier: "RS Components Thailand" },
+  { id: "mi8", itemCode: "EL-RLY-102", partNo: "G9SE-401", description: "Safety relay unit 4 contacts", brand: "Omron", unit: "Pcs", location: "WH1-B2", reorderLevel: 1, avgUnitCost: 4890, leadTimeDays: 21, preferredSupplier: "RS Components Thailand" },
+  { id: "mi9", itemCode: "EL-SEN-101", partNo: "FS-N43N + FU-35FA", description: "Fiber optic sensor with amplifier", brand: "KEYENCE", unit: "Set", location: "WH1-C1", reorderLevel: 2, avgUnitCost: 1750, leadTimeDays: 10, preferredSupplier: "Keyence (Thailand) Co., Ltd." },
+  { id: "mi10", itemCode: "EL-SEN-102", partNo: "D4NS-4CF", description: "Safety door switch with connector", brand: "Omron", unit: "Pcs", location: "WH1-C2", reorderLevel: 1, avgUnitCost: 2450, leadTimeDays: 14, preferredSupplier: "RS Components Thailand" },
+  { id: "mi11", itemCode: "ME-GRP-101", partNo: "MHZ2-25D", description: "Pneumatic parallel gripper", brand: "SMC", unit: "Pcs", location: "WH1-D1", reorderLevel: 0, avgUnitCost: 8900, leadTimeDays: 21, preferredSupplier: "SMC (Thailand) Ltd." },
+  { id: "mi12", itemCode: "HW-SEN-001", partNo: "SR-X300", description: "Barcode reader 2D fixed mount", brand: "KEYENCE", unit: "Pcs", location: "WH1-C3", reorderLevel: 0, avgUnitCost: 48500, leadTimeDays: 30, preferredSupplier: "Keyence (Thailand) Co., Ltd." },
+  { id: "mi13", itemCode: "HW-NET-001", partNo: "IE-3300-8T2S", description: "Industrial managed switch 8 port", brand: "Cisco", unit: "Pcs", location: "WH1-E1", reorderLevel: 1, avgUnitCost: 41200, leadTimeDays: 45, preferredSupplier: "Cisco Partner — Datacom Thai" },
+  { id: "mi14", itemCode: "HW-IPC-001", partNo: "IPC-240", description: "Industrial PC i7 / 32GB / 1TB SSD", brand: "Advantech", unit: "Set", location: "WH1-E2", reorderLevel: 0, avgUnitCost: 98500, leadTimeDays: 45, preferredSupplier: "Cisco Partner — Datacom Thai" },
+  { id: "mi15", itemCode: "RB-ROB-001", partNo: "COBOTTA PRO 1300", description: "Collaborative robot 6 axis / 12 kg", brand: "DENSO", unit: "Set", location: "—", reorderLevel: 0, avgUnitCost: 1180000, leadTimeDays: 60, preferredSupplier: "DENSO Wave Robotics" },
+  { id: "mi16", itemCode: "EL-ENC-101", partNo: "AE1380 600x800", description: "Panel enclosure 600x800x300", brand: "Rittal", unit: "Pcs", location: "WH1-F1", reorderLevel: 0, avgUnitCost: 12400, leadTimeDays: 30, preferredSupplier: "Rittal Thailand" },
+];
+
+/* ---- Immutable stock transaction ledger ----------------------------------- */
+
+export const STOCK_TXN_TYPES = [
+  "Goods Receipt", "Material Issue", "Material Return", "Stock Transfer",
+  "Stock Adjustment", "Scrap", "Cycle Count Adjustment", "Quarantine In", "Quarantine Release",
+] as const;
+export type StockTxnType = (typeof STOCK_TXN_TYPES)[number];
+
+export type StockTxn = {
+  id: string;
+  at: string;
+  type: StockTxnType;
+  itemId: string;
+  /** Signed quantity. "stock" moves usable stock, "quarantine" the hold area. */
+  qty: number;
+  bucket: "stock" | "quarantine";
+  location: string;
+  /** GRN / MIR / ADJ / CC document behind the movement — nothing moves without one. */
+  refNo: string;
+  projectId: string;
+  byId: string;
+  note: string;
+};
+
+export const STOCK_TXNS: StockTxn[] = [
+  // Opening balances — August cycle count, plus leftovers from finished projects.
+  { id: "mt1", at: "2026-08-01 09:00", type: "Cycle Count Adjustment", itemId: "mi1", qty: 3, bucket: "stock", location: "WH1-A1", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August — 2 pcs left over from TTS Energy" },
+  { id: "mt2", at: "2026-08-01 09:00", type: "Cycle Count Adjustment", itemId: "mi2", qty: 4, bucket: "stock", location: "WH1-A1", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt3", at: "2026-08-01 09:05", type: "Cycle Count Adjustment", itemId: "mi4", qty: 1, bucket: "stock", location: "WH1-B1", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt4", at: "2026-08-01 09:05", type: "Cycle Count Adjustment", itemId: "mi5", qty: 10, bucket: "stock", location: "WH1-B1", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt5", at: "2026-08-01 09:10", type: "Cycle Count Adjustment", itemId: "mi6", qty: 30, bucket: "stock", location: "WH1-B2", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt6", at: "2026-08-01 09:10", type: "Cycle Count Adjustment", itemId: "mi7", qty: 1, bucket: "stock", location: "WH1-B3", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt7", at: "2026-08-01 09:15", type: "Cycle Count Adjustment", itemId: "mi9", qty: 2, bucket: "stock", location: "WH1-C1", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt8", at: "2026-08-01 09:15", type: "Cycle Count Adjustment", itemId: "mi10", qty: 4, bucket: "stock", location: "WH1-C2", refNo: "CC-2608-0001", projectId: "", byId: "u14", note: "Count August" },
+  { id: "mt9", at: "2026-07-02 14:20", type: "Goods Receipt", itemId: "mi12", qty: 1, bucket: "stock", location: "WH1-C3", refNo: "GRN-2607-0006", projectId: "", byId: "u13", note: "Returned unused from FTS Traceability" },
+  { id: "mt10", at: "2026-03-12 10:40", type: "Goods Receipt", itemId: "mi13", qty: 1, bucket: "stock", location: "WH1-E1", refNo: "GRN-2603-0002", projectId: "", byId: "u13", note: "Spare from Meiji OEE Phase 1" },
+  { id: "mt11", at: "2026-05-20 11:10", type: "Goods Receipt", itemId: "mi14", qty: 1, bucket: "stock", location: "WH1-E2", refNo: "GRN-2605-0004", projectId: "", byId: "u13", note: "Cancelled DENSO leak test project" },
+  { id: "mt12", at: "2026-02-06 15:30", type: "Goods Receipt", itemId: "mi16", qty: 1, bucket: "stock", location: "WH1-F1", refNo: "GRN-2602-0001", projectId: "", byId: "u13", note: "Left over — project cancelled at design stage" },
+
+  // GRN-2608-0012 — fiber sensors, partial delivery 6 of 10 (1 damaged).
+  { id: "mt13", at: "2026-08-26 10:35", type: "Goods Receipt", itemId: "mi9", qty: 5, bucket: "stock", location: "WH1-C1", refNo: "GRN-2608-0012", projectId: "p8", byId: "u13", note: "Partial delivery 6 of 10 — 5 accepted" },
+  { id: "mt14", at: "2026-08-26 10:35", type: "Quarantine In", itemId: "mi9", qty: 1, bucket: "quarantine", location: "WH1-QC", refNo: "GRN-2608-0012", projectId: "p8", byId: "u13", note: "Amplifier housing cracked — damage report DR-2608-0002" },
+
+  // MIR-2608-0007 — panel components issued to the Cobot project.
+  { id: "mt15", at: "2026-08-27 09:20", type: "Material Issue", itemId: "mi1", qty: -1, bucket: "stock", location: "WH1-A1", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "Main control panel assembly" },
+  { id: "mt16", at: "2026-08-27 09:20", type: "Material Issue", itemId: "mi2", qty: -2, bucket: "stock", location: "WH1-A1", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "" },
+  { id: "mt17", at: "2026-08-27 09:22", type: "Material Issue", itemId: "mi4", qty: -1, bucket: "stock", location: "WH1-B1", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "" },
+  { id: "mt18", at: "2026-08-27 09:22", type: "Material Issue", itemId: "mi5", qty: -6, bucket: "stock", location: "WH1-B1", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "" },
+  { id: "mt19", at: "2026-08-27 09:25", type: "Material Issue", itemId: "mi6", qty: -12, bucket: "stock", location: "WH1-B2", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "" },
+  { id: "mt20", at: "2026-08-27 09:25", type: "Material Issue", itemId: "mi7", qty: -1, bucket: "stock", location: "WH1-B3", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "" },
+  { id: "mt21", at: "2026-08-27 09:30", type: "Material Issue", itemId: "mi9", qty: -5, bucket: "stock", location: "WH1-C1", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "" },
+
+  // Two relays over-picked, returned next day.
+  { id: "mt22", at: "2026-08-28 16:10", type: "Material Return", itemId: "mi6", qty: 2, bucket: "stock", location: "WH1-B2", refNo: "MIR-2608-0007", projectId: "p8", byId: "u13", note: "Over-picked — returned unused by Chakkrit Manee" },
+];
+
+/* ---- Reservations — one quantity, one project, never two ------------------ */
+
+export type Reservation = {
+  id: string;
+  itemId: string;
+  projectId: string;
+  bomLineId: string;
+  qty: number;
+  requiredDate: string;
+  ownerId: string;
+  status: "Active" | "Consumed" | "Released";
+  createdAt: string;
+};
+
+export const RESERVATIONS: Reservation[] = [
+  // JCU palletizer holds one PLC spare — the cross-project contention the module exists to expose.
+  { id: "rsv1", itemId: "mi1", projectId: "p2", bomLineId: "", qty: 1, requiredDate: "2026-09-07", ownerId: "u10", status: "Active", createdAt: "2026-08-05" },
+  // Cobot allocations (consumed ones were issued on MIR-2608-0007).
+  { id: "rsv2", itemId: "mi1", projectId: "p8", bomLineId: "bl4", qty: 1, requiredDate: "2026-08-27", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  { id: "rsv3", itemId: "mi2", projectId: "p8", bomLineId: "bl5", qty: 2, requiredDate: "2026-08-27", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  { id: "rsv4", itemId: "mi4", projectId: "p8", bomLineId: "bl7", qty: 1, requiredDate: "2026-08-27", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  { id: "rsv5", itemId: "mi5", projectId: "p8", bomLineId: "bl8", qty: 6, requiredDate: "2026-08-27", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  { id: "rsv6", itemId: "mi6", projectId: "p8", bomLineId: "bl9", qty: 12, requiredDate: "2026-08-27", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  { id: "rsv7", itemId: "mi7", projectId: "p8", bomLineId: "bl10", qty: 1, requiredDate: "2026-08-27", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  { id: "rsv8", itemId: "mi9", projectId: "p8", bomLineId: "bl12", qty: 2, requiredDate: "2026-09-10", ownerId: "u1", status: "Consumed", createdAt: "2026-08-19" },
+  // Received fiber sensors put straight on reservation for the project (3 consumed on issue, 1 still held).
+  { id: "rsv9", itemId: "mi9", projectId: "p8", bomLineId: "bl12", qty: 3, requiredDate: "2026-09-10", ownerId: "u13", status: "Consumed", createdAt: "2026-08-26" },
+  { id: "rsv10", itemId: "mi9", projectId: "p8", bomLineId: "bl12", qty: 1, requiredDate: "2026-09-10", ownerId: "u13", status: "Active", createdAt: "2026-08-26" },
+  { id: "rsv11", itemId: "mi12", projectId: "p8", bomLineId: "bl2", qty: 1, requiredDate: "2026-09-05", ownerId: "u1", status: "Active", createdAt: "2026-08-20" },
+  { id: "rsv12", itemId: "mi13", projectId: "p8", bomLineId: "bl20", qty: 1, requiredDate: "2026-09-15", ownerId: "u1", status: "Active", createdAt: "2026-08-20" },
+  { id: "rsv13", itemId: "mi14", projectId: "p8", bomLineId: "bl19", qty: 1, requiredDate: "2026-09-05", ownerId: "u1", status: "Active", createdAt: "2026-08-20" },
+];
+
+/* ---- BOM ------------------------------------------------------------------ */
+
+export const BOM_SECTIONS: { code: string; name: string; parent: string }[] = [
+  { code: "HW", name: "Hardware", parent: "" },
+  { code: "HW.STD", name: "Standard Equipment", parent: "HW" },
+  { code: "HW.EL", name: "Electrical", parent: "HW" },
+  { code: "HW.ME", name: "Mechanical", parent: "HW" },
+  { code: "HW.PC", name: "Server / PC", parent: "HW" },
+  { code: "HW.INF", name: "Infrastructure", parent: "HW" },
+  { code: "SW", name: "Software", parent: "" },
+  { code: "SVC", name: "Service & Installation", parent: "" },
+  { code: "MP", name: "Manpower", parent: "" },
+];
+
+export type Bom = {
+  id: string;
+  no: string;
+  revision: string;
+  status: "Draft" | "Released" | "Superseded";
+  projectId: string;
+  estimateId: string;
+  estimateRev: string;
+  generatedAt: string;
+  generatedBy: string;
+  releasedAt: string;
+  releasedBy: string;
+};
+
+export type BomLine = {
+  id: string;
+  bomId: string;
+  section: string;
+  /** "" for non-stock lines (software, service). */
+  itemId: string;
+  itemCode: string;
+  partNo: string;
+  description: string;
+  brand: string;
+  specification: string;
+  qtyRequired: number;
+  unit: string;
+  estUnitCost: number;
+  /** Quantity the customer supplies — never purchased, never issued from stock. */
+  customerSupplied: number;
+  requiredDate: string;
+  preferredSupplier: string;
+  leadTimeDays: number;
+  /** The estimate line this BOM line draws its budget from. */
+  estimateLineId: string;
+  ownerId: string;
+  nonStock: boolean;
+  remark: string;
+};
+
+export const BOMS: Bom[] = [
+  {
+    id: "bom1", no: "BOM-2608-0001", revision: "R01", status: "Released",
+    projectId: "p8", estimateId: "e1", estimateRev: "R03",
+    generatedAt: "2026-08-18", generatedBy: "u1", releasedAt: "2026-08-19", releasedBy: "u7",
+  },
+];
+
+export const BOM_LINES: BomLine[] = [
+  // --- Hardware · Standard Equipment ---
+  { id: "bl1", bomId: "bom1", section: "HW.STD", itemId: "mi15", itemCode: "RB-ROB-001", partNo: "COBOTTA PRO 1300", description: "Collaborative robot 6 axis / 12 kg", brand: "DENSO", specification: "Reach 1300 mm, controller + pendant", qtyRequired: 1, unit: "Set", estUnitCost: 1180000, customerSupplied: 0, requiredDate: "2026-10-30", preferredSupplier: "DENSO Wave Robotics", leadTimeDays: 60, estimateLineId: "i15", ownerId: "u10", nonStock: false, remark: "Long lead — advance order" },
+  { id: "bl2", bomId: "bom1", section: "HW.STD", itemId: "mi12", itemCode: "HW-SEN-001", partNo: "SR-X300", description: "Barcode reader 2D fixed mount", brand: "KEYENCE", specification: "Auto focus, Ethernet", qtyRequired: 2, unit: "Pcs", estUnitCost: 48500, customerSupplied: 0, requiredDate: "2026-09-20", preferredSupplier: "Keyence (Thailand) Co., Ltd.", leadTimeDays: 30, estimateLineId: "i4", ownerId: "u1", nonStock: false, remark: "" },
+  { id: "bl3", bomId: "bom1", section: "HW.STD", itemId: "", itemCode: "RB-GRP-001", partNo: "VG-4Z", description: "Vacuum gripper with sensor feedback", brand: "—", specification: "4 zone, custom pad", qtyRequired: 1, unit: "Set", estUnitCost: 142000, customerSupplied: 0, requiredDate: "2026-10-15", preferredSupplier: "TP Precision Fabrication", leadTimeDays: 40, estimateLineId: "i16", ownerId: "u10", nonStock: false, remark: "Waiting final pad drawing before PR" },
+  // --- Hardware · Electrical (panel explode of EL-PNL-001 plus the PLC/HMI estimate lines) ---
+  { id: "bl4", bomId: "bom1", section: "HW.EL", itemId: "mi1", itemCode: "EL-PLC-101", partNo: "FX5U-64MT/ES", description: "PLC CPU 64 I/O transistor output", brand: "Mitsubishi", specification: "Ethernet built-in, 64 pt", qtyRequired: 1, unit: "Pcs", estUnitCost: 28900, customerSupplied: 0, requiredDate: "2026-08-27", preferredSupplier: "Mitsubishi Electric Automation", leadTimeDays: 14, estimateLineId: "i1", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl5", bomId: "bom1", section: "HW.EL", itemId: "mi2", itemCode: "EL-PLC-102", partNo: "FX5-16EX/ES", description: "Expansion input unit 16DI", brand: "Mitsubishi", specification: "24VDC sink/source", qtyRequired: 2, unit: "Pcs", estUnitCost: 6400, customerSupplied: 0, requiredDate: "2026-08-27", preferredSupplier: "Mitsubishi Electric Automation", leadTimeDays: 14, estimateLineId: "i2", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl6", bomId: "bom1", section: "HW.EL", itemId: "mi3", itemCode: "EL-HMI-101", partNo: "GT2505-VTBD", description: "Touch panel 5.7 inch TFT", brand: "Mitsubishi", specification: "640x480, Ethernet", qtyRequired: 1, unit: "Pcs", estUnitCost: 24500, customerSupplied: 0, requiredDate: "2026-09-20", preferredSupplier: "Mitsubishi Electric Automation", leadTimeDays: 21, estimateLineId: "i3", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl7", bomId: "bom1", section: "HW.EL", itemId: "mi4", itemCode: "EL-BRK-101", partNo: "NF63-CV 3P 20A", description: "MCCB 3 pole 20 A", brand: "Mitsubishi", specification: "20 A, 3 pole", qtyRequired: 2, unit: "Pcs", estUnitCost: 1850, customerSupplied: 0, requiredDate: "2026-09-20", preferredSupplier: "RS Components Thailand", leadTimeDays: 7, estimateLineId: "i11", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl8", bomId: "bom1", section: "HW.EL", itemId: "mi5", itemCode: "EL-BRK-102", partNo: "CP30-BA 5A", description: "Circuit protector 5 A", brand: "Mitsubishi", specification: "1 pole, 5 A", qtyRequired: 6, unit: "Pcs", estUnitCost: 890, customerSupplied: 0, requiredDate: "2026-08-27", preferredSupplier: "RS Components Thailand", leadTimeDays: 7, estimateLineId: "i11", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl9", bomId: "bom1", section: "HW.EL", itemId: "mi6", itemCode: "EL-RLY-101", partNo: "MY4N-GS 24VDC", description: "Relay 4 pole with socket", brand: "Omron", specification: "24 VDC coil", qtyRequired: 12, unit: "Pcs", estUnitCost: 320, customerSupplied: 0, requiredDate: "2026-08-27", preferredSupplier: "RS Components Thailand", leadTimeDays: 7, estimateLineId: "i11", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl10", bomId: "bom1", section: "HW.EL", itemId: "mi7", itemCode: "EL-PSU-101", partNo: "S8FS-G24024CD", description: "Switching power supply 24 V 10 A", brand: "Omron", specification: "24 VDC, 10 A", qtyRequired: 2, unit: "Pcs", estUnitCost: 3150, customerSupplied: 0, requiredDate: "2026-09-20", preferredSupplier: "RS Components Thailand", leadTimeDays: 10, estimateLineId: "i11", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl11", bomId: "bom1", section: "HW.EL", itemId: "mi8", itemCode: "EL-RLY-102", partNo: "G9SE-401", description: "Safety relay unit 4 contacts", brand: "Omron", specification: "24 VDC, 4 NO", qtyRequired: 2, unit: "Pcs", estUnitCost: 4890, customerSupplied: 0, requiredDate: "2026-09-20", preferredSupplier: "RS Components Thailand", leadTimeDays: 21, estimateLineId: "i11", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl12", bomId: "bom1", section: "HW.EL", itemId: "mi9", itemCode: "EL-SEN-101", partNo: "FS-N43N + FU-35FA", description: "Fiber optic sensor with amplifier", brand: "KEYENCE", specification: "Through-beam fiber set", qtyRequired: 8, unit: "Set", estUnitCost: 1750, customerSupplied: 0, requiredDate: "2026-09-10", preferredSupplier: "Keyence (Thailand) Co., Ltd.", leadTimeDays: 10, estimateLineId: "i5", ownerId: "u11", nonStock: false, remark: "" },
+  { id: "bl13", bomId: "bom1", section: "HW.EL", itemId: "mi10", itemCode: "EL-SEN-102", partNo: "D4NS-4CF", description: "Safety door switch with connector", brand: "Omron", specification: "Slow action, M12 connector", qtyRequired: 2, unit: "Pcs", estUnitCost: 2450, customerSupplied: 0, requiredDate: "2026-09-25", preferredSupplier: "RS Components Thailand", leadTimeDays: 14, estimateLineId: "i11", ownerId: "u11", nonStock: false, remark: "In stock — allocate before purchasing" },
+  { id: "bl14", bomId: "bom1", section: "HW.EL", itemId: "", itemCode: "EL-PNL-001", partNo: "CP-MAIN-01", description: "Panel enclosure 800x1800 + fabrication", brand: "Schneider", specification: "IP54, with air conditioner", qtyRequired: 1, unit: "Set", estUnitCost: 82000, customerSupplied: 0, requiredDate: "2026-09-25", preferredSupplier: "Thai Control Panel Works", leadTimeDays: 30, estimateLineId: "i11", ownerId: "u4", nonStock: false, remark: "Fabricated to drawing" },
+  { id: "bl15", bomId: "bom1", section: "HW.EL", itemId: "", itemCode: "EL-WIR-001", partNo: "—", description: "Field wiring material and cable tray", brand: "—", specification: "Complete set, 2 stations", qtyRequired: 1, unit: "Lot", estUnitCost: 96000, customerSupplied: 0, requiredDate: "2026-10-05", preferredSupplier: "Thai Control Panel Works", leadTimeDays: 21, estimateLineId: "i12", ownerId: "u4", nonStock: false, remark: "" },
+  // --- Hardware · Mechanical ---
+  { id: "bl16", bomId: "bom1", section: "HW.ME", itemId: "mi11", itemCode: "ME-GRP-101", partNo: "MHZ2-25D", description: "Pneumatic parallel gripper", brand: "SMC", specification: "Bore 25, with auto switch", qtyRequired: 2, unit: "Pcs", estUnitCost: 8900, customerSupplied: 0, requiredDate: "2026-09-25", preferredSupplier: "SMC (Thailand) Ltd.", leadTimeDays: 21, estimateLineId: "i13", ownerId: "u5", nonStock: false, remark: "" },
+  { id: "bl17", bomId: "bom1", section: "HW.ME", itemId: "", itemCode: "ME-FAB-001", partNo: "MF-CNV-2600", description: "Conveyor frame and guarding fabrication", brand: "—", specification: "SS400 painted, 6 m", qtyRequired: 1, unit: "Lot", estUnitCost: 217200, customerSupplied: 0, requiredDate: "2026-10-20", preferredSupplier: "TP Precision Fabrication", leadTimeDays: 45, estimateLineId: "i13", ownerId: "u5", nonStock: false, remark: "" },
+  { id: "bl18", bomId: "bom1", section: "HW.ME", itemId: "", itemCode: "ME-ASM-001", partNo: "SF-2400", description: "Safety fence with interlock door", brand: "—", specification: "H2000, 24 m perimeter", qtyRequired: 1, unit: "Lot", estUnitCost: 88000, customerSupplied: 1, requiredDate: "2026-11-10", preferredSupplier: "—", leadTimeDays: 0, estimateLineId: "i14", ownerId: "u5", nonStock: false, remark: "Astemo reuses the existing line fence (R03)" },
+  // --- Hardware · Server / PC ---
+  { id: "bl19", bomId: "bom1", section: "HW.PC", itemId: "mi14", itemCode: "HW-IPC-001", partNo: "IPC-240", description: "Industrial PC i7 / 32GB / 1TB SSD", brand: "Advantech", specification: "Fanless, 24/7 operation", qtyRequired: 1, unit: "Set", estUnitCost: 98500, customerSupplied: 0, requiredDate: "2026-09-05", preferredSupplier: "Cisco Partner — Datacom Thai", leadTimeDays: 45, estimateLineId: "i7", ownerId: "u1", nonStock: false, remark: "Covered by stock — do not purchase" },
+  // --- Hardware · Infrastructure ---
+  { id: "bl20", bomId: "bom1", section: "HW.INF", itemId: "mi13", itemCode: "HW-NET-001", partNo: "IE-3300-8T2S", description: "Industrial managed switch 8 port", brand: "Cisco", specification: "Layer 2, DIN rail", qtyRequired: 2, unit: "Pcs", estUnitCost: 41200, customerSupplied: 0, requiredDate: "2026-09-15", preferredSupplier: "Cisco Partner — Datacom Thai", leadTimeDays: 45, estimateLineId: "i6", ownerId: "u1", nonStock: false, remark: "" },
+  // --- Software ---
+  { id: "bl21", bomId: "bom1", section: "SW", itemId: "", itemCode: "SW-APP-001", partNo: "TT-TRACE-STD", description: "Traceability application license", brand: "—", specification: "10 station license", qtyRequired: 1, unit: "Lot", estUnitCost: 120000, customerSupplied: 0, requiredDate: "2026-11-20", preferredSupplier: "TOMAS TECH", leadTimeDays: 0, estimateLineId: "i8", ownerId: "u3", nonStock: true, remark: "Internal package — no stock" },
+  { id: "bl22", bomId: "bom1", section: "SW", itemId: "", itemCode: "SW-DB-001", partNo: "SQL-STD-2Core", description: "SQL Server Standard runtime license", brand: "Microsoft", specification: "2 core pack", qtyRequired: 2, unit: "Pcs", estUnitCost: 68000, customerSupplied: 0, requiredDate: "2026-11-20", preferredSupplier: "Cisco Partner — Datacom Thai", leadTimeDays: 14, estimateLineId: "i9", ownerId: "u3", nonStock: true, remark: "" },
+  // --- Service & Installation ---
+  { id: "bl23", bomId: "bom1", section: "SVC", itemId: "", itemCode: "TR-DEL-001", partNo: "—", description: "Delivery to Amata City and unloading", brand: "—", specification: "6 wheel truck with crane", qtyRequired: 2, unit: "Service", estUnitCost: 12500, customerSupplied: 0, requiredDate: "2026-12-15", preferredSupplier: "Local Logistics", leadTimeDays: 7, estimateLineId: "i17", ownerId: "u7", nonStock: true, remark: "" },
+];
+
+/* ---- Purchase requisitions ------------------------------------------------- */
+
+export const MAT_PR_STATUSES = ["Draft", "In Approval", "Approved", "Rejected", "Converted to PO", "Cancelled"] as const;
+export type MatPrStatus = (typeof MAT_PR_STATUSES)[number];
+
+export type MatApprovalStep = {
+  name: string;
+  approverId: string;
+  status: "Completed" | "Current" | "Pending" | "Not Required" | "Auto-added";
+  at: string;
+  comment: string;
+  /** Why the step exists when a rule added it automatically. */
+  rule: string;
+};
+
+export type MatPrLine = {
+  id: string;
+  prId: string;
+  bomLineId: string;
+  itemId: string;
+  itemCode: string;
+  partNo: string;
+  description: string;
+  qtyRequired: number;
+  /** Stock available at the moment the PR was raised — the audit snapshot. */
+  stockSnapshot: number;
+  qty: number;
+  estUnitCost: number;
+  unitPrice: number;
+  priceSource: "Price Library" | "Supplier Quotation" | "Manual" | "Previous Purchase";
+  supplier: string;
+  leadTimeDays: number;
+  budgetSection: string;
+  reason: string;
+  attachment: string;
+  unplanned: boolean;
+  unplannedJustification: string;
+};
+
+export type MatPr = {
+  id: string;
+  no: string;
+  sourceBomId: string;
+  sourceLabel: string;
+  projectId: string;
+  requestedBy: string;
+  department: string;
+  requestDate: string;
+  requiredDate: string;
+  priority: "Normal" | "High" | "Emergency";
+  status: MatPrStatus;
+  steps: MatApprovalStep[];
+  lines: MatPrLine[];
+};
+
+export const MAT_PRS: MatPr[] = [
+  {
+    // Advance order for the long-lead items, already converted to POs.
+    id: "mpr1", no: "PR-2608-0004", sourceBomId: "bom1", sourceLabel: "BOM-2608-0001 R01",
+    projectId: "p8", requestedBy: "u1", department: "Engineering",
+    requestDate: "2026-08-19", requiredDate: "2026-10-30", priority: "High", status: "Converted to PO",
+    steps: [
+      { name: "Submitted by Requester", approverId: "u1", status: "Completed", at: "2026-08-19 10:12", comment: "", rule: "" },
+      { name: "Section Owner Review", approverId: "u10", status: "Completed", at: "2026-08-19 14:40", comment: "Robot spec confirmed with DENSO", rule: "" },
+      { name: "Budget Owner Approval", approverId: "u7", status: "Completed", at: "2026-08-20 09:05", comment: "Long-lead advance order per project plan", rule: "" },
+      { name: "Purchasing Review", approverId: "u12", status: "Completed", at: "2026-08-20 15:30", comment: "Split into 4 POs by supplier; fiber order raised to 10 pcs to restock", rule: "" },
+      { name: "Management Approval", approverId: "u6", status: "Completed", at: "2026-08-21 08:50", comment: "Approved — value above 1M THB", rule: "PR value exceeds 1,000,000 THB" },
+      { name: "PO Creation", approverId: "u12", status: "Completed", at: "2026-08-21 11:20", comment: "PO-2608-0009 / 0010 / 0011 / 0012", rule: "" },
+    ],
+    lines: [
+      { id: "mprl1", prId: "mpr1", bomLineId: "bl1", itemId: "mi15", itemCode: "RB-ROB-001", partNo: "COBOTTA PRO 1300", description: "Collaborative robot 6 axis / 12 kg", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 1180000, unitPrice: 1180000, priceSource: "Supplier Quotation", supplier: "DENSO Wave Robotics", leadTimeDays: 60, budgetSection: "HW.STD", reason: "60 day lead time", attachment: "SQ-2608-0025.pdf", unplanned: false, unplannedJustification: "" },
+      { id: "mprl2", prId: "mpr1", bomLineId: "bl12", itemId: "mi9", itemCode: "EL-SEN-101", partNo: "FS-N43N + FU-35FA", description: "Fiber optic sensor with amplifier", qtyRequired: 8, stockSnapshot: 2, qty: 10, estUnitCost: 1750, unitPrice: 1750, priceSource: "Price Library", supplier: "RS Components Thailand", leadTimeDays: 10, budgetSection: "HW.EL", reason: "6 short for BOM + 4 buffer (pack of 10)", attachment: "", unplanned: false, unplannedJustification: "" },
+      { id: "mprl3", prId: "mpr1", bomLineId: "bl14", itemId: "", itemCode: "EL-PNL-001", partNo: "CP-MAIN-01", description: "Panel enclosure 800x1800 + fabrication", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 82000, unitPrice: 82000, priceSource: "Supplier Quotation", supplier: "Thai Control Panel Works", leadTimeDays: 30, budgetSection: "HW.EL", reason: "", attachment: "SQ-2608-0018.pdf", unplanned: false, unplannedJustification: "" },
+      { id: "mprl4", prId: "mpr1", bomLineId: "bl15", itemId: "", itemCode: "EL-WIR-001", partNo: "—", description: "Field wiring material and cable tray", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 96000, unitPrice: 96000, priceSource: "Supplier Quotation", supplier: "Thai Control Panel Works", leadTimeDays: 21, budgetSection: "HW.EL", reason: "", attachment: "SQ-2608-0018.pdf", unplanned: false, unplannedJustification: "" },
+      { id: "mprl5", prId: "mpr1", bomLineId: "bl17", itemId: "", itemCode: "ME-FAB-001", partNo: "MF-CNV-2600", description: "Conveyor frame and guarding fabrication", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 217200, unitPrice: 217200, priceSource: "Supplier Quotation", supplier: "TP Precision Fabrication", leadTimeDays: 45, budgetSection: "HW.ME", reason: "45 day fabrication", attachment: "SQ-2608-0021.pdf", unplanned: false, unplannedJustification: "" },
+    ],
+  },
+  {
+    // The requisition currently sitting with the budget owner — the module's demo star.
+    id: "mpr2", no: "PR-2608-0005", sourceBomId: "bom1", sourceLabel: "BOM-2608-0001 R01",
+    projectId: "p8", requestedBy: "u11", department: "Engineering",
+    requestDate: "2026-08-29", requiredDate: "2026-09-20", priority: "Normal", status: "In Approval",
+    steps: [
+      { name: "Submitted by Requester", approverId: "u11", status: "Completed", at: "2026-08-29 09:30", comment: "", rule: "" },
+      { name: "Section Owner Review", approverId: "u1", status: "Completed", at: "2026-08-29 11:15", comment: "Quantities checked against BOM shortage", rule: "" },
+      { name: "Budget Owner Approval", approverId: "u7", status: "Current", at: "", comment: "", rule: "" },
+      { name: "Purchasing Review", approverId: "u12", status: "Pending", at: "", comment: "", rule: "" },
+      { name: "Management Approval", approverId: "u6", status: "Auto-added", at: "", comment: "", rule: "G9SE-401 unit price is 12.5% above the estimate (limit 10%)" },
+      { name: "PO Creation", approverId: "u12", status: "Pending", at: "", comment: "", rule: "" },
+    ],
+    lines: [
+      { id: "mprl6", prId: "mpr2", bomLineId: "bl6", itemId: "mi3", itemCode: "EL-HMI-101", partNo: "GT2505-VTBD", description: "Touch panel 5.7 inch TFT", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 24500, unitPrice: 24500, priceSource: "Supplier Quotation", supplier: "Mitsubishi Electric Automation", leadTimeDays: 21, budgetSection: "HW.EL", reason: "No stock", attachment: "SQ-2608-0027.pdf", unplanned: false, unplannedJustification: "" },
+      { id: "mprl7", prId: "mpr2", bomLineId: "bl7", itemId: "mi4", itemCode: "EL-BRK-101", partNo: "NF63-CV 3P 20A", description: "MCCB 3 pole 20 A", qtyRequired: 2, stockSnapshot: 0, qty: 1, estUnitCost: 1850, unitPrice: 1850, priceSource: "Price Library", supplier: "RS Components Thailand", leadTimeDays: 7, budgetSection: "HW.EL", reason: "1 issued from stock, 1 short", attachment: "", unplanned: false, unplannedJustification: "" },
+      { id: "mprl8", prId: "mpr2", bomLineId: "bl10", itemId: "mi7", itemCode: "EL-PSU-101", partNo: "S8FS-G24024CD", description: "Switching power supply 24 V 10 A", qtyRequired: 2, stockSnapshot: 0, qty: 1, estUnitCost: 3150, unitPrice: 3150, priceSource: "Price Library", supplier: "RS Components Thailand", leadTimeDays: 10, budgetSection: "HW.EL", reason: "1 issued from stock, 1 short", attachment: "", unplanned: false, unplannedJustification: "" },
+      { id: "mprl9", prId: "mpr2", bomLineId: "bl11", itemId: "mi8", itemCode: "EL-RLY-102", partNo: "G9SE-401", description: "Safety relay unit 4 contacts", qtyRequired: 2, stockSnapshot: 0, qty: 2, estUnitCost: 4890, unitPrice: 5501, priceSource: "Manual", supplier: "RS Components Thailand", leadTimeDays: 21, budgetSection: "HW.EL", reason: "RS list price increased — manual price", attachment: "RS-pricelist-aug26.pdf", unplanned: false, unplannedJustification: "" },
+      { id: "mprl10", prId: "mpr2", bomLineId: "bl16", itemId: "mi11", itemCode: "ME-GRP-101", partNo: "MHZ2-25D", description: "Pneumatic parallel gripper", qtyRequired: 2, stockSnapshot: 0, qty: 2, estUnitCost: 8900, unitPrice: 8900, priceSource: "Supplier Quotation", supplier: "SMC (Thailand) Ltd.", leadTimeDays: 21, budgetSection: "HW.ME", reason: "No stock", attachment: "SQ-2608-0033.pdf", unplanned: false, unplannedJustification: "" },
+      { id: "mprl11", prId: "mpr2", bomLineId: "bl2", itemId: "mi12", itemCode: "HW-SEN-001", partNo: "SR-X300", description: "Barcode reader 2D fixed mount", qtyRequired: 2, stockSnapshot: 1, qty: 1, estUnitCost: 48500, unitPrice: 48500, priceSource: "Price Library", supplier: "Keyence (Thailand) Co., Ltd.", leadTimeDays: 30, budgetSection: "HW.STD", reason: "1 reserved from stock, 1 short", attachment: "", unplanned: false, unplannedJustification: "" },
+      { id: "mprl12", prId: "mpr2", bomLineId: "bl20", itemId: "mi13", itemCode: "HW-NET-001", partNo: "IE-3300-8T2S", description: "Industrial managed switch 8 port", qtyRequired: 2, stockSnapshot: 1, qty: 1, estUnitCost: 41200, unitPrice: 41200, priceSource: "Supplier Quotation", supplier: "Cisco Partner — Datacom Thai", leadTimeDays: 45, budgetSection: "HW.INF", reason: "1 reserved from stock, 1 short", attachment: "SQ-2607-0044.pdf", unplanned: false, unplannedJustification: "" },
+    ],
+  },
+  {
+    // Legacy requisitions migrated from the previous module (Katolec Ink Jet).
+    id: "mpr3", no: "PR-2608-0002", sourceBomId: "", sourceLabel: "EST-2608-0001 (no BOM)",
+    projectId: "p1", requestedBy: "u2", department: "Engineering",
+    requestDate: "2026-08-24", requiredDate: "2026-10-02", priority: "Normal", status: "In Approval",
+    steps: [
+      { name: "Submitted by Requester", approverId: "u2", status: "Completed", at: "2026-08-24 10:00", comment: "", rule: "" },
+      { name: "Section Owner Review", approverId: "u6", status: "Completed", at: "2026-08-24 13:00", comment: "", rule: "" },
+      { name: "Budget Owner Approval", approverId: "u7", status: "Completed", at: "2026-08-25 09:00", comment: "", rule: "" },
+      { name: "Purchasing Review", approverId: "u12", status: "Current", at: "", comment: "", rule: "" },
+      { name: "Management Approval", approverId: "u6", status: "Not Required", at: "", comment: "", rule: "" },
+      { name: "PO Creation", approverId: "u12", status: "Pending", at: "", comment: "", rule: "" },
+    ],
+    lines: [
+      { id: "mprl13", prId: "mpr3", bomLineId: "", itemId: "", itemCode: "HW-MRK-001", partNo: "MK-G1000", description: "Ink jet marking head", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 186000, unitPrice: 186000, priceSource: "Supplier Quotation", supplier: "KEYENCE (Thailand) Co., Ltd.", leadTimeDays: 30, budgetSection: "HW.STD", reason: "", attachment: "", unplanned: false, unplannedJustification: "" },
+      { id: "mprl14", prId: "mpr3", bomLineId: "", itemId: "", itemCode: "EL-WIR-002", partNo: "—", description: "Marking head cabling set", qtyRequired: 1, stockSnapshot: 0, qty: 1, estUnitCost: 42500, unitPrice: 42500, priceSource: "Price Library", supplier: "RS Components Thailand", leadTimeDays: 14, budgetSection: "HW.EL", reason: "", attachment: "", unplanned: false, unplannedJustification: "" },
+    ],
+  },
+];
+
+/* ---- Purchase orders -------------------------------------------------------- */
+
+export type MatPoLine = {
+  id: string;
+  poId: string;
+  prLineId: string;
+  bomLineId: string;
+  itemId: string;
+  itemCode: string;
+  partNo: string;
+  description: string;
+  qty: number;
+  unitPrice: number;
+};
+
+export type MatPo = {
+  id: string;
+  no: string;
+  prId: string;
+  projectId: string;
+  supplier: string;
+  orderDate: string;
+  confirmedDate: string;
+  expectedDate: string;
+  createdBy: string;
+  status: "Ordered" | "Confirmed" | "Partially Received" | "Received" | "Closed";
+  lines: MatPoLine[];
+};
+
+export const MAT_POS: MatPo[] = [
+  {
+    id: "mpo1", no: "PO-2608-0009", prId: "mpr1", projectId: "p8", supplier: "DENSO Wave Robotics",
+    orderDate: "2026-08-21", confirmedDate: "2026-08-24", expectedDate: "2026-10-20", createdBy: "u12", status: "Confirmed",
+    lines: [
+      { id: "mpol1", poId: "mpo1", prLineId: "mprl1", bomLineId: "bl1", itemId: "mi15", itemCode: "RB-ROB-001", partNo: "COBOTTA PRO 1300", description: "Collaborative robot 6 axis / 12 kg", qty: 1, unitPrice: 1180000 },
+    ],
+  },
+  {
+    id: "mpo2", no: "PO-2608-0010", prId: "mpr1", projectId: "p8", supplier: "RS Components Thailand",
+    orderDate: "2026-08-21", confirmedDate: "2026-08-22", expectedDate: "2026-08-31", createdBy: "u12", status: "Partially Received",
+    lines: [
+      { id: "mpol2", poId: "mpo2", prLineId: "mprl2", bomLineId: "bl12", itemId: "mi9", itemCode: "EL-SEN-101", partNo: "FS-N43N + FU-35FA", description: "Fiber optic sensor with amplifier", qty: 10, unitPrice: 1750 },
+    ],
+  },
+  {
+    id: "mpo3", no: "PO-2608-0011", prId: "mpr1", projectId: "p8", supplier: "Thai Control Panel Works",
+    orderDate: "2026-08-21", confirmedDate: "2026-08-25", expectedDate: "2026-09-25", createdBy: "u12", status: "Confirmed",
+    lines: [
+      { id: "mpol3", poId: "mpo3", prLineId: "mprl3", bomLineId: "bl14", itemId: "", itemCode: "EL-PNL-001", partNo: "CP-MAIN-01", description: "Panel enclosure 800x1800 + fabrication", qty: 1, unitPrice: 82000 },
+      { id: "mpol4", poId: "mpo3", prLineId: "mprl4", bomLineId: "bl15", itemId: "", itemCode: "EL-WIR-001", partNo: "—", description: "Field wiring material and cable tray", qty: 1, unitPrice: 96000 },
+    ],
+  },
+  {
+    id: "mpo4", no: "PO-2608-0012", prId: "mpr1", projectId: "p8", supplier: "TP Precision Fabrication",
+    orderDate: "2026-08-21", confirmedDate: "", expectedDate: "2026-10-20", createdBy: "u12", status: "Ordered",
+    lines: [
+      { id: "mpol5", poId: "mpo4", prLineId: "mprl5", bomLineId: "bl17", itemId: "", itemCode: "ME-FAB-001", partNo: "MF-CNV-2600", description: "Conveyor frame and guarding fabrication", qty: 1, unitPrice: 217200 },
+    ],
+  },
+];
+
+/* ---- Goods receiving --------------------------------------------------------- */
+
+export type GrnLine = {
+  id: string;
+  grnId: string;
+  poLineId: string;
+  itemId: string;
+  itemCode: string;
+  partNo: string;
+  orderedQty: number;
+  previouslyReceived: number;
+  receivedQty: number;
+  acceptedQty: number;
+  damagedQty: number;
+  rejectedQty: number;
+  unit: string;
+  lotNo: string;
+  serialNo: string;
+  location: string;
+  qcStatus: "Pending" | "Passed" | "Failed";
+  projectAllocation: string;
+  remark: string;
+};
+
+export type Grn = {
+  id: string;
+  no: string;
+  poId: string;
+  prId: string;
+  supplier: string;
+  deliveryNote: string;
+  invoiceRef: string;
+  receivedBy: string;
+  receivedAt: string;
+  warehouse: string;
+  status: "Draft" | "Confirmed";
+  deliveryStatus: "Partial Delivery" | "Full Delivery";
+  damageReport: string;
+  photos: number;
+  lines: GrnLine[];
+};
+
+export const GRNS: Grn[] = [
+  {
+    id: "grn1", no: "GRN-2608-0012", poId: "mpo2", prId: "mpr1", supplier: "RS Components Thailand",
+    deliveryNote: "DN-RS-260826-114", invoiceRef: "INV-RS-88712", receivedBy: "u13", receivedAt: "2026-08-26 10:35",
+    warehouse: "WH1 — Chonburi Store", status: "Confirmed", deliveryStatus: "Partial Delivery",
+    damageReport: "DR-2608-0002 — 1 amplifier housing cracked in transit", photos: 3,
+    lines: [
+      {
+        id: "grnl1", grnId: "grn1", poLineId: "mpol2", itemId: "mi9", itemCode: "EL-SEN-101", partNo: "FS-N43N + FU-35FA",
+        orderedQty: 10, previouslyReceived: 0, receivedQty: 6, acceptedQty: 5, damagedQty: 1, rejectedQty: 0,
+        unit: "Set", lotNo: "LOT-KE-26082", serialNo: "—", location: "WH1-C1", qcStatus: "Passed",
+        projectAllocation: "PJ260153 (4) + Stock (1)", remark: "Balance 4 confirmed by RS for 31 Aug",
+      },
+    ],
+  },
+];
+
+/* ---- Material issue requests --------------------------------------------------- */
+
+export const MIR_STATUSES = ["Draft", "Pending Approval", "Approved", "Picking", "Issued", "Received", "Completed"] as const;
+export type MirStatus = (typeof MIR_STATUSES)[number];
+
+export type MirLine = {
+  id: string;
+  mirId: string;
+  bomLineId: string;
+  itemId: string;
+  itemCode: string;
+  partNo: string;
+  bomQty: number;
+  previouslyIssued: number;
+  requestedQty: number;
+  issueQty: number;
+  returnedQty: number;
+  location: string;
+  purpose: string;
+  workArea: string;
+  lotNo: string;
+};
+
+export type Mir = {
+  id: string;
+  no: string;
+  projectId: string;
+  bomId: string;
+  requestedBy: string;
+  requestedAt: string;
+  requiredDate: string;
+  status: MirStatus;
+  approvedBy: string;
+  approvedAt: string;
+  pickedBy: string;
+  issuedBy: string;
+  issuedAt: string;
+  receivedBy: string;
+  receivedAt: string;
+  purpose: string;
+  workArea: string;
+  lines: MirLine[];
+};
+
+export const MIRS: Mir[] = [
+  {
+    id: "mir1", no: "MIR-2608-0007", projectId: "p8", bomId: "bom1",
+    requestedBy: "u11", requestedAt: "2026-08-26 13:00", requiredDate: "2026-08-27", status: "Completed",
+    approvedBy: "u1", approvedAt: "2026-08-26 15:20", pickedBy: "u13",
+    issuedBy: "u13", issuedAt: "2026-08-27 09:30", receivedBy: "u11", receivedAt: "2026-08-27 09:45",
+    purpose: "Main control panel assembly", workArea: "Workshop Bay 2",
+    lines: [
+      { id: "mirl1", mirId: "mir1", bomLineId: "bl4", itemId: "mi1", itemCode: "EL-PLC-101", partNo: "FX5U-64MT/ES", bomQty: 1, previouslyIssued: 0, requestedQty: 1, issueQty: 1, returnedQty: 0, location: "WH1-A1", purpose: "Panel assembly", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl2", mirId: "mir1", bomLineId: "bl5", itemId: "mi2", itemCode: "EL-PLC-102", partNo: "FX5-16EX/ES", bomQty: 2, previouslyIssued: 0, requestedQty: 2, issueQty: 2, returnedQty: 0, location: "WH1-A1", purpose: "Panel assembly", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl3", mirId: "mir1", bomLineId: "bl7", itemId: "mi4", itemCode: "EL-BRK-101", partNo: "NF63-CV 3P 20A", bomQty: 2, previouslyIssued: 0, requestedQty: 1, issueQty: 1, returnedQty: 0, location: "WH1-B1", purpose: "Panel assembly", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl4", mirId: "mir1", bomLineId: "bl8", itemId: "mi5", itemCode: "EL-BRK-102", partNo: "CP30-BA 5A", bomQty: 6, previouslyIssued: 0, requestedQty: 6, issueQty: 6, returnedQty: 0, location: "WH1-B1", purpose: "Panel assembly", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl5", mirId: "mir1", bomLineId: "bl9", itemId: "mi6", itemCode: "EL-RLY-101", partNo: "MY4N-GS 24VDC", bomQty: 12, previouslyIssued: 0, requestedQty: 12, issueQty: 12, returnedQty: 2, location: "WH1-B2", purpose: "Panel assembly", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl6", mirId: "mir1", bomLineId: "bl10", itemId: "mi7", itemCode: "EL-PSU-101", partNo: "S8FS-G24024CD", bomQty: 2, previouslyIssued: 0, requestedQty: 1, issueQty: 1, returnedQty: 0, location: "WH1-B3", purpose: "Panel assembly", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl7", mirId: "mir1", bomLineId: "bl12", itemId: "mi9", itemCode: "EL-SEN-101", partNo: "FS-N43N + FU-35FA", bomQty: 8, previouslyIssued: 0, requestedQty: 5, issueQty: 5, returnedQty: 0, location: "WH1-C1", purpose: "Conveyor sensor rail", workArea: "Workshop Bay 2", lotNo: "LOT-KE-26082" },
+    ],
+  },
+  {
+    id: "mir2", no: "MIR-2608-0008", projectId: "p8", bomId: "bom1",
+    requestedBy: "u11", requestedAt: "2026-08-29 10:40", requiredDate: "2026-09-05", status: "Pending Approval",
+    approvedBy: "", approvedAt: "", pickedBy: "", issuedBy: "", issuedAt: "", receivedBy: "", receivedAt: "",
+    purpose: "Vision station bring-up", workArea: "Workshop Bay 2",
+    lines: [
+      { id: "mirl8", mirId: "mir2", bomLineId: "bl19", itemId: "mi14", itemCode: "HW-IPC-001", partNo: "IPC-240", bomQty: 1, previouslyIssued: 0, requestedQty: 1, issueQty: 0, returnedQty: 0, location: "WH1-E2", purpose: "Vision processing PC", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl9", mirId: "mir2", bomLineId: "bl2", itemId: "mi12", itemCode: "HW-SEN-001", partNo: "SR-X300", bomQty: 2, previouslyIssued: 0, requestedQty: 1, issueQty: 0, returnedQty: 0, location: "WH1-C3", purpose: "Station 1 reader", workArea: "Workshop Bay 2", lotNo: "—" },
+      { id: "mirl10", mirId: "mir2", bomLineId: "bl13", itemId: "mi10", itemCode: "EL-SEN-102", partNo: "D4NS-4CF", bomQty: 2, previouslyIssued: 0, requestedQty: 2, issueQty: 0, returnedQty: 0, location: "WH1-C2", purpose: "Fence door interlock", workArea: "Workshop Bay 2", lotNo: "—" },
+    ],
+  },
+];
+
+/* ---- Stock adjustments awaiting the inventory controller ----------------------- */
+
+export type StockAdjustment = {
+  id: string;
+  no: string;
+  itemId: string;
+  qtyChange: number;
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+  status: "Pending Approval" | "Approved" | "Rejected";
+  approvedBy: string;
+};
+
+export const STOCK_ADJUSTMENTS: StockAdjustment[] = [
+  { id: "adj1", no: "ADJ-2608-0003", itemId: "mi5", qtyChange: -1, reason: "Cycle count 29 Aug found 3 pcs, ledger says 4 — one unit missing", requestedBy: "u13", requestedAt: "2026-08-29 08:30", status: "Pending Approval", approvedBy: "" },
+];
+
+/* ---- Material audit trail — append-only, never edited --------------------------- */
+
+export type MatAudit = {
+  id: string;
+  at: string;
+  actorId: string;
+  role: string;
+  action: string;
+  entity: "BOM" | "PR" | "PO" | "GRN" | "MIR" | "Stock" | "Reservation" | "Adjustment";
+  entityNo: string;
+  before: string;
+  after: string;
+  qty: number;
+  projectId: string;
+  reason: string;
+  attachment: string;
+  approverId: string;
+};
+
+export const MAT_AUDIT: MatAudit[] = [
+  { id: "mau1", at: "2026-08-18 09:12", actorId: "u1", role: "Engineer", action: "Generated BOM from Estimate", entity: "BOM", entityNo: "BOM-2608-0001 R01", before: "—", after: "23 lines from EST-2608-0001 R03", qty: 0, projectId: "p8", reason: "", attachment: "", approverId: "" },
+  { id: "mau2", at: "2026-08-19 08:40", actorId: "u7", role: "Project Manager", action: "Released BOM", entity: "BOM", entityNo: "BOM-2608-0001 R01", before: "Draft", after: "Released", qty: 0, projectId: "p8", reason: "Budget reconciled with R03", attachment: "", approverId: "u7" },
+  { id: "mau3", at: "2026-08-19 09:00", actorId: "u1", role: "Engineer", action: "Reserved stock for project", entity: "Reservation", entityNo: "EL-PLC-101", before: "Available 2", after: "Reserved 1 → PJ260153", qty: 1, projectId: "p8", reason: "BOM allocation", attachment: "", approverId: "" },
+  { id: "mau4", at: "2026-08-19 10:12", actorId: "u1", role: "Engineer", action: "Submitted PR", entity: "PR", entityNo: "PR-2608-0004", before: "Draft", after: "In Approval", qty: 0, projectId: "p8", reason: "Long-lead advance order", attachment: "", approverId: "" },
+  { id: "mau5", at: "2026-08-21 08:50", actorId: "u6", role: "Engineering Manager", action: "Approved PR (management)", entity: "PR", entityNo: "PR-2608-0004", before: "In Approval", after: "Approved", qty: 0, projectId: "p8", reason: "Value above 1,000,000 THB threshold", attachment: "", approverId: "u6" },
+  { id: "mau6", at: "2026-08-21 11:20", actorId: "u12", role: "Purchasing", action: "Converted PR to PO", entity: "PO", entityNo: "PO-2608-0009 / 0010 / 0011 / 0012", before: "PR-2608-0004", after: "4 purchase orders by supplier", qty: 0, projectId: "p8", reason: "Fiber order consolidated to 10 pcs (+4 restock)", attachment: "", approverId: "" },
+  { id: "mau7", at: "2026-08-26 10:35", actorId: "u13", role: "Warehouse", action: "Confirmed goods receipt (partial)", entity: "GRN", entityNo: "GRN-2608-0012", before: "Ordered 10 / received 0", after: "Received 6 — accepted 5, damaged 1", qty: 6, projectId: "p8", reason: "Partial delivery, balance 4 due 31 Aug", attachment: "DN-RS-260826-114", approverId: "" },
+  { id: "mau8", at: "2026-08-26 10:36", actorId: "u13", role: "Warehouse", action: "Sent to quarantine", entity: "Stock", entityNo: "EL-SEN-101", before: "—", after: "1 pc quarantine WH1-QC", qty: 1, projectId: "p8", reason: "Amplifier housing cracked — DR-2608-0002", attachment: "DR-2608-0002.pdf", approverId: "" },
+  { id: "mau9", at: "2026-08-26 15:20", actorId: "u1", role: "Engineer", action: "Approved material issue", entity: "MIR", entityNo: "MIR-2608-0007", before: "Pending Approval", after: "Approved", qty: 0, projectId: "p8", reason: "", attachment: "", approverId: "u1" },
+  { id: "mau10", at: "2026-08-27 09:30", actorId: "u13", role: "Warehouse", action: "Issued material", entity: "MIR", entityNo: "MIR-2608-0007", before: "Picking", after: "Issued — 7 lines, 28 pcs", qty: 28, projectId: "p8", reason: "", attachment: "PICK-2608-0007", approverId: "" },
+  { id: "mau11", at: "2026-08-27 09:45", actorId: "u11", role: "Engineer", action: "Confirmed member receipt", entity: "MIR", entityNo: "MIR-2608-0007", before: "Issued", after: "Received by Chakkrit Manee", qty: 28, projectId: "p8", reason: "", attachment: "", approverId: "" },
+  { id: "mau12", at: "2026-08-28 16:10", actorId: "u13", role: "Warehouse", action: "Processed material return", entity: "MIR", entityNo: "MIR-2608-0007", before: "MY4N-GS issued 12", after: "2 returned to WH1-B2", qty: 2, projectId: "p8", reason: "Over-picked", attachment: "", approverId: "" },
+  { id: "mau13", at: "2026-08-29 08:30", actorId: "u13", role: "Warehouse", action: "Requested stock adjustment", entity: "Adjustment", entityNo: "ADJ-2608-0003", before: "CP30-BA ledger 4", after: "Count 3 (−1)", qty: -1, projectId: "", reason: "Cycle count discrepancy", attachment: "CC-2608-0002", approverId: "" },
+  { id: "mau14", at: "2026-08-29 09:30", actorId: "u11", role: "Engineer", action: "Submitted PR", entity: "PR", entityNo: "PR-2608-0005", before: "Draft", after: "In Approval", qty: 0, projectId: "p8", reason: "BOM shortage after stock allocation", attachment: "", approverId: "" },
+  { id: "mau15", at: "2026-08-29 10:40", actorId: "u11", role: "Engineer", action: "Submitted material issue request", entity: "MIR", entityNo: "MIR-2608-0008", before: "—", after: "Pending Approval — 3 lines", qty: 4, projectId: "p8", reason: "Vision station bring-up", attachment: "", approverId: "" },
 ];
