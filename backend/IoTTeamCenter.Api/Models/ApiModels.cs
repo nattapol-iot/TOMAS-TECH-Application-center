@@ -209,3 +209,25 @@ public sealed record GenerateBomRequest(long ProjectId);
 public sealed record ReleaseBomRequest(string RowVersion, string? Comment);
 
 public sealed record ReserveStockRequest(long BomLineId, decimal Quantity, DateOnly? RequiredDate);
+
+public sealed record PurchaseRequisitionLineRequest(
+    long BomLineId,
+    long SupplierId,
+    decimal Quantity,
+    decimal UnitPrice,
+    string PriceSource,
+    bool IsUnplanned,
+    bool BuyDespiteStock,
+    string? Remark,
+    string? ItemCodeOverride);
+
+public sealed record CreatePurchaseRequisitionRequest(
+    long BomId,
+    string Priority,
+    DateOnly RequiredDate,
+    string? Purpose,
+    IReadOnlyList<PurchaseRequisitionLineRequest> Lines);
+
+public sealed record DecidePurchaseRequisitionRequest(string Decision, string? Comment);
+
+public sealed record ConvertPurchaseRequisitionRequest(string RowVersion, DateOnly? ExpectedDate);

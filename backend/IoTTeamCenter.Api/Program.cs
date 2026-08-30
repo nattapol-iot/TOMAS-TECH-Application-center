@@ -214,6 +214,7 @@ app.MapProjectEndpoints();
 app.MapProjectDocumentEndpoints();
 app.MapInventoryEndpoints();
 app.MapBomEndpoints();
+app.MapPurchaseRequisitionEndpoints();
 app.MapMasterDataEndpoints();
 
 app.Run();
