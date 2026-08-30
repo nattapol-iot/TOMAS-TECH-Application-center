@@ -1,0 +1,64 @@
+name: Backend integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-material-flow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IOT_SQL_SERVER: localhost
+      IOT_SQL_USER: sa
+      IOT_SQL_PASSWORD: "TOMAS_CI!Sql2026#Run"
+      SQLCMDPASSWORD: "TOMAS_CI!Sql2026#Run"
+      IOT_RUN_SQL_INTEGRATION: "1"
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: "TOMAS_CI!Sql2026#Run"
+        ports:
+          - 1433:1433
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install SQL Server command-line tools
+        shell: bash
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/packages-microsoft-prod.deb" \
+            https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+          sudo dpkg -i "$RUNNER_TEMP/packages-microsoft-prod.deb"
+          sudo apt-get update
+          sudo env ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+
+      - name: Wait for SQL Server
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -Q "SELECT 1;"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready in time." >&2
+          exit 1
+
+      - name: Run fresh-database material flow
+        run: node --test --test-isolation=none tests/full-material-flow.integration.test.mjs
