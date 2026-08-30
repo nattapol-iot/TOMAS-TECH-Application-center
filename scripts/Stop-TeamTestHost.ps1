@@ -18,7 +18,7 @@ if ($runtimeProcess) {
     }
     $process = Get-Process -Id $runtimeState.ProcessId
     Stop-Process -Id $runtimeState.ProcessId -Force
-    $process.WaitForExit(5000)
+    [void]$process.WaitForExit(5000)
 }
 Remove-Item -LiteralPath $pidPath -Force
 [pscustomobject]@{ Status = 'STOPPED'; ProcessId = $runtimeState.ProcessId }

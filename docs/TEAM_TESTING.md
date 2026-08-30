@@ -8,7 +8,7 @@ Team Test Mode lets registered team members perform UAT without Microsoft Entra.
 - Generate one random 32-256 character signing key and keep it only in the API host's secret configuration.
 - Do not put the signing key in Vercel, source control, a URL, or a chat message.
 - Generate a different access code for each registered email. A code cannot be reused to impersonate another tester.
-- Testers enter their registered email and personal temporary code. The browser keeps both only in `sessionStorage` and sends them to the HTTPS API.
+- Testers enter their registered email and personal temporary code. The browser keeps both only in `sessionStorage`. Managed staging sends them to the HTTPS API; the explicit trusted-LAN exception uses unencrypted HTTP and must remain short-lived and subnet-scoped.
 - The API resolves the email to an active `dbo.users` row. All RBAC checks and audit ownership continue to use that database user.
 - Rotate/remove the key and delete the staging deployment when UAT ends.
 
@@ -54,6 +54,44 @@ Start and stop only the installed API process with the recorded, command-line-va
 ```powershell
 .\scripts\Start-TeamTestHost.ps1
 .\scripts\Stop-TeamTestHost.ps1
+```
+
+For a short-lived test on a trusted company LAN, use the installer's explicit LAN switch and an RFC1918 address assigned to the host. This exception is accepted only by `Staging + TeamTest`; Production and Vercel builds remain HTTPS-only.
+
+```powershell
+.\scripts\Install-TeamTestHost.ps1 `
+  -SqlServer "localhost" `
+  -DatabaseName "<DEDICATED_UAT_DATABASE>" `
+  -FrontendOrigin "http://192.168.1.140:3000" `
+  -PrivateLanAddress "192.168.1.140" `
+  -AllowPrivateLanHttp `
+  -TrustServerCertificateForTeamTest
+
+.\scripts\Start-TeamTestHost.ps1
+.\scripts\Start-TeamTestLanFrontend.ps1
+```
+
+The frontend binds to that exact LAN address, not `0.0.0.0`, and keeps all public build values in the child process rather than writing them to an environment file. From an elevated PowerShell window, configure the managed firewall rules:
+
+```powershell
+.\scripts\Configure-TeamTestLanFirewall.ps1
+```
+
+The firewall script preserves the current Wi-Fi profile, disables only matching broad local Node.js inbound rules, and replaces them with rules scoped to the installed host address, Wi-Fi adapter, `/24` subnet, executable, and TCP ports 3000/5105. It records enough state to restore those prior rules later. From a second device on the same Wi-Fi, open `http://192.168.1.140:3000` or verify both ports:
+
+```powershell
+Test-NetConnection 192.168.1.140 -Port 3000
+Test-NetConnection 192.168.1.140 -Port 5105
+```
+
+If both checks fail while the local health checks pass, check Wi-Fi client/AP isolation or a company-managed firewall policy. Team Test codes travel over LAN HTTP without TLS, so use disposable UAT identities/codes only and rotate the signing key afterward.
+
+When the LAN test ends, stop only the recorded processes and remove the managed firewall rules from an elevated PowerShell window:
+
+```powershell
+.\scripts\Stop-TeamTestLanFrontend.ps1
+.\scripts\Stop-TeamTestHost.ps1
+.\scripts\Remove-TeamTestLanFirewall.ps1
 ```
 
 Provision a tester and generate that tester's personal code from the locally protected signing key:

@@ -129,13 +129,13 @@ export default function ProductionApp() {
           </div>
         </header>
         <main className="page">
-          {view === "dashboard" ? <ProductionDashboard bootstrap={bootstrap} /> : null}
+          {view === "dashboard" ? <ProductionDashboard bootstrap={bootstrap} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
           {view === "inquiries" ? <ProductionInquiries {...common} /> : null}
           {view === "estimates" ? <ProductionEstimates {...common} /> : null}
-          {view === "projects" ? <ProductionProjects {...common} /> : null}
+          {view === "projects" ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
           {view === "inventory" ? <ProductionInventory bootstrap={bootstrap} /> : null}
           {view === "master" ? <ProductionMasterData {...common} /> : null}
-          {view === "team" ? <ProductionTeam bootstrap={bootstrap} /> : null}
+          {view === "team" ? <ProductionTeam bootstrap={bootstrap} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
         </main>
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {IS_TEAM_TEST_MODE ? "Team Test" : "Production"}</footer>
       </div>

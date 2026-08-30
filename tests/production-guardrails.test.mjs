@@ -123,6 +123,13 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     stopper,
     addUser,
     loginGrants,
+    networkOrigin,
+    lanFrontendStarter,
+    lanFrontendStopper,
+    lanFrontendProcess,
+    lanValidation,
+    lanFirewallConfigurator,
+    lanFirewallRemover,
   ] = await Promise.all([
     readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/TeamTestAuthenticationHandler.cs", root), "utf8"),
@@ -137,9 +144,18 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     readFile(new URL("scripts/Stop-TeamTestHost.ps1", root), "utf8"),
     readFile(new URL("scripts/Add-TeamTestUser.ps1", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("app/system/network-origin.ts", root), "utf8"),
+    readFile(new URL("scripts/Start-TeamTestLanFrontend.ps1", root), "utf8"),
+    readFile(new URL("scripts/Stop-TeamTestLanFrontend.ps1", root), "utf8"),
+    readFile(new URL("scripts/TeamTestLanFrontendProcess.ps1", root), "utf8"),
+    readFile(new URL("scripts/TeamTestLanValidation.ps1", root), "utf8"),
+    readFile(new URL("scripts/Configure-TeamTestLanFirewall.ps1", root), "utf8"),
+    readFile(new URL("scripts/Remove-TeamTestLanFirewall.ps1", root), "utf8"),
   ]);
   assert.match(program, /IsStaging\(\).*TeamTestAuthenticationHandler\.SchemeName/s);
   assert.match(program, /TeamTest authentication is allowed only in the Staging environment/);
+  assert.match(program, /TeamTest:AllowPrivateLanHttp is allowed only in Staging TeamTest mode/);
+  assert.match(program, /IsPrivateLanIpv4/);
   assert.match(program, /TeamTestSigningKey.*32-256 characters/s);
   assert.match(handler, /X-Team-Test-Code/);
   assert.match(handler, /X-Team-Test-Email/);
@@ -167,8 +183,19 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
   assert.match(installer, /CREATE APPLICATION ROLE/);
   assert.match(installer, /RuntimeRoot must stay within/);
   assert.match(installer, /non-application-role database principal/);
+  assert.match(installer, /PrivateLanAddress is not assigned to this machine/);
+  assert.match(installer, /AllowPrivateLanHttp/);
+  assert.match(installer, /Get-TeamTestCanonicalOrigin/);
+  assert.match(lanValidation, /GetLeftPart\(\[UriPartial\]::Authority\)/);
+  assert.match(lanValidation, /canonical origin without credentials, a trailing slash/);
   assert.doesNotMatch(installer, /contained database authentication/i);
-  assert.match(starter, /ASPNETCORE_URLS = "http:\/\/127\.0\.0\.1:/);
+  assert.match(starter, /Get-TeamTestValidatedListenerConfiguration/);
+  assert.match(lanValidation, /Saved ListenUrls must contain exactly/);
+  assert.match(lanValidation, /Wildcard, hostname, and extra listeners are forbidden/);
+  assert.match(starter, /Test-ExactApiListeners/);
+  assert.match(starter, /Test-TeamTestApiHealth/);
+  assert.match(starter, /ASPNETCORE_URLS = \$listenerConfiguration\.ListenUrls/);
+  assert.match(starter, /http:\/\/127\.0\.0\.1:/);
   assert.match(starter, /Database__ApplicationRolePassword/);
   assert.match(starter, /-WindowStyle Hidden/);
   assert.match(stopper, /CommandLine -notlike/);
@@ -176,6 +203,41 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
   assert.match(addUser, /035_provision_team_test_user\.sql/);
   assert.match(addUser, /TeamTestSigningKey/);
   assert.doesNotMatch(addUser, /TeamTestSigningKey\s*=\s*["'][^"']+["']/);
+  assert.match(networkOrigin, /isPrivateLanIpv4Host/);
+  assert.match(networkOrigin, /allowPrivateLanHttp/);
+  assert.match(lanFrontendStarter, /--hostname/);
+  assert.match(lanFrontendStarter, /NEXT_PUBLIC_API_BASE_URL/);
+  assert.match(lanFrontendStarter, /savedStateMatches/);
+  assert.match(lanFrontendStarter, /Test-TeamTestLanFrontendHealth/);
+  assert.doesNotMatch(lanFrontendStarter, /0\.0\.0\.0/);
+  assert.match(lanFrontendStopper, /Test-TeamTestLanFrontendCommandLine/);
+  assert.match(lanFrontendStopper, /Test-TeamTestLanFrontendListener/);
+  assert.match(lanFrontendStopper, /refusing to stop it/);
+  assert.match(lanFrontendProcess, /\\s\+dev\\s\+/);
+  assert.match(lanFrontendProcess, /--hostname/);
+  assert.match(lanFrontendProcess, /--port/);
+  assert.match(lanFrontendProcess, /Get-NetTCPConnection/);
+  assert.match(lanFrontendProcess, /OwningProcess/);
+  assert.match(lanFirewallConfigurator, /Assert-Administrator/);
+  assert.match(lanFirewallConfigurator, /Test-BroadProgramAllowRule/);
+  assert.match(lanFirewallConfigurator, /Test-RuleCanAdmitTarget/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallPortFilter/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallApplicationFilter/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallAddressFilter/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallInterfaceFilter/);
+  assert.match(lanFirewallConfigurator, /Existing inbound Allow firewall rules could also admit/);
+  assert.match(lanFirewallConfigurator, /\$ruleName -notin \$managedRuleNames/);
+  assert.match(lanFirewallConfigurator, /\$ruleName -notin \$handledBroadRuntimeRuleNames/);
+  assert.match(lanFirewallConfigurator, /PolicyStoreSourceType.*Local/s);
+  assert.match(lanFirewallConfigurator, /-InterfaceAlias\s+\$interfaceAlias/);
+  assert.match(lanFirewallConfigurator, /-LocalAddress\s+\$lanAddress/);
+  assert.match(lanFirewallConfigurator, /-RemoteAddress\s+\$remoteSubnet/);
+  assert.match(lanFirewallConfigurator, /-Profile\s+\$firewallProfile/);
+  assert.match(lanFirewallConfigurator, /-EdgeTraversalPolicy\s+Block/);
+  assert.doesNotMatch(lanFirewallConfigurator, /-RemoteAddress\s+['"]?(?:Any|\*)/i);
+  assert.match(lanFirewallRemover, /DisabledBroadRuntimeRuleNames/);
+  assert.match(lanFirewallRemover, /IoTTeamCenter-TeamTest-LAN-Frontend/);
+  assert.match(lanFirewallRemover, /IoTTeamCenter-TeamTest-LAN-API/);
 });
 
 test("SQL application login stays least-privileged and secret template fails closed", async () => {

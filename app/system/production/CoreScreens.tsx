@@ -127,7 +127,7 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
   );
 }
 
-export function ProductionDashboard({ bootstrap }: Pick<CommonProps, "bootstrap">) {
+export function ProductionDashboard({ bootstrap, teamTestMode }: Pick<CommonProps, "bootstrap"> & { teamTestMode: boolean }) {
   const canReadInquiries = bootstrap.permissions.includes("inquiry.read");
   const canReadEstimates = bootstrap.permissions.includes("estimate.read");
   const canReadProjects = bootstrap.permissions.includes("project.read");
@@ -136,9 +136,11 @@ export function ProductionDashboard({ bootstrap }: Pick<CommonProps, "bootstrap"
   return (
     <>
       <PageHeader
-        eyebrow="PRODUCTION WORKSPACE"
+        eyebrow={teamTestMode ? "TEAM TEST WORKSPACE" : "PRODUCTION WORKSPACE"}
         title={`ยินดีต้อนรับ ${bootstrap.user.name}`}
-        subtitle="ข้อมูลสรุปนี้อ่านจาก SQL Server ผ่าน API ที่ยืนยันตัวตนด้วย Microsoft Entra ID"
+        subtitle={teamTestMode
+          ? "ข้อมูลสรุปนี้อ่านจาก SQL Server ผ่าน API ด้วยรหัสทดสอบชั่วคราวสำหรับ UAT"
+          : "ข้อมูลสรุปนี้อ่านจาก SQL Server ผ่าน API ที่ยืนยันตัวตนด้วย Microsoft Entra ID"}
         meta={<Badge tone="green">Connected · {bootstrap.user.role}</Badge>}
       />
       {hasVisibleKpi ? <div className="kpi-grid four">
@@ -147,9 +149,9 @@ export function ProductionDashboard({ bootstrap }: Pick<CommonProps, "bootstrap"
         {canReadProjects ? <KpiCard label="Active projects" value={bootstrap.counts.activeProjects} note="โครงการที่ยังไม่ปิด" tone="green" icon="folder" /> : null}
         {canApproveEstimates ? <KpiCard label="Pending approvals" value={bootstrap.counts.approvals} note="รายการรออนุมัติ" tone="amber" icon="checkCircle" /> : null}
       </div> : null}
-      <Panel title="Production safeguards" subtitle="สถานะของเส้นทางข้อมูลจริง">
+      <Panel title={teamTestMode ? "Team Test safeguards" : "Production safeguards"} subtitle="สถานะของเส้นทางข้อมูลจริง">
         <div className="settings-list">
-          <div><span className="setting-icon green"><Icon name="shield" /></span><span><strong>Microsoft Entra ID</strong><small>รหัสผ่านถูกจัดการโดย Microsoft และไม่ถูกเก็บในระบบนี้</small></span><Badge tone="green">Active</Badge></div>
+          <div><span className={`setting-icon ${teamTestMode ? "amber" : "green"}`}><Icon name="shield" /></span><span><strong>{teamTestMode ? "Temporary Team Test access" : "Microsoft Entra ID"}</strong><small>{teamTestMode ? "ยืนยันตัวตนด้วยอีเมลและรหัสทดสอบชั่วคราวสำหรับ UAT เท่านั้น" : "รหัสผ่านถูกจัดการโดย Microsoft และไม่ถูกเก็บในระบบนี้"}</small></span><Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "UAT only" : "Active"}</Badge></div>
           <div><span className="setting-icon blue"><Icon name="database" /></span><span><strong>Microsoft SQL Server</strong><small>Frontend ไม่เชื่อมฐานข้อมูลโดยตรง ทุกคำสั่งผ่าน API และ RBAC</small></span><Badge tone="green">Connected</Badge></div>
           <div><span className="setting-icon violet"><Icon name="gitBranch" /></span><span><strong>Audit & concurrency</strong><small>การเปลี่ยนสถานะสำคัญมี audit log และตรวจ row version</small></span><Badge tone="green">Enabled</Badge></div>
         </div>
@@ -458,7 +460,7 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
   </Modal>;
 }
 
-export function ProductionProjects({ bootstrap, notify, refreshBootstrap }: CommonProps) {
+export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode }: CommonProps & { teamTestMode: boolean }) {
   const [result, setResult] = useState<PagedResult<ProjectSummary>>(EMPTY_PAGE);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -472,18 +474,18 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap }: Comm
   const canWrite = bootstrap.permissions.includes("project.write");
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
   return <>
-    <PageHeader eyebrow="APPROVED WORK" title="Projects" subtitle="สร้างได้จาก Estimate ที่อนุมัติแล้ว พร้อมเอกสารโครงการบน NAS ตามโฟลเดอร์มาตรฐาน 15 รายการ" actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" />Create project</button> : undefined} />
+    <PageHeader eyebrow="APPROVED WORK" title="Projects" subtitle={teamTestMode ? "สร้างได้จาก Estimate ที่อนุมัติแล้ว และเก็บเอกสารชั่วคราวในเครื่องทดสอบ (ยังไม่เชื่อม NAS)" : "สร้างได้จาก Estimate ที่อนุมัติแล้ว พร้อมเอกสารโครงการบน NAS ตามโฟลเดอร์มาตรฐาน 15 รายการ"} actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" />Create project</button> : undefined} />
     <Toolbar><SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search project or customer…" /><Select label="Status" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"]} /><button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button></Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${result.total} projects`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data"} flush>
       {result.items.length ? <div className="table-wrap"><table><thead><tr><th>Project No.</th><th>Project</th><th>Customer</th><th>Type</th><th>Manager</th><th>Start</th><th>Target delivery</th><th>Progress</th><th>Status</th><th>Updated</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{result.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.name}</strong></td><td>{item.customerName}</td><td>{item.projectType}</td><td>{item.managerName}</td><td>{formatDate(item.startDate)}</td><td>{formatDate(item.targetDelivery)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td><td><Badge>{item.status}</Badge></td><td className="muted">{formatDateTime(item.updatedAt)}</td><td><button className="btn ghost sm" type="button" aria-label={`Documents for ${item.number}`} onClick={() => setDocumentsProject(item)}><Icon name="paperclip" />Documents</button></td></tr>)}</tbody></table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" />Loading…</div> : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
     </Panel>
     {createOpen ? <CreateProjectModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} created with folder metadata`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
-    {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
+    {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
   </>;
 }
 
-function ProjectDocumentsModal({ project, canWrite, notify, onClose }: { project: ProjectSummary; canWrite: boolean; notify: (message: string) => void; onClose: () => void }) {
+function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClose }: { project: ProjectSummary; canWrite: boolean; teamTestMode: boolean; notify: (message: string) => void; onClose: () => void }) {
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [folderCode, setFolderCode] = useState<string>(PROJECT_DOCUMENT_FOLDERS[0][0]);
   const [documentType, setDocumentType] = useState("");
@@ -540,7 +542,7 @@ function ProjectDocumentsModal({ project, canWrite, notify, onClose }: { project
       setRemark("");
       setFile(null);
       setFileInputKey((current) => current + 1);
-      notify(`${created.fileName} uploaded to NAS`);
+      notify(`${created.fileName} uploaded to ${teamTestMode ? "temporary local storage" : "NAS"}`);
     } catch (requestError) {
       setActionError(toError(requestError));
     } finally {
@@ -570,7 +572,9 @@ function ProjectDocumentsModal({ project, canWrite, notify, onClose }: { project
 
   return <Modal
     title={`${project.number} · Documents`}
-    subtitle={`${project.name} · ไฟล์จัดเก็บบน NAS บริษัทและ metadata จัดเก็บใน SQL Server`}
+    subtitle={teamTestMode
+      ? `${project.name} · ไฟล์จัดเก็บชั่วคราวในเครื่องทดสอบและ metadata จัดเก็บใน SQL Server`
+      : `${project.name} · ไฟล์จัดเก็บบน NAS บริษัทและ metadata จัดเก็บใน SQL Server`}
     size="xl"
     onClose={onClose}
     footer={<button className="btn ghost" type="button" onClick={onClose}>Close</button>}
@@ -582,14 +586,14 @@ function ProjectDocumentsModal({ project, canWrite, notify, onClose }: { project
         <label className="field span-2"><span>File * · Maximum 50 MiB</span><input key={fileInputKey} required type="file" disabled={uploading} onChange={(event) => { const selected = event.target.files?.[0] ?? null; setFile(selected); setActionError(selected && selected.size > MAX_PROJECT_DOCUMENT_BYTES ? `ไฟล์ต้องมีขนาดไม่เกิน ${formatFileSize(MAX_PROJECT_DOCUMENT_BYTES)}` : ""); }} />{file ? <small>{file.name} · {formatFileSize(file.size)}</small> : null}</label>
         <label className="field span-2"><span>Remark</span><textarea maxLength={2000} rows={2} value={remark} disabled={uploading} onChange={(event) => setRemark(event.target.value)} /></label>
       </div>
-      <div className="production-document-submit"><small>API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึก; Production ต้องเปิดใช้การสแกนมัลแวร์ขององค์กรก่อนเปิดรับไฟล์จริง</small><button className="btn primary" type="submit" disabled={uploading || !file || !documentType.trim() || file.size === 0 || file.size > MAX_PROJECT_DOCUMENT_BYTES}><Icon name="paperclip" />{uploading ? "Uploading…" : "Upload document"}</button></div>
+      <div className="production-document-submit"><small>{teamTestMode ? "API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึกลงพื้นที่ทดสอบชั่วคราว; ยังไม่เชื่อมต่อ NAS" : "API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึก; Production ต้องเปิดใช้การสแกนมัลแวร์ขององค์กรก่อนเปิดรับไฟล์จริง"}</small><button className="btn primary" type="submit" disabled={uploading || !file || !documentType.trim() || file.size === 0 || file.size > MAX_PROJECT_DOCUMENT_BYTES}><Icon name="paperclip" />{uploading ? "Uploading…" : "Upload document"}</button></div>
     </form> : <div className="info-strip" role="status"><Icon name="shield" /><span>บัญชีนี้อ่านและดาวน์โหลดเอกสารได้ แต่ไม่มีสิทธิ์อัปโหลดเอกสารโครงการ</span></div>}
 
     {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong>ดำเนินการไม่สำเร็จ</strong>{actionError}</span></div> : null}
     {loadError ? <LoadError message={loadError} retry={() => { void load(); }} /> : null}
 
-    <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : "NAS document register"} flush>
-      {documents.length ? <div className="table-wrap"><table><thead><tr><th>File</th><th>Folder</th><th>Type</th><th>Size</th><th>Remark</th><th>Uploaded by</th><th>Uploaded</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : "Download"}</button></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading…</div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS" : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
+    <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : teamTestMode ? "Temporary local document register" : "NAS document register"} flush>
+      {documents.length ? <div className="table-wrap"><table><thead><tr><th>File</th><th>Folder</th><th>Type</th><th>Size</th><th>Remark</th><th>Uploaded by</th><th>Uploaded</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : "Download"}</button></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading…</div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
     </Panel>
   </Modal>;
 }
@@ -920,6 +924,6 @@ function TeamReferenceTab({ bootstrap }: Pick<CommonProps, "bootstrap">) {
   </Panel>;
 }
 
-export function ProductionTeam({ bootstrap }: Pick<CommonProps, "bootstrap">) {
-  return <><PageHeader eyebrow="ACCESS CONTROL" title="Team & permissions" subtitle="ผู้ใช้และบทบาทถูกอ่านจากฐานข้อมูล ส่วนการยืนยันตัวตนมาจาก Microsoft Entra ID" /><Panel title={`${bootstrap.team.length} active users`} subtitle={`${bootstrap.permissions.length} permissions for your role`} flush><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Level</th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><strong>{member.name}</strong></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div></Panel></>;
+export function ProductionTeam({ bootstrap, teamTestMode }: Pick<CommonProps, "bootstrap"> & { teamTestMode: boolean }) {
+  return <><PageHeader eyebrow="ACCESS CONTROL" title="Team & permissions" subtitle={teamTestMode ? "ผู้ใช้และบทบาทถูกอ่านจากฐานข้อมูล ส่วนการยืนยันตัวตนใช้รหัสทดสอบชั่วคราวสำหรับ UAT" : "ผู้ใช้และบทบาทถูกอ่านจากฐานข้อมูล ส่วนการยืนยันตัวตนมาจาก Microsoft Entra ID"} /><Panel title={`${bootstrap.team.length} active users`} subtitle={`${bootstrap.permissions.length} permissions for your role`} flush><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Level</th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><strong>{member.name}</strong></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div></Panel></>;
 }

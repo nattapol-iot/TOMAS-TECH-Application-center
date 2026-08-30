@@ -2,14 +2,14 @@
 
 import { acquireApiToken } from "./auth-client";
 import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
+import { isTrustedWebProtocol } from "./network-origin";
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export const IS_API_CONFIGURED = (() => {
   try {
     const url = new URL(apiBaseUrl);
-    const localHttp = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-    const trustedProtocol = url.protocol === "https:" || localHttp;
+    const trustedProtocol = isTrustedWebProtocol(url, IS_TEAM_TEST_MODE);
     const placeholderHost = url.hostname.endsWith(".invalid")
       || url.hostname === "example.tomastc.com"
       || url.hostname.endsWith(".example.tomastc.com");

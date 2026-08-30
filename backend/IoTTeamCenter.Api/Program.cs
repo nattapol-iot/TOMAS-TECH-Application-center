@@ -6,6 +6,31 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Features;
 using System.Threading.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
+using System.Net;
+using System.Net.Sockets;
+
+static bool IsPrivateLanIpv4(string host)
+{
+    if (!IPAddress.TryParse(host, out var address) || address.AddressFamily != AddressFamily.InterNetwork)
+        return false;
+
+    var octets = address.GetAddressBytes();
+    return octets[0] == 10
+        || (octets[0] == 172 && octets[1] is >= 16 and <= 31)
+        || (octets[0] == 192 && octets[1] == 168);
+}
+
+static bool IsTrustedCorsOrigin(string origin, bool allowPrivateLanHttp)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+        || !string.IsNullOrEmpty(uri.UserInfo)
+        || origin.Contains('*')
+        || uri.GetLeftPart(UriPartial.Authority) != origin)
+        return false;
+
+    return uri.Scheme == Uri.UriSchemeHttps
+        || (allowPrivateLanHttp && uri.Scheme == Uri.UriSchemeHttp && IsPrivateLanIpv4(uri.Host));
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +51,13 @@ else
 
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 var businessTimeZoneId = builder.Configuration["Business:TimeZoneId"];
+var authenticationMode = builder.Configuration["Authentication:Mode"] ?? "Entra";
+var useDevelopmentAuthentication = builder.Environment.IsDevelopment() && authenticationMode == "Development";
+var useTeamTestAuthentication = builder.Environment.IsStaging() && authenticationMode == TeamTestAuthenticationHandler.SchemeName;
+var privateLanHttpConfigured = builder.Configuration.GetValue<bool>("TeamTest:AllowPrivateLanHttp");
+var allowPrivateLanHttp = useTeamTestAuthentication && privateLanHttpConfigured;
+if (privateLanHttpConfigured && !allowPrivateLanHttp)
+    throw new InvalidOperationException("TeamTest:AllowPrivateLanHttp is allowed only in Staging TeamTest mode.");
 var documentStorageOptions = DocumentStorageOptions.FromConfiguration(builder.Configuration, builder.Environment);
 if (!builder.Environment.IsDevelopment())
 {
@@ -33,13 +65,8 @@ if (!builder.Environment.IsDevelopment())
     var hostEntries = allowedHosts?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
     if (hostEntries.Length == 0 || hostEntries.Any(host => host == "*" || host.Contains('*') || Uri.CheckHostName(host) == UriHostNameType.Unknown))
         throw new InvalidOperationException("AllowedHosts must contain the deployed API host in Production; wildcard hosts are not allowed.");
-    if (corsOrigins.Length == 0 || corsOrigins.Any(origin =>
-            !Uri.TryCreate(origin, UriKind.Absolute, out var uri)
-            || uri.Scheme != Uri.UriSchemeHttps
-            || !string.IsNullOrEmpty(uri.UserInfo)
-            || origin.Contains('*')
-            || uri.GetLeftPart(UriPartial.Authority) != origin))
-        throw new InvalidOperationException("Cors:AllowedOrigins must contain only trusted HTTPS origins in Production.");
+    if (corsOrigins.Length == 0 || corsOrigins.Any(origin => !IsTrustedCorsOrigin(origin, allowPrivateLanHttp)))
+        throw new InvalidOperationException("Cors:AllowedOrigins must contain trusted HTTPS origins; private LAN HTTP is allowed only by explicit Staging TeamTest configuration.");
     if (string.IsNullOrWhiteSpace(businessTimeZoneId))
         throw new InvalidOperationException("Business:TimeZoneId is required in Production.");
 }
@@ -74,9 +101,6 @@ builder.Services.Configure<FormOptions>(options =>
 });
 builder.Services.AddProblemDetails();
 
-var authenticationMode = builder.Configuration["Authentication:Mode"] ?? "Entra";
-var useDevelopmentAuthentication = builder.Environment.IsDevelopment() && authenticationMode == "Development";
-var useTeamTestAuthentication = builder.Environment.IsStaging() && authenticationMode == TeamTestAuthenticationHandler.SchemeName;
 var requiredScope = builder.Configuration["Authentication:RequiredScope"];
 if (authenticationMode == "Development" && !builder.Environment.IsDevelopment())
     throw new InvalidOperationException("Development authentication is allowed only in the Development environment.");
@@ -206,8 +230,8 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionMiddleware>();
-if (!app.Environment.IsDevelopment()) app.UseHsts();
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment() && !allowPrivateLanHttp) app.UseHsts();
+if (!allowPrivateLanHttp) app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";

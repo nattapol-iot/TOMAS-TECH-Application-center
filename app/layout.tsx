@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { PRODUCT } from "./system/product";
+import { isTrustedWebProtocol } from "./system/network-origin";
 
 // `next/font/google` emits no stylesheet under vinext — the generated class
 // lands on <body> but the CSS variable and @font-face never ship, so the whole
@@ -22,8 +23,8 @@ export function generateMetadata(): Metadata {
 function safeOrigin(value: string) {
   try {
     const url = new URL(value);
-    const localHttp = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
-    if (url.protocol !== "https:" && !localHttp) return "http://localhost:3000";
+    const teamTestMode = process.env.NEXT_PUBLIC_AUTH_MODE === "team-test";
+    if (!isTrustedWebProtocol(url, teamTestMode)) return "http://localhost:3000";
     return url.origin;
   } catch {
     return "http://localhost:3000";

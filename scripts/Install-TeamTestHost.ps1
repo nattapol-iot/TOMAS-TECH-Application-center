@@ -5,6 +5,8 @@ param(
     [string] $AppLogin = 'iot_team_app_uat',
     [string] $FrontendOrigin = 'https://iot-team-center-preview.vercel.app',
     [string] $AllowedHosts = 'localhost;127.0.0.1',
+    [string] $PrivateLanAddress = '',
+    [switch] $AllowPrivateLanHttp,
     [ValidateRange(1024, 65535)]
     [int] $ApiPort = 5105,
     [switch] $TrustServerCertificateForTeamTest,
@@ -12,6 +14,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'TeamTestLanValidation.ps1')
 if ($AppLogin -notmatch '^[A-Za-z][A-Za-z0-9_]{2,63}$') { throw 'AppLogin contains unsupported characters.' }
 if ($DatabaseName -notmatch '^[A-Za-z][A-Za-z0-9_]{2,127}$') { throw 'DatabaseName contains unsupported characters.' }
 $runtimeBase = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'IoTTeamCenter\TeamTest'))
@@ -22,9 +25,26 @@ if (!$normalizedRuntimeRoot.Equals($runtimeBase, [StringComparison]::OrdinalIgno
     throw "RuntimeRoot must stay within $runtimeBase."
 }
 $RuntimeRoot = $normalizedRuntimeRoot
-$frontendUri = [Uri]$FrontendOrigin
-if (!$frontendUri.IsAbsoluteUri -or $frontendUri.Scheme -ne 'https' -or $frontendUri.AbsolutePath -ne '/') {
-    throw 'FrontendOrigin must be an HTTPS origin without a path.'
+$frontendUri = Get-TeamTestCanonicalOrigin $FrontendOrigin
+
+if ($AllowPrivateLanHttp) {
+    if (!(Test-TeamTestPrivateLanIpv4 $PrivateLanAddress)) { throw 'PrivateLanAddress must be a canonical private IPv4 address.' }
+    if ($frontendUri.Scheme -ne 'http' -or $frontendUri.Host -ne $PrivateLanAddress) {
+        throw 'Private LAN mode requires an HTTP FrontendOrigin hosted on PrivateLanAddress.'
+    }
+    $assignedAddresses = [Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() |
+        ForEach-Object { $_.GetIPProperties().UnicastAddresses } |
+        ForEach-Object { $_.Address.IPAddressToString }
+    if ($PrivateLanAddress -notin $assignedAddresses) { throw 'PrivateLanAddress is not assigned to this machine.' }
+    $allowedHostEntries = @($AllowedHosts.Split(';', [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() })
+    if ($PrivateLanAddress -notin $allowedHostEntries) { $allowedHostEntries += $PrivateLanAddress }
+    $AllowedHosts = ($allowedHostEntries | Select-Object -Unique) -join ';'
+}
+elseif ($PrivateLanAddress) {
+    throw 'PrivateLanAddress requires AllowPrivateLanHttp.'
+}
+elseif ($frontendUri.Scheme -ne 'https') {
+    throw 'FrontendOrigin must use HTTPS unless explicit private LAN mode is enabled.'
 }
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -167,6 +187,9 @@ $settingsJson = @{
     DatabaseAuthenticationMode = $(if ($windowsAuthenticationOnly) { 'ApplicationRole' } else { 'SqlLogin' })
     FrontendOrigin = $FrontendOrigin
     AllowedHosts = $AllowedHosts
+    ListenUrls = $(if ($AllowPrivateLanHttp) { "http://127.0.0.1:${ApiPort};http://${PrivateLanAddress}:${ApiPort}" } else { "http://127.0.0.1:${ApiPort}" })
+    AllowPrivateLanHttp = [bool]$AllowPrivateLanHttp
+    PrivateLanAddress = $PrivateLanAddress
     ApiPort = $ApiPort
     TrustServerCertificateForTeamTest = [bool]$TrustServerCertificateForTeamTest
 } | ConvertTo-Json

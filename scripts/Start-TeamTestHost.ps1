@@ -7,16 +7,52 @@ $ErrorActionPreference = 'Stop'
 $settingsPath = Join-Path $RuntimeRoot 'settings.json'
 $secretsPath = Join-Path $RuntimeRoot 'secrets.json'
 $pidPath = Join-Path $RuntimeRoot 'api.pid.json'
+. (Join-Path $PSScriptRoot 'TeamTestLanValidation.ps1')
 
 if (!(Test-Path -LiteralPath $settingsPath) -or !(Test-Path -LiteralPath $secretsPath)) {
     throw 'Team Test runtime is not installed. Run Install-TeamTestHost.ps1 first.'
 }
 
+function Test-ExactApiListeners($Configuration, [int] $ProcessId) {
+    $ownedListeners = @(Get-NetTCPConnection -State Listen -LocalPort $Configuration.ApiPort -ErrorAction SilentlyContinue |
+        Where-Object { $_.OwningProcess -eq $ProcessId })
+    if ($ownedListeners.Count -ne $Configuration.Addresses.Count) { return $false }
+    foreach ($address in $Configuration.Addresses) {
+        if (@($ownedListeners | Where-Object { $_.LocalAddress -eq $address }).Count -ne 1) { return $false }
+    }
+    return $true
+}
+
+function Test-TeamTestApiHealth($Configuration) {
+    foreach ($address in $Configuration.Addresses) {
+        try {
+            $response = Invoke-WebRequest `
+                -Uri "http://${address}:$($Configuration.ApiPort)/health/live" `
+                -UseBasicParsing `
+                -TimeoutSec 2
+            if ($response.StatusCode -ne 200) { return $false }
+        }
+        catch { return $false }
+    }
+    return $true
+}
+
+$settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+$listenerConfiguration = Get-TeamTestValidatedListenerConfiguration $settings
+
 if (Test-Path -LiteralPath $pidPath) {
     $existingState = Get-Content -LiteralPath $pidPath -Raw | ConvertFrom-Json
-    $existingProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $($existingState.ProcessId)" -ErrorAction SilentlyContinue
+    $existingProcessId = 0
+    [void][int]::TryParse([string]$existingState.ProcessId, [ref]$existingProcessId)
+    $existingProcess = if ($existingProcessId -gt 0) {
+        Get-CimInstance Win32_Process -Filter "ProcessId = $existingProcessId" -ErrorAction SilentlyContinue
+    }
     if ($existingProcess -and $existingProcess.Name -eq 'dotnet.exe' -and $existingProcess.CommandLine -like "*$($existingState.ReleasePath)\IoTTeamCenter.Api.dll*") {
-        [pscustomobject]@{ Status = 'ALREADY_RUNNING'; ProcessId = $existingState.ProcessId }
+        if (!(Test-ExactApiListeners $listenerConfiguration $existingProcessId) `
+            -or !(Test-TeamTestApiHealth $listenerConfiguration)) {
+            throw 'The saved API process does not own the exact configured listeners or is unhealthy; refusing to report it as running.'
+        }
+        [pscustomobject]@{ Status = 'ALREADY_RUNNING'; ProcessId = $existingProcessId }
         exit 0
     }
     Remove-Item -LiteralPath $pidPath -Force
@@ -29,7 +65,6 @@ function Unprotect-String([string] $cipherText) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($valuePointer) }
 }
 
-$settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
 $secrets = Get-Content -LiteralPath $secretsPath -Raw | ConvertFrom-Json
 $connectionString = Unprotect-String $secrets.ConnectionString
 $signingKey = Unprotect-String $secrets.TeamTestSigningKey
@@ -39,11 +74,12 @@ New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 $logStamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
 
 $env:ASPNETCORE_ENVIRONMENT = 'Staging'
-$env:ASPNETCORE_URLS = "http://127.0.0.1:$($settings.ApiPort)"
+$env:ASPNETCORE_URLS = $listenerConfiguration.ListenUrls
 $env:AllowedHosts = $settings.AllowedHosts
 $env:Authentication__Mode = 'TeamTest'
 $env:Authentication__TeamTestSigningKey = $signingKey
 $env:Database__TrustServerCertificateForTeamTest = [string]$settings.TrustServerCertificateForTeamTest
+$env:TeamTest__AllowPrivateLanHttp = [string]$listenerConfiguration.AllowPrivateLanHttp
 if ($applicationRolePassword) {
     $env:Database__ApplicationRoleName = $settings.AppLogin
     $env:Database__ApplicationRolePassword = $applicationRolePassword
@@ -67,22 +103,17 @@ $process = Start-Process -FilePath $dotnetPath `
     -PassThru
 
 try {
-    $health = $null
+    $healthy = $false
     foreach ($attempt in 1..15) {
         Start-Sleep -Seconds 1
         if ($process.HasExited) { throw "Team Test API exited with code $($process.ExitCode)." }
-        try {
-            $health = Invoke-WebRequest `
-                -Uri "http://127.0.0.1:$($settings.ApiPort)/health/live" `
-                -UseBasicParsing `
-                -TimeoutSec 2
-            if ($health.StatusCode -eq 200) { break }
-        }
-        catch {
-            if ($attempt -eq 15) { throw }
-        }
+        $healthy = Test-TeamTestApiHealth $listenerConfiguration
+        if ($healthy) { break }
     }
-    if (!$health -or $health.StatusCode -ne 200) { throw 'Team Test API did not become healthy in time.' }
+    if (!$healthy) { throw 'Team Test API did not become healthy on every configured listener in time.' }
+    if (!(Test-ExactApiListeners $listenerConfiguration $process.Id)) {
+        throw 'Team Test API does not own exactly the configured loopback and private LAN listeners.'
+    }
     [IO.File]::WriteAllText($pidPath, (@{
         ProcessId = $process.Id
         ReleasePath = $settings.ReleasePath
@@ -91,7 +122,8 @@ try {
     [pscustomobject]@{
         Status = 'RUNNING'
         ProcessId = $process.Id
-        LocalOrigin = "http://127.0.0.1:$($settings.ApiPort)"
+        LocalOrigin = "http://127.0.0.1:$($listenerConfiguration.ApiPort)"
+        LanOrigin = $(if ($listenerConfiguration.AllowPrivateLanHttp) { "http://$($listenerConfiguration.PrivateLanAddress):$($listenerConfiguration.ApiPort)" } else { $null })
         FrontendOrigin = $settings.FrontendOrigin
     }
 }
@@ -104,6 +136,7 @@ finally {
     $env:ConnectionStrings__IoTTeamCenter = $null
     $env:Database__ApplicationRoleName = $null
     $env:Database__ApplicationRolePassword = $null
+    $env:TeamTest__AllowPrivateLanHttp = $null
     $connectionString = $null
     $signingKey = $null
     $applicationRolePassword = $null
