@@ -262,6 +262,7 @@ app.MapGoodsReceiptEndpoints();
 app.MapMaterialIssueEndpoints();
 app.MapStockControlEndpoints();
 app.MapMasterDataEndpoints();
+app.MapReportEndpoints();
 
 app.Run();
 
