@@ -237,7 +237,7 @@ public static class GoodsReceiptEndpoints
             SELECT gl.id, gl.po_line_id, gl.item_id, COALESCE(i.item_code, prl.item_code),
                    COALESCE(i.part_no, prl.part_no), prl.description, pol.qty, gl.received_qty,
                    gl.accepted_qty, gl.damaged_qty, gl.rejected_qty, gl.lot_no, gl.serial_no,
-                   gl.location, gl.qc_status, gl.project_allocation_id, gl.remark, prl.unit,
+                   gl.location, gl.qc_status, gl.project_allocation_id, gl.remark, gl.allow_over_receipt, prl.unit,
                    COALESCE(prev.received_qty, 0)
             FROM dbo.grn_lines gl
             INNER JOIN dbo.mat_po_lines pol ON pol.id = gl.po_line_id
@@ -274,7 +274,7 @@ public static class GoodsReceiptEndpoints
         {
             var ordered = reader.GetDecimal(6);
             var received = reader.GetDecimal(7);
-            var previously = reader.GetDecimal(18);
+            var previously = reader.GetDecimal(19);
             lines.Add(new
             {
                 id = reader.GetInt64(0), purchaseOrderLineId = reader.GetInt64(1),
@@ -288,7 +288,7 @@ public static class GoodsReceiptEndpoints
                 location = reader.GetString(13), qcStatus = reader.GetString(14),
                 projectAllocationId = reader.IsDBNull(15) ? (long?)null : reader.GetInt64(15),
                 remark = reader.IsDBNull(16) ? null : reader.GetString(16),
-                unit = reader.GetString(17),
+                allowOverReceipt = reader.GetBoolean(17), unit = reader.GetString(18),
                 outstandingAfter = Math.Max(0m, ordered - previously - received)
             });
         }
@@ -436,10 +436,10 @@ public static class GoodsReceiptEndpoints
         await using var insert = new SqlCommand("""
             INSERT INTO dbo.grn_lines (
                 grn_id, po_id, po_line_id, item_id, received_qty, accepted_qty, damaged_qty, rejected_qty,
-                lot_no, serial_no, location, qc_status, project_allocation_id, remark)
+                lot_no, serial_no, location, qc_status, project_allocation_id, allow_over_receipt, remark)
             VALUES (
                 @grn_id, @po_id, @po_line_id, @item_id, @received, @accepted, @damaged, @rejected,
-                @lot_no, @serial_no, @location, @qc_status, @project_id, @remark);
+                @lot_no, @serial_no, @location, @qc_status, @project_id, @allow_over_receipt, @remark);
             """, connection, transaction);
         insert.Parameters.AddParameter("@grn_id", SqlDbType.BigInt, grnId);
         insert.Parameters.AddParameter("@po_id", SqlDbType.BigInt, poId);
@@ -454,6 +454,7 @@ public static class GoodsReceiptEndpoints
         insert.Parameters.AddParameter("@location", SqlDbType.NVarChar, location, 100);
         insert.Parameters.AddParameter("@qc_status", SqlDbType.NVarChar, line.QcStatus?.Trim() ?? "Pending", 30);
         insert.Parameters.AddParameter("@project_id", SqlDbType.BigInt, line.ProjectAllocationId);
+        insert.Parameters.AddParameter("@allow_over_receipt", SqlDbType.Bit, line.AllowOverReceipt);
         insert.Parameters.AddParameter("@remark", SqlDbType.NVarChar, line.Remark?.Trim(), -1);
         await insert.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -507,6 +508,12 @@ public static class GoodsReceiptEndpoints
                 project.Parameters.AddParameter("@po_id", SqlDbType.BigInt, poId);
                 projectId = (long)(await project.ExecuteScalarAsync(cancellationToken))!;
             }
+
+            // Draft receipts can be recorded by different store users before
+            // either one is confirmed. The PO row above serializes confirmation
+            // for this order; now lock each affected line and re-read confirmed
+            // quantities before anything is appended to the stock ledger.
+            await DemandConfirmableQuantitiesAsync(connection, transaction, id, cancellationToken);
 
             var movements = new List<(long LineId, long ItemId, decimal Accepted, decimal Held, string Location, decimal UnitCost)>();
             await using (var lines = new SqlCommand("""
@@ -585,6 +592,67 @@ public static class GoodsReceiptEndpoints
         {
             await transaction.RollbackAsync(cancellationToken);
             throw;
+        }
+    }
+
+    private static async Task DemandConfirmableQuantitiesAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        long grnId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            SELECT gl.po_line_id, COALESCE(i.item_code, prl.item_code), pol.qty, gl.received_qty,
+                   COALESCE((
+                       SELECT SUM(previous.received_qty)
+                       FROM dbo.grn_lines previous WITH (UPDLOCK, HOLDLOCK, INDEX(IX_grn_lines_po_line))
+                       INNER JOIN dbo.grns previous_grn ON previous_grn.id = previous.grn_id
+                                                        AND previous_grn.status = N'Confirmed'
+                       WHERE previous.po_line_id = gl.po_line_id
+                         AND previous.grn_id <> @grn_id
+                   ), 0),
+                   gl.allow_over_receipt, gl.remark
+            FROM dbo.grn_lines gl WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN dbo.mat_po_lines pol WITH (UPDLOCK, HOLDLOCK) ON pol.id = gl.po_line_id
+            INNER JOIN dbo.mat_pr_lines prl ON prl.id = pol.pr_line_id
+            LEFT JOIN dbo.mat_items i ON i.id = gl.item_id
+            WHERE gl.grn_id = @grn_id
+            ORDER BY gl.po_line_id;
+            """, connection, transaction);
+        command.Parameters.AddParameter("@grn_id", SqlDbType.BigInt, grnId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var poLineId = reader.GetInt64(0);
+            var itemCode = reader.GetString(1);
+            var ordered = reader.GetDecimal(2);
+            var requested = reader.GetDecimal(3);
+            var previouslyReceived = reader.GetDecimal(4);
+            var allowOverReceipt = reader.GetBoolean(5);
+            var remark = reader.IsDBNull(6) ? null : reader.GetString(6);
+            if (previouslyReceived + requested <= ordered) continue;
+
+            var details = new
+            {
+                purchaseOrderLineId = poLineId,
+                ordered,
+                previouslyReceived,
+                requested,
+                resultingReceived = previouslyReceived + requested
+            };
+            if (!allowOverReceipt)
+                throw new ApiException(
+                    StatusCodes.Status409Conflict,
+                    "over_receipt",
+                    $"{itemCode}: only {Math.Max(0m, ordered - previouslyReceived):0.####} remains on the order; another confirmed receipt makes this draft exceed the ordered quantity.",
+                    details);
+            if (string.IsNullOrWhiteSpace(remark))
+                throw new ApiException(
+                    StatusCodes.Status409Conflict,
+                    "over_receipt_reason_required",
+                    $"{itemCode}: the explicitly allowed over-receipt still needs a remark before it can be confirmed.",
+                    details);
         }
     }
 

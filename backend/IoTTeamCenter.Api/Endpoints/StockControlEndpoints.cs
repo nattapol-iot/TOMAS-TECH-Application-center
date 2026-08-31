@@ -185,11 +185,12 @@ public static class StockControlEndpoints
             string status;
             string location;
             decimal unitCost;
+            string itemCode;
             await using (var read = new SqlCommand("""
                 SELECT a.adjustment_no, a.item_id, a.qty_change, a.reason, a.requested_by, a.status,
-                       COALESCE(i.location, N''), i.avg_unit_cost
+                       COALESCE(i.location, N''), i.avg_unit_cost, i.item_code
                 FROM dbo.stock_adjustments a WITH (UPDLOCK, HOLDLOCK)
-                INNER JOIN dbo.mat_items i ON i.id = a.item_id
+                INNER JOIN dbo.mat_items i WITH (UPDLOCK, HOLDLOCK) ON i.id = a.item_id
                 WHERE a.id = @id;
                 """, connection, transaction))
             {
@@ -205,11 +206,36 @@ public static class StockControlEndpoints
                 status = reader.GetString(5);
                 location = reader.GetString(6);
                 unitCost = reader.GetDecimal(7);
+                itemCode = reader.GetString(8);
             }
             if (!string.Equals(status, "Pending Approval", StringComparison.Ordinal))
                 throw new ApiException(StatusCodes.Status409Conflict, "adjustment_decided", $"This adjustment is already '{status}'.");
             if (requestedBy == actor.Id)
                 throw new ApiException(StatusCodes.Status403Forbidden, "self_approval_forbidden", "The requester cannot approve their own stock adjustment.");
+
+            decimal? resultingBalance = null;
+            if (approve)
+            {
+                decimal usable;
+                await using (var balance = new SqlCommand("""
+                    SELECT COALESCE(SUM(t.qty), 0)
+                    FROM dbo.stock_txns t WITH (UPDLOCK, HOLDLOCK, INDEX(IX_stock_txns_item))
+                    WHERE t.item_id = @item_id AND t.bucket = N'stock';
+                    """, connection, transaction))
+                {
+                    balance.Parameters.AddParameter("@item_id", SqlDbType.BigInt, itemId);
+                    usable = Convert.ToDecimal(await balance.ExecuteScalarAsync(cancellationToken));
+                }
+
+                var resulting = usable + change;
+                resultingBalance = resulting;
+                if (resulting < 0)
+                    throw new ApiException(
+                        StatusCodes.Status409Conflict,
+                        "negative_balance",
+                        $"{itemCode}: stock changed while this adjustment was pending; approving {change:0.####} would take the current {usable:0.####} balance below zero.",
+                        new { onHand = usable, requestedChange = change, resultingBalance });
+            }
 
             byte[] version;
             await using (var update = new SqlCommand("""
@@ -233,7 +259,7 @@ public static class StockControlEndpoints
 
             await MaterialAudit.WriteAsync(
                 connection, transaction, actor, $"{request.Decision.Trim()} stock adjustment", "Adjustment", id, number,
-                new { status = "Pending Approval" }, new { status = approve ? "Approved" : "Rejected", change },
+                new { status = "Pending Approval" }, new { status = approve ? "Approved" : "Rejected", change, resultingBalance },
                 cancellationToken, quantity: change, reason: request.Comment?.Trim() ?? reason, approverId: actor.Id);
             await transaction.CommitAsync(cancellationToken);
             return Results.Ok(new { id, status = approve ? "Approved" : "Rejected", rowVersion = Convert.ToBase64String(version) });

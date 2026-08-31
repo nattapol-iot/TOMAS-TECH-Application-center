@@ -164,12 +164,13 @@ public static class BomEndpoints
             var onOpenPr = reader.GetDecimal(25);
             var netIssued = reader.GetDecimal(26);
             // Required minus what is already covered: an allocation, material
-            // already issued without one, the customer's own supply, and an
-            // open order. Never negative.
+            // already issued without one, the customer's own supply, an open
+            // order, and requisitions that have not yet become an order. The
+            // same value is enforced again when a PR line is created.
             var covered = Math.Max(allocated, netIssued + activeReserved);
             var purchaseRequired = nonStock
                 ? 0m
-                : Math.Max(0m, quantityRequired - covered - customerSupplied - onOrder);
+                : Math.Max(0m, quantityRequired - covered - customerSupplied - onOrder - onOpenPr);
             lines.Add(new
             {
                 id = reader.GetInt64(0), sectionCode = reader.GetString(1),
@@ -393,17 +394,33 @@ public static class BomEndpoints
         {
             var header = await ReadHeaderAsync(connection, transaction, id, forUpdate: true, cancellationToken);
             await ProjectScope.DemandAsync(connection, transaction, header.ProjectId, actor, cancellationToken);
+            if (!string.Equals(header.Status, "Released", StringComparison.Ordinal))
+                throw new ApiException(
+                    StatusCodes.Status409Conflict, "bom_not_released",
+                    $"Stock can only be reserved against a released BOM; this one is '{header.Status}'.");
 
             long itemId;
             string itemCode;
             decimal available;
+            decimal remainingDemand;
             await using (var lookup = new SqlCommand("""
                 SELECT l.item_id, i.item_code,
+                       l.qty_required,
+                       l.customer_supplied_qty,
+                       COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WITH (UPDLOCK, HOLDLOCK)
+                                 WHERE r.bom_line_id = l.id AND r.status IN (N'Active', N'Consumed')), 0),
+                       COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WITH (UPDLOCK, HOLDLOCK)
+                                 WHERE r.bom_line_id = l.id AND r.status = N'Active'), 0),
+                       COALESCE((SELECT SUM(ml.issued_qty - ml.returned_qty)
+                                 FROM dbo.mir_lines ml WITH (UPDLOCK, HOLDLOCK)
+                                 INNER JOIN dbo.mirs m WITH (UPDLOCK, HOLDLOCK) ON m.id = ml.mir_id
+                                      AND m.status IN (N'Issued', N'Received', N'Completed')
+                                 WHERE ml.bom_line_id = l.id), 0),
                        COALESCE((SELECT SUM(t.qty) FROM dbo.stock_txns t WITH (UPDLOCK, HOLDLOCK)
                                  WHERE t.item_id = l.item_id AND t.bucket = N'stock'), 0)
-                     - COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WITH (UPDLOCK, HOLDLOCK)
+                      - COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WITH (UPDLOCK, HOLDLOCK)
                                  WHERE r.item_id = l.item_id AND r.status = N'Active'), 0)
-                FROM dbo.bom_lines l
+                FROM dbo.bom_lines l WITH (UPDLOCK, HOLDLOCK)
                 INNER JOIN dbo.mat_items i ON i.id = l.item_id
                 WHERE l.id = @line_id AND l.bom_id = @bom_id AND l.deleted_at IS NULL AND l.non_stock = 0;
                 """, connection, transaction))
@@ -415,9 +432,21 @@ public static class BomEndpoints
                     throw new ApiException(StatusCodes.Status404NotFound, "bom_line_not_found", "This BOM line does not exist or is not a stock line.");
                 itemId = reader.GetInt64(0);
                 itemCode = reader.GetString(1);
-                available = reader.GetDecimal(2);
+                var quantityRequired = reader.GetDecimal(2);
+                var customerSupplied = reader.GetDecimal(3);
+                var allocated = reader.GetDecimal(4);
+                var activeReserved = reader.GetDecimal(5);
+                var netIssued = reader.GetDecimal(6);
+                available = reader.GetDecimal(7);
+                var covered = Math.Max(allocated, netIssued + activeReserved);
+                remainingDemand = Math.Max(0m, quantityRequired - customerSupplied - covered);
             }
 
+            if (request.Quantity > remainingDemand)
+                throw new ApiException(
+                    StatusCodes.Status409Conflict, "quantity_exceeds_bom_demand",
+                    $"Only {remainingDemand:0.####} {itemCode} is still required by this BOM line.",
+                    new { remainingDemand, requested = request.Quantity });
             if (request.Quantity > available)
                 throw new ApiException(
                     StatusCodes.Status409Conflict, "insufficient_stock",
@@ -447,7 +476,9 @@ public static class BomEndpoints
             await transaction.CommitAsync(cancellationToken);
             return Results.Created($"/api/v1/boms/{id}/reservations/{reservationId}", new
             {
-                id = reservationId, itemId, quantity = request.Quantity, available = available - request.Quantity
+                id = reservationId, itemId, quantity = request.Quantity,
+                available = available - request.Quantity,
+                remainingDemand = remainingDemand - request.Quantity
             });
         }
         catch

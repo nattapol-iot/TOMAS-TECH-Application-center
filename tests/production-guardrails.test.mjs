@@ -60,6 +60,30 @@ test("demo dependency closure stays isolated from production", async () => {
       /(?:from\s+|import\s*\(\s*)["'][^"']*screens\//,
       `${path.pathname} must not import the demo screens`,
     );
+    assert.doesNotMatch(
+      source,
+      /(?:from\s+|import\s*\(\s*)["'][^"']*(?:data|calc|store|matstore|session)["']/,
+      `${path.pathname} must not import demo data or in-memory stores`,
+    );
+  }
+});
+
+test("production workspace exposes every Demo menu through API-backed renderers", async () => {
+  const productionApp = await readFile(new URL("app/system/ProductionApp.tsx", root), "utf8");
+  const navSource = productionApp.slice(productionApp.indexOf("const NAV"), productionApp.indexOf("const IS_AUTH_CONFIGURED"));
+  const menuLabels = [
+    "Dashboard", "My Work", "Inquiry", "Estimate Cost", "Projects",
+    "Price Library", "Supplier Quotation", "Waiting Supplier Price", "Resource Plan",
+    "Procurement Dashboard", "BOM", "Purchase Requisition", "Purchase Orders", "Inventory",
+    "Goods Receiving", "Material Issues", "Approvals", "Customers", "Reports", "Master Data",
+    "Engineering Rate", "Audit Log", "Settings",
+  ];
+  for (const label of menuLabels) {
+    assert.match(navSource, new RegExp(`label: ["']${label}["']`));
+  }
+  assert.equal((navSource.match(/label:\s*["'][^"']+["']/g) ?? []).length, menuLabels.length);
+  for (const banned of ["data", "calc", "store", "matstore", "session"]) {
+    assert.doesNotMatch(productionApp, new RegExp(`from ["'][^"']*\\/${banned}["']`));
   }
 });
 
@@ -297,7 +321,7 @@ test("SQL parameter helper preserves MAX fields and validates row versions", asy
 
 test("production baseline verifier checks schema, app role, and real identities", async () => {
   const verifier = await readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8");
-  assert.match(verifier, /schema_versions WHERE version = 5/);
+  assert.match(verifier, /schema_versions WHERE version = 6/);
   assert.match(verifier, /Schema-wide EXECUTE is forbidden/);
   assert.match(verifier, /Schema-wide SELECT is forbidden/);
   assert.match(verifier, /active production administrator/);
@@ -330,6 +354,58 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(costs, /"Updated", before, after/);
   assert.match(migration, /trg_estimate_revisions_append_only/);
   assert.match(migration, /Historical cost items cannot be changed/);
+});
+
+test("project portfolio listing follows the same assignment scope as project workspaces", async () => {
+  const projects = await readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ProjectEndpoints.cs", root), "utf8");
+  assert.match(projects, /var actor = await users\.GetRequiredAsync/);
+  assert.match(projects, /@elevated = 1 OR p\.manager_id = @actor OR p\.lead_engineer_id = @actor/);
+  assert.match(projects, /dbo\.project_members m WHERE m\.project_id = p\.id AND m\.user_id = @actor/);
+  assert.match(projects, /ProjectScope\.IsElevated\(actor\)/);
+});
+
+test("administrative read models are permission-gated and audit ledgers stay immutable", async () => {
+  const [program, endpoints, grants, verifier] = await Promise.all([
+    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/AdminReadEndpoints.cs", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
+  ]);
+  assert.match(program, /MapAdminReadEndpoints/);
+  assert.match(endpoints, /MapGet\("\/engineering-rates"/);
+  assert.match(endpoints, /DemandPermissionAsync\("master\.read"/);
+  assert.match(endpoints, /MapGet\("\/audit"/);
+  assert.match(endpoints, /DemandPermissionAsync\("audit\.read"/);
+  assert.match(endpoints, /FROM dbo\.audit_log/);
+  assert.match(endpoints, /FROM dbo\.mat_audit/);
+  assert.doesNotMatch(endpoints, /Map(?:Post|Put|Delete|Patch)/);
+  assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.audit_log/i);
+  assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.mat_audit/i);
+  assert.match(grants, /REVOKE UPDATE, DELETE ON OBJECT::dbo\.audit_log/i);
+  assert.match(grants, /REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo\.mat_audit/i);
+  assert.match(verifier, /\(N'audit_log', N'SELECT'\)/i);
+  assert.match(verifier, /\(N'mat_audit', N'SELECT'\)/i);
+});
+
+test("inventory decisions revalidate live quantities under database locks", async () => {
+  const [receipts, stock, migration, deployment, health] = await Promise.all([
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/GoodsReceiptEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/StockControlEndpoints.cs", root), "utf8"),
+    readFile(new URL("database/migrations/006_inventory_concurrency.sql", root), "utf8"),
+    readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/HealthEndpoints.cs", root), "utf8"),
+  ]);
+  assert.match(receipts, /DemandConfirmableQuantitiesAsync/);
+  assert.match(receipts, /previous WITH \(UPDLOCK, HOLDLOCK, INDEX\(IX_grn_lines_po_line\)\)/);
+  assert.match(receipts, /gl\.allow_over_receipt/);
+  assert.match(receipts, /"over_receipt"/);
+  assert.match(stock, /stock_txns t WITH \(UPDLOCK, HOLDLOCK, INDEX\(IX_stock_txns_item\)\)/);
+  assert.match(stock, /resulting < 0/);
+  assert.match(stock, /"negative_balance"/);
+  assert.match(migration, /ADD allow_over_receipt bit NOT NULL/);
+  assert.match(migration, /schema_versions\(version, name\)[\s\S]*VALUES \(6,/);
+  assert.match(deployment, /006_inventory_concurrency\.sql/);
+  assert.match(health, /RequiredSchemaVersion = 6/);
 });
 
 test("project documents use fail-closed NAS storage, scoped access, and append-only metadata", async () => {

@@ -17,6 +17,8 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $backendRoot = Join-Path $repoRoot 'backend\IoTTeamCenter.Api'
 $databaseName = 'IoTTeamCenter_CI_{0}_{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddHHmmss')), ([Guid]::NewGuid().ToString('N'))
 if ($databaseName -notmatch '^IoTTeamCenter_CI_[A-Za-z0-9_]+$') { throw 'Generated CI database name is outside the cleanup boundary.' }
+$appRoleName = 'iot_ci_app_role'
+$appRolePassword = '{0}{1}' -f ([Guid]::NewGuid().ToString('N')), ([Guid]::NewGuid().ToString('N'))
 
 $sqlcmdBase = @('-S', $SqlServer, '-b', '-r1', '-C')
 $oldSqlcmdPassword = $env:SQLCMDPASSWORD
@@ -84,11 +86,57 @@ function Invoke-Api {
                 finally { $streamReader.Dispose(); $stream.Dispose() }
             } catch { $details = $null }
         }
-        if (-not [string]::IsNullOrWhiteSpace($details)) {
-            throw "API $Method $Path failed: $details"
+        $apiLogTail = ''
+        if (Test-Path -LiteralPath $script:stdoutPath) {
+            $apiLogTail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 80) -join [Environment]::NewLine
         }
-        throw "API $Method $Path failed: $($_.Exception.Message)"
+        if (Test-Path -LiteralPath $script:stderrPath) {
+            $stderrTail = @(Get-Content -LiteralPath $script:stderrPath -Tail 80) -join [Environment]::NewLine
+            $apiLogTail = @($apiLogTail, $stderrTail) -join [Environment]::NewLine
+        }
+        $failure = if (-not [string]::IsNullOrWhiteSpace($details)) { $details } else { $_.Exception.Message }
+        if (-not [string]::IsNullOrWhiteSpace($apiLogTail)) {
+            throw "API $Method $Path failed: $failure`nAPI error log tail:`n$apiLogTail"
+        }
+        throw "API $Method $Path failed: $failure"
     }
+}
+
+function Assert-ApiError {
+    param(
+        [Parameter(Mandatory)][ValidateSet('GET', 'POST', 'PUT')][string] $Method,
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][string] $Identity,
+        [object] $Body,
+        [Parameter(Mandatory)][string] $ExpectedCode,
+        [int] $ExpectedStatus = 0
+    )
+    $parameters = @{
+        Uri = "$script:apiBase$Path"
+        Method = $Method
+        Headers = @{ 'X-Dev-User-Id' = $Identity }
+        ContentType = 'application/json'
+        TimeoutSec = 30
+    }
+    if ($null -ne $Body) { $parameters.Body = ($Body | ConvertTo-Json -Depth 20 -Compress) }
+    try {
+        $null = Invoke-RestMethod @parameters
+    } catch {
+        if ($null -eq $_.Exception.Response) { throw }
+        $status = [int]$_.Exception.Response.StatusCode
+        $details = if ($null -ne $_.ErrorDetails) { $_.ErrorDetails.Message } else { $null }
+        if ([string]::IsNullOrWhiteSpace($details)) {
+            $stream = $_.Exception.Response.GetResponseStream()
+            $streamReader = [IO.StreamReader]::new($stream)
+            try { $details = $streamReader.ReadToEnd() }
+            finally { $streamReader.Dispose(); $stream.Dispose() }
+        }
+        $payload = $details | ConvertFrom-Json
+        if ($ExpectedStatus -gt 0) { Assert-Equal $status $ExpectedStatus "API $Method $Path status" }
+        Assert-Equal $payload.code $ExpectedCode "API $Method $Path error code"
+        return $payload
+    }
+    throw "API $Method $Path unexpectedly succeeded; expected error '$ExpectedCode'."
 }
 
 function Assert-Equal {
@@ -97,13 +145,37 @@ function Assert-Equal {
 }
 
 $apiProcess = $null
-$stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("iot-team-api-{0}.out.log" -f [Guid]::NewGuid().ToString('N'))
-$stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("iot-team-api-{0}.err.log" -f [Guid]::NewGuid().ToString('N'))
+$script:stdoutPath = Join-Path ([IO.Path]::GetTempPath()) ("iot-team-api-{0}.out.log" -f [Guid]::NewGuid().ToString('N'))
+$stdoutPath = $script:stdoutPath
+$script:stderrPath = Join-Path ([IO.Path]::GetTempPath()) ("iot-team-api-{0}.err.log" -f [Guid]::NewGuid().ToString('N'))
+$stderrPath = $script:stderrPath
 $cleanupEligible = $true
 
 try {
     Invoke-SqlFile (Join-Path $repoRoot 'database\scripts\020_deploy_fresh_database.sql')
     Invoke-SqlFile (Join-Path $PSScriptRoot 'seed-ci-users.sql')
+    $escapedAppRolePassword = $appRolePassword.Replace("'", "''")
+    Invoke-SqlQuery $databaseName "CREATE APPLICATION ROLE [$appRoleName] WITH PASSWORD = N'$escapedAppRolePassword';"
+    Push-Location $repoRoot
+    try {
+        & sqlcmd @sqlcmdBase -i (Join-Path $repoRoot 'database\scripts\010_application_login.sql') `
+            -v "DatabaseName=$databaseName" "AppLogin=$appRoleName"
+        if ($LASTEXITCODE -ne 0) { throw 'Application-role grant script failed.' }
+    } finally {
+        Pop-Location
+    }
+    Invoke-SqlQuery $databaseName @"
+DECLARE @cookie varbinary(8000);
+EXEC sys.sp_setapprole @rolename = N'$appRoleName', @password = N'$escapedAppRolePassword',
+    @fCreateCookie = 1, @cookie = @cookie OUTPUT;
+IF COALESCE(HAS_PERMS_BY_NAME(N'dbo.audit_log', N'OBJECT', N'SELECT'), 0) <> 1
+    THROW 51076, 'Application role cannot read the core audit ledger.', 1;
+IF COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'SELECT'), 0) <> 1
+    THROW 51077, 'Application role cannot read the material audit ledger.', 1;
+SELECT TOP (0) id FROM dbo.audit_log;
+SELECT TOP (0) id FROM dbo.mat_audit;
+EXEC sys.sp_unsetapprole @cookie = @cookie;
+"@
 
     & dotnet build (Join-Path $backendRoot 'IoTTeamCenter.Api.csproj') -c Release --nologo
     if ($LASTEXITCODE -ne 0) { throw 'Release build failed before the integration flow.' }
@@ -162,6 +234,12 @@ try {
         unit = 'pcs'; location = 'CI-A1'; reorderLevel = 0; averageUnitCost = 10;
         leadTimeDays = 1; preferredSupplierId = $supplier.id
     })
+    $rate = Invoke-Api POST '/api/v1/master/engineering-rates' 'dev-user' ([ordered]@{
+        level = 'CI Engineer'; department = 'CI Engineering';
+        engineeringHourly = 500; engineeringDaily = 4000;
+        installationHourly = 450; installationDaily = 3600;
+        effectiveFrom = $today; effectiveTo = $null
+    })
 
     $inquiry = Invoke-Api POST '/api/v1/inquiries' 'dev-user' ([ordered]@{
         customerId = $customer.id; contact = ''; projectName = 'CI Full Material Flow'; projectType = 'Integration';
@@ -195,6 +273,9 @@ try {
     $bom = Invoke-Api POST '/api/v1/boms' 'dev-user' ([ordered]@{ projectId = $project.id })
     $bomDetail = Invoke-Api GET "/api/v1/boms/$($bom.id)" 'dev-user'
     $bomLine = @($bomDetail.lines)[0]
+    $null = Assert-ApiError POST "/api/v1/boms/$($bom.id)/reservations" 'dev-user' ([ordered]@{
+        bomLineId = $bomLine.id; quantity = 1; requiredDate = $future
+    }) 'bom_not_released' 409
     $releasedBom = Invoke-Api POST "/api/v1/boms/$($bom.id)/release" 'mgr-oid' ([ordered]@{
         rowVersion = $bomDetail.bom.rowVersion; comment = 'CI release'
     })
@@ -212,6 +293,19 @@ try {
         bomLineId = $bomLine.id; quantity = 4; requiredDate = $future
     })
     Assert-Equal $reservation.quantity 4 'Reservation quantity'
+    Assert-Equal $reservation.remainingDemand 6 'Reservation remaining BOM demand'
+    $null = Assert-ApiError POST "/api/v1/boms/$($bom.id)/reservations" 'dev-user' ([ordered]@{
+        bomLineId = $bomLine.id; quantity = 7; requiredDate = $future
+    }) 'quantity_exceeds_bom_demand' 409
+
+    $null = Assert-ApiError POST '/api/v1/purchase-requisitions' 'dev-user' ([ordered]@{
+        bomId = $bom.id; priority = 'Normal'; requiredDate = $future; purpose = 'CI mismatch check';
+        lines = @([ordered]@{
+            bomLineId = $bomLine.id; supplierId = $supplier.id; quantity = 6; unitPrice = 10;
+            priceSource = 'Supplier Quotation'; isUnplanned = $false; buyDespiteStock = $false;
+            remark = $null; itemCodeOverride = 'CI-WRONG-ITEM'
+        })
+    }) 'item_code_override_mismatch' 400
 
     $pr = Invoke-Api POST '/api/v1/purchase-requisitions' 'dev-user' ([ordered]@{
         bomId = $bom.id; priority = 'Normal'; requiredDate = $future; purpose = 'CI';
@@ -221,6 +315,10 @@ try {
             remark = $null; itemCodeOverride = $null
         })
     })
+    $bomAfterPr = Invoke-Api GET "/api/v1/boms/$($bom.id)" 'dev-user'
+    $bomLineAfterPr = @($bomAfterPr.lines | Where-Object { $_.id -eq $bomLine.id })[0]
+    Assert-Equal $bomLineAfterPr.onOpenPr 6 'BOM open PR commitment'
+    Assert-Equal $bomLineAfterPr.purchaseRequired 0 'BOM purchase requirement after open PR'
     $submittedPr = Invoke-Api POST "/api/v1/purchase-requisitions/$($pr.id)/submit" 'dev-user' ([ordered]@{
         comment = 'CI submit'; rowVersion = $pr.rowVersion
     })
@@ -237,7 +335,7 @@ try {
     $poDetail = Invoke-Api GET "/api/v1/purchase-orders/$($po.id)" 'buy-oid'
     $poLine = @($poDetail.lines)[0]
 
-    $grn = Invoke-Api POST '/api/v1/goods-receipts' 'wh-oid' ([ordered]@{
+    $grnRequest = [ordered]@{
         purchaseOrderId = $po.id; deliveryNote = 'CI-DN'; receivedDate = $today;
         lines = @([ordered]@{
             purchaseOrderLineId = $poLine.id; receivedQuantity = 6; acceptedQuantity = 6;
@@ -245,23 +343,56 @@ try {
             serialNumber = $null; location = 'CI-A1'; projectAllocationId = $project.id;
             allowOverReceipt = $false; remark = $null
         })
-    })
+    }
+    $grn = Invoke-Api POST '/api/v1/goods-receipts' 'wh-oid' $grnRequest
+    # This second draft sees the same remaining quantity. Confirmation must
+    # revalidate after the first draft wins instead of double-receiving the PO.
+    $conflictingGrn = Invoke-Api POST '/api/v1/goods-receipts' 'wh-oid' $grnRequest
+    $conflictingGrnDetail = Invoke-Api GET "/api/v1/goods-receipts/$($conflictingGrn.id)" 'wh-oid'
+    Assert-Equal @($conflictingGrnDetail.lines)[0].allowOverReceipt $false 'GRN persisted over-receipt authorization'
     $confirmedGrn = Invoke-Api POST "/api/v1/goods-receipts/$($grn.id)/confirm" 'wh-oid' ([ordered]@{
         rowVersion = $grn.rowVersion; comment = 'CI confirm'
     })
     Assert-Equal $confirmedGrn.status 'Confirmed' 'GRN status'
     Assert-Equal $confirmedGrn.purchaseOrderStatus 'Received' 'Purchase order status'
+    $null = Assert-ApiError POST "/api/v1/goods-receipts/$($conflictingGrn.id)/confirm" 'wh-oid' ([ordered]@{
+        rowVersion = $conflictingGrn.rowVersion; comment = 'CI conflicting confirm'
+    }) 'over_receipt' 409
+
+    # This was valid while ten units were on hand (opening 4 + GRN 6). It must
+    # be checked again at approval after subsequent material issues consume it.
+    $staleNegativeAdjustment = Invoke-Api POST '/api/v1/stock-adjustments' 'wh-oid' ([ordered]@{
+        itemId = $item.id; quantityChange = -6; reason = 'CI pending shrinkage revalidation'
+    })
 
     $mir = Invoke-Api POST '/api/v1/material-issues' 'dev-user' ([ordered]@{
         bomId = $bom.id; requiredDate = $future; purpose = 'CI';
         lines = @([ordered]@{ bomLineId = $bomLine.id; requestedQuantity = 7; location = 'CI-A1'; purpose = 'CI' })
     })
+    Assert-ApiError POST '/api/v1/material-issues' 'dev-user' ([ordered]@{
+        bomId = $bom.id; requiredDate = $future; purpose = 'CI overcommit guard';
+        lines = @([ordered]@{ bomLineId = $bomLine.id; requestedQuantity = 4; location = 'CI-A1'; purpose = 'CI' })
+    }) 'exceeds_bom_quantity'
+    $staleMir = Invoke-Api POST '/api/v1/material-issues' 'dev-user' ([ordered]@{
+        bomId = $bom.id; requiredDate = $future; purpose = 'CI stale concurrency fixture';
+        lines = @([ordered]@{ bomLineId = $bomLine.id; requestedQuantity = 3; location = 'CI-A1'; purpose = 'CI' })
+    })
     $approvedMir = Invoke-Api POST "/api/v1/material-issues/$($mir.id)/decide" 'mgr-oid' ([ordered]@{
         decision = 'Approve'; comment = $null
     })
+    $approvedStaleMir = Invoke-Api POST "/api/v1/material-issues/$($staleMir.id)/decide" 'mgr-oid' ([ordered]@{
+        decision = 'Approve'; comment = $null
+    })
+    # Simulate an old/concurrently-created request whose snapshot no longer
+    # represents the live BOM allowance. IssueAsync must protect the ledger
+    # even when such legacy data reaches the approved state.
+    Invoke-SqlQuery $databaseName "UPDATE dbo.mir_lines SET requested_qty = 4 WHERE mir_id = $($staleMir.id); IF @@ROWCOUNT <> 1 THROW 51078, 'Stale MIR fixture update failed.', 1;"
     $issuedMir = Invoke-Api POST "/api/v1/material-issues/$($mir.id)/issue" 'wh-oid' ([ordered]@{
         rowVersion = $approvedMir.rowVersion; comment = 'CI issue'
     })
+    Assert-ApiError POST "/api/v1/material-issues/$($staleMir.id)/issue" 'wh-oid' ([ordered]@{
+        rowVersion = $approvedStaleMir.rowVersion; comment = 'CI stale issue must be blocked'
+    }) 'exceeds_bom_quantity'
     $receivedMir = Invoke-Api POST "/api/v1/material-issues/$($mir.id)/receipt" 'dev-user' ([ordered]@{
         rowVersion = $issuedMir.rowVersion; comment = 'CI received'
     })
@@ -271,6 +402,10 @@ try {
     $null = Invoke-Api POST "/api/v1/material-issues/$($mir.id)/returns" 'wh-oid' ([ordered]@{
         lineId = $mirLine.id; quantity = 2; reason = 'CI unused'
     })
+
+    $null = Assert-ApiError POST "/api/v1/stock-adjustments/$($staleNegativeAdjustment.id)/decide" 'inv-oid' ([ordered]@{
+        decision = 'Approve'; comment = 'CI stale negative adjustment must be blocked'
+    }) 'negative_balance' 409
 
     $inventory = Invoke-Api GET '/api/v1/inventory/items?reorderOnly=false' 'dev-user'
     $inventoryItem = @($inventory | Where-Object { $_.itemId -eq $item.id })[0]
@@ -339,6 +474,11 @@ try {
     Assert-Equal $baseline.revision 1 'Schedule baseline revision'
     $myWork = Invoke-Api GET '/api/v1/me/work' 'dev-user'
     Assert-Equal @($myWork).Count 2 'My Work task count'
+    $rates = Invoke-Api GET '/api/v1/admin/engineering-rates?page=1&pageSize=25&activeOnly=true' 'mgr-oid'
+    Assert-Equal @($rates.items).Count 1 'Engineering rate read model count'
+    Assert-Equal @($rates.items)[0].id $rate.id 'Engineering rate read model id'
+    $audit = Invoke-Api GET '/api/v1/admin/audit?page=1&pageSize=100' 'mgr-oid'
+    if (@($audit.items).Count -lt 1) { throw 'Administrative audit read model did not return the recorded workflow events.' }
 
     $assertionSql = @"
 SET NOCOUNT ON;
@@ -347,12 +487,17 @@ IF EXISTS (SELECT 1 FROM dbo.reservations WHERE project_id = $($project.id) AND 
 IF COALESCE((SELECT status FROM dbo.mat_prs WHERE id = $($pr.id)), N'') <> N'Converted to PO' THROW 51063, 'PR status mismatch.', 1;
 IF COALESCE((SELECT status FROM dbo.mat_pos WHERE id = $($po.id)), N'') <> N'Received' THROW 51064, 'PO status mismatch.', 1;
 IF COALESCE((SELECT status FROM dbo.grns WHERE id = $($grn.id)), N'') <> N'Confirmed' THROW 51065, 'GRN status mismatch.', 1;
+IF COALESCE((SELECT status FROM dbo.grns WHERE id = $($conflictingGrn.id)), N'') <> N'Draft' THROW 51082, 'Conflicting GRN was not left as a draft.', 1;
 IF COALESCE((SELECT status FROM dbo.mirs WHERE id = $($mir.id)), N'') <> N'Received' THROW 51066, 'MIR status mismatch.', 1;
 IF NOT EXISTS (SELECT 1 FROM dbo.mir_lines WHERE id = $($mirLine.id) AND issued_qty = 7 AND returned_qty = 2) THROW 51074, 'MIR line quantity mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.mirs WHERE id = $($staleMir.id) AND status = N'Approved') THROW 51079, 'Blocked stale MIR status mismatch.', 1;
+IF EXISTS (SELECT 1 FROM dbo.stock_txns WHERE source_event_key LIKE N'mir:$($staleMir.id):line:%:issue') THROW 51080, 'Blocked stale MIR moved stock.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.mat_pr_approval_steps WHERE pr_id = $($pr.id) AND status = N'Completed' AND decision = N'Approve' AND name IN (N'Section Owner Review', N'Budget Owner Approval', N'Purchasing Review')) <> 3 THROW 51075, 'PR approval chain mismatch.', 1;
 IF ABS((SELECT COALESCE(SUM(qty), 0) FROM dbo.stock_txns WHERE item_id = $($item.id) AND bucket = N'stock') - 5) > 0.0001 THROW 51067, 'Stock balance mismatch.', 1;
 IF ABS((SELECT COALESCE(SUM(-qty * unit_cost), 0) FROM dbo.stock_txns WHERE project_id = $($project.id) AND txn_type IN (N'MIR_ISSUE', N'MIR_RETURN')) - 50) > 0.0001 THROW 51068, 'Actual cost mismatch.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key = N'adj:$($adjustment.id)' AND txn_type = N'STOCK_ADJUSTMENT' AND qty = 4) <> 1 THROW 51069, 'Adjustment ledger idempotency mismatch.', 1;
+IF COALESCE((SELECT status FROM dbo.stock_adjustments WHERE id = $($staleNegativeAdjustment.id)), N'') <> N'Pending Approval' THROW 51083, 'Rejected stale stock adjustment was not left pending.', 1;
+IF EXISTS (SELECT 1 FROM dbo.stock_txns WHERE source_event_key = N'adj:$($staleNegativeAdjustment.id)') THROW 51084, 'Rejected stale stock adjustment changed the ledger.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key LIKE N'grn:$($grn.id):line:%:accepted' AND txn_type = N'GRN_RECEIPT' AND qty = 6) <> 1 THROW 51070, 'GRN ledger idempotency mismatch.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key = N'mir:$($mir.id):line:$($mirLine.id):issue' AND txn_type = N'MIR_ISSUE' AND qty = -7) <> 1 THROW 51071, 'MIR issue ledger mismatch.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key = N'mir:$($mir.id):line:$($mirLine.id):return:1' AND txn_type = N'MIR_RETURN' AND qty = 2) <> 1 THROW 51072, 'MIR return ledger mismatch.', 1;

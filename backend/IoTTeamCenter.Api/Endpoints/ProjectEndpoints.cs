@@ -43,6 +43,7 @@ public static class ProjectEndpoints
         CancellationToken cancellationToken)
     {
         await users.DemandPermissionAsync("project.read", cancellationToken);
+        var actor = await users.GetRequiredAsync(cancellationToken);
         InputValidation.OptionalText(search, 200, "Search");
         InputValidation.OptionalText(status, 50, "Status");
         page = Math.Max(1, page);
@@ -56,6 +57,8 @@ public static class ProjectEndpoints
             INNER JOIN dbo.customers c ON c.id = p.customer_id
             INNER JOIN dbo.users u ON u.id = p.manager_id
             WHERE p.deleted_at IS NULL
+              AND (@elevated = 1 OR p.manager_id = @actor OR p.lead_engineer_id = @actor
+                   OR EXISTS (SELECT 1 FROM dbo.project_members m WHERE m.project_id = p.id AND m.user_id = @actor))
               AND (@status IS NULL OR p.status = @status)
               AND (@search IS NULL OR p.project_no LIKE N'%' + @search + N'%'
                    OR p.name LIKE N'%' + @search + N'%'
@@ -66,6 +69,8 @@ public static class ProjectEndpoints
             """, connection);
         command.Parameters.AddParameter("@status", SqlDbType.NVarChar, string.IsNullOrWhiteSpace(status) ? null : status.Trim(), 50);
         command.Parameters.AddParameter("@search", SqlDbType.NVarChar, string.IsNullOrWhiteSpace(search) ? null : search.Trim(), 200);
+        command.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+        command.Parameters.AddParameter("@elevated", SqlDbType.Bit, ProjectScope.IsElevated(actor));
         command.Parameters.AddParameter("@offset", SqlDbType.Int, (page - 1) * pageSize);
         command.Parameters.AddParameter("@page_size", SqlDbType.Int, pageSize);
 

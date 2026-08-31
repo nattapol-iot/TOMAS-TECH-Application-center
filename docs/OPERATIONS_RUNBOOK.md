@@ -67,7 +67,7 @@ Expected result: HTTP `200` with `status: "ok"` and `service: "IoTTeamCenter.Api
 ### Readiness
 
 `GET /health/ready` opens a SQL connection, verifies that `dbo.schema_versions` has
-reached version 5, and uses a bounded, single-flight, briefly cached probe to verify
+reached version 6, and uses a bounded, single-flight, briefly cached probe to verify
 that the configured document-storage root exists and can be enumerated under the API identity.
 
 ```powershell
@@ -75,7 +75,7 @@ $apiBase = "https://<api-host>"
 Invoke-RestMethod -Method Get -Uri "$apiBase/health/ready"
 ```
 
-Expected result: HTTP `200`, `status: "ready"`, `schemaVersion: 5` or greater, and
+Expected result: HTTP `200`, `status: "ready"`, `schemaVersion: 6` or greater, and
 `documentStorage: "available"`. HTTP `503` means SQL is unreachable, a database
 operation failed, required migrations are absent, or the document root is unavailable.
 Do not route user traffic to an instance that is not ready.
@@ -422,7 +422,7 @@ FROM dbo.schema_versions
 ORDER BY version;
 ```
 
-The current API requires at least schema version 5. A schema-version marker alone is not proof of functional success; also run readiness, RBAC, and workflow smoke tests.
+The current API requires at least schema version 6. A schema-version marker alone is not proof of functional success; also run readiness, RBAC, and workflow smoke tests.
 For the initial baseline and after SQL-login changes, also run the repository's read-only
 `database/scripts/080_verify_production_baseline.sql` with explicit `DatabaseName` and
 `AppLogin` SQLCMD variables; archive its PASS output with the release evidence.

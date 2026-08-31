@@ -25,7 +25,11 @@ GO
 
 USE [$(DatabaseName)];
 GO
+:r database/migrations/006_inventory_concurrency.sql
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5)) <> 5
+USE [$(DatabaseName)];
+GO
+
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6)) <> 6
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 GO

@@ -31,7 +31,7 @@ Windows mapped drives are per-session state and are not supported for IIS.
 
 The production frontend and API currently provide the dashboard/bootstrap, user profile, inquiries, estimates and estimate cost, estimate workflow, projects, and inventory balance paths. The database baseline also contains procurement, receiving, stock, scheduling, document, notification, and audit structures. The presence of those tables does **not** mean that every corresponding production UI/API workflow is complete; validate each additional module before enabling it for the team.
 
-The database runner is a **fresh-database baseline**, not an upgrade runner. `database/scripts/020_deploy_fresh_database.sql` applies schema versions 1 through 5 and intentionally fails if those migrations have already been applied. Do not run it against an existing business database or rerun it after a partial deployment.
+The database runner is a **fresh-database baseline**, not an upgrade runner. `database/scripts/020_deploy_fresh_database.sql` applies schema versions 1 through 6 and intentionally fails if those migrations have already been applied. Do not run it against an existing business database or rerun it after a partial deployment.
 
 ## Values that must be decided before deployment
 
@@ -128,14 +128,23 @@ sqlcmd -S "tcp:<SQL_FQDN>,1433" -E -N -b -r1 `
   -v "DatabaseName=IoTTeamCenter"
 ```
 
-The runner creates the database if absent, enables snapshot isolation options, applies migrations 001-005 in order, and verifies all five schema version records. Migration 005 makes estimate snapshots append-only and prevents changes to historical cost revisions. Verify the result independently:
+The runner creates the database if absent, enables snapshot isolation options, applies migrations 001-006 in order, and verifies all six schema version records. Migration 005 makes estimate snapshots append-only and prevents changes to historical cost revisions. Migration 006 persists explicit GRN over-receipt authorization so confirmation can safely revalidate concurrent drafts. Verify the result independently:
 
 ```powershell
 sqlcmd -S "tcp:<SQL_FQDN>,1433" -E -N -b -r1 -d "IoTTeamCenter" `
   -Q "SET NOCOUNT ON; SELECT version, name, applied_at FROM dbo.schema_versions ORDER BY version;"
 ```
 
-Expected versions are exactly `1`, `2`, `3`, `4`, and `5`.
+Expected versions are exactly `1`, `2`, `3`, `4`, `5`, and `6`.
+
+For an existing database already at version 5, do not use the fresh-database runner. After a verified backup and a rehearsal on a recent restored clone, apply only the incremental migration during the approved change window:
+
+```powershell
+sqlcmd -S "tcp:<SQL_FQDN>,1433" -E -N -b -r1 -d "IoTTeamCenter" `
+  -i ".\database\migrations\006_inventory_concurrency.sql"
+```
+
+Confirm that schema version 6 and `dbo.grn_lines.allow_over_receipt` exist before starting the new API release. The added non-null bit column is backfilled to `0`, so pre-existing drafts fail closed rather than gaining implicit over-receipt authorization.
 
 Do not run `database/scripts/900_optional_development_seed.sql` in Production. It is explicitly development-only.
 
@@ -374,7 +383,7 @@ After release, confirm that the actual browser origin still equals both the SPA 
 Perform these checks with provisioned test accounts before inviting the full team:
 
 - TLS succeeds for both the Vercel/custom frontend and API without browser or SQL certificate bypasses.
-- `/health/live` returns HTTP 200 and `/health/ready` reports schema version 5 or greater.
+- `/health/live` returns HTTP 200 and `/health/ready` reports schema version 6 or greater.
 - A provisioned user can sign in with the company Microsoft account and load the dashboard.
 - An unprovisioned tenant user receives no application access even if Entra authentication succeeds.
 - The first `Admin` uses the authenticated **Master Data** screen to create at least one real customer before the first inquiry; add approved suppliers, inventory items, and engineering rates there as needed. Do not use the optional development seed or ad-hoc SQL.

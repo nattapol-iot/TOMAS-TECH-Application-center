@@ -241,13 +241,24 @@ public static class MasterDataEndpoints
                 connection, transaction, level, department, request.EffectiveFrom, request.EffectiveTo, cancellationToken);
 
             await using var command = new SqlCommand("""
+                DECLARE @created TABLE (
+                    id bigint NOT NULL,
+                    level nvarchar(100) NOT NULL,
+                    department nvarchar(100) NOT NULL,
+                    row_version binary(8) NOT NULL
+                );
+
                 INSERT INTO dbo.engineering_rates (
                     level, department, engineering_hourly, engineering_daily,
                     installation_hourly, installation_daily, effective_from, effective_to, created_by)
                 OUTPUT inserted.id, inserted.level, inserted.department, inserted.row_version
+                    INTO @created (id, level, department, row_version)
                 VALUES (
                     @level, @department, @engineering_hourly, @engineering_daily,
                     @installation_hourly, @installation_daily, @effective_from, @effective_to, @actor);
+
+                SELECT id, level, department, row_version
+                FROM @created;
                 """, connection, transaction);
             command.Parameters.AddParameter("@level", SqlDbType.NVarChar, level, 100);
             command.Parameters.AddParameter("@department", SqlDbType.NVarChar, department, 100);

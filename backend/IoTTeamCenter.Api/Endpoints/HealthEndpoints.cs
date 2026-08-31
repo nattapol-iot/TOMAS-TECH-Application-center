@@ -5,7 +5,7 @@ namespace IoTTeamCenter.Api.Endpoints;
 
 public static class HealthEndpoints
 {
-    private const int RequiredSchemaVersion = 5;
+    private const int RequiredSchemaVersion = 6;
 
     public static void MapHealthEndpoints(this IEndpointRouteBuilder app)
     {

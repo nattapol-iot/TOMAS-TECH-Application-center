@@ -277,12 +277,17 @@ public static class MaterialIssueEndpoints
         decimal bomQuantity;
         decimal customerSupplied;
         decimal previouslyIssued;
+        decimal openCommitted;
         string defaultLocation;
         await using (var lookup = new SqlCommand("""
             SELECT bl.item_id, i.item_code, bl.qty_required, bl.customer_supplied_qty, COALESCE(i.location, N''),
                    COALESCE((SELECT SUM(ml.issued_qty - ml.returned_qty) FROM dbo.mir_lines ml
                              INNER JOIN dbo.mirs m ON m.id = ml.mir_id
                                   AND m.status IN (N'Issued', N'Received')
+                             WHERE ml.bom_line_id = bl.id), 0),
+                   COALESCE((SELECT SUM(ml.requested_qty) FROM dbo.mir_lines ml
+                             INNER JOIN dbo.mirs m ON m.id = ml.mir_id
+                                  AND m.status IN (N'Pending Approval', N'Approved', N'Picking')
                              WHERE ml.bom_line_id = bl.id), 0)
             FROM dbo.bom_lines bl
             INNER JOIN dbo.mat_items i ON i.id = bl.item_id
@@ -301,16 +306,20 @@ public static class MaterialIssueEndpoints
             customerSupplied = reader.GetDecimal(3);
             defaultLocation = reader.GetString(4);
             previouslyIssued = reader.GetDecimal(5);
+            openCommitted = reader.GetDecimal(6);
         }
 
         // The BOM quantity the project may still draw, less anything the
-        // customer supplies themselves.
+        // customer supplies themselves. Open requests are commitments too:
+        // without counting them, two pending/approved MIRs could each claim
+        // the same remaining BOM allowance before either one is issued.
         var issuable = bomQuantity - customerSupplied;
-        if (line.RequestedQuantity > issuable - previouslyIssued)
+        var remaining = issuable - previouslyIssued - openCommitted;
+        if (line.RequestedQuantity > remaining)
             throw new ApiException(
                 StatusCodes.Status409Conflict, "exceeds_bom_quantity",
-                $"{itemCode}: the BOM allows {issuable:0.####} and {previouslyIssued:0.####} is already issued, so {line.RequestedQuantity:0.####} cannot be requested.",
-                new { issuable, previouslyIssued, requested = line.RequestedQuantity });
+                $"{itemCode}: the BOM allows {issuable:0.####}; {previouslyIssued:0.####} is net issued and {openCommitted:0.####} is already committed to open requests, so only {Math.Max(remaining, 0):0.####} remains.",
+                new { issuable, previouslyIssued, openCommitted, remaining = Math.Max(remaining, 0), requested = line.RequestedQuantity });
 
         await using var insert = new SqlCommand("""
             INSERT INTO dbo.mir_lines (
@@ -417,20 +426,35 @@ public static class MaterialIssueEndpoints
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
+            // Every request raised from the same BOM shares this lock. It is
+            // also the lock CreateAsync takes, so availability checks and
+            // actual issues cannot race one another across different MIRs.
+            // Take it before the MIR header to match CreateAsync's BOM-first
+            // lock order and avoid a BOM/MIR lock inversion.
+            await LockSourceBomsAsync(connection, transaction, id, cancellationToken);
+
             var header = await ReadHeaderAsync(connection, transaction, id, forUpdate: true, cancellationToken);
             if (header.Status is not ("Approved" or "Picking"))
                 throw new ApiException(StatusCodes.Status409Conflict, "mir_not_approved", $"Material can only be issued against an approved request; this one is '{header.Status}'.");
 
-            var lines = new List<(long LineId, long ItemId, string ItemCode, decimal Requested, string Location, decimal UnitCost, decimal Usable, decimal OwnReserved, decimal Available)>();
+            var lines = new List<(long LineId, long ItemId, string ItemCode, decimal Requested, string Location, decimal UnitCost, decimal Usable, decimal OwnReserved, decimal Available, decimal BomAllowance, decimal PreviouslyIssued)>();
             await using (var read = new SqlCommand("""
                 SELECT ml.id, ml.item_id, i.item_code, ml.requested_qty, ml.location, i.avg_unit_cost,
                        COALESCE((SELECT SUM(t.qty) FROM dbo.stock_txns t WITH (UPDLOCK, HOLDLOCK)
                                  WHERE t.item_id = ml.item_id AND t.bucket = N'stock'), 0),
                        COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WITH (UPDLOCK, HOLDLOCK)
                                  WHERE r.item_id = ml.item_id AND r.project_id = @project_id AND r.status = N'Active'), 0),
-                       COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r
-                                 WHERE r.item_id = ml.item_id AND r.status = N'Active'), 0)
+                        COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r
+                                  WHERE r.item_id = ml.item_id AND r.status = N'Active'), 0)
+                       , bl.qty_required - bl.customer_supplied_qty
+                       , COALESCE((SELECT SUM(other_ml.issued_qty - other_ml.returned_qty)
+                                   FROM dbo.mir_lines other_ml
+                                   INNER JOIN dbo.mirs other_m ON other_m.id = other_ml.mir_id
+                                        AND other_m.status IN (N'Issued', N'Received')
+                                   WHERE other_ml.bom_line_id = ml.bom_line_id
+                                     AND other_ml.mir_id <> @id), 0)
                 FROM dbo.mir_lines ml
+                INNER JOIN dbo.bom_lines bl ON bl.id = ml.bom_line_id
                 INNER JOIN dbo.mat_items i ON i.id = ml.item_id
                 WHERE ml.mir_id = @id
                 ORDER BY ml.id;
@@ -445,7 +469,8 @@ public static class MaterialIssueEndpoints
                     var ownReserved = reader.GetDecimal(7);
                     var totalReserved = reader.GetDecimal(8);
                     lines.Add((reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetDecimal(3),
-                        reader.GetString(4), reader.GetDecimal(5), usable, ownReserved, usable - totalReserved));
+                        reader.GetString(4), reader.GetDecimal(5), usable, ownReserved, usable - totalReserved,
+                        reader.GetDecimal(9), reader.GetDecimal(10)));
                 }
             }
             if (lines.Count == 0)
@@ -454,6 +479,17 @@ public static class MaterialIssueEndpoints
             // Nothing moves until every line is proven issuable.
             foreach (var line in lines)
             {
+                var remainingBom = line.BomAllowance - line.PreviouslyIssued;
+                if (line.Requested > remainingBom)
+                    throw new ApiException(StatusCodes.Status409Conflict, "exceeds_bom_quantity",
+                        $"{line.ItemCode}: only {Math.Max(remainingBom, 0):0.####} remains on the BOM after {line.PreviouslyIssued:0.####} was net issued by other requests. Reload the BOM and create a request for the remaining quantity.",
+                        new
+                        {
+                            bomAllowance = line.BomAllowance,
+                            previouslyIssued = line.PreviouslyIssued,
+                            remaining = Math.Max(remainingBom, 0),
+                            requested = line.Requested
+                        });
                 if (line.Requested > line.Usable)
                     throw new ApiException(StatusCodes.Status409Conflict, "insufficient_stock",
                         $"{line.ItemCode}: only {line.Usable:0.####} is physically in stock.",
@@ -509,6 +545,34 @@ public static class MaterialIssueEndpoints
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Serializes all creation and issue decisions that consume allowance from
+    /// the same source BOM. Locking the stable BOM header avoids relying on a
+    /// range lock over mutable MIR status rows and gives multi-line requests a
+    /// deterministic lock order.
+    /// </summary>
+    private static async Task LockSourceBomsAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        long mirId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            SELECT b.id
+            FROM dbo.boms b WITH (UPDLOCK, HOLDLOCK)
+            WHERE EXISTS (
+                SELECT 1
+                FROM dbo.bom_lines bl
+                INNER JOIN dbo.mir_lines ml ON ml.bom_line_id = bl.id
+                WHERE bl.bom_id = b.id AND ml.mir_id = @mir_id
+            )
+            ORDER BY b.id;
+            """, connection, transaction);
+        command.Parameters.AddParameter("@mir_id", SqlDbType.BigInt, mirId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken)) { }
     }
 
     /// <summary>

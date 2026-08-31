@@ -263,6 +263,7 @@ app.MapMaterialIssueEndpoints();
 app.MapStockControlEndpoints();
 app.MapMasterDataEndpoints();
 app.MapReportEndpoints();
+app.MapAdminReadEndpoints();
 
 app.Run();
 

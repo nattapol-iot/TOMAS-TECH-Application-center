@@ -325,7 +325,7 @@ public static class PurchaseRequisitionEndpoints
         decimal available;
 
         await using (var lookup = new SqlCommand("""
-            SELECT l.item_id, COALESCE(i.item_code, N''), COALESCE(i.part_no, N''), l.description, l.unit,
+            SELECT l.item_id, COALESCE(i.item_code, ci.item_code, N''), COALESCE(i.part_no, N''), l.description, l.unit,
                    l.qty_required, l.customer_supplied_qty, l.est_unit_cost, l.non_stock,
                    COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WITH (UPDLOCK, HOLDLOCK)
                              WHERE r.bom_line_id = l.id AND r.status IN (N'Active', N'Consumed')), 0),
@@ -351,6 +351,7 @@ public static class PurchaseRequisitionEndpoints
                    COALESCE(vb.available, 0)
             FROM dbo.bom_lines l
             LEFT JOIN dbo.mat_items i ON i.id = l.item_id
+            LEFT JOIN dbo.cost_items ci ON ci.id = l.estimate_line_id AND ci.deleted_at IS NULL
             LEFT JOIN dbo.v_item_balances vb ON vb.item_id = l.item_id
             WHERE l.id = @line_id AND l.bom_id = @bom_id AND l.deleted_at IS NULL;
             """, connection, transaction))
@@ -379,7 +380,29 @@ public static class PurchaseRequisitionEndpoints
             covered = Math.Max(allocated, netIssued + activeReserved);
         }
 
-        if (string.IsNullOrEmpty(itemCode)) itemCode = line.ItemCodeOverride?.Trim() ?? description;
+        var requestedItemCode = string.IsNullOrWhiteSpace(line.ItemCodeOverride)
+            ? null
+            : line.ItemCodeOverride.Trim();
+        if (string.IsNullOrWhiteSpace(itemCode))
+        {
+            // Legacy BOM rows may not point at either an inventory item or an
+            // estimate line. Only those rows need a client-supplied code.
+            if (requestedItemCode is null)
+                throw new ApiException(StatusCodes.Status400BadRequest, "item_code_required",
+                    $"BOM line {line.BomLineId} has no authoritative item code; provide itemCodeOverride.");
+            itemCode = requestedItemCode;
+        }
+        else if (requestedItemCode is not null
+                 && !string.Equals(requestedItemCode, itemCode, StringComparison.OrdinalIgnoreCase))
+        {
+            // A normal generated BOM already carries the approved estimate or
+            // inventory-master code. Do not let request JSON silently relabel
+            // that line on the purchasing document.
+            throw new ApiException(
+                StatusCodes.Status400BadRequest, "item_code_override_mismatch",
+                $"BOM line {line.BomLineId} is '{itemCode}', not '{requestedItemCode}'. Reload the BOM and try again.",
+                new { bomLineId = line.BomLineId, authoritativeItemCode = itemCode });
+        }
         var shortage = Math.Max(0m, quantityRequired - covered - customerSupplied - onOrder - onOpenPr);
         if (!line.IsUnplanned && line.Quantity > shortage)
             throw new ApiException(

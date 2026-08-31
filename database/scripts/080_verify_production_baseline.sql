@@ -11,8 +11,8 @@ SET XACT_ABORT ON;
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
 
-IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 5)
-    THROW 51070, 'Required schema version 5 is not installed.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 6)
+    THROW 51070, 'Required schema version 6 is not installed.', 1;
 
 IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
@@ -25,6 +25,7 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.trg_other_cost_lines_current_revision_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_stock_txns_append_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_mat_audit_append_only', N'TR') IS NULL
+   OR COL_LENGTH(N'dbo.grn_lines', N'allow_over_receipt') IS NULL
     THROW 51071, 'A required production procedure, function, or view is missing.', 1;
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'iot_team_app_role' AND type = 'R')
@@ -94,7 +95,8 @@ VALUES
     (N'mir_lines', N'SELECT'), (N'mir_lines', N'INSERT'), (N'mir_lines', N'UPDATE'),
     (N'stock_adjustments', N'SELECT'), (N'stock_adjustments', N'INSERT'), (N'stock_adjustments', N'UPDATE'),
     (N'stock_txns', N'SELECT'), (N'stock_txns', N'INSERT'),
-    (N'mat_audit', N'INSERT'),
+    (N'audit_log', N'SELECT'),
+    (N'mat_audit', N'SELECT'), (N'mat_audit', N'INSERT'),
     (N'holidays', N'SELECT'),
     (N'schedule_tasks', N'SELECT'), (N'schedule_tasks', N'INSERT'), (N'schedule_tasks', N'UPDATE'),
     (N'schedule_task_pics', N'SELECT'), (N'schedule_task_pics', N'INSERT'), (N'schedule_task_pics', N'DELETE'),
