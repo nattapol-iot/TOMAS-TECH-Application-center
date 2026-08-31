@@ -87,6 +87,33 @@ test("production workspace exposes every Demo menu through API-backed renderers"
   }
 });
 
+test("production My Work keeps the Demo workflow on live API contracts", async () => {
+  const [screen, shell] = await Promise.all([
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+  ]);
+  for (const label of [
+    "Needs update", "Late", "Blocked", "Due this week", "Awaiting the PM",
+    "My tasks", "My updates", "Needs your update", "Start today", "Finish today",
+    "Forecast", "Request more days", "Add my task", "Whole plan",
+  ]) {
+    assert.match(screen, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(screen, /apiRequest<MyWorkItem\[]>\("\/api\/v1\/me\/work"\)/);
+  assert.match(screen, /apiRequest<MyWorkUpdate\[]>\("\/api\/v1\/me\/work\/updates"\)/);
+  assert.match(screen, /\/api\/v1\/schedule\/tasks\/\$\{item\.taskId\}\/updates/);
+  assert.match(screen, /\/api\/v1\/schedule\/tasks\/\$\{item\.taskId\}\/day-requests/);
+  assert.match(screen, /\/api\/v1\/schedule\/tasks\/\$\{item\.taskId\}\/details/);
+  assert.match(screen, /\/api\/v1\/schedule\/day-requests\/\$\{request\.id\}\/answer/);
+  assert.match(screen, /Review request for more days/);
+  assert.match(screen, /item\.isOwnDetail/);
+  assert.match(screen, /item\.canAddDetail/);
+  assert.match(screen, /item\.canDeleteDetail/);
+  assert.doesNotMatch(screen, /from ["'][^"']*(?:data|calc|store|session)["']/);
+  assert.match(shell, /openProjectSchedule/);
+  assert.match(shell, /myWorkUrgentCount/);
+});
+
 test("legacy unauthenticated D1 routes and binding are absent", async () => {
   const hosting = JSON.parse(await readFile(new URL(".openai/hosting.json", root), "utf8"));
   assert.equal(hosting.d1, null);
@@ -283,7 +310,12 @@ test("SQL application login stays least-privileged and secret template fails clo
   ]);
   assert.doesNotMatch(grants, /GRANT EXECUTE ON SCHEMA::dbo/i);
   assert.doesNotMatch(grants, /GRANT SELECT ON SCHEMA::dbo/i);
+  assert.match(grants, /@permission_cleanup/);
+  assert.match(grants, /permission\.class IN \(0, 3\)/);
+  assert.match(grants, /Application-role database\/schema permission normalization did not complete/);
+  assert.match(grants, /retained a database- or schema-wide grant/);
   assert.match(grants, /GRANT EXECUTE ON OBJECT::dbo\.issue_document_number/i);
+  assert.match(grants, /REVOKE EXECUTE ON OBJECT::dbo\.answer_schedule_day_request FROM \[public\]/i);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.estimate_revisions/i);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.estimate_revisions/i);
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.mat_items/i);
@@ -321,7 +353,7 @@ test("SQL parameter helper preserves MAX fields and validates row versions", asy
 
 test("production baseline verifier checks schema, app role, and real identities", async () => {
   const verifier = await readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8");
-  assert.match(verifier, /schema_versions WHERE version = 6/);
+  assert.match(verifier, /schema_versions WHERE version = 7/);
   assert.match(verifier, /Schema-wide EXECUTE is forbidden/);
   assert.match(verifier, /Schema-wide SELECT is forbidden/);
   assert.match(verifier, /active production administrator/);
@@ -329,7 +361,16 @@ test("production baseline verifier checks schema, app role, and real identities"
   assert.match(verifier, /sys\.server_role_members/);
   assert.match(verifier, /unexpected direct server permission/);
   assert.match(verifier, /unexpected direct database permission/);
+  assert.match(verifier, /authentication_type_desc/);
+  assert.match(verifier, /@app_authentication_type = N'INSTANCE'/);
+  assert.match(verifier, /@allowed_public_database_permissions/);
+  assert.match(verifier, /unexpected database- or schema-wide grant/);
+  assert.match(verifier, /owner-executed application procedure is granted to an unexpected database principal/);
+  assert.match(verifier, /principal_id IN \(@app_user_id, @app_role_id, @public_role_id\)/);
+  assert.match(verifier, /HAS_PERMS_BY_NAME\(N'dbo', N'SCHEMA', N'CONTROL'\)/);
   assert.match(verifier, /EXECUTE AS USER/);
+  assert.match(verifier, /@app_user_type = 'A'/);
+  assert.match(verifier, /application-role principals cannot be impersonated/);
   assert.match(verifier, /HAS_PERMS_BY_NAME\(N'dbo\.project_docs'/);
   assert.match(verifier, /required_material_permissions/);
   assert.match(verifier, /unexpected material-workflow write grant/);
@@ -362,6 +403,20 @@ test("project portfolio listing follows the same assignment scope as project wor
   assert.match(projects, /@elevated = 1 OR p\.manager_id = @actor OR p\.lead_engineer_id = @actor/);
   assert.match(projects, /dbo\.project_members m WHERE m\.project_id = p\.id AND m\.user_id = @actor/);
   assert.match(projects, /ProjectScope\.IsElevated\(actor\)/);
+});
+
+test("My Work does not treat the Project Manager role as globally project-scoped", async () => {
+  const [scope, schedule] = await Promise.all([
+    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectScope.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ScheduleEndpoints.cs", root), "utf8"),
+  ]);
+  const myWorkPolicy = scope.match(/public static bool IsMyWorkElevated\(CurrentUser actor\) =>\s*([^;]+);/);
+  assert.ok(myWorkPolicy, "My Work must have an explicit elevation policy");
+  assert.match(myWorkPolicy[1], /Admin/);
+  assert.match(myWorkPolicy[1], /Engineering Manager/);
+  assert.doesNotMatch(myWorkPolicy[1], /Project Manager/);
+  assert.equal([...schedule.matchAll(/ProjectScope\.IsMyWorkElevated\(actor\)/g)].length, 2);
+  assert.equal([...schedule.matchAll(/ProjectScope\.DemandMyWorkAsync\(/g)].length, 4);
 });
 
 test("administrative read models are permission-gated and audit ledgers stay immutable", async () => {
@@ -405,7 +460,49 @@ test("inventory decisions revalidate live quantities under database locks", asyn
   assert.match(migration, /ADD allow_over_receipt bit NOT NULL/);
   assert.match(migration, /schema_versions\(version, name\)[\s\S]*VALUES \(6,/);
   assert.match(deployment, /006_inventory_concurrency\.sql/);
-  assert.match(health, /RequiredSchemaVersion = 6/);
+  assert.match(health, /RequiredSchemaVersion = 7/);
+});
+
+test("schedule day-request answers are atomic and narrowly permissioned", async () => {
+  const [migration, grants, verifier, deployment, schedule] = await Promise.all([
+    readFile(new URL("database/migrations/007_schedule_day_request_answers.sql", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
+    readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ScheduleEndpoints.cs", root), "utf8"),
+  ]);
+  assert.match(migration, /PROCEDURE dbo\.answer_schedule_day_request/);
+  assert.match(migration, /WITH EXECUTE AS OWNER/);
+  assert.match(migration, /WITH \(UPDLOCK, HOLDLOCK\)/);
+  assert.match(migration, /plan_days = plan_days \+ @request_days/);
+  assert.match(migration, /answer = @answer/);
+  assert.match(migration, /schema_versions\(version, name\)[\s\S]*VALUES \(7,/);
+  assert.match(grants, /GRANT EXECUTE ON OBJECT::dbo\.answer_schedule_day_request/i);
+  assert.doesNotMatch(grants, /GRANT UPDATE ON OBJECT::dbo\.schedule_updates/i);
+  assert.match(verifier, /answer_schedule_day_request/);
+  assert.match(deployment, /007_schedule_day_request_answers\.sql/);
+  assert.match(schedule, /MapPost\("\/day-requests\/\{id:long\}\/answer"/);
+  assert.match(schedule, /DemandPermissionAsync\("schedule\.plan"/);
+
+  const answerSource = schedule.slice(
+    schedule.indexOf("private static async Task<IResult> AnswerDayRequestAsync"),
+    schedule.indexOf("private static async Task<IResult> CreateMemberDetailAsync"),
+  );
+  const requestSource = schedule.slice(
+    schedule.indexOf("private static async Task<IResult> RequestMoreDaysAsync"),
+    schedule.indexOf("private static async Task<IResult> AnswerDayRequestAsync"),
+  );
+  const answerTaskLock = answerSource.indexOf("ReadTaskAsync(connection, transaction");
+  const answerRequestLock = answerSource.indexOf("FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)");
+  const requestTaskLock = requestSource.indexOf("ReadTaskAsync(connection, transaction");
+  const requestPendingLock = requestSource.indexOf("HasPendingDayRequestAsync(connection, transaction");
+  assert.ok(answerTaskLock >= 0 && answerRequestLock > answerTaskLock, "answer path must lock task before request");
+  assert.ok(requestTaskLock >= 0 && requestPendingLock > requestTaskLock, "request path must lock task before pending requests");
+  assert.ok(
+    migration.indexOf("FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)")
+      < migration.indexOf("FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)"),
+    "owner procedure must lock task before request",
+  );
 });
 
 test("project documents use fail-closed NAS storage, scoped access, and append-only metadata", async () => {

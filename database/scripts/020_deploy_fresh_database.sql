@@ -29,7 +29,11 @@ GO
 
 USE [$(DatabaseName)];
 GO
+:r database/migrations/007_schedule_day_request_answers.sql
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6)) <> 6
+USE [$(DatabaseName)];
+GO
+
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7)) <> 7
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 GO

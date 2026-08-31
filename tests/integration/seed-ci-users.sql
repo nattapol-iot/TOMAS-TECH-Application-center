@@ -18,6 +18,8 @@ DECLARE @fixtures TABLE (
 INSERT INTO @fixtures (entra_object_id, email, name, initials, role_code)
 VALUES
     (N'dev-user', N'dev-user@ci.invalid', N'CI Admin', N'AD', N'Admin'),
+    (N'engineer-oid', N'engineer-oid@ci.invalid', N'CI Other Engineer', N'OE', N'Engineer'),
+    (N'pm-oid', N'pm-oid@ci.invalid', N'CI Other Project Manager', N'PM', N'Project Manager'),
     (N'mgr-oid', N'mgr-oid@ci.invalid', N'CI Engineering Manager', N'EM', N'Engineering Manager'),
     (N'buy-oid', N'buy-oid@ci.invalid', N'CI Purchasing', N'PU', N'Purchasing'),
     (N'wh-oid', N'wh-oid@ci.invalid', N'CI Warehouse', N'WH', N'Warehouse'),

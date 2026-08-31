@@ -18,11 +18,37 @@ public static class ProjectScope
     public static bool IsElevated(CurrentUser actor) =>
         ElevatedRoles.Contains(actor.Role, StringComparer.Ordinal);
 
-    public static async Task DemandAsync(
+    /// <summary>
+    /// My Work is an assignment-scoped employee surface. Only the two roles
+    /// responsible for organization-wide schedule oversight may bypass the
+    /// project manager/lead/member checks; a Project Manager role by itself
+    /// does not grant access to every project's assigned work.
+    /// </summary>
+    public static bool IsMyWorkElevated(CurrentUser actor) =>
+        actor.Role is "Admin" or "Engineering Manager";
+
+    public static Task DemandAsync(
         SqlConnection connection,
         SqlTransaction? transaction,
         long projectId,
         CurrentUser actor,
+        CancellationToken cancellationToken) =>
+        DemandWithPolicyAsync(connection, transaction, projectId, actor, IsElevated(actor), cancellationToken);
+
+    public static Task DemandMyWorkAsync(
+        SqlConnection connection,
+        SqlTransaction? transaction,
+        long projectId,
+        CurrentUser actor,
+        CancellationToken cancellationToken) =>
+        DemandWithPolicyAsync(connection, transaction, projectId, actor, IsMyWorkElevated(actor), cancellationToken);
+
+    private static async Task DemandWithPolicyAsync(
+        SqlConnection connection,
+        SqlTransaction? transaction,
+        long projectId,
+        CurrentUser actor,
+        bool elevated,
         CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand("""
@@ -34,7 +60,7 @@ public static class ProjectScope
             """, connection, transaction);
         command.Parameters.AddParameter("@project_id", SqlDbType.BigInt, projectId);
         command.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
-        command.Parameters.AddParameter("@elevated", SqlDbType.Bit, IsElevated(actor));
+        command.Parameters.AddParameter("@elevated", SqlDbType.Bit, elevated);
         var allowed = await command.ExecuteScalarAsync(cancellationToken);
         if (allowed is null)
             throw new ApiException(StatusCodes.Status404NotFound, "project_not_found", "Project not found.");

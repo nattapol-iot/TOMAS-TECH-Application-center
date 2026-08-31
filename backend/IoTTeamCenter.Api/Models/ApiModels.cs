@@ -315,7 +315,24 @@ public sealed record UpdateScheduleProgressRequest(
     decimal PercentComplete,
     DateOnly? ActualStart,
     DateOnly? ActualFinish,
+    DateOnly? ForecastFinish,
     string Status,
     string? Remark);
+
+public sealed record RequestScheduleDaysRequest(int RequestDays, string Comment);
+
+public sealed record AnswerScheduleDaysRequest(
+    string? ScheduleVersion,
+    string RowVersion,
+    string Answer,
+    string? Note);
+
+public sealed record CreateMemberScheduleDetailRequest(
+    string? ScheduleVersion,
+    string RowVersion,
+    string Name,
+    int PlanDays);
+
+public sealed record DeleteMemberScheduleDetailRequest(string? ScheduleVersion, string RowVersion);
 
 public sealed record CreateScheduleBaselineRequest(string? ScheduleVersion, string Label, string Reason);

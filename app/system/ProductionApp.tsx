@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
-import { IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
+import { apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
 import { clearTeamTestSession, getTeamTestSession, IS_TEAM_TEST_MODE, saveTeamTestSession } from "./team-test-client";
 import { PRODUCT } from "./product";
 import { Icon, Tabs, Toast, type IconName } from "./ui";
@@ -48,6 +48,14 @@ type View =
   | "customers" | "reports" | "master" | "rates" | "audit" | "settings";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
+type MyWorkUrgencyItem = {
+  status: string;
+  canUpdate: boolean;
+  planFinish: string | null;
+  actualFinish: string | null;
+  forecastFinish: string | null;
+  updatedAt: string;
+};
 const NAV: { group?: string; items: NavItem[] }[] = [
   { items: [
     { view: "dashboard", label: "Dashboard", icon: "grid" },
@@ -98,6 +106,10 @@ export default function ProductionApp() {
   const [userOpen, setUserOpen] = useState(false);
   const [projectTab, setProjectTab] = useState<"portfolio" | "schedule">("portfolio");
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
+  const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
+  const [myWorkUrgentCount, setMyWorkUrgentCount] = useState(0);
+  const canLoadMyWork = Boolean(bootstrap?.permissions.includes("schedule.read")
+    && bootstrap.permissions.includes("schedule.progress"));
 
   const refreshBootstrap = async () => {
     setBootstrap(await loadBootstrap());
@@ -126,8 +138,21 @@ export default function ProductionApp() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!bootstrap || !canLoadMyWork) return () => { cancelled = true; };
+    void apiRequest<MyWorkUrgencyItem[]>("/api/v1/me/work")
+      .then((items) => {
+        if (!cancelled) setMyWorkUrgentCount(items.filter(myWorkNeedsAttention).length);
+      })
+      .catch(() => {
+        if (!cancelled) setMyWorkUrgentCount(0);
+    });
+    return () => { cancelled = true; };
+  }, [bootstrap, canLoadMyWork]);
+
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {
-    setBusy(true); setAuthError("");
+    setBusy(true); setAuthError(""); setMyWorkUrgentCount(0);
     try {
       if (IS_TEAM_TEST_MODE) saveTeamTestSession(teamTestEmail ?? "", teamTestAccessCode ?? "");
       else await signInWithMicrosoft();
@@ -145,7 +170,7 @@ export default function ProductionApp() {
     try {
       if (IS_TEAM_TEST_MODE) clearTeamTestSession();
       else await signOutMicrosoft();
-      setBootstrap(null); setView("dashboard");
+      setBootstrap(null); setMyWorkUrgentCount(0); setView("dashboard");
     }
     catch (error) { setAuthError(error instanceof Error ? error.message : "Unable to sign out. Please try again."); }
     finally { setBusy(false); }
@@ -158,6 +183,13 @@ export default function ProductionApp() {
         && (!item.permissions || item.permissions.every((permission) => bootstrap?.permissions.includes(permission)))),
     }))
     .filter((section) => section.items.length > 0), [bootstrap]);
+
+  const openProjectSchedule = useCallback((projectId: number) => {
+    setPreferredScheduleProjectId(projectId);
+    setProjectTab("schedule");
+    setView("projects");
+    window.scrollTo({ top: 0 });
+  }, []);
 
   if (!bootstrap) {
     return (
@@ -173,7 +205,13 @@ export default function ProductionApp() {
   }
 
   const common = { bootstrap, notify: setToast, refreshBootstrap };
-  const moduleProps = { bootstrap, notify: setToast };
+  const moduleProps = {
+    bootstrap,
+    notify: setToast,
+    openProjectSchedule,
+    preferredProjectId: preferredScheduleProjectId,
+    onMyWorkUrgentCountChange: setMyWorkUrgentCount,
+  };
   return (
     <div className="app">
       <aside className="sidebar">
@@ -183,7 +221,7 @@ export default function ProductionApp() {
           {allowedNav.map((section, sectionIndex) => (
             <div className="nav-group" key={section.group ?? `primary-${sectionIndex}`}>
               {section.group ? <p className="nav-label">{section.group}</p> : null}
-              {section.items.map((item) => <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} onClick={() => { setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{item.label}</span>{badgeFor(item.view, bootstrap) ? <em>{badgeFor(item.view, bootstrap)}</em> : null}</button>)}
+              {section.items.map((item) => <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} onClick={() => { setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{item.label}</span>{badgeFor(item.view, bootstrap, myWorkUrgentCount) ? <em>{badgeFor(item.view, bootstrap, myWorkUrgentCount)}</em> : null}</button>)}
             </div>
           ))}
         </nav>
@@ -289,7 +327,21 @@ function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
 }
 
-function badgeFor(view: View, bootstrap: BootstrapData) {
+function myWorkNeedsAttention(item: MyWorkUrgencyItem) {
+  if (!item.canUpdate || item.status === "Done") return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const effectiveFinish = item.actualFinish ?? item.forecastFinish ?? item.planFinish;
+  const late = Boolean(effectiveFinish && new Date(`${effectiveFinish.slice(0, 10)}T00:00:00`) < today);
+  const needsForecast = !item.actualFinish && !item.forecastFinish
+    && Boolean(item.planFinish && new Date(`${item.planFinish.slice(0, 10)}T00:00:00`) < today);
+  const stale = item.status === "In Progress"
+    && Date.now() - Date.parse(item.updatedAt) > 5 * 86_400_000;
+  return late || item.status === "Blocked" || needsForecast || stale;
+}
+
+function badgeFor(view: View, bootstrap: BootstrapData, myWorkUrgentCount = 0) {
+  if (view === "my-work") return myWorkUrgentCount;
   if (view === "inquiries") return bootstrap.counts.inquiries;
   if (view === "estimates") return bootstrap.counts.estimates;
   if (view === "projects") return bootstrap.counts.activeProjects;

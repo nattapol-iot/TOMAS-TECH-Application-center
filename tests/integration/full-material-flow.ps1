@@ -20,7 +20,7 @@ if ($databaseName -notmatch '^IoTTeamCenter_CI_[A-Za-z0-9_]+$') { throw 'Generat
 $appRoleName = 'iot_ci_app_role'
 $appRolePassword = '{0}{1}' -f ([Guid]::NewGuid().ToString('N')), ([Guid]::NewGuid().ToString('N'))
 
-$sqlcmdBase = @('-S', $SqlServer, '-b', '-r1', '-C')
+$sqlcmdBase = @('-S', $SqlServer, '-b', '-r1', '-C', '-I')
 $oldSqlcmdPassword = $env:SQLCMDPASSWORD
 if ([string]::IsNullOrWhiteSpace($SqlUser)) {
     $sqlcmdBase += '-E'
@@ -58,7 +58,7 @@ function Get-FreePort {
 
 function Invoke-Api {
     param(
-        [Parameter(Mandatory)][ValidateSet('GET', 'POST', 'PUT')][string] $Method,
+        [Parameter(Mandatory)][ValidateSet('GET', 'POST', 'PUT', 'DELETE')][string] $Method,
         [Parameter(Mandatory)][string] $Path,
         [Parameter(Mandatory)][string] $Identity,
         [object] $Body
@@ -104,7 +104,7 @@ function Invoke-Api {
 
 function Assert-ApiError {
     param(
-        [Parameter(Mandatory)][ValidateSet('GET', 'POST', 'PUT')][string] $Method,
+        [Parameter(Mandatory)][ValidateSet('GET', 'POST', 'PUT', 'DELETE')][string] $Method,
         [Parameter(Mandatory)][string] $Path,
         [Parameter(Mandatory)][string] $Identity,
         [object] $Body,
@@ -155,7 +155,7 @@ try {
     Invoke-SqlFile (Join-Path $repoRoot 'database\scripts\020_deploy_fresh_database.sql')
     Invoke-SqlFile (Join-Path $PSScriptRoot 'seed-ci-users.sql')
     $escapedAppRolePassword = $appRolePassword.Replace("'", "''")
-    Invoke-SqlQuery $databaseName "CREATE APPLICATION ROLE [$appRoleName] WITH PASSWORD = N'$escapedAppRolePassword';"
+    Invoke-SqlQuery $databaseName "IF DATABASE_PRINCIPAL_ID(N'iot_team_app_role') IS NULL EXEC(N'CREATE ROLE [iot_team_app_role]'); CREATE APPLICATION ROLE [$appRoleName] WITH PASSWORD = N'$escapedAppRolePassword'; GRANT CONTROL TO [iot_team_app_role]; GRANT CONTROL ON SCHEMA::dbo TO [iot_team_app_role]; GRANT CONTROL TO [$appRoleName]; GRANT CONTROL ON SCHEMA::dbo TO [$appRoleName]; GRANT EXECUTE ON OBJECT::dbo.answer_schedule_day_request TO [public];"
     Push-Location $repoRoot
     try {
         & sqlcmd @sqlcmdBase -i (Join-Path $repoRoot 'database\scripts\010_application_login.sql') `
@@ -165,9 +165,26 @@ try {
         Pop-Location
     }
     Invoke-SqlQuery $databaseName @"
+IF EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = DATABASE_PRINCIPAL_ID(N'public')
+      AND class = 1
+      AND major_id = OBJECT_ID(N'dbo.answer_schedule_day_request')
+      AND permission_name = N'EXECUTE'
+      AND state IN ('G', 'W'))
+    THROW 51073, 'Application login provisioning retained public EXECUTE on the owner procedure.', 1;
 DECLARE @cookie varbinary(8000);
 EXEC sys.sp_setapprole @rolename = N'$appRoleName', @password = N'$escapedAppRolePassword',
     @fCreateCookie = 1, @cookie = @cookie OUTPUT;
+IF COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'CONTROL'), 0) <> 0
+    THROW 51074, 'Application login provisioning retained database CONTROL.', 1;
+IF COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'CONTROL'), 0) <> 0
+   OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'SELECT'), 0) <> 0
+   OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'EXECUTE'), 0) <> 0
+   OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'INSERT'), 0) <> 0
+   OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'UPDATE'), 0) <> 0
+   OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'DELETE'), 0) <> 0
+    THROW 51075, 'Application login provisioning retained a schema-wide data permission.', 1;
 IF COALESCE(HAS_PERMS_BY_NAME(N'dbo.audit_log', N'OBJECT', N'SELECT'), 0) <> 1
     THROW 51076, 'Application role cannot read the core audit ledger.', 1;
 IF COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'SELECT'), 0) <> 1
@@ -216,6 +233,8 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
     }
 
     $dev = Invoke-Api GET '/api/v1/me' 'dev-user'
+    $otherEngineer = Invoke-Api GET '/api/v1/me' 'engineer-oid'
+    $otherProjectManager = Invoke-Api GET '/api/v1/me' 'pm-oid'
     $manager = Invoke-Api GET '/api/v1/me' 'mgr-oid'
     $today = [DateTime]::UtcNow.Date.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
     $future = [DateTime]::UtcNow.Date.AddDays(30).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
@@ -270,6 +289,7 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
         managerId = $manager.id; leadEngineerId = $dev.id; startDate = $today; targetDelivery = $delivery;
         site = 'CI'; remark = 'Automated integration flow'
     })
+    Invoke-SqlQuery $databaseName "INSERT INTO dbo.project_members (project_id, user_id, role_on_project, created_by) VALUES ($($project.id), $($otherEngineer.id), N'CI observer', $($dev.id)), ($($project.id), $($otherProjectManager.id), N'CI PM observer', $($dev.id));"
     $bom = Invoke-Api POST '/api/v1/boms' 'dev-user' ([ordered]@{ projectId = $project.id })
     $bomDetail = Invoke-Api GET "/api/v1/boms/$($bom.id)" 'dev-user'
     $bomLine = @($bomDetail.lines)[0]
@@ -474,6 +494,306 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
     Assert-Equal $baseline.revision 1 'Schedule baseline revision'
     $myWork = Invoke-Api GET '/api/v1/me/work' 'dev-user'
     Assert-Equal @($myWork).Count 2 'My Work task count'
+    $myWorkTask = @($myWork | Where-Object { $_.taskId -eq $fourWorkDayTask.id })[0]
+    Assert-Equal $myWorkTask.managerId $manager.id 'My Work project manager id'
+    Assert-Equal $myWorkTask.managerName $manager.name 'My Work project manager name'
+    Assert-Equal $myWorkTask.projectStatus 'Planning' 'My Work project status'
+    Assert-Equal $myWorkTask.canUpdate $true 'My Work update capability'
+    Assert-Equal $myWorkTask.kind 'task' 'My Work leaf kind'
+    Assert-Equal $myWorkTask.origin 'PM' 'My Work task origin'
+    Assert-Equal $myWorkTask.phaseWbs '1' 'My Work top phase WBS'
+    Assert-Equal $myWorkTask.phaseName 'CI delivery phase' 'My Work top phase name'
+    Assert-Equal $myWorkTask.isOwnDetail $false 'PM task is not a member-owned detail'
+    Assert-Equal $myWorkTask.canAddDetail $true 'Pristine manual task member-detail capability'
+    Assert-Equal $myWorkTask.canDeleteDetail $false 'PM task delete-detail capability'
+    if ([string]::IsNullOrWhiteSpace($myWorkTask.scheduleVersion)) { throw 'My Work did not return the project schedule version.' }
+
+    $forecastFinish = $scheduleMondayDate.AddDays(7).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/updates" 'dev-user' ([ordered]@{
+        scheduleVersion = $myWorkTask.scheduleVersion; rowVersion = $myWorkTask.rowVersion; percentComplete = 25;
+        actualStart = $scheduleMonday; actualFinish = $null; forecastFinish = $forecastFinish;
+        status = 'Blocked'; remark = ''
+    }) 'validation_failed' 400
+    $blockedTask = Invoke-Api POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/updates" 'dev-user' ([ordered]@{
+        scheduleVersion = $myWorkTask.scheduleVersion; rowVersion = $myWorkTask.rowVersion; percentComplete = 25;
+        actualStart = $scheduleMonday; actualFinish = $null; forecastFinish = $forecastFinish;
+        status = 'Blocked'; remark = 'CI dependency blocked'
+    })
+    if ([string]::IsNullOrWhiteSpace($blockedTask.scheduleVersion)) { throw 'Progress update did not return the new schedule version.' }
+
+    $dayRequest = Invoke-Api POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/day-requests" 'dev-user' ([ordered]@{
+        requestDays = 3; comment = 'CI needs extra commissioning time'
+    })
+    Assert-Equal $dayRequest.requestDays 3 'My Work requested day count'
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/day-requests" 'dev-user' ([ordered]@{
+        requestDays = 2; comment = 'CI duplicate request'
+    }) 'schedule_day_request_pending' 409
+
+    $myWorkAfterUpdate = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $updatedWorkTask = @($myWorkAfterUpdate | Where-Object { $_.taskId -eq $fourWorkDayTask.id })[0]
+    Assert-Equal $updatedWorkTask.status 'Blocked' 'My Work blocked status persistence'
+    Assert-Equal $updatedWorkTask.forecastFinish $forecastFinish 'My Work forecast persistence'
+    Assert-Equal $updatedWorkTask.remark 'CI dependency blocked' 'My Work remark persistence'
+    Assert-Equal $updatedWorkTask.pendingRequest.id $dayRequest.id 'My Work pending request id'
+    Assert-Equal $updatedWorkTask.pendingRequest.requestDays 3 'My Work pending request days'
+    Assert-Equal $updatedWorkTask.canAddDetail $false 'Pending or started task add-detail capability'
+
+    $null = Assert-ApiError PUT "/api/v1/schedule/tasks/$($fourWorkDayTask.id)" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $updatedWorkTask.scheduleVersion; rowVersion = $updatedWorkTask.rowVersion;
+        parentId = $schedulePhase.id; sortOrder = 2; kind = 'task'; name = 'CI holiday-spanning task';
+        isMilestone = $false; visibility = 'Internal'; planStart = $scheduleMonday; planDays = 6;
+        startMode = 'manual'; predecessorId = $null; lagDays = 0; picUserIds = @($dev.id);
+        picExternal = ''; planManDays = 4
+    }) 'schedule_day_request_pending' 409
+    $null = Assert-ApiError PUT "/api/v1/schedule/tasks/$($fourWorkDayTask.id)" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $updatedWorkTask.scheduleVersion; rowVersion = $updatedWorkTask.rowVersion;
+        parentId = $schedulePhase.id; sortOrder = 2; kind = 'task'; name = 'CI holiday-spanning task';
+        isMilestone = $false; visibility = 'Internal'; planStart = $scheduleMonday; planDays = 5;
+        startMode = 'manual'; predecessorId = $null; lagDays = 0; picUserIds = @($dev.id, $manager.id);
+        picExternal = ''; planManDays = 4
+    }) 'schedule_day_request_pending' 409
+
+    $acceptedRequest = Invoke-Api POST "/api/v1/schedule/day-requests/$($dayRequest.id)/answer" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $updatedWorkTask.scheduleVersion; rowVersion = $updatedWorkTask.rowVersion;
+        answer = 'Accepted'; note = 'CI PM approved extra time'
+    })
+    Assert-Equal $acceptedRequest.answer 'Accepted' 'Accepted day request answer'
+    Assert-Equal $acceptedRequest.planDays 8 'Accepted day request task duration'
+    $null = Assert-ApiError POST "/api/v1/schedule/day-requests/$($dayRequest.id)/answer" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $acceptedRequest.scheduleVersion; rowVersion = $acceptedRequest.rowVersion;
+        answer = 'Rejected'; note = 'CI duplicate answer'
+    }) 'schedule_day_request_answered' 409
+
+    $myWorkAfterAccept = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $acceptedWorkTask = @($myWorkAfterAccept | Where-Object { $_.taskId -eq $fourWorkDayTask.id })[0]
+    if ($null -ne $acceptedWorkTask.pendingRequest) { throw 'An accepted day request remained pending in My Work.' }
+    $scheduleAfterAccept = Invoke-Api GET "/api/v1/projects/$($project.id)/schedule" 'mgr-oid'
+    $acceptedScheduleTask = @(@($scheduleAfterAccept.tasks)[0].children | Where-Object { $_.id -eq $fourWorkDayTask.id })[0]
+    Assert-Equal $acceptedScheduleTask.planDays 8 'Accepted request schedule plan days'
+    $acceptedScheduleRequest = @($scheduleAfterAccept.recentUpdates | Where-Object { $_.id -eq $dayRequest.id })[0]
+    Assert-Equal $acceptedScheduleRequest.requestDays 3 'Project schedule request metadata days'
+    Assert-Equal $acceptedScheduleRequest.answer 'Accepted' 'Project schedule request metadata answer'
+    Assert-Equal $acceptedScheduleRequest.answerBy.id $manager.id 'Project schedule request metadata answer actor'
+    Assert-Equal $acceptedScheduleRequest.answerNote 'CI PM approved extra time' 'Project schedule request metadata note'
+
+    $rejectedDayRequest = Invoke-Api POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/day-requests" 'dev-user' ([ordered]@{
+        requestDays = 1; comment = 'CI second request for rejection coverage'
+    })
+    $myWorkBeforeReject = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $rejectWorkTask = @($myWorkBeforeReject | Where-Object { $_.taskId -eq $fourWorkDayTask.id })[0]
+    $rejectedRequest = Invoke-Api POST "/api/v1/schedule/day-requests/$($rejectedDayRequest.id)/answer" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $rejectWorkTask.scheduleVersion; rowVersion = $rejectWorkTask.rowVersion;
+        answer = 'Rejected'; note = 'CI PM kept the current plan'
+    })
+    Assert-Equal $rejectedRequest.answer 'Rejected' 'Rejected day request answer'
+    Assert-Equal $rejectedRequest.planDays 8 'Rejected day request leaves duration unchanged'
+    $myWorkAfterReject = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $updatedWorkTask = @($myWorkAfterReject | Where-Object { $_.taskId -eq $fourWorkDayTask.id })[0]
+    if ($null -ne $updatedWorkTask.pendingRequest) { throw 'A rejected day request remained pending in My Work.' }
+
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $updatedWorkTask.scheduleVersion; rowVersion = $updatedWorkTask.rowVersion;
+        name = 'CI member-owned detail'; planDays = 2
+    }) 'schedule_detail_parent_started' 409
+
+    $linkedDetailParentTask = Invoke-Api POST "/api/v1/projects/$($project.id)/schedule/tasks" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $updatedWorkTask.scheduleVersion; parentId = $schedulePhase.id; sortOrder = 30; kind = 'task'; name = 'CI linked detail parent task';
+        isMilestone = $false; visibility = 'Internal'; planStart = $null; planDays = 2; startMode = 'linked';
+        predecessorId = $oneDayTask.id; lagDays = 0; picUserIds = @($dev.id); picExternal = ''; planManDays = 2
+    })
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($linkedDetailParentTask.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $linkedDetailParentTask.scheduleVersion; rowVersion = $linkedDetailParentTask.rowVersion;
+        name = 'CI linked member detail'; planDays = 2
+    }) 'schedule_detail_parent_linked' 409
+    $myWorkWithLinkedParent = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $linkedParentWork = @($myWorkWithLinkedParent | Where-Object { $_.taskId -eq $linkedDetailParentTask.id })[0]
+    Assert-Equal $linkedParentWork.canAddDetail $false 'Linked task add-detail capability'
+
+    $detailParentTask = Invoke-Api POST "/api/v1/projects/$($project.id)/schedule/tasks" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $linkedDetailParentTask.scheduleVersion; parentId = $schedulePhase.id; sortOrder = 40; kind = 'task'; name = 'CI detail parent task';
+        isMilestone = $false; visibility = 'Internal'; planStart = $scheduleMonday; planDays = 3; startMode = 'manual';
+        predecessorId = $null; lagDays = 0; picUserIds = @($dev.id); picExternal = ''; planManDays = 3
+    })
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($detailParentTask.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $detailParentTask.scheduleVersion; rowVersion = $detailParentTask.rowVersion;
+        name = 'CI boundary-changing detail'; planDays = 2
+    }) 'schedule_detail_outside_parent_plan' 422
+
+    $detailParentRequest = Invoke-Api POST "/api/v1/schedule/tasks/$($detailParentTask.id)/day-requests" 'dev-user' ([ordered]@{
+        requestDays = 1; comment = 'CI pending request blocks adding a child row'
+    })
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($detailParentTask.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $detailParentTask.scheduleVersion; rowVersion = $detailParentTask.rowVersion;
+        name = 'CI pending-request detail'; planDays = 3
+    }) 'schedule_day_request_pending' 409
+    $clearedDetailParentRequest = Invoke-Api POST "/api/v1/schedule/day-requests/$($detailParentRequest.id)/answer" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $detailParentTask.scheduleVersion; rowVersion = $detailParentTask.rowVersion;
+        answer = 'Rejected'; note = 'CI clear pending request before adding detail'
+    })
+    $scheduleBeforeMemberDetail = Invoke-Api GET "/api/v1/projects/$($project.id)/schedule" 'mgr-oid'
+
+    $memberDetail = Invoke-Api POST "/api/v1/schedule/tasks/$($detailParentTask.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $clearedDetailParentRequest.scheduleVersion; rowVersion = $clearedDetailParentRequest.rowVersion;
+        name = 'CI member-owned detail'; planDays = 3
+    })
+    $myWorkWithDetail = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    Assert-Equal @($myWorkWithDetail).Count 4 'My Work leaf-only count after member detail creation'
+    if (@($myWorkWithDetail | Where-Object { $_.taskId -eq $detailParentTask.id }).Count -ne 0) {
+        throw 'My Work returned a parent task after it gained an active child.'
+    }
+    $memberDetailWork = @($myWorkWithDetail | Where-Object { $_.taskId -eq $memberDetail.id })[0]
+    Assert-Equal $memberDetailWork.kind 'detail' 'Member detail kind'
+    Assert-Equal $memberDetailWork.origin 'Member' 'Member detail origin'
+    Assert-Equal $memberDetailWork.phaseWbs '1' 'Member detail phase WBS'
+    Assert-Equal $memberDetailWork.isOwnDetail $true 'Member detail ownership capability'
+    Assert-Equal $memberDetailWork.canAddDetail $false 'Member detail cannot add another detail'
+    Assert-Equal $memberDetailWork.canDeleteDetail $true 'Pristine owned member detail delete capability'
+    $scheduleWithMemberDetail = Invoke-Api GET "/api/v1/projects/$($project.id)/schedule" 'mgr-oid'
+    Assert-Equal $scheduleWithMemberDetail.summary.planStart $scheduleBeforeMemberDetail.summary.planStart 'Member detail preserves project plan start'
+    Assert-Equal $scheduleWithMemberDetail.summary.planFinish $scheduleBeforeMemberDetail.summary.planFinish 'Member detail preserves project plan finish'
+    Assert-Equal $scheduleWithMemberDetail.summary.percentComplete $scheduleBeforeMemberDetail.summary.percentComplete 'Member detail preserves project progress'
+    $detailParentSchedule = @(@($scheduleWithMemberDetail.tasks)[0].children | Where-Object { $_.id -eq $detailParentTask.id })[0]
+    $detailParentFinish = $scheduleMondayDate.AddDays(2).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+    Assert-Equal $detailParentSchedule.planStart $scheduleMonday 'Member detail preserves parent plan start'
+    Assert-Equal $detailParentSchedule.planFinish $detailParentFinish 'Member detail preserves parent plan finish'
+    Assert-Equal $detailParentSchedule.percentComplete 0 'Member detail preserves pristine parent progress'
+
+    $null = Assert-ApiError DELETE "/api/v1/schedule/tasks/$($memberDetail.id)/details" 'engineer-oid' ([ordered]@{
+        scheduleVersion = $memberDetail.scheduleVersion; rowVersion = $memberDetail.rowVersion
+    }) 'schedule_member_detail_owner_required' 403
+    $memberDetailRequest = Invoke-Api POST "/api/v1/schedule/tasks/$($memberDetail.id)/day-requests" 'dev-user' ([ordered]@{
+        requestDays = 1; comment = 'CI pending request blocks deleting the task row'
+    })
+    $myWorkWithPendingDetail = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $pendingDetailWork = @($myWorkWithPendingDetail | Where-Object { $_.taskId -eq $memberDetail.id })[0]
+    Assert-Equal $pendingDetailWork.canDeleteDetail $false 'Pending request disables member-detail deletion capability'
+    $null = Assert-ApiError DELETE "/api/v1/schedule/tasks/$($memberDetail.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $memberDetail.scheduleVersion; rowVersion = $memberDetail.rowVersion
+    }) 'schedule_day_request_pending' 409
+    $clearedMemberDetailRequest = Invoke-Api POST "/api/v1/schedule/day-requests/$($memberDetailRequest.id)/answer" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $memberDetail.scheduleVersion; rowVersion = $memberDetail.rowVersion;
+        answer = 'Rejected'; note = 'CI clear pending request before deleting detail'
+    })
+    $deletedDetail = Invoke-Api DELETE "/api/v1/schedule/tasks/$($memberDetail.id)/details" 'dev-user' ([ordered]@{
+        scheduleVersion = $clearedMemberDetailRequest.scheduleVersion; rowVersion = $clearedMemberDetailRequest.rowVersion
+    })
+    Assert-Equal $deletedDetail.deleted $true 'Member detail soft delete'
+
+    $myUpdates = Invoke-Api GET '/api/v1/me/work/updates' 'dev-user'
+    $requestHistory = @($myUpdates | Where-Object { $_.id -eq $dayRequest.id })[0]
+    Assert-Equal $requestHistory.projectId $project.id 'My Work update project id'
+    Assert-Equal $requestHistory.taskId $fourWorkDayTask.id 'My Work update task id'
+    Assert-Equal $requestHistory.wbs '1.2' 'My Work update task WBS'
+    Assert-Equal $requestHistory.field 'request' 'My Work request history field'
+    Assert-Equal $requestHistory.requestDays 3 'My Work request history days'
+    Assert-Equal $requestHistory.comment 'CI needs extra commissioning time' 'My Work request history comment'
+    Assert-Equal $requestHistory.answer 'Accepted' 'My Work request history answer'
+    Assert-Equal $requestHistory.answerNote 'CI PM approved extra time' 'My Work request history answer note'
+    if (@($myUpdates | Where-Object { $_.taskId -eq $fourWorkDayTask.id -and $_.field -eq 'forecast_finish' }).Count -lt 1) {
+        throw 'My Work update history did not include the persisted forecast change.'
+    }
+
+    # A task PIC is not itself project authorization. Keep a real task and
+    # update owned by the engineer, then remove only project membership so the
+    # stale PIC rows prove that both My Work read models and mutations enforce
+    # ProjectScope independently.
+    $stalePicTask = Invoke-Api POST "/api/v1/projects/$($project.id)/schedule/tasks" 'mgr-oid' ([ordered]@{
+        scheduleVersion = $deletedDetail.scheduleVersion; parentId = $schedulePhase.id; sortOrder = 3;
+        kind = 'task'; name = 'CI stale PIC scope task'; isMilestone = $false; visibility = 'Internal';
+        planStart = $scheduleMonday; planDays = 1; startMode = 'manual'; predecessorId = $null; lagDays = 0;
+        picUserIds = @($otherEngineer.id, $otherProjectManager.id); picExternal = ''; planManDays = 1
+    })
+    $scopedEngineerWork = Invoke-Api GET '/api/v1/me/work' 'engineer-oid'
+    $scopedEngineerTask = @($scopedEngineerWork | Where-Object { $_.taskId -eq $stalePicTask.id })[0]
+    Assert-Equal $scopedEngineerTask.canUpdate $true 'In-scope PIC My Work update capability'
+    $stalePicUpdate = Invoke-Api POST "/api/v1/schedule/tasks/$($stalePicTask.id)/updates" 'engineer-oid' ([ordered]@{
+        scheduleVersion = $scopedEngineerTask.scheduleVersion; rowVersion = $scopedEngineerTask.rowVersion;
+        percentComplete = 25; actualStart = $scheduleMonday; actualFinish = $null;
+        forecastFinish = $scheduleMonday; status = 'In Progress'; remark = 'CI scoped update before removal'
+    })
+    $scopedEngineerUpdates = Invoke-Api GET '/api/v1/me/work/updates' 'engineer-oid'
+    if (@($scopedEngineerUpdates | Where-Object { $_.projectId -eq $project.id -and $_.taskId -eq $stalePicTask.id }).Count -lt 1) {
+        throw 'The in-scope engineer update was missing before project membership removal.'
+    }
+
+    # The Project Manager role is project-scoped here: it must not become a
+    # global My Work bypass merely because the actor manages other projects.
+    $scopedProjectManagerWork = Invoke-Api GET '/api/v1/me/work' 'pm-oid'
+    $scopedProjectManagerTask = @($scopedProjectManagerWork | Where-Object { $_.taskId -eq $stalePicTask.id })[0]
+    Assert-Equal $scopedProjectManagerTask.canUpdate $true 'In-scope Project Manager PIC My Work capability'
+    $staleProjectManagerUpdate = Invoke-Api POST "/api/v1/schedule/tasks/$($stalePicTask.id)/updates" 'pm-oid' ([ordered]@{
+        scheduleVersion = $stalePicUpdate.scheduleVersion; rowVersion = $stalePicUpdate.rowVersion;
+        percentComplete = 30; actualStart = $scheduleMonday; actualFinish = $null;
+        forecastFinish = $scheduleMonday; status = 'In Progress'; remark = 'CI scoped PM update before removal'
+    })
+    $scopedProjectManagerUpdates = Invoke-Api GET '/api/v1/me/work/updates' 'pm-oid'
+    if (@($scopedProjectManagerUpdates | Where-Object { $_.projectId -eq $project.id -and $_.taskId -eq $stalePicTask.id }).Count -lt 1) {
+        throw 'The in-scope Project Manager update was missing before project membership removal.'
+    }
+
+    Invoke-SqlQuery $databaseName "DELETE FROM dbo.project_members WHERE project_id = $($project.id) AND user_id IN ($($otherEngineer.id), $($otherProjectManager.id)); IF @@ROWCOUNT <> 2 THROW 51091, 'Stale PIC membership fixture removal failed.', 1;"
+    $outOfScopeWork = Invoke-Api GET '/api/v1/me/work' 'engineer-oid'
+    if (@($outOfScopeWork | Where-Object { $_.projectId -eq $project.id }).Count -ne 0) {
+        throw 'My Work exposed a stale PIC after project membership was removed.'
+    }
+    $outOfScopeUpdates = Invoke-Api GET '/api/v1/me/work/updates' 'engineer-oid'
+    if (@($outOfScopeUpdates | Where-Object { $_.projectId -eq $project.id }).Count -ne 0) {
+        throw 'My Work update history exposed a project after membership was removed.'
+    }
+    $outOfScopeProjectManagerWork = Invoke-Api GET '/api/v1/me/work' 'pm-oid'
+    if (@($outOfScopeProjectManagerWork | Where-Object { $_.projectId -eq $project.id }).Count -ne 0) {
+        throw 'My Work treated the Project Manager role as globally elevated after membership was removed.'
+    }
+    $outOfScopeProjectManagerUpdates = Invoke-Api GET '/api/v1/me/work/updates' 'pm-oid'
+    if (@($outOfScopeProjectManagerUpdates | Where-Object { $_.projectId -eq $project.id }).Count -ne 0) {
+        throw 'My Work update history treated the Project Manager role as globally elevated after membership was removed.'
+    }
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($stalePicTask.id)/updates" 'engineer-oid' ([ordered]@{
+        scheduleVersion = $staleProjectManagerUpdate.scheduleVersion; rowVersion = $staleProjectManagerUpdate.rowVersion;
+        percentComplete = 50; actualStart = $scheduleMonday; actualFinish = $null;
+        forecastFinish = $scheduleMonday; status = 'In Progress'; remark = 'CI stale PIC update must fail'
+    }) 'project_scope_forbidden' 403
+    $null = Assert-ApiError POST "/api/v1/schedule/tasks/$($stalePicTask.id)/updates" 'pm-oid' ([ordered]@{
+        scheduleVersion = $staleProjectManagerUpdate.scheduleVersion; rowVersion = $staleProjectManagerUpdate.rowVersion;
+        percentComplete = 50; actualStart = $scheduleMonday; actualFinish = $null;
+        forecastFinish = $scheduleMonday; status = 'In Progress'; remark = 'CI stale Project Manager PIC update must fail'
+    }) 'project_scope_forbidden' 403
+
+    $oldPendingRequest = Invoke-Api POST "/api/v1/schedule/tasks/$($fourWorkDayTask.id)/day-requests" 'dev-user' ([ordered]@{
+        requestDays = 2; comment = 'CI pending request older than the recent activity window'
+    })
+    $historyNoiseSql = @"
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET NUMERIC_ROUNDABORT OFF;
+SET NOCOUNT ON;
+DECLARE @history_counter int = 1;
+WHILE @history_counter <= 105
+BEGIN
+    INSERT INTO dbo.schedule_updates (
+        project_id, task_id, actor_id, field, from_value, to_value, comment)
+    VALUES (
+        $($project.id), $($fourWorkDayTask.id), $($manager.id), N'ci_history_noise', NULL,
+        CONVERT(nvarchar(20), @history_counter), N'CI recent activity window fixture');
+    SET @history_counter += 1;
+END;
+"@
+    Invoke-SqlQuery $databaseName $historyNoiseSql
+    $scheduleWithOldPending = Invoke-Api GET "/api/v1/projects/$($project.id)/schedule" 'mgr-oid'
+    $oldPendingMatches = @($scheduleWithOldPending.recentUpdates | Where-Object { $_.id -eq $oldPendingRequest.id })
+    Assert-Equal $oldPendingMatches.Count 1 'Project schedule old pending request inclusion without duplicate'
+    Assert-Equal $oldPendingMatches[0].requestDays 2 'Project schedule old pending request days'
+    if ($null -ne $oldPendingMatches[0].answer) { throw 'The old pending request was unexpectedly answered.' }
+    Assert-Equal @($scheduleWithOldPending.recentUpdates).Count 101 'Project schedule latest 100 plus all pending requests'
+    Invoke-SqlQuery $databaseName "SET ANSI_NULLS ON; SET QUOTED_IDENTIFIER ON; SET ANSI_PADDING ON; SET ANSI_WARNINGS ON; SET ARITHABORT ON; SET CONCAT_NULL_YIELDS_NULL ON; SET NUMERIC_ROUNDABORT OFF; UPDATE dbo.projects SET status = N'Closed', updated_by = $($manager.id), updated_at = SYSUTCDATETIME() WHERE id = $($project.id); IF @@ROWCOUNT <> 1 THROW 51098, 'Closed-project My Work fixture update failed.', 1;"
+    $closedProjectWork = Invoke-Api GET '/api/v1/me/work' 'dev-user'
+    $closedProjectTask = @($closedProjectWork | Where-Object { $_.taskId -eq $fourWorkDayTask.id })[0]
+    Assert-Equal $closedProjectTask.projectStatus 'Closed' 'Closed project My Work status'
+    Assert-Equal $closedProjectTask.canUpdate $false 'Closed project My Work update capability'
     $rates = Invoke-Api GET '/api/v1/admin/engineering-rates?page=1&pageSize=25&activeOnly=true' 'mgr-oid'
     Assert-Equal @($rates.items).Count 1 'Engineering rate read model count'
     Assert-Equal @($rates.items)[0].id $rate.id 'Engineering rate read model id'
@@ -501,9 +821,37 @@ IF EXISTS (SELECT 1 FROM dbo.stock_txns WHERE source_event_key = N'adj:$($staleN
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key LIKE N'grn:$($grn.id):line:%:accepted' AND txn_type = N'GRN_RECEIPT' AND qty = 6) <> 1 THROW 51070, 'GRN ledger idempotency mismatch.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key = N'mir:$($mir.id):line:$($mirLine.id):issue' AND txn_type = N'MIR_ISSUE' AND qty = -7) <> 1 THROW 51071, 'MIR issue ledger mismatch.', 1;
 IF (SELECT COUNT_BIG(*) FROM dbo.stock_txns WHERE source_event_key = N'mir:$($mir.id):line:$($mirLine.id):return:1' AND txn_type = N'MIR_RETURN' AND qty = 2) <> 1 THROW 51072, 'MIR return ledger mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_tasks WHERE id = $($fourWorkDayTask.id) AND forecast_end = '$forecastFinish' AND status = N'Blocked' AND blocked_reason = N'CI dependency blocked' AND note = N'CI dependency blocked') THROW 51085, 'Schedule forecast or blocked reason persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_updates WHERE id = $($dayRequest.id) AND task_id = $($fourWorkDayTask.id) AND actor_id = $($dev.id) AND field = N'request' AND request_days = 3 AND answer = N'Accepted' AND answer_by = $($manager.id) AND answer_note = N'CI PM approved extra time') THROW 51086, 'Accepted schedule day request persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_updates WHERE id = $($rejectedDayRequest.id) AND task_id = $($fourWorkDayTask.id) AND answer = N'Rejected' AND answer_by = $($manager.id)) THROW 51088, 'Rejected schedule day request persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_tasks WHERE id = $($fourWorkDayTask.id) AND plan_days = 8) THROW 51089, 'Accepted schedule day request did not extend plan days exactly once.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_updates WHERE id = $($oldPendingRequest.id) AND task_id = $($fourWorkDayTask.id) AND request_days = 2 AND answer IS NULL) THROW 51090, 'Old pending schedule request fixture mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_tasks WHERE id = $($memberDetail.id) AND origin = N'Member' AND kind = N'detail' AND created_by = $($dev.id) AND deleted_at IS NOT NULL) THROW 51087, 'Member detail ownership or soft delete mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_tasks WHERE id = $($detailParentTask.id) AND plan_days = 3 AND percent_done = 0 AND status = N'Not Started' AND actual_start IS NULL AND actual_end IS NULL) THROW 51095, 'Member detail parent boundary or progress changed.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_tasks WHERE id = $($linkedDetailParentTask.id) AND start_mode = N'linked' AND predecessor_id = $($oneDayTask.id) AND deleted_at IS NULL) THROW 51099, 'Linked detail parent lost its live dependency.', 1;
+IF EXISTS (SELECT 1 FROM dbo.schedule_tasks WHERE parent_id = $($linkedDetailParentTask.id) AND deleted_at IS NULL) THROW 51100, 'A member detail was added beneath a linked task.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_updates WHERE id = $($detailParentRequest.id) AND answer = N'Rejected' AND answer_by = $($manager.id)) THROW 51096, 'Parent pending-request guard fixture was not resolved.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schedule_updates WHERE id = $($memberDetailRequest.id) AND answer = N'Rejected' AND answer_by = $($manager.id)) THROW 51097, 'Detail delete pending-request guard fixture was not resolved.', 1;
+IF EXISTS (SELECT 1 FROM dbo.project_members WHERE project_id = $($project.id) AND user_id IN ($($otherEngineer.id), $($otherProjectManager.id))) THROW 51092, 'Stale PIC actors remained project members.', 1;
+IF (SELECT COUNT_BIG(*) FROM dbo.schedule_task_pics WHERE task_id = $($stalePicTask.id) AND user_id IN ($($otherEngineer.id), $($otherProjectManager.id))) <> 2 THROW 51093, 'Stale PIC fixtures were not preserved.', 1;
+IF (SELECT COUNT_BIG(*) FROM dbo.schedule_updates WHERE task_id = $($stalePicTask.id) AND actor_id IN ($($otherEngineer.id), $($otherProjectManager.id))) < 2 THROW 51094, 'Stale PIC update-history fixtures were not preserved.', 1;
 SELECT N'PASS' AS full_material_flow;
 "@
     Invoke-SqlQuery $databaseName $assertionSql
+
+    # Exercise the production verifier against the application-role auth path.
+    # The CI identities use readable aliases during API calls; replace only the
+    # external object IDs now that the HTTP flow is complete so production's
+    # canonical-GUID identity guard can run against this disposable database.
+    Invoke-SqlQuery $databaseName "UPDATE dbo.users SET entra_object_id = CONVERT(nvarchar(36), NEWID());"
+    Push-Location $repoRoot
+    try {
+        & sqlcmd @sqlcmdBase -i (Join-Path $repoRoot 'database\scripts\080_verify_production_baseline.sql') `
+            -v "DatabaseName=$databaseName" "AppLogin=$appRoleName"
+        if ($LASTEXITCODE -ne 0) { throw 'Production baseline verifier failed for the application-role fixture.' }
+    } finally {
+        Pop-Location
+    }
     Write-Output "Full material flow, schedule, reports, stock balance, and actual cost passed in $databaseName."
 } finally {
     if ($null -ne $apiProcess -and -not $apiProcess.HasExited) {

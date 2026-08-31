@@ -67,7 +67,7 @@ Expected result: HTTP `200` with `status: "ok"` and `service: "IoTTeamCenter.Api
 ### Readiness
 
 `GET /health/ready` opens a SQL connection, verifies that `dbo.schema_versions` has
-reached version 6, and uses a bounded, single-flight, briefly cached probe to verify
+reached version 7, and uses a bounded, single-flight, briefly cached probe to verify
 that the configured document-storage root exists and can be enumerated under the API identity.
 
 ```powershell
@@ -75,7 +75,7 @@ $apiBase = "https://<api-host>"
 Invoke-RestMethod -Method Get -Uri "$apiBase/health/ready"
 ```
 
-Expected result: HTTP `200`, `status: "ready"`, `schemaVersion: 6` or greater, and
+Expected result: HTTP `200`, `status: "ready"`, `schemaVersion: 7` or greater, and
 `documentStorage: "available"`. HTTP `503` means SQL is unreachable, a database
 operation failed, required migrations are absent, or the document root is unavailable.
 Do not route user traffic to an instance that is not ready.
@@ -390,7 +390,7 @@ not evidence that the IIS service can access the UNC path.
 
 ## Schema migration safety
 
-The current `database/scripts/020_deploy_fresh_database.sql` runner is for a **fresh database only**. It creates the database and applies migrations 001 through 005. Those migrations deliberately fail when their schema version is already present. Do not rerun the fresh runner against an existing production database and do not delete or manually insert `schema_versions` rows to force execution.
+The current `database/scripts/020_deploy_fresh_database.sql` runner is for a **fresh database only**. It creates the database and applies migrations 001 through 007. Those migrations deliberately fail when their schema version is already present. Do not rerun the fresh runner against an existing production database and do not delete or manually insert `schema_versions` rows to force execution.
 
 For a fresh, approved deployment, run from the repository root with SQLCMD error-stop behavior and an explicit database name:
 
@@ -422,7 +422,7 @@ FROM dbo.schema_versions
 ORDER BY version;
 ```
 
-The current API requires at least schema version 6. A schema-version marker alone is not proof of functional success; also run readiness, RBAC, and workflow smoke tests.
+The current API requires at least schema version 7. A schema-version marker alone is not proof of functional success; also run readiness, RBAC, and workflow smoke tests. Migration 007 installs `dbo.answer_schedule_day_request`; after applying it, re-run the application-login script and verify that the application role has object-level `EXECUTE` on the procedure but no direct `UPDATE` permission on `dbo.schedule_updates`.
 For the initial baseline and after SQL-login changes, also run the repository's read-only
 `database/scripts/080_verify_production_baseline.sql` with explicit `DatabaseName` and
 `AppLogin` SQLCMD variables; archive its PASS output with the release evidence.
@@ -445,6 +445,13 @@ For P1/P2:
 6. Validate in isolation, then restore traffic gradually and monitor.
 7. Notify stakeholders with impact and facts; never include credentials or sensitive row data.
 8. Complete a post-incident review with root cause, recovery point/time, and prevention work.
+
+If the SQL `AppLogin` service credential may have been disclosed, treat end-user actor
+attribution during the exposure window as untrusted. The application authenticates people
+at the API boundary and uses one database service identity, so SQL Server cannot prove which
+person supplied an actor ID after that credential is compromised. Disable and rotate the
+credential, isolate the API, preserve database/API logs, and reconcile affected writes before
+restoring service.
 
 For suspected malicious or compromised documents, stop new document writes/downloads
 without disabling unrelated core workflows where safe, preserve SQL audit metadata and

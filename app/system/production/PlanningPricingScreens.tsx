@@ -15,14 +15,18 @@ import {
 import {
   Badge,
   EmptyState,
+  Field,
   Icon,
   KpiCard,
   Modal,
   PageHeader,
   Panel,
+  Pill,
   ProgressCell,
   SearchInput,
   Select,
+  SummaryTile,
+  Tabs,
   Toolbar,
 } from "../ui";
 
@@ -30,16 +34,32 @@ type ProductionPlanningProps = {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   refreshBootstrap?: () => Promise<void>;
+  openProjectSchedule?: (projectId: number) => void;
+  preferredProjectId?: number | null;
+  onMyWorkUrgentCountChange?: (count: number) => void;
 };
 
 type MyWorkItem = {
   projectId: number;
   projectNo: string;
   projectName: string;
+  managerId: number;
+  managerName: string;
+  projectStatus: string;
+  scheduleVersion: string | null;
+  canUpdate: boolean;
+  isOwnDetail: boolean;
+  canAddDetail: boolean;
+  canDeleteDetail: boolean;
   taskId: number;
   parentId: number | null;
   wbs: string;
   name: string;
+  kind: "task" | "detail";
+  origin: string;
+  isMilestone: boolean;
+  phaseWbs: string | null;
+  phaseName: string | null;
   planStart: string | null;
   planFinish: string | null;
   workDays: number;
@@ -47,9 +67,34 @@ type MyWorkItem = {
   status: string;
   actualStart: string | null;
   actualFinish: string | null;
+  forecastFinish: string | null;
   remark: string | null;
+  pendingRequest: {
+    id: number;
+    requestDays: number;
+    comment: string | null;
+    occurredAt: string;
+  } | null;
   rowVersion: string;
   updatedAt: string;
+};
+
+type MyWorkUpdate = {
+  id: number;
+  projectId: number;
+  projectNo: string;
+  projectName: string;
+  taskId: number | null;
+  wbs: string | null;
+  taskName: string | null;
+  field: string;
+  fromValue: string | null;
+  toValue: string | null;
+  comment: string | null;
+  requestDays: number;
+  answer: string | null;
+  answerNote: string | null;
+  occurredAt: string;
 };
 
 type SchedulePic = { id: number; name: string; email: string };
@@ -110,6 +155,11 @@ type ScheduleUpdate = {
   fromValue: string | null;
   toValue: string | null;
   comment: string | null;
+  requestDays: number;
+  answer: string | null;
+  answerBy: { id: number; name: string } | null;
+  answerNote: string | null;
+  answeredAt: string | null;
   occurredAt: string;
   actor: { id: number; name: string };
 };
@@ -185,6 +235,7 @@ type ProgressTarget = {
   status: string;
   actualStart: string | null;
   actualFinish: string | null;
+  forecastFinish: string | null;
   remark: string | null;
 };
 
@@ -372,13 +423,14 @@ function useSchedules(enabled: boolean) {
 function ProgressModal({ target, onClose, onSubmit, onConflict }: {
   target: ProgressTarget;
   onClose: () => void;
-  onSubmit: (input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; remark: string }) => Promise<void>;
+  onSubmit: (input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; forecastFinish: string | null; remark: string }) => Promise<void>;
   onConflict?: () => Promise<void>;
 }) {
   const [percent, setPercent] = useState(Number(target.percentComplete));
   const [status, setStatus] = useState(target.status);
   const [actualStart, setActualStart] = useState(target.actualStart ?? "");
   const [actualFinish, setActualFinish] = useState(target.actualFinish ?? "");
+  const [forecastFinish, setForecastFinish] = useState(target.forecastFinish ?? "");
   const [remark, setRemark] = useState(target.remark ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -404,6 +456,7 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
         status,
         actualStart: actualStart || null,
         actualFinish: actualFinish || null,
+        forecastFinish: forecastFinish || null,
         remark: remark.trim(),
       });
       onClose();
@@ -426,7 +479,9 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
     || (status === "Done" && (percent !== 100 || !actualStart || !actualFinish))
     || (status === "Not Started" && (percent !== 0 || Boolean(actualStart) || Boolean(actualFinish)))
     || (status !== "Done" && percent === 100)
-    || Boolean(actualFinish && (!actualStart || actualFinish < actualStart));
+    || (status === "Blocked" && !remark.trim())
+    || Boolean(actualFinish && (!actualStart || actualFinish < actualStart))
+    || Boolean(forecastFinish && actualStart && forecastFinish < actualStart);
   return <Modal
     title={`Update ${target.wbs} · ${target.name}`}
     subtitle={`${target.projectNo} · บันทึกลง SQL Server และ audit log`}
@@ -444,113 +499,394 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
       <label className="field"><span>Percent complete *</span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => setPercent(Number(event.target.value))} /></label>
       <label className="field"><span>Actual start</span><input type="date" value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
       <label className="field"><span>Actual finish</span><input type="date" min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
-      <label className="field span-2"><span>Remark</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
+      <label className="field"><span>Forecast finish</span><input type="date" min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
+      <label className="field span-2"><span>{status === "Blocked" ? "Blocked reason *" : "Remark"}</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
     </div>
   </Modal>;
 }
 
-export function ProductionMyWork({ bootstrap, notify }: ProductionPlanningProps) {
+const workEffectiveFinish = (item: MyWorkItem) => item.actualFinish ?? item.forecastFinish ?? item.planFinish;
+const workIsLate = (item: MyWorkItem) => item.status !== "Done" && isBeforeToday(workEffectiveFinish(item));
+const workNeedsForecast = (item: MyWorkItem) => item.status !== "Done" && !item.actualFinish
+  && isBeforeToday(item.planFinish) && !item.forecastFinish;
+const workIsStale = (item: MyWorkItem) => item.status === "In Progress"
+  && Date.now() - Date.parse(item.updatedAt) > 5 * 86_400_000;
+const workNeedsUpdate = (item: MyWorkItem) => workIsLate(item) || item.status === "Blocked"
+  || workNeedsForecast(item) || workIsStale(item);
+const daysFromToday = (value: string | null) => value
+  ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
+  : null;
+const myWorkInitials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
+
+type MyWorkProgressInput = {
+  percentComplete: number;
+  status: string;
+  actualStart: string | null;
+  actualFinish: string | null;
+  forecastFinish: string | null;
+  remark: string;
+};
+
+export function ProductionMyWork({
+  bootstrap,
+  notify,
+  openProjectSchedule,
+  onMyWorkUrgentCountChange,
+}: ProductionPlanningProps) {
   const hasProgressPermission = bootstrap.permissions.includes("schedule.progress");
   const hasReadPermission = bootstrap.permissions.includes("schedule.read");
   const allowed = hasProgressPermission && hasReadPermission;
   const [items, setItems] = useState<MyWorkItem[]>([]);
-  const [editableKeys, setEditableKeys] = useState<Set<string>>(() => new Set());
-  const [unverifiedProjects, setUnverifiedProjects] = useState(0);
+  const [updates, setUpdates] = useState<MyWorkUpdate[]>([]);
   const [loading, setLoading] = useState(allowed);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("All status");
-  const [active, setActive] = useState<MyWorkItem | null>(null);
+  const [tab, setTab] = useState<"tasks" | "updates">("tasks");
+  const [saving, setSaving] = useState<Set<number>>(() => new Set());
+  const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
+  const [addingFor, setAddingFor] = useState<MyWorkItem | null>(null);
+
   const load = useCallback(async () => {
     if (!allowed) return;
-    setLoading(true); setError(""); setEditableKeys(new Set()); setUnverifiedProjects(0);
+    setLoading(true); setError("");
     try {
-      const loaded = await apiRequest<MyWorkItem[]>("/api/v1/me/work");
-      const projectIds = Array.from(new Set(loaded.map((item) => item.projectId)));
-      const schedules = await mapSettledLimited(projectIds, 5, (projectId) =>
-        apiRequest<ProjectSchedule>(`/api/v1/projects/${projectId}/schedule`));
-      const nextEditable = new Set<string>();
-      schedules.forEach((result, index) => {
-        if (!result.ok) return;
-        const tasks = new Map(flattenTasks(result.value.tasks).map((task) => [task.id, task]));
-        loaded.filter((item) => item.projectId === projectIds[index]).forEach((item) => {
-          const task = tasks.get(item.taskId);
-          if (task && task.kind !== "phase" && task.children.length === 0
-            && task.pics.some((pic) => pic.id === bootstrap.user.id)) {
-            nextEditable.add(`${item.projectId}:${item.taskId}`);
-          }
-        });
-      });
-      setItems(loaded);
-      setEditableKeys(nextEditable);
-      setUnverifiedProjects(schedules.filter((result) => !result.ok).length);
+      const [loadedItems, loadedUpdates] = await Promise.all([
+        apiRequest<MyWorkItem[]>("/api/v1/me/work"),
+        apiRequest<MyWorkUpdate[]>("/api/v1/me/work/updates"),
+      ]);
+      setItems(loadedItems);
+      setUpdates(loadedUpdates);
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
     }
-    catch (requestError) { setEditableKeys(new Set()); setError(toError(requestError)); }
-    finally { setLoading(false); }
-  }, [allowed, bootstrap.user.id]);
+  }, [allowed]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
-  const rows = useMemo(() => items.filter((item) => {
-    const matchesSearch = `${item.projectNo} ${item.projectName} ${item.wbs} ${item.name}`.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch && (status === "All status" || item.status === status);
-  }), [items, search, status]);
-  const overdue = items.filter((item) => item.status !== "Done" && isBeforeToday(item.planFinish)).length;
-  const blocked = items.filter((item) => item.status === "Blocked").length;
-  const activeCount = items.filter((item) => item.status === "In Progress").length;
+
+  const open = useMemo(() => items.filter((item) => item.status !== "Done"), [items]);
+  const actionableOpen = useMemo(() => open.filter((item) => item.canUpdate), [open]);
+  const needsUpdate = useMemo(() => actionableOpen.filter(workNeedsUpdate), [actionableOpen]);
+  const dueThisWeek = useMemo(() => actionableOpen.filter((item) => {
+    const days = daysFromToday(workEffectiveFinish(item));
+    return days !== null && days >= 0 && days <= 7;
+  }), [actionableOpen]);
+  const waiting = useMemo(() => items.filter((item) => item.pendingRequest), [items]);
+  const projects = useMemo(() => Array.from(new Map(items.map((item) => [item.projectId, {
+    id: item.projectId,
+    no: item.projectNo,
+    name: item.projectName,
+    managerName: item.managerName,
+    rows: items.filter((candidate) => candidate.projectId === item.projectId),
+  }])).values()), [items]);
+
+  useEffect(() => {
+    onMyWorkUrgentCountChange?.(needsUpdate.length);
+  }, [needsUpdate.length, onMyWorkUrgentCountChange]);
+
+  const saveProgress = useCallback(async (item: MyWorkItem, input: MyWorkProgressInput, message: string) => {
+    setSaving((current) => new Set(current).add(item.taskId));
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/updates`, {
+        method: "POST",
+        body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, ...input }),
+      });
+      notify(message);
+      await load();
+    } catch (requestError) {
+      if (isConcurrencyConflict(requestError)) {
+        notify(`${item.projectNo} · ${item.wbs} changed by another user; reloaded the latest data`);
+        await load();
+      } else {
+        setError(toError(requestError));
+      }
+    } finally {
+      setSaving((current) => {
+        const next = new Set(current);
+        next.delete(item.taskId);
+        return next;
+      });
+    }
+  }, [load, notify]);
+
+  const patchProgress = useCallback((item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => {
+    const input: MyWorkProgressInput = {
+      percentComplete: Number(item.percentComplete),
+      status: item.status,
+      actualStart: item.actualStart,
+      actualFinish: item.actualFinish,
+      forecastFinish: item.forecastFinish,
+      remark: item.remark ?? "",
+      ...patch,
+    };
+    void saveProgress(item, input, message);
+  }, [saveProgress]);
+
   if (!allowed) {
     const missing = [!hasProgressPermission ? "schedule.progress" : "", !hasReadPermission ? "schedule.read" : ""].filter(Boolean).join(" + ");
     return <><PageHeader eyebrow="PERSONAL WORKSPACE" title="My Work" subtitle="งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้" /></>;
   }
+
   return <>
-    <PageHeader eyebrow="PERSONAL WORKSPACE" title="My Work" subtitle="งานที่มอบหมายให้คุณโดยตรงจาก Schedule ของโครงการจริง" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>} />
-    <div className="kpi-grid four">
-      <KpiCard label="Assigned tasks" value={items.length} note="งานที่เป็น PIC" tone="blue" icon="checkCircle" />
-      <KpiCard label="In progress" value={activeCount} note="กำลังดำเนินการ" tone="violet" icon="play" />
-      <KpiCard label="Blocked" value={blocked} note="ต้องการความช่วยเหลือ" tone="amber" icon="alertTriangle" />
-      <KpiCard label="Overdue" value={overdue} note="เลยกำหนดและยังไม่เสร็จ" tone={overdue ? "red" : "green"} icon="clock" />
-    </div>
-    <Toolbar>
-      <SearchInput value={search} onChange={setSearch} placeholder="Search project, WBS or task…" />
-      <Select label="Status" value={status} onChange={setStatus} options={["All status", "Not Started", "In Progress", "Blocked", "Done"]} />
-    </Toolbar>
-    {unverifiedProjects ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong>บาง Project ตรวจสอบสิทธิ์แก้ไขไม่ได้</strong><small>ปุ่ม Update ถูกปิดไว้สำหรับงานจาก {unverifiedProjects} Project จนกว่าจะโหลด Schedule สำเร็จ</small></span></div> : null}
+    <PageHeader
+      eyebrow="MY WORK"
+      title="My Work"
+      subtitle="Everything assigned to you, across every project. Updates here are written to the live project schedule and SQL audit log."
+      actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>}
+    />
+    <div className="info-strip"><Icon name="lock" />You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change.</div>
+    <section className="summary-strip">
+      <SummaryTile label="Needs update" value={`${needsUpdate.length}`} tone={needsUpdate.length ? "amber" : "green"} strong />
+      <SummaryTile label="Late" value={`${actionableOpen.filter(workIsLate).length}`} tone={actionableOpen.some(workIsLate) ? "red" : "green"} />
+      <SummaryTile label="Blocked" value={`${actionableOpen.filter((item) => item.status === "Blocked").length}`} tone={actionableOpen.some((item) => item.status === "Blocked") ? "red" : "green"} />
+      <SummaryTile label="Due this week" value={`${dueThisWeek.length}`} />
+      <SummaryTile label="Awaiting the PM" value={`${waiting.length}`} note={waiting.length ? "requests sent" : "nothing pending"} />
+    </section>
+    <Tabs active={tab} onChange={setTab} tabs={[{ id: "tasks", label: "My tasks", count: open.length }, { id: "updates", label: "My updates" }]} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${rows.length} assigned tasks`} subtitle={loading ? "Loading from production API…" : "Live schedule assignments"} flush>
-      {rows.length ? <div className="table-wrap"><table><thead><tr><th>Project</th><th>WBS / Task</th><th>Plan</th><th>Days</th><th>Progress</th><th>Status</th><th>Remark</th><th>Updated</th><th /></tr></thead><tbody>{rows.map((item) => <tr key={`${item.projectId}:${item.taskId}`}>
-        <td><div className="cell-primary"><strong className="mono">{item.projectNo}</strong><span>{item.projectName}</span></div></td>
-        <td><div className="cell-primary"><strong>{item.wbs} · {item.name}</strong><span>Task ID {item.taskId}</span></div></td>
-        <td>{date(item.planStart)} – {date(item.planFinish)}</td>
-        <td className="num">{item.workDays}</td>
-        <td style={{ minWidth: 120 }}><ProgressCell value={Number(item.percentComplete)} /></td>
-        <td><Badge>{item.status}</Badge></td>
-        <td className="wrap">{item.remark || "—"}</td>
-        <td>{dateTime(item.updatedAt)}</td>
-        <td>{editableKeys.has(`${item.projectId}:${item.taskId}`)
-          ? <button className="btn sm default" type="button" disabled={loading} onClick={() => setActive(item)}><Icon name="edit" />Update</button>
-          : <span className="muted" title="Only an assigned PIC can update a non-phase leaf task">Not editable</span>}</td>
-      </tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading…</div> : <EmptyState icon="checkCircle" title="No assigned schedule task" message="เมื่อ Project Manager มอบหมาย PIC งานจะแสดงที่นี่" />}
-    </Panel>
-    {active ? <ProgressModal target={{ ...active }} onClose={() => setActive(null)} onSubmit={async (input) => {
-      const schedule = await apiRequest<ProjectSchedule>(`/api/v1/projects/${active.projectId}/schedule`);
-      const freshTask = flattenTasks(schedule.tasks).find((task) => task.id === active.taskId);
-      if (!freshTask) throw new Error("Task นี้ไม่มีอยู่ใน Schedule ล่าสุดแล้ว กรุณารีเฟรชรายการ");
-      if (freshTask.kind === "phase" || freshTask.children.length > 0
-        || !freshTask.pics.some((pic) => pic.id === bootstrap.user.id)) {
-        throw new Error("Task นี้ไม่ใช่งานย่อยที่คุณมีสิทธิ์อัปเดตแล้ว กรุณารีเฟรชรายการ");
-      }
-      await apiRequest(`/api/v1/schedule/tasks/${active.taskId}/updates`, {
-        method: "POST",
-        body: JSON.stringify({ scheduleVersion: schedule.scheduleVersion, rowVersion: freshTask.rowVersion, ...input }),
-      });
-      notify(`${active.projectNo} · ${active.wbs} progress updated`);
+
+    {tab === "tasks" ? <>
+      {needsUpdate.length ? <Panel title="Needs your update" subtitle="Late, blocked or quiet for too long — clear these first" flush>
+        {needsUpdate.map((item) => <ProductionWorkQueueRow
+          key={`urgent:${item.taskId}`}
+          item={item}
+          busy={saving.has(item.taskId)}
+          notify={notify}
+          patchProgress={patchProgress}
+          onRequest={() => setRequestFor(item)}
+        />)}
+      </Panel> : null}
+
+      {projects.map((project) => <Panel
+        key={project.id}
+        title={`${project.no} — ${project.name}`}
+        subtitle={`${project.rows.filter((item) => item.status === "Done").length}/${project.rows.length} done · Project manager: ${project.managerName}`}
+        actions={<button className="btn default sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(project.id)}><Icon name="calendar" />Whole plan</button>}
+        flush
+      >
+        {Array.from(new Map(project.rows.map((item) => [`${item.phaseWbs ?? ""}:${item.phaseName ?? "Other work"}`, {
+          wbs: item.phaseWbs,
+          name: item.phaseName ?? "Other work",
+          rows: project.rows.filter((candidate) => candidate.phaseWbs === item.phaseWbs && candidate.phaseName === item.phaseName),
+        }])).values()).map((phase) => <div className="phase-group" key={`${project.id}:${phase.wbs ?? phase.name}`}>
+          <p className="phase-label">
+            {phase.wbs ? <span className="mono muted">{phase.wbs}</span> : null} {phase.name}
+            <Badge>{Math.round(phase.rows.reduce((sum, item) => sum + Number(item.percentComplete), 0) / phase.rows.length)}%</Badge>
+          </p>
+          {phase.rows.map((item) => <ProductionMyTaskRow
+            key={item.taskId}
+            item={item}
+            busy={saving.has(item.taskId)}
+            notify={notify}
+            patchProgress={patchProgress}
+            onRequest={() => setRequestFor(item)}
+            onAdd={() => setAddingFor(item)}
+            onDelete={async () => {
+              if (!window.confirm(`Delete your task “${item.name}”?`)) return;
+              setSaving((current) => new Set(current).add(item.taskId));
+              try {
+                await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
+                  method: "DELETE",
+                  body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion }),
+                });
+                notify(`${item.wbs} deleted`);
+                await load();
+              } catch (requestError) {
+                setError(toError(requestError));
+              } finally {
+                setSaving((current) => { const next = new Set(current); next.delete(item.taskId); return next; });
+              }
+            }}
+          />)}
+        </div>)}
+      </Panel>)}
+
+      {!items.length && !loading ? <Panel title="My tasks" flush><EmptyState icon="checkCircle" title="Nothing assigned to you yet" message="When the project manager assigns you a task it appears here." /></Panel> : null}
+      {loading && !items.length ? <div className="empty"><span className="spinner" />Loading your live schedule…</div> : null}
+    </> : null}
+
+    {tab === "updates" ? <Panel title="My updates" subtitle="What you reported, in order — loaded from the append-only SQL audit trail" flush>
+      <div className="panel-body feed">
+        {updates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
+          <span className="avatar sm">{myWorkInitials(bootstrap.user.name)}</span>
+          <div>
+            <p><strong>{entry.projectNo}{entry.wbs ? ` · ${entry.wbs}` : ""} {entry.taskName ?? entry.projectName}</strong></p>
+            <p className="muted">
+              {entry.field === "request" || entry.requestDays > 0
+                ? `Requested ${entry.requestDays} more day${entry.requestDays === 1 ? "" : "s"} · ${entry.answer ?? "waiting"}`
+                : `${entry.field}: ${entry.fromValue ?? "—"} → ${entry.toValue ?? "—"}`}
+              {entry.comment ? ` · “${entry.comment}”` : ""}
+              {entry.answerNote ? ` · PM: “${entry.answerNote}”` : ""}
+            </p>
+          </div>
+          <span className="muted mono" style={{ fontSize: 11 }}>{dateTime(entry.occurredAt)}</span>
+        </div>)}
+        {!updates.length && !loading ? <p className="muted">No update yet.</p> : null}
+      </div>
+    </Panel> : null}
+
+    {requestFor ? <ProductionRequestDaysModal item={requestFor} onClose={() => setRequestFor(null)} onSubmitted={async () => {
+      setRequestFor(null);
+      notify("Request sent to the project manager");
       await load();
-    }} onConflict={async () => {
-      notify(`${active.projectNo} · ${active.wbs} changed by another user; the list was reloaded`);
+    }} /> : null}
+    {addingFor ? <ProductionAddDetailModal item={addingFor} onClose={() => setAddingFor(null)} onCreated={async () => {
+      setAddingFor(null);
+      notify("Your task was added to the live schedule");
       await load();
     }} /> : null}
   </>;
+}
+
+function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }: {
+  item: MyWorkItem;
+  busy: boolean;
+  notify: (message: string) => void;
+  patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
+  onRequest: () => void;
+}) {
+  const today = isoToday();
+  const editable = item.canUpdate && !busy;
+  return <div className="quick-controls">
+    <div className="pct-strip" role="group" aria-label="Percent done">
+      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" disabled={!editable || (item.status === "Done" && value !== 100)} className={Number(item.percentComplete) === value ? "on" : undefined} onClick={() => {
+        patchProgress(item, {
+          percentComplete: value,
+          ...(value === 100 ? { status: "Done", actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
+          ...(value > 0 && value < 100 && item.status === "Not Started" ? { status: "In Progress", actualStart: item.actualStart ?? today } : {}),
+        }, `${item.wbs} progress updated to ${value}%`);
+      }}>{value}</button>)}
+    </div>
+    <select disabled={!editable} value={item.status} onChange={(event) => {
+      const status = event.target.value;
+      if (status === "Blocked" && !item.remark?.trim()) {
+        notify("Enter the blocking reason in Note first, then choose Blocked");
+        return;
+      }
+      patchProgress(item, {
+        status,
+        ...(status === "Not Started" ? { percentComplete: 0, actualStart: null, actualFinish: null } : {}),
+        ...(status === "In Progress" ? { actualStart: item.actualStart ?? today, actualFinish: null, percentComplete: Number(item.percentComplete) === 100 ? 99 : Number(item.percentComplete) } : {}),
+        ...(status === "Blocked" ? { actualStart: item.actualStart ?? today, actualFinish: null, percentComplete: Number(item.percentComplete) === 100 ? 99 : Number(item.percentComplete) } : {}),
+        ...(status === "Done" ? { percentComplete: 100, actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
+      }, `${item.wbs} status changed to ${status}`);
+    }}>
+      <option>Not Started</option><option>In Progress</option><option>Blocked</option><option>Done</option>
+    </select>
+    {!item.actualStart ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: today, status: "In Progress" }, `${item.wbs} started today`)}><Icon name="play" />Start today</button> : null}
+    {item.status !== "Done" ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? today, actualFinish: today, percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" />Finish today</button> : null}
+    {workNeedsForecast(item) || workIsLate(item) ? <label className="forecast-inline"><span>Forecast</span><input type="date" disabled={!editable} value={item.forecastFinish ?? ""} className={workNeedsForecast(item) ? "needs-input" : undefined} min={item.actualStart ?? undefined} onChange={(event) => patchProgress(item, { forecastFinish: event.target.value || null }, `${item.wbs} forecast updated`)} /></label> : null}
+    <input
+      key={`${item.taskId}:${item.updatedAt}:note`}
+      className="note-inline"
+      disabled={!editable}
+      placeholder={item.status === "Blocked" ? "What is blocking it? (required)" : "Note…"}
+      defaultValue={item.remark ?? ""}
+      onBlur={(event) => {
+        const value = event.target.value.trim();
+        if (value === (item.remark ?? "")) return;
+        if (item.status === "Blocked" && !value) { notify("Blocked tasks require a reason"); return; }
+        patchProgress(item, { remark: value }, `${item.wbs} note updated`);
+      }}
+    />
+    <button className="row-action" type="button" disabled={!editable || Boolean(item.pendingRequest)} title={item.pendingRequest ? "A request is already waiting for the PM" : "Request more days"} onClick={onRequest}><Icon name="clock" /></button>
+  </div>;
+}
+
+function ProductionWorkQueueRow(props: {
+  item: MyWorkItem;
+  busy: boolean;
+  notify: (message: string) => void;
+  patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
+  onRequest: () => void;
+}) {
+  const { item } = props;
+  const reason = item.status === "Blocked" ? "Blocked" : workIsLate(item) ? "Late" : workNeedsForecast(item) ? "Needs a forecast" : "No update for 5 days";
+  return <div className={`queue-row ${item.status === "Blocked" || workIsLate(item) ? "hot" : ""}`}>
+    <div className="queue-head"><Badge>{reason}</Badge><strong>{item.projectNo} · {item.wbs} {item.name}</strong><span className="muted">{date(item.planStart)} → {date(item.planFinish)}</span></div>
+    <ProductionWorkControls {...props} />
+    {workNeedsForecast(item) ? <p className="queue-nag"><Icon name="alertTriangle" />This was due {date(item.planFinish)} — set the forecast date so the plan tells the truth.</p> : null}
+  </div>;
+}
+
+function ProductionMyTaskRow({ item, busy, notify, patchProgress, onRequest, onAdd, onDelete }: {
+  item: MyWorkItem;
+  busy: boolean;
+  notify: (message: string) => void;
+  patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
+  onRequest: () => void;
+  onAdd: () => void;
+  onDelete: () => Promise<void>;
+}) {
+  return <div className={`my-task ${workIsLate(item) ? "late" : ""}`}>
+    <div className="my-task-head">
+      <span className="mono muted">{item.wbs}</span><strong>{item.name}</strong>
+      {item.isOwnDetail ? <Pill tone="blue">own</Pill> : null}
+      {item.isMilestone ? <Pill tone="violet">◆ Milestone</Pill> : null}
+      <span className="muted">{date(item.planStart)} → {date(item.planFinish)} · {item.workDays} work days</span>
+      {item.pendingRequest ? <Pill tone="amber">Requested {item.pendingRequest.requestDays} more days</Pill> : null}
+      {!item.canUpdate ? <Pill tone="slate">{item.projectStatus}</Pill> : null}
+    </div>
+    <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} />
+    {item.canAddDetail ? <button className="link-btn" type="button" disabled={busy} title="Add a private detail task" onClick={onAdd}><Icon name="plus" />Add my task</button> : null}
+    {item.canDeleteDetail ? <button className="link-btn danger-text" type="button" disabled={busy} title="Delete my task" onClick={() => { void onDelete(); }}><Icon name="trash" />Delete my task</button> : null}
+  </div>;
+}
+
+function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
+  item: MyWorkItem;
+  onClose: () => void;
+  onSubmitted: () => Promise<void>;
+}) {
+  const [days, setDays] = useState(2);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/day-requests`, { method: "POST", body: JSON.stringify({ requestDays: days, comment: comment.trim() }) });
+      await onSubmitted();
+    } catch (requestError) { setError(toError(requestError)); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Request more days" subtitle={`${item.wbs} ${item.name} · plan ${date(item.planStart)} → ${date(item.planFinish)}`} onClose={onClose} footer={<>
+    <span className="muted">The dates change only when the PM accepts.</span><span className="spacer" />
+    <button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button>
+    <button className="btn primary" type="button" disabled={busy || days < 1 || !comment.trim()} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Sending…" : "Send request"}</button>
+  </>}>
+    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
+    <div className="form-grid"><Field label="Extra days needed"><input className="num" type="number" min="1" max="3650" value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value)))} /></Field><Field label="Why? (required — the PM decides with this)" span={3}><input maxLength={20000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="e.g. rack anchor rework — re-drilling takes 3 days" /></Field></div>
+  </Modal>;
+}
+
+function ProductionAddDetailModal({ item, onClose, onCreated }: {
+  item: MyWorkItem;
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const planSpan = item.planStart && item.planFinish
+    ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1
+    : 1;
+  const planDays = Number.isFinite(planSpan) ? Math.max(1, planSpan) : 1;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, { method: "POST", body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, name: name.trim(), planDays }) });
+      await onCreated();
+    } catch (requestError) { setError(toError(requestError)); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Add my task" subtitle={`${item.projectNo} · inside ${item.wbs} ${item.name} · internal visibility`} onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || !name.trim() || planDays < 1} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? "Adding…" : "Add task"}</button></>}>
+    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
+    <div className="form-grid"><Field label="What will you do inside this task?" span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></Field><Field label="Days (fixed to the parent plan)"><input className="num" type="number" value={planDays} readOnly /></Field></div>
+  </Modal>;
 }
 
 function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onConflict }: {
@@ -702,7 +1038,55 @@ function BaselineModal({ schedule, onClose, onCreated, onConflict }: {
   </Modal>;
 }
 
-export function ProductionProjectSchedule({ bootstrap, notify }: ProductionPlanningProps) {
+function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAnswered }: {
+  request: ScheduleUpdate;
+  schedule: ProjectSchedule;
+  task: ScheduleTask | null;
+  onClose: () => void;
+  onAnswered: (answer: "Accepted" | "Rejected") => Promise<void>;
+}) {
+  const [answer, setAnswer] = useState<"Accepted" | "Rejected">("Accepted");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    if (!task) { setError("The requested task is no longer available. Reload the schedule."); return; }
+    setBusy(true); setError("");
+    try {
+      await apiRequest(`/api/v1/schedule/day-requests/${request.id}/answer`, {
+        method: "POST",
+        body: JSON.stringify({
+          scheduleVersion: schedule.scheduleVersion,
+          rowVersion: task.rowVersion,
+          answer,
+          note: note.trim(),
+        }),
+      });
+      await onAnswered(answer);
+      onClose();
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const taskLabel = task ? `${task.wbs} ${task.name}` : `Task ${request.taskId ?? "—"}`;
+  return <Modal
+    title="Review request for more days"
+    subtitle={`${schedule.projectNo} · ${taskLabel}`}
+    onClose={onClose}
+    footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className={answer === "Accepted" ? "btn success" : "btn danger"} type="button" disabled={busy || !task || !note.trim()} onClick={() => { void submit(); }}><Icon name={answer === "Accepted" ? "check" : "x"} />{busy ? "Saving…" : answer}</button></>}
+  >
+    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
+    <div className="request-impact"><Icon name="clock" /><span>{request.requestDays} calendar day{request.requestDays === 1 ? "" : "s"} requested. Accepting extends the task duration and recalculates the project schedule.</span></div>
+    <div className="form-grid two">
+      <Field label="Decision"><select value={answer} onChange={(event) => setAnswer(event.target.value as "Accepted" | "Rejected")}><option>Accepted</option><option>Rejected</option></select></Field>
+      <Field label="PM note (required)" span={2}><textarea maxLength={20000} rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Explain the decision for the team and audit trail" /></Field>
+    </div>
+  </Modal>;
+}
+
+export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId }: ProductionPlanningProps) {
   const allowed = bootstrap.permissions.includes("schedule.read");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -713,6 +1097,7 @@ export function ProductionProjectSchedule({ bootstrap, notify }: ProductionPlann
   const [createOpen, setCreateOpen] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
+  const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
@@ -720,15 +1105,19 @@ export function ProductionProjectSchedule({ bootstrap, notify }: ProductionPlann
     try {
       const loaded = await loadAllProjects();
       setProjects(loaded);
-      setSelectedId((current) => current && loaded.some((project) => project.id === current) ? current : loaded[0]?.id ?? null);
+      setSelectedId((current) => {
+        if (preferredProjectId && loaded.some((project) => project.id === preferredProjectId)) return preferredProjectId;
+        return current && loaded.some((project) => project.id === current) ? current : loaded[0]?.id ?? null;
+      });
     } catch (requestError) { setError(toError(requestError)); }
     finally { setLoadingProjects(false); }
-  }, [allowed]);
+  }, [allowed, preferredProjectId]);
   const loadSchedule = useCallback(async () => {
     const requestId = ++scheduleRequestId.current;
     setCreateOpen(false);
     setBaselineOpen(false);
     setProgressTask(null);
+    setAnswerRequest(null);
     setSchedule(null);
     if (!selectedId) { setLoadingSchedule(false); return; }
     setLoadingSchedule(true); setError("");
@@ -758,6 +1147,7 @@ export function ProductionProjectSchedule({ bootstrap, notify }: ProductionPlann
   const activeSchedule = schedule?.projectId === selectedId && !loadingSchedule ? schedule : null;
   const rows = activeSchedule ? flattenTasks(activeSchedule.tasks) : [];
   const canPlan = Boolean(activeSchedule?.canPlan && bootstrap.permissions.includes("schedule.plan"));
+  const pendingDayRequests = activeSchedule?.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer) ?? [];
   return <>
     <PageHeader eyebrow="PROJECT CONTROL" title="Project Schedule" subtitle="จัดทำแผน อัปเดตความคืบหน้า และเก็บ Baseline พร้อม concurrency control" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" />Refresh</button>} />
     <Toolbar>
@@ -767,6 +1157,7 @@ export function ProductionProjectSchedule({ bootstrap, notify }: ProductionPlann
         setCreateOpen(false);
         setBaselineOpen(false);
         setProgressTask(null);
+        setAnswerRequest(null);
         setSchedule(null);
         setLoadingSchedule(Boolean(nextId));
         setSelectedId(nextId);
@@ -804,15 +1195,37 @@ export function ProductionProjectSchedule({ bootstrap, notify }: ProductionPlann
           </tr>;
         })}</tbody></table></div> : loadingSchedule ? <div className="empty"><span className="spinner" />Loading…</div> : <EmptyState icon="calendar" title="This project has no schedule yet" message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
-      {activeSchedule.recentUpdates.length ? <Panel title="Recent schedule activity" subtitle="100 รายการล่าสุดจาก audit trail ของ Schedule" flush><div className="table-wrap"><table><thead><tr><th>When</th><th>Actor</th><th>Task</th><th>Field</th><th>Change</th><th>Comment</th></tr></thead><tbody>{activeSchedule.recentUpdates.slice(0, 20).map((update) => <tr key={update.id}><td>{dateTime(update.occurredAt)}</td><td>{update.actor.name}</td><td>{update.taskId ?? "Schedule"}</td><td><Badge>{update.field}</Badge></td><td className="wrap">{update.fromValue ?? "—"} → {update.toValue ?? "—"}</td><td className="wrap">{update.comment || "—"}</td></tr>)}</tbody></table></div></Panel> : null}
+      {canPlan && pendingDayRequests.length ? <Panel title="Requests waiting for the PM" subtitle="Accepting extends the task plan; rejecting leaves the dates unchanged" flush><div className="panel-body">
+        {pendingDayRequests.map((request) => {
+          const requestedTask = request.taskId ? rows.find((task) => task.id === request.taskId) : null;
+          return <div className="request-row" key={`pending:${request.id}`}><div className="request-head"><Badge tone="amber">+{request.requestDays} days</Badge><strong>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : `Task ${request.taskId ?? "—"}`}</strong><span className="muted">requested by {request.actor.name} · {dateTime(request.occurredAt)}</span></div><p className="muted">{request.comment || "No reason provided"}</p><button className="btn primary sm" type="button" disabled={!requestedTask} onClick={() => setAnswerRequest(request)}><Icon name="checkCircle" />Review request</button></div>;
+        })}
+      </div></Panel> : null}
+      {activeSchedule.recentUpdates.length ? <Panel title="Recent schedule activity" subtitle="100 รายการล่าสุดจาก audit trail ของ Schedule" flush><div className="table-wrap"><table><thead><tr><th>When</th><th>Actor</th><th>Task</th><th>Field</th><th>Change</th><th>Comment</th><th>Decision</th></tr></thead><tbody>{activeSchedule.recentUpdates.slice(0, 20).map((update) => {
+        const requestedTask = update.taskId ? rows.find((task) => task.id === update.taskId) : null;
+        const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
+        return <tr key={update.id}>
+          <td>{dateTime(update.occurredAt)}</td><td>{update.actor.name}</td><td>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : update.taskId ?? "Schedule"}</td><td><Badge>{update.field}</Badge></td>
+          <td className="wrap">{update.requestDays > 0 ? `+${update.requestDays} days requested` : `${update.fromValue ?? "—"} → ${update.toValue ?? "—"}`}</td>
+          <td className="wrap">{update.comment || "—"}</td>
+          <td>{pendingRequest && requestedTask && canPlan ? <button className="btn sm primary" type="button" onClick={() => setAnswerRequest(update)}><Icon name="checkCircle" />Review</button> : update.answer ? <div className="cell-primary"><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge><span>{update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span></div> : "—"}</td>
+        </tr>;
+      })}</tbody></table></div></Panel> : null}
     </> : loadingProjects || loadingSchedule ? <Panel><div className="empty"><span className="spinner" />Loading schedule…</div></Panel> : <Panel><EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" /></Panel>}
     {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} onClose={() => setCreateOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} schedule row created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {baselineOpen && activeSchedule ? <BaselineModal schedule={activeSchedule} onClose={() => setBaselineOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} baseline created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
-    {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, remark: progressTask.remark }} onClose={() => setProgressTask(null)} onSubmit={async (input) => {
+    {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, forecastFinish: progressTask.forecastFinish, remark: progressTask.remark }} onClose={() => setProgressTask(null)} onSubmit={async (input) => {
       await apiRequest(`/api/v1/schedule/tasks/${progressTask.id}/updates`, { method: "POST", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: progressTask.rowVersion, ...input }) });
       notify(`${activeSchedule.projectNo} · ${progressTask.wbs} progress updated`);
       await loadSchedule();
     }} onConflict={async () => { notify(`${activeSchedule.projectNo} · ${progressTask.wbs} changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
+    {answerRequest && activeSchedule ? <ScheduleDayRequestAnswerModal
+      request={answerRequest}
+      schedule={activeSchedule}
+      task={rows.find((task) => task.id === answerRequest.taskId) ?? null}
+      onClose={() => setAnswerRequest(null)}
+      onAnswered={async (answer) => { notify(`${activeSchedule.projectNo} day request ${answer.toLowerCase()}`); await loadSchedule(); }}
+    /> : null}
   </>;
 }
 

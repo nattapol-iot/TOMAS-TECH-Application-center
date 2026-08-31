@@ -11,10 +11,16 @@ SET XACT_ABORT ON;
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
 
-IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 6)
-    THROW 51070, 'Required schema version 6 is not installed.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 7)
+    THROW 51070, 'Required schema version 7 is not installed.', 1;
 
 IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
+   OR OBJECT_ID(N'dbo.answer_schedule_day_request', N'P') IS NULL
+   OR NOT EXISTS (
+       SELECT 1
+       FROM sys.sql_modules
+       WHERE object_id = OBJECT_ID(N'dbo.answer_schedule_day_request')
+         AND execute_as_principal_id = -2)
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
    OR OBJECT_ID(N'dbo.v_estimate_totals', N'V') IS NULL
    OR OBJECT_ID(N'dbo.v_item_balances', N'V') IS NULL
@@ -32,20 +38,38 @@ IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'iot_team_app
     THROW 51072, 'The least-privileged application role is missing.', 1;
 
 DECLARE @app_role_id int = DATABASE_PRINCIPAL_ID(N'iot_team_app_role');
+DECLARE @public_role_id int = DATABASE_PRINCIPAL_ID(N'public');
 DECLARE @app_user_id int = DATABASE_PRINCIPAL_ID(N'$(AppLogin)');
-DECLARE @app_login_id int = SUSER_ID(N'$(AppLogin)');
+DECLARE @app_user_type char(1) = (
+    SELECT type FROM sys.database_principals WHERE principal_id = @app_user_id);
+DECLARE @app_authentication_type nvarchar(60) = (
+    SELECT authentication_type_desc
+    FROM sys.database_principals
+    WHERE principal_id = @app_user_id);
+-- A contained user may share a name with an unrelated instance login. Only
+-- resolve and audit the server principal when this database user is actually
+-- authenticated by that instance login.
+DECLARE @app_login_id int = CASE WHEN @app_authentication_type = N'INSTANCE'
+    THEN SUSER_ID(N'$(AppLogin)') ELSE NULL END;
 
-IF @app_login_id IS NULL OR @app_user_id IS NULL OR NOT EXISTS (
+IF @app_user_id IS NULL OR @app_user_type NOT IN ('A', 'S', 'U', 'G') OR NOT EXISTS (
     SELECT 1 FROM sys.database_role_members
     WHERE role_principal_id = @app_role_id AND member_principal_id = @app_user_id)
     THROW 51073, 'The expected application user is not a member of iot_team_app_role.', 1;
 
-IF EXISTS (
+IF @app_user_type <> 'A'
+   AND (@app_authentication_type IS NULL OR @app_authentication_type NOT IN (N'INSTANCE', N'DATABASE'))
+    THROW 51073, 'The expected application database user uses an unsupported authentication type.', 1;
+
+IF @app_authentication_type = N'INSTANCE' AND @app_login_id IS NULL
+    THROW 51073, 'The expected application database user is not mapped to a server login.', 1;
+
+IF @app_login_id IS NOT NULL AND EXISTS (
     SELECT 1 FROM sys.server_role_members
     WHERE member_principal_id = @app_login_id)
     THROW 51074, 'The application login must not belong to a fixed or custom server role.', 1;
 
-IF EXISTS (
+IF @app_login_id IS NOT NULL AND EXISTS (
     SELECT 1 FROM sys.server_permissions
     WHERE grantee_principal_id = @app_login_id
       AND state IN ('G', 'W')
@@ -61,14 +85,56 @@ IF EXISTS (
 IF EXISTS (
     SELECT 1 FROM sys.database_permissions
     WHERE grantee_principal_id = @app_user_id
-      AND state IN ('G', 'W')
       AND permission_name <> N'CONNECT')
     THROW 51089, 'The application user has an unexpected direct database permission.', 1;
 
-IF EXISTS (SELECT 1 FROM sys.databases WHERE database_id = DB_ID() AND owner_sid = SUSER_SID(N'$(AppLogin)'))
-   OR EXISTS (SELECT 1 FROM sys.schemas WHERE principal_id = @app_user_id)
-   OR EXISTS (SELECT 1 FROM sys.objects WHERE principal_id = @app_user_id)
-    THROW 51090, 'The application login/user must not own the database, a schema, or an object.', 1;
+DECLARE @app_user_sid varbinary(85) = (
+    SELECT sid FROM sys.database_principals WHERE principal_id = @app_user_id);
+DECLARE @app_role_sid varbinary(85) = (
+    SELECT sid FROM sys.database_principals WHERE principal_id = @app_role_id);
+DECLARE @public_role_sid varbinary(85) = (
+    SELECT sid FROM sys.database_principals WHERE principal_id = @public_role_id);
+
+IF EXISTS (
+       SELECT 1 FROM sys.databases
+       WHERE database_id = DB_ID()
+         AND owner_sid IN (@app_user_sid, @app_role_sid, @public_role_sid))
+   OR EXISTS (
+       SELECT 1 FROM sys.schemas
+       WHERE principal_id IN (@app_user_id, @app_role_id, @public_role_id))
+   OR EXISTS (
+       SELECT 1 FROM sys.objects
+       WHERE principal_id IN (@app_user_id, @app_role_id, @public_role_id))
+    THROW 51090, 'The application user, application role, and public role must not own the database, a schema, or an object.', 1;
+
+-- The application principal inherits permissions only from its single role and
+-- public. No database/schema grant is valid for the application role. Public
+-- is limited to SQL Server's safe database-connection/key-metadata defaults.
+DECLARE @allowed_public_database_permissions TABLE (
+    permission_name nvarchar(60) NOT NULL PRIMARY KEY
+);
+INSERT INTO @allowed_public_database_permissions(permission_name)
+VALUES
+    (N'CONNECT'),
+    (N'VIEW ANY COLUMN ENCRYPTION KEY DEFINITION'),
+    (N'VIEW ANY COLUMN MASTER KEY DEFINITION');
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id IN (@app_role_id, @public_role_id)
+      AND permission.state IN ('G', 'W')
+      AND (
+           (permission.class = 0
+            AND (permission.grantee_principal_id = @app_role_id
+                 OR NOT EXISTS (
+                     SELECT 1
+                     FROM @allowed_public_database_permissions allowed
+                     WHERE allowed.permission_name COLLATE DATABASE_DEFAULT
+                           = permission.permission_name COLLATE DATABASE_DEFAULT)))
+        OR permission.class = 3
+      ))
+    THROW 51097, 'The application/public role has an unexpected database- or schema-wide grant.', 1;
 
 DECLARE @required_material_permissions TABLE (
     object_name sysname NOT NULL,
@@ -104,37 +170,94 @@ VALUES
     (N'schedule_baselines', N'SELECT'), (N'schedule_baselines', N'INSERT');
 
 DECLARE @has_forbidden_effective_permission bit;
-EXECUTE AS USER = N'$(AppLogin)';
-SELECT @has_forbidden_effective_permission = CASE WHEN
-       COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'CONTROL'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'ALTER'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.project_docs', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.project_docs', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.estimate_revisions', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.estimate_revisions', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.audit_log', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.audit_log', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.stock_txns', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.stock_txns', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'INSERT'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_tasks', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_updates', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_updates', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_baselines', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_baselines', N'OBJECT', N'DELETE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'INSERT'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'UPDATE'), 0) = 1
-    OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'DELETE'), 0) = 1
-    THEN 1 ELSE 0 END;
-UPDATE required
-SET is_effective = CONVERT(bit, COALESCE(HAS_PERMS_BY_NAME(N'dbo.' + object_name, N'OBJECT', permission_name), 0))
-FROM @required_material_permissions required;
-REVERT;
+IF @app_user_type = 'A'
+BEGIN
+    -- SQL Server application-role principals cannot be impersonated with
+    -- EXECUTE AS USER. They are required to have no direct permissions and to
+    -- inherit exactly one database role above, so metadata inspection of that
+    -- role is equivalent to the runtime effective-permission check.
+    SELECT @has_forbidden_effective_permission = CASE WHEN EXISTS (
+        SELECT 1
+        FROM sys.database_permissions permission
+        LEFT JOIN sys.objects object_item
+          ON permission.class = 1 AND object_item.object_id = permission.major_id
+        WHERE permission.grantee_principal_id IN (@app_role_id, @public_role_id)
+          AND permission.state IN ('G', 'W')
+          AND (
+               (permission.class = 0 AND permission.permission_name = N'CONTROL')
+            OR (permission.class = 3 AND permission.major_id = SCHEMA_ID(N'dbo')
+                AND permission.permission_name IN (N'ALTER', N'DELETE'))
+            OR (permission.class = 1 AND (
+                   (object_item.name IN (N'project_docs', N'estimate_revisions', N'audit_log', N'stock_txns', N'mat_audit')
+                    AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'holidays' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'schedule_tasks' AND permission.permission_name = N'DELETE')
+                OR (object_item.name = N'schedule_updates' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'schedule_baselines' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'users' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
+            ))
+          )
+    ) THEN 1 ELSE 0 END;
+
+    UPDATE required
+    SET is_effective = CONVERT(bit, CASE WHEN EXISTS (
+        SELECT 1
+        FROM sys.database_permissions permission
+        WHERE permission.grantee_principal_id = @app_role_id
+          AND permission.class = 1
+          AND permission.major_id = OBJECT_ID(N'dbo.' + required.object_name)
+          AND permission.permission_name COLLATE DATABASE_DEFAULT = required.permission_name
+          AND permission.state IN ('G', 'W')) THEN 1 ELSE 0 END)
+    FROM @required_material_permissions required;
+END
+ELSE
+BEGIN
+    EXECUTE AS USER = N'$(AppLogin)';
+    SELECT @has_forbidden_effective_permission = CASE WHEN
+           COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'CONTROL'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'ALTER'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'TAKE OWNERSHIP'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'SELECT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'EXECUTE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'INSERT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(DB_NAME(), N'DATABASE', N'IMPERSONATE ANY USER'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'CONTROL'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'ALTER'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'TAKE OWNERSHIP'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'SELECT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'EXECUTE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'INSERT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo', N'SCHEMA', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.project_docs', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.project_docs', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.estimate_revisions', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.estimate_revisions', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.audit_log', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.audit_log', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.stock_txns', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.stock_txns', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.mat_audit', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'INSERT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.holidays', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_tasks', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_updates', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_updates', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_baselines', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.schedule_baselines', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'INSERT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'DELETE'), 0) = 1
+        THEN 1 ELSE 0 END;
+    UPDATE required
+    SET is_effective = CONVERT(bit, COALESCE(HAS_PERMS_BY_NAME(N'dbo.' + object_name, N'OBJECT', permission_name), 0))
+    FROM @required_material_permissions required;
+    REVERT;
+END;
 
 IF @has_forbidden_effective_permission = 1
     THROW 51091, 'The application principal has an effective permission that bypasses the least-privilege baseline.', 1;
@@ -162,6 +285,25 @@ IF NOT EXISTS (
       AND class = 1 AND major_id = OBJECT_ID(N'dbo.issue_document_number')
       AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
     THROW 51076, 'The document-number procedure EXECUTE grant is missing.', 1;
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.answer_schedule_day_request')
+      AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
+    THROW 51096, 'The schedule day-request answer procedure EXECUTE grant is missing.', 1;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_permissions
+    WHERE class = 1
+      AND major_id IN (
+          OBJECT_ID(N'dbo.issue_document_number'),
+          OBJECT_ID(N'dbo.answer_schedule_day_request'))
+      AND permission_name = N'EXECUTE'
+      AND state IN ('G', 'W')
+      AND grantee_principal_id <> @app_role_id)
+    THROW 51098, 'An owner-executed application procedure is granted to an unexpected database principal.', 1;
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.database_permissions

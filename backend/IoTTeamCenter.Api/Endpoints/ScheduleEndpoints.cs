@@ -19,8 +19,13 @@ public static class ScheduleEndpoints
         var schedule = app.MapGroup("/api/v1/schedule").RequireAuthorization();
         schedule.MapPut("/tasks/{id:long}", UpdatePlanAsync);
         schedule.MapPost("/tasks/{id:long}/updates", UpdateProgressAsync);
+        schedule.MapPost("/tasks/{id:long}/day-requests", RequestMoreDaysAsync);
+        schedule.MapPost("/day-requests/{id:long}/answer", AnswerDayRequestAsync);
+        schedule.MapPost("/tasks/{id:long}/details", CreateMemberDetailAsync);
+        schedule.MapDelete("/tasks/{id:long}/details", DeleteMemberDetailAsync);
 
         app.MapGet("/api/v1/me/work", GetMyWorkAsync).RequireAuthorization();
+        app.MapGet("/api/v1/me/work/updates", GetMyWorkUpdatesAsync).RequireAuthorization();
     }
 
     private static async Task<IResult> GetProjectScheduleAsync(
@@ -108,6 +113,11 @@ public static class ScheduleEndpoints
             await ValidateTaskReferencesAsync(connection, transaction, projectId, null, request.ParentId, request.PredecessorId, cancellationToken);
             await ValidateTaskGraphAsync(connection, transaction, projectId, null, request.ParentId, request.PredecessorId, cancellationToken);
             await ValidateTaskHierarchyAsync(connection, transaction, projectId, null, request.ParentId, request.Kind.Trim(), cancellationToken);
+            if (request.ParentId is long parentId
+                && await HasPendingDayRequestAsync(connection, transaction, parentId, cancellationToken))
+            {
+                throw PendingDayRequestBlocksStructure();
+            }
             var picIds = NormalizePicIds(request.PicUserIds);
             await ValidatePicsAsync(connection, transaction, project, picIds, cancellationToken);
 
@@ -183,15 +193,27 @@ public static class ScheduleEndpoints
             if (!existing.RowVersion.AsSpan().SequenceEqual(expectedRowVersion))
                 throw Concurrency();
 
-            await ValidateTaskReferencesAsync(connection, transaction, existing.ProjectId, id, request.ParentId, request.PredecessorId, cancellationToken);
-            await ValidateTaskGraphAsync(connection, transaction, existing.ProjectId, id, request.ParentId, request.PredecessorId, cancellationToken);
-            await ValidateTaskHierarchyAsync(connection, transaction, existing.ProjectId, id, request.ParentId, request.Kind.Trim(), cancellationToken);
             var picIds = NormalizePicIds(request.PicUserIds);
-            await ValidatePicsAsync(connection, transaction, project, picIds, cancellationToken);
             var existingPics = (await ReadPicsAsync(connection, transaction, existing.ProjectId, cancellationToken))
                 .GetValueOrDefault(id, [])
                 .Select(pic => pic.Id)
                 .ToArray();
+            if (PendingRequestSensitivePlanFieldsChanged(existing, request, existingPics, picIds)
+                && await HasPendingDayRequestAsync(connection, transaction, id, cancellationToken))
+            {
+                throw PendingDayRequestBlocksPlanChange();
+            }
+
+            await ValidateTaskReferencesAsync(connection, transaction, existing.ProjectId, id, request.ParentId, request.PredecessorId, cancellationToken);
+            await ValidateTaskGraphAsync(connection, transaction, existing.ProjectId, id, request.ParentId, request.PredecessorId, cancellationToken);
+            await ValidateTaskHierarchyAsync(connection, transaction, existing.ProjectId, id, request.ParentId, request.Kind.Trim(), cancellationToken);
+            if (request.ParentId is long parentId
+                && request.ParentId != existing.ParentId
+                && await HasPendingDayRequestAsync(connection, transaction, parentId, cancellationToken))
+            {
+                throw PendingDayRequestBlocksStructure();
+            }
+            await ValidatePicsAsync(connection, transaction, project, picIds, cancellationToken);
 
             var hasChildren = await HasActiveChildrenAsync(connection, transaction, id, cancellationToken);
             if (hasChildren && PlanFieldsChanged(existing, request))
@@ -282,7 +304,7 @@ public static class ScheduleEndpoints
         try
         {
             var existing = await ReadTaskAsync(connection, transaction, id, true, cancellationToken);
-            await ProjectScope.DemandAsync(connection, transaction, existing.ProjectId, actor, cancellationToken);
+            await ProjectScope.DemandMyWorkAsync(connection, transaction, existing.ProjectId, actor, cancellationToken);
             var project = await ReadProjectAsync(connection, transaction, existing.ProjectId, true, cancellationToken);
             if (project.Status == "Closed")
                 throw new ApiException(StatusCodes.Status409Conflict, "project_closed", "A closed project's schedule cannot be changed.");
@@ -315,7 +337,9 @@ public static class ScheduleEndpoints
 
                 UPDATE dbo.schedule_tasks
                 SET percent_done = @percent, actual_start = @actual_start, actual_end = @actual_finish,
-                    status = @status, note = @remark, updated_by = @actor, updated_at = SYSUTCDATETIME()
+                    forecast_end = @forecast_finish, status = @status,
+                    blocked_reason = @blocked_reason, note = @remark,
+                    updated_by = @actor, updated_at = SYSUTCDATETIME()
                 OUTPUT inserted.row_version INTO @changed(row_version)
                 WHERE id = @id AND deleted_at IS NULL AND row_version = @row_version;
 
@@ -325,7 +349,10 @@ public static class ScheduleEndpoints
                 update.Parameters.AddParameter("@percent", SqlDbType.Decimal, request.PercentComplete, precision: 5, scale: 2);
                 update.Parameters.AddParameter("@actual_start", SqlDbType.Date, request.ActualStart);
                 update.Parameters.AddParameter("@actual_finish", SqlDbType.Date, request.ActualFinish);
+                update.Parameters.AddParameter("@forecast_finish", SqlDbType.Date, request.ForecastFinish);
                 update.Parameters.AddParameter("@status", SqlDbType.NVarChar, request.Status.Trim(), 30);
+                update.Parameters.AddParameter("@blocked_reason", SqlDbType.NVarChar,
+                    request.Status.Trim() == "Blocked" ? request.Remark?.Trim() : null, -1);
                 update.Parameters.AddParameter("@remark", SqlDbType.NVarChar, request.Remark?.Trim(), -1);
                 update.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
                 update.Parameters.AddParameter("@id", SqlDbType.BigInt, id);
@@ -342,7 +369,9 @@ public static class ScheduleEndpoints
                 percentComplete = existing.PercentComplete,
                 existing.ActualStart,
                 actualFinish = existing.ActualEnd,
+                forecastFinish = existing.ForecastEnd,
                 existing.Status,
+                blockedReason = existing.BlockedReason,
                 remark = existing.Note
             };
             var after = new
@@ -350,7 +379,9 @@ public static class ScheduleEndpoints
                 request.PercentComplete,
                 request.ActualStart,
                 request.ActualFinish,
+                request.ForecastFinish,
                 status = request.Status.Trim(),
+                blockedReason = request.Status.Trim() == "Blocked" ? request.Remark?.Trim() : null,
                 remark = request.Remark?.Trim()
             };
             await InquiryEndpoints.InsertAuditAsync(
@@ -364,6 +395,450 @@ public static class ScheduleEndpoints
                 rowVersion = Encode(rowVersion),
                 scheduleVersion = Encode(scheduleVersion)
             });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private static async Task<IResult> RequestMoreDaysAsync(
+        long id,
+        RequestScheduleDaysRequest request,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("schedule.read", cancellationToken);
+        await users.DemandPermissionAsync("schedule.progress", cancellationToken);
+        if (request.RequestDays is < 1 or > 3650)
+            throw Invalid("Requested days must be between 1 and 3650.");
+        InputValidation.RequiredText(request.Comment, 20_000, "Request comment");
+        var actor = await users.GetRequiredAsync(cancellationToken);
+
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var task = await ReadTaskAsync(connection, transaction, id, true, cancellationToken);
+            await ProjectScope.DemandMyWorkAsync(connection, transaction, task.ProjectId, actor, cancellationToken);
+            var project = await ReadProjectAsync(connection, transaction, task.ProjectId, true, cancellationToken);
+            if (project.Status == "Closed")
+                throw new ApiException(StatusCodes.Status409Conflict, "project_closed", "A closed project's schedule cannot be changed.");
+            await DemandAssignedLeafAsync(connection, transaction, task, actor.Id, cancellationToken);
+
+            if (await HasPendingDayRequestAsync(connection, transaction, id, cancellationToken))
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_day_request_pending", "This task already has a pending request for more days.");
+
+            long requestId;
+            DateTimeOffset occurredAt;
+            await using (var insert = new SqlCommand("""
+                DECLARE @created TABLE (id bigint NOT NULL, occurred_at datetimeoffset(0) NOT NULL);
+
+                INSERT INTO dbo.schedule_updates (
+                    project_id, task_id, actor_id, field, from_value, to_value, comment, request_days)
+                OUTPUT inserted.id, inserted.occurred_at INTO @created(id, occurred_at)
+                VALUES (@project_id, @task_id, @actor, N'request', @from_value, @to_value, @comment, @request_days);
+
+                SELECT id, occurred_at FROM @created;
+                """, connection, transaction))
+            {
+                insert.Parameters.AddParameter("@project_id", SqlDbType.BigInt, task.ProjectId);
+                insert.Parameters.AddParameter("@task_id", SqlDbType.BigInt, id);
+                insert.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                insert.Parameters.AddParameter("@from_value", SqlDbType.NVarChar, Invariant(task.ForecastEnd), -1);
+                insert.Parameters.AddParameter("@to_value", SqlDbType.NVarChar,
+                    FormattableString.Invariant($"+{request.RequestDays} days"), -1);
+                insert.Parameters.AddParameter("@comment", SqlDbType.NVarChar, request.Comment.Trim(), -1);
+                insert.Parameters.AddParameter("@request_days", SqlDbType.Int, request.RequestDays);
+                await using var reader = await insert.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                await reader.ReadAsync(cancellationToken);
+                requestId = reader.GetInt64(0);
+                occurredAt = reader.GetFieldValue<DateTimeOffset>(1);
+            }
+
+            var after = new { taskId = id, request.RequestDays, comment = request.Comment.Trim() };
+            await InquiryEndpoints.InsertAuditAsync(
+                connection, transaction, actor.Id, "Schedule Day Request", requestId,
+                FormattableString.Invariant($"T-{id}/R-{requestId}"), "Requested more days", null, after, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Results.Created($"/api/v1/me/work/updates/{requestId}", new
+            {
+                id = requestId,
+                taskId = id,
+                requestDays = request.RequestDays,
+                comment = request.Comment.Trim(),
+                occurredAt
+            });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private static async Task<IResult> AnswerDayRequestAsync(
+        long id,
+        AnswerScheduleDaysRequest request,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("schedule.plan", cancellationToken);
+        InputValidation.OneOf(request.Answer, "Day request answer", "Accepted", "Rejected");
+        InputValidation.OptionalText(request.Note, 20_000, "Answer note");
+        var expectedRowVersion = SqlExtensions.ParseRowVersion(request.RowVersion);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        var locator = await ReadDayRequestLocatorAsync(connection, id, cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var projectId = locator.ProjectId;
+            var taskId = locator.TaskId;
+            var task = await ReadTaskAsync(connection, transaction, taskId, true, cancellationToken);
+            if (task.ProjectId != projectId)
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_day_request_invalid", "The day request no longer matches its task.");
+            var project = await DemandPlanOwnerAsync(connection, transaction, projectId, actor, cancellationToken);
+            if (task.Kind == "phase" || await HasActiveChildrenAsync(connection, transaction, taskId, cancellationToken))
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_day_request_not_leaf", "A day request can only be answered while its task remains a non-phase leaf row.");
+
+            int requestDays;
+            string? existingAnswer;
+            await using (var readRequest = new SqlCommand("""
+                SELECT project_id, task_id, request_days, answer
+                FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)
+                WHERE id = @request_id AND task_id IS NOT NULL
+                  AND field = N'request' AND request_days > 0;
+                """, connection, transaction))
+            {
+                readRequest.Parameters.AddParameter("@request_id", SqlDbType.BigInt, id);
+                await using var reader = await readRequest.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                    throw new ApiException(StatusCodes.Status404NotFound, "schedule_day_request_not_found", "Schedule day request not found.");
+                if (reader.GetInt64(0) != projectId || reader.GetInt64(1) != taskId)
+                    throw new ApiException(StatusCodes.Status409Conflict, "schedule_day_request_invalid", "The day request no longer matches its task.");
+                requestDays = reader.GetInt32(2);
+                existingAnswer = reader.IsDBNull(3) ? null : reader.GetString(3);
+            }
+            if (existingAnswer is not null)
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_day_request_answered", "This day request has already been answered.");
+
+            await ValidateScheduleVersionAsync(connection, transaction, projectId, request.ScheduleVersion, cancellationToken);
+            if (!task.RowVersion.AsSpan().SequenceEqual(expectedRowVersion)) throw Concurrency();
+            if (request.Answer.Trim() == "Accepted" && task.PlanDays > 3650 - requestDays)
+                throw Invalid("Accepting this request would make the task longer than 3650 calendar days.");
+
+            byte[] rowVersion;
+            await using (var answer = new SqlCommand("dbo.answer_schedule_day_request", connection, transaction)
+            {
+                CommandType = CommandType.StoredProcedure
+            })
+            {
+                answer.Parameters.AddParameter("@request_id", SqlDbType.BigInt, id);
+                answer.Parameters.AddParameter("@task_id", SqlDbType.BigInt, taskId);
+                answer.Parameters.AddParameter("@project_id", SqlDbType.BigInt, projectId);
+                answer.Parameters.AddParameter("@answer_by", SqlDbType.BigInt, actor.Id);
+                answer.Parameters.AddParameter("@answer", SqlDbType.NVarChar, request.Answer.Trim(), 20);
+                answer.Parameters.AddParameter("@answer_note", SqlDbType.NVarChar, request.Note?.Trim(), -1);
+                answer.Parameters.AddParameter("@expected_row_version", SqlDbType.Timestamp, expectedRowVersion);
+                await using var reader = await answer.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken) || reader.GetInt64(0) != taskId)
+                    throw Concurrency();
+                rowVersion = (byte[])reader.GetValue(1);
+            }
+
+            var normalizedAnswer = request.Answer.Trim();
+            var resultingPlanDays = normalizedAnswer == "Accepted" ? checked(task.PlanDays + requestDays) : task.PlanDays;
+            if (normalizedAnswer == "Accepted")
+            {
+                await AppendUpdateAsync(connection, transaction, projectId, taskId, actor.Id, "plan_days",
+                    task.PlanDays.ToString(CultureInfo.InvariantCulture),
+                    resultingPlanDays.ToString(CultureInfo.InvariantCulture), request.Note?.Trim(), cancellationToken);
+            }
+            await AppendUpdateAsync(connection, transaction, projectId, taskId, actor.Id, "request_answer",
+                null, normalizedAnswer, request.Note?.Trim(), cancellationToken);
+
+            var before = new { requestId = id, answer = (string?)null, task.PlanDays };
+            var after = new
+            {
+                requestId = id,
+                answer = normalizedAnswer,
+                answerNote = request.Note?.Trim(),
+                requestDays,
+                planDays = resultingPlanDays
+            };
+            await InquiryEndpoints.InsertAuditAsync(
+                connection, transaction, actor.Id, "Schedule Day Request", id,
+                FormattableString.Invariant($"T-{taskId}/R-{id}"), "Answered day request", before, after, cancellationToken);
+            var scheduleVersion = await GetScheduleVersionAsync(connection, transaction, project.Id, false, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Results.Ok(new
+            {
+                id,
+                projectId,
+                taskId,
+                answer = normalizedAnswer,
+                answerNote = request.Note?.Trim(),
+                requestDays,
+                planDays = resultingPlanDays,
+                rowVersion = Encode(rowVersion),
+                scheduleVersion = Encode(scheduleVersion)
+            });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private static async Task<IResult> CreateMemberDetailAsync(
+        long id,
+        CreateMemberScheduleDetailRequest request,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("schedule.read", cancellationToken);
+        await users.DemandPermissionAsync("schedule.progress", cancellationToken);
+        InputValidation.RequiredText(request.Name, 500, "Task name");
+        if (request.PlanDays is < 1 or > 3650)
+            throw Invalid("Plan days must be between 1 and 3650.");
+        var expectedRowVersion = SqlExtensions.ParseRowVersion(request.RowVersion);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var parent = await ReadTaskAsync(connection, transaction, id, true, cancellationToken);
+            await ProjectScope.DemandMyWorkAsync(connection, transaction, parent.ProjectId, actor, cancellationToken);
+            var project = await ReadProjectAsync(connection, transaction, parent.ProjectId, true, cancellationToken);
+            if (project.Status == "Closed")
+                throw new ApiException(StatusCodes.Status409Conflict, "project_closed", "A closed project's schedule cannot be changed.");
+            await ValidateScheduleVersionAsync(connection, transaction, parent.ProjectId, request.ScheduleVersion, cancellationToken);
+            if (!parent.RowVersion.AsSpan().SequenceEqual(expectedRowVersion)) throw Concurrency();
+            await DemandAssignedLeafAsync(connection, transaction, parent, actor.Id, cancellationToken);
+            if (parent.Kind != "task")
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, "schedule_detail_parent_required", "A member detail can only be added beneath an assigned task row.");
+            if (parent.StartMode != "manual" || parent.PredecessorId is not null)
+            {
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_detail_parent_linked",
+                    "A member cannot add a detail beneath a linked or predecessor-driven task because that would detach it from the live dependency. Ask the project manager to restructure the plan.");
+            }
+            if (parent.Status != "Not Started" || parent.PercentComplete != 0
+                || parent.ActualStart is not null || parent.ActualEnd is not null
+                || parent.ForecastEnd is not null || parent.ActualManDays != 0)
+            {
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_detail_parent_started",
+                    "A member detail can only be added before the parent task has started or reported progress.");
+            }
+            if (await HasPendingDayRequestAsync(connection, transaction, parent.Id, cancellationToken))
+                throw PendingDayRequestBlocksStructure();
+
+            var tasks = await ReadTasksAsync(connection, transaction, parent.ProjectId, cancellationToken);
+            var holidays = await ReadHolidaysAsync(connection, transaction, cancellationToken);
+            var resolvedParent = Resolve(tasks, holidays).ById[parent.Id];
+            var planStart = resolvedParent.PlanStart
+                ?? throw new ApiException(StatusCodes.Status422UnprocessableEntity, "schedule_detail_start_unresolved", "The parent task must have a resolved start date before a detail can be added.");
+            var planFinish = resolvedParent.PlanFinish
+                ?? throw new ApiException(StatusCodes.Status422UnprocessableEntity, "schedule_detail_finish_unresolved", "The parent task must have a resolved finish date before a detail can be added.");
+            var parentPlanDays = CalendarDays(planStart, planFinish);
+            if (request.PlanDays != parentPlanDays)
+            {
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, "schedule_detail_outside_parent_plan",
+                    "The first member detail must cover the current parent plan period exactly so member-owned work cannot change PM-owned project dates.");
+            }
+
+            int sortOrder;
+            await using (var order = new SqlCommand("""
+                SELECT COALESCE(MAX(sort_order), 0) + 1
+                FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)
+                WHERE parent_id = @parent_id AND deleted_at IS NULL;
+                """, connection, transaction))
+            {
+                order.Parameters.AddParameter("@parent_id", SqlDbType.BigInt, id);
+                sortOrder = Convert.ToInt32(await order.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+            }
+
+            long detailId;
+            byte[] rowVersion;
+            await using (var insert = new SqlCommand("""
+                DECLARE @created TABLE (id bigint NOT NULL, row_version binary(8) NOT NULL);
+
+                INSERT INTO dbo.schedule_tasks (
+                    project_id, parent_id, sort_order, kind, name, is_milestone, origin,
+                    created_by, visibility, plan_start, plan_days, start_mode, predecessor_id,
+                    lag_days, pic_external, plan_man_days, updated_by)
+                OUTPUT inserted.id, inserted.row_version INTO @created(id, row_version)
+                VALUES (
+                    @project_id, @parent_id, @sort_order, N'detail', @name, 0, N'Member',
+                    @actor, N'Internal', @plan_start, @plan_days, N'manual', NULL,
+                    0, N'', 0, @actor);
+
+                SELECT id, row_version FROM @created;
+                """, connection, transaction))
+            {
+                insert.Parameters.AddParameter("@project_id", SqlDbType.BigInt, parent.ProjectId);
+                insert.Parameters.AddParameter("@parent_id", SqlDbType.BigInt, parent.Id);
+                insert.Parameters.AddParameter("@sort_order", SqlDbType.Int, sortOrder);
+                insert.Parameters.AddParameter("@name", SqlDbType.NVarChar, request.Name.Trim(), 500);
+                insert.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                insert.Parameters.AddParameter("@plan_start", SqlDbType.Date, planStart);
+                insert.Parameters.AddParameter("@plan_days", SqlDbType.Int, request.PlanDays);
+                await using var reader = await insert.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                await reader.ReadAsync(cancellationToken);
+                detailId = reader.GetInt64(0);
+                rowVersion = (byte[])reader.GetValue(1);
+            }
+
+            await using (var assign = new SqlCommand(
+                "INSERT INTO dbo.schedule_task_pics (task_id, user_id) VALUES (@task_id, @actor);",
+                connection, transaction))
+            {
+                assign.Parameters.AddParameter("@task_id", SqlDbType.BigInt, detailId);
+                assign.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                await assign.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var after = new
+            {
+                id = detailId,
+                projectId = parent.ProjectId,
+                parentId = parent.Id,
+                kind = "detail",
+                name = request.Name.Trim(),
+                origin = "Member",
+                visibility = "Internal",
+                planStart,
+                request.PlanDays,
+                picUserIds = new[] { actor.Id }
+            };
+            await AppendUpdateAsync(connection, transaction, parent.ProjectId, detailId, actor.Id, "created", null,
+                request.Name.Trim(), "Member detail created", cancellationToken);
+            await InquiryEndpoints.InsertAuditAsync(
+                connection, transaction, actor.Id, "Schedule Task", detailId,
+                FormattableString.Invariant($"T-{detailId}"), "Created member detail", null, after, cancellationToken);
+            var scheduleVersion = await GetScheduleVersionAsync(connection, transaction, parent.ProjectId, false, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Results.Created($"/api/v1/schedule/tasks/{detailId}", new
+            {
+                id = detailId,
+                parentId = parent.Id,
+                rowVersion = Encode(rowVersion),
+                scheduleVersion = Encode(scheduleVersion)
+            });
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private static async Task<IResult> DeleteMemberDetailAsync(
+        long id,
+        [Microsoft.AspNetCore.Mvc.FromBody] DeleteMemberScheduleDetailRequest request,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("schedule.read", cancellationToken);
+        await users.DemandPermissionAsync("schedule.progress", cancellationToken);
+        var expectedRowVersion = SqlExtensions.ParseRowVersion(request.RowVersion);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var detail = await ReadTaskAsync(connection, transaction, id, true, cancellationToken);
+            await ProjectScope.DemandMyWorkAsync(connection, transaction, detail.ProjectId, actor, cancellationToken);
+            var project = await ReadProjectAsync(connection, transaction, detail.ProjectId, true, cancellationToken);
+            if (project.Status == "Closed")
+                throw new ApiException(StatusCodes.Status409Conflict, "project_closed", "A closed project's schedule cannot be changed.");
+            await ValidateScheduleVersionAsync(connection, transaction, detail.ProjectId, request.ScheduleVersion, cancellationToken);
+            if (!detail.RowVersion.AsSpan().SequenceEqual(expectedRowVersion)) throw Concurrency();
+
+            long createdBy;
+            bool assigned;
+            await using (var ownership = new SqlCommand("""
+                SELECT t.created_by,
+                       CASE WHEN EXISTS (
+                           SELECT 1 FROM dbo.schedule_task_pics pic
+                           WHERE pic.task_id = t.id AND pic.user_id = @actor
+                       ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END
+                FROM dbo.schedule_tasks t WITH (UPDLOCK, HOLDLOCK)
+                WHERE t.id = @task_id AND t.deleted_at IS NULL;
+                """, connection, transaction))
+            {
+                ownership.Parameters.AddParameter("@task_id", SqlDbType.BigInt, id);
+                ownership.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                await using var reader = await ownership.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                    throw new ApiException(StatusCodes.Status404NotFound, "schedule_task_not_found", "Schedule task not found.");
+                createdBy = reader.GetInt64(0);
+                assigned = reader.GetBoolean(1);
+            }
+
+            if (detail.Kind != "detail" || detail.Origin != "Member" || createdBy != actor.Id || !assigned)
+                throw new ApiException(StatusCodes.Status403Forbidden, "schedule_member_detail_owner_required", "Only the member who created and owns this detail can delete it.");
+            if (detail.Status != "Not Started" || detail.PercentComplete != 0 || detail.ActualStart is not null || detail.ActualEnd is not null)
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_detail_started", "A member detail cannot be deleted after work has started.");
+            if (await HasActiveChildrenAsync(connection, transaction, id, cancellationToken))
+                throw new ApiException(StatusCodes.Status409Conflict, "schedule_detail_has_children", "A member detail with active children cannot be deleted.");
+            if (await HasPendingDayRequestAsync(connection, transaction, id, cancellationToken))
+                throw PendingDayRequestBlocksStructure();
+
+            await using (var references = new SqlCommand("""
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)
+                    WHERE predecessor_id = @task_id AND deleted_at IS NULL
+                ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END;
+                """, connection, transaction))
+            {
+                references.Parameters.AddParameter("@task_id", SqlDbType.BigInt, id);
+                if ((bool)(await references.ExecuteScalarAsync(cancellationToken) ?? false))
+                    throw new ApiException(StatusCodes.Status409Conflict, "schedule_detail_referenced", "A member detail used as a predecessor cannot be deleted.");
+            }
+
+            var before = new
+            {
+                detail.Id,
+                detail.ProjectId,
+                detail.ParentId,
+                detail.Name,
+                detail.Kind,
+                detail.Origin,
+                detail.PlanStart,
+                detail.PlanDays,
+                detail.Status
+            };
+            await AppendUpdateAsync(connection, transaction, detail.ProjectId, id, actor.Id, "deleted",
+                detail.Name, null, "Member detail deleted", cancellationToken);
+            await InquiryEndpoints.InsertAuditAsync(
+                connection, transaction, actor.Id, "Schedule Task", id,
+                FormattableString.Invariant($"T-{id}"), "Deleted member detail", before, null, cancellationToken);
+
+            await using (var delete = new SqlCommand("""
+                UPDATE dbo.schedule_tasks
+                SET deleted_at = SYSUTCDATETIME(), updated_by = @actor, updated_at = SYSUTCDATETIME()
+                WHERE id = @task_id AND deleted_at IS NULL AND row_version = @row_version;
+                """, connection, transaction))
+            {
+                delete.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                delete.Parameters.AddParameter("@task_id", SqlDbType.BigInt, id);
+                delete.Parameters.AddParameter("@row_version", SqlDbType.Timestamp, expectedRowVersion);
+                if (await delete.ExecuteNonQueryAsync(cancellationToken) != 1) throw Concurrency();
+            }
+
+            var scheduleVersion = await GetScheduleVersionAsync(connection, transaction, detail.ProjectId, false, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Results.Ok(new { id, deleted = true, scheduleVersion = Encode(scheduleVersion) });
         }
         catch
         {
@@ -493,24 +968,34 @@ public static class ScheduleEndpoints
         CurrentUserService users,
         CancellationToken cancellationToken)
     {
+        await users.DemandPermissionAsync("schedule.read", cancellationToken);
         await users.DemandPermissionAsync("schedule.progress", cancellationToken);
         var actor = await users.GetRequiredAsync(cancellationToken);
         await using var connection = await connections.OpenAsync(cancellationToken);
         var holidays = await ReadHolidaysAsync(connection, null, cancellationToken);
 
-        var projects = new List<ProjectRow>();
+        var projects = new List<WorkProjectRow>();
         await using (var command = new SqlCommand("""
-            SELECT DISTINCT p.id, p.project_no, p.name, p.manager_id, p.status
+            SELECT DISTINCT p.id, p.project_no, p.name, p.manager_id, manager.name, p.status,
+                   CAST(CASE WHEN p.status <> N'Closed' AND scope.is_allowed = 1 THEN 1 ELSE 0 END AS bit)
             FROM dbo.projects p
+            INNER JOIN dbo.users manager ON manager.id = p.manager_id
             INNER JOIN dbo.schedule_tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
             INNER JOIN dbo.schedule_task_pics pic ON pic.task_id = t.id
-            WHERE pic.user_id = @actor AND p.deleted_at IS NULL;
+            CROSS APPLY (VALUES (CAST(CASE
+                WHEN @elevated = 1 OR p.manager_id = @actor OR p.lead_engineer_id = @actor
+                     OR EXISTS (SELECT 1 FROM dbo.project_members m
+                                WHERE m.project_id = p.id AND m.user_id = @actor)
+                THEN 1 ELSE 0 END AS bit))) scope(is_allowed)
+            WHERE pic.user_id = @actor AND p.deleted_at IS NULL AND scope.is_allowed = 1;
             """, connection))
         {
             command.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+            command.Parameters.AddParameter("@elevated", SqlDbType.Bit, ProjectScope.IsMyWorkElevated(actor));
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
-                projects.Add(new ProjectRow(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt64(3), reader.GetString(4)));
+                projects.Add(new WorkProjectRow(reader.GetInt64(0), reader.GetString(1), reader.GetString(2),
+                    reader.GetInt64(3), reader.GetString(4), reader.GetString(5), reader.GetBoolean(6)));
         }
 
         var work = new List<MyWorkResponse>();
@@ -519,13 +1004,51 @@ public static class ScheduleEndpoints
             var tasks = await ReadTasksAsync(connection, null, project.Id, cancellationToken);
             var pics = await ReadPicsAsync(connection, null, project.Id, cancellationToken);
             var calculation = Resolve(tasks, holidays);
-            foreach (var task in tasks.Where(task => pics.GetValueOrDefault(task.Id, []).Any(pic => pic.Id == actor.Id)))
+            var byId = tasks.ToDictionary(task => task.Id);
+            var pending = await ReadPendingRequestsAsync(connection, project.Id, actor.Id, cancellationToken);
+            var dependentTaskIds = tasks
+                .Where(candidate => candidate.PredecessorId is not null)
+                .Select(candidate => candidate.PredecessorId!.Value)
+                .ToHashSet();
+            var scheduleVersion = Encode(await GetScheduleVersionAsync(connection, null, project.Id, false, cancellationToken));
+            foreach (var task in tasks.Where(task =>
+                         task.Kind != "phase"
+                         && calculation.ById[task.Id].Children.Count == 0
+                         && pics.GetValueOrDefault(task.Id, []).Any(pic => pic.Id == actor.Id)))
             {
                 var item = calculation.ById[task.Id];
+                var phase = FindTopPhase(task, byId, calculation);
+                var hasPendingRequest = pending.AllTaskIds.Contains(task.Id);
+                var isOwnDetail = task.Kind == "detail" && task.Origin == "Member" && task.CreatedBy == actor.Id;
+                var canAddDetail = project.CanUpdate
+                    && task.Kind == "task"
+                    && task.StartMode == "manual"
+                    && task.PredecessorId is null
+                    && task.Status == "Not Started"
+                    && task.PercentComplete == 0
+                    && task.ActualStart is null
+                    && task.ActualEnd is null
+                    && task.ForecastEnd is null
+                    && task.ActualManDays == 0
+                    && item.PlanStart is not null
+                    && item.PlanFinish is not null
+                    && !hasPendingRequest;
+                var canDeleteDetail = project.CanUpdate
+                    && isOwnDetail
+                    && task.Status == "Not Started"
+                    && task.PercentComplete == 0
+                    && task.ActualStart is null
+                    && task.ActualEnd is null
+                    && !hasPendingRequest
+                    && !dependentTaskIds.Contains(task.Id);
                 work.Add(new MyWorkResponse(
-                    project.Id, project.Number, project.Name, task.Id, task.ParentId, item.Wbs,
-                    task.Name, item.PlanStart, item.PlanFinish, item.WorkDays, item.PercentComplete,
-                    item.Status, item.ActualStart, item.ActualFinish, task.Note, Encode(task.RowVersion)!, task.UpdatedAt));
+                    project.Id, project.Number, project.Name, project.ManagerId, project.ManagerName,
+                    project.Status, scheduleVersion, project.CanUpdate, isOwnDetail, canAddDetail, canDeleteDetail,
+                    task.Id, task.ParentId, item.Wbs, task.Name, task.Kind, task.Origin, task.IsMilestone,
+                    phase?.Wbs, phase?.Name, item.PlanStart, item.PlanFinish, item.WorkDays,
+                    item.PercentComplete, item.Status, item.ActualStart, item.ActualFinish,
+                    item.ForecastFinish, task.Note, pending.ActorRequests.GetValueOrDefault(task.Id),
+                    Encode(task.RowVersion)!, task.UpdatedAt));
             }
         }
 
@@ -536,11 +1059,148 @@ public static class ScheduleEndpoints
             .ThenBy(item => item.Wbs, StringComparer.Ordinal));
     }
 
+    private static async Task<IResult> GetMyWorkUpdatesAsync(
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("schedule.read", cancellationToken);
+        await users.DemandPermissionAsync("schedule.progress", cancellationToken);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+        await using var connection = await connections.OpenAsync(cancellationToken);
+
+        var updates = new List<MyUpdateRow>();
+        await using (var command = new SqlCommand("""
+            SELECT TOP (100)
+                   s.id, s.project_id, p.project_no, p.name, s.task_id, t.name,
+                   s.field, s.from_value, s.to_value, s.comment, s.request_days,
+                   s.answer, s.answer_note, s.occurred_at
+            FROM dbo.schedule_updates s
+            INNER JOIN dbo.projects p ON p.id = s.project_id
+            LEFT JOIN dbo.schedule_tasks t ON t.id = s.task_id
+            WHERE s.actor_id = @actor AND p.deleted_at IS NULL
+              AND (@elevated = 1 OR p.manager_id = @actor OR p.lead_engineer_id = @actor
+                   OR EXISTS (SELECT 1 FROM dbo.project_members m
+                              WHERE m.project_id = p.id AND m.user_id = @actor))
+            ORDER BY s.occurred_at DESC, s.id DESC;
+            """, connection))
+        {
+            command.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+            command.Parameters.AddParameter("@elevated", SqlDbType.Bit, ProjectScope.IsMyWorkElevated(actor));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                updates.Add(new MyUpdateRow(
+                    reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetInt64(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9),
+                    reader.GetInt32(10), reader.IsDBNull(11) ? null : reader.GetString(11),
+                    reader.IsDBNull(12) ? null : reader.GetString(12), reader.GetFieldValue<DateTimeOffset>(13)));
+            }
+        }
+
+        var wbsByTask = new Dictionary<long, string>();
+        var holidays = await ReadHolidaysAsync(connection, null, cancellationToken);
+        foreach (var projectId in updates.Select(update => update.ProjectId).Distinct())
+        {
+            var tasks = await ReadTasksAsync(connection, null, projectId, cancellationToken);
+            if (tasks.Count == 0) continue;
+            foreach (var item in Resolve(tasks, holidays).ById.Values)
+                wbsByTask[item.Source.Id] = item.Wbs;
+        }
+
+        return Results.Ok(updates.Select(update => new
+        {
+            update.Id,
+            update.ProjectId,
+            update.ProjectNo,
+            update.ProjectName,
+            update.TaskId,
+            wbs = update.TaskId is long taskId ? wbsByTask.GetValueOrDefault(taskId) : null,
+            update.TaskName,
+            update.Field,
+            update.FromValue,
+            update.ToValue,
+            update.Comment,
+            update.RequestDays,
+            update.Answer,
+            update.AnswerNote,
+            update.OccurredAt
+        }));
+    }
+
     private static ResolvedSchedule Resolve(IReadOnlyCollection<TaskRow> tasks, IReadOnlySet<DateOnly> holidays) =>
         ScheduleCalculator.Resolve(tasks.Select(task => new ScheduleCalculationTask(
             task.Id, task.ParentId, task.SortOrder, task.PlanStart, task.PlanDays, task.StartMode,
             task.PredecessorId, task.LagDays, task.ActualStart, task.ActualEnd, task.ForecastEnd,
             task.PercentComplete, task.Status)).ToArray(), holidays);
+
+    private static PhaseLabel? FindTopPhase(
+        TaskRow task,
+        IReadOnlyDictionary<long, TaskRow> tasks,
+        ResolvedSchedule calculation)
+    {
+        TaskRow? current = task;
+        PhaseLabel? phase = null;
+        while (current.ParentId is long parentId && tasks.TryGetValue(parentId, out var parent))
+        {
+            if (parent.Kind == "phase")
+                phase = new PhaseLabel(calculation.ById[parent.Id].Wbs, parent.Name);
+            current = parent;
+        }
+        return phase;
+    }
+
+    private static async Task<PendingRequestState> ReadPendingRequestsAsync(
+        SqlConnection connection,
+        long projectId,
+        long actorId,
+        CancellationToken cancellationToken)
+    {
+        var actorRequests = new Dictionary<long, PendingRequestResponse>();
+        var allTaskIds = new HashSet<long>();
+        await using var command = new SqlCommand("""
+            SELECT id, task_id, actor_id, request_days, comment, occurred_at
+            FROM dbo.schedule_updates
+            WHERE project_id = @project_id
+              AND task_id IS NOT NULL AND field = N'request'
+              AND request_days > 0 AND answer IS NULL
+            ORDER BY occurred_at DESC, id DESC;
+            """, connection);
+        command.Parameters.AddParameter("@project_id", SqlDbType.BigInt, projectId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var taskId = reader.GetInt64(1);
+            allTaskIds.Add(taskId);
+            if (reader.GetInt64(2) == actorId && !actorRequests.ContainsKey(taskId))
+            {
+                actorRequests[taskId] = new PendingRequestResponse(
+                    reader.GetInt64(0), reader.GetInt32(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetFieldValue<DateTimeOffset>(5));
+            }
+        }
+        return new PendingRequestState(actorRequests, allTaskIds);
+    }
+
+    private static async Task<DayRequestLocator> ReadDayRequestLocatorAsync(
+        SqlConnection connection,
+        long requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            SELECT project_id, task_id
+            FROM dbo.schedule_updates
+            WHERE id = @request_id AND task_id IS NOT NULL
+              AND field = N'request' AND request_days > 0;
+            """, connection);
+        command.Parameters.AddParameter("@request_id", SqlDbType.BigInt, requestId);
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            throw new ApiException(StatusCodes.Status404NotFound, "schedule_day_request_not_found", "Schedule day request not found.");
+        return new DayRequestLocator(reader.GetInt64(0), reader.GetInt64(1));
+    }
 
     private static ScheduleTaskResponse ToResponse(
         ResolvedScheduleTask resolved,
@@ -602,7 +1262,7 @@ public static class ScheduleEndpoints
     {
         var tasks = new List<TaskRow>();
         await using var command = new SqlCommand("""
-            SELECT id, project_id, parent_id, sort_order, kind, name, is_milestone, origin, visibility,
+            SELECT id, project_id, parent_id, sort_order, kind, name, is_milestone, origin, created_by, visibility,
                    plan_start, plan_days, start_mode, predecessor_id, lag_days, pic_external, plan_man_days,
                    baseline_start, baseline_end, baseline_days, baseline_rev, actual_start, actual_end,
                    forecast_end, percent_done, status, blocked_reason, note, actual_man_days,
@@ -626,7 +1286,7 @@ public static class ScheduleEndpoints
     {
         var hint = forUpdate ? " WITH (UPDLOCK, HOLDLOCK)" : string.Empty;
         await using var command = new SqlCommand($"""
-            SELECT id, project_id, parent_id, sort_order, kind, name, is_milestone, origin, visibility,
+            SELECT id, project_id, parent_id, sort_order, kind, name, is_milestone, origin, created_by, visibility,
                    plan_start, plan_days, start_mode, predecessor_id, lag_days, pic_external, plan_man_days,
                    baseline_start, baseline_end, baseline_days, baseline_rev, actual_start, actual_end,
                    forecast_end, percent_done, status, blocked_reason, note, actual_man_days,
@@ -644,12 +1304,12 @@ public static class ScheduleEndpoints
     private static TaskRow ReadTask(SqlDataReader reader) => new(
         reader.GetInt64(0), reader.GetInt64(1), reader.IsDBNull(2) ? null : reader.GetInt64(2),
         reader.GetInt32(3), reader.GetString(4), reader.GetString(5), reader.GetBoolean(6), reader.GetString(7),
-        reader.GetString(8), ReadDate(reader, 9), reader.GetInt32(10), reader.GetString(11),
-        reader.IsDBNull(12) ? null : reader.GetInt64(12), reader.GetInt32(13), reader.GetString(14), reader.GetDecimal(15),
-        ReadDate(reader, 16), ReadDate(reader, 17), reader.GetInt32(18), reader.GetInt32(19),
-        ReadDate(reader, 20), ReadDate(reader, 21), ReadDate(reader, 22), reader.GetDecimal(23), reader.GetString(24),
-        reader.IsDBNull(25) ? null : reader.GetString(25), reader.IsDBNull(26) ? null : reader.GetString(26),
-        reader.GetDecimal(27), reader.GetInt64(28), reader.GetFieldValue<DateTimeOffset>(29), (byte[])reader.GetValue(30));
+        reader.GetInt64(8), reader.GetString(9), ReadDate(reader, 10), reader.GetInt32(11), reader.GetString(12),
+        reader.IsDBNull(13) ? null : reader.GetInt64(13), reader.GetInt32(14), reader.GetString(15), reader.GetDecimal(16),
+        ReadDate(reader, 17), ReadDate(reader, 18), reader.GetInt32(19), reader.GetInt32(20),
+        ReadDate(reader, 21), ReadDate(reader, 22), ReadDate(reader, 23), reader.GetDecimal(24), reader.GetString(25),
+        reader.IsDBNull(26) ? null : reader.GetString(26), reader.IsDBNull(27) ? null : reader.GetString(27),
+        reader.GetDecimal(28), reader.GetInt64(29), reader.GetFieldValue<DateTimeOffset>(30), (byte[])reader.GetValue(31));
 
     private static async Task<HashSet<DateOnly>> ReadHolidaysAsync(
         SqlConnection connection,
@@ -730,11 +1390,20 @@ public static class ScheduleEndpoints
     {
         var result = new List<object>();
         await using var command = new SqlCommand("""
-            SELECT TOP (100) s.id, s.task_id, s.field, s.from_value, s.to_value, s.comment,
+            WITH ranked_updates AS (
+                SELECT s.*,
+                       ROW_NUMBER() OVER (ORDER BY s.occurred_at DESC, s.id DESC) AS recent_rank
+                FROM dbo.schedule_updates s
+                WHERE s.project_id = @project_id
+            )
+            SELECT s.id, s.task_id, s.field, s.from_value, s.to_value, s.comment,
+                   s.request_days, s.answer, s.answer_by, answered.name, s.answer_note, s.answered_at,
                    s.occurred_at, u.id, u.name
-            FROM dbo.schedule_updates s
+            FROM ranked_updates s
             INNER JOIN dbo.users u ON u.id = s.actor_id
-            WHERE s.project_id = @project_id
+            LEFT JOIN dbo.users answered ON answered.id = s.answer_by
+            WHERE s.recent_rank <= 100
+               OR (s.field = N'request' AND s.request_days > 0 AND s.answer IS NULL)
             ORDER BY s.occurred_at DESC, s.id DESC;
             """, connection);
         command.Parameters.AddParameter("@project_id", SqlDbType.BigInt, projectId);
@@ -749,8 +1418,13 @@ public static class ScheduleEndpoints
                 fromValue = reader.IsDBNull(3) ? null : reader.GetString(3),
                 toValue = reader.IsDBNull(4) ? null : reader.GetString(4),
                 comment = reader.IsDBNull(5) ? null : reader.GetString(5),
-                occurredAt = reader.GetFieldValue<DateTimeOffset>(6),
-                actor = new { id = reader.GetInt64(7), name = reader.GetString(8) }
+                requestDays = reader.GetInt32(6),
+                answer = reader.IsDBNull(7) ? null : reader.GetString(7),
+                answerBy = reader.IsDBNull(8) ? null : new { id = reader.GetInt64(8), name = reader.GetString(9) },
+                answerNote = reader.IsDBNull(10) ? null : reader.GetString(10),
+                answeredAt = reader.IsDBNull(11) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(11),
+                occurredAt = reader.GetFieldValue<DateTimeOffset>(12),
+                actor = new { id = reader.GetInt64(13), name = reader.GetString(14) }
             });
         }
         return result;
@@ -929,6 +1603,47 @@ public static class ScheduleEndpoints
             """, connection, transaction);
         command.Parameters.AddParameter("@task_id", SqlDbType.BigInt, taskId);
         return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+    }
+
+    private static async Task<bool> HasPendingDayRequestAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        long taskId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            SELECT CASE WHEN EXISTS (
+                SELECT 1
+                FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)
+                WHERE task_id = @task_id
+                  AND field = N'request' AND request_days > 0 AND answer IS NULL
+            ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END;
+            """, connection, transaction);
+        command.Parameters.AddParameter("@task_id", SqlDbType.BigInt, taskId);
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+    }
+
+    private static async Task DemandAssignedLeafAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        TaskRow task,
+        long actorId,
+        CancellationToken cancellationToken)
+    {
+        await using var ownership = new SqlCommand("""
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK, HOLDLOCK)
+                WHERE task_id = @task_id AND user_id = @actor
+            ) AND NOT EXISTS (
+                SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)
+                WHERE parent_id = @task_id AND deleted_at IS NULL
+            ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END;
+            """, connection, transaction);
+        ownership.Parameters.AddParameter("@task_id", SqlDbType.BigInt, task.Id);
+        ownership.Parameters.AddParameter("@actor", SqlDbType.BigInt, actorId);
+        var assignedLeaf = (bool)(await ownership.ExecuteScalarAsync(cancellationToken) ?? false);
+        if (!assignedLeaf || task.Kind == "phase")
+            throw new ApiException(StatusCodes.Status403Forbidden, "schedule_pic_required", "Only an assigned PIC can change a non-phase leaf task.");
     }
 
     private static async Task ValidatePicsAsync(
@@ -1124,10 +1839,15 @@ public static class ScheduleEndpoints
         InputValidation.DecimalScale(request.PercentComplete, 2, "Percent complete");
         InputValidation.OneOf(request.Status, "Schedule status", "Not Started", "In Progress", "Blocked", "Done");
         InputValidation.OptionalText(request.Remark, 20_000, "Remark");
+        if (status == "Blocked" && string.IsNullOrWhiteSpace(request.Remark))
+            throw Invalid("A blocked task requires a non-empty reason.");
         if (request.ActualFinish is not null && request.ActualStart is null)
             throw Invalid("Actual finish requires an actual start.");
         if (request.ActualFinish < request.ActualStart)
             throw Invalid("Actual finish cannot be before actual start.");
+        if (request.ForecastFinish is not null && request.ActualStart is not null
+            && request.ForecastFinish < request.ActualStart)
+            throw Invalid("Forecast finish cannot be before actual start.");
         if (status == "Done" && (request.PercentComplete != 100 || request.ActualStart is null || request.ActualFinish is null))
             throw Invalid("A completed task requires 100 percent and both actual dates.");
         if (status != "Done" && request.PercentComplete == 100)
@@ -1168,6 +1888,22 @@ public static class ScheduleEndpoints
         || before.PredecessorId != after.PredecessorId
         || before.LagDays != after.LagDays;
 
+    private static bool PendingRequestSensitivePlanFieldsChanged(
+        TaskRow before,
+        UpdateSchedulePlanRequest after,
+        IReadOnlyCollection<long> beforePicIds,
+        IReadOnlyCollection<long> afterPicIds) =>
+        before.ParentId != after.ParentId
+        || before.SortOrder != after.SortOrder
+        || before.Kind != after.Kind.Trim()
+        || before.Name != after.Name.Trim()
+        || before.IsMilestone != after.IsMilestone
+        || before.Visibility != after.Visibility.Trim()
+        || PlanFieldsChanged(before, after)
+        || before.PlanManDays != after.PlanManDays
+        || before.PicExternal != (after.PicExternal?.Trim() ?? string.Empty)
+        || !beforePicIds.Order().SequenceEqual(afterPicIds.Order());
+
     private static IEnumerable<FieldChange> ProgressChanges(TaskRow before, UpdateScheduleProgressRequest after)
     {
         if (before.PercentComplete != after.PercentComplete)
@@ -1176,8 +1912,13 @@ public static class ScheduleEndpoints
             yield return new FieldChange("actual_start", Invariant(before.ActualStart), Invariant(after.ActualStart));
         if (before.ActualEnd != after.ActualFinish)
             yield return new FieldChange("actual_finish", Invariant(before.ActualEnd), Invariant(after.ActualFinish));
+        if (before.ForecastEnd != after.ForecastFinish)
+            yield return new FieldChange("forecast_finish", Invariant(before.ForecastEnd), Invariant(after.ForecastFinish));
         if (before.Status != after.Status.Trim())
             yield return new FieldChange("status", before.Status, after.Status.Trim());
+        var blockedReason = after.Status.Trim() == "Blocked" ? after.Remark?.Trim() : null;
+        if ((before.BlockedReason ?? string.Empty) != (blockedReason ?? string.Empty))
+            yield return new FieldChange("blocked_reason", before.BlockedReason, blockedReason);
         if ((before.Note ?? string.Empty) != (after.Remark?.Trim() ?? string.Empty))
             yield return new FieldChange("remark", before.Note, after.Remark?.Trim());
     }
@@ -1222,20 +1963,70 @@ public static class ScheduleEndpoints
     private static ApiException Concurrency() =>
         new(StatusCodes.Status409Conflict, "concurrency_conflict", "The schedule changed. Reload it and try again.");
 
+    private static ApiException PendingDayRequestBlocksStructure() =>
+        new(StatusCodes.Status409Conflict, "schedule_day_request_pending",
+            "Answer the pending request for more days before changing this task's child rows.");
+
+    private static ApiException PendingDayRequestBlocksPlanChange() =>
+        new(StatusCodes.Status409Conflict, "schedule_day_request_pending",
+            "Answer the pending request for more days before changing this task's plan or assignment.");
+
     private static ApiException Invalid(string message) =>
         new(StatusCodes.Status400BadRequest, "validation_failed", message);
 
     private sealed record ProjectRow(long Id, string Number, string Name, long ManagerId, string Status);
+    private sealed record WorkProjectRow(
+        long Id,
+        string Number,
+        string Name,
+        long ManagerId,
+        string ManagerName,
+        string Status,
+        bool CanUpdate);
     private sealed record PicRow(long Id, string Name, string Email);
     private sealed record FieldChange(string Field, string? Before, string? After);
+    private sealed record PhaseLabel(string Wbs, string Name);
+    private sealed record PendingRequestResponse(long Id, int RequestDays, string? Comment, DateTimeOffset OccurredAt);
+    private sealed record PendingRequestState(
+        IReadOnlyDictionary<long, PendingRequestResponse> ActorRequests,
+        IReadOnlySet<long> AllTaskIds);
+    private sealed record DayRequestLocator(long ProjectId, long TaskId);
+    private sealed record MyUpdateRow(
+        long Id,
+        long ProjectId,
+        string ProjectNo,
+        string ProjectName,
+        long? TaskId,
+        string? TaskName,
+        string Field,
+        string? FromValue,
+        string? ToValue,
+        string? Comment,
+        int RequestDays,
+        string? Answer,
+        string? AnswerNote,
+        DateTimeOffset OccurredAt);
     private sealed record MyWorkResponse(
         long ProjectId,
         string ProjectNo,
         string ProjectName,
+        long ManagerId,
+        string ManagerName,
+        string ProjectStatus,
+        string? ScheduleVersion,
+        bool CanUpdate,
+        bool IsOwnDetail,
+        bool CanAddDetail,
+        bool CanDeleteDetail,
         long TaskId,
         long? ParentId,
         string Wbs,
         string Name,
+        string Kind,
+        string Origin,
+        bool IsMilestone,
+        string? PhaseWbs,
+        string? PhaseName,
         DateOnly? PlanStart,
         DateOnly? PlanFinish,
         int WorkDays,
@@ -1243,7 +2034,9 @@ public static class ScheduleEndpoints
         string Status,
         DateOnly? ActualStart,
         DateOnly? ActualFinish,
+        DateOnly? ForecastFinish,
         string? Remark,
+        PendingRequestResponse? PendingRequest,
         string RowVersion,
         DateTimeOffset UpdatedAt);
 
@@ -1293,6 +2086,7 @@ public static class ScheduleEndpoints
         string Name,
         bool IsMilestone,
         string Origin,
+        long CreatedBy,
         string Visibility,
         DateOnly? PlanStart,
         int PlanDays,
