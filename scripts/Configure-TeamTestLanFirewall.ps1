@@ -27,6 +27,22 @@ function Test-PrivateLanIpv4([string] $Address) {
         -or ($octets[0] -eq 192 -and $octets[1] -eq 168)
 }
 
+function Get-PrivateLanSubnetCidr([string] $Address, [int] $PrefixLength) {
+    if (!(Test-PrivateLanIpv4 $Address)) { throw 'The LAN address must be an RFC1918 IPv4 address.' }
+    $octets = [Net.IPAddress]::Parse($Address).GetAddressBytes()
+    $minimumPrivatePrefix = if ($octets[0] -eq 10) { 8 } elseif ($octets[0] -eq 172) { 12 } else { 16 }
+    if ($PrefixLength -lt $minimumPrivatePrefix -or $PrefixLength -gt 30) {
+        throw "The Wi-Fi prefix /$PrefixLength would expose addresses outside the selected RFC1918 range or cannot contain peer devices."
+    }
+
+    $networkOctets = foreach ($index in 0..3) {
+        $networkBits = [Math]::Min(8, [Math]::Max(0, $PrefixLength - ($index * 8)))
+        $mask = if ($networkBits -eq 0) { 0 } elseif ($networkBits -eq 8) { 255 } else { 256 - [Math]::Pow(2, 8 - $networkBits) }
+        [int]$octets[$index] -band [int]$mask
+    }
+    return "$($networkOctets -join '.')/$PrefixLength"
+}
+
 function Test-OnlyAnyValue([object] $Value) {
     $items = @($Value)
     return $items.Count -eq 1 -and [string]::Equals([string]$items[0], 'Any', [StringComparison]::OrdinalIgnoreCase)
@@ -246,7 +262,8 @@ $addressEntries = @(Get-NetIPAddress -AddressFamily IPv4 -IPAddress $lanAddress 
     Where-Object { $_.AddressState -eq 'Preferred' })
 if ($addressEntries.Count -ne 1) { throw 'PrivateLanAddress must identify one current preferred IPv4 address.' }
 $addressEntry = $addressEntries[0]
-if ([int]$addressEntry.PrefixLength -ne 24) { throw 'Team Test LAN firewall configuration supports only a /24 Wi-Fi network.' }
+$prefixLength = [int]$addressEntry.PrefixLength
+$remoteSubnet = Get-PrivateLanSubnetCidr $lanAddress $prefixLength
 
 $adapters = @(Get-NetAdapter -InterfaceIndex $addressEntry.InterfaceIndex -ErrorAction Stop)
 if ($adapters.Count -ne 1) { throw 'Unable to identify the Wi-Fi adapter for PrivateLanAddress.' }
@@ -265,9 +282,6 @@ $firewallProfile = switch ($networkCategory) {
     default { throw "Unsupported Wi-Fi network category: $networkCategory" }
 }
 
-$lanIp = [Net.IPAddress]::Parse($lanAddress)
-$lanOctets = $lanIp.GetAddressBytes()
-$remoteSubnet = "$($lanOctets[0]).$($lanOctets[1]).$($lanOctets[2]).0/24"
 $interfaceAlias = [string]$adapter.Name
 $nodePath = Get-CanonicalPath ((Get-Command node.exe -ErrorAction Stop).Source)
 $dotnetPath = Get-CanonicalPath ((Get-Command dotnet.exe -ErrorAction Stop).Source)
@@ -308,7 +322,7 @@ $otherRelevantRules = @($activeInboundAllowRules | Where-Object {
 })
 if ($otherRelevantRules.Count -ne 0) {
     $conflictingRuleNames = @($otherRelevantRules | ForEach-Object { [string]$_.Name } | Sort-Object -Unique)
-    throw "Existing inbound Allow firewall rules could also admit the Team Test frontend or API, so the intended /24 scope cannot be guaranteed: $($conflictingRuleNames -join ', '). Disable or narrow those rules explicitly before continuing."
+    throw "Existing inbound Allow firewall rules could also admit the Team Test frontend or API, so the intended private-subnet scope cannot be guaranteed: $($conflictingRuleNames -join ', '). Disable or narrow those rules explicitly before continuing."
 }
 
 $disabledRuleNames = [Collections.Generic.List[string]]::new()
@@ -368,7 +382,7 @@ try {
         InterfaceAlias = $interfaceAlias
         InterfaceIndex = [int]$addressEntry.InterfaceIndex
         LocalAddress = $lanAddress
-        PrefixLength = 24
+        PrefixLength = $prefixLength
         RemoteSubnet = $remoteSubnet
         NetworkCategory = $networkCategory
         FirewallProfile = $firewallProfile

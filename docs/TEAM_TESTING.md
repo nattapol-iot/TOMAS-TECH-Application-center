@@ -62,8 +62,8 @@ For a short-lived test on a trusted company LAN, use the installer's explicit LA
 .\scripts\Install-TeamTestHost.ps1 `
   -SqlServer "localhost" `
   -DatabaseName "<DEDICATED_UAT_DATABASE>" `
-  -FrontendOrigin "http://192.168.1.140:3000" `
-  -PrivateLanAddress "192.168.1.140" `
+  -FrontendOrigin "http://<LAN_IPV4>:3000" `
+  -PrivateLanAddress "<LAN_IPV4>" `
   -AllowPrivateLanHttp `
   -TrustServerCertificateForTeamTest
 
@@ -77,11 +77,11 @@ The frontend binds to that exact LAN address, not `0.0.0.0`, and keeps all publi
 .\scripts\Configure-TeamTestLanFirewall.ps1
 ```
 
-The firewall script preserves the current Wi-Fi profile, disables only matching broad local Node.js inbound rules, and replaces them with rules scoped to the installed host address, Wi-Fi adapter, `/24` subnet, executable, and TCP ports 3000/5105. It records enough state to restore those prior rules later. From a second device on the same Wi-Fi, open `http://192.168.1.140:3000` or verify both ports:
+The firewall script preserves the current Wi-Fi profile, disables only matching broad local Node.js inbound rules, and replaces them with rules scoped to the installed host address, Wi-Fi adapter, the adapter's current RFC1918 subnet, executable, and TCP ports 3000/5105. It records enough state to restore those prior rules later. From a second device on the same Wi-Fi, open the configured frontend origin or verify both ports at the configured host address:
 
 ```powershell
-Test-NetConnection 192.168.1.140 -Port 3000
-Test-NetConnection 192.168.1.140 -Port 5105
+Test-NetConnection <LAN_IPV4> -Port 3000
+Test-NetConnection <LAN_IPV4> -Port 5105
 ```
 
 If both checks fail while the local health checks pass, check Wi-Fi client/AP isolation or a company-managed firewall policy. Team Test codes travel over LAN HTTP without TLS, so use disposable UAT identities/codes only and rotate the signing key afterward.

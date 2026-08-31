@@ -208,6 +208,10 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
   assert.match(stopper, /refusing to stop it/);
   assert.match(addUser, /035_provision_team_test_user\.sql/);
   assert.match(addUser, /TeamTestSigningKey/);
+  assert.match(addUser, /iot-team-test-provision-/);
+  assert.match(addUser, /:setvar DisplayName/);
+  assert.match(addUser, /Remove-Item.*\$sqlcmdInputPath/s);
+  assert.doesNotMatch(addUser, /sqlcmd[^\n]*\s-v(?:\s|`)/);
   assert.doesNotMatch(addUser, /TeamTestSigningKey\s*=\s*["'][^"']+["']/);
   assert.match(networkOrigin, /isPrivateLanIpv4Host/);
   assert.match(networkOrigin, /allowPrivateLanHttp/);
@@ -227,6 +231,8 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
   assert.match(lanFirewallConfigurator, /Assert-Administrator/);
   assert.match(lanFirewallConfigurator, /Test-BroadProgramAllowRule/);
   assert.match(lanFirewallConfigurator, /Test-RuleCanAdmitTarget/);
+  assert.match(lanFirewallConfigurator, /Get-PrivateLanSubnetCidr/);
+  assert.match(lanFirewallConfigurator, /PrefixLength = \$prefixLength/);
   assert.match(lanFirewallConfigurator, /Get-NetFirewallPortFilter/);
   assert.match(lanFirewallConfigurator, /Get-NetFirewallApplicationFilter/);
   assert.match(lanFirewallConfigurator, /Get-NetFirewallAddressFilter/);
