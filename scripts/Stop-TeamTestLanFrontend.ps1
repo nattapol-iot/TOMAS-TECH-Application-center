@@ -21,14 +21,19 @@ if (![int]::TryParse([string]$runtimeState.ProcessId, [ref]$processId) -or $proc
     throw 'The saved frontend process state is invalid; refusing to stop any process.'
 }
 $runtimeProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
+$runtimeCommand = if ($runtimeState.RuntimeCommand) { [string]$runtimeState.RuntimeCommand } else { 'dev' }
+if ($runtimeCommand -notin @('dev', 'start')) {
+    throw 'The saved frontend runtime command is invalid; refusing to stop any process.'
+}
 if ($runtimeProcess) {
     if (!(Test-TeamTestLanFrontendCommandLine `
             $runtimeProcess `
             ([string]$runtimeState.Entrypoint) `
             ([string]$runtimeState.LanAddress) `
-            $frontendPort) `
+            $frontendPort `
+            $runtimeCommand) `
         -or !(Test-TeamTestLanFrontendListener $processId ([string]$runtimeState.LanAddress) $frontendPort)) {
-        throw 'The saved process does not match the exact entrypoint, dev arguments, address, port, and listener; refusing to stop it.'
+        throw 'The saved process does not match the exact entrypoint, runtime arguments, address, port, and listener; refusing to stop it.'
     }
     $process = Get-Process -Id $processId
     Stop-Process -Id $processId -Force

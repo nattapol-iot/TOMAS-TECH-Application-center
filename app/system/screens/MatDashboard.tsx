@@ -1,4 +1,5 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
 import { BOM_SECTIONS, MAT_ITEMS, PROJECTS } from "../data";
 import {
@@ -67,8 +68,8 @@ export default function MatDashboard({ go }: ScreenProps) {
       />
 
       <section className="kpi-grid eight">
-        <div className="kpi blue"><span className="kpi-icon"><Icon name="file" /></span><span className="kpi-body"><span className="kpi-label">{t("Open PR Value")}</span><strong className="kpi-value">{moneyShort(openPrValue)}</strong><span className="kpi-note">{openPrs.length} PR</span></span></div>
-        <div className="kpi violet"><span className="kpi-icon"><Icon name="truck" /></span><span className="kpi-body"><span className="kpi-label">{t("Open PO Value")}</span><strong className="kpi-value">{moneyShort(openPoValue)}</strong><span className="kpi-note">{openPos.length} PO</span></span></div>
+        <div className="kpi blue"><span className="kpi-icon"><Icon name="file" /></span><span className="kpi-body"><span className="kpi-label">{t("Open PR Value")}</span><strong className="kpi-value">{moneyShort(openPrValue)}</strong><span className="kpi-note">{openPrs.length} <LocalizedText text={"PR"} /></span></span></div>
+        <div className="kpi violet"><span className="kpi-icon"><Icon name="truck" /></span><span className="kpi-body"><span className="kpi-label">{t("Open PO Value")}</span><strong className="kpi-value">{moneyShort(openPoValue)}</strong><span className="kpi-note">{openPos.length} <LocalizedText text={"PO"} /></span></span></div>
         <div className="kpi red"><span className="kpi-icon"><Icon name="alertTriangle" /></span><span className="kpi-body"><span className="kpi-label">{t("PR Over Budget")}</span><strong className="kpi-value">{overBudgetPrs.length}</strong><span className="kpi-note">{t("needs exception approval")}</span></span></div>
         <div className="kpi red"><span className="kpi-icon"><Icon name="clock" /></span><span className="kpi-body"><span className="kpi-label">{t("Overdue Deliveries")}</span><strong className="kpi-value">{overduePos.length}</strong><span className="kpi-note">{partialPos.length} {t("partial")}</span></span></div>
         <div className="kpi blue"><span className="kpi-icon"><Icon name="database" /></span><span className="kpi-body"><span className="kpi-label">{t("Inventory Value")}</span><strong className="kpi-value">{moneyShort(inventoryValue)}</strong><span className="kpi-note">{t("Reserved")} {moneyShort(reservedValue)}</span></span></div>
@@ -143,8 +144,8 @@ export default function MatDashboard({ go }: ScreenProps) {
                 <div className="file-row" key={pr.id}>
                   <span className="file-icon"><Icon name="file" /></span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong>{pr.no} · {moneyShort(matPrAmount(pr))} THB</strong>
-                    <small>{userName(pr.requestedBy)} · {t("variance")} {matPrVariancePct(pr) > 0 ? "+" : ""}{matPrVariancePct(pr).toFixed(1)}% · {t("waiting")} {userName(pr.steps.find((step) => step.status === "Current")?.approverId ?? "")}</small>
+                    <strong>{pr.no} <LocalizedText text={"·"} /> {moneyShort(matPrAmount(pr))} <LocalizedText text={"THB"} /></strong>
+                    <small>{userName(pr.requestedBy)} <LocalizedText text={"·"} /> {t("variance")} {matPrVariancePct(pr) > 0 ? "+" : ""}{matPrVariancePct(pr).toFixed(1)}% · {t("waiting")} {userName(pr.steps.find((step) => step.status === "Current")?.approverId ?? "")}</small>
                   </div>
                   <button className="btn default sm" type="button" onClick={() => go({ name: "pr", id: pr.id })}>{t("Review")}</button>
                 </div>
@@ -153,8 +154,8 @@ export default function MatDashboard({ go }: ScreenProps) {
                 <div className="file-row" key={po.id}>
                   <span className="file-icon"><Icon name="clock" /></span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong className="red-text">{po.no} · {po.supplier}</strong>
-                    <small>{t("expected")} {formatDate(po.expectedDate)} · {t("open value")} {moneyShort(poFacts(po).openValue)}</small>
+                    <strong className="red-text">{po.no} <LocalizedText text={"·"} /> {po.supplier}</strong>
+                    <small>{t("expected")} {formatDate(po.expectedDate)} <LocalizedText text={"·"} /> {t("open value")} {moneyShort(poFacts(po).openValue)}</small>
                   </div>
                   <Badge tone="red">{t("Overdue")}</Badge>
                 </div>

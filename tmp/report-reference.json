@@ -1,0 +1,7194 @@
+{
+  "Service_Report_Rev00.xlsx": [
+    {
+      "name": "README",
+      "rows": 11,
+      "cols": 6,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='landscape', paperSize=None, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "B8",
+        "C9:F9",
+        "B4",
+        "B5",
+        "B9",
+        "C8:F8",
+        "C4:F4",
+        "B7",
+        "B11",
+        "B6",
+        "C6:F6",
+        "C7:F7",
+        "B10",
+        "C11:F11",
+        "C10:F10",
+        "C5:F5"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "README - SERVICE REPORT TEMPLATE",
+            "style": 143
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Purpose",
+            "style": 228
+          },
+          {
+            "cell": "C4",
+            "value": "This template is used to record and report work performed for customer systems, including installation, replacement, modification, inspection, support, troubleshooting, and issue resolution activities.\nIt is designed to cover both hardware work and software/configuration work in one standard form.\n\nThe main objectives of this template are:\nTo record what work was actually performed on-site or remotely\nTo communicate the service result clearly to the customer\nTo provide traceable evidence for installation, correction, and support activities\nTo support follow-up actions, open items, and future troubleshooting\nTo prepare document control structure for ISO or quality system use in the future\n\nThis document should be used whenever the team performs any activity that changes, checks, restores, updates, or validates the customer’s system.",
+            "style": 229
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "Recommended file name",
+            "style": 168
+          },
+          {
+            "cell": "C5",
+            "value": "YYYYMMDD_Customer_ProjectOrSite_WorkType_ReportNo_RevXX.xlsx\nExample: 20260311_AHBrake_ShippingDashboard_Installation_SR-001_Rev00.xlsx",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "Mandatory fields",
+            "style": 168
+          },
+          {
+            "cell": "C6",
+            "value": "Report No., Report Date, Customer, Project/Site, Contact Person, Visit Type, Work Mode, Work Summary, Start/End DateTime, Service Team, Test Result, Customer Acceptance.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "How to use section 2",
+            "style": 168
+          },
+          {
+            "cell": "C7",
+            "value": "Record hardware work on the left half and software/configuration work on the right half. Leave unused rows blank.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "How to use section 3",
+            "style": 168
+          },
+          {
+            "cell": "C8",
+            "value": "Describe issue/symptom, impact, root cause, action taken, downtime, backup check, and rollback need.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B9",
+            "value": "ISO / Revision control",
+            "style": 168
+          },
+          {
+            "cell": "C9",
+            "value": "Maintain template revision in Doc_Control sheet. When structure changes, update revision history with date, owner, and summary of change.\nRev.00 = Initial release\nRev.01 = Added software/configuration section\nRev.02 = Added customer acknowledgement and pending item fields",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "Archive suggestion",
+            "style": 168
+          },
+          {
+            "cell": "C10",
+            "value": "Store reports by Year > Customer > Project > Service Report, and keep signed PDF copy if customer signs by hand.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "Example sheet",
+            "style": 159
+          },
+          {
+            "cell": "C11",
+            "value": "Use Example_Filled_ISO as a reference when training service engineers.",
+            "style": 225
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "Doc_Control",
+      "rows": 17,
+      "cols": 7,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='landscape', paperSize=None, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "C7:G7",
+        "C4:G4",
+        "C6:G6",
+        "C10:G10",
+        "C5:G5",
+        "C8:G8",
+        "C9:G9"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "DOCUMENT CONTROL / REVISION HISTORY",
+            "style": 143
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Document Title",
+            "style": 228
+          },
+          {
+            "cell": "C4",
+            "value": "Service Report Template (Hardware + Software)",
+            "style": 229
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "Document Code",
+            "style": 168
+          },
+          {
+            "cell": "C5",
+            "value": "TT-FRM-SRV-001",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "Current Revision",
+            "style": 168
+          },
+          {
+            "cell": "C6",
+            "value": "Rev.00",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "Effective Date",
+            "style": 168
+          },
+          {
+            "cell": "C7",
+            "value": "2026-03-14 00:00:00",
+            "style": 232
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "Owner Department",
+            "style": 168
+          },
+          {
+            "cell": "C8",
+            "value": "IoT / Electrical / Hardware / Software / Mechanical",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B9",
+            "value": "Purpose",
+            "style": 168
+          },
+          {
+            "cell": "C9",
+            "value": "Standard template for reporting installation, modification, issue resolution, and service activity for hardware and software work.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "ISO Note",
+            "style": 159
+          },
+          {
+            "cell": "C10",
+            "value": "Keep approved revision history and archive issued reports by project/site/date.",
+            "style": 225
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "Rev.",
+            "style": 150
+          },
+          {
+            "cell": "C12",
+            "value": "Date",
+            "style": 151
+          },
+          {
+            "cell": "D12",
+            "value": "Changed By",
+            "style": 151
+          },
+          {
+            "cell": "E12",
+            "value": "Description of Change",
+            "style": 151
+          },
+          {
+            "cell": "F12",
+            "value": "Reviewed / Approved By",
+            "style": 151
+          },
+          {
+            "cell": "G12",
+            "value": "Remarks",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B13",
+            "value": "Rev.00",
+            "style": 153
+          },
+          {
+            "cell": "C13",
+            "value": "2026-03-14 00:00:00",
+            "style": 142
+          },
+          {
+            "cell": "D13",
+            "value": "Nattapol",
+            "style": 123
+          },
+          {
+            "cell": "E13",
+            "value": "Initial ISO-ready template integrating hardware and software service reporting.",
+            "style": 184
+          },
+          {
+            "cell": "F13",
+            "value": "Pending",
+            "style": 124
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "Service_Report_Ex",
+      "rows": 47,
+      "cols": 16,
+      "print_area": "'Service_Report_Ex'!$B$2:$M$47",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=54, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "D37:M37",
+        "D12:M12",
+        "J43:M43",
+        "B31:C31",
+        "B12:C12",
+        "D6:E6",
+        "J42:M42",
+        "L5:M5",
+        "J44:M44",
+        "B38:C38",
+        "D7:E7",
+        "J30:M30",
+        "B24:C24",
+        "D30:G31",
+        "B33:C33",
+        "J4:M4",
+        "B32:C32",
+        "B26:C26",
+        "B35:C35",
+        "L7:M7",
+        "B25:C25",
+        "F6:G6",
+        "D33:G33",
+        "B27:C27",
+        "D42:G42",
+        "H25:I25",
+        "H34:I34",
+        "B10:M10",
+        "J34:K34",
+        "B11:C11",
+        "D11:E11",
+        "F5:G5",
+        "D44:G44",
+        "J27:K27",
+        "D34:G34",
+        "H11:I11",
+        "H15:M15",
+        "J11:K11",
+        "B37:C37",
+        "B41:G41",
+        "B6:C6",
+        "D32:M32",
+        "L6:M6",
+        "H41:M41",
+        "B46:M46",
+        "H5:I5",
+        "B7:C7",
+        "H43:I43",
+        "B23:M23",
+        "F7:G7",
+        "B43:C43",
+        "D27:E27",
+        "B42:C42",
+        "L33:M33",
+        "L8:M8",
+        "B15:G15",
+        "F8:G8",
+        "B44:C44",
+        "B2:M3",
+        "B34:C34",
+        "B28:C28",
+        "B36:M36",
+        "B30:C30",
+        "B5:C5",
+        "H42:I42",
+        "D5:E5",
+        "L11:M11",
+        "J25:M25",
+        "H30:I30",
+        "F11:G11",
+        "J5:K5",
+        "D25:G25",
+        "B14:M14",
+        "H44:I44",
+        "D24:M24",
+        "D38:M38",
+        "B29:M29",
+        "H6:I6",
+        "J6:K6",
+        "D26:M26",
+        "B40:M40",
+        "B8:C8",
+        "H7:I7",
+        "J7:K7",
+        "F27:G27",
+        "H27:I27",
+        "D8:E8",
+        "L34:M34",
+        "H33:I33",
+        "J33:K33",
+        "L27:M27",
+        "D43:G43",
+        "H8:I8",
+        "J8:K8",
+        "B4:I4"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "SERVICE REPORT / ใบรายงานการให้บริการ",
+            "style": 213
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 219
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-SRV-001 | Revision: Rev.00",
+            "style": 270
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 168
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-SRV-2603-001",
+            "style": 170
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 172
+          },
+          {
+            "cell": "H5",
+            "value": "11-Mar-2026",
+            "style": 170
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 172
+          },
+          {
+            "cell": "L5",
+            "value": "Installation",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 168
+          },
+          {
+            "cell": "D6",
+            "value": "AH Brake (Thailand) Co., Ltd.",
+            "style": 170
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 172
+          },
+          {
+            "cell": "H6",
+            "value": "Shipping Dashboard Monitor",
+            "style": 170
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 172
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 168
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Tomoyuki Tani",
+            "style": 170
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 172
+          },
+          {
+            "cell": "H7",
+            "value": "064-1801696",
+            "style": 170
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 172
+          },
+          {
+            "cell": "L7",
+            "value": "Normal",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "SERVICE TEAM / ทีมบริการ",
+            "style": 168
+          },
+          {
+            "cell": "D8",
+            "value": "ME / EE / Software",
+            "style": 170
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / CR NO.",
+            "style": 172
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260025",
+            "style": 170
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 172
+          },
+          {
+            "cell": "L8",
+            "value": "Closed",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "1) SCOPE & OBJECTIVE / ขอบเขตและวัตถุประสงค์",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "REQUESTED BY / ผู้ร้องขอ",
+            "style": 168
+          },
+          {
+            "cell": "D11",
+            "value": "Customer request",
+            "style": 170
+          },
+          {
+            "cell": "F11",
+            "value": "START DATETIME / เริ่มงาน",
+            "style": 172
+          },
+          {
+            "cell": "H11",
+            "value": "11-Mar-2026 01:00 PM",
+            "style": 170
+          },
+          {
+            "cell": "J11",
+            "value": "END DATETIME / สิ้นสุดงาน",
+            "style": 172
+          },
+          {
+            "cell": "L11",
+            "value": "11-Mar-2026 04:00 PM",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "WORK SUMMARY / สรุปงาน",
+            "style": 168
+          },
+          {
+            "cell": "D12",
+            "value": "Installed new tower light (Patlite) and handheld mobile computer for monitoring at shipping line. Configured dashboard display path, verified signal tower response, and checked LAN routing to TV and signal tower.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B14",
+            "value": "2) INSTALLATION / CHANGE DETAIL / รายละเอียดการติดตั้งหรือเปลี่ยนแปลง",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B15",
+            "value": "HARDWARE INSTALLATION / CHANGE",
+            "style": 209
+          },
+          {
+            "cell": "H15",
+            "value": "SOFTWARE INSTALLATION / CONFIGURATION",
+            "style": 210
+          }
+        ],
+        [
+          {
+            "cell": "B16",
+            "value": "Item / อุปกรณ์",
+            "style": 131
+          },
+          {
+            "cell": "C16",
+            "value": "Model",
+            "style": 122
+          },
+          {
+            "cell": "D16",
+            "value": "Serial / Asset",
+            "style": 122
+          },
+          {
+            "cell": "E16",
+            "value": "Qty",
+            "style": 122
+          },
+          {
+            "cell": "F16",
+            "value": "Action / งานที่ทำ",
+            "style": 122
+          },
+          {
+            "cell": "G16",
+            "value": "Status",
+            "style": 122
+          },
+          {
+            "cell": "H16",
+            "value": "Application / Module",
+            "style": 122
+          },
+          {
+            "cell": "I16",
+            "value": "Version Before",
+            "style": 122
+          },
+          {
+            "cell": "J16",
+            "value": "Version After",
+            "style": 122
+          },
+          {
+            "cell": "K16",
+            "value": "Config / License Ref",
+            "style": 122
+          },
+          {
+            "cell": "L16",
+            "value": "Action / งานที่ทำ",
+            "style": 122
+          },
+          {
+            "cell": "M16",
+            "value": "Status",
+            "style": 132
+          }
+        ],
+        [
+          {
+            "cell": "B17",
+            "value": "Tower Light",
+            "style": 133
+          },
+          {
+            "cell": "C17",
+            "value": "Patlite",
+            "style": 123
+          },
+          {
+            "cell": "D17",
+            "value": "-",
+            "style": 123
+          },
+          {
+            "cell": "E17",
+            "value": "1",
+            "style": 123
+          },
+          {
+            "cell": "F17",
+            "value": "Install",
+            "style": 184
+          },
+          {
+            "cell": "G17",
+            "value": "Completed",
+            "style": 123
+          },
+          {
+            "cell": "H17",
+            "value": "Shipping Dashboard",
+            "style": 184
+          },
+          {
+            "cell": "J17",
+            "value": "v1.0",
+            "style": 123
+          },
+          {
+            "cell": "K17",
+            "value": "Display Path / IP",
+            "style": 184
+          },
+          {
+            "cell": "L17",
+            "value": "Config / Verify",
+            "style": 184
+          },
+          {
+            "cell": "M17",
+            "value": "Completed",
+            "style": 134
+          }
+        ],
+        [
+          {
+            "cell": "B18",
+            "value": "Handheld Mobile Computer",
+            "style": 133
+          },
+          {
+            "cell": "D18",
+            "value": "-",
+            "style": 123
+          },
+          {
+            "cell": "E18",
+            "value": "1",
+            "style": 123
+          },
+          {
+            "cell": "F18",
+            "value": "Install / Test",
+            "style": 184
+          },
+          {
+            "cell": "G18",
+            "value": "Completed",
+            "style": 123
+          },
+          {
+            "cell": "H18",
+            "value": "Signal Tower Status Logic",
+            "style": 184
+          },
+          {
+            "cell": "J18",
+            "value": "v1.0",
+            "style": 123
+          },
+          {
+            "cell": "K18",
+            "value": "LAN to tower",
+            "style": 184
+          },
+          {
+            "cell": "L18",
+            "value": "Debug / Verify",
+            "style": 184
+          },
+          {
+            "cell": "M18",
+            "value": "Completed",
+            "style": 134
+          }
+        ],
+        [
+          {
+            "cell": "B19",
+            "value": "Switching HUB",
+            "style": 135
+          },
+          {
+            "cell": "C19",
+            "value": "Unprovided",
+            "style": 124
+          },
+          {
+            "cell": "D19",
+            "value": "-",
+            "style": 124
+          },
+          {
+            "cell": "E19",
+            "value": "1",
+            "style": 124
+          },
+          {
+            "cell": "F19",
+            "value": "Pending Customer",
+            "style": 170
+          },
+          {
+            "cell": "G19",
+            "value": "Pending",
+            "style": 124
+          }
+        ],
+        [
+          {
+            "cell": "B23",
+            "value": "3) ISSUE / IMPACT / RESOLUTION / ปัญหา ผลกระทบ และแนวทางแก้ไข",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B24",
+            "value": "ISSUE / SYMPTOM / อาการปัญหา",
+            "style": 206
+          },
+          {
+            "cell": "D24",
+            "value": "Customer requested installation support for new monitoring equipment and network connection to TV / signal tower.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B25",
+            "value": "IMPACT / ผลกระทบ",
+            "style": 206
+          },
+          {
+            "cell": "D25",
+            "value": "No production stop; pending customer-supplied HUB and LAN cable set.",
+            "style": 184
+          },
+          {
+            "cell": "H25",
+            "value": "ROOT CAUSE / สาเหตุ",
+            "style": 208
+          },
+          {
+            "cell": "J25",
+            "value": "New point installation; some network materials not yet provided.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B26",
+            "value": "ACTION TAKEN / สิ่งที่ดำเนินการ",
+            "style": 206
+          },
+          {
+            "cell": "D26",
+            "value": "Mounted TV and tower light, connected signal path, checked dashboard display, verified handheld monitoring, and informed customer of remaining required items.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B27",
+            "value": "DOWNTIME / เวลาที่กระทบ",
+            "style": 168
+          },
+          {
+            "cell": "D27",
+            "value": "0",
+            "style": 170
+          },
+          {
+            "cell": "F27",
+            "value": "BACKUP CHECKED",
+            "style": 172
+          },
+          {
+            "cell": "H27",
+            "value": "N/A",
+            "style": 170
+          },
+          {
+            "cell": "J27",
+            "value": "ROLLBACK NEEDED",
+            "style": 172
+          },
+          {
+            "cell": "L27",
+            "value": "No",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B28",
+            "value": "RESULT / IMAGE / แนบรูปภาพในการดำเนินการหรือผลการดำเนินงาน",
+            "style": 271
+          }
+        ],
+        [
+          {
+            "cell": "B29",
+            "value": "4) VALIDATION & FOLLOW-UP / การทดสอบ ผลลัพธ์ และงานค้าง",
+            "style": 190
+          }
+        ],
+        [
+          {
+            "cell": "B30",
+            "value": "TEST PERFORMED / การทดสอบ",
+            "style": 193
+          },
+          {
+            "cell": "D30",
+            "value": "Power-on test, dashboard display check, signal tower trigger test, handheld monitoring verification.",
+            "style": 272
+          },
+          {
+            "cell": "H30",
+            "value": "TEST RESULT / ผลทดสอบ",
+            "style": 200
+          },
+          {
+            "cell": "J30",
+            "value": "Pass",
+            "style": 202
+          }
+        ],
+        [
+          {
+            "cell": "B32",
+            "value": "PENDING / NEXT STEP",
+            "style": 168
+          },
+          {
+            "cell": "D32",
+            "value": "Customer to provide switching HUB and LAN cable 2 sets for TV and signal tower completion.",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B33",
+            "value": "DELIVERABLES / FILES",
+            "style": 168
+          },
+          {
+            "cell": "D33",
+            "value": "Service report, installation photo, connection sketch",
+            "style": 184
+          },
+          {
+            "cell": "H33",
+            "value": "FOLLOW-UP OWNER",
+            "style": 172
+          },
+          {
+            "cell": "J33",
+            "value": "Customer / Tomas Tech",
+            "style": 170
+          },
+          {
+            "cell": "L33",
+            "value": "NEXT ACTION DATE",
+            "style": 172
+          }
+        ],
+        [
+          {
+            "cell": "B34",
+            "value": "CUSTOMER ACCEPTANCE",
+            "style": 168
+          },
+          {
+            "cell": "D34",
+            "value": "Accepted with Pending",
+            "style": 170
+          },
+          {
+            "cell": "H34",
+            "value": "REVISION USED",
+            "style": 172
+          },
+          {
+            "cell": "J34",
+            "value": "Rev.00",
+            "style": 170
+          },
+          {
+            "cell": "L34",
+            "value": "12-Mar-2026",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B35",
+            "value": "RESULT / IMAGE / แนบรูปภาพในการดำเนินการหรือผลการดำเนินงาน",
+            "style": 273
+          }
+        ],
+        [
+          {
+            "cell": "B36",
+            "value": "5) MATERIAL / REMARKS / รายการคงค้างและหมายเหตุ",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B37",
+            "value": "REMAIN / PENDING ITEM",
+            "style": 168
+          },
+          {
+            "cell": "D37",
+            "value": "- Switching HUB\n- LAN Cable : 2 Set [TV & Signal Tower]",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B38",
+            "value": "COMMENTS / REQUEST",
+            "style": 168
+          },
+          {
+            "cell": "D38",
+            "value": "Please complete after customer provides remaining materials.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B40",
+            "value": "6) ACKNOWLEDGEMENT / ลายเซ็นรับทราบ",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B41",
+            "value": "SERVICE ENGINEER / ผู้ปฏิบัติงาน",
+            "style": 174
+          },
+          {
+            "cell": "H41",
+            "value": "CUSTOMER REPRESENTATIVE / ผู้รับทราบ",
+            "style": 177
+          }
+        ],
+        [
+          {
+            "cell": "B42",
+            "value": "NAME / ชื่อ",
+            "style": 168
+          },
+          {
+            "cell": "D42",
+            "value": "Mr. Taweesak Suriyon",
+            "style": 170
+          },
+          {
+            "cell": "H42",
+            "value": "NAME / ชื่อ",
+            "style": 172
+          },
+          {
+            "cell": "J42",
+            "value": "Mr. Tomoyuki Tani",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B43",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 168
+          },
+          {
+            "cell": "H43",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 172
+          }
+        ],
+        [
+          {
+            "cell": "B44",
+            "value": "DATE / วันที่",
+            "style": 159
+          },
+          {
+            "cell": "D44",
+            "value": "11-Mar-2026",
+            "style": 161
+          },
+          {
+            "cell": "H44",
+            "value": "DATE / วันที่",
+            "style": 163
+          },
+          {
+            "cell": "J44",
+            "value": "12-Mar-2026",
+            "style": 161
+          }
+        ],
+        [
+          {
+            "cell": "B46",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 274
+          }
+        ]
+      ],
+      "images": 2
+    },
+    {
+      "name": "Service_Report",
+      "rows": 47,
+      "cols": 16,
+      "print_area": "'Service_Report'!$B$2:$M$47",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=54, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "D37:M37",
+        "D12:M12",
+        "J43:M43",
+        "B31:C31",
+        "B12:C12",
+        "D6:E6",
+        "J42:M42",
+        "L5:M5",
+        "J44:M44",
+        "B38:C38",
+        "D7:E7",
+        "J30:M30",
+        "B24:C24",
+        "D30:G31",
+        "B33:C33",
+        "J4:M4",
+        "B32:C32",
+        "B26:C26",
+        "B35:C35",
+        "L7:M7",
+        "B25:C25",
+        "F6:G6",
+        "D33:G33",
+        "B27:C27",
+        "D42:G42",
+        "H25:I25",
+        "H34:I34",
+        "B10:M10",
+        "J34:K34",
+        "B11:C11",
+        "D11:E11",
+        "F5:G5",
+        "D44:G44",
+        "J27:K27",
+        "D34:G34",
+        "H11:I11",
+        "H15:M15",
+        "J11:K11",
+        "B37:C37",
+        "B41:G41",
+        "B6:C6",
+        "D32:M32",
+        "L6:M6",
+        "H41:M41",
+        "B46:M46",
+        "H5:I5",
+        "B7:C7",
+        "H43:I43",
+        "B23:M23",
+        "F7:G7",
+        "B43:C43",
+        "D27:E27",
+        "B42:C42",
+        "L33:M33",
+        "L8:M8",
+        "B15:G15",
+        "F8:G8",
+        "B44:C44",
+        "B2:M3",
+        "B34:C34",
+        "B28:C28",
+        "B36:M36",
+        "B30:C30",
+        "B5:C5",
+        "H42:I42",
+        "D5:E5",
+        "L11:M11",
+        "J25:M25",
+        "H30:I30",
+        "F11:G11",
+        "J5:K5",
+        "D25:G25",
+        "B14:M14",
+        "H44:I44",
+        "D24:M24",
+        "D38:M38",
+        "B29:M29",
+        "H6:I6",
+        "J6:K6",
+        "D26:M26",
+        "B40:M40",
+        "B8:C8",
+        "H7:I7",
+        "J7:K7",
+        "F27:G27",
+        "H27:I27",
+        "D8:E8",
+        "L34:M34",
+        "H33:I33",
+        "J33:K33",
+        "L27:M27",
+        "D43:G43",
+        "H8:I8",
+        "J8:K8",
+        "B4:I4"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "SERVICE REPORT / ใบรายงานการให้บริการ",
+            "style": 213
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 219
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-SRV-001 | Revision: Rev.00",
+            "style": 270
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 168
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-SRV-2603-001",
+            "style": 170
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 172
+          },
+          {
+            "cell": "H5",
+            "value": "11-Mar-2026",
+            "style": 170
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 172
+          },
+          {
+            "cell": "L5",
+            "value": "Installation",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 168
+          },
+          {
+            "cell": "D6",
+            "value": "AH Brake (Thailand) Co., Ltd.",
+            "style": 170
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 172
+          },
+          {
+            "cell": "H6",
+            "value": "Shipping Dashboard Monitor",
+            "style": 170
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 172
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 168
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Tomoyuki Tani",
+            "style": 170
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 172
+          },
+          {
+            "cell": "H7",
+            "value": "064-1801696",
+            "style": 170
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 172
+          },
+          {
+            "cell": "L7",
+            "value": "Normal",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "SERVICE TEAM / ทีมบริการ",
+            "style": 168
+          },
+          {
+            "cell": "D8",
+            "value": "ME / EE / Software",
+            "style": 170
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / CR NO.",
+            "style": 172
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260025",
+            "style": 170
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 172
+          },
+          {
+            "cell": "L8",
+            "value": "Closed",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "1) SCOPE & OBJECTIVE / ขอบเขตและวัตถุประสงค์",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "REQUESTED BY / ผู้ร้องขอ",
+            "style": 168
+          },
+          {
+            "cell": "D11",
+            "value": "Customer request",
+            "style": 170
+          },
+          {
+            "cell": "F11",
+            "value": "START DATETIME / เริ่มงาน",
+            "style": 172
+          },
+          {
+            "cell": "H11",
+            "value": "11-Mar-2026 01:00 PM",
+            "style": 170
+          },
+          {
+            "cell": "J11",
+            "value": "END DATETIME / สิ้นสุดงาน",
+            "style": 172
+          },
+          {
+            "cell": "L11",
+            "value": "11-Mar-2026 04:00 PM",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "WORK SUMMARY / สรุปงาน",
+            "style": 168
+          },
+          {
+            "cell": "D12",
+            "value": "Installed new tower light (Patlite) and handheld mobile computer for monitoring at shipping line. Configured dashboard display path, verified signal tower response, and checked LAN routing to TV and signal tower.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B14",
+            "value": "2) INSTALLATION / CHANGE DETAIL / รายละเอียดการติดตั้งหรือเปลี่ยนแปลง",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B15",
+            "value": "HARDWARE INSTALLATION / CHANGE",
+            "style": 209
+          },
+          {
+            "cell": "H15",
+            "value": "SOFTWARE INSTALLATION / CONFIGURATION",
+            "style": 210
+          }
+        ],
+        [
+          {
+            "cell": "B16",
+            "value": "Item / อุปกรณ์",
+            "style": 131
+          },
+          {
+            "cell": "C16",
+            "value": "Model",
+            "style": 122
+          },
+          {
+            "cell": "D16",
+            "value": "Serial / Asset",
+            "style": 122
+          },
+          {
+            "cell": "E16",
+            "value": "Qty",
+            "style": 122
+          },
+          {
+            "cell": "F16",
+            "value": "Action / งานที่ทำ",
+            "style": 122
+          },
+          {
+            "cell": "G16",
+            "value": "Status",
+            "style": 122
+          },
+          {
+            "cell": "H16",
+            "value": "Application / Module",
+            "style": 122
+          },
+          {
+            "cell": "I16",
+            "value": "Version Before",
+            "style": 122
+          },
+          {
+            "cell": "J16",
+            "value": "Version After",
+            "style": 122
+          },
+          {
+            "cell": "K16",
+            "value": "Config / License Ref",
+            "style": 122
+          },
+          {
+            "cell": "L16",
+            "value": "Action / งานที่ทำ",
+            "style": 122
+          },
+          {
+            "cell": "M16",
+            "value": "Status",
+            "style": 132
+          }
+        ],
+        [
+          {
+            "cell": "B17",
+            "value": "Tower Light",
+            "style": 133
+          },
+          {
+            "cell": "C17",
+            "value": "Patlite",
+            "style": 123
+          },
+          {
+            "cell": "D17",
+            "value": "-",
+            "style": 123
+          },
+          {
+            "cell": "E17",
+            "value": "1",
+            "style": 123
+          },
+          {
+            "cell": "F17",
+            "value": "Install",
+            "style": 184
+          },
+          {
+            "cell": "G17",
+            "value": "Completed",
+            "style": 123
+          },
+          {
+            "cell": "H17",
+            "value": "Shipping Dashboard",
+            "style": 184
+          },
+          {
+            "cell": "J17",
+            "value": "v1.0",
+            "style": 123
+          },
+          {
+            "cell": "K17",
+            "value": "Display Path / IP",
+            "style": 184
+          },
+          {
+            "cell": "L17",
+            "value": "Config / Verify",
+            "style": 184
+          },
+          {
+            "cell": "M17",
+            "value": "Completed",
+            "style": 134
+          }
+        ],
+        [
+          {
+            "cell": "B18",
+            "value": "Handheld Mobile Computer",
+            "style": 133
+          },
+          {
+            "cell": "D18",
+            "value": "-",
+            "style": 123
+          },
+          {
+            "cell": "E18",
+            "value": "1",
+            "style": 123
+          },
+          {
+            "cell": "F18",
+            "value": "Install / Test",
+            "style": 184
+          },
+          {
+            "cell": "G18",
+            "value": "Completed",
+            "style": 123
+          },
+          {
+            "cell": "H18",
+            "value": "Signal Tower Status Logic",
+            "style": 184
+          },
+          {
+            "cell": "J18",
+            "value": "v1.0",
+            "style": 123
+          },
+          {
+            "cell": "K18",
+            "value": "LAN to tower",
+            "style": 184
+          },
+          {
+            "cell": "L18",
+            "value": "Debug / Verify",
+            "style": 184
+          },
+          {
+            "cell": "M18",
+            "value": "Completed",
+            "style": 134
+          }
+        ],
+        [
+          {
+            "cell": "B19",
+            "value": "Switching HUB",
+            "style": 135
+          },
+          {
+            "cell": "C19",
+            "value": "Unprovided",
+            "style": 124
+          },
+          {
+            "cell": "D19",
+            "value": "-",
+            "style": 124
+          },
+          {
+            "cell": "E19",
+            "value": "1",
+            "style": 124
+          },
+          {
+            "cell": "F19",
+            "value": "Pending Customer",
+            "style": 170
+          },
+          {
+            "cell": "G19",
+            "value": "Pending",
+            "style": 124
+          }
+        ],
+        [
+          {
+            "cell": "B23",
+            "value": "3) ISSUE / IMPACT / RESOLUTION / ปัญหา ผลกระทบ และแนวทางแก้ไข",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B24",
+            "value": "ISSUE / SYMPTOM / อาการปัญหา",
+            "style": 206
+          },
+          {
+            "cell": "D24",
+            "value": "Customer requested installation support for new monitoring equipment and network connection to TV / signal tower.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B25",
+            "value": "IMPACT / ผลกระทบ",
+            "style": 206
+          },
+          {
+            "cell": "D25",
+            "value": "No production stop; pending customer-supplied HUB and LAN cable set.",
+            "style": 184
+          },
+          {
+            "cell": "H25",
+            "value": "ROOT CAUSE / สาเหตุ",
+            "style": 208
+          },
+          {
+            "cell": "J25",
+            "value": "New point installation; some network materials not yet provided.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B26",
+            "value": "ACTION TAKEN / สิ่งที่ดำเนินการ",
+            "style": 206
+          },
+          {
+            "cell": "D26",
+            "value": "Mounted TV and tower light, connected signal path, checked dashboard display, verified handheld monitoring, and informed customer of remaining required items.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B27",
+            "value": "DOWNTIME / เวลาที่กระทบ",
+            "style": 168
+          },
+          {
+            "cell": "D27",
+            "value": "0",
+            "style": 170
+          },
+          {
+            "cell": "F27",
+            "value": "BACKUP CHECKED",
+            "style": 172
+          },
+          {
+            "cell": "H27",
+            "value": "N/A",
+            "style": 170
+          },
+          {
+            "cell": "J27",
+            "value": "ROLLBACK NEEDED",
+            "style": 172
+          },
+          {
+            "cell": "L27",
+            "value": "No",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B28",
+            "value": "RESULT / IMAGE / แนบรูปภาพในการดำเนินการหรือผลการดำเนินงาน",
+            "style": 271
+          }
+        ],
+        [
+          {
+            "cell": "B29",
+            "value": "4) VALIDATION & FOLLOW-UP / การทดสอบ ผลลัพธ์ และงานค้าง",
+            "style": 190
+          }
+        ],
+        [
+          {
+            "cell": "B30",
+            "value": "TEST PERFORMED / การทดสอบ",
+            "style": 193
+          },
+          {
+            "cell": "D30",
+            "value": "Power-on test, dashboard display check, signal tower trigger test, handheld monitoring verification.",
+            "style": 272
+          },
+          {
+            "cell": "H30",
+            "value": "TEST RESULT / ผลทดสอบ",
+            "style": 200
+          },
+          {
+            "cell": "J30",
+            "value": "Pass",
+            "style": 202
+          }
+        ],
+        [
+          {
+            "cell": "B32",
+            "value": "PENDING / NEXT STEP",
+            "style": 168
+          },
+          {
+            "cell": "D32",
+            "value": "Customer to provide switching HUB and LAN cable 2 sets for TV and signal tower completion.",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B33",
+            "value": "DELIVERABLES / FILES",
+            "style": 168
+          },
+          {
+            "cell": "D33",
+            "value": "Service report, installation photo, connection sketch",
+            "style": 184
+          },
+          {
+            "cell": "H33",
+            "value": "FOLLOW-UP OWNER",
+            "style": 172
+          },
+          {
+            "cell": "J33",
+            "value": "Customer / Tomas Tech",
+            "style": 170
+          },
+          {
+            "cell": "L33",
+            "value": "NEXT ACTION DATE",
+            "style": 172
+          }
+        ],
+        [
+          {
+            "cell": "B34",
+            "value": "CUSTOMER ACCEPTANCE",
+            "style": 168
+          },
+          {
+            "cell": "D34",
+            "value": "Accepted with Pending",
+            "style": 170
+          },
+          {
+            "cell": "H34",
+            "value": "REVISION USED",
+            "style": 172
+          },
+          {
+            "cell": "J34",
+            "value": "Rev.00",
+            "style": 170
+          },
+          {
+            "cell": "L34",
+            "value": "12-Mar-2026",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B35",
+            "value": "RESULT / IMAGE / แนบรูปภาพในการดำเนินการหรือผลการดำเนินงาน",
+            "style": 273
+          }
+        ],
+        [
+          {
+            "cell": "B36",
+            "value": "5) MATERIAL / REMARKS / รายการคงค้างและหมายเหตุ",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B37",
+            "value": "REMAIN / PENDING ITEM",
+            "style": 168
+          },
+          {
+            "cell": "D37",
+            "value": "- Switching HUB\n- LAN Cable : 2 Set [TV & Signal Tower]",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B38",
+            "value": "COMMENTS / REQUEST",
+            "style": 168
+          },
+          {
+            "cell": "D38",
+            "value": "Please complete after customer provides remaining materials.",
+            "style": 184
+          }
+        ],
+        [
+          {
+            "cell": "B40",
+            "value": "6) ACKNOWLEDGEMENT / ลายเซ็นรับทราบ",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B41",
+            "value": "SERVICE ENGINEER / ผู้ปฏิบัติงาน",
+            "style": 174
+          },
+          {
+            "cell": "H41",
+            "value": "CUSTOMER REPRESENTATIVE / ผู้รับทราบ",
+            "style": 177
+          }
+        ],
+        [
+          {
+            "cell": "B42",
+            "value": "NAME / ชื่อ",
+            "style": 168
+          },
+          {
+            "cell": "D42",
+            "value": "Mr. Taweesak Suriyon",
+            "style": 170
+          },
+          {
+            "cell": "H42",
+            "value": "NAME / ชื่อ",
+            "style": 172
+          },
+          {
+            "cell": "J42",
+            "value": "Mr. Tomoyuki Tani",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B43",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 168
+          },
+          {
+            "cell": "H43",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 172
+          }
+        ],
+        [
+          {
+            "cell": "B44",
+            "value": "DATE / วันที่",
+            "style": 159
+          },
+          {
+            "cell": "D44",
+            "value": "11-Mar-2026",
+            "style": 161
+          },
+          {
+            "cell": "H44",
+            "value": "DATE / วันที่",
+            "style": 163
+          },
+          {
+            "cell": "J44",
+            "value": "12-Mar-2026",
+            "style": 161
+          }
+        ],
+        [
+          {
+            "cell": "B46",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 274
+          }
+        ]
+      ],
+      "images": 2
+    },
+    {
+      "name": "DAILY REPORT",
+      "rows": 78,
+      "cols": 41,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [
+        "R30:T30",
+        "E28:P28",
+        "U32:W32",
+        "AD31:AF31",
+        "E31:P31",
+        "E30:P30",
+        "E34:P34",
+        "A59:AO59",
+        "U28:W28",
+        "U33:W33",
+        "R32:T32",
+        "U29:W29",
+        "E32:P32",
+        "R33:T33",
+        "U31:W31",
+        "U34:W34",
+        "R29:T29",
+        "A1:Z2",
+        "E33:P33",
+        "R28:T28",
+        "U30:W30",
+        "R31:T31",
+        "R34:T34",
+        "E29:P29"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "A1",
+            "value": "JOB DAILY REPORT",
+            "style": 233
+          },
+          {
+            "cell": "AA1",
+            "value": "DOCUMENT NO.",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A3",
+            "value": "DATE",
+            "style": 2
+          },
+          {
+            "cell": "AA3",
+            "value": "PROJECT NO",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A4",
+            "value": "CUSTOMER NAME",
+            "style": 2
+          },
+          {
+            "cell": "AA4",
+            "value": "PROJECT NAME",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A5",
+            "value": "CONTACT NAME",
+            "style": 2
+          },
+          {
+            "cell": "AA5",
+            "value": "M/C NAME",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A6",
+            "value": "DEPARTMENT",
+            "style": 2
+          },
+          {
+            "cell": "AA6",
+            "value": "HIRATA NAME",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A7",
+            "value": "PHONE NO.",
+            "style": 2
+          },
+          {
+            "cell": "AA7",
+            "value": "PHONE NO",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A10",
+            "value": "WORKING  CONDITION",
+            "style": 7
+          }
+        ],
+        [
+          {
+            "cell": "C12",
+            "value": "   NORMAL CONDITION",
+            "style": 14
+          },
+          {
+            "cell": "M12",
+            "value": "   HOT WORK",
+            "style": 14
+          },
+          {
+            "cell": "T12",
+            "value": "   ELEVATED WORK",
+            "style": 15
+          },
+          {
+            "cell": "AA12",
+            "value": "   CONFINE SPACE",
+            "style": 15
+          },
+          {
+            "cell": "AH12",
+            "value": "   OTHER",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "U13",
+            "value": "(MORE THAN 2M.)",
+            "style": 16
+          },
+          {
+            "cell": "AB13",
+            "value": "(LESS AIR)",
+            "style": 16
+          }
+        ],
+        [
+          {
+            "cell": "A14",
+            "value": "JOB SCOPE",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C16",
+            "value": "   SITE CHECK",
+            "style": 14
+          },
+          {
+            "cell": "O16",
+            "value": "   RELOCATION",
+            "style": 14
+          },
+          {
+            "cell": "X16",
+            "value": "   ALIGNMENT/LEVEL",
+            "style": 14
+          },
+          {
+            "cell": "AG16",
+            "value": "   M/C MODIFICATION",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "C18",
+            "value": "   UNLOADING / UNPACKING",
+            "style": 14
+          },
+          {
+            "cell": "O18",
+            "value": "   ASSEMBLY",
+            "style": 14
+          },
+          {
+            "cell": "X18",
+            "value": "   WIRING",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "C20",
+            "value": "   DISMENTAL",
+            "style": 14
+          },
+          {
+            "cell": "O20",
+            "value": "   M/C INSTALL",
+            "style": 14
+          },
+          {
+            "cell": "X20",
+            "value": "   SOFTWARE",
+            "style": 14
+          },
+          {
+            "cell": "AG20",
+            "value": "   OTHER",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "A22",
+            "value": "PROGRESS",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C24",
+            "value": "   ON SCHEDULE",
+            "style": 14
+          },
+          {
+            "cell": "O24",
+            "value": "   DELAY",
+            "style": 14
+          },
+          {
+            "cell": "X24",
+            "value": "   FINISH",
+            "style": 14
+          },
+          {
+            "cell": "AG24",
+            "value": "   CONTINUE ON",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "A26",
+            "value": "MANPOWER",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "E28",
+            "value": "ITEM",
+            "style": 246
+          },
+          {
+            "cell": "R28",
+            "value": "ME",
+            "style": 241
+          },
+          {
+            "cell": "U28",
+            "value": "EE",
+            "style": 241
+          }
+        ],
+        [
+          {
+            "cell": "E29",
+            "value": "   ENGINEER",
+            "style": 239
+          }
+        ],
+        [
+          {
+            "cell": "E30",
+            "value": "   S/V",
+            "style": 239
+          }
+        ],
+        [
+          {
+            "cell": "E31",
+            "value": "   FOREMAN",
+            "style": 239
+          },
+          {
+            "cell": "AD31",
+            "value": "TIME",
+            "style": 241
+          }
+        ],
+        [
+          {
+            "cell": "E32",
+            "value": "   WORKER",
+            "style": 239
+          },
+          {
+            "cell": "AE32",
+            "value": "START ",
+            "style": 20
+          }
+        ],
+        [
+          {
+            "cell": "E33",
+            "value": "   CAR",
+            "style": 239
+          },
+          {
+            "cell": "AE33",
+            "value": "FINISH",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "E34",
+            "value": "   TRUCK",
+            "style": 239
+          }
+        ],
+        [
+          {
+            "cell": "A37",
+            "value": "NOTE",
+            "style": 29
+          }
+        ],
+        [
+          {
+            "cell": "A59",
+            "value": "FOR CUSTOMER",
+            "style": 243
+          }
+        ],
+        [
+          {
+            "cell": "A61",
+            "value": "1",
+            "style": 45
+          },
+          {
+            "cell": "B61",
+            "value": "CLEAN UP AFTER WORK",
+            "style": 46
+          },
+          {
+            "cell": "L61",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P61",
+            "value": "NO",
+            "style": 48
+          },
+          {
+            "cell": "V61",
+            "value": "SPEACIAL REQUEST :",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "A63",
+            "value": "2",
+            "style": 45
+          },
+          {
+            "cell": "B63",
+            "value": "WORKING WITH SAFTY RULE",
+            "style": 46
+          },
+          {
+            "cell": "L63",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P63",
+            "value": "NO",
+            "style": 48
+          }
+        ],
+        [
+          {
+            "cell": "B65",
+            "value": "PROGRESS",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "E67",
+            "value": "ON SCHEDULE",
+            "style": 46
+          },
+          {
+            "cell": "L67",
+            "value": "DELAY",
+            "style": 46
+          },
+          {
+            "cell": "P67",
+            "value": "FINISH",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E69",
+            "value": "CONTINUE ON",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E73",
+            "value": "     HIRATA SIGN",
+            "style": 2
+          },
+          {
+            "cell": "AA73",
+            "value": "CUSTOMER SIGN",
+            "style": 72
+          }
+        ],
+        [
+          {
+            "cell": "AH76",
+            "value": "DATE",
+            "style": 74
+          }
+        ],
+        [
+          {
+            "cell": "E77",
+            "value": "(                           )",
+            "style": 75
+          },
+          {
+            "cell": "AA77",
+            "value": "(                            )",
+            "style": 75
+          },
+          {
+            "cell": "AH77",
+            "value": "TIME",
+            "style": 74
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "Rev11",
+      "rows": 80,
+      "cols": 41,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [
+        "R30:T30",
+        "E36:Q36",
+        "U32:W32",
+        "R36:T36",
+        "AD31:AF31",
+        "R35:T35",
+        "E32:Q32",
+        "U33:W33",
+        "R32:T32",
+        "A61:AO61",
+        "E33:Q33",
+        "R33:T33",
+        "U35:W35",
+        "E35:Q35",
+        "U31:W31",
+        "U34:W34",
+        "A1:Z2",
+        "E31:Q31",
+        "E34:Q34",
+        "U36:W36",
+        "U30:W30",
+        "E30:Q30",
+        "R31:T31",
+        "R34:T34"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "A1",
+            "value": "JOB DAILY REPORT",
+            "style": 233
+          },
+          {
+            "cell": "AA1",
+            "value": " DOCUMENT NO.",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A3",
+            "value": "DATE",
+            "style": 79
+          },
+          {
+            "cell": "AA3",
+            "value": " PROJECT NO",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A4",
+            "value": "CUSTOMER NAME",
+            "style": 79
+          },
+          {
+            "cell": "AA4",
+            "value": " PROJECT NAME",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A5",
+            "value": "CONTACT NAME",
+            "style": 79
+          },
+          {
+            "cell": "AA5",
+            "value": " M/C NAME",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A6",
+            "value": "DEPARTMENT",
+            "style": 79
+          },
+          {
+            "cell": "AA6",
+            "value": " HIRATA NAME",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A7",
+            "value": "PHONE NO.",
+            "style": 79
+          },
+          {
+            "cell": "AA7",
+            "value": " PHONE NO",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A10",
+            "value": " WORKING  CONDITION",
+            "style": 7
+          }
+        ],
+        [
+          {
+            "cell": "C12",
+            "value": "   NORMAL CONDITION",
+            "style": 14
+          },
+          {
+            "cell": "M12",
+            "value": "   HOT WORK",
+            "style": 14
+          },
+          {
+            "cell": "T12",
+            "value": "   ELEVATED WORK",
+            "style": 15
+          },
+          {
+            "cell": "AA12",
+            "value": "   CONFINE SPACE",
+            "style": 15
+          },
+          {
+            "cell": "AH12",
+            "value": "   OTHER",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "U13",
+            "value": "(MORE THAN 2M.)",
+            "style": 16
+          },
+          {
+            "cell": "AB13",
+            "value": "(LESS AIR)",
+            "style": 16
+          }
+        ],
+        [
+          {
+            "cell": "A14",
+            "value": " JOB SCOPE",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C16",
+            "value": "   SITE CHECK",
+            "style": 80
+          },
+          {
+            "cell": "K16",
+            "value": "   RELOCATION",
+            "style": 80
+          },
+          {
+            "cell": "P16",
+            "value": "   ALIGNMENT/LEVEL",
+            "style": 80
+          },
+          {
+            "cell": "V16",
+            "value": "   M/C MODIFICATION",
+            "style": 80
+          },
+          {
+            "cell": "AB16",
+            "value": "   CARRY IN",
+            "style": 80
+          },
+          {
+            "cell": "AG16",
+            "value": "   ROBOT TEACHNG",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "C18",
+            "value": "   UNLOADING / UNPACKING",
+            "style": 80
+          },
+          {
+            "cell": "K18",
+            "value": "   ASSEMBLY",
+            "style": 80
+          },
+          {
+            "cell": "P18",
+            "value": "   WIRING",
+            "style": 80
+          },
+          {
+            "cell": "V18",
+            "value": "   FLOOR MAKING",
+            "style": 81
+          },
+          {
+            "cell": "AB18",
+            "value": "   AIR TUBING",
+            "style": 80
+          },
+          {
+            "cell": "AG18",
+            "value": "   I/O CHECK",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "C20",
+            "value": "   DISMENTAL",
+            "style": 80
+          },
+          {
+            "cell": "K20",
+            "value": "   M/C INSTALL",
+            "style": 80
+          },
+          {
+            "cell": "P20",
+            "value": "   SOFTWARE",
+            "style": 80
+          },
+          {
+            "cell": "V20",
+            "value": "   DESIGN REVIEW",
+            "style": 80
+          },
+          {
+            "cell": "AB20",
+            "value": "   ADJUSTMENT",
+            "style": 80
+          },
+          {
+            "cell": "AG20",
+            "value": "   FACTORY SHIPPING",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "C22",
+            "value": "   TRAINING",
+            "style": 80
+          },
+          {
+            "cell": "K22",
+            "value": "   TEST RUN",
+            "style": 80
+          },
+          {
+            "cell": "P22",
+            "value": "   PIPING",
+            "style": 80
+          },
+          {
+            "cell": "V22",
+            "value": "   STAND BY",
+            "style": 80
+          },
+          {
+            "cell": "AB22",
+            "value": "   BUY-OFF",
+            "style": 80
+          },
+          {
+            "cell": "AG22",
+            "value": "   OTHER",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "A24",
+            "value": " PROGRESS",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C26",
+            "value": "   ON SCHEDULE",
+            "style": 14
+          },
+          {
+            "cell": "O26",
+            "value": "   DELAY",
+            "style": 14
+          },
+          {
+            "cell": "X26",
+            "value": "   FINISH",
+            "style": 14
+          },
+          {
+            "cell": "AG26",
+            "value": "   CONTINUE ON",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "A28",
+            "value": " MANPOWER",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "E30",
+            "value": "ITEM",
+            "style": 249
+          },
+          {
+            "cell": "R30",
+            "value": "ME",
+            "style": 241
+          },
+          {
+            "cell": "U30",
+            "value": "EE",
+            "style": 241
+          }
+        ],
+        [
+          {
+            "cell": "E31",
+            "value": "   ENGINEER",
+            "style": 248
+          },
+          {
+            "cell": "AD31",
+            "value": "TIME",
+            "style": 252
+          }
+        ],
+        [
+          {
+            "cell": "E32",
+            "value": "   SUPER VISOR",
+            "style": 248
+          }
+        ],
+        [
+          {
+            "cell": "E33",
+            "value": "   FOREMAN",
+            "style": 248
+          },
+          {
+            "cell": "AE33",
+            "value": "START ",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "E34",
+            "value": "   WORKER",
+            "style": 248
+          }
+        ],
+        [
+          {
+            "cell": "E35",
+            "value": "   CAR",
+            "style": 248
+          },
+          {
+            "cell": "AE35",
+            "value": "FINISH",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "E36",
+            "value": "   TRUCK",
+            "style": 248
+          }
+        ],
+        [
+          {
+            "cell": "A39",
+            "value": " NOTE",
+            "style": 29
+          }
+        ],
+        [
+          {
+            "cell": "A61",
+            "value": "FOR CUSTOMER",
+            "style": 243
+          }
+        ],
+        [
+          {
+            "cell": "A63",
+            "value": "1",
+            "style": 45
+          },
+          {
+            "cell": "B63",
+            "value": "CLEAN UP AFTER WORK",
+            "style": 46
+          },
+          {
+            "cell": "L63",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P63",
+            "value": "NO",
+            "style": 48
+          },
+          {
+            "cell": "V63",
+            "value": "SPEACIAL REQUEST :",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "A65",
+            "value": "2",
+            "style": 45
+          },
+          {
+            "cell": "B65",
+            "value": "WORKING WITH SAFTY RULE",
+            "style": 46
+          },
+          {
+            "cell": "L65",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P65",
+            "value": "NO",
+            "style": 48
+          }
+        ],
+        [
+          {
+            "cell": "B67",
+            "value": "PROGRESS",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "E69",
+            "value": "ON SCHEDULE",
+            "style": 46
+          },
+          {
+            "cell": "L69",
+            "value": "DELAY",
+            "style": 46
+          },
+          {
+            "cell": "P69",
+            "value": "FINISH",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E71",
+            "value": "CONTINUE ON",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E75",
+            "value": "     HIRATA SIGN",
+            "style": 2
+          },
+          {
+            "cell": "AA75",
+            "value": "CUSTOMER SIGN",
+            "style": 72
+          }
+        ],
+        [
+          {
+            "cell": "AH78",
+            "value": "DATE",
+            "style": 74
+          }
+        ],
+        [
+          {
+            "cell": "E79",
+            "value": "(                           )",
+            "style": 75
+          },
+          {
+            "cell": "AA79",
+            "value": "(                            )",
+            "style": 75
+          },
+          {
+            "cell": "AH79",
+            "value": "TIME",
+            "style": 74
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "SC10",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "SC15",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "SC20",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "SC30",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "DS",
+      "rows": 102,
+      "cols": 63,
+      "print_area": "'DS'!$A$1:$BJ$101",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "graph sheet",
+      "rows": 101,
+      "cols": 62,
+      "print_area": "'graph sheet'!$A$1:$BH$100",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [
+        "A1:AD2",
+        "A5:AD6",
+        "A9:AD10",
+        "BI1:BJ10",
+        "A3:AD4",
+        "AE9:BH10",
+        "AE3:BH4",
+        "A7:AD8",
+        "AE7:BH8",
+        "AE1:BH2",
+        "AE5:BH6"
+      ],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "Lists",
+      "rows": 12,
+      "cols": 10,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation=None, paperSize=None, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [],
+      "cells": [
+        [
+          {
+            "cell": "A1",
+            "value": "Installation",
+            "style": 0
+          },
+          {
+            "cell": "B1",
+            "value": "Indoor",
+            "style": 0
+          },
+          {
+            "cell": "C1",
+            "value": "Normal",
+            "style": 0
+          },
+          {
+            "cell": "D1",
+            "value": "Draft",
+            "style": 0
+          },
+          {
+            "cell": "E1",
+            "value": "Install",
+            "style": 0
+          },
+          {
+            "cell": "F1",
+            "value": "Completed",
+            "style": 0
+          },
+          {
+            "cell": "G1",
+            "value": "Hardware",
+            "style": 0
+          },
+          {
+            "cell": "H1",
+            "value": "Pass",
+            "style": 0
+          },
+          {
+            "cell": "I1",
+            "value": "Yes",
+            "style": 0
+          },
+          {
+            "cell": "J1",
+            "value": "Accepted",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A2",
+            "value": "Maintenance",
+            "style": 0
+          },
+          {
+            "cell": "B2",
+            "value": "Outdoor",
+            "style": 0
+          },
+          {
+            "cell": "C2",
+            "value": "Urgent",
+            "style": 0
+          },
+          {
+            "cell": "D2",
+            "value": "Issued",
+            "style": 0
+          },
+          {
+            "cell": "E2",
+            "value": "Replace",
+            "style": 0
+          },
+          {
+            "cell": "F2",
+            "value": "Pending",
+            "style": 0
+          },
+          {
+            "cell": "G2",
+            "value": "Software",
+            "style": 0
+          },
+          {
+            "cell": "H2",
+            "value": "Fail",
+            "style": 0
+          },
+          {
+            "cell": "I2",
+            "value": "No",
+            "style": 0
+          },
+          {
+            "cell": "J2",
+            "value": "Accepted with Pending",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A3",
+            "value": "Issue Support",
+            "style": 0
+          },
+          {
+            "cell": "B3",
+            "value": "Production Line",
+            "style": 0
+          },
+          {
+            "cell": "C3",
+            "value": "Shutdown",
+            "style": 0
+          },
+          {
+            "cell": "D3",
+            "value": "Pending Customer",
+            "style": 0
+          },
+          {
+            "cell": "E3",
+            "value": "Remove",
+            "style": 0
+          },
+          {
+            "cell": "F3",
+            "value": "In Progress",
+            "style": 0
+          },
+          {
+            "cell": "G3",
+            "value": "Network",
+            "style": 0
+          },
+          {
+            "cell": "H3",
+            "value": "Conditional Pass",
+            "style": 0
+          },
+          {
+            "cell": "I3",
+            "value": "N/A",
+            "style": 0
+          },
+          {
+            "cell": "J3",
+            "value": "Pending Confirmation",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A4",
+            "value": "Survey / Checking",
+            "style": 0
+          },
+          {
+            "cell": "B4",
+            "value": "Office",
+            "style": 0
+          },
+          {
+            "cell": "C4",
+            "value": "Trial Run",
+            "style": 0
+          },
+          {
+            "cell": "D4",
+            "value": "Closed",
+            "style": 0
+          },
+          {
+            "cell": "E4",
+            "value": "Relocate",
+            "style": 0
+          },
+          {
+            "cell": "F4",
+            "value": "N/A",
+            "style": 0
+          },
+          {
+            "cell": "G4",
+            "value": "Configuration",
+            "style": 0
+          },
+          {
+            "cell": "H4",
+            "value": "Pending",
+            "style": 0
+          },
+          {
+            "cell": "J4",
+            "value": "Not Accepted Yet",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A5",
+            "value": "Modification",
+            "style": 0
+          },
+          {
+            "cell": "B5",
+            "value": "Warehouse",
+            "style": 0
+          },
+          {
+            "cell": "C5",
+            "value": "Online Support",
+            "style": 0
+          },
+          {
+            "cell": "D5",
+            "value": "Need Follow-up",
+            "style": 0
+          },
+          {
+            "cell": "E5",
+            "value": "Wiring",
+            "style": 0
+          },
+          {
+            "cell": "G5",
+            "value": "Operation",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A6",
+            "value": "Training",
+            "style": 0
+          },
+          {
+            "cell": "B6",
+            "value": "Server Room",
+            "style": 0
+          },
+          {
+            "cell": "C6",
+            "value": "Standby",
+            "style": 0
+          },
+          {
+            "cell": "E6",
+            "value": "Testing",
+            "style": 0
+          },
+          {
+            "cell": "G6",
+            "value": "Environment",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A7",
+            "value": "Preventive Maintenance",
+            "style": 0
+          },
+          {
+            "cell": "B7",
+            "value": "Utility Area",
+            "style": 0
+          },
+          {
+            "cell": "C7",
+            "value": "Other",
+            "style": 0
+          },
+          {
+            "cell": "E7",
+            "value": "Inspection",
+            "style": 0
+          },
+          {
+            "cell": "G7",
+            "value": "User Request",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A8",
+            "value": "Replacement",
+            "style": 0
+          },
+          {
+            "cell": "B8",
+            "value": "Other",
+            "style": 0
+          },
+          {
+            "cell": "E8",
+            "value": "Update",
+            "style": 0
+          },
+          {
+            "cell": "G8",
+            "value": "Unknown",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A9",
+            "value": "Emergency Support",
+            "style": 0
+          },
+          {
+            "cell": "E9",
+            "value": "Backup",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A10",
+            "value": "Other",
+            "style": 0
+          },
+          {
+            "cell": "E10",
+            "value": "Restore",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "E11",
+            "value": "Training",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "E12",
+            "value": "Other",
+            "style": 0
+          }
+        ]
+      ],
+      "images": 0
+    }
+  ],
+  "UAT Report_Rev00.xlsx": [
+    {
+      "name": "README_ISO",
+      "rows": 11,
+      "cols": 6,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='landscape', paperSize=None, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "B8",
+        "C9:F9",
+        "B4",
+        "B5",
+        "B9",
+        "C8:F8",
+        "C4:F4",
+        "B7",
+        "B11",
+        "B6",
+        "C7:F7",
+        "C6:F6",
+        "B10",
+        "C11:F11",
+        "C10:F10",
+        "C5:F5"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "README - SERVICE REPORT TEMPLATE",
+            "style": 133
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Purpose",
+            "style": 166
+          },
+          {
+            "cell": "C4",
+            "value": "This template is used to report installation, replacement, modification, support, and issue resolution for both hardware and software work.",
+            "style": 167
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "Recommended file name",
+            "style": 164
+          },
+          {
+            "cell": "C5",
+            "value": "YYYYMMDD_Customer_ProjectOrSite_WorkType_ReportNo_RevXX.xlsx\nExample: 20260311_AHBrake_ShippingDashboard_Installation_SR-001_Rev00.xlsx",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "Mandatory fields",
+            "style": 164
+          },
+          {
+            "cell": "C6",
+            "value": "Report No., Report Date, Customer, Project/Site, Contact Person, Visit Type, Work Mode, Work Summary, Start/End DateTime, Service Team, Test Result, Customer Acceptance.",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "How to use section 2",
+            "style": 164
+          },
+          {
+            "cell": "C7",
+            "value": "Record hardware work on the left half and software/configuration work on the right half. Leave unused rows blank.",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "How to use section 3",
+            "style": 164
+          },
+          {
+            "cell": "C8",
+            "value": "Describe issue/symptom, impact, root cause, action taken, downtime, backup check, and rollback need.",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B9",
+            "value": "ISO / Revision control",
+            "style": 164
+          },
+          {
+            "cell": "C9",
+            "value": "Maintain template revision in Doc_Control sheet. When structure changes, update revision history with date, owner, and summary of change.",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "Archive suggestion",
+            "style": 164
+          },
+          {
+            "cell": "C10",
+            "value": "Store reports by Year > Customer > Project > Service Report, and keep signed PDF copy if customer signs by hand.",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "Example sheet",
+            "style": 168
+          },
+          {
+            "cell": "C11",
+            "value": "Use Example_Filled_ISO as a reference when training service engineers.",
+            "style": 169
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "Doc_Control",
+      "rows": 17,
+      "cols": 7,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='landscape', paperSize=None, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "C7:G7",
+        "C4:G4",
+        "C6:G6",
+        "C10:G10",
+        "C5:G5",
+        "C8:G8",
+        "C9:G9"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "DOCUMENT CONTROL / REVISION HISTORY",
+            "style": 133
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Document Title",
+            "style": 166
+          },
+          {
+            "cell": "C4",
+            "value": "Service Report Template (Hardware + Software)",
+            "style": 167
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "Document Code",
+            "style": 164
+          },
+          {
+            "cell": "C5",
+            "value": "TT-FRM-UAT-001",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "Current Revision",
+            "style": 164
+          },
+          {
+            "cell": "C6",
+            "value": "Rev.00",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "Effective Date",
+            "style": 164
+          },
+          {
+            "cell": "C7",
+            "value": "2026-07-03 00:00:00",
+            "style": 170
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "Owner Department",
+            "style": 164
+          },
+          {
+            "cell": "C8",
+            "value": "IoT / Electrical / Hardware / Software / Mechanical",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B9",
+            "value": "Purpose",
+            "style": 164
+          },
+          {
+            "cell": "C9",
+            "value": "Standard template for reporting installation, modification, issue resolution, and service activity for hardware and software work.",
+            "style": 165
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "ISO Note",
+            "style": 168
+          },
+          {
+            "cell": "C10",
+            "value": "Keep approved revision history and archive issued reports by project/site/date.",
+            "style": 169
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "Rev.",
+            "style": 140
+          },
+          {
+            "cell": "C12",
+            "value": "Date",
+            "style": 141
+          },
+          {
+            "cell": "D12",
+            "value": "Changed By",
+            "style": 141
+          },
+          {
+            "cell": "E12",
+            "value": "Description of Change",
+            "style": 141
+          },
+          {
+            "cell": "F12",
+            "value": "Reviewed / Approved By",
+            "style": 141
+          },
+          {
+            "cell": "G12",
+            "value": "Remarks",
+            "style": 142
+          }
+        ],
+        [
+          {
+            "cell": "B13",
+            "value": "Rev.00",
+            "style": 143
+          },
+          {
+            "cell": "C13",
+            "value": "2026-07-03 00:00:00",
+            "style": 132
+          },
+          {
+            "cell": "D13",
+            "value": "Nattapong",
+            "style": 121
+          },
+          {
+            "cell": "E13",
+            "value": "Initial ISO-ready template integrating hardware and software service reporting.",
+            "style": 165
+          },
+          {
+            "cell": "F13",
+            "value": "Approved",
+            "style": 252
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "UAT_Report",
+      "rows": 51,
+      "cols": 16,
+      "print_area": "'UAT_Report'!$B$2:$M$51",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=46, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "D35:H35",
+        "D12:M12",
+        "B12:C12",
+        "D6:E6",
+        "C15:F15",
+        "L5:M5",
+        "C24:F24",
+        "B38:C38",
+        "D7:E7",
+        "D45:G45",
+        "H45:I45",
+        "C26:F26",
+        "H37:I37",
+        "B40:C40",
+        "J45:M45",
+        "D41:M41",
+        "D48:G48",
+        "G18:J18",
+        "D33:E33",
+        "J4:M4",
+        "C27:F27",
+        "B41:C41",
+        "B35:C35",
+        "B43:M43",
+        "C17:F17",
+        "L7:M7",
+        "D34:E34",
+        "J47:M47",
+        "F34:G34",
+        "G20:J20",
+        "G29:J29",
+        "F6:G6",
+        "C19:F19",
+        "C28:F28",
+        "G22:J22",
+        "B10:M10",
+        "B11:C11",
+        "B33:C34",
+        "D11:E11",
+        "F5:G5",
+        "F33:G33",
+        "G21:J21",
+        "H36:I36",
+        "J36:K36",
+        "H11:I11",
+        "H33:I34",
+        "J11:K11",
+        "J33:K34",
+        "G23:J23",
+        "D40:M40",
+        "D36:G36",
+        "B37:C37",
+        "B6:C6",
+        "I35:J35",
+        "L6:M6",
+        "H48:I48",
+        "D47:G47",
+        "B31:M31",
+        "H5:I5",
+        "K35:M35",
+        "G24:J24",
+        "D37:G37",
+        "B39:M39",
+        "B7:C7",
+        "G26:J26",
+        "J46:M46",
+        "G16:J16",
+        "G25:J25",
+        "F7:G7",
+        "C18:F18",
+        "J48:M48",
+        "L33:M33",
+        "L8:M8",
+        "F8:G8",
+        "B2:M3",
+        "C20:F20",
+        "C29:F29",
+        "B50:M50",
+        "C22:F22",
+        "B5:C5",
+        "D5:E5",
+        "B45:C45",
+        "C21:F21",
+        "L11:M11",
+        "G15:J15",
+        "B47:C47",
+        "F11:G11",
+        "C23:F23",
+        "J5:K5",
+        "B46:C46",
+        "B14:M14",
+        "J37:K37",
+        "L37:M37",
+        "B44:G44",
+        "D38:M38",
+        "B48:C48",
+        "H6:I6",
+        "J6:K6",
+        "H46:I46",
+        "B8:C8",
+        "G27:J27",
+        "D46:G46",
+        "G17:J17",
+        "H7:I7",
+        "J7:K7",
+        "B32:M32",
+        "C16:F16",
+        "C25:F25",
+        "H47:I47",
+        "G19:J19",
+        "G28:J28",
+        "D8:E8",
+        "L34:M34",
+        "H44:M44",
+        "B36:C36",
+        "H8:I8",
+        "L36:M36",
+        "J8:K8",
+        "B4:I4"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "UAT REPORT / ใบรายงานการให้บริการ",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 189
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-UAT-001 | Revision: Rev.00",
+            "style": 403
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 164
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-UAT-2701-001",
+            "style": 171
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 185
+          },
+          {
+            "cell": "H5",
+            "value": "2026-07-02 00:00:00",
+            "style": 191
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 185
+          },
+          {
+            "cell": "L5",
+            "value": "IoT System",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 164
+          },
+          {
+            "cell": "D6",
+            "value": "Thai Asahi Denso Co., Ltd.",
+            "style": 184
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 185
+          },
+          {
+            "cell": "H6",
+            "value": "IoT Monitoring System for TAD ",
+            "style": 186
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 185
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 164
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 185
+          },
+          {
+            "cell": "H7",
+            "value": "092-2874418",
+            "style": 171
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 185
+          },
+          {
+            "cell": "L7",
+            "value": "Urgent",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "UAT TEAM / ทีมบริการ",
+            "style": 164
+          },
+          {
+            "cell": "D8",
+            "value": "SE",
+            "style": 171
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / PROJECT NO.",
+            "style": 185
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260039",
+            "style": 171
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 185
+          },
+          {
+            "cell": "L8",
+            "value": "In Progress",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "1) SCOPE & OBJECTIVE / ขอบเขตและวัตถุประสงค์",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "REQUESTED BY / ผู้ร้องขอ",
+            "style": 164
+          },
+          {
+            "cell": "D11",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F11",
+            "value": "START DATETIME / เริ่มงาน",
+            "style": 185
+          },
+          {
+            "cell": "H11",
+            "value": "2026-07-01 08:30:00",
+            "style": 194
+          },
+          {
+            "cell": "J11",
+            "value": "END DATETIME / สิ้นสุดงาน",
+            "style": 185
+          },
+          {
+            "cell": "L11",
+            "value": "-",
+            "style": 194
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "WORK SUMMARY / สรุปงาน",
+            "style": 164
+          },
+          {
+            "cell": "D12",
+            "value": "การยืนยันการใช้งานของระบบ IoT monitoring",
+            "style": 404
+          }
+        ],
+        [
+          {
+            "cell": "B14",
+            "value": "2) UAT LIST DETAIL / รายละเอียด",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B15",
+            "value": "Page No. / หน้าที่",
+            "style": 148
+          },
+          {
+            "cell": "C15",
+            "value": "Page Name /ชื่อเอกสาร",
+            "style": 199
+          },
+          {
+            "cell": "G15",
+            "value": "Comment / ความคิดเห็น",
+            "style": 199
+          },
+          {
+            "cell": "K15",
+            "value": "YES / NO",
+            "style": 311
+          },
+          {
+            "cell": "L15",
+            "value": "Customer Sing / รายเซ็นลูกค้า",
+            "style": 311
+          },
+          {
+            "cell": "M15",
+            "value": "Date / วันที่",
+            "style": 301
+          }
+        ],
+        [
+          {
+            "cell": "B16",
+            "value": "1",
+            "style": 152
+          },
+          {
+            "cell": "C16",
+            "value": "สามารถ Monitoring แบบเรียลไทม์ ได้พร้อมกัน 42 ไลน์",
+            "style": 179
+          }
+        ],
+        [
+          {
+            "cell": "B17",
+            "value": "2",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B18",
+            "value": "3",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B19",
+            "value": "4",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B20",
+            "value": "5",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B21",
+            "value": "6",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B22",
+            "value": "7",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B23",
+            "value": "8",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B24",
+            "value": "9",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B25",
+            "value": "10",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B26",
+            "value": "11",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B27",
+            "value": "12",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B28",
+            "value": "13",
+            "style": 152
+          }
+        ],
+        [
+          {
+            "cell": "B32",
+            "value": "3) UAT SUMMARY / การทดสอบและส่งมอบระบบ",
+            "style": 208
+          }
+        ],
+        [
+          {
+            "cell": "B33",
+            "value": "UAT DATE \n วันที่ดำเนินการ",
+            "style": 405
+          },
+          {
+            "cell": "D33",
+            "value": "Start Date",
+            "style": 213
+          },
+          {
+            "cell": "F33",
+            "value": "Finish Date",
+            "style": 213
+          },
+          {
+            "cell": "H33",
+            "value": "UAT SUMMARY RESULT \n ผลการทดสอบ",
+            "style": 406
+          },
+          {
+            "cell": "J33",
+            "value": "PARTIAL",
+            "style": 407
+          },
+          {
+            "cell": "L33",
+            "value": "Remark",
+            "style": 408
+          }
+        ],
+        [
+          {
+            "cell": "B35",
+            "value": "SUMMARY ISSUES FOUND / ปัญหาที่พบ ",
+            "style": 164
+          },
+          {
+            "cell": "D35",
+            "value": "จำนวนปัญหาที่พบ",
+            "style": 409
+          },
+          {
+            "cell": "I35",
+            "value": "CORRECTIVE ACTION / การแก้ไข",
+            "style": 231
+          },
+          {
+            "cell": "K35",
+            "value": "จำนวนการแก้ไข",
+            "style": 410
+          }
+        ],
+        [
+          {
+            "cell": "B36",
+            "value": "DELIVERABLES / FILES",
+            "style": 164
+          },
+          {
+            "cell": "H36",
+            "value": "FOLLOW-UP OWNER",
+            "style": 185
+          },
+          {
+            "cell": "J36",
+            "value": "MR.Chackkrit",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B37",
+            "value": "CUSTOMER ACCEPTANCE",
+            "style": 164
+          },
+          {
+            "cell": "D37",
+            "value": "Sign Customer",
+            "style": 171
+          },
+          {
+            "cell": "H37",
+            "value": "REVISION USED",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B38",
+            "value": "RESULT / IMAGE / แนบรูปภาพในการดำเนินการหรือผลการดำเนินงาน",
+            "style": 411
+          },
+          {
+            "cell": "D38",
+            "value": "Follow up page Picture",
+            "style": 412
+          }
+        ],
+        [
+          {
+            "cell": "B39",
+            "value": "4) MATERIAL / REMARKS / รายการคงค้างและหมายเหตุ",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B40",
+            "value": "REMAIN / PENDING ITEM",
+            "style": 164
+          }
+        ],
+        [
+          {
+            "cell": "B41",
+            "value": "COMMENTS / REQUEST",
+            "style": 164
+          }
+        ],
+        [
+          {
+            "cell": "B43",
+            "value": "5) ACKNOWLEDGEMENT / ลายเซ็นรับทราบ",
+            "style": 192
+          }
+        ],
+        [
+          {
+            "cell": "B44",
+            "value": "COMMISSIONED BY / ผู้ดำเนินการ",
+            "style": 235
+          },
+          {
+            "cell": "H44",
+            "value": "CUSTOMER REPRESENTATIVE / ผู้รับทราบ",
+            "style": 236
+          }
+        ],
+        [
+          {
+            "cell": "B45",
+            "value": "NAME / ชื่อ",
+            "style": 164
+          },
+          {
+            "cell": "H45",
+            "value": "NAME / ชื่อ",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B46",
+            "value": "POSITION / ตำแหน่ง",
+            "style": 164
+          },
+          {
+            "cell": "H46",
+            "value": "POSITION / ตำแหน่ง",
+            "style": 164
+          }
+        ],
+        [
+          {
+            "cell": "B47",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 164
+          },
+          {
+            "cell": "H47",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B48",
+            "value": "DATE / วันที่",
+            "style": 168
+          },
+          {
+            "cell": "H48",
+            "value": "DATE / วันที่",
+            "style": 251
+          }
+        ],
+        [
+          {
+            "cell": "B50",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 413
+          }
+        ]
+      ],
+      "images": 1
+    },
+    {
+      "name": "UAT List1",
+      "rows": 51,
+      "cols": 16,
+      "print_area": "'UAT List1'!$B$2:$M$51",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=54, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "H17:I18",
+        "C25:G26",
+        "B43:B44",
+        "H27:K27",
+        "D12:M12",
+        "J28:K28",
+        "H33:K33",
+        "B29:B30",
+        "B12:C12",
+        "D6:E6",
+        "H35:K35",
+        "C39:G40",
+        "L5:M5",
+        "L39:L40",
+        "L45:L46",
+        "B37:B38",
+        "B15:B16",
+        "B17:B24",
+        "D7:E7",
+        "C37:G38",
+        "M17:M18",
+        "H39:K39",
+        "L31:L32",
+        "C29:G30",
+        "M47:M48",
+        "J4:M4",
+        "B25:B26",
+        "H45:K45",
+        "B35:B36",
+        "H37:K37",
+        "B27:B28",
+        "C41:G42",
+        "L7:M7",
+        "M39:M40",
+        "H47:K47",
+        "F6:G6",
+        "H15:K15",
+        "C43:G44",
+        "H23:K23",
+        "L43:L44",
+        "H34:I34",
+        "B10:M10",
+        "C27:G28",
+        "J34:K34",
+        "B11:C11",
+        "D11:E11",
+        "L33:L34",
+        "F5:G5",
+        "H36:I36",
+        "L29:L30",
+        "J36:K36",
+        "M37:M38",
+        "H41:K41",
+        "M27:M28",
+        "L35:L36",
+        "H11:I11",
+        "J11:K11",
+        "J20:K20",
+        "M21:M22",
+        "H25:K25",
+        "C15:G16",
+        "L21:L22",
+        "H28:I28",
+        "J22:K22",
+        "M41:M42",
+        "M23:M24",
+        "B45:B46",
+        "B6:C6",
+        "L6:M6",
+        "H48:I48",
+        "C45:G46",
+        "J46:K46",
+        "M43:M44",
+        "H5:I5",
+        "J48:K48",
+        "C47:G48",
+        "B31:B32",
+        "H19:K19",
+        "B7:C7",
+        "H38:I38",
+        "C31:G32",
+        "J38:K38",
+        "H40:I40",
+        "F7:G7",
+        "J40:K40",
+        "C17:G18",
+        "M15:M16",
+        "J24:K24",
+        "M25:M26",
+        "C19:G20",
+        "H43:K43",
+        "L8:M8",
+        "L25:L26",
+        "J26:K26",
+        "F8:G8",
+        "M45:M46",
+        "J17:K18",
+        "B2:M3",
+        "H16:I16",
+        "J16:K16",
+        "L41:L42",
+        "B33:B34",
+        "B50:M50",
+        "H22:I22",
+        "M29:M30",
+        "B5:C5",
+        "H42:I42",
+        "D5:E5",
+        "J42:K42",
+        "L11:M11",
+        "H30:I30",
+        "F11:G11",
+        "J44:K44",
+        "B47:B48",
+        "C21:G22",
+        "H20:I20",
+        "J5:K5",
+        "L47:L48",
+        "B14:M14",
+        "H44:I44",
+        "L37:L38",
+        "L15:L16",
+        "C23:G24",
+        "M35:M36",
+        "B39:B40",
+        "J30:K30",
+        "H6:I6",
+        "J6:K6",
+        "H46:I46",
+        "M31:M32",
+        "H29:K29",
+        "L23:L24",
+        "B8:C8",
+        "H31:K31",
+        "H32:I32",
+        "H7:I7",
+        "J32:K32",
+        "J7:K7",
+        "M33:M34",
+        "H21:K21",
+        "L27:L28",
+        "D8:E8",
+        "C33:G34",
+        "H24:I24",
+        "L17:L18",
+        "H26:I26",
+        "M19:M20",
+        "B41:B42",
+        "C35:G36",
+        "H8:I8",
+        "J8:K8",
+        "B4:I4",
+        "L19:L20"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "UAT REPORT / ใบรายงานการให้บริการ",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 189
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-UAT-001 | Revision: Rev.00",
+            "style": 403
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 164
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-UAT-2701-001",
+            "style": 171
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 185
+          },
+          {
+            "cell": "H5",
+            "value": "2026-07-02 00:00:00",
+            "style": 191
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 185
+          },
+          {
+            "cell": "L5",
+            "value": "Programing/Website",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 164
+          },
+          {
+            "cell": "D6",
+            "value": "Thai Asahi Denso Co., Ltd.",
+            "style": 184
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 185
+          },
+          {
+            "cell": "H6",
+            "value": "IoT Monitoring System for TAD ",
+            "style": 186
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 185
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 164
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 185
+          },
+          {
+            "cell": "H7",
+            "value": "092-2874418",
+            "style": 171
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 185
+          },
+          {
+            "cell": "L7",
+            "value": "Urgent",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "UAT TEAM / ทีมบริการ",
+            "style": 164
+          },
+          {
+            "cell": "D8",
+            "value": "SE",
+            "style": 171
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / PROJECT NO.",
+            "style": 185
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260039",
+            "style": 171
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 185
+          },
+          {
+            "cell": "L8",
+            "value": "In Progress",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "1) SCOPE & OBJECTIVE / ขอบเขตและวัตถุประสงค์",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "REQUESTED BY / ผู้ร้องขอ",
+            "style": 164
+          },
+          {
+            "cell": "D11",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F11",
+            "value": "START DATETIME / เริ่มงาน",
+            "style": 185
+          },
+          {
+            "cell": "H11",
+            "value": "2026-07-01 08:30:00",
+            "style": 194
+          },
+          {
+            "cell": "J11",
+            "value": "END DATETIME / สิ้นสุดงาน",
+            "style": 185
+          },
+          {
+            "cell": "L11",
+            "value": "-",
+            "style": 194
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "WORK SUMMARY / สรุปงาน",
+            "style": 164
+          },
+          {
+            "cell": "D12",
+            "value": "สามารถ Monitoring แบบเรียลไทม์ ได้พร้อมกัน 42 ไลน์ / Able monitor 42 lines in real time simultaneously.",
+            "style": 404
+          }
+        ],
+        [
+          {
+            "cell": "B14",
+            "value": "2.1) UAT LIST DETAIL / รายละเอียด",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B15",
+            "value": "Test Scenario / หัวข้อในการทดสอบ",
+            "style": 414
+          },
+          {
+            "cell": "C15",
+            "value": "Test Step / ลำดับในการทดสอบ",
+            "style": 415
+          },
+          {
+            "cell": "H15",
+            "value": "Test Result ",
+            "style": 311
+          },
+          {
+            "cell": "L15",
+            "value": "Actual Result \n ผลการทดสอบ",
+            "style": 416
+          },
+          {
+            "cell": "M15",
+            "value": "Remark / หมายเหตุ",
+            "style": 301
+          }
+        ],
+        [
+          {
+            "cell": "H16",
+            "value": "Input Test",
+            "style": 263
+          },
+          {
+            "cell": "J16",
+            "value": "Output Test",
+            "style": 263
+          }
+        ],
+        [
+          {
+            "cell": "B17",
+            "value": "การรับข้อมูลจาก Shopfloor และส่งไปยัง HMI Production line",
+            "style": 417
+          },
+          {
+            "cell": "C17",
+            "value": "1. รับข้อมูล Line Number, Work order, Item name , Item ID, Q'ty และ Start time \nจาก Shopfloor",
+            "style": 418
+          },
+          {
+            "cell": "H17",
+            "value": "เช็คข้อมูลหน้า Shopfloor monitor ผ่าน Pagasus website ",
+            "style": 270
+          },
+          {
+            "cell": "L17",
+            "value": "PASS",
+            "style": 419
+          }
+        ],
+        [
+          {
+            "cell": "C19",
+            "value": "2. HMI Production Line แสดงค่า Work Order ,Item name, Item ID ,Q'Ty , Start time",
+            "style": 418
+          },
+          {
+            "cell": "H19",
+            "value": "เช็คข้อมูลผ่านหน้า HMI Production Line ",
+            "style": 420
+          },
+          {
+            "cell": "L19",
+            "value": "PASS",
+            "style": 421
+          },
+          {
+            "cell": "M19",
+            "value": "test ต่อ พน",
+            "style": 256
+          }
+        ],
+        [
+          {
+            "cell": "C21",
+            "value": "3.สามารถส่ง Status Lamp Start ไปยัง Production Line ได้ถูกต้อง",
+            "style": 418
+          },
+          {
+            "cell": "H21",
+            "value": "เช็ค Status Lamp ของ Production Line",
+            "style": 420
+          },
+          {
+            "cell": "L21",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "C23",
+            "value": "4. Website สามารถแสดงการ Start ของ Production ไลน์ในหน้า Production Overview ,\nProduction Preformance และ 3D Production ได้อย่างถูกต้อง ",
+            "style": 422
+          },
+          {
+            "cell": "H23",
+            "value": "หน้า Product Over view แสดงสีของไลน์ในเป็นสีเขียว ,หน้า Production Performance แสดง Status Running  และ 3D Production แสดง Lamp สีเขียว",
+            "style": 420
+          },
+          {
+            "cell": "L23",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L25",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L27",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L29",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L31",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L33",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L35",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L37",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L39",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L41",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L43",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L45",
+            "value": "PASS",
+            "style": 421
+          }
+        ],
+        [
+          {
+            "cell": "L47",
+            "value": "PASS",
+            "style": 260
+          }
+        ],
+        [
+          {
+            "cell": "B50",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 413
+          }
+        ]
+      ],
+      "images": 1
+    },
+    {
+      "name": "UAT List1 Summary",
+      "rows": 51,
+      "cols": 16,
+      "print_area": "'UAT List1 Summary'!$B$2:$M$51",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=38, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "D12:M12",
+        "E39:I39",
+        "E48:I48",
+        "B12:C12",
+        "D6:E6",
+        "E29:I29",
+        "E38:I38",
+        "C41:D41",
+        "L5:M5",
+        "E31:I31",
+        "E40:I40",
+        "B15:B16",
+        "C43:D43",
+        "D7:E7",
+        "C27:D27",
+        "C36:D36",
+        "C17:D17",
+        "E26:I26",
+        "C19:D19",
+        "E25:I25",
+        "J4:M4",
+        "C28:D28",
+        "K15:K16",
+        "E18:I18",
+        "C30:D30",
+        "L7:M7",
+        "E42:I42",
+        "C45:D45",
+        "F6:G6",
+        "E44:I44",
+        "B10:M10",
+        "C47:D47",
+        "E20:I20",
+        "B11:C11",
+        "D11:E11",
+        "F5:G5",
+        "E28:I28",
+        "C40:D40",
+        "E30:I30",
+        "H11:I11",
+        "J11:K11",
+        "E46:I46",
+        "B6:C6",
+        "L6:M6",
+        "E32:I32",
+        "E41:I41",
+        "H5:I5",
+        "C18:D18",
+        "E47:I47",
+        "C34:D34",
+        "E43:I43",
+        "B7:C7",
+        "E24:I24",
+        "E33:I33",
+        "E17:I17",
+        "F7:G7",
+        "C20:D20",
+        "M15:M16",
+        "C29:D29",
+        "E35:I35",
+        "E19:I19",
+        "C44:D44",
+        "C22:D22",
+        "C31:D31",
+        "L8:M8",
+        "F8:G8",
+        "C46:D46",
+        "C21:D21",
+        "B2:M3",
+        "C15:D16",
+        "B50:M50",
+        "E45:I45",
+        "C48:D48",
+        "C23:D23",
+        "C32:D32",
+        "C38:D38",
+        "B5:C5",
+        "D5:E5",
+        "L11:M11",
+        "E37:I37",
+        "E21:I21",
+        "F11:G11",
+        "C24:D24",
+        "E15:I16",
+        "J5:K5",
+        "C33:D33",
+        "C42:D42",
+        "B14:M14",
+        "E23:I23",
+        "J15:J16",
+        "C26:D26",
+        "L15:L16",
+        "C35:D35",
+        "H6:I6",
+        "J6:K6",
+        "C25:D25",
+        "B8:C8",
+        "E34:I34",
+        "H7:I7",
+        "J7:K7",
+        "E27:I27",
+        "E36:I36",
+        "C39:D39",
+        "D8:E8",
+        "C37:D37",
+        "H8:I8",
+        "E22:I22",
+        "J8:K8",
+        "B4:I4"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "UAT REPORT / ใบรายงานการให้บริการ",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 189
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-UAT-001 | Revision: Rev.00",
+            "style": 403
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 164
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-UAT-2701-001",
+            "style": 171
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 185
+          },
+          {
+            "cell": "H5",
+            "value": "2026-07-02 00:00:00",
+            "style": 191
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 185
+          },
+          {
+            "cell": "L5",
+            "value": "Programing/Website",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 164
+          },
+          {
+            "cell": "D6",
+            "value": "Thai Asahi Denso Co., Ltd.",
+            "style": 184
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 185
+          },
+          {
+            "cell": "H6",
+            "value": "IoT Monitoring System for TAD ",
+            "style": 186
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 185
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 164
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 185
+          },
+          {
+            "cell": "H7",
+            "value": "092-2874418",
+            "style": 171
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 185
+          },
+          {
+            "cell": "L7",
+            "value": "Urgent",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "UAT TEAM / ทีมบริการ",
+            "style": 164
+          },
+          {
+            "cell": "D8",
+            "value": "SE",
+            "style": 171
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / PROJECT NO.",
+            "style": 185
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260039",
+            "style": 171
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 185
+          },
+          {
+            "cell": "L8",
+            "value": "In Progress",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B10",
+            "value": "1) SCOPE & OBJECTIVE / ขอบเขตและวัตถุประสงค์",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B11",
+            "value": "REQUESTED BY / ผู้ร้องขอ",
+            "style": 164
+          },
+          {
+            "cell": "D11",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F11",
+            "value": "START DATETIME / เริ่มงาน",
+            "style": 185
+          },
+          {
+            "cell": "H11",
+            "value": "2026-07-01 08:30:00",
+            "style": 194
+          },
+          {
+            "cell": "J11",
+            "value": "END DATETIME / สิ้นสุดงาน",
+            "style": 185
+          },
+          {
+            "cell": "L11",
+            "value": "-",
+            "style": 194
+          }
+        ],
+        [
+          {
+            "cell": "B12",
+            "value": "WORK SUMMARY / สรุปงาน",
+            "style": 164
+          },
+          {
+            "cell": "D12",
+            "value": "สามารถ Monitoring แบบเรียลไทม์ ได้พร้อมกัน 42 ไลน์ / Able monitor 42 lines in real time simultaneously.",
+            "style": 404
+          }
+        ],
+        [
+          {
+            "cell": "B14",
+            "value": "2.2 UAT PUNCH LIST DETAIL / รายละเอียด",
+            "style": 193
+          }
+        ],
+        [
+          {
+            "cell": "B15",
+            "value": "Test Scenario / หัวข้อในการทดสอบ",
+            "style": 295
+          },
+          {
+            "cell": "C15",
+            "value": "Topic Test Step / \nลำดับในการทดสอบ",
+            "style": 308
+          },
+          {
+            "cell": "E15",
+            "value": "Topic Issue \nรายการปัญหา",
+            "style": 304
+          },
+          {
+            "cell": "J15",
+            "value": " Date Update\nวันที่อัพเดท",
+            "style": 304
+          },
+          {
+            "cell": "K15",
+            "value": "Status\nสถานะของปัญหา",
+            "style": 312
+          },
+          {
+            "cell": "L15",
+            "value": " Dua Date\nวันที่คาดว่าจะเสร็จ",
+            "style": 304
+          },
+          {
+            "cell": "M15",
+            "value": "Result Status\nผลลัพการแก้ไขปัญหา",
+            "style": 306
+          }
+        ],
+        [
+          {
+            "cell": "B50",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 413
+          }
+        ]
+      ],
+      "images": 1
+    },
+    {
+      "name": "Evident #1",
+      "rows": 47,
+      "cols": 16,
+      "print_area": "'Evident #1'!$A$1:$P$51",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=46, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "L7:M7",
+        "B7:C7",
+        "J5:K5",
+        "B10:M39",
+        "H43:I43",
+        "J43:M43",
+        "F6:G6",
+        "H44:I44",
+        "D42:G42",
+        "B43:C43",
+        "F7:G7",
+        "J42:M42",
+        "D6:E6",
+        "H6:I6",
+        "J6:K6",
+        "F5:G5",
+        "D44:G44",
+        "B42:C42",
+        "B40:M40",
+        "L5:M5",
+        "J44:M44",
+        "L8:M8",
+        "B8:C8",
+        "F8:G8",
+        "B44:C44",
+        "B2:M3",
+        "D7:E7",
+        "H7:I7",
+        "B41:G41",
+        "J7:K7",
+        "B45:M47",
+        "D8:E8",
+        "B6:C6",
+        "H41:M41",
+        "L6:M6",
+        "B5:C5",
+        "H42:I42",
+        "J4:M4",
+        "D5:E5",
+        "H5:I5",
+        "D43:G43",
+        "H8:I8",
+        "J8:K8",
+        "B4:I4"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "PICTURE REPORT / ใบรายงานการให้บริการ",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 189
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-SRV-001 | Revision: Rev.00",
+            "style": 403
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 164
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-UAT-2607-001",
+            "style": 171
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 185
+          },
+          {
+            "cell": "H5",
+            "value": "2026-07-02 00:00:00",
+            "style": 191
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 185
+          },
+          {
+            "cell": "L5",
+            "value": "Programing/Website",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 164
+          },
+          {
+            "cell": "D6",
+            "value": "Thai Asahi Denso Co., Ltd.",
+            "style": 184
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 185
+          },
+          {
+            "cell": "H6",
+            "value": "IoT Monitoring System for TAD ",
+            "style": 186
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 185
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 164
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 185
+          },
+          {
+            "cell": "H7",
+            "value": "092-2874418",
+            "style": 171
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 185
+          },
+          {
+            "cell": "L7",
+            "value": "Urgent",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "SERVICE TEAM / ทีมบริการ",
+            "style": 164
+          },
+          {
+            "cell": "D8",
+            "value": "SE",
+            "style": 171
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / CR NO.",
+            "style": 185
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260039",
+            "style": 171
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 185
+          },
+          {
+            "cell": "L8",
+            "value": "In Progress",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B40",
+            "value": "ACKNOWLEDGEMENT / ลายเซ็นรับทราบ",
+            "style": 192
+          }
+        ],
+        [
+          {
+            "cell": "B41",
+            "value": "COMMISSIONED BY / ผู้ดำเนินการ",
+            "style": 235
+          },
+          {
+            "cell": "H41",
+            "value": "CUSTOMER REPRESENTATIVE / ผู้รับทราบ",
+            "style": 236
+          }
+        ],
+        [
+          {
+            "cell": "B42",
+            "value": "NAME / ชื่อ",
+            "style": 164
+          },
+          {
+            "cell": "H42",
+            "value": "NAME / ชื่อ",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B43",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 164
+          },
+          {
+            "cell": "H43",
+            "value": "SIGNATURE / ลายเซ็น",
+            "style": 185
+          }
+        ],
+        [
+          {
+            "cell": "B44",
+            "value": "DATE / วันที่",
+            "style": 168
+          },
+          {
+            "cell": "H44",
+            "value": "DATE / วันที่",
+            "style": 251
+          }
+        ],
+        [
+          {
+            "cell": "B45",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 423
+          }
+        ]
+      ],
+      "images": 1
+    },
+    {
+      "name": "Evident #2",
+      "rows": 47,
+      "cols": 16,
+      "print_area": "'Evident #2'!$A$1:$M$51",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=49, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [
+        "L7:M7",
+        "B7:C7",
+        "J5:K5",
+        "F6:G6",
+        "F7:G7",
+        "D6:E6",
+        "H6:I6",
+        "J6:K6",
+        "F5:G5",
+        "L5:M5",
+        "L8:M8",
+        "B8:C8",
+        "F8:G8",
+        "B2:M3",
+        "D7:E7",
+        "H7:I7",
+        "J7:K7",
+        "B45:M47",
+        "D8:E8",
+        "B6:C6",
+        "L6:M6",
+        "B10:M44",
+        "B5:C5",
+        "D5:E5",
+        "J4:M4",
+        "H5:I5",
+        "H8:I8",
+        "J8:K8",
+        "B4:I4"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "B2",
+            "value": "PICTURE REPORT / ใบรายงานการให้บริการ",
+            "style": 188
+          }
+        ],
+        [
+          {
+            "cell": "B4",
+            "value": "Use this report to document installation, modification, support, verification, and issue resolution for hardware and software work.",
+            "style": 189
+          },
+          {
+            "cell": "J4",
+            "value": "Doc Code: TT-FRM-SRV-001 | Revision: Rev.00",
+            "style": 403
+          }
+        ],
+        [
+          {
+            "cell": "B5",
+            "value": "REPORT NO. / เลขที่รายงาน",
+            "style": 164
+          },
+          {
+            "cell": "D5",
+            "value": "IOT-UAT-2607-001",
+            "style": 171
+          },
+          {
+            "cell": "F5",
+            "value": "REPORT DATE / วันที่",
+            "style": 185
+          },
+          {
+            "cell": "H5",
+            "value": "2026-07-02 00:00:00",
+            "style": 191
+          },
+          {
+            "cell": "J5",
+            "value": "VISIT TYPE / ประเภทงาน",
+            "style": 185
+          },
+          {
+            "cell": "L5",
+            "value": "Programing/Website",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B6",
+            "value": "CUSTOMER / ลูกค้า",
+            "style": 164
+          },
+          {
+            "cell": "D6",
+            "value": "Thai Asahi Denso Co., Ltd.",
+            "style": 184
+          },
+          {
+            "cell": "F6",
+            "value": "PROJECT / SITE / โครงการ",
+            "style": 185
+          },
+          {
+            "cell": "H6",
+            "value": "IoT Monitoring System for TAD ",
+            "style": 186
+          },
+          {
+            "cell": "J6",
+            "value": "ENVIRONMENT / สภาพแวดล้อม",
+            "style": 185
+          },
+          {
+            "cell": "L6",
+            "value": "Production Line",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B7",
+            "value": "CONTACT PERSON / ผู้ประสานงาน",
+            "style": 164
+          },
+          {
+            "cell": "D7",
+            "value": "Mr. Charkkrit Buayen",
+            "style": 171
+          },
+          {
+            "cell": "F7",
+            "value": "CONTACT / โทร / อีเมล",
+            "style": 185
+          },
+          {
+            "cell": "H7",
+            "value": "092-2874418",
+            "style": 171
+          },
+          {
+            "cell": "J7",
+            "value": "WORK MODE / รูปแบบงาน",
+            "style": 185
+          },
+          {
+            "cell": "L7",
+            "value": "Urgent",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B8",
+            "value": "SERVICE TEAM / ทีมบริการ",
+            "style": 164
+          },
+          {
+            "cell": "D8",
+            "value": "SE",
+            "style": 171
+          },
+          {
+            "cell": "F8",
+            "value": "TICKET / CR NO.",
+            "style": 185
+          },
+          {
+            "cell": "H8",
+            "value": "PJ260039",
+            "style": 171
+          },
+          {
+            "cell": "J8",
+            "value": "REPORT STATUS / สถานะ",
+            "style": 185
+          },
+          {
+            "cell": "L8",
+            "value": "In Progress",
+            "style": 171
+          }
+        ],
+        [
+          {
+            "cell": "B45",
+            "value": "Customer sign-off confirms that the work result has been communicated and acknowledged on the date above.",
+            "style": 423
+          }
+        ]
+      ],
+      "images": 1
+    },
+    {
+      "name": "DAILY REPORT",
+      "rows": 78,
+      "cols": 41,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [
+        "R30:T30",
+        "E28:P28",
+        "U32:W32",
+        "AD31:AF31",
+        "E31:P31",
+        "E30:P30",
+        "E34:P34",
+        "A59:AO59",
+        "U28:W28",
+        "R32:T32",
+        "U33:W33",
+        "U29:W29",
+        "E32:P32",
+        "R33:T33",
+        "U31:W31",
+        "U34:W34",
+        "R29:T29",
+        "A1:Z2",
+        "E33:P33",
+        "R28:T28",
+        "U30:W30",
+        "R31:T31",
+        "R34:T34",
+        "E29:P29"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "A1",
+            "value": "JOB DAILY REPORT",
+            "style": 339
+          },
+          {
+            "cell": "AA1",
+            "value": "DOCUMENT NO.",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A3",
+            "value": "DATE",
+            "style": 2
+          },
+          {
+            "cell": "AA3",
+            "value": "PROJECT NO",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A4",
+            "value": "CUSTOMER NAME",
+            "style": 2
+          },
+          {
+            "cell": "AA4",
+            "value": "PROJECT NAME",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A5",
+            "value": "CONTACT NAME",
+            "style": 2
+          },
+          {
+            "cell": "AA5",
+            "value": "M/C NAME",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A6",
+            "value": "DEPARTMENT",
+            "style": 2
+          },
+          {
+            "cell": "AA6",
+            "value": "HIRATA NAME",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A7",
+            "value": "PHONE NO.",
+            "style": 2
+          },
+          {
+            "cell": "AA7",
+            "value": "PHONE NO",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A10",
+            "value": "WORKING  CONDITION",
+            "style": 7
+          }
+        ],
+        [
+          {
+            "cell": "C12",
+            "value": "   NORMAL CONDITION",
+            "style": 14
+          },
+          {
+            "cell": "M12",
+            "value": "   HOT WORK",
+            "style": 14
+          },
+          {
+            "cell": "T12",
+            "value": "   ELEVATED WORK",
+            "style": 15
+          },
+          {
+            "cell": "AA12",
+            "value": "   CONFINE SPACE",
+            "style": 15
+          },
+          {
+            "cell": "AH12",
+            "value": "   OTHER",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "U13",
+            "value": "(MORE THAN 2M.)",
+            "style": 16
+          },
+          {
+            "cell": "AB13",
+            "value": "(LESS AIR)",
+            "style": 16
+          }
+        ],
+        [
+          {
+            "cell": "A14",
+            "value": "JOB SCOPE",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C16",
+            "value": "   SITE CHECK",
+            "style": 14
+          },
+          {
+            "cell": "O16",
+            "value": "   RELOCATION",
+            "style": 14
+          },
+          {
+            "cell": "X16",
+            "value": "   ALIGNMENT/LEVEL",
+            "style": 14
+          },
+          {
+            "cell": "AG16",
+            "value": "   M/C MODIFICATION",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "C18",
+            "value": "   UNLOADING / UNPACKING",
+            "style": 14
+          },
+          {
+            "cell": "O18",
+            "value": "   ASSEMBLY",
+            "style": 14
+          },
+          {
+            "cell": "X18",
+            "value": "   WIRING",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "C20",
+            "value": "   DISMENTAL",
+            "style": 14
+          },
+          {
+            "cell": "O20",
+            "value": "   M/C INSTALL",
+            "style": 14
+          },
+          {
+            "cell": "X20",
+            "value": "   SOFTWARE",
+            "style": 14
+          },
+          {
+            "cell": "AG20",
+            "value": "   OTHER",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "A22",
+            "value": "PROGRESS",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C24",
+            "value": "   ON SCHEDULE",
+            "style": 14
+          },
+          {
+            "cell": "O24",
+            "value": "   DELAY",
+            "style": 14
+          },
+          {
+            "cell": "X24",
+            "value": "   FINISH",
+            "style": 14
+          },
+          {
+            "cell": "AG24",
+            "value": "   CONTINUE ON",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "A26",
+            "value": "MANPOWER",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "E28",
+            "value": "ITEM",
+            "style": 338
+          },
+          {
+            "cell": "R28",
+            "value": "ME",
+            "style": 337
+          },
+          {
+            "cell": "U28",
+            "value": "EE",
+            "style": 337
+          }
+        ],
+        [
+          {
+            "cell": "E29",
+            "value": "   ENGINEER",
+            "style": 335
+          }
+        ],
+        [
+          {
+            "cell": "E30",
+            "value": "   S/V",
+            "style": 335
+          }
+        ],
+        [
+          {
+            "cell": "E31",
+            "value": "   FOREMAN",
+            "style": 335
+          },
+          {
+            "cell": "AD31",
+            "value": "TIME",
+            "style": 337
+          }
+        ],
+        [
+          {
+            "cell": "E32",
+            "value": "   WORKER",
+            "style": 335
+          },
+          {
+            "cell": "AE32",
+            "value": "START ",
+            "style": 20
+          }
+        ],
+        [
+          {
+            "cell": "E33",
+            "value": "   CAR",
+            "style": 335
+          },
+          {
+            "cell": "AE33",
+            "value": "FINISH",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "E34",
+            "value": "   TRUCK",
+            "style": 335
+          }
+        ],
+        [
+          {
+            "cell": "A37",
+            "value": "NOTE",
+            "style": 29
+          }
+        ],
+        [
+          {
+            "cell": "A59",
+            "value": "FOR CUSTOMER",
+            "style": 336
+          }
+        ],
+        [
+          {
+            "cell": "A61",
+            "value": "1",
+            "style": 45
+          },
+          {
+            "cell": "B61",
+            "value": "CLEAN UP AFTER WORK",
+            "style": 46
+          },
+          {
+            "cell": "L61",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P61",
+            "value": "NO",
+            "style": 48
+          },
+          {
+            "cell": "V61",
+            "value": "SPEACIAL REQUEST :",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "A63",
+            "value": "2",
+            "style": 45
+          },
+          {
+            "cell": "B63",
+            "value": "WORKING WITH SAFTY RULE",
+            "style": 46
+          },
+          {
+            "cell": "L63",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P63",
+            "value": "NO",
+            "style": 48
+          }
+        ],
+        [
+          {
+            "cell": "B65",
+            "value": "PROGRESS",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "E67",
+            "value": "ON SCHEDULE",
+            "style": 46
+          },
+          {
+            "cell": "L67",
+            "value": "DELAY",
+            "style": 46
+          },
+          {
+            "cell": "P67",
+            "value": "FINISH",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E69",
+            "value": "CONTINUE ON",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E73",
+            "value": "     HIRATA SIGN",
+            "style": 2
+          },
+          {
+            "cell": "AA73",
+            "value": "CUSTOMER SIGN",
+            "style": 72
+          }
+        ],
+        [
+          {
+            "cell": "AH76",
+            "value": "DATE",
+            "style": 74
+          }
+        ],
+        [
+          {
+            "cell": "E77",
+            "value": "(                           )",
+            "style": 75
+          },
+          {
+            "cell": "AA77",
+            "value": "(                            )",
+            "style": 75
+          },
+          {
+            "cell": "AH77",
+            "value": "TIME",
+            "style": 74
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "Rev11",
+      "rows": 80,
+      "cols": 41,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [
+        "R30:T30",
+        "E36:Q36",
+        "U32:W32",
+        "R36:T36",
+        "AD31:AF31",
+        "R35:T35",
+        "E32:Q32",
+        "R32:T32",
+        "U33:W33",
+        "A61:AO61",
+        "E33:Q33",
+        "R33:T33",
+        "U35:W35",
+        "E35:Q35",
+        "U31:W31",
+        "U34:W34",
+        "A1:Z2",
+        "E31:Q31",
+        "E34:Q34",
+        "U36:W36",
+        "U30:W30",
+        "E30:Q30",
+        "R31:T31",
+        "R34:T34"
+      ],
+      "cells": [
+        [
+          {
+            "cell": "A1",
+            "value": "JOB DAILY REPORT",
+            "style": 339
+          },
+          {
+            "cell": "AA1",
+            "value": " DOCUMENT NO.",
+            "style": 2
+          }
+        ],
+        [
+          {
+            "cell": "A3",
+            "value": "DATE",
+            "style": 79
+          },
+          {
+            "cell": "AA3",
+            "value": " PROJECT NO",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A4",
+            "value": "CUSTOMER NAME",
+            "style": 79
+          },
+          {
+            "cell": "AA4",
+            "value": " PROJECT NAME",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A5",
+            "value": "CONTACT NAME",
+            "style": 79
+          },
+          {
+            "cell": "AA5",
+            "value": " M/C NAME",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A6",
+            "value": "DEPARTMENT",
+            "style": 79
+          },
+          {
+            "cell": "AA6",
+            "value": " HIRATA NAME",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A7",
+            "value": "PHONE NO.",
+            "style": 79
+          },
+          {
+            "cell": "AA7",
+            "value": " PHONE NO",
+            "style": 79
+          }
+        ],
+        [
+          {
+            "cell": "A10",
+            "value": " WORKING  CONDITION",
+            "style": 7
+          }
+        ],
+        [
+          {
+            "cell": "C12",
+            "value": "   NORMAL CONDITION",
+            "style": 14
+          },
+          {
+            "cell": "M12",
+            "value": "   HOT WORK",
+            "style": 14
+          },
+          {
+            "cell": "T12",
+            "value": "   ELEVATED WORK",
+            "style": 15
+          },
+          {
+            "cell": "AA12",
+            "value": "   CONFINE SPACE",
+            "style": 15
+          },
+          {
+            "cell": "AH12",
+            "value": "   OTHER",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "U13",
+            "value": "(MORE THAN 2M.)",
+            "style": 16
+          },
+          {
+            "cell": "AB13",
+            "value": "(LESS AIR)",
+            "style": 16
+          }
+        ],
+        [
+          {
+            "cell": "A14",
+            "value": " JOB SCOPE",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C16",
+            "value": "   SITE CHECK",
+            "style": 80
+          },
+          {
+            "cell": "K16",
+            "value": "   RELOCATION",
+            "style": 80
+          },
+          {
+            "cell": "P16",
+            "value": "   ALIGNMENT/LEVEL",
+            "style": 80
+          },
+          {
+            "cell": "V16",
+            "value": "   M/C MODIFICATION",
+            "style": 80
+          },
+          {
+            "cell": "AB16",
+            "value": "   CARRY IN",
+            "style": 80
+          },
+          {
+            "cell": "AG16",
+            "value": "   ROBOT TEACHNG",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "C18",
+            "value": "   UNLOADING / UNPACKING",
+            "style": 80
+          },
+          {
+            "cell": "K18",
+            "value": "   ASSEMBLY",
+            "style": 80
+          },
+          {
+            "cell": "P18",
+            "value": "   WIRING",
+            "style": 80
+          },
+          {
+            "cell": "V18",
+            "value": "   FLOOR MAKING",
+            "style": 81
+          },
+          {
+            "cell": "AB18",
+            "value": "   AIR TUBING",
+            "style": 80
+          },
+          {
+            "cell": "AG18",
+            "value": "   I/O CHECK",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "C20",
+            "value": "   DISMENTAL",
+            "style": 80
+          },
+          {
+            "cell": "K20",
+            "value": "   M/C INSTALL",
+            "style": 80
+          },
+          {
+            "cell": "P20",
+            "value": "   SOFTWARE",
+            "style": 80
+          },
+          {
+            "cell": "V20",
+            "value": "   DESIGN REVIEW",
+            "style": 80
+          },
+          {
+            "cell": "AB20",
+            "value": "   ADJUSTMENT",
+            "style": 80
+          },
+          {
+            "cell": "AG20",
+            "value": "   FACTORY SHIPPING",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "C22",
+            "value": "   TRAINING",
+            "style": 80
+          },
+          {
+            "cell": "K22",
+            "value": "   TEST RUN",
+            "style": 80
+          },
+          {
+            "cell": "P22",
+            "value": "   PIPING",
+            "style": 80
+          },
+          {
+            "cell": "V22",
+            "value": "   STAND BY",
+            "style": 80
+          },
+          {
+            "cell": "AB22",
+            "value": "   BUY-OFF",
+            "style": 80
+          },
+          {
+            "cell": "AG22",
+            "value": "   OTHER",
+            "style": 80
+          }
+        ],
+        [
+          {
+            "cell": "A24",
+            "value": " PROGRESS",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "C26",
+            "value": "   ON SCHEDULE",
+            "style": 14
+          },
+          {
+            "cell": "O26",
+            "value": "   DELAY",
+            "style": 14
+          },
+          {
+            "cell": "X26",
+            "value": "   FINISH",
+            "style": 14
+          },
+          {
+            "cell": "AG26",
+            "value": "   CONTINUE ON",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "A28",
+            "value": " MANPOWER",
+            "style": 10
+          }
+        ],
+        [
+          {
+            "cell": "E30",
+            "value": "ITEM",
+            "style": 342
+          },
+          {
+            "cell": "R30",
+            "value": "ME",
+            "style": 337
+          },
+          {
+            "cell": "U30",
+            "value": "EE",
+            "style": 337
+          }
+        ],
+        [
+          {
+            "cell": "E31",
+            "value": "   ENGINEER",
+            "style": 341
+          },
+          {
+            "cell": "AD31",
+            "value": "TIME",
+            "style": 340
+          }
+        ],
+        [
+          {
+            "cell": "E32",
+            "value": "   SUPER VISOR",
+            "style": 341
+          }
+        ],
+        [
+          {
+            "cell": "E33",
+            "value": "   FOREMAN",
+            "style": 341
+          },
+          {
+            "cell": "AE33",
+            "value": "START ",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "E34",
+            "value": "   WORKER",
+            "style": 341
+          }
+        ],
+        [
+          {
+            "cell": "E35",
+            "value": "   CAR",
+            "style": 341
+          },
+          {
+            "cell": "AE35",
+            "value": "FINISH",
+            "style": 14
+          }
+        ],
+        [
+          {
+            "cell": "E36",
+            "value": "   TRUCK",
+            "style": 341
+          }
+        ],
+        [
+          {
+            "cell": "A39",
+            "value": " NOTE",
+            "style": 29
+          }
+        ],
+        [
+          {
+            "cell": "A61",
+            "value": "FOR CUSTOMER",
+            "style": 336
+          }
+        ],
+        [
+          {
+            "cell": "A63",
+            "value": "1",
+            "style": 45
+          },
+          {
+            "cell": "B63",
+            "value": "CLEAN UP AFTER WORK",
+            "style": 46
+          },
+          {
+            "cell": "L63",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P63",
+            "value": "NO",
+            "style": 48
+          },
+          {
+            "cell": "V63",
+            "value": "SPEACIAL REQUEST :",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "A65",
+            "value": "2",
+            "style": 45
+          },
+          {
+            "cell": "B65",
+            "value": "WORKING WITH SAFTY RULE",
+            "style": 46
+          },
+          {
+            "cell": "L65",
+            "value": "YES",
+            "style": 48
+          },
+          {
+            "cell": "P65",
+            "value": "NO",
+            "style": 48
+          }
+        ],
+        [
+          {
+            "cell": "B67",
+            "value": "PROGRESS",
+            "style": 51
+          }
+        ],
+        [
+          {
+            "cell": "E69",
+            "value": "ON SCHEDULE",
+            "style": 46
+          },
+          {
+            "cell": "L69",
+            "value": "DELAY",
+            "style": 46
+          },
+          {
+            "cell": "P69",
+            "value": "FINISH",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E71",
+            "value": "CONTINUE ON",
+            "style": 46
+          }
+        ],
+        [
+          {
+            "cell": "E75",
+            "value": "     HIRATA SIGN",
+            "style": 2
+          },
+          {
+            "cell": "AA75",
+            "value": "CUSTOMER SIGN",
+            "style": 72
+          }
+        ],
+        [
+          {
+            "cell": "AH78",
+            "value": "DATE",
+            "style": 74
+          }
+        ],
+        [
+          {
+            "cell": "E79",
+            "value": "(                           )",
+            "style": 75
+          },
+          {
+            "cell": "AA79",
+            "value": "(                            )",
+            "style": 75
+          },
+          {
+            "cell": "AH79",
+            "value": "TIME",
+            "style": 74
+          }
+        ]
+      ],
+      "images": 0
+    },
+    {
+      "name": "SC10",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "SC15",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "SC20",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "SC30",
+      "rows": 1,
+      "cols": 1,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "DS",
+      "rows": 102,
+      "cols": 63,
+      "print_area": "'DS'!$A$1:$BJ$101",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "graph sheet",
+      "rows": 101,
+      "cols": 62,
+      "print_area": "'graph sheet'!$A$1:$BH$100",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation='portrait', paperSize=9, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=300, verticalDpi=300, copies=None, id=None",
+      "merged": [
+        "A1:AD2",
+        "A5:AD6",
+        "A9:AD10",
+        "BI1:BJ10",
+        "A3:AD4",
+        "AE9:BH10",
+        "AE3:BH4",
+        "A7:AD8",
+        "AE7:BH8",
+        "AE1:BH2",
+        "AE5:BH6"
+      ],
+      "cells": [],
+      "images": 0
+    },
+    {
+      "name": "Lists",
+      "rows": 12,
+      "cols": 10,
+      "print_area": "",
+      "page_setup": "<openpyxl.worksheet.page.PrintPageSetup object>\nParameters:\norientation=None, paperSize=None, scale=None, fitToHeight=None, fitToWidth=None, firstPageNumber=None, useFirstPageNumber=None, paperHeight=None, paperWidth=None, pageOrder=None, usePrinterDefaults=None, blackAndWhite=None, draft=None, cellComments=None, errors=None, horizontalDpi=None, verticalDpi=None, copies=None, id=None",
+      "merged": [],
+      "cells": [
+        [
+          {
+            "cell": "A1",
+            "value": "Installation",
+            "style": 0
+          },
+          {
+            "cell": "B1",
+            "value": "Indoor",
+            "style": 0
+          },
+          {
+            "cell": "C1",
+            "value": "Normal",
+            "style": 0
+          },
+          {
+            "cell": "D1",
+            "value": "Draft",
+            "style": 0
+          },
+          {
+            "cell": "E1",
+            "value": "Install",
+            "style": 0
+          },
+          {
+            "cell": "F1",
+            "value": "Completed",
+            "style": 0
+          },
+          {
+            "cell": "G1",
+            "value": "Hardware",
+            "style": 0
+          },
+          {
+            "cell": "H1",
+            "value": "Pass",
+            "style": 0
+          },
+          {
+            "cell": "I1",
+            "value": "Yes",
+            "style": 0
+          },
+          {
+            "cell": "J1",
+            "value": "Accepted",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A2",
+            "value": "Maintenance",
+            "style": 0
+          },
+          {
+            "cell": "B2",
+            "value": "Outdoor",
+            "style": 0
+          },
+          {
+            "cell": "C2",
+            "value": "Urgent",
+            "style": 0
+          },
+          {
+            "cell": "D2",
+            "value": "Issued",
+            "style": 0
+          },
+          {
+            "cell": "E2",
+            "value": "Replace",
+            "style": 0
+          },
+          {
+            "cell": "F2",
+            "value": "Pending",
+            "style": 0
+          },
+          {
+            "cell": "G2",
+            "value": "Software",
+            "style": 0
+          },
+          {
+            "cell": "H2",
+            "value": "Fail",
+            "style": 0
+          },
+          {
+            "cell": "I2",
+            "value": "No",
+            "style": 0
+          },
+          {
+            "cell": "J2",
+            "value": "Accepted with Pending",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A3",
+            "value": "Issue Support",
+            "style": 0
+          },
+          {
+            "cell": "B3",
+            "value": "Production Line",
+            "style": 0
+          },
+          {
+            "cell": "C3",
+            "value": "Shutdown",
+            "style": 0
+          },
+          {
+            "cell": "D3",
+            "value": "Pending Customer",
+            "style": 0
+          },
+          {
+            "cell": "E3",
+            "value": "Remove",
+            "style": 0
+          },
+          {
+            "cell": "F3",
+            "value": "In Progress",
+            "style": 0
+          },
+          {
+            "cell": "G3",
+            "value": "Network",
+            "style": 0
+          },
+          {
+            "cell": "H3",
+            "value": "Conditional Pass",
+            "style": 0
+          },
+          {
+            "cell": "I3",
+            "value": "N/A",
+            "style": 0
+          },
+          {
+            "cell": "J3",
+            "value": "Pending Confirmation",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A4",
+            "value": "Survey / Checking",
+            "style": 0
+          },
+          {
+            "cell": "B4",
+            "value": "Office",
+            "style": 0
+          },
+          {
+            "cell": "C4",
+            "value": "Trial Run",
+            "style": 0
+          },
+          {
+            "cell": "D4",
+            "value": "Closed",
+            "style": 0
+          },
+          {
+            "cell": "E4",
+            "value": "Relocate",
+            "style": 0
+          },
+          {
+            "cell": "F4",
+            "value": "N/A",
+            "style": 0
+          },
+          {
+            "cell": "G4",
+            "value": "Configuration",
+            "style": 0
+          },
+          {
+            "cell": "H4",
+            "value": "Pending",
+            "style": 0
+          },
+          {
+            "cell": "J4",
+            "value": "Not Accepted Yet",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A5",
+            "value": "Modification",
+            "style": 0
+          },
+          {
+            "cell": "B5",
+            "value": "Warehouse",
+            "style": 0
+          },
+          {
+            "cell": "C5",
+            "value": "Online Support",
+            "style": 0
+          },
+          {
+            "cell": "D5",
+            "value": "Need Follow-up",
+            "style": 0
+          },
+          {
+            "cell": "E5",
+            "value": "Wiring",
+            "style": 0
+          },
+          {
+            "cell": "G5",
+            "value": "Operation",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A6",
+            "value": "Training",
+            "style": 0
+          },
+          {
+            "cell": "B6",
+            "value": "Server Room",
+            "style": 0
+          },
+          {
+            "cell": "C6",
+            "value": "Standby",
+            "style": 0
+          },
+          {
+            "cell": "E6",
+            "value": "Testing",
+            "style": 0
+          },
+          {
+            "cell": "G6",
+            "value": "Environment",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A7",
+            "value": "Preventive Maintenance",
+            "style": 0
+          },
+          {
+            "cell": "B7",
+            "value": "Utility Area",
+            "style": 0
+          },
+          {
+            "cell": "C7",
+            "value": "Other",
+            "style": 0
+          },
+          {
+            "cell": "E7",
+            "value": "Inspection",
+            "style": 0
+          },
+          {
+            "cell": "G7",
+            "value": "User Request",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A8",
+            "value": "Replacement",
+            "style": 0
+          },
+          {
+            "cell": "B8",
+            "value": "Other",
+            "style": 0
+          },
+          {
+            "cell": "E8",
+            "value": "Update",
+            "style": 0
+          },
+          {
+            "cell": "G8",
+            "value": "Unknown",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A9",
+            "value": "Emergency Support",
+            "style": 0
+          },
+          {
+            "cell": "E9",
+            "value": "Backup",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "A10",
+            "value": "Other",
+            "style": 0
+          },
+          {
+            "cell": "E10",
+            "value": "Restore",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "E11",
+            "value": "Training",
+            "style": 0
+          }
+        ],
+        [
+          {
+            "cell": "E12",
+            "value": "Other",
+            "style": 0
+          }
+        ]
+      ],
+      "images": 0
+    }
+  ]
+}

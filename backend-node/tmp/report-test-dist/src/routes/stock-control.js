@@ -1,0 +1,67 @@
+import sql from "mssql/msnodesqlv8.js";
+import { issueDocumentNumber } from "../document-number.js";
+import { ApiError } from "../errors.js";
+import { bodyObject, oneOf, optionalBodyText, optionalText, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { insertMaterialAudit } from "../material-audit.js";
+import { appendStockLedger } from "../stock-ledger.js";
+function todayIn(timeZone) { const p = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); const v = Object.fromEntries(p.map((x) => [x.type, x.value])); return `${v.year}-${v.month}-${v.day}`; }
+function change(value, allowNegative) { const minimum = allowNegative ? -1_000_000_000 : 0.0001; if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > 1_000_000_000 || (allowNegative && value === 0))
+    throw new ApiError(400, "validation_failed", allowNegative ? "A valid non-zero quantity change is required." : "A valid quantity is required."); if (!value.toString().toLowerCase().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > 4)
+    throw new ApiError(400, "validation_failed", "Quantity cannot have more than 4 decimal places."); return value; }
+export function registerStockControlRoutes(app, config, database, users) {
+    app.get("/api/v1/stock-adjustments", async (request) => {
+        await users.demandPermission(request, "inventory.read");
+        const status = optionalText(request.query.status, 30, "Status");
+        const result = await database.query(`SELECT a.id,a.adjustment_no,a.item_id,i.item_code,i.part_no,i.description,a.qty_change,a.reason,a.requested_by,ru.name requested_by_name,a.status,a.approved_by,au.name approved_by_name,a.approved_at,a.row_version,COALESCE(vb.usable,0) usable
+    FROM dbo.stock_adjustments a INNER JOIN dbo.mat_items i ON i.id=a.item_id INNER JOIN dbo.users ru ON ru.id=a.requested_by LEFT JOIN dbo.users au ON au.id=a.approved_by LEFT JOIN dbo.v_item_balances vb ON vb.item_id=a.item_id WHERE (@status IS NULL OR a.status=@status) ORDER BY a.id DESC;`, (r) => r.input("status", sql.NVarChar(30), status));
+        return result.recordset.map((row) => ({ id: Number(row.id), number: row.adjustment_no, itemId: Number(row.item_id), itemCode: row.item_code, partNumber: row.part_no, description: row.description, quantityChange: Number(row.qty_change), reason: row.reason, requestedById: Number(row.requested_by), requestedByName: row.requested_by_name, status: row.status, approvedById: row.approved_by === null ? null : Number(row.approved_by), approvedByName: row.approved_by_name, approvedAt: row.approved_at, rowVersion: row.row_version.toString("base64"), currentUsable: Number(row.usable) }));
+    });
+    app.post("/api/v1/stock-adjustments", async (request, reply) => { await users.demandPermission(request, "inventory.receive"); const actor = await users.required(request); const body = bodyObject(request.body), itemId = requiredInteger(body.itemId, "Item", 1), quantityChange = change(body.quantityChange, true), reason = requiredText(body.reason, 20_000, "Reason"), today = todayIn(config.businessTimeZone); const created = await database.transaction(async (transaction) => { const item = new sql.Request(transaction); item.input("id", sql.BigInt, itemId); const row = (await item.query(`SELECT i.item_code,COALESCE((SELECT SUM(t.qty) FROM dbo.stock_txns t WHERE t.item_id=i.id AND t.bucket=N'stock'),0) usable FROM dbo.mat_items i WHERE i.id=@id AND i.deleted_at IS NULL AND i.is_active=1;`)).recordset[0]; if (!row)
+        throw new ApiError(404, "item_not_found", "Item not found or inactive."); const usable = Number(row.usable); if (usable + quantityChange < 0)
+        throw new ApiError(409, "negative_balance", `${row.item_code}: the adjustment would take stock below zero (${usable} on hand).`, { onHand: usable }); const number = await issueDocumentNumber(transaction, "ADJ", today); const insert = new sql.Request(transaction); insert.input("number", sql.NVarChar(30), number); insert.input("item", sql.BigInt, itemId); insert.input("qty", sql.Decimal(19, 4), quantityChange); insert.input("reason", sql.NVarChar(sql.MAX), reason); insert.input("actor", sql.BigInt, actor.id); const adjustment = (await insert.query(`INSERT INTO dbo.stock_adjustments(adjustment_no,item_id,qty_change,reason,requested_by,status) OUTPUT inserted.id,inserted.row_version VALUES(@number,@item,@qty,@reason,@actor,N'Pending Approval');`)).recordset[0]; const id = Number(adjustment.id); await insertMaterialAudit(transaction, actor, "Requested stock adjustment", "Adjustment", id, number, { onHand: usable }, { change: quantityChange, itemCode: row.item_code }, { quantity: quantityChange, reason }); return { id, number, status: "Pending Approval", rowVersion: adjustment.row_version.toString("base64") }; }); return reply.status(201).header("Location", `/api/v1/stock-adjustments/${created.id}`).send(created); });
+    app.post("/api/v1/stock-adjustments/:id/decide", async (request) => {
+        await users.demandPermission(request, "inventory.adjust");
+        const actor = await users.required(request);
+        const id = positiveLong(request.params.id, "Adjustment id"), body = bodyObject(request.body), decision = oneOf(requiredText(body.decision, 20, "Decision"), "Decision", ["Approve", "Reject"]), comment = optionalBodyText(body.comment, 20_000, "Comment"), approve = decision === "Approve", today = todayIn(config.businessTimeZone);
+        if (!approve && !comment)
+            throw new ApiError(400, "comment_required", "A comment is required when rejecting an adjustment.");
+        return database.transaction(async (transaction) => {
+            const read = new sql.Request(transaction);
+            read.input("id", sql.BigInt, id);
+            const row = (await read.query(`SELECT a.adjustment_no,a.item_id,a.qty_change,a.reason,a.requested_by,a.status,COALESCE(i.location,N'') location,i.avg_unit_cost,i.item_code FROM dbo.stock_adjustments a WITH (UPDLOCK,HOLDLOCK) INNER JOIN dbo.mat_items i WITH (UPDLOCK,HOLDLOCK) ON i.id=a.item_id WHERE a.id=@id;`)).recordset[0];
+            if (!row)
+                throw new ApiError(404, "adjustment_not_found", "Stock adjustment not found.");
+            if (row.status !== "Pending Approval")
+                throw new ApiError(409, "adjustment_decided", `This adjustment is already '${row.status}'.`);
+            if (Number(row.requested_by) === actor.id)
+                throw new ApiError(403, "self_approval_forbidden", "The requester cannot approve their own stock adjustment.");
+            const qtyChange = Number(row.qty_change), itemId = Number(row.item_id);
+            let resultingBalance = null;
+            if (approve) {
+                const balance = new sql.Request(transaction);
+                balance.input("item", sql.BigInt, itemId);
+                const usable = Number((await balance.query(`SELECT COALESCE(SUM(t.qty),0) usable FROM dbo.stock_txns t WITH (UPDLOCK,HOLDLOCK,INDEX(IX_stock_txns_item)) WHERE t.item_id=@item AND t.bucket=N'stock';`)).recordset[0].usable);
+                resultingBalance = usable + qtyChange;
+                if (resultingBalance < 0)
+                    throw new ApiError(409, "negative_balance", `${row.item_code}: stock changed while this adjustment was pending; approving ${qtyChange} would take the current ${usable} balance below zero.`, { onHand: usable, requestedChange: qtyChange, resultingBalance });
+            }
+            const update = new sql.Request(transaction);
+            update.input("status", sql.NVarChar(30), approve ? "Approved" : "Rejected");
+            update.input("actor", sql.BigInt, actor.id);
+            update.input("id", sql.BigInt, id);
+            const updated = (await update.query(`UPDATE dbo.stock_adjustments SET status=@status,approved_by=@actor,approved_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id AND status=N'Pending Approval';`)).recordset[0];
+            if (!updated)
+                throw new ApiError(409, "concurrency_conflict", "This adjustment changed. Reload and try again.");
+            if (approve)
+                await appendStockLedger(transaction, `adj:${id}`, "STOCK_ADJUSTMENT", itemId, qtyChange, "stock", String(row.location), String(row.adjustment_no), null, Number(row.avg_unit_cost), actor.id, String(row.reason), today);
+            await insertMaterialAudit(transaction, actor, `${decision} stock adjustment`, "Adjustment", id, String(row.adjustment_no), { status: "Pending Approval" }, { status: approve ? "Approved" : "Rejected", change: qtyChange, resultingBalance }, { quantity: qtyChange, reason: comment ?? String(row.reason), approverId: actor.id });
+            return { id, status: approve ? "Approved" : "Rejected", rowVersion: updated.row_version.toString("base64") };
+        });
+    });
+    app.get("/api/v1/quarantine", async (request) => { await users.demandPermission(request, "inventory.read"); const result = await database.query(`SELECT i.id,i.item_code,i.part_no,i.description,i.brand,i.unit,COALESCE(vb.quarantine,0) quarantine,COALESCE(vb.usable,0) usable,i.avg_unit_cost,(SELECT MAX(t.occurred_at) FROM dbo.stock_txns t WHERE t.item_id=i.id AND t.bucket=N'quarantine') held_since FROM dbo.mat_items i LEFT JOIN dbo.v_item_balances vb ON vb.item_id=i.id WHERE COALESCE(vb.quarantine,0)>0 ORDER BY i.item_code;`); return result.recordset.map((row) => ({ itemId: Number(row.id), itemCode: row.item_code, partNumber: row.part_no, description: row.description, brand: row.brand, unit: row.unit, quarantineQuantity: Number(row.quarantine), usableQuantity: Number(row.usable), averageUnitCost: Number(row.avg_unit_cost), heldSince: row.held_since })); });
+    app.post("/api/v1/quarantine/release", async (request) => { await users.demandPermission(request, "inventory.adjust"); const actor = await users.required(request); const body = bodyObject(request.body), itemId = requiredInteger(body.itemId, "Item", 1), quantity = change(body.quantity, false), outcome = oneOf(requiredText(body.outcome, 30, "Outcome"), "Outcome", ["Accept", "Return to Supplier", "Scrap"]), reason = requiredText(body.reason, 20_000, "Reason"), today = todayIn(config.businessTimeZone); return database.transaction(async (transaction) => { const read = new sql.Request(transaction); read.input("item", sql.BigInt, itemId); const row = (await read.query(`SELECT i.item_code,COALESCE(i.location,N'') location,i.avg_unit_cost,COALESCE((SELECT SUM(t.qty) FROM dbo.stock_txns t WITH (UPDLOCK,HOLDLOCK) WHERE t.item_id=i.id AND t.bucket=N'quarantine'),0) quarantine FROM dbo.mat_items i WHERE i.id=@item AND i.deleted_at IS NULL;`)).recordset[0]; if (!row)
+        throw new ApiError(404, "item_not_found", "Item not found."); const quarantine = Number(row.quarantine); if (quantity > quarantine)
+        throw new ApiError(409, "insufficient_quarantine", `${row.item_code}: only ${quarantine} is held in quarantine.`, { quarantine }); const sequenceRequest = new sql.Request(transaction); sequenceRequest.input("prefix", sql.NVarChar(200), `qc:${itemId}:%`); const sequence = Number((await sequenceRequest.query(`SELECT COUNT(*) count FROM dbo.stock_txns WHERE source_event_key LIKE @prefix AND txn_type=N'QC_RELEASE_OUT';`)).recordset[0].count) + 1; const reference = `QC-${today.replaceAll("-", "")}-${itemId}-${sequence}`; await appendStockLedger(transaction, `qc:${itemId}:${sequence}:out`, "QC_RELEASE_OUT", itemId, -quantity, "quarantine", String(row.location), reference, null, Number(row.avg_unit_cost), actor.id, `${outcome} — ${reason}`, today); if (outcome === "Accept")
+        await appendStockLedger(transaction, `qc:${itemId}:${sequence}:in`, "QC_RELEASE_IN", itemId, quantity, "stock", String(row.location), reference, null, Number(row.avg_unit_cost), actor.id, `Passed inspection — ${reason}`, today); await insertMaterialAudit(transaction, actor, `Quarantine ${outcome.toLowerCase()}`, "Stock", itemId, String(row.item_code), { quarantine }, { outcome, quantity, remaining: quarantine - quantity }, { quantity, reason, approverId: actor.id }); return { itemId, itemCode: row.item_code, outcome, quantity, quarantineRemaining: quarantine - quantity, reference }; }); });
+}
+//# sourceMappingURL=stock-control.js.map

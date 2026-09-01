@@ -39,6 +39,11 @@ function Test-TeamTestApiHealth($Configuration) {
 
 $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
 $listenerConfiguration = Get-TeamTestValidatedListenerConfiguration $settings
+$nodeServerPath = Join-Path $settings.ReleasePath 'dist\src\server.js'
+$legacyApiDll = Join-Path $settings.ReleasePath 'IoTTeamCenter.Api.dll'
+$runtimeKind = if (Test-Path -LiteralPath $nodeServerPath) { 'Node' }
+    elseif (Test-Path -LiteralPath $legacyApiDll) { 'LegacyDotNet' }
+    else { throw 'The saved API release contains neither the Node server nor a recoverable legacy release.' }
 
 if (Test-Path -LiteralPath $pidPath) {
     $existingState = Get-Content -LiteralPath $pidPath -Raw | ConvertFrom-Json
@@ -47,7 +52,11 @@ if (Test-Path -LiteralPath $pidPath) {
     $existingProcess = if ($existingProcessId -gt 0) {
         Get-CimInstance Win32_Process -Filter "ProcessId = $existingProcessId" -ErrorAction SilentlyContinue
     }
-    if ($existingProcess -and $existingProcess.Name -eq 'dotnet.exe' -and $existingProcess.CommandLine -like "*$($existingState.ReleasePath)\IoTTeamCenter.Api.dll*") {
+    $existingIsNode = $existingProcess -and $existingProcess.Name -eq 'node.exe' `
+        -and $existingProcess.CommandLine -like "*$($existingState.ReleasePath)\dist\src\server.js*"
+    $existingIsLegacyDotNet = $existingProcess -and $existingProcess.Name -eq 'dotnet.exe' `
+        -and $existingProcess.CommandLine -like "*$($existingState.ReleasePath)\IoTTeamCenter.Api.dll*"
+    if ($existingIsNode -or $existingIsLegacyDotNet) {
         if (!(Test-ExactApiListeners $listenerConfiguration $existingProcessId) `
             -or !(Test-TeamTestApiHealth $listenerConfiguration)) {
             throw 'The saved API process does not own the exact configured listeners or is unhealthy; refusing to report it as running.'
@@ -73,29 +82,45 @@ $logRoot = Join-Path $RuntimeRoot 'logs'
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 $logStamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture)
 
-$env:ASPNETCORE_ENVIRONMENT = 'Staging'
-$env:ASPNETCORE_URLS = $listenerConfiguration.ListenUrls
 $env:AllowedHosts = $settings.AllowedHosts
 $env:Authentication__Mode = 'TeamTest'
 $env:Authentication__TeamTestSigningKey = $signingKey
 $env:Database__TrustServerCertificateForTeamTest = [string]$settings.TrustServerCertificateForTeamTest
-$env:TeamTest__AllowPrivateLanHttp = [string]$listenerConfiguration.AllowPrivateLanHttp
 if ($applicationRolePassword) {
     $env:Database__ApplicationRoleName = $settings.AppLogin
     $env:Database__ApplicationRolePassword = $applicationRolePassword
 }
 $env:Cors__AllowedOrigins__0 = $settings.FrontendOrigin
-$env:Business__TimeZoneId = 'SE Asia Standard Time'
 $env:ConnectionStrings__IoTTeamCenter = $connectionString
 $env:DocumentStorage__Mode = 'Local'
 $env:DocumentStorage__RootPath = (Join-Path $RuntimeRoot 'documents')
+$env:Email__Mode = 'Disabled'
 
-$dotnetPath = (Get-Command dotnet -ErrorAction Stop).Source
-$apiDll = Join-Path $settings.ReleasePath 'IoTTeamCenter.Api.dll'
-if (!(Test-Path -LiteralPath $apiDll)) { throw "Published API is missing: $apiDll" }
+$commandPath = $null
+$commandArguments = @()
+if ($runtimeKind -eq 'Node') {
+    $env:NODE_ENV = 'staging'
+    $env:Business__TimeZoneId = 'Asia/Bangkok'
+    $env:HOST = $listenerConfiguration.Addresses -join ';'
+    $env:PORT = [string]$listenerConfiguration.ApiPort
+    $commandPath = (Get-Command node -ErrorAction Stop).Source
+    # Start-Process joins ArgumentList entries into one command line. Quote the
+    # script path explicitly because the saved release root contains spaces.
+    $commandArguments = @('"' + $nodeServerPath + '"')
+}
+else {
+    # Recovery path for the release that predates the Node cutover. New
+    # releases are always Node; this branch exists only for atomic rollback.
+    $env:ASPNETCORE_ENVIRONMENT = 'Staging'
+    $env:Business__TimeZoneId = 'SE Asia Standard Time'
+    $env:ASPNETCORE_URLS = $listenerConfiguration.ListenUrls
+    $env:TeamTest__AllowPrivateLanHttp = [string]$listenerConfiguration.AllowPrivateLanHttp
+    $commandPath = (Get-Command dotnet -ErrorAction Stop).Source
+    $commandArguments = @('"' + $legacyApiDll + '"')
+}
 
-$process = Start-Process -FilePath $dotnetPath `
-    -ArgumentList @($apiDll) `
+$process = Start-Process -FilePath $commandPath `
+    -ArgumentList $commandArguments `
     -WorkingDirectory $settings.ReleasePath `
     -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $logRoot "api-$logStamp.out.log") `
@@ -117,6 +142,7 @@ try {
     [IO.File]::WriteAllText($pidPath, (@{
         ProcessId = $process.Id
         ReleasePath = $settings.ReleasePath
+        Runtime = $runtimeKind
         StartedAt = [DateTimeOffset]::Now.ToString('O')
     } | ConvertTo-Json))
     [pscustomobject]@{
@@ -137,6 +163,11 @@ finally {
     $env:Database__ApplicationRoleName = $null
     $env:Database__ApplicationRolePassword = $null
     $env:TeamTest__AllowPrivateLanHttp = $null
+    $env:NODE_ENV = $null
+    $env:HOST = $null
+    $env:PORT = $null
+    $env:ASPNETCORE_ENVIRONMENT = $null
+    $env:ASPNETCORE_URLS = $null
     $connectionString = $null
     $signingKey = $null
     $applicationRolePassword = $null

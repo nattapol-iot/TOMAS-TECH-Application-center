@@ -51,19 +51,19 @@ Assert-Throws { [void](Get-TeamTestValidatedListenerConfiguration $validSettings
 $entrypoint = [IO.Path]::GetFullPath((Join-Path $env:SystemDrive 'Team Test\vinext\dist\cli.js'))
 $goodProcess = [pscustomobject]@{
     Name = 'node.exe'
-    CommandLine = '"C:\Program Files\nodejs\node.exe" "' + $entrypoint + '" dev --hostname 192.168.1.140 --port 3000'
+    CommandLine = '"C:\Program Files\nodejs\node.exe" "' + $entrypoint + '" start --hostname 192.168.1.140 --port 3000'
 }
 Assert-True (Test-TeamTestLanFrontendCommandLine $goodProcess $entrypoint '192.168.1.140' 3000) 'Exact frontend command line should pass.'
 $wrongHostProcess = [pscustomobject]@{
     Name = 'node.exe'
-    CommandLine = '"C:\Program Files\nodejs\node.exe" "' + $entrypoint + '" dev --hostname 0.0.0.0 --port 3000'
+    CommandLine = '"C:\Program Files\nodejs\node.exe" "' + $entrypoint + '" start --hostname 0.0.0.0 --port 3000'
 }
 Assert-False (Test-TeamTestLanFrontendCommandLine $wrongHostProcess $entrypoint '192.168.1.140' 3000) 'Wildcard frontend host must fail.'
 $wrongCommandProcess = [pscustomobject]@{
     Name = 'node.exe'
     CommandLine = '"C:\Program Files\nodejs\node.exe" "' + $entrypoint + '" build --hostname 192.168.1.140 --port 3000'
 }
-Assert-False (Test-TeamTestLanFrontendCommandLine $wrongCommandProcess $entrypoint '192.168.1.140' 3000) 'Non-dev command must fail.'
+Assert-False (Test-TeamTestLanFrontendCommandLine $wrongCommandProcess $entrypoint '192.168.1.140' 3000) 'Non-start command must fail.'
 `;
 
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "-"], {

@@ -1,0 +1,174 @@
+declare const AREA_CODES: readonly ["DELIVERY", "QUALITY", "TECHNICAL", "TEAMWORK"];
+declare const SALES_AREA_CODES: readonly ["PIPELINE", "CUSTOMER", "FORECAST", "COMMERCIAL", "HANDOVER"];
+export type EvidenceAreaCode = typeof AREA_CODES[number] | typeof SALES_AREA_CODES[number];
+export type EvidenceSourceType = "PROJECT" | "INQUIRY" | "TASK";
+export type ProjectEvidenceRow = {
+    id: number;
+    project_no: string;
+    name: string;
+    status: string;
+    role_on_project: string;
+    start_date: Date | string;
+    target_delivery: Date | string;
+    actual_delivery: Date | string | null;
+};
+export type ScheduleEvidenceRow = {
+    id: number;
+    project_id: number;
+    project_no: string;
+    project_name: string;
+    name: string;
+    status: string;
+    is_milestone: boolean;
+    due_date: Date | string | null;
+    actual_end: Date | string | null;
+    percent_done: number;
+    updated_at: Date | string;
+};
+export type ResourceEvidenceRow = {
+    id: number;
+    inquiry_id: number | null;
+    project_id: number | null;
+    source_no: string;
+    source_name: string;
+    title: string;
+    is_issue: boolean;
+    state: string;
+    execution_status: string;
+    due_date: Date | string | null;
+    actual_end: Date | string | null;
+    percent_done: number;
+    updated_at: Date | string;
+};
+export type InquiryEvidenceRow = {
+    id: number;
+    inquiry_no: string;
+    project_name: string;
+    status: string;
+    due_date: Date | string;
+    meeting_count: number;
+    updated_at: Date | string;
+};
+export type SalesInquiryEvidenceRow = {
+    id: number;
+    inquiry_no: string;
+    project_name: string;
+    status: string;
+    inquiry_date: Date | string;
+    due_date: Date | string;
+    updated_at: Date | string;
+    project_probability: number;
+    customer_interest_grade: string;
+    meeting_count: number;
+    estimate_id: number | null;
+    estimate_status: string | null;
+    estimate_total: number | null;
+    project_id: number | null;
+};
+type EvidenceSignal = {
+    id: string;
+    areaCode: EvidenceAreaCode;
+    sourceType: EvidenceSourceType;
+    sourceId: number;
+    sourceLabel: string;
+    title: string;
+    detail: string;
+    occurredAt: string | null;
+    tone: "green" | "blue" | "violet" | "amber" | "slate";
+};
+export declare function buildPerformanceEvidence(input: {
+    employeeId: number;
+    employeeName: string;
+    cycleId: number;
+    cycleCode: string;
+    periodStart: Date | string;
+    periodEnd: Date | string;
+    projects: ProjectEvidenceRow[];
+    scheduleTasks: ScheduleEvidenceRow[];
+    resourceTasks: ResourceEvidenceRow[];
+    inquiries: InquiryEvidenceRow[];
+    today?: Date | string;
+}): {
+    frameworkCode: "ENGINEERING";
+    employeeId: number;
+    employeeName: string;
+    cycleId: number;
+    cycleCode: string;
+    periodStart: string;
+    periodEnd: string;
+    asOf: string;
+    confidence: string;
+    methodology: string;
+    sources: {
+        key: string;
+        label: string;
+        count: number;
+        connected: boolean;
+    }[];
+    metrics: {
+        projectCount: number;
+        inquiryCount: number;
+        assignedTaskCount: number;
+        completedTaskCount: number;
+        dueTaskCount: number;
+        onTimeTaskCount: number;
+        overdueTaskCount: number;
+        issueTaskCount: number;
+        closedIssueCount: number;
+    };
+    areas: {
+        areaCode: "DELIVERY" | "QUALITY" | "TECHNICAL" | "TEAMWORK";
+        suggestedScore: number | null;
+        evidenceText: string;
+        signals: EvidenceSignal[];
+    }[];
+};
+export declare function buildSalesPerformanceEvidence(input: {
+    employeeId: number;
+    employeeName: string;
+    cycleId: number;
+    cycleCode: string;
+    periodStart: Date | string;
+    periodEnd: Date | string;
+    inquiries: SalesInquiryEvidenceRow[];
+    today?: Date | string;
+}): {
+    frameworkCode: "SALES";
+    employeeId: number;
+    employeeName: string;
+    cycleId: number;
+    cycleCode: string;
+    periodStart: string;
+    periodEnd: string;
+    asOf: string;
+    confidence: string;
+    methodology: string;
+    sources: {
+        key: string;
+        label: string;
+        count: number;
+        connected: boolean;
+    }[];
+    metrics: {
+        projectCount: number;
+        inquiryCount: number;
+        assignedTaskCount: number;
+        completedTaskCount: number;
+        dueTaskCount: number;
+        onTimeTaskCount: number;
+        overdueTaskCount: number;
+        issueTaskCount: number;
+        closedIssueCount: number;
+        meetingCount: number;
+        estimateCount: number;
+        approvedEstimateCount: number;
+        handoverCount: number;
+    };
+    areas: {
+        areaCode: "PIPELINE" | "CUSTOMER" | "FORECAST" | "COMMERCIAL" | "HANDOVER";
+        suggestedScore: number | null;
+        evidenceText: string;
+        signals: EvidenceSignal[];
+    }[];
+};
+export {};

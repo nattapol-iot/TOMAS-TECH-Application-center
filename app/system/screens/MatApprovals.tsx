@@ -1,5 +1,7 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
+import { useT as useUiText } from "../i18n";
 import { MAT_ITEMS, PROJECTS } from "../data";
 import { formatDate, matKpis, matPrAmount, matPrVariancePct, moneyShort, userName, userOf } from "../calc";
 import { useMatStore } from "../matstore";
@@ -13,6 +15,7 @@ import type { ScreenProps } from "../routes";
    ========================================================================== */
 
 export default function MatApprovals({ go }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   const session = useSession();
   const store = useMatStore();
@@ -44,7 +47,7 @@ export default function MatApprovals({ go }: ScreenProps) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>{t("PR No.")}</th><th>{t("Project")}</th><th>{t("Requested By")}</th><th className="num">{t("Amount")}</th><th className="num">{t("Variance")}</th><th>{t("Budget")}</th><th>{t("Current step")}</th><th>{t("Approver")}</th><th>{t("Rule flags")}</th><th aria-label="Open" /></tr>
+              <tr><th>{t("PR No.")}</th><th>{t("Project")}</th><th>{t("Requested By")}</th><th className="num">{t("Amount")}</th><th className="num">{t("Variance")}</th><th>{t("Budget")}</th><th>{t("Current step")}</th><th>{t("Approver")}</th><th>{t("Rule flags")}</th><th aria-label={uiText("Open")} /></tr>
             </thead>
             <tbody>
               {prQueue.map(({ pr, step }) => {
@@ -78,7 +81,7 @@ export default function MatApprovals({ go }: ScreenProps) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>{t("Issue No.")}</th><th>{t("Project")}</th><th>{t("Requested By")}</th><th className="num">{t("Lines")}</th><th>{t("Required")}</th><th>{t("Approver")}</th><th aria-label="Open" /></tr>
+              <tr><th>{t("Issue No.")}</th><th>{t("Project")}</th><th>{t("Requested By")}</th><th className="num">{t("Lines")}</th><th>{t("Required")}</th><th>{t("Approver")}</th><th aria-label={uiText("Open")} /></tr>
             </thead>
             <tbody>
               {mirQueue.map((mir) => {
@@ -114,7 +117,7 @@ export default function MatApprovals({ go }: ScreenProps) {
                 return (
                   <tr key={adjustment.id} className="clickable" onClick={() => go({ name: "inventory" })}>
                     <td><strong className="mono">{adjustment.no}</strong></td>
-                    <td>{item.itemCode} · {item.partNo}</td>
+                    <td>{item.itemCode} <LocalizedText text={"·"} /> {item.partNo}</td>
                     <td className="num"><strong className={adjustment.qtyChange < 0 ? "red-text" : "green-text"}>{adjustment.qtyChange > 0 ? "+" : ""}{adjustment.qtyChange}</strong></td>
                     <td className="muted">{adjustment.reason}</td>
                     <td>{userName(adjustment.requestedBy)}</td>

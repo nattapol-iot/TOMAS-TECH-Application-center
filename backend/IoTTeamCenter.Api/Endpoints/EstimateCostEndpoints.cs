@@ -11,6 +11,12 @@ public static class EstimateCostEndpoints
     private static readonly HashSet<string> AllowedCategoryCodes = new(
         ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"],
         StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, string> CategoryNames = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["01"] = "Hardware", ["02"] = "Software", ["03"] = "Electrical", ["04"] = "Mechanical",
+        ["05"] = "Robot", ["06"] = "Engineering", ["07"] = "Outsource", ["08"] = "Transportation",
+        ["09"] = "Accommodation", ["10"] = "Other Cost"
+    };
     private static readonly HashSet<string> AllowedPriceSources = new(
         [
             "Supplier Quotation", "Price Library", "Previous Project", "Budgetary",
@@ -49,7 +55,6 @@ public static class EstimateCostEndpoints
     public static void MapEstimateCostEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/estimates").RequireAuthorization();
-        group.MapGet("/{id:long}/cost-workspace", GetWorkspaceAsync);
         group.MapPost("/{id:long}/cost-items", CreateCostItemAsync);
         group.MapPut("/{id:long}/cost-items/{lineId:long}", UpdateCostItemAsync);
         group.MapPost("/{id:long}/cost-items/{lineId:long}/remove", RemoveCostItemAsync);
@@ -141,7 +146,7 @@ public static class EstimateCostEndpoints
             var elevated = IsElevatedCostWriter(actor, estimate);
             if (!elevated)
             {
-                var assignment = await GetCategoryAssignmentAsync(connection, transaction, id, request.CategoryCode.Trim(), cancellationToken);
+                var assignment = await GetCategoryAssignmentAsync(connection, transaction, id, estimate.Revision, request.CategoryCode.Trim(), cancellationToken);
                 if (!IsAssigned(actor, assignment))
                     throw new ApiException(StatusCodes.Status403Forbidden, "estimate_section_forbidden", "You may add cost lines only to an estimate section assigned to you.");
                 if (request.OwnerId != assignment!.OwnerId && request.OwnerId != assignment.SupportId)
@@ -152,14 +157,18 @@ public static class EstimateCostEndpoints
                 await UpsertCategoryAssignmentAsync(connection, transaction, id, request.CategoryCode.Trim(), request.OwnerId, estimate.DueDate, cancellationToken);
             }
             await using var insert = new SqlCommand("""
+                DECLARE @result table (id bigint NOT NULL, row_version binary(8) NOT NULL);
+
                 INSERT INTO dbo.cost_items (
                     estimate_id, revision, category_code, category, subcategory, module, item_code, description,
                     brand, model, specification, supplier_id, qty, unit, unit_cost, price_source, reference_no,
                     reference_project, price_date, remark, owner_id, status, created_by, updated_by)
-                OUTPUT inserted.id, inserted.row_version
+                OUTPUT inserted.id, inserted.row_version INTO @result (id, row_version)
                 VALUES (@estimate_id, @revision, @category_code, @category, @subcategory, @module, @item_code, @description,
                     @brand, @model, @specification, @supplier_id, @qty, @unit, @unit_cost, @price_source, @reference_no,
                     @reference_project, @price_date, @remark, @owner_id, N'Active', @actor, @actor);
+
+                SELECT id, row_version FROM @result;
                 """, connection, transaction);
             AddCostParameters(insert, id, estimate.Revision, request, actor.Id);
             long lineId;
@@ -205,14 +214,14 @@ public static class EstimateCostEndpoints
             var elevated = IsElevatedCostWriter(actor, estimate);
             if (!elevated)
             {
-                var currentAssignment = await GetCategoryAssignmentAsync(connection, transaction, id, before.CategoryCode, cancellationToken);
-                if (before.OwnerId != actor.Id && !IsAssigned(actor, currentAssignment))
-                    throw new ApiException(StatusCodes.Status403Forbidden, "cost_line_forbidden", "You may update only your own line or a line in a section assigned to you.");
+                var currentAssignment = await GetCategoryAssignmentAsync(connection, transaction, id, estimate.Revision, before.CategoryCode, cancellationToken);
+                if (!IsAssigned(actor, currentAssignment))
+                    throw new ApiException(StatusCodes.Status403Forbidden, "cost_line_forbidden", "You may update a cost line only while its current category is assigned to you.");
                 if (request.OwnerId != before.OwnerId)
                     throw new ApiException(StatusCodes.Status403Forbidden, "cost_owner_forbidden", "Only the estimate owner, an engineering manager or an administrator can reassign a cost line.");
                 if (!string.Equals(before.CategoryCode, request.CategoryCode.Trim(), StringComparison.Ordinal))
                 {
-                    var targetAssignment = await GetCategoryAssignmentAsync(connection, transaction, id, request.CategoryCode.Trim(), cancellationToken);
+                    var targetAssignment = await GetCategoryAssignmentAsync(connection, transaction, id, estimate.Revision, request.CategoryCode.Trim(), cancellationToken);
                     if (!IsAssigned(actor, targetAssignment))
                         throw new ApiException(StatusCodes.Status403Forbidden, "estimate_section_forbidden", "You cannot move a line to an estimate section that is not assigned to you.");
                 }
@@ -222,14 +231,18 @@ public static class EstimateCostEndpoints
                 await UpsertCategoryAssignmentAsync(connection, transaction, id, request.CategoryCode.Trim(), request.OwnerId, estimate.DueDate, cancellationToken);
             }
             await using var update = new SqlCommand("""
+                DECLARE @result table (row_version binary(8) NOT NULL);
+
                 UPDATE dbo.cost_items SET
                     category_code=@category_code, category=@category, subcategory=@subcategory, module=@module,
                     item_code=@item_code, description=@description, brand=@brand, model=@model, specification=@specification,
                     supplier_id=@supplier_id, qty=@qty, unit=@unit, unit_cost=@unit_cost, price_source=@price_source,
                     reference_no=@reference_no, reference_project=@reference_project, price_date=@price_date, remark=@remark,
                     owner_id=@owner_id, updated_by=@actor, updated_at=SYSUTCDATETIME()
-                OUTPUT inserted.row_version
+                OUTPUT inserted.row_version INTO @result (row_version)
                 WHERE id=@line_id AND estimate_id=@estimate_id AND revision=@revision AND deleted_at IS NULL AND row_version=@line_version;
+
+                SELECT row_version FROM @result;
                 """, connection, transaction);
             AddCostParameters(update, id, estimate.Revision, request, actor.Id);
             update.Parameters.AddParameter("@line_id", SqlDbType.BigInt, lineId);
@@ -271,14 +284,18 @@ public static class EstimateCostEndpoints
             var before = await GetCostItemSnapshotAsync(connection, transaction, id, estimate.Revision, lineId, lineVersion, includeDeleted: false, cancellationToken);
             if (!IsElevatedCostWriter(actor, estimate))
             {
-                var assignment = await GetCategoryAssignmentAsync(connection, transaction, id, before.CategoryCode, cancellationToken);
-                if (before.OwnerId != actor.Id && !IsAssigned(actor, assignment))
-                    throw new ApiException(StatusCodes.Status403Forbidden, "cost_line_forbidden", "You may remove only your own line or a line in a section assigned to you.");
+                var assignment = await GetCategoryAssignmentAsync(connection, transaction, id, estimate.Revision, before.CategoryCode, cancellationToken);
+                if (!IsAssigned(actor, assignment))
+                    throw new ApiException(StatusCodes.Status403Forbidden, "cost_line_forbidden", "You may remove a cost line only while its current category is assigned to you.");
             }
             await using var update = new SqlCommand("""
+                DECLARE @result table (row_version binary(8) NOT NULL);
+
                 UPDATE dbo.cost_items SET deleted_at=SYSUTCDATETIME(), updated_by=@actor, updated_at=SYSUTCDATETIME()
-                OUTPUT inserted.row_version
+                OUTPUT inserted.row_version INTO @result (row_version)
                 WHERE id=@line_id AND estimate_id=@estimate_id AND revision=@revision AND deleted_at IS NULL AND row_version=@line_version;
+
+                SELECT row_version FROM @result;
                 """, connection, transaction);
             update.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
             update.Parameters.AddParameter("@line_id", SqlDbType.BigInt, lineId);
@@ -310,7 +327,7 @@ public static class EstimateCostEndpoints
         InputValidation.RequiredText(request.CategoryCode, 2, "Category code");
         if (!AllowedCategoryCodes.Contains(request.CategoryCode.Trim()))
             throw new ApiException(StatusCodes.Status400BadRequest, "validation_failed", "Category code is not allowed.");
-        InputValidation.RequiredText(request.Category, 100, "Category");
+        InputValidation.OptionalText(request.Category, 100, "Category");
         InputValidation.OptionalText(request.Subcategory, 100, "Subcategory");
         InputValidation.RequiredText(request.Module, 200, "Module");
         InputValidation.RequiredText(request.ItemCode, 100, "Item code");
@@ -397,15 +414,20 @@ public static class EstimateCostEndpoints
         SqlConnection connection,
         SqlTransaction transaction,
         long estimateId,
+        int revision,
         string categoryCode,
         CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand("""
-            SELECT owner_id, support_id
-            FROM dbo.estimate_assignments WITH (UPDLOCK, HOLDLOCK)
-            WHERE estimate_id = @estimate_id AND section = @section;
+            SELECT a.owner_id, a.support_id
+            FROM dbo.estimate_assignments a WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN dbo.estimates e WITH (UPDLOCK, HOLDLOCK)
+                ON e.id=a.estimate_id AND e.revision=@revision AND e.deleted_at IS NULL
+            WHERE a.estimate_id = @estimate_id
+              AND (a.section = @section OR (LEFT(a.section, 2)=@section AND SUBSTRING(a.section, 3, 1)=N' '));
             """, connection, transaction);
         command.Parameters.AddParameter("@estimate_id", SqlDbType.BigInt, estimateId);
+        command.Parameters.AddParameter("@revision", SqlDbType.Int, revision);
         command.Parameters.AddParameter("@section", SqlDbType.NVarChar, categoryCode, 100);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
         if (!await reader.ReadAsync(cancellationToken)) return null;
@@ -486,7 +508,7 @@ public static class EstimateCostEndpoints
         command.Parameters.AddParameter("@estimate_id", SqlDbType.BigInt, estimateId);
         command.Parameters.AddParameter("@revision", SqlDbType.Int, revision);
         command.Parameters.AddParameter("@category_code", SqlDbType.Char, request.CategoryCode.Trim().ToUpperInvariant(), 2);
-        command.Parameters.AddParameter("@category", SqlDbType.NVarChar, request.Category.Trim(), 100);
+        command.Parameters.AddParameter("@category", SqlDbType.NVarChar, CategoryNames[request.CategoryCode.Trim().ToUpperInvariant()], 100);
         command.Parameters.AddParameter("@subcategory", SqlDbType.NVarChar, request.Subcategory?.Trim() ?? "", 100);
         command.Parameters.AddParameter("@module", SqlDbType.NVarChar, request.Module.Trim(), 200);
         command.Parameters.AddParameter("@item_code", SqlDbType.NVarChar, request.ItemCode.Trim(), 100);

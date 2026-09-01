@@ -1,0 +1,111 @@
+Supplier|ผู้ขาย|仕入先
+Item|รายการ|項目
+Reason|เหตุผล|理由
+Total|รวม|合計
+Remark|หมายเหตุ|備考
+Code|รหัส|コード
+Engineer|วิศวกร|技術者
+Required|จำเป็น|必須
+Category|หมวดหมู่|カテゴリ
+Actions|การดำเนินการ|操作
+Project type|ประเภทโปรเจกต์|プロジェクト種別
+Revision|ฉบับแก้ไข|改訂
+Lines|รายการ|明細
+Action|การดำเนินการ|操作
+Discipline|สาขางาน|専門分野
+Source|ที่มา|出典
+Type|ประเภท|種類
+Estimate owner|ผู้รับผิดชอบประมาณการ|見積担当者
+Title|หัวข้อ|タイトル
+Model|รุ่น|型式
+Role|บทบาท|役割
+Man-days|คน-วัน|人日
+Man-hours|คน-ชั่วโมง|人時
+days|วัน|日
+Requested By|ผู้ขอ|申請者
+Change|เปลี่ยนแปลง|変更
+Amount|จำนวนเงิน|金額
+Decision|ผลการพิจารณา|判定
+Item code|รหัสรายการ|品目コード
+Total estimated cost|ต้นทุนประมาณการรวม|見積原価合計
+Due date|กำหนดส่ง|期限
+Purpose|วัตถุประสงค์|目的
+Price date|วันที่ราคา|価格日付
+Module|โมดูล|モジュール
+Comment|ความคิดเห็น|コメント
+Attachments|ไฟล์แนบ|添付ファイル
+Approver|ผู้อนุมัติ|承認者
+Variance|ส่วนต่าง|差異
+Note|หมายเหตุ|備考
+Phone|โทรศัพท์|電話
+Search Price Library|ค้นหาคลังราคา|価格ライブラリを検索
+subtotal|ยอดรวมย่อย|小計
+Supplier man-hour|ชั่วโมงแรงงานผู้ขาย|仕入先工数
+Add Meeting Record|เพิ่มบันทึกการประชุม|議事録を追加
+User|ผู้ใช้|ユーザー
+Rev|ฉบับแก้ไข|改訂
+Subject|หัวเรื่อง|件名
+View|ดู|表示
+Requester|ผู้ขอ|申請者
+Contact|ผู้ติดต่อ|連絡先
+From|จาก|開始
+Effective|มีผลตั้งแต่|適用開始
+Contingency|เงินเผื่อสำรอง|予備費
+Unit cost|ต้นทุนต่อหน่วย|単位原価
+Line total|ยอดรวมรายการ|明細合計
+Share|แชร์|共有
+New Main Module|เพิ่มโมดูลหลัก|メインモジュールを追加
+Reference|อ้างอิง|参照
+New Work Package|เพิ่มชุดงาน|作業パッケージを追加
+Download|ดาวน์โหลด|ダウンロード
+Document|เอกสาร|文書
+Returned|ส่งกลับ|差戻し
+State|สถานะ|状態
+English|ภาษาอังกฤษ|英語
+saved|บันทึกแล้ว|保存済み
+Visit No.|เลขที่เข้าหน้างาน|訪問番号
+deliveries|การส่งมอบ|納品
+Price Date|วันที่ราคา|価格日付
+Industry|อุตสาหกรรม|業種
+Loading live report…|กำลังโหลดรายงาน…|レポートを読み込み中…
+No report loaded|ยังไม่มีรายงาน|レポートがありません
+Usable|พร้อมใช้งาน|利用可能
+Created by|สร้างโดย|作成者
+No supplier|ไม่ระบุผู้ขาย|仕入先なし
+Name|ชื่อ|名前
+Subcategory|หมวดหมู่ย่อย|サブカテゴリ
+No cost item|ไม่มีรายการต้นทุน|原価項目なし
+No.|ลำดับ|番号
+Brand / Model|ยี่ห้อ / รุ่น|ブランド / 型式
+Add activity|เพิ่มกิจกรรม|活動を追加
+Engineering cost|ต้นทุนงานวิศวกรรม|技術原価
+Quotation No.|เลขที่ใบเสนอราคา|見積書番号
+Section|ส่วน|セクション
+Inquiry date|วันที่สอบถามราคา|引合日
+Customer RFQ No.|เลขที่ใบขอราคาลูกค้า|顧客見積依頼番号
+Participants|ผู้เข้าร่วม|参加者
+Activity|กิจกรรม|活動
+Needs attention|ต้องดำเนินการ|要対応
+Document type|ประเภทเอกสาร|文書種別
+Document No.|เลขที่เอกสาร|文書番号
+Tags|แท็ก|タグ
+By|โดย|担当
+Quantity|จำนวน|数量
+Unit price|ราคาต่อหน่วย|単価
+Use|ใช้งาน|使用
+Clear search|ล้างการค้นหา|検索をクリア
+Signing|ลงนามเอกสาร|文書署名
+My Work|งานของฉัน|自分の作業
+Document Signing|ลงนามเอกสาร|文書署名
+Task inbox|กล่องงาน|タスク受信箱
+Project schedule tasks|งานตามแผนโปรเจกต์|プロジェクト工程タスク
+All languages|ทุกภาษา|すべての言語
+All categories|ทุกหมวดหมู่|すべてのカテゴリ
+All types|ทุกประเภท|すべての種類
+All statuses|ทุกสถานะ|すべての状態
+Knowledge Hub|ศูนย์ความรู้|ナレッジハブ
+Module Templates|แม่แบบโมดูล|モジュールテンプレート
+Sales Intake|รับเรื่องจากฝ่ายขาย|営業受付
+Site Visits|งานเข้าหน้างาน|現場訪問
+My Assignments|งานที่ได้รับมอบหมาย|自分の割当
+Document locale|ภาษาเอกสาร|文書の言語

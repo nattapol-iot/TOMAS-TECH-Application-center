@@ -1,0 +1,2696 @@
+[
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 181,
+    "kind": "translation-call",
+    "value": "Your role does not include"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 332,
+    "kind": "translation-call",
+    "value": "Search intake no., subject, customer or site…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 352,
+    "kind": "jsx-text:th",
+    "value": "คำขอ / ลูกค้า"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 352,
+    "kind": "jsx-text:th",
+    "value": "นัดเข้าหน้างาน"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 357,
+    "kind": "jsx-text:div",
+    "value": "คำขอ:"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 359,
+    "kind": "jsx-text:button",
+    "value": "เปิด"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 366,
+    "kind": "translation-call",
+    "value": "No intake matches the filter"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 367,
+    "kind": "translation-call",
+    "value": "Adjust the filters above, or record a new customer request."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 391,
+    "kind": "PageHeader.eyebrow",
+    "value": "ENGINEERING COORDINATOR"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 392,
+    "kind": "translation-call",
+    "value": "Check the information is complete before an engineer is committed to a date."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 394,
+    "kind": "translation-call",
+    "value": "Waiting for review"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 395,
+    "kind": "translation-call",
+    "value": "Returned to sales"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 396,
+    "kind": "translation-call",
+    "value": "Ready to schedule"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 399,
+    "kind": "translation-call",
+    "value": "Review queue"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 399,
+    "kind": "translation-call",
+    "value": "Ordered by status, then priority, then the response date the customer was promised"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 403,
+    "kind": "translation-call",
+    "value": "Missing"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 414,
+    "kind": "translation-call",
+    "value": "Complete"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 422,
+    "kind": "translation-call",
+    "value": "Nothing waiting"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 422,
+    "kind": "translation-call",
+    "value": "Every submitted intake has been reviewed."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 444,
+    "kind": "PageHeader.eyebrow",
+    "value": "SALES"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 444,
+    "kind": "translation-call",
+    "value": "Where each of your customer requests has got to."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 446,
+    "kind": "translation-call",
+    "value": "My intakes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 447,
+    "kind": "translation-call",
+    "value": "Pending technical review"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 448,
+    "kind": "translation-call",
+    "value": "Returned for information"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 449,
+    "kind": "translation-call",
+    "value": "Waiting for the customer"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 450,
+    "kind": "translation-call",
+    "value": "Upcoming visits"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 451,
+    "kind": "translation-call",
+    "value": "Completed visits"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 452,
+    "kind": "translation-call",
+    "value": "Waiting for a report"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 453,
+    "kind": "translation-call",
+    "value": "Converted to inquiry"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 456,
+    "kind": "translation-call",
+    "value": "Intake by status"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 463,
+    "kind": "translation-call",
+    "value": "No data yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 463,
+    "kind": "translation-call",
+    "value": "Register the first intake to populate this chart."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 465,
+    "kind": "translation-call",
+    "value": "Needs your attention"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 465,
+    "kind": "translation-call",
+    "value": "Drafts, returned intakes, and anything past its promised response date"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 474,
+    "kind": "translation-call",
+    "value": "Nothing waiting on you"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 474,
+    "kind": "translation-call",
+    "value": "Every intake you own is moving."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 677,
+    "kind": "translation-call",
+    "value": "file(s) uploaded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 692,
+    "kind": "translation-call",
+    "value": "Save a draft at any time. Submitting for technical review needs the mandatory information below."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 702,
+    "kind": "jsx-text:span",
+    "value": "ดึงข้อมูลจาก Inquiry แล้ว — เติมรายละเอียดสำหรับการเข้าหน้างาน ผลสำรวจจะอยู่ในเรื่องเดิม"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 703,
+    "kind": "Panel.title",
+    "value": "Inquiry ที่เกี่ยวข้อง"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 703,
+    "kind": "Panel.subtitle",
+    "value": "เชื่อมรายการเดิมกับเรื่องของลูกค้ารายนี้ โดยเก็บข้อมูลคำขอเดิมไว้"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 704,
+    "kind": "Field.label",
+    "value": "ค้นหาเลข Inquiry หรือชื่องาน"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 706,
+    "kind": "Field.label",
+    "value": "เรื่องหลัก"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 707,
+    "kind": "jsx-text:option",
+    "value": "ยังไม่ได้เชื่อม Inquiry"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 715,
+    "kind": "translation-call",
+    "value": "Where the engineer is going and who will meet them"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 724,
+    "kind": "translation-call",
+    "value": "Enough for a driver to find the gate"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 729,
+    "kind": "translation-call",
+    "value": "Position"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 741,
+    "kind": "translation-call",
+    "value": "Reference numbers, ownership and how urgent this is"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 743,
+    "kind": "translation-call",
+    "value": "Allocated on save — read only"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 743,
+    "kind": "translation-call",
+    "value": "Generated on save"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 744,
+    "kind": "translation-call",
+    "value": "May repeat; the system warns rather than merging"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 770,
+    "kind": "translation-call",
+    "value": "This customer reference already appears on another intake"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 772,
+    "kind": "translation-call",
+    "value": "Nothing has been merged. Check whether this is a genuine second request."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 778,
+    "kind": "translation-call",
+    "value": "In their words. Engineering adds its own assessment separately and never edits this."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 780,
+    "kind": "translation-call",
+    "value": "At least a couple of sentences — this is the mandatory one"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 784,
+    "kind": "translation-call",
+    "value": "What is true after the work is done"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 792,
+    "kind": "translation-call",
+    "value": "Only if the customer said so"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 803,
+    "kind": "jsx-text:summary",
+    "value": "รายละเอียดเครื่องจักรและความปลอดภัยหน้างาน"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 804,
+    "kind": "translation-call",
+    "value": "Everything that decides whether an engineer can actually do the work on the day"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 821,
+    "kind": "translation-call",
+    "value": "Permits, escorts, induction — anything that stops an engineer at the gate"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 824,
+    "kind": "translation-call",
+    "value": "Restrictions"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 835,
+    "kind": "translation-call",
+    "value": "Sales' best guess. The coordinator may correct the skills, and both are kept."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 847,
+    "kind": "translation-call",
+    "value": "No visit purpose is configured yet. An administrator can add them in Visit Master Data."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 864,
+    "kind": "translation-call",
+    "value": "Ranges the customer offered, most preferred first"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 875,
+    "kind": "translation-call",
+    "value": "Preference"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 875,
+    "kind": "translation-call",
+    "value": "To"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 897,
+    "kind": "translation-call",
+    "value": "Remove window"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 901,
+    "kind": "translation-call",
+    "value": "No availability recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 902,
+    "kind": "translation-call",
+    "value": "Ask the customer for one or two ranges. It is the difference between one phone call and five."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 906,
+    "kind": "translation-call",
+    "value": "Photos, drawings, specifications and the email the request arrived in"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 913,
+    "kind": "translation-call",
+    "value": "Drag and drop files here or click to browse"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 914,
+    "kind": "translation-call",
+    "value": "Image, video, PDF, Office or drawing — maximum 50 MB per file"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 918,
+    "kind": "translation-call",
+    "value": "queued"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 925,
+    "kind": "translation-call",
+    "value": "Remove"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 929,
+    "kind": "translation-call",
+    "value": "Already attached"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 932,
+    "kind": "jsx-text:small",
+    "value": "· v"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 939,
+    "kind": "translation-call",
+    "value": "What is still needed before this can go to technical review"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 954,
+    "kind": "translation-call",
+    "value": "Nothing recorded in this section."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 999,
+    "kind": "translation-call",
+    "value": "Not found"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 999,
+    "kind": "translation-call",
+    "value": "This intake no longer exists."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1010,
+    "kind": "translation-call",
+    "value": "Site not named"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1015,
+    "kind": "translation-call",
+    "value": "Archived"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1018,
+    "kind": "jsx-text:button",
+    "value": "· เปิดเรื่องหลัก"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1077,
+    "kind": "translation-call",
+    "value": "Recomputed by the API from what is actually stored"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1081,
+    "kind": "translation-call",
+    "value": "Visit purpose and skills"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1085,
+    "kind": "translation-call",
+    "value": "Not selected"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1087,
+    "kind": "translation-call",
+    "value": "Skills requested by sales"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1090,
+    "kind": "translation-call",
+    "value": "Not selected"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1093,
+    "kind": "translation-call",
+    "value": "Skills confirmed by the coordinator"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1097,
+    "kind": "translation-call",
+    "value": "The coordinator's list is the one used for assignment. Sales' original selection is kept above."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1108,
+    "kind": "translation-call",
+    "value": "No window was proposed."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1112,
+    "kind": "translation-call",
+    "value": "Where this request ended up"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1124,
+    "kind": "translation-call",
+    "value": "Recorded by sales. Engineering conclusions live on the Technical Review tab."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1162,
+    "kind": "translation-call",
+    "value": "Yes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1162,
+    "kind": "translation-call",
+    "value": "No"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1163,
+    "kind": "translation-call",
+    "value": "Yes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1163,
+    "kind": "translation-call",
+    "value": "No"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1168,
+    "kind": "translation-call",
+    "value": "Engineering's assessment. It sits beside the sales record and never replaces it."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1180,
+    "kind": "translation-call",
+    "value": "hours"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1184,
+    "kind": "translation-call",
+    "value": "Yes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1184,
+    "kind": "translation-call",
+    "value": "No"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1191,
+    "kind": "translation-call",
+    "value": "Not reviewed yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1192,
+    "kind": "translation-call",
+    "value": "Once sales submits, a coordinator records their assessment here."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1195,
+    "kind": "translation-call",
+    "value": "Site visits raised from this intake"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1198,
+    "kind": "translation-call",
+    "value": "Engineers"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1217,
+    "kind": "translation-call",
+    "value": "No site visit yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1218,
+    "kind": "translation-call",
+    "value": "A site visit can be requested once technical review is complete."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1221,
+    "kind": "translation-call",
+    "value": "Version, uploader and time are recorded for every file"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1224,
+    "kind": "translation-call",
+    "value": "Version"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1225,
+    "kind": "translation-call",
+    "value": "Scan"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1225,
+    "kind": "translation-call",
+    "value": "Uploaded at"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1231,
+    "kind": "jsx-text:td",
+    "value": "v"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1249,
+    "kind": "translation-call",
+    "value": "Archive"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1253,
+    "kind": "translation-call",
+    "value": "Attachment archived"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1260,
+    "kind": "translation-call",
+    "value": "No attachment"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1260,
+    "kind": "translation-call",
+    "value": "A photo of the real machine is the single most useful thing to add."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1263,
+    "kind": "translation-call",
+    "value": "Status history"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1263,
+    "kind": "translation-call",
+    "value": "Append-only. Every move records who, when and why."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1272,
+    "kind": "translation-call",
+    "value": "No history yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1272,
+    "kind": "translation-call",
+    "value": "Status changes appear here."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1277,
+    "kind": "translation-call",
+    "value": "Change status to"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1283,
+    "kind": "translation-call",
+    "value": "Working…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1283,
+    "kind": "translation-call",
+    "value": "Confirm"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1287,
+    "kind": "translation-call",
+    "value": "This is recorded in the append-only status history with your name and the time."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1290,
+    "kind": "translation-call",
+    "value": "Mandatory information is still missing"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1293,
+    "kind": "translation-call",
+    "value": "Reason / comment"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1293,
+    "kind": "translation-call",
+    "value": "Required when returning, holding or cancelling"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1368,
+    "kind": "translation-call",
+    "value": "Everything is present."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1375,
+    "kind": "translation-call",
+    "value": "Required when returning, holding or cancelling — say exactly what is missing"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1386,
+    "kind": "translation-call",
+    "value": "Correcting this does not erase what sales asked for"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1398,
+    "kind": "translation-call",
+    "value": "This visit needs manager approval before it is scheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1438,
+    "kind": "translation-call",
+    "value": "created"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1451,
+    "kind": "translation-call",
+    "value": "Creating…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1463,
+    "kind": "translation-call",
+    "value": "Customer's preferred window"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1467,
+    "kind": "translation-call",
+    "value": "Duration (hours)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1474,
+    "kind": "translation-call",
+    "value": "Never shown to the customer"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1556,
+    "kind": "translation-call",
+    "value": "Search visit no., intake no., subject or customer…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1576,
+    "kind": "translation-call",
+    "value": "site visits"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1581,
+    "kind": "translation-call",
+    "value": "Intake"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1581,
+    "kind": "translation-call",
+    "value": "Customer / Site"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1590,
+    "kind": "translation-call",
+    "value": "Not scheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1592,
+    "kind": "translation-call",
+    "value": "accepted"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1595,
+    "kind": "jsx-text:Badge",
+    "value": "E"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1596,
+    "kind": "jsx-text:Badge",
+    "value": "C"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1607,
+    "kind": "translation-call",
+    "value": "No site visit matches the filter"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1608,
+    "kind": "translation-call",
+    "value": "A visit is created from an intake once technical review is complete."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1687,
+    "kind": "PageHeader.eyebrow",
+    "value": "SCHEDULING"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1688,
+    "kind": "translation-call",
+    "value": "Colour follows the visit status, so an unconfirmed appointment never looks like a firm one."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1690,
+    "kind": "translation-call",
+    "value": "Calendar view"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1697,
+    "kind": "translation-call",
+    "value": "Anchor date"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1708,
+    "kind": "translation-call",
+    "value": "visits"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1708,
+    "kind": "translation-call",
+    "value": "unavailable periods"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1726,
+    "kind": "translation-call",
+    "value": "Nobody is booked in this range."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1777,
+    "kind": "translation-call",
+    "value": "What is unassigned, what is unconfirmed, and which report is late."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1779,
+    "kind": "translation-call",
+    "value": "Waiting for assignment"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1780,
+    "kind": "translation-call",
+    "value": "Waiting for confirmation"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1781,
+    "kind": "translation-call",
+    "value": "Visits today"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1782,
+    "kind": "translation-call",
+    "value": "Visits this week"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1783,
+    "kind": "translation-call",
+    "value": "Conflict overrides"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1784,
+    "kind": "translation-call",
+    "value": "Reports overdue"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1787,
+    "kind": "translation-call",
+    "value": "Workload by engineer"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1787,
+    "kind": "translation-call",
+    "value": "Active assignments, excluding cancelled and closed visits"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1794,
+    "kind": "translation-call",
+    "value": "Nobody assigned yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1794,
+    "kind": "translation-call",
+    "value": "Assignments appear here as soon as engineers are placed."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1796,
+    "kind": "translation-call",
+    "value": "Skill demand"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1796,
+    "kind": "translation-call",
+    "value": "What open intakes are asking for"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1803,
+    "kind": "translation-call",
+    "value": "No skill requested yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1803,
+    "kind": "translation-call",
+    "value": "Skills appear once intakes name them."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1807,
+    "kind": "translation-call",
+    "value": "Unassigned, awaiting confirmation, or with an overdue report"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1818,
+    "kind": "translation-call",
+    "value": "Nothing outstanding"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1818,
+    "kind": "translation-call",
+    "value": "Every visit is assigned, confirmed and reported."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1822,
+    "kind": "translation-call",
+    "value": "Management view"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1822,
+    "kind": "translation-call",
+    "value": "Conversion and service level across the whole book"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1824,
+    "kind": "translation-call",
+    "value": "Intakes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1825,
+    "kind": "translation-call",
+    "value": "Site visits"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1826,
+    "kind": "translation-call",
+    "value": "Lead time to confirmed"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1827,
+    "kind": "translation-call",
+    "value": "Completion rate"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1828,
+    "kind": "translation-call",
+    "value": "Report SLA compliance"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1830,
+    "kind": "translation-call",
+    "value": "Visit → estimate"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1831,
+    "kind": "translation-call",
+    "value": "Visit → project"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1833,
+    "kind": "translation-call",
+    "value": "Rescheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1834,
+    "kind": "translation-call",
+    "value": "Customer no-show"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1838,
+    "kind": "translation-call",
+    "value": "By customer"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1839,
+    "kind": "translation-call",
+    "value": "By sales owner"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1841,
+    "kind": "translation-call",
+    "value": "By department"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1842,
+    "kind": "translation-call",
+    "value": "By visit type"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1912,
+    "kind": "translation-call",
+    "value": "created"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1912,
+    "kind": "translation-call",
+    "value": "linked"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1920,
+    "kind": "translation-call",
+    "value": "Not found"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1920,
+    "kind": "translation-call",
+    "value": "This site visit no longer exists."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1935,
+    "kind": "translation-call",
+    "value": "Site not named"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1947,
+    "kind": "jsx-text:button",
+    "value": "กลับ Inquiry · ทำ Estimate ต่อ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1948,
+    "kind": "jsx-text:button",
+    "value": "สร้าง Inquiry สำหรับรายการเดิม"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1951,
+    "kind": "jsx-text:summary",
+    "value": "จัดการสถานะ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1977,
+    "kind": "jsx-text:summary",
+    "value": "เอกสารเชื่อมโยงและประวัติ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1984,
+    "kind": "translation-call",
+    "value": "Visit"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1994,
+    "kind": "translation-call",
+    "value": "report due"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 1996,
+    "kind": "translation-call",
+    "value": "minutes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2006,
+    "kind": "translation-call",
+    "value": "Skill coverage"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2006,
+    "kind": "translation-call",
+    "value": "Required skills come from the coordinator's list when there is one"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2010,
+    "kind": "translation-call",
+    "value": "No skill requirement recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2014,
+    "kind": "translation-call",
+    "value": "The assigned team does not cover every required skill"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2027,
+    "kind": "translation-call",
+    "value": "Nobody assigned"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2027,
+    "kind": "translation-call",
+    "value": "Assign a lead engineer to move this forward."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2036,
+    "kind": "translation-call",
+    "value": "Append-only: old time, new time, reason and who did it"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2045,
+    "kind": "translation-call",
+    "value": "Never rescheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2045,
+    "kind": "translation-call",
+    "value": "The original time still stands."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2047,
+    "kind": "translation-call",
+    "value": "Both the engineer's answer and the customer's, with the channel it came through"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2057,
+    "kind": "translation-call",
+    "value": "Recorded by"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2059,
+    "kind": "translation-call",
+    "value": "Nothing confirmed yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2060,
+    "kind": "translation-call",
+    "value": "Record the engineer's acceptance and the customer's answer here."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2070,
+    "kind": "translation-call",
+    "value": "Inquiry, estimate and project"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2071,
+    "kind": "translation-call",
+    "value": "Site visit findings feed these records. They are never overwritten by a later visit."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2072,
+    "kind": "jsx-text:span",
+    "value": "รายงานของการเข้าหน้างานครั้งนี้อยู่ภายใต้เรื่องเดิม เปิดแท็บ Report เพื่อดูผล แล้วกลับ Inquiry เพื่อทำ Estimate ต่อ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2075,
+    "kind": "translation-call",
+    "value": "The report is not approved yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2075,
+    "kind": "translation-call",
+    "value": "An inquiry is created from a confirmed site visit, so approve the report first."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2078,
+    "kind": "translation-call",
+    "value": "Number"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2078,
+    "kind": "translation-call",
+    "value": "Relation"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2088,
+    "kind": "translation-call",
+    "value": "Create an inquiry from the approved report, then an estimate from the inquiry."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2103,
+    "kind": "translation-call",
+    "value": "Status history"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2103,
+    "kind": "translation-call",
+    "value": "Append-only. A trigger refuses any change."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2112,
+    "kind": "translation-call",
+    "value": "No history yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2112,
+    "kind": "translation-call",
+    "value": "Status changes appear here."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2117,
+    "kind": "translation-call",
+    "value": "Change status to"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2122,
+    "kind": "translation-call",
+    "value": "Working…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2122,
+    "kind": "translation-call",
+    "value": "Confirm"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2126,
+    "kind": "translation-call",
+    "value": "Recorded in the append-only status history with your name and the time."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2127,
+    "kind": "translation-call",
+    "value": "Reason / comment"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2127,
+    "kind": "translation-call",
+    "value": "Required for reschedule, hold, cancel and no-show"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2160,
+    "kind": "translation-call",
+    "value": "accepted"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2167,
+    "kind": "translation-call",
+    "value": "Match"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2167,
+    "kind": "translation-call",
+    "value": "Response"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2167,
+    "kind": "translation-call",
+    "value": "Assigned by"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2175,
+    "kind": "translation-call",
+    "value": "Missing"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2183,
+    "kind": "translation-call",
+    "value": "Override"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2187,
+    "kind": "translation-call",
+    "value": "Respond"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2189,
+    "kind": "translation-call",
+    "value": "Withdraw"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2192,
+    "kind": "translation-call",
+    "value": "Assignment withdrawn"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2198,
+    "kind": "translation-call",
+    "value": "No engineer assigned"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2199,
+    "kind": "translation-call",
+    "value": "Assign a lead engineer. The candidate list shows skill match, workload and any schedule conflict."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2203,
+    "kind": "translation-call",
+    "value": "Withdrawn, declined and replaced assignments are kept, never deleted"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2205,
+    "kind": "translation-call",
+    "value": "Outcome"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2205,
+    "kind": "translation-call",
+    "value": "Assigned by"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2205,
+    "kind": "translation-call",
+    "value": "Assigned at"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2256,
+    "kind": "translation-call",
+    "value": "assigned"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2256,
+    "kind": "translation-call",
+    "value": "skill match"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2263,
+    "kind": "translation-call",
+    "value": "not scheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2273,
+    "kind": "translation-call",
+    "value": "Assigning…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2273,
+    "kind": "translation-call",
+    "value": "Assign"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2280,
+    "kind": "translation-call",
+    "value": "Required skills"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2280,
+    "kind": "translation-call",
+    "value": "none recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2289,
+    "kind": "translation-call",
+    "value": "Select"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2289,
+    "kind": "translation-call",
+    "value": "Match"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2290,
+    "kind": "translation-call",
+    "value": "Open jobs"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2290,
+    "kind": "translation-call",
+    "value": "Booked (h)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2290,
+    "kind": "translation-call",
+    "value": "Travel"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2290,
+    "kind": "translation-call",
+    "value": "Conflict"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2298,
+    "kind": "translation-call",
+    "value": "Already assigned"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2304,
+    "kind": "translation-call",
+    "value": "min"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2307,
+    "kind": "translation-call",
+    "value": "Free"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2312,
+    "kind": "translation-call",
+    "value": "does not hold"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2312,
+    "kind": "translation-call",
+    "value": "Add a supporting engineer who does."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2319,
+    "kind": "translation-call",
+    "value": "At least ten characters. Recorded against the assignment and the audit log."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2322,
+    "kind": "translation-call",
+    "value": "Only an engineering manager may override. Without the permission the API refuses regardless of this form."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2355,
+    "kind": "translation-call",
+    "value": "Assignment response"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2360,
+    "kind": "translation-call",
+    "value": "Record response"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2364,
+    "kind": "translation-call",
+    "value": "Response"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2369,
+    "kind": "translation-call",
+    "value": "Required when declining or asking for information"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2373,
+    "kind": "translation-call",
+    "value": "Proposed start"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2374,
+    "kind": "translation-call",
+    "value": "Proposed end"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2406,
+    "kind": "translation-call",
+    "value": "Record"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2411,
+    "kind": "translation-call",
+    "value": "Party"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2413,
+    "kind": "translation-call",
+    "value": "Outcome"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2415,
+    "kind": "translation-call",
+    "value": "Channel"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2417,
+    "kind": "translation-call",
+    "value": "Confirmed by"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2417,
+    "kind": "translation-call",
+    "value": "The person's name, as they gave it"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2420,
+    "kind": "translation-call",
+    "value": "Customer comment"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2421,
+    "kind": "translation-call",
+    "value": "Attach the evidence — an email or a chat screenshot — on the Execution tab, then reference it here."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2446,
+    "kind": "translation-call",
+    "value": "rescheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2461,
+    "kind": "translation-call",
+    "value": "Every assigned engineer is re-checked against the new time, and both confirmations are cleared — the parties agreed to a time, not to a visit."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2464,
+    "kind": "translation-call",
+    "value": "New start"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2465,
+    "kind": "translation-call",
+    "value": "New end"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2470,
+    "kind": "translation-call",
+    "value": "Mandatory. Stored in the append-only reschedule history."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2489,
+    "kind": "translation-call",
+    "value": "closed"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2498,
+    "kind": "translation-call",
+    "value": "Closing…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2503,
+    "kind": "translation-call",
+    "value": "This visit has an approved report."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2506,
+    "kind": "translation-call",
+    "value": "No approved report"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2506,
+    "kind": "translation-call",
+    "value": "Closing without one needs a written explanation of at least twenty characters."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2535,
+    "kind": "translation-call",
+    "value": "created from"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2544,
+    "kind": "translation-call",
+    "value": "Creating…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2551,
+    "kind": "translation-call",
+    "value": "Customer, site, contact, the customer's requirement, the site findings, the proposed scope, the assumptions, the exclusions and the risks — from the approved report."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2554,
+    "kind": "translation-call",
+    "value": "Project name"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2561,
+    "kind": "translation-call",
+    "value": "Estimate due date"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2596,
+    "kind": "translation-call",
+    "value": "Everything the engineer needs on one page. Print this before leaving."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2597,
+    "kind": "translation-call",
+    "value": "Print"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2608,
+    "kind": "translation-call",
+    "value": "minutes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2643,
+    "kind": "translation-call",
+    "value": "Restricted — ask before taking any picture"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2643,
+    "kind": "translation-call",
+    "value": "Allowed"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2644,
+    "kind": "translation-call",
+    "value": "Not required"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2661,
+    "kind": "translation-call",
+    "value": "Nothing outstanding — the intake was complete."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2669,
+    "kind": "translation-call",
+    "value": "No file was attached to the intake."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2674,
+    "kind": "translation-call",
+    "value": "When"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2674,
+    "kind": "translation-call",
+    "value": "Engineers"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2680,
+    "kind": "translation-call",
+    "value": "First visit to this customer."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2773,
+    "kind": "translation-call",
+    "value": "Uploaded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2805,
+    "kind": "jsx-text:button",
+    "value": "บันทึกตอนนี้"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2817,
+    "kind": "jsx-text:span",
+    "value": "ข้อมูลการสำรวจ · อ่านอย่างเดียว"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2822,
+    "kind": "translation-call",
+    "value": "No template selected"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2823,
+    "kind": "jsx-text:strong",
+    "value": "ข้อบันทึกแล้ว"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2824,
+    "kind": "jsx-text:button",
+    "value": "เฉพาะข้อบังคับที่ยังไม่ครบ ("
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2828,
+    "kind": "translation-call",
+    "value": "required item(s) still unanswered"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2829,
+    "kind": "translation-call",
+    "value": "Check-out is refused until they are answered or marked not applicable."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2832,
+    "kind": "jsx-text:span",
+    "value": "ข้อ · เหลือข้อบังคับ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2867,
+    "kind": "jsx-text:button",
+    "value": "เพิ่มหมายเหตุ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2873,
+    "kind": "translation-call",
+    "value": "No checklist"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2874,
+    "kind": "translation-call",
+    "value": "This visit type has no checklist template. An administrator can add one."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2878,
+    "kind": "translation-call",
+    "value": "Photos, videos and documents"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2892,
+    "kind": "jsx-text:span",
+    "value": "· v"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2908,
+    "kind": "translation-call",
+    "value": "No file yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2909,
+    "kind": "translation-call",
+    "value": "A photograph of what you are describing is worth more than the description."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2913,
+    "kind": "translation-call",
+    "value": "Recorded separately from the sales requirement and carried into the report"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2929,
+    "kind": "translation-call",
+    "value": "Nothing recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2930,
+    "kind": "translation-call",
+    "value": "Record what you saw, what you measured and what worries you."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2937,
+    "kind": "translation-call",
+    "value": "Not shared"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2980,
+    "kind": "translation-call",
+    "value": "recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2989,
+    "kind": "translation-call",
+    "value": "Record"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2993,
+    "kind": "translation-call",
+    "value": "Kind"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 2996,
+    "kind": "translation-call",
+    "value": "Detail"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3003,
+    "kind": "translation-call",
+    "value": "A finding is added and archived, never silently edited — the report quotes it."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3019,
+    "kind": "translation-call",
+    "value": "This device cannot report a location."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3022,
+    "kind": "translation-call",
+    "value": "The location could not be read. Check-in works without it."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3036,
+    "kind": "translation-call",
+    "value": "checked in"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3045,
+    "kind": "translation-call",
+    "value": "Checking in…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3053,
+    "kind": "translation-call",
+    "value": "Optional. Nothing is stored unless you tick this."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3073,
+    "kind": "translation-call",
+    "value": "checked out"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3073,
+    "kind": "translation-call",
+    "value": "report due"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3082,
+    "kind": "translation-call",
+    "value": "Checking out…"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3088,
+    "kind": "translation-call",
+    "value": "required checklist item(s) unanswered"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3089,
+    "kind": "translation-call",
+    "value": "The API will refuse the check-out and name them. Answer them or mark them not applicable first."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3091,
+    "kind": "translation-call",
+    "value": "Checking out starts the report clock. The report draft is created for you, pre-filled from the intake and your findings."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3092,
+    "kind": "translation-call",
+    "value": "Closing note"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3142,
+    "kind": "translation-call",
+    "value": "No report yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3143,
+    "kind": "translation-call",
+    "value": "The report is created automatically when the engineer checks out."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3149,
+    "kind": "translation-call",
+    "value": "Report saved"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3161,
+    "kind": "translation-call",
+    "value": "submitted for review"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3190,
+    "kind": "translation-call",
+    "value": "Reviewer comment"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3195,
+    "kind": "translation-call",
+    "value": "Customer acknowledged"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3203,
+    "kind": "jsx-text:p",
+    "value": "ก่อนส่งตรวจ: เติม"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3203,
+    "kind": "jsx-text:p",
+    "value": "อย่างน้อยช่องละ 20 ตัวอักษร"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3204,
+    "kind": "jsx-text:summary",
+    "value": "ตรวจรายละเอียดประกอบ · ความต้องการ ขอบเขต เงื่อนไข และความเสี่ยง"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3205,
+    "kind": "jsx-text:p",
+    "value": "ข้อมูลที่มีอยู่ถูกเก็บไว้แล้ว แก้เฉพาะส่วนที่ต้องเพิ่มหรือเปลี่ยน"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3216,
+    "kind": "jsx-text:summary",
+    "value": "รายละเอียดรายงานทั้งหมด"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3223,
+    "kind": "jsx-text:summary",
+    "value": "บันทึกหน้างานและไฟล์ประกอบ ·"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3223,
+    "kind": "jsx-text:summary",
+    "value": "บันทึก /"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3225,
+    "kind": "jsx-text:h3",
+    "value": "สิ่งที่บันทึกระหว่างสำรวจ"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3225,
+    "kind": "jsx-text:p",
+    "value": "ยังไม่มีบันทึกเพิ่มเติมจากหน้างาน"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3226,
+    "kind": "jsx-text:h3",
+    "value": "ค่าที่วัดไว้"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3248,
+    "kind": "translation-call",
+    "value": "No action item"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3249,
+    "kind": "translation-call",
+    "value": "Anything the visit left open belongs here, with an owner and a date."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3253,
+    "kind": "translation-call",
+    "value": "An approved revision is frozen by a database trigger; a revision request opens the next one"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3257,
+    "kind": "jsx-text:strong",
+    "value": "R"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3260,
+    "kind": "translation-call",
+    "value": "approved by"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3308,
+    "kind": "translation-call",
+    "value": "The author cannot approve their own report. Requesting a revision opens the next revision and keeps this one intact."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3315,
+    "kind": "translation-call",
+    "value": "Required when requesting a revision"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3336,
+    "kind": "translation-call",
+    "value": "acknowledged"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3345,
+    "kind": "translation-call",
+    "value": "Record acknowledgement"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3349,
+    "kind": "translation-call",
+    "value": "The customer representative's name, as they gave it"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3352,
+    "kind": "translation-call",
+    "value": "A digital customer signature is planned for a later phase; the name and time are recorded now."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3377,
+    "kind": "translation-call",
+    "value": "Action item recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3391,
+    "kind": "translation-call",
+    "value": "Detail"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3452,
+    "kind": "translation-call",
+    "value": "Call"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3455,
+    "kind": "translation-call",
+    "value": "Brief"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3479,
+    "kind": "PageHeader.eyebrow",
+    "value": "ENGINEER"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3485,
+    "kind": "translation-call",
+    "value": "Nothing assigned to you"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3485,
+    "kind": "translation-call",
+    "value": "Assignments appear here as soon as a coordinator places you on a visit."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3504,
+    "kind": "translation-call",
+    "value": "Not scheduled"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3554,
+    "kind": "translation-call",
+    "value": "Send"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3558,
+    "kind": "translation-call",
+    "value": "This visit has no time yet."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3559,
+    "kind": "translation-call",
+    "value": "Response"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3563,
+    "kind": "translation-call",
+    "value": "Required when declining or asking for information"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3584,
+    "kind": "translation-call",
+    "value": "You may edit"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3584,
+    "kind": "translation-call",
+    "value": "Read only"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3591,
+    "kind": "translation-call",
+    "value": "SLA"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3628,
+    "kind": "translation-call",
+    "value": "visit purposes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3629,
+    "kind": "translation-call",
+    "value": "A purpose carries the default duration, crew size and checklist a coordinator starts from"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3634,
+    "kind": "translation-call",
+    "value": "Thai"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3634,
+    "kind": "translation-call",
+    "value": "Japanese"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3635,
+    "kind": "translation-call",
+    "value": "Duration"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3635,
+    "kind": "translation-call",
+    "value": "Engineers"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3641,
+    "kind": "translation-call",
+    "value": "h"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3644,
+    "kind": "jsx-text:span",
+    "value": "CL_GENERAL"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3676,
+    "kind": "translation-call",
+    "value": "Edit visit type"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3684,
+    "kind": "translation-call",
+    "value": "Letters, digits, underscore. Cannot be changed once used."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3686,
+    "kind": "translation-call",
+    "value": "Sort order"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3689,
+    "kind": "translation-call",
+    "value": "Japanese name"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3690,
+    "kind": "translation-call",
+    "value": "Default duration (minutes)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3692,
+    "kind": "translation-call",
+    "value": "Default engineers"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3699,
+    "kind": "translation-call",
+    "value": "Requires manager approval before scheduling"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3723,
+    "kind": "translation-call",
+    "value": "skills"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3723,
+    "kind": "translation-call",
+    "value": "The vocabulary used for skill matching and for engineer profiles"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3727,
+    "kind": "translation-call",
+    "value": "Thai"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3727,
+    "kind": "translation-call",
+    "value": "Japanese"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3728,
+    "kind": "translation-call",
+    "value": "Engineers holding it"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3740,
+    "kind": "translation-call",
+    "value": "Edit skill"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3757,
+    "kind": "translation-call",
+    "value": "Sort order"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3763,
+    "kind": "translation-call",
+    "value": "Japanese name"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3806,
+    "kind": "translation-call",
+    "value": "Checklist templates"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3807,
+    "kind": "translation-call",
+    "value": "Answered items are deactivated rather than deleted, so a finished visit keeps the question it answered"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3812,
+    "kind": "translation-call",
+    "value": "Save template"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3818,
+    "kind": "translation-call",
+    "value": "Any (fallback)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3820,
+    "kind": "translation-call",
+    "value": "Yes"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3820,
+    "kind": "translation-call",
+    "value": "No"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3823,
+    "kind": "translation-call",
+    "value": "Prompt"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3824,
+    "kind": "translation-call",
+    "value": "Guidance"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3840,
+    "kind": "translation-call",
+    "value": "Remove"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3847,
+    "kind": "translation-call",
+    "value": "Add item"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3848,
+    "kind": "translation-call",
+    "value": "No template"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3848,
+    "kind": "translation-call",
+    "value": "Run the master seed, or create a template."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3863,
+    "kind": "translation-call",
+    "value": "Service levels"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3864,
+    "kind": "translation-call",
+    "value": "Report due days drive the check-out clock, the 'due soon' warning and the SLA compliance figure"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3866,
+    "kind": "translation-call",
+    "value": "Visit type"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3866,
+    "kind": "translation-call",
+    "value": "Review (days)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3867,
+    "kind": "translation-call",
+    "value": "Lead (days)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3867,
+    "kind": "translation-call",
+    "value": "Report due (days)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3867,
+    "kind": "translation-call",
+    "value": "Warn (hours)"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3868,
+    "kind": "translation-call",
+    "value": "Default"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3873,
+    "kind": "translation-call",
+    "value": "All"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3878,
+    "kind": "translation-call",
+    "value": "Default"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3915,
+    "kind": "translation-call",
+    "value": "Skill match on the assignment screen reads directly from this table"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3919,
+    "kind": "translation-call",
+    "value": "Skill"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3923,
+    "kind": "Field.label",
+    "value": "&nbsp;"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3926,
+    "kind": "translation-call",
+    "value": "Skill granted"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3941,
+    "kind": "translation-call",
+    "value": "Remove"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3943,
+    "kind": "translation-call",
+    "value": "Skill removed"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3948,
+    "kind": "translation-call",
+    "value": "No skill profile yet"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3949,
+    "kind": "translation-call",
+    "value": "Until engineers have skills, every skill match reads 0%."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3966,
+    "kind": "translation-call",
+    "value": "Leave, training or a holiday. The assignment check refuses a booking that overlaps one of these."
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3970,
+    "kind": "translation-call",
+    "value": "Kind"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3973,
+    "kind": "translation-call",
+    "value": "To"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3981,
+    "kind": "translation-call",
+    "value": "Recorded, but these visits overlap"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3982,
+    "kind": "translation-call",
+    "value": "Unavailability recorded"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3987,
+    "kind": "translation-call",
+    "value": "Record"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3990,
+    "kind": "translation-call",
+    "value": "From 30 days ago onwards"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3992,
+    "kind": "translation-call",
+    "value": "Kind"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3992,
+    "kind": "translation-call",
+    "value": "To"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3996,
+    "kind": "translation-call",
+    "value": "Remove"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 3998,
+    "kind": "translation-call",
+    "value": "Removed"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 4002,
+    "kind": "translation-call",
+    "value": "Nobody has recorded time off"
+  },
+  {
+    "file": "app/system/production/SiteVisitScreens.tsx",
+    "line": 4003,
+    "kind": "translation-call",
+    "value": "Recording leave here is what stops a booking landing on it."
+  }
+]

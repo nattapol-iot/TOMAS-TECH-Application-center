@@ -23,10 +23,13 @@ public sealed record InquirySummary(
     string CustomerName,
     string ProjectName,
     string ProjectType,
+    string? SalesOwner,
     long EstimateOwnerId,
     string EstimateOwnerName,
     DateOnly DueDate,
     string Priority,
+    int ProjectProbability,
+    string CustomerInterestGrade,
     string Status,
     decimal Progress,
     int Revision,
@@ -44,6 +47,9 @@ public sealed record CreateInquiryRequest(
     long EstimateOwnerId,
     DateOnly DueDate,
     string Priority,
+    int ProjectProbability,
+    string CustomerInterestGrade,
+    string? QualificationNote,
     string? Requirement,
     string? Background,
     string? ScopeSummary,
@@ -53,6 +59,124 @@ public sealed record CreateInquiryRequest(
     string? Standard,
     string? Special,
     string? Remark);
+
+public sealed record InquiryAssignmentRequest(long EstimateOwnerId, string RowVersion);
+
+public sealed record InquiryQualificationRequest(
+    int ProjectProbability,
+    string CustomerInterestGrade,
+    string? QualificationNote,
+    string RowVersion);
+
+public sealed record CreateInquiryMeetingRequest(
+    DateOnly MeetingDate,
+    string MeetingType,
+    IReadOnlyList<string>? Participants,
+    string? Requirement,
+    string? Technical,
+    string? Decision,
+    string? OpenPoint,
+    string? ActionItem,
+    long? OwnerId,
+    DateOnly? DueDate,
+    long? AttachmentId);
+
+public sealed record InquiryMeetingSummary(
+    long Id,
+    DateOnly MeetingDate,
+    string MeetingType,
+    IReadOnlyList<string> Participants,
+    string Requirement,
+    string Technical,
+    string Decision,
+    string OpenPoint,
+    string ActionItem,
+    long? OwnerId,
+    string? OwnerName,
+    DateOnly? DueDate,
+    long? AttachmentId,
+    string? AttachmentName,
+    string CreatedByName,
+    DateTimeOffset CreatedAt,
+    string RowVersion);
+
+public sealed record InquiryAttachmentSummary(
+    long Id,
+    string FileName,
+    string Category,
+    string ContentType,
+    long SizeBytes,
+    string UploadedByName,
+    DateTimeOffset UploadedAt,
+    string RowVersion);
+
+public sealed record InquiryActivitySummary(
+    long Id,
+    string EntityType,
+    string EntityNumber,
+    string Action,
+    string ActorName,
+    string? BeforeJson,
+    string? AfterJson,
+    string? Reason,
+    DateTimeOffset OccurredAt);
+
+public sealed record InquiryEstimateSummary(
+    long Id,
+    string Number,
+    int Revision,
+    long OwnerId,
+    string OwnerName,
+    DateOnly CreatedDate,
+    DateOnly DueDate,
+    string Status,
+    decimal Progress,
+    decimal MaterialTotal,
+    decimal EngineeringTotal,
+    decimal OutsourceTotal,
+    decimal OtherTotal,
+    decimal Total,
+    string RowVersion);
+
+public sealed record InquiryDetail(
+    long Id,
+    string Number,
+    DateOnly InquiryDate,
+    long CustomerId,
+    string CustomerCode,
+    string CustomerName,
+    string Contact,
+    string ProjectName,
+    string ProjectType,
+    string? RfqNo,
+    string? SalesOwner,
+    long EstimateOwnerId,
+    string EstimateOwnerName,
+    DateOnly DueDate,
+    string Priority,
+    int ProjectProbability,
+    string CustomerInterestGrade,
+    string QualificationNote,
+    string Status,
+    decimal Progress,
+    int Revision,
+    long? EstimateId,
+    string Requirement,
+    string Background,
+    string ScopeSummary,
+    string Technical,
+    DateOnly? TargetDelivery,
+    string SiteLocation,
+    string Standard,
+    string Special,
+    string Remark,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    string RowVersion,
+    InquiryEstimateSummary? Estimate,
+    IReadOnlyList<InquiryMeetingSummary> Meetings,
+    IReadOnlyList<InquiryAttachmentSummary> Attachments,
+    IReadOnlyList<InquiryActivitySummary> Activity);
 
 public sealed record EstimateSummary(
     long Id,
@@ -70,7 +194,13 @@ public sealed record EstimateSummary(
     decimal Progress,
     decimal MaterialTotal,
     decimal EngineeringTotal,
+    decimal OutsourceTotal,
+    decimal TransportationTotal,
+    decimal AccommodationTotal,
+    decimal OtherTotal,
+    decimal ContingencyTotal,
     decimal Total,
+    DateOnly CreatedDate,
     DateTimeOffset UpdatedAt,
     string RowVersion);
 
@@ -162,7 +292,75 @@ public sealed record CostItemRequest(
 
 public sealed record DeleteCostItemRequest(string EstimateRowVersion, string LineRowVersion, string? Reason);
 
+public sealed record ManhourLineRequest(
+    string EstimateRowVersion,
+    string? LineRowVersion,
+    string Package,
+    string Activity,
+    string Department,
+    string Level,
+    string CostType,
+    string Provider,
+    long? SupplierId,
+    string? QuotationNumber,
+    DateOnly? PriceDate,
+    decimal Engineers,
+    decimal ManDays,
+    decimal HoursPerDay,
+    decimal DailyRate,
+    long OwnerId,
+    string? Remark);
+
+public sealed record ExpenseLineRequest(
+    string EstimateRowVersion,
+    string? LineRowVersion,
+    string Package,
+    string ExpenseType,
+    string Description,
+    string CostType,
+    long? SupplierId,
+    string? ReferenceNumber,
+    decimal Quantity,
+    string Unit,
+    decimal UnitCost,
+    long OwnerId,
+    string? Remark);
+
+public sealed record OtherCostLineRequest(
+    string EstimateRowVersion,
+    string? LineRowVersion,
+    string Category,
+    string Description,
+    decimal Quantity,
+    string Unit,
+    decimal UnitCost,
+    string? Remark);
+
+public sealed record RemoveEstimateLineRequest(string EstimateRowVersion, string LineRowVersion, string? Reason);
+
+public sealed record EstimateAssignmentRequest(
+    string EstimateRowVersion,
+    string LineRowVersion,
+    long OwnerId,
+    long? SupportId,
+    DateOnly DueDate,
+    string Status,
+    decimal Progress,
+    string? Comment);
+
+public sealed record EstimateContingencyRequest(string RowVersion, decimal ContingencyRate);
+
 public sealed record CreateCustomerRequest(
+    string Code,
+    string Name,
+    string? Contact,
+    string? Email,
+    string? Phone,
+    string? Industry,
+    string? Site);
+
+public sealed record UpdateCustomerRequest(
+    string RowVersion,
     string Code,
     string Name,
     string? Contact,
@@ -201,6 +399,41 @@ public sealed record CreateEngineeringRateRequest(
     decimal InstallationDaily,
     DateOnly EffectiveFrom,
     DateOnly? EffectiveTo);
+
+public sealed record CreateEmployeeRequest(
+    int EmployeeNo,
+    string NameEn,
+    string? NameTh,
+    string Department,
+    string JobTitle,
+    string? Mobile,
+    string Email,
+    string? Nickname,
+    DateOnly? BirthDate,
+    string? UniformSize,
+    string? ShoeSize,
+    DateOnly StartWorkDate,
+    DateOnly? EndWorkDate,
+    string Position,
+    bool IsActive);
+
+public sealed record UpdateEmployeeRequest(
+    string RowVersion,
+    int EmployeeNo,
+    string NameEn,
+    string? NameTh,
+    string Department,
+    string JobTitle,
+    string? Mobile,
+    string Email,
+    string? Nickname,
+    DateOnly? BirthDate,
+    string? UniformSize,
+    string? ShoeSize,
+    DateOnly StartWorkDate,
+    DateOnly? EndWorkDate,
+    string Position,
+    bool IsActive);
 
 public sealed record ApiError(string Code, string Message, object? Details = null);
 

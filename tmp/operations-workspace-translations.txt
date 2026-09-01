@@ -1,0 +1,85 @@
+1|ไม่พบสิทธิ์เข้าถึง|アクセス権がありません|Access not available
+2|รายการนี้ถูกจำกัดตามบทบาท|この項目はロールによって制限されています|This item is restricted by role
+3|สิ่งที่คุณรายงานตามลำดับ — จากประวัติ SQL ที่แก้ย้อนหลังไม่ได้|報告内容を順番に表示・変更できないSQL監査履歴から取得
+5|Phase เป็นแถวสรุป|フェーズは集計行です|Phase is a summary row
+6|วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase|日付・期間・進捗はフェーズ内のタスクから計算します|Dates, duration and progress are calculated from tasks within the phase
+7|ที่ร้องขอ การยอมรับจะเพิ่มระยะเวลางานและคำนวณตารางโครงการใหม่|が申請されています。承認するとタスク期間を延長し、工程を再計算します。
+9|ยอมรับเพื่อขยายแผนงาน ปฏิเสธเพื่อคงวันที่เดิม|承認するとタスク計画を延長します。却下すると元の日付を維持します
+10|100 รายการล่าสุดจาก audit trail ของ Schedule|工程の監査履歴・最新100件|Latest 100 schedule audit entries
+11|สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule|工程を開く前にプロジェクトを作成するか、アクセス権を申請してください|Create a project or request project access before opening its schedule
+12|บางโครงการไม่ถูกนำมารวม|一部のプロジェクトは含まれていません|Some projects are excluded
+13|โหลด Schedule ไม่สำเร็จหรือไม่มีสิทธิ์|工程を読み込めないか、アクセス権がありません|Schedule could not be loaded or access is unavailable
+14|โครงการจาก|件のプロジェクト／全|projects out of
+15|โครงการ|プロジェクト|projects
+16|Effort แบ่งเท่ากันเมื่อ Task มี PIC หลายคน|複数の担当者がいるタスクは工数を均等に配分します|Effort is divided equally when a task has multiple owners
+17|สร้างบัญชีผู้ใช้ก่อนมอบหมายงานในตาราง|工程の作業を割り当てる前にユーザーを登録してください
+18|ข้อมูลที่ใช้คำนวณ Resource Plan|リソース計画の計算に使用する情報|Data used to calculate the resource plan
+19|สร้าง Schedule ในโครงการเพื่อเริ่ม Resource Plan|プロジェクトに工程を作成してリソース計画を開始します|Create a project schedule to start the resource plan
+20|Price view บางส่วนไม่ถูกโหลด|価格表示の一部を読み込めませんでした|Some price views could not be loaded
+21|ไม่สามารถอ่าน Cost workspace|原価ワークスペースを読み込めません：|Cannot read the cost workspace for
+22|estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น|件の見積。正常に読み込めた実データのみを表示しています|estimates. Only actual data loaded successfully is shown
+23|ไม่พบข้อมูลตามตัวกรอง หรือยังไม่มี Unit cost ใน Estimate|条件に一致するデータがないか、見積に単価がありません|No data matches the filters, or the estimate has no unit cost
+28|อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก|仕入先見積のPDF・Excel・画像をアップロードして最初の項目を作成します|Upload a supplier quotation PDF, Excel or image to create the first record
+29|ไม่พบ Cost item ที่มี Supplier และเข้าเกณฑ์ราคาไม่พร้อมใช้งาน|仕入先が設定され、価格未確定の条件に該当する原価明細はありません|No cost item with a supplier meets the unavailable-price criteria
+30|ผู้ดูแลต้องเพิ่มสิทธิ์ knowledge.view ให้บทบาทของคุณ|管理者がこのロールにknowledge.view権限を付与する必要があります。
+32|หนึ่งแถวต่อเอกสาร โดยแสดงรุ่นปัจจุบัน|文書ごとに1行で、現在の版を表示します
+33|สร้างมาตรฐาน SOP หรือเทมเพลตเพื่อเริ่มทะเบียน|標準・SOP・テンプレートを作成して登録を始めます。
+34|อัปโหลดงานนำเสนอบริษัท ฝ่ายขาย หรือด้านเทคนิคเพื่อสร้างคลัง|会社・営業・技術のプレゼン資料をアップロードしてライブラリを作成します。
+35|เอกสารทำงาน โครงการ และผู้ขายที่แชร์กับคุณจะแสดงที่นี่|共有された作業・プロジェクト・仕入先の文書がここに表示されます。
+36|เอกสารทำงาน โครงการ และผู้ขายที่คุณเข้าถึงได้|閲覧可能な作業・プロジェクト・仕入先の文書
+37|มาตรฐานที่มอบหมายให้คุณอ่านจะแสดงที่นี่จนกว่าคุณจะยืนยัน|閲読を依頼された標準は、確認するまでここに表示されます。
+38|เอกสารที่คุณต้องตอบรับทราบ|確認が必要な文書
+39|การยืนยันบันทึกว่าคุณอ่านเอกสารรุ่นนี้แล้ว|この版を閲読したことを記録します
+40|วิธีใช้งาน การแก้ปัญหา แนวปฏิบัติ และบทเรียน|手順・トラブル対応・推奨実践・教訓
+41|สร้างบทความด้านเทคนิคแรกให้ทีม|チーム向けの最初の技術記事を作成します。
+42|จัดเก็บเป็นข้อความหรือ Markdown ที่ปลอดภัย โดยไม่แทรก HTML|安全なプレーンテキスト・Markdownで保存し、HTMLは挿入しません
+43|เขียนหัวข้อ รายการ ลิงก์ ตาราง และโค้ดด้วย Markdown ได้|見出し・リスト・リンク・表・コードブロックをMarkdownで記述できます
+44|จัดการลำดับชั้น ลำดับแสดง ค่าเริ่มต้น และสถานะใช้งาน|階層・表示順・既定値・利用可否を管理します
+45|ตัวนับตามคำนำหน้าและขอบเขตรองรับการใช้งานพร้อมกัน และปรับได้เฉพาะเพิ่มขึ้น|接頭辞・範囲別の採番は同時操作に対応し、既存番号は増加のみ可能です
+46|ระบบกำหนดเลขเอกสารให้เมื่อสร้าง|作成時にサーバーが文書番号を発行します
+48|รหัสแผนก เช่น EE, ME, SW, PR|部門コード（例：EE・ME・SW・PR）
+49|ไม่บังคับ รองรับ PDF, Word, Excel, PowerPoint, text, CSV, PNG หรือ JPG|任意。PDF・Word・Excel・PowerPoint・テキスト・CSV・PNG・JPG
+50|เอกสารนี้เลิกใช้แล้ว ห้ามใช้เป็นข้อมูลอ้างอิงสำหรับงานใหม่|この文書は廃止済みです。新しい作業の参照に使用しないでください。
+51|เอกสารนี้หมดอายุแล้ว ห้ามใช้อ้างอิง|この文書は有効期限を過ぎています。引用しないでください。
+52|กิจกรรมของเอกสารนี้จะแสดงที่นี่|この文書の操作履歴がここに表示されます。
+53|การมอบหมายผูกกับเอกสารที่เผยแพร่รุ่นนี้เท่านั้น|割当はこの公開済みの版に紐付きます
+54|เชื่อมเอกสารเดียวกับหลายรายการโดยไม่คัดลอกไฟล์|ファイルを複製せず、1つの文書を複数の記録に連携します
+55|เชื่อมเอกสารกับ Inquiry, Project, Estimate, BOM, PR หรือ PO เพื่อค้นเจอจากรายการนั้น|引合・プロジェクト・見積・BOM・PR・POに文書を連携すると、その記録から見つけられます。
+56|ความคิดเห็นผูกกับเอกสารรุ่นนี้|コメントはこの文書の版に紐付きます
+57|บทสนทนาการตรวจสอบจะแสดงที่นี่|レビューのやり取りがここに表示されます。
+59|ตรวจสิทธิ์ที่เซิร์ฟเวอร์ทุกครั้งที่อ่านหรือดาวน์โหลด|閲覧・ダウンロードのたびにサーバーで権限を確認します
+60|ต้องมีสมาชิกทีมคนอื่นอย่างน้อยหนึ่งคนก่อนส่ง เพราะผู้เขียนอนุมัติเอกสารตัวเองไม่ได้|提出には他のメンバーが最低1人必要です。作成者は自分の文書を承認できません。
+61|ไม่เขียนทับรุ่นที่เผยแพร่แล้ว การดำเนินการนี้สร้างรุ่นถัดไป|公開済みの版は上書きせず、次の版を作成します
+62|จำเป็น — บันทึกเป็นส่วนหนึ่งของประวัติรุ่น|必須・版履歴に記録されます
+63|ปรับคำค้นหา หรือเพิ่มลูกค้ารายแรกเมื่อมีสิทธิ์ master.write|検索条件を変更するか、master.write権限で最初の顧客を追加してください|Adjust the search, or add the first customer with master.write permission
+64|ยังไม่มี stock transaction ถึงวันที่รายงาน|報告日までの在庫取引はありません|No stock transaction exists up to the report date
+65|ใบสั่งซื้อ|発注書
+66|ยังไม่มีขั้นตอนอนุมัติที่เสร็จในช่วงวันที่นี้|この期間に完了した承認ステップはありません|No approval step was completed in this date range
+67|เลือกโครงการเพื่อคำนวณต้นทุนจาก estimate, procurement และ stock ledger|プロジェクトを選択し、見積・調達・在庫台帳から原価を計算します|Select a project to calculate costs from estimate, procurement and stock ledgers
+68|อัตราวิศวกรรมและติดตั้งตามวันที่มีผล|適用日別の技術・設置単価
+69|เพิ่มอัตราแรกเมื่อมีสิทธิ์ master.write|master.write権限で最初の単価を追加します|Add the first rate with master.write permission
+70|อ่านข้อมูลได้อย่างเดียว บัญชี Audit ทั้งสองชุดเพิ่มประวัติได้แต่แก้ย้อนหลังไม่ได้|閲覧専用です。両方の監査台帳は追記のみで、過去の変更はできません
+71|ยืนยันจาก API และทะเบียนผู้ใช้ SQL|APIとSQLユーザー台帳で確認
+72|ยืนยันจากการโหลดข้อมูลเริ่มต้นที่สำเร็จ|初期データの正常な取得で確認済み
+73|SQL Server ผ่าน API|API経由のSQL Server
+74|โหลดข้อมูลเริ่มต้น ข้อมูลหลัก และสิทธิ์สำเร็จ|初期データ・マスタ・権限を正常に読み込みました
+75|สิทธิ์ RBAC ที่ API ส่งให้บัญชีปัจจุบัน|APIが現在のアカウントに返したRBAC権限|RBAC permissions returned by the API for the current account
+76|ค่า connection string, Entra, CORS และ host ถูกจัดการที่ server environment เพื่อไม่ให้ browser แก้ไขความปลอดภัยของ Production ได้|接続文字列・Entra・CORS・ホストはサーバー環境で管理し、ブラウザーから本番環境のセキュリティを変更できないようにしています|Connection strings, Entra, CORS and host settings are managed on the server so the browser cannot change production security
+78|สร้าง Estimate จาก Inquiry ที่ลงทะเบียนแล้ว|登録済みの引合から見積を作成|Create an estimate from a registered inquiry
+79|ไม่มี Inquiry สถานะ New ที่ยังไม่สร้าง Estimate และอยู่ในสิทธิ์ของคุณ|アクセス可能な新規引合のうち、見積未作成のものはありません|No accessible New inquiry remains without an estimate
+80|บริษัทที่รับงานด้วย|契約先顧客|Contracting customer
+81|บัญชีนี้อ่านและดาวน์โหลดเอกสารได้ แต่ไม่มีสิทธิ์อัปโหลดเอกสารโครงการ|このアカウントは文書の閲覧・ダウンロードのみ可能で、プロジェクト文書をアップロードできません|This account can read and download documents but cannot upload project documents
+82|ใช้ End user จาก Inquiry ต้นทาง|元の引合のエンドユーザーを使用|Inherit end user from inquiry
+83|เอาเครื่องหมายออกเพื่อระบุ End user สำหรับ Project นี้เอง หรือเว้นว่างเมื่อยังไม่ทราบ|チェックを外してこのプロジェクトのエンドユーザーを指定するか、不明なら空欄にします|Uncheck to choose this project's end user, or leave unspecified if unknown
+84|เพิ่ม Material master และรับสินค้าเข้าระบบก่อน|先に品目マスタを追加し、入荷を登録してください|Add material master records and receive items first
+85|ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier|原価明細と優先仕入先で同じ仕入先データを使用します|Shared supplier records for cost items and preferred suppliers
+86|ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย|検索語を変更するか、仕入先追加を選択してください|Try another search, or choose Add supplier
+87|คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร|ブランドをカンマで区切って入力・最大100件、各100文字まで|Separate brands with commas; up to 100 brands, 100 characters each
+88|ทะเบียนสินค้าใช้ร่วมกับ Inventory · การเพิ่มสินค้าไม่เพิ่มยอด Stock|在庫と共通の品目マスタ・品目の追加では在庫数量は増えません|Item records shared with Inventory · Adding an item does not add stock
+89|รหัส Item ต้องไม่ซ้ำ และรองรับตัวอักษร ตัวเลข . _ / -|品目コードは一意にし、英数字と . _ / - を使用できます|Item codes must be unique and may contain letters, digits, . _ / -
+90|การสร้าง Master ไม่เพิ่มยอด Stock; ยอดคงเหลือมาจาก Stock ledger เท่านั้น|マスタ作成では在庫は増えません。在庫残高は在庫台帳のみから算出します|Creating master data does not add stock; balances come only from the stock ledger
+91|Preferred supplier เป็นตัวเลือก ไม่บังคับสำหรับการสร้าง Item|優先仕入先は任意で、品目作成の必須項目ではありません|Preferred supplier is optional when creating an item
+92|ข้อมูลสินค้าอ้างอิง · ดูยอดคงเหลือและการเคลื่อนไหวที่เมนู Inventory|品目の参照情報・残高と入出庫は在庫メニューで確認|Item reference data · View balances and movements in Inventory
+93|สร้าง Material master โดยไม่สร้างยอด Stock เริ่มต้น|初期在庫を作成せずに品目マスタを追加|Create material master data without opening stock
+94|บัญชีที่เข้าใช้งานระบบและบทบาทสิทธิ์ แยกจากทะเบียนพนักงานในแท็บ Employees|システムの利用アカウントと権限ロールです。従業員タブの従業員台帳とは別に管理します|System accounts and permission roles, separate from the employee register in Employees
+95|สร้างบัญชีผู้ใช้ก่อนสร้างข้อมูลอ้างอิงอัตรา|単価の参照情報を作成する前にユーザーを登録してください

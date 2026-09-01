@@ -1,0 +1,6 @@
+{"level":30,"time":1788583082912,"pid":37536,"hostname":"BOY-TMT","msg":"Server listening at http://127.0.0.1:5107"}
+{"level":30,"time":1788583082936,"pid":37536,"hostname":"BOY-TMT","msg":"Server listening at http://192.168.1.160:5107"}
+{"level":30,"time":1788583095441,"pid":37536,"hostname":"BOY-TMT","reqId":"req-1","req":{"method":"GET","url":"/health/ready","host":"127.0.0.1:5107","remoteAddress":"127.0.0.1","remotePort":60771},"msg":"incoming request"}
+{"level":30,"time":1788583095644,"pid":37536,"hostname":"BOY-TMT","reqId":"req-1","res":{"statusCode":200},"responseTime":202.8168999999998,"msg":"request completed"}
+{"level":30,"time":1788583095699,"pid":37536,"hostname":"BOY-TMT","reqId":"req-1","req":{"method":"GET","url":"/health/live","host":"192.168.1.160:5107","remoteAddress":"192.168.1.160","remotePort":60772},"msg":"incoming request"}
+{"level":30,"time":1788583095700,"pid":37536,"hostname":"BOY-TMT","reqId":"req-1","res":{"statusCode":200},"responseTime":0.5700999999990017,"msg":"request completed"}

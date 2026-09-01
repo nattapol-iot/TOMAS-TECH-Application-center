@@ -1,5 +1,7 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
+import { useT as useUiText } from "../i18n";
 import { useMemo, useState } from "react";
 import {
   BOM_LINES, BOMS, MAT_PRS, PROJECTS,
@@ -30,6 +32,7 @@ export const prStatusTone = (status: MatPr["status"]) =>
    ========================================================================== */
 
 export function PrList({ go }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   const store = useMatStore();
   const session = useSession();
@@ -59,7 +62,7 @@ export function PrList({ go }: ScreenProps) {
                 <th>{t("PR No.")}</th><th>{t("Project")}</th><th>{t("Source")}</th><th>{t("Requested By")}</th>
                 <th>{t("Request Date")}</th><th>{t("Required")}</th><th className="num">{t("Lines")}</th>
                 <th className="num">{t("PR Amount")}</th><th className="num">{t("vs Estimate")}</th>
-                <th>{t("Budget")}</th><th>{t("Waiting on")}</th><th>{t("Status")}</th><th aria-label="Action" />
+                <th>{t("Budget")}</th><th>{t("Waiting on")}</th><th>{t("Status")}</th><th aria-label={uiText("Action")} />
               </tr>
             </thead>
             <tbody>
@@ -471,8 +474,8 @@ export function PrDetail({ id, go, notify }: ScreenProps & { id: string }) {
             <div className="table-wrap">
               <table>
                 <tbody>
-                  <tr><td>{t("Approved Budget")} ({t("material")})</td><td className="num"><strong>{money(check.approvedBudget)}</strong></td></tr>
-                  <tr><td>{t("Previously Committed")} ({t("open PO")})</td><td className="num">{money(check.committed)}</td></tr>
+                  <tr><td>{t("Approved Budget")} ({t("material")}<LocalizedText text={")"} /></td><td className="num"><strong>{money(check.approvedBudget)}</strong></td></tr>
+                  <tr><td>{t("Previously Committed")} ({t("open PO")}<LocalizedText text={")"} /></td><td className="num">{money(check.committed)}</td></tr>
                   <tr><td>{t("Forecast before this PR")}</td><td className="num">{money(check.forecastBefore)}</td></tr>
                   <tr><td>{t("Current PR Amount")}</td><td className="num">{money(check.amount)}</td></tr>
                   <tr className="subtotal-row"><td>{t("Forecast After Approval")}</td><td className="num"><strong>{money(check.forecastAfter)}</strong></td></tr>
@@ -514,7 +517,7 @@ export function PrDetail({ id, go, notify }: ScreenProps & { id: string }) {
               <div className="file-row"><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>EST-2608-0001 R03</strong><small>{t("Estimate Cost Reference")}</small></div>
                 <button className="btn default sm" type="button" onClick={() => go({ name: "estimate", id: project.estimateId })}>{t("Open")}</button></div>
               {pr.lines.filter((line) => line.attachment).map((line) => (
-                <div className="file-row" key={line.id}><span className="file-icon"><Icon name="paperclip" /></span><div style={{ flex: 1 }}><strong>{line.attachment}</strong><small>{t("Supplier Quotation")} · {line.partNo}</small></div>
+                <div className="file-row" key={line.id}><span className="file-icon"><Icon name="paperclip" /></span><div style={{ flex: 1 }}><strong>{line.attachment}</strong><small>{t("Supplier Quotation")} <LocalizedText text={"·"} /> {line.partNo}</small></div>
                   <button className="btn default sm" type="button" onClick={() => notify(`${line.attachment} ${t("opened")}`)}>{t("Open")}</button></div>
               ))}
             </div>
@@ -542,7 +545,7 @@ export function PrDetail({ id, go, notify }: ScreenProps & { id: string }) {
               <div className="feed-row" key={entry.id}>
                 <span className="avatar sm">{userOf(entry.actorId)?.initials ?? "—"}</span>
                 <div>
-                  <p><strong>{userName(entry.actorId)}</strong> · {entry.role} · {entry.action}</p>
+                  <p><strong>{userName(entry.actorId)}</strong> <LocalizedText text={"·"} /> {entry.role} <LocalizedText text={"·"} /> {entry.action}</p>
                   <p className="muted">{entry.before} → {entry.after}{entry.reason ? ` · “${entry.reason}”` : ""}</p>
                 </div>
                 <span className="muted mono" style={{ fontSize: 11 }}>{entry.at}</span>

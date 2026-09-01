@@ -9,8 +9,8 @@ GO
 IF N'$(ConfirmDevelopmentSeed)' <> N'YES'
     THROW 51030, 'Development seed blocked. Pass ConfirmDevelopmentSeed="YES" explicitly.', 1;
 
-IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 7)
-    THROW 51031, 'Migration 007 must be applied before the optional development seed.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 15)
+    THROW 51031, 'Migration 015 must be applied before the optional development seed.', 1;
 GO
 
 SET XACT_ABORT ON;

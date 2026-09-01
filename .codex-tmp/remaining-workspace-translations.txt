@@ -1,0 +1,343 @@
+A — Hot / สนใจมาก~A — Hot / Strong interest~A — 高い関心
+B — Warm / สนใจ~B — Warm / Interested~B — 関心あり
+C — Nurture / อยู่ช่วงศึกษา~C — Nurture / Researching~C — 情報収集中
+D — Low / สนใจน้อย~D — Low / Limited interest~D — 関心が低い
+All probability~ทุกระดับโอกาสสำเร็จ~すべての確度
+High · 75–100%~สูง · 75–100%~高 · 75～100%
+Medium · 50–74%~ปานกลาง · 50–74%~中 · 50～74%
+Early · 25–49%~เริ่มต้น · 25–49%~初期 · 25～49%
+Low · 0–24%~ต่ำ · 0–24%~低 · 0～24%
+Inquiry / งาน~Inquiry / Work~引合・案件
+End user:~ผู้ใช้งานปลายทาง:~エンドユーザー：
+รับเรื่องลูกค้า~Customer intake~顧客案件の受付
+บันทึกข้อมูลหลักก่อน แล้วเลือกทำ Estimate หรือขอเข้าหน้างาน~Save the main details, then create an estimate or request a site visit.~基本情報を保存してから、見積作成または現場訪問を申請してください。
+กำหนดตอบกลับ / Estimate due~Response / Estimate due date~回答・見積期限
+รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค~More details · Estimator, work type and technical information~詳細・見積担当者、案件種別、技術情報
+ผู้ประเมินเริ่มต้น:~Default estimator:~既定の見積担当者：
+· เปลี่ยนได้ในส่วนนี้~· Change it here~・ここで変更できます
+0% = unlikely, 100% = highly likely~0% = โอกาสน้อยมาก, 100% = โอกาสสูงมาก~0%＝見込みが低い、100%＝見込みが非常に高い
+Record the evidence behind the grade and probability~บันทึกข้อมูลสนับสนุนระดับความสนใจและโอกาสสำเร็จ~関心度と確度の根拠を記録してください
+Project Background~ที่มาโครงการ~プロジェクトの背景
+Scope Summary~สรุปขอบเขตงาน~作業範囲の概要
+Technical Requirement~ข้อกำหนดทางเทคนิค~技術要件
+Site Location~สถานที่หน้างาน~現場所在地
+Customer Standard~มาตรฐานลูกค้า~顧客規格
+Inquiry Attachments~ไฟล์แนบงานสอบถามราคา~引合の添付ファイル
+Files are stored in the configured company document storage and linked to the inquiry~ไฟล์จะเก็บในพื้นที่เอกสารบริษัทและเชื่อมกับงานสอบถามราคานี้~ファイルは会社の文書保管先に保存し、この引合に紐付けます
+Drag and drop files here or click to browse~ลากไฟล์มาวางที่นี่หรือคลิกเพื่อเลือก~ここにファイルをドラッグするか、クリックして選択してください
+PDF, Excel, Word, DWG or image — maximum 50 MB per file~PDF, Excel, Word, DWG หรือรูปภาพ — ไม่เกิน 50 MB ต่อไฟล์~PDF、Excel、Word、DWG、画像・1ファイル最大50 MB
+· queued for upload~· รออัปโหลด~・アップロード待ち
+Loading inquiry from SQL Server…~กำลังโหลดงานสอบถามราคา…~引合を読み込み中…
+Inquiry status~สถานะงานสอบถามราคา~引合の状態
+Open estimate~เปิดประมาณการต้นทุน~見積を開く
+Assign owner~มอบหมายผู้รับผิดชอบ~担当者を割り当て
+Update qualification~ปรับข้อมูลประเมินโอกาส~案件評価を更新
+Inquiry information~ข้อมูลงานสอบถามราคา~引合情報
+บริษัทที่รับงานด้วย / Contracting customer~Contracting customer~契約先顧客
+Customer contact~ผู้ติดต่อลูกค้า~顧客担当者
+Site location~สถานที่หน้างาน~現場所在地
+Scope summary~สรุปขอบเขตงาน~作業範囲の概要
+Sales signal and forecast are tracked independently~ติดตามความสนใจและโอกาสสำเร็จแยกจากกัน~関心度と受注確度は別々に管理します
+Forecast guide~เกณฑ์โอกาสสำเร็จ~受注確度の目安
+75–100% High · 50–74% Medium · 25–49% Early · 0–24% Low~75–100% สูง · 50–74% ปานกลาง · 25–49% เริ่มต้น · 0–24% ต่ำ~75～100% 高・50～74% 中・25～49% 初期・0～24% 低
+Estimate progress~ความคืบหน้าประมาณการต้นทุน~見積の進捗
+Latest meetings~การประชุมล่าสุด~最近の打ち合わせ
+No meeting recorded yet.~ยังไม่มีบันทึกการประชุม~打ち合わせ記録がありません。
+Requirement Information~ข้อมูลความต้องการ~要件情報
+The engineering basis recorded against this inquiry~ข้อมูลพื้นฐานทางวิศวกรรมของงานสอบถามราคานี้~この引合に記録された設計の基礎情報
+Why the estimate requirement changed, recorded meeting by meeting~เหตุผลที่ข้อกำหนดประมาณการเปลี่ยน แยกตามการประชุม~打ち合わせごとの見積要件変更の理由
+Technical discussion~การหารือทางเทคนิค~技術的な協議
+Open point~ประเด็นค้าง~未解決事項
+Action item~งานที่ต้องดำเนินการ~対応事項
+Meeting Record~บันทึกการประชุม~打ち合わせ記録
+Estimate cost linked to this inquiry~ประมาณการต้นทุนที่เชื่อมกับงานสอบถามราคานี้~この引合に紐付く原価見積
+Files are stored in the configured company document storage~ไฟล์จะเก็บในพื้นที่เอกสารของบริษัท~ファイルは会社の文書保管先に保存します
+Every production change recorded against this inquiry and its estimate~ประวัติการเปลี่ยนแปลงงานสอบถามราคาและประมาณการต้นทุน~この引合と見積に記録された変更履歴
+Meeting Date~วันที่ประชุม~打ち合わせ日
+Meeting Type~ประเภทการประชุม~打ち合わせの種類
+Separate names with a comma~คั่นแต่ละชื่อด้วยจุลภาค~名前をカンマで区切ってください
+Technical Discussion~การหารือทางเทคนิค~技術的な協議
+Open Point~ประเด็นค้าง~未解決事項
+Action Item~งานที่ต้องดำเนินการ~対応事項
+Assign estimate owner~มอบหมายผู้รับผิดชอบประมาณการต้นทุน~見積担当者を割り当て
+Independent forecast score from 0 to 100~คะแนนโอกาสสำเร็จแยกต่างหาก ตั้งแต่ 0 ถึง 100~独立した受注確度（0～100）
+Example: Budget approved; customer requested final technical proposal by Friday~ตัวอย่าง: อนุมัติงบแล้ว ลูกค้าขอข้อเสนอทางเทคนิคฉบับสุดท้ายภายในวันศุกร์~例：予算承認済み。顧客から金曜までに最終技術提案を求められた
+Upload inquiry attachment~อัปโหลดไฟล์แนบงานสอบถามราคา~引合の添付ファイルをアップロード
+Loading from production API…~กำลังโหลดข้อมูลจากระบบ…~システムから読み込み中…
+Project / supplier~โครงการ / ผู้ขาย~プロジェクト・仕入先
+Value / quantity~มูลค่า / จำนวน~金額・数量
+Next action~ขั้นตอนถัดไป~次の操作
+Purchase Order~ใบสั่งซื้อ~発注書
+Generate BOM~สร้างรายการวัสดุ~BOMを作成
+Release~เปิดใช้งาน~リリース
+Section / item~หมวด / รายการ~区分・明細
+On PO~อยู่ในใบสั่งซื้อ~発注済み
+Open PR~เปิดใบขอซื้อ~購買申請を開く
+Covered~มีจำนวนครอบคลุมแล้ว~必要数を確保済み
+Reserve~จอง~引当
+Required date~วันที่ต้องการ~必要日
+Generate production BOM~สร้างรายการวัสดุสำหรับงานจริง~製作用BOMを作成
+PROCURE TO PAY~จัดซื้อถึงชำระเงิน~購買から支払まで
+Project / BOM~โครงการ / รายการวัสดุ~プロジェクト・BOM
+Current step~ขั้นตอนปัจจุบัน~現在のステップ
+Create PO~สร้างใบสั่งซื้อ~発注書を作成
+Approval rules triggered~กฎอนุมัติที่ใช้~適用された承認ルール
+Committed ก่อนหน้า~Previously committed~既存の確定額
+· PR นี้~· This PR~・この購買申請
+· หลังอนุมัติจะเหลือ~· Remaining after approval~・承認後の残額
+ทุกบรรทัดย้อนกลับไปยัง Module และรายการใน Estimate ได้~Every line can be traced to its module and estimate item.~すべての明細を元のモジュールと見積明細に追跡できます。
+Stock ตอนเปิด PR~Stock when PR opened~購買申請作成時の在庫
+ตอนนี้~Now~現在
+Buy despite stock~ซื้อแม้มีสต็อก~在庫があっても購入
+ทุก step มาจาก rule engine ของ API~Every step follows the configured approval rules.~各ステップは設定済みの承認ルールに基づきます。
+Step~ขั้นตอน~ステップ
+Rule~กฎ~ルール
+Acted~ดำเนินการแล้ว~対応済み
+วางแผนและรวมรายการ PR~Plan and consolidate PR items~購買申請明細の計画・集約
+Supplier master is empty~ยังไม่มีข้อมูลผู้ขาย~仕入先マスターが空です
+เพิ่ม supplier ใน Master Data ก่อนสร้าง PR~Add a supplier in Master Data before creating a PR.~購買申請の作成前に、マスターデータで仕入先を追加してください。
+Select BOM…~เลือกรายการวัสดุ…~BOMを選択…
+Emergency~ฉุกเฉิน~緊急
+Module lines~รายการตามโมดูล~モジュール明細
+ต้นทางจาก Estimate/BOM~Source estimate / BOM~元の見積・BOM
+รายการหลังรวม~Consolidated items~集約後の明細
+รวมซ้ำ~Duplicates merged~重複を集約
+บรรทัด~lines~行
+จองจาก Stock~Reserve from stock~在庫から引当
+จองอัตโนมัติก่อนสร้าง PR~Automatically reserve before creating the PR~購買申請作成前に自動引当
+ยอดสั่งซื้อ~Purchase amount~購入金額
+รายการ · แยก PO ตาม Supplier~items · Separate POs by supplier~明細・仕入先ごとに発注書を分割
+รายการซ้ำถูกรวมให้แล้ว~Duplicate items have been consolidated.~重複明細を集約しました。
+แต่ละรายการยังเปิดดู Module และ Estimate source เดิมได้ครบ~Each item retains all original module and estimate references.~各明細から元のモジュールと見積の参照情報を確認できます。
+แสดงรายการที่ไม่ต้องซื้อ~Show items not requiring purchase~購入不要の明細を表示
+อุปกรณ์ที่รวมแล้ว~Consolidated materials~集約済みの資材
+ต้องใช้~Required~必要数
+Stock ว่าง~Available stock~利用可能在庫
+จองให้~Reserved~引当数
+On order / PR~อยู่ในใบสั่งซื้อ / ใบขอซื้อ~発注済み・申請中
+Module line~รายการโมดูล~モジュール明細
+Select…~เลือก…~選択…
+Previous Purchase~การซื้อครั้งก่อน~過去の購入
+Manual~กำหนดเอง~手動
+No BOM line available~ไม่มีรายการวัสดุที่ใช้ได้~利用できるBOM明細がありません
+This released BOM has no shortage or material line~รายการวัสดุที่เปิดใช้งานนี้ไม่มีของขาดหรือรายการวัสดุ~このリリース済みBOMには不足または資材明細がありません
+No released BOM~ไม่มีรายการวัสดุที่เปิดใช้งาน~リリース済みBOMがありません
+Release a BOM before creating a requisition~เปิดใช้งานรายการวัสดุก่อนสร้างใบขอซื้อ~購買申請の前にBOMをリリースしてください
+Expected delivery date~วันที่คาดว่าจะได้รับ~納入予定日
+PR / project~ใบขอซื้อ / โครงการ~購買申請・プロジェクト
+Order date~วันที่สั่งซื้อ~発注日
+Value~มูลค่า~金額
+Receive~รับสินค้า~受入
+Previously received~รับแล้วก่อนหน้า~受入済み数量
+Outstanding~คงค้าง~未処理
+Line value~มูลค่ารายการ~明細金額
+Default location~ตำแหน่งเก็บเริ่มต้น~既定の保管場所
+Quantity split mismatch~จำนวนแยกประเภทไม่ตรงกัน~数量の内訳が一致しません
+Accepted + damaged + rejected ต้องเท่ากับ received quantity ในทุกบรรทัด~Accepted + damaged + rejected must equal received quantity on every line.~各明細で、合格数＋破損数＋不合格数が受入数と一致する必要があります。
+QC~ตรวจคุณภาพ~品質検査
+Over~เกิน~超過
+Passed~ผ่าน~合格
+Pending~รอดำเนินการ~保留中
+Failed~ไม่ผ่าน~不合格
+This purchase order has no receivable line~ใบสั่งซื้อนี้ไม่มีรายการที่รับได้~この発注書には受入可能な明細がありません
+INBOUND MATERIAL~รับวัสดุเข้า~資材受入
+Held~กักไว้~保留
+Confirm~ยืนยัน~確定
+Previously~ก่อนหน้า~前回まで
+Lot / serial~ล็อต / หมายเลขเครื่อง~ロット・シリアル番号
+OUTBOUND MATERIAL~เบิกวัสดุออก~資材払出
+Qty requested~จำนวนที่ขอ~申請数量
+New material issue request~สร้างใบขอเบิกวัสดุ~資材払出申請を作成
+BOM qty~จำนวนตามรายการวัสดุ~BOM数量
+Previously issued~เบิกแล้วก่อนหน้า~払出済み数量
+Request qty~จำนวนที่ขอเบิก~払出申請数量
+Location override~เปลี่ยนตำแหน่งเก็บ~保管場所を変更
+Release a BOM before requesting material~เปิดใช้งานรายการวัสดุก่อนขอเบิก~資材申請の前にBOMをリリースしてください
+Net~สุทธิ~正味
+Return~คืน~返却
+Chain of custody~ประวัติการส่งมอบ~受渡履歴
+· required~· จำเป็น~・必須
+Return quantity~จำนวนคืน~返却数量
+CONTROL & GOVERNANCE~ควบคุมและกำกับดูแล~管理・ガバナンス
+Purchase requisition approvals~อนุมัติใบขอซื้อ~購買申請の承認
+Approval route and current approver are calculated by the API~ระบบกำหนดเส้นทางอนุมัติและผู้อนุมัติปัจจุบัน~システムが承認経路と現在の承認者を判定します
+Changes~การเปลี่ยนแปลง~変更
+Material issue approvals~อนุมัติการเบิกวัสดุ~資材払出の承認
+Requester cannot approve their own MIR~ผู้ขอเบิกไม่สามารถอนุมัติใบขอเบิกของตนเอง~申請者は自身の払出申請を承認できません
+Stock adjustment approvals~อนุมัติปรับปรุงสต็อก~在庫調整の承認
+Stock changes only after Inventory Controller approval~สต็อกเปลี่ยนหลังผู้ควบคุมคลังอนุมัติเท่านั้น~在庫管理担当者の承認後に在庫が変わります
+Adjustment~การปรับปรุง~調整
+Current usable~จำนวนใช้งานได้ปัจจุบัน~現在の利用可能数
+INVENTORY CONTROL~ควบคุมสินค้าคงคลัง~在庫管理
+Request adjustment~ขอปรับปรุงสต็อก~在庫調整を申請
+Approved adjustments append a ledger event; balances are never edited directly~รายการปรับปรุงที่อนุมัติจะบันทึกความเคลื่อนไหว โดยไม่แก้ยอดคงเหลือโดยตรง~承認済み調整は台帳に履歴として記録し、残高を直接変更しません
+Damaged / rejected receipts stay unavailable until an explicit decision~สินค้าที่เสียหายหรือไม่ผ่านจะยังใช้ไม่ได้จนกว่าจะมีการตัดสินใจ~破損・不合格品は処置が決まるまで使用できません
+Held since~กักไว้ตั้งแต่~保留開始日
+Decide~ตัดสินใจ~処置を決定
+Request stock adjustment~ขอปรับปรุงสินค้าคงคลัง~在庫調整を申請
+Inventory item~รายการสินค้าคงคลัง~在庫品目
+Select item…~เลือกรายการ…~品目を選択…
+(usable~(ใช้งานได้~（利用可能
+Quantity change~จำนวนที่เปลี่ยน~数量の増減
+ใช้ค่าบวกเพื่อเพิ่ม และค่าลบเพื่อลด~Use a positive value to increase and a negative value to decrease.~増やす場合は正の値、減らす場合は負の値を入力してください。
+Outcome~ผลการตัดสินใจ~処置結果
+Return to Supplier~คืนผู้ขาย~仕入先へ返品
+Scrap~ตัดทิ้ง~廃棄
+Drawing~แบบงาน~図面
+Material approve~อนุมัติวัสดุ~資材承認
+Quotation~ใบเสนอราคา~見積書
+Purchase requisition / order~ใบขอซื้อ / ใบสั่งซื้อ~購買申請・発注
+UAT acceptance~ตรวจรับ UAT~UAT検収
+Reason (required)~เหตุผล (จำเป็น)~理由（必須）
+เหตุผลจะถูกเก็บถาวรใน signature event chain และแสดงบนหน้าเอกสาร~The reason is permanently recorded in the signature history and displayed on the document page.~理由は署名履歴に永久保存され、文書画面に表示されます。
+บทบาทของคุณยังไม่มีสิทธิ์ signing.read กรุณาติดต่อผู้ดูแลระบบ~Your role lacks signing.read permission. Contact your administrator.~現在の役割にsigning.read権限がありません。管理者に連絡してください。
+ยังไม่มีลายเซ็นของคุณ~You have no saved signature.~署名が登録されていません。
+ต้องสร้างลายเซ็นก่อนจึงจะลงนามได้ ลายเซ็นนี้ใช้เฉพาะเวลาคุณเซ็นเท่านั้น ไม่ถูกส่งให้ผู้ใช้อื่นและดาวน์โหลดไม่ได้~Create your signature before signing. It is used only when you sign and is not available to other users or for download.~署名前に署名を作成してください。署名時にのみ使用され、他のユーザーへの提供やダウンロードはできません。
+สร้างลายเซ็น~Create signature~署名を作成
+Block~บล็อก~ブロック
+Mark~เครื่องหมาย~マーク
+ไม่มีเอกสารที่รอลายเซ็นของคุณอยู่ในขณะนี้~No documents are waiting for your signature.~現在、あなたの署名待ちの文書はありません。
+รายการตามงาน เหมือนที่ Team Attention ทำกับ work item แต่ทำกับเอกสาร~Follow-up items for documents needing attention.~対応が必要な文書のフォローアップ一覧。
+ไม่มีคำขอลงนามที่คุณเปิดไว้และยังค้างอยู่~You have no open signature requests awaiting action.~あなたが開始した未完了の署名依頼はありません。
+by role · first to act wins~ตามบทบาท · ผู้ดำเนินการคนแรกเป็นผู้ลงนาม~役割指定・最初に対応した人が署名
+· no authority~· ไม่มีสิทธิ์ลงนาม~・署名権限なし
+Open &amp; sign~เปิดและลงนาม~開いて署名
+Locale~ภาษาเอกสาร~文書の言語
+Chain~ลำดับเหตุการณ์~イベント履歴
+The file being signed~ไฟล์ที่จะลงนาม~署名対象のファイル
+ไฟล์นี้เปลี่ยนไม่ได้ · การแก้ไขต้นฉบับคือ revision ใหม่ และจะยกเลิกทุก step ที่ยังไม่ได้เซ็น~This file is immutable. Editing the original creates a new revision and cancels all unsigned steps.~このファイルは変更できません。原本を変更すると新しい版になり、未署名のステップはすべて取り消されます。
+Frozen by~ผู้ตรึงเอกสาร~確定者
+เปิดไฟล์ที่กำลังจะเซ็น~Open the file to be signed~署名対象ファイルを開く
+Preview file &amp; signatures~ดูไฟล์และลายเซ็นก่อนลงนาม~ファイルと署名をプレビュー
+Freeze a revision then request signatures~ตรึงฉบับเอกสารแล้วขอลงนาม~版を確定して署名を依頼
+Company stamp at Manager approval~ประทับตราบริษัทเมื่อผู้จัดการอนุมัติ~管理職の承認時に社印を押印
+Manager must hold current stamp authority. No stamp is applied before approval.~ผู้จัดการต้องมีสิทธิ์ประทับตราที่ยังมีผล ระบบจะไม่ประทับตราก่อนอนุมัติ~管理職には有効な押印権限が必要です。承認前に押印されることはありません。
+Signature only (no company stamp)~ลงนามอย่างเดียว (ไม่ประทับตราบริษัท)~署名のみ（社印なし）
+Request signatures~ขอลงนาม~署名を依頼
+Freeze new revision~ตรึงฉบับเอกสารใหม่~新しい版を確定
+Signed output~เอกสารที่ลงนามแล้ว~署名済み文書
+ไฟล์นี้คือสิ่งที่ส่งออกจริง · มี certificate page และรหัสตรวจสอบ~This is the exported file, including a certificate page and verification code.~証明ページと検証コードを含む、実際に出力されたファイルです。
+Verify code~รหัสตรวจสอบ~検証コード
+Output SHA-256~ค่า SHA-256 ของไฟล์ผลลัพธ์~出力ファイルのSHA-256
+Produced~สร้างเมื่อ~生成日時
+View signed file / ดูไฟล์ที่เซ็นแล้ว~View signed file~署名済みファイルを表示
+Open signed output in new tab~เปิดเอกสารที่ลงนามแล้วในแท็บใหม่~署名済み文書を新しいタブで開く
+Append-only และผูกกันด้วย hash · hash = SHA256(prev_hash + '|' + payload_hash)~Append-only and hash-linked · hash = SHA256(prev_hash + '|' + payload_hash)~追記専用のハッシュ連鎖・hash = SHA256(prev_hash + '|' + payload_hash)
+Evidence~หลักฐาน~証跡
+Hash~แฮช~ハッシュ
+step~ขั้นตอน~ステップ
+ยังไม่มีการเปิดคำขอลงนามบนเอกสารนี้~No signature request has been opened for this document.~この文書の署名依頼はまだ開始されていません。
+Revision ใหม่จะยกเลิก step ที่ยังไม่ได้เซ็น และเก็บ step ที่เซ็นแล้วไว้กับไฟล์เดิมเท่านั้น~A new revision cancels unsigned steps. Signed steps remain linked only to the original file.~新しい版では未署名ステップが取り消されます。署名済みステップは元のファイルにのみ残ります。
+ประวัติคำขอที่ปิดแล้ว~Closed request history~終了した依頼の履歴
+Opened~เปิดเมื่อ~開始日時
+Signed~ลงนามแล้ว~署名済み
+View signed file~ดูไฟล์ที่ลงนามแล้ว~署名済みファイルを表示
+อัปโหลดสำเนาที่ลูกค้าเซ็นไว้ในหน้า Project Documents ก่อน แล้วเลือกไฟล์นั้นที่นี่ — ระบบบันทึกว่าใครเป็นผู้แนบ~Upload the customer-signed copy in Project Documents, then select it here. The system records who attached it.~顧客の署名済みコピーをプロジェクト文書にアップロードしてから、ここで選択してください。添付したユーザーを記録します。
+Scanned copy~สำเนาสแกน~スキャンしたコピー
+Note (optional)~หมายเหตุ (ไม่บังคับ)~備考（任意）
+ช่องนี้เป็นตัวเลือก เอกสารสามารถถึงสถานะ SIGNED ได้โดยไม่มีลายเซ็นลูกค้า~This field is optional. The document can reach SIGNED status without a customer signature.~この項目は任意です。顧客の署名がなくても文書は署名済み状態にできます。
+ช่องนี้จำเป็น — การตรวจรับที่ไม่มีลายเซ็นลูกค้าไม่ใช่การตรวจรับ~This field is required. Customer acceptance requires the customer's signature.~この項目は必須です。顧客検収には顧客の署名が必要です。
+Assignee~ผู้ได้รับมอบหมาย~担当者
+Decided~ตัดสินใจเมื่อ~判断日時
+Marks~เครื่องหมาย~マーク
+stamp~ตราประทับ~印章
+ delegated by~มอบสิทธิ์โดย~委任者
+Preview, move &amp; resize signature~ดูตัวอย่าง ย้าย และปรับขนาดลายเซ็น~署名のプレビュー・移動・サイズ変更
+This file format uses the signature certificate; convert to PDF for positioned signing.~ไฟล์รูปแบบนี้ใช้ใบรับรองการลงนาม แปลงเป็น PDF หากต้องการวางตำแหน่งลายเซ็น~この形式では署名証明書を使用します。署名位置を指定するにはPDFに変換してください。
+You~คุณ~あなた
+Company stamp~ตราประทับบริษัท~社印
+ลายเซ็นของคุณ~Your signature~あなたの署名
+แสดงเฉพาะกับคุณ · ไม่มี route ที่ส่งลายเซ็นของผู้ใช้อื่น~Only visible to you. Other users' signatures are not exposed.~自分にのみ表示されます。他のユーザーの署名は取得できません。
+ยังไม่มีลายเซ็น — สร้างก่อนลงนาม~No signature saved. Create one before signing.~署名が未登録です。署名前に作成してください。
+ชื่อของคุณจะถูกพิมพ์ใต้ตราประทับ และระบบบันทึกว่า~Your name is printed below the stamp, and the system records that~印章の下にあなたの名前を表示し、次の内容を記録します：
+เป็นผู้ประทับพร้อมสิทธิ์ที่ใช้ — ระบบนี้ไม่สามารถผลิตประโยคว่า &ldquo;บริษัทประทับตรา&rdquo; ได้~is the person applying the stamp, with the authority used. The record identifies a person rather than stating that the company stamped it.~が使用した権限に基づいて押印したことを記録します。「会社が押印した」という匿名の記録にはなりません。
+เก็บไว้ใน event chain~Recorded in the event history~イベント履歴に記録
+ยืนยันตัวตนของคุณ~Confirm your identity~本人確認
+ระบบนี้ไม่เก็บรหัสผ่าน การลงนามจึงต้องผ่านการเข้าสู่ระบบ Microsoft ใหม่ทันทีก่อนเซ็น และเวลาที่ยืนยันจะถูกบันทึกลงใน chain~The system does not store passwords. Sign in to Microsoft again immediately before signing; the authentication time is recorded in the event history.~パスワードは保存しません。署名直前にMicrosoftへ再ログインし、その本人確認時刻を履歴に記録します。
+Return to owner~ส่งคืนผู้รับผิดชอบ~担当者へ差し戻す
+Delegate~มอบสิทธิ์ลงนาม~署名を委任
+Delegate this signature step~มอบสิทธิ์ลงนามขั้นตอนนี้~この署名ステップを委任
+Delegate to~มอบสิทธิ์ให้~委任先
+New signable document~สร้างเอกสารสำหรับลงนาม~署名対象の文書を作成
+Document class~ประเภทเอกสาร~文書分類
+ยังไม่มีเอกสารที่ถูก freeze เข้าสู่กระบวนการลงนาม~No documents have been frozen for signing yet.~署名用に確定された文書がありません。
+Freeze a document for signature~ตรึงเอกสารเพื่อขอลงนาม~署名用に文書を確定
+Stored file~ไฟล์ที่จัดเก็บแล้ว~保存済みファイル
+My Design task~งานออกแบบของฉัน~自分の設計タスク
+เฉพาะงานย่อยที่คุณได้รับมอบหมาย · Member เป็นผู้จัดทำ~Only subtasks assigned to you. The member prepares the document.~自分に割り当てられたサブタスクのみ表示します。メンバーが文書を作成します。
+· Leader:~· หัวหน้า:~・リーダー：
+· Manager:~· ผู้จัดการ:~・マネージャー：
+เลือกไฟล์ใหม่ หรือใช้ Stored file ด้านบน · ต้นฉบับและ SHA-256 จะถูกเก็บก่อนส่งอนุมัติ~Choose a new file or a stored file above. The original and its SHA-256 are saved before submission for approval.~新しいファイルか上の保存済みファイルを選択してください。承認申請前に原本とSHA-256を保存します。
+R ตามด้วยตัวเลข~R followed by a number~Rに続けて数字を入力
+ภาษาของเอกสาร ไม่ใช่ภาษาหน้าจอของผู้เซ็น~The document language, independent of the signer's interface language~署名者の画面言語とは別の文書言語
+ไทย~Thai~タイ語
+日本語~ญี่ปุ่น~日本語
+Amount (THB)~จำนวนเงิน (บาท)~金額（THB）
+ใช้เลือก value band ของ flow เท่านั้น เช่น PR/PO~Used only to select the workflow value band, such as for PR/PO.~購買申請・発注などの承認フローで金額帯を選ぶためにのみ使用します。
+Replacement file~ไฟล์ทดแทน~差し替えファイル
+Import revised Drawing~นำเข้าแบบงานฉบับแก้ไข~改訂図面をインポート
+Revision label~ชื่อฉบับแก้ไข~改訂ラベル
+Verify a signed document~ตรวจสอบเอกสารที่ลงนามแล้ว~署名済み文書を検証
+Verification code~รหัสตรวจสอบ~検証コード
+รูปแบบ TC-XXXX-XXXX-XXXX~Format: TC-XXXX-XXXX-XXXX~形式：TC-XXXX-XXXX-XXXX
+Class~ประเภท~分類
+Source SHA-256~ค่า SHA-256 ต้นฉบับ~原本のSHA-256
+Signed by~ผู้ลงนาม~署名者
+Signer~ผู้ลงนาม~署名者
+หน้านี้บอกอะไร~What this page shows~この画面で確認できること
+PREFERENCES~การตั้งค่าส่วนตัว~個人設定
+Initials:~ตัวย่อชื่อ:~イニシャル：
+เอกสารที่ลงนามแล้วยังอ้างอิงเวอร์ชันที่ใช้จริง — การเปลี่ยนลายเซ็นไม่ย้อนไปแก้เอกสารเก่า~Signed documents retain the signature version used. Changing your signature does not alter older documents.~署名済み文書には使用した署名の版が残ります。署名を変更しても過去の文書は変わりません。
+Active from~เริ่มใช้งาน~有効開始日
+ยังไม่เคยสร้างลายเซ็น~No signature has been created.~署名を作成していません。
+วิธีสร้าง~Creation method~作成方法
+วาดด้วยเมาส์ สไตลัส หรือนิ้ว~Draw with a mouse, stylus or finger~マウス、スタイラス、指で描画
+ไฟล์ PNG พื้นหลังโปร่งใส~PNG file with a transparent background~背景が透明なPNGファイル
+กว้างอย่างน้อย 600 px และไม่เกิน 2 MB~At least 600 px wide and no larger than 2 MB~幅600 px以上、2 MB以下
+ชื่อที่จะใช้เป็นลายเซ็น~Name to use as the signature~署名に使用する名前
+ชื่อพิมพ์เป็นเครื่องหมายที่อ่อนแอที่สุด มีไว้สำหรับคนที่วาดไม่ได้จริง ๆ~A typed name provides the weakest signature mark and is intended for those unable to draw.~文字入力の署名は最も弱い形式で、描画ができない場合に使用します。
+ตัวย่อ (สำหรับช่องลายเซ็นในกรอบชื่อแบบ)~Initials (for the drawing title-block signature box)~イニシャル（図面表題欄の署名枠用）
+ช่อง DRAWN BY ในกรอบชื่อแบบกว้างเพียง 18 มม. ลายเซ็นเต็มจะอ่านไม่ออก~The DRAWN BY box in the title block is only 18 mm wide; a full signature would be illegible.~表題欄のDRAWN BY枠は幅18 mmのため、署名全体では読み取れません。
+Undo~เลิกทำ~元に戻す
+Clear~ล้าง~クリア
+Grant authority~ให้สิทธิ์ประทับตรา~押印権限を付与
+Artwork~ภาพตราประทับ~印影
+on file~จัดเก็บแล้ว~登録済み
+not uploaded~ยังไม่อัปโหลด~未アップロード
+Valid~มีผล~有効
+ใครมีสิทธิ์ประทับตรานี้~Who may use this stamp~この印章を使用できる人
+Holder~ผู้ถือสิทธิ์~権限保有者
+Classes~ประเภทเอกสาร~文書分類
+Used~ใช้งานแล้ว~使用済み
+revoked~เพิกถอนแล้ว~取消済み
+Revoke~เพิกถอน~取り消す
+ยังไม่มีใครได้รับสิทธิ์ประทับตรานี้~No one has been granted authority to use this stamp.~この印章の使用権限はまだ付与されていません。
+การยกเลิกสิทธิ์ไม่ทำให้เอกสาร~Revoking authority does not invalidate~権限を取り消しても、
+ฉบับที่ประทับไปแล้วเป็นโมฆะ · Admin ไม่สามารถอยู่ในรายการนี้ได้ — Admin ตั้งค่าระบบ ฝ่ายธุรกิจเป็นผู้ลงนาม~previously stamped documents. Admins configure the system; business users sign and cannot grant stamp authority to the Admin role.~過去に押印した文書は無効になりません。管理者はシステムを設定し、業務担当者が署名するため、管理者役割はこの一覧に含められません。
+แปดคลาสเอกสารต่างกันเฉพาะที่นี่ · คำขอที่กำลังรันจะยึด template version ของตัวเองไว้ การแก้ template ไม่กระทบงานที่ค้างอยู่~The eight document classes have separate flows here. Running requests retain their own template version; template changes do not affect pending work.~8つの文書分類のフローをここで設定します。進行中の依頼は元のテンプレート版を保持し、変更は未完了の依頼に影響しません。
+Steps~ขั้นตอน~ステップ
+Rules~กฎ~ルール
+Running~กำลังดำเนินการ~進行中
+return to~ส่งคืนไปยัง~差し戻し先
+revision voids unsigned · locked~ฉบับแก้ไขยกเลิกขั้นตอนที่ยังไม่เซ็น · ล็อกแล้ว~改訂で未署名分を取消・ロック済み
+Estimate ไม่อยู่ในรายการนี้โดยเจตนา — เป็นเอกสารต้นทุนภายในที่มี APPROVAL สองขั้นอยู่แล้ว สิ่งที่ลูกค้าได้รับคือ Quotation ซึ่งเป็นตัวที่ลงนามและประทับตรา~Estimates use their existing two-stage internal cost approval. The customer-facing quotation is the document that receives signatures and the company stamp.~原価見積には既存の社内2段階承認を使用します。顧客に渡す見積書が署名と社印の対象です。
+ยังไม่ได้ตั้งค่า signature flow~Signature flows have not been configured.~署名フローが未設定です。
+New company stamp~สร้างตราประทับบริษัท~社印を新規作成
+Legal entity~นิติบุคคล~法人
+ชื่อตราประทับ / Stamp names~Stamp names~印章の名称
+ชื่อ (ไทย)~Name (Thai)~名称（タイ語）
+Name (English)~ชื่อ (อังกฤษ)~名称（英語）
+名前 (日本語)~ชื่อ (ญี่ปุ่น)~名称（日本語）
+Custodian role~บทบาทผู้ดูแลตราประทับ~印章管理者の役割
+ใครรับผิดชอบตราประทับนี้ในโลกจริง~Who is responsible for the physical stamp~実物の印章の管理責任者
+Valid from~เริ่มมีผล~有効開始日
+วันที่เริ่มมีผลของตราประทับ~The date this stamp becomes valid~この印章の有効開始日
+Scope — คลาสเอกสารที่ตรานี้ครอบคลุม~Scope — document classes covered by this stamp~適用範囲・この印章で扱う文書分類
+ภาพตราประทับอัปโหลดแยกและต้องใช้สิทธิ์ระดับผู้จัดการ เพราะเป็นสิ่งที่ปรากฏบนกระดาษของลูกค้าจริง ไฟล์ภาพถูกเก็บไว้ในที่ที่ไม่มี route ใดส่งออกได้~Upload stamp artwork separately with manager authority. It appears on customer documents and is stored without a public download route.~印影は管理職権限で別途アップロードします。顧客文書に使われるため、公開ダウンロード経路のない場所に保管します。
+Named person~บุคคลที่ระบุ~個人を指定
+Person~บุคคล~対象者
+สิทธิ์ระดับบทบาทตั้งค่าโดยผู้ดูแลระบบ เพราะต้องใช้ role id~Administrators configure role-based authority using the role ID.~役割単位の権限は、管理者が役割IDを使用して設定します。
+เว้นว่างหมายถึงทุกคลาสที่อยู่ใน scope ของตรานี้~Leave blank to cover every document class in this stamp's scope.~空欄の場合、この印章の適用範囲内の全分類が対象です。
+ทุกคลาสใน scope~All classes in scope~適用範囲内の全分類
+Valid to~มีผลถึง~有効終了日
+เว้นว่างคือไม่มีกำหนด~Leave blank for no expiry date.~空欄の場合、有効期限はありません。

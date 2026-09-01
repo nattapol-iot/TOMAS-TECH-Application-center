@@ -1,0 +1,104 @@
+
+> @tomas-tech/iot-team-center-api@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> @tomas-tech/iot-team-center-api@0.1.0 test
+> node --import tsx --test tests/*.test.ts
+
+✔ audit JSON keeps object/array payloads and envelopes scalar values for SQL ISJSON (0.7196ms)
+✔ Team Test codes match the existing HMAC-SHA256 base64url contract (1.4485ms)
+✔ private LAN detection accepts only RFC1918 IPv4 (4.7299ms)
+✔ Windows business time zone ids are normalized for Node.js (18.753ms)
+✔ TeamTest fails closed outside staging (0.709ms)
+✔ Microsoft Graph email fails closed when confidential settings are incomplete (1.2498ms)
+✔ drawing workflow uses three named project participants (1.2994ms)
+✔ drawing cannot be submitted without both project approvers (0.425ms)
+✔ neither author self-approval nor combined leader-manager is permitted (0.1599ms)
+✔ disabled assignment email reports recipients without making a network request (1.4212ms)
+✔ Microsoft Graph assignment email deduplicates recipients, escapes HTML and reuses the access token (41.3057ms)
+✔ Microsoft Graph failure does not throw after the assignment has been committed (2.8645ms)
+✔ end user distinguishes omitted inheritance, explicit clearing and positive numeric identity (1.5ms)
+✔ end user changes reject closed records while planning and approved records remain editable (0.4483ms)
+✔ end user updates require explicit write permission before any database access (437.8015ms)
+✔ end user update rejects malformed body and missing rowVersion before transaction (5.3505ms)
+✔ a writer outside project scope is denied before end user lookup or update (3.9862ms)
+✔ stale end user update cannot validate references or write (2.5733ms)
+✔ query helpers preserve the ASP.NET validation and clamping rules (1.5197ms)
+✔ write helpers validate text, integer, dates and SQL row versions (1.8938ms)
+✔ identifier and boolean query helpers reject ambiguous values (0.3813ms)
+✔ sales catalog accepts bounded company SharePoint data (2.0601ms)
+✔ sales catalog rejects external links and duplicate source rows (0.8385ms)
+✔ template pagination totals use the same search filter as the rows (278.6206ms)
+✔ template JSON identifiers accept frontend numbers and reject invalid values before SQL (18.4038ms)
+✔ work evidence scores only due assigned work and keeps suggestions advisory (13.5797ms)
+✔ work evidence with sparse data does not invent a score (0.4176ms)
+✔ all report types retain only reusable definitions and strip source/result/evidence data (1.8656ms)
+✔ allowlist does not copy inherited fields or unknown report types (1.1017ms)
+✔ template metadata accepts empty descriptions and 200-character names (0.3418ms)
+✔ creator/master ownership never substitutes for report.write permission (0.124ms)
+✔ resource planning requires server-side read permission (237.541ms)
+✔ source planning requires schedule.plan AND source write permission before database mutation (10.6409ms)
+✔ capacity and effort inputs reject invalid amounts, dates and arbitrary table names (6.3498ms)
+✔ task duration skips weekends and company holidays while effort stays independent (2.6858ms)
+✔ workload distinguishes zero capacity, missing capacity, and over capacity (0.6494ms)
+✔ invalid fractional duration, negative effort and malformed date are rejected (0.568ms)
+✔ replacement compares actual before and after rather than dropping the old plan (0.2633ms)
+{"level":30,"time":1788675378108,"pid":8396,"hostname":"BOY-TMT","reqId":"req-1","req":{"method":"GET","url":"/health/live/","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+✔ frontend collection URLs select the same route with or without a trailing slash (189.914ms)
+{"level":30,"time":1788675378110,"pid":8396,"hostname":"BOY-TMT","reqId":"req-1","res":{"statusCode":200},"responseTime":2.462500000000091,"msg":"request completed"}
+✔ sales company validation generates bounded unique codes and requires contact identity (2.364ms)
+✔ sales contact validation handles optional fields and rejects malformed values (1.1746ms)
+✔ permission fallback accepts only explicit permission-denied, never auth or database failures (0.6845ms)
+✔ HTTP create endpoints reject read-only users before any write or actor lookup (232.4259ms)
+✔ Sales intake.write can reach validation without master.write; malformed site and contact writes stop before transaction (10.0605ms)
+✔ placement rejects non-finite, off-page, zero-sized and unknown pages (3.6392ms)
+✔ display coordinates map to PDF CropBox for every right-angle rotation (0.2174ms)
+✔ PDF validation rejects changed source bytes and unsupported formats (9.563ms)
+✔ the canonical payload is order-independent and drops absent fields (0.9098ms)
+✔ the chain links each event to the one before it (0.4565ms)
+✔ a verification code is readable off paper and validates its own shape (1.2198ms)
+✔ document classes, prefixes and revision labels are validated, not assumed (0.7495ms)
+✔ signing assurance reports how presence was established, and refuses stale credentials (0.5752ms)
+✔ sales intake readiness blocks missing customer-critical information (0.9225ms)
+✔ site visit workflow enforces both state and permission (0.6498ms)
+✔ skill match is normalized and reports missing skills (0.7231ms)
+✔ report source semantics separate delivery reports and pre-sales POC (0.6387ms)
+✔ customer acknowledgment requires identity, explicit consent and the correct evidence mode (0.6684ms)
+✔ report JSON is bounded and optional reviewer does not invent report facts (0.9173ms)
+✔ snapshot evidence hash changes when signed content changes (0.2023ms)
+✔ submission requires common facts and type-specific evidence while draft parsing stays permissive (1.0591ms)
+✔ complete row never hides partially completed UAT/Inspection/POC rows (0.4282ms)
+✔ structured results accept only recorded PASS, FAIL or PARTIAL and every row must be complete (0.2775ms)
+✔ optional repeat sections ignore fully blank placeholders but reject incomplete evidence or activities (0.2922ms)
+ℹ tests 63
+ℹ suites 0
+ℹ pass 63
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1706.3439
+
+> @tomas-tech/iot-team-center-api@0.1.0 build
+> tsc -p tsconfig.json
+
+npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+
+added 168 packages, and audited 169 packages in 8s
+
+46 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+
+Status         : UPDATED
+ReleasePath    : C:\Users\natta\AppData\Local\IoTTeamCenter\TeamTest\releases\20260906-061613
+ProcessId      : 10808
+LocalOrigin    : http://127.0.0.1:5105
+LanOrigin      : http://192.168.1.160:5105
+FrontendOrigin : http://192.168.1.160:3000
+
+
+

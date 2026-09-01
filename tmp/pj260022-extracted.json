@@ -1,0 +1,1840 @@
+{
+  "source": "C:\\Users\\natta\\OneDrive - Tomas Tech\\IoT Team - Documents\\Project - 2026\\[PJ260022] SR Jig for Howa\\20260121-001-1_Estimate cost for HOWA - QR Reader Jig.xlsx",
+  "project_code": "PJ260022",
+  "project_name": "QR Reader Jig Stand",
+  "customer": "HOWA PACKAGING (THAILAND) CO., LTD.",
+  "document_date": "2026-01-21",
+  "creator": "Warit",
+  "summary_items": [
+    {
+      "sheet": "001_Summary cost",
+      "row": 9,
+      "model": "Standard equipment cost",
+      "description": "LASER SENSOR (LR-ZH500N)",
+      "supplier": "Keyence",
+      "brand": "Keyence",
+      "lead_time": "Customer Provide",
+      "quote_revision": null,
+      "unit_price": null,
+      "quantity": 2,
+      "total": 0,
+      "unit": "Set",
+      "remark": "Page 2/1",
+      "formulas": {
+        "E9": "='002_STD'!E7",
+        "L9": "=J9*K9"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 10,
+      "model": null,
+      "description": "D-SUB CABLE 5M.(OP-88682)",
+      "supplier": "Keyence",
+      "brand": "Keyence",
+      "lead_time": "Customer Provide",
+      "quote_revision": null,
+      "unit_price": null,
+      "quantity": 2,
+      "total": 0,
+      "unit": "Set",
+      "remark": "Page 2/2",
+      "formulas": {
+        "E10": "='002_STD'!E32",
+        "L10": "=J10*K10"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 11,
+      "model": null,
+      "description": "BRACKET SENSOR (OP-87404)",
+      "supplier": "Keyence",
+      "brand": "Keyence",
+      "lead_time": "Customer Provide",
+      "quote_revision": null,
+      "unit_price": null,
+      "quantity": 2,
+      "total": 0,
+      "unit": "Set",
+      "remark": "Page 2/3",
+      "formulas": {
+        "E11": "='002_STD'!E55",
+        "L11": "=J11*K11"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 14,
+      "model": "Electical cost",
+      "description": "Control Box",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 3950,
+      "quantity": 1,
+      "total": 3950,
+      "unit": "Set",
+      "remark": "Page 3/1",
+      "formulas": {
+        "E14": "='003_COST_EE'!E7",
+        "J14": "='003_COST_EE'!L26",
+        "L14": "=J14*K14"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 19,
+      "model": "Electical labore cost",
+      "description": "Drawing design",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000,
+      "quantity": 1,
+      "total": 5000,
+      "unit": "Man Day",
+      "remark": "Page 3/6",
+      "formulas": {
+        "E19": "='003_COST_EE'!E131",
+        "L19": "=J19*K19"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 20,
+      "model": null,
+      "description": "Assembly + Wiring",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000,
+      "quantity": 1,
+      "total": 5000,
+      "unit": "Man Day",
+      "remark": "Page 3/6",
+      "formulas": {
+        "E20": "='003_COST_EE'!E132",
+        "L20": "=J20*K20"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 21,
+      "model": null,
+      "description": "Installation and AutoID Configuration",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000,
+      "quantity": 1,
+      "total": 5000,
+      "unit": "Man Day",
+      "remark": "Page 3/6",
+      "formulas": {
+        "E21": "='003_COST_EE'!E133",
+        "K21": "='003_COST_EE'!K133",
+        "L21": "=J21*K21"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 24,
+      "model": "Mechanical cost",
+      "description": "Sensor Jig Stand",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": "3W",
+      "quote_revision": null,
+      "unit_price": 12500,
+      "quantity": 2,
+      "total": 25000,
+      "unit": "Set",
+      "remark": "Page 4/1",
+      "formulas": {
+        "E24": "='004_COST_ME'!E7",
+        "J24": "='004_COST_ME'!L35",
+        "L24": "=J24*K24"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 29,
+      "model": "Mechanical labore cost",
+      "description": "Drawing Design",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000,
+      "quantity": 1,
+      "total": 5000,
+      "unit": "Man Day",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E29": "='004_COST_ME'!E186",
+        "J29": "='004_COST_ME'!J186",
+        "K29": "='004_COST_ME'!K186",
+        "L29": "=J29*K29"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 30,
+      "model": null,
+      "description": "Assembly",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000,
+      "quantity": 1,
+      "total": 5000,
+      "unit": "Man Day",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E30": "='004_COST_ME'!E187",
+        "J30": "='004_COST_ME'!J187",
+        "K30": "='004_COST_ME'!K187",
+        "L30": "=J30*K30"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 31,
+      "model": null,
+      "description": "Installation ,Test",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000,
+      "quantity": 1,
+      "total": 5000,
+      "unit": "Set",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E31": "='004_COST_ME'!E189",
+        "J31": "='004_COST_ME'!J189",
+        "K31": "='004_COST_ME'!K189",
+        "L31": "=J31*K31"
+      }
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 32,
+      "model": null,
+      "description": "Transportation",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 2000,
+      "quantity": 1,
+      "total": 2000,
+      "unit": "Day",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E32": "='004_COST_ME'!E190",
+        "J32": "='004_COST_ME'!J190",
+        "K32": "='004_COST_ME'!K190",
+        "L32": "=J32*K32"
+      }
+    }
+  ],
+  "detail_items": {
+    "standard": [
+      {
+        "sheet": "002_STD",
+        "row": 10,
+        "model": "LR-ZH500N",
+        "description": "LASER SENSOR",
+        "supplier": "Keyence",
+        "brand": "Keyence",
+        "lead_time": "Keyence",
+        "quote_revision": "Keyence",
+        "unit_price": 0,
+        "quantity": 1,
+        "total": 0,
+        "unit": null,
+        "remark": "Customer Provide",
+        "formulas": {
+          "L10": "=J10*K10"
+        }
+      },
+      {
+        "sheet": "002_STD",
+        "row": 35,
+        "model": "OP-88682",
+        "description": "D-SUB CABLE 5M.",
+        "supplier": "Keyence",
+        "brand": "Keyence",
+        "lead_time": "Keyence",
+        "quote_revision": "Keyence",
+        "unit_price": 0,
+        "quantity": 1,
+        "total": 0,
+        "unit": null,
+        "remark": "Customer Provide",
+        "formulas": {
+          "L35": "=J35*K35"
+        }
+      },
+      {
+        "sheet": "002_STD",
+        "row": 58,
+        "model": "OP-87404",
+        "description": "Bracket Sensor",
+        "supplier": "Keyence",
+        "brand": "Keyence",
+        "lead_time": "Keyence",
+        "quote_revision": "Keyence",
+        "unit_price": 0,
+        "quantity": 1,
+        "total": 0,
+        "unit": null,
+        "remark": "Customer Provide",
+        "formulas": {
+          "L58": "=J58*K58"
+        }
+      }
+    ],
+    "electrical_material": [
+      {
+        "sheet": "003_COST_EE",
+        "row": 10,
+        "model": "KVC-36 3C 0.5MM2",
+        "description": "Control Cable  (100m)",
+        "supplier": "Planet T&S",
+        "brand": "Kuramo",
+        "lead_time": "5 Day",
+        "quote_revision": null,
+        "unit_price": 2520,
+        "quantity": 1,
+        "total": 2520,
+        "unit": null,
+        "remark": null,
+        "formulas": {
+          "L10": "=J10*K10"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 11,
+        "model": "CE-2",
+        "description": "Close End Wire Connector",
+        "supplier": "Piyapoj Electric",
+        "brand": "Bandex",
+        "lead_time": "2 Day",
+        "quote_revision": null,
+        "unit_price": 150,
+        "quantity": 1,
+        "total": 150,
+        "unit": null,
+        "remark": null,
+        "formulas": {
+          "L11": "=J11*K11"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 12,
+        "model": "HFCC8PACK-B",
+        "description": "Parts for Aluminium Frame (Series 8)",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": "2 Day",
+        "quote_revision": null,
+        "unit_price": 680,
+        "quantity": 1,
+        "total": 680,
+        "unit": null,
+        "remark": null,
+        "formulas": {
+          "L12": "=J12*K12"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 13,
+        "model": "SW-10B",
+        "description": "Spiral Wrapping Band (O.D =10) - Black",
+        "supplier": "Piyapoj Electric",
+        "brand": "Bandex",
+        "lead_time": "2 Day",
+        "quote_revision": null,
+        "unit_price": 150,
+        "quantity": 2,
+        "total": 300,
+        "unit": null,
+        "remark": null,
+        "formulas": {
+          "L13": "=J13*K13"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 14,
+        "model": null,
+        "description": "Cable Ties",
+        "supplier": "Piyapoj Electric",
+        "brand": "Bandex",
+        "lead_time": "2 Day",
+        "quote_revision": null,
+        "unit_price": 300,
+        "quantity": 1,
+        "total": 300,
+        "unit": null,
+        "remark": null,
+        "formulas": {
+          "L14": "=J14*K14"
+        }
+      }
+    ],
+    "electrical_labor": [
+      {
+        "sheet": "003_COST_EE",
+        "row": 131,
+        "model": "Labore cost",
+        "description": "Drawing design",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 0,
+        "total": 0,
+        "unit": "Day",
+        "remark": null,
+        "formulas": {
+          "L131": "=J131*K131"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 132,
+        "model": null,
+        "description": "Assembly + Wiring",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 0,
+        "total": 0,
+        "unit": "Day",
+        "remark": null,
+        "formulas": {
+          "L132": "=J132*K132"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 133,
+        "model": null,
+        "description": "Installation and AutoID Configuration",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 1,
+        "total": 5000,
+        "unit": "Day",
+        "remark": null,
+        "formulas": {
+          "L133": "=J133*K133"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 134,
+        "model": null,
+        "description": "Installation",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 1,
+        "total": 5000,
+        "unit": "Day",
+        "remark": null,
+        "formulas": {
+          "L134": "=J134*K134"
+        }
+      },
+      {
+        "sheet": "003_COST_EE",
+        "row": 135,
+        "model": null,
+        "description": "Packing and Transportation",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 0,
+        "quantity": 0,
+        "total": 0,
+        "unit": null,
+        "remark": null,
+        "formulas": {
+          "L135": "=J135*K135"
+        }
+      }
+    ],
+    "mechanical_material": [
+      {
+        "sheet": "004_COST_ME",
+        "row": 11,
+        "model": "NEFS8-4040-1600",
+        "description": "8 Series Aluminum Frame - Square 40x40mm",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 580,
+        "quantity": 1,
+        "total": 580,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L11": "=J11*K11"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 12,
+        "model": "NEFS8-4040-800",
+        "description": "8 Series Aluminum Frame - Square 40x40mm",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 300,
+        "quantity": 1,
+        "total": 300,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L12": "=J12*K12"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 13,
+        "model": "NEFS8-4040-350",
+        "description": "8 Series Aluminum Frame - Square 40x40mm",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 150,
+        "quantity": 1,
+        "total": 150,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L13": "=J13*K13"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 14,
+        "model": "NEFS8-4040-500-LAT45-RAT45",
+        "description": "8 Series Aluminum Frame - Square 40x40mm",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 550,
+        "quantity": 1,
+        "total": 550,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L14": "=J14*K14"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 15,
+        "model": "HBLFSNF8",
+        "description": "Aluminum Frame Bracket",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 30,
+        "quantity": 4,
+        "total": 120,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L15": "=J15*K15"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 16,
+        "model": "SL-HBL45TS8",
+        "description": "Aluminum Frame Bracket",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 205,
+        "quantity": 2,
+        "total": 410,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L16": "=J16*K16"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 17,
+        "model": "SL-HBL135TS8",
+        "description": "Aluminum Frame Bracket",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 220,
+        "quantity": 2,
+        "total": 440,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L17": "=J17*K17"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 18,
+        "model": "SHPTTS8",
+        "description": "Aluminum Frame Bracket",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 80,
+        "quantity": 1,
+        "total": 80,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L18": "=J18*K18"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 19,
+        "model": "HFC8-4040-B",
+        "description": "Aluminum Frame End Cap",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 20,
+        "quantity": 3,
+        "total": 60,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L19": "=J19*K19"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 20,
+        "model": "HLFC8-4040",
+        "description": "Foot Base",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 325,
+        "quantity": 1,
+        "total": 325,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L20": "=J20*K20"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 21,
+        "model": "NFJN10-75",
+        "description": "Adjust Pad",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 60,
+        "quantity": 1,
+        "total": 60,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L21": "=J21*K21"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 22,
+        "model": "MFSTF12",
+        "description": "Device Stands",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 360,
+        "quantity": 3,
+        "total": 1080,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L22": "=J22*K22"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 23,
+        "model": "PSFJ12-100",
+        "description": "Shaft",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 135,
+        "quantity": 2,
+        "total": 270,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L23": "=J23*K23"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 24,
+        "model": "PSFJ12-200",
+        "description": "Shaft",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 175,
+        "quantity": 1,
+        "total": 175,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L24": "=J24*K24"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 25,
+        "model": "MKA12-50",
+        "description": "Strut Clamps",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": "12D",
+        "quote_revision": null,
+        "unit_price": 680,
+        "quantity": 1,
+        "total": 680,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L25": "=J25*K25"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 26,
+        "model": "PACK-HNTP8-8",
+        "description": "Insert Nut M8",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 1300,
+        "quantity": 1,
+        "total": 1300,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L26": "=J26*K26"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 27,
+        "model": "PACK-HNTP8-6",
+        "description": "Insert Nut M6",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 1300,
+        "quantity": 1,
+        "total": 1300,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L27": "=J27*K27"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 28,
+        "model": "HNTP8-5",
+        "description": "Insert Nut M5",
+        "supplier": "Misumi",
+        "brand": "Misumi",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 15,
+        "quantity": 10,
+        "total": 150,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L28": "=J28*K28"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 29,
+        "model": "Bolt and Accessorry",
+        "description": null,
+        "supplier": "Local",
+        "brand": "Local",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 1000,
+        "quantity": 1,
+        "total": 1000,
+        "unit": "Set",
+        "remark": null,
+        "formulas": {
+          "L29": "=J29*K29"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 30,
+        "model": "MZ00-U001-001",
+        "description": "Stand bkt",
+        "supplier": "Local",
+        "brand": "Local",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 750,
+        "quantity": 2,
+        "total": 1500,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L30": "=J30*K30"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 31,
+        "model": "MZ00-U001-002",
+        "description": "Stand bkt",
+        "supplier": "Local",
+        "brand": "Local",
+        "lead_time": null,
+        "quote_revision": null,
+        "unit_price": 500,
+        "quantity": 2,
+        "total": 1000,
+        "unit": "Pcs",
+        "remark": null,
+        "formulas": {
+          "L31": "=J31*K31"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 34,
+        "model": null,
+        "description": "Sefety cost",
+        "supplier": "-",
+        "brand": "-",
+        "lead_time": "-",
+        "quote_revision": null,
+        "unit_price": 0,
+        "quantity": null,
+        "total": 970,
+        "unit": null,
+        "remark": null,
+        "formulas": {}
+      }
+    ],
+    "mechanical_labor": [
+      {
+        "sheet": "004_COST_ME",
+        "row": 186,
+        "model": "Labore cost",
+        "description": "Drawing Design",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 1,
+        "total": 5000,
+        "unit": "Day",
+        "remark": "",
+        "formulas": {
+          "L186": "=J186*K186"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 187,
+        "model": null,
+        "description": "Assembly",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 1,
+        "total": 5000,
+        "unit": "Day",
+        "remark": "",
+        "formulas": {
+          "L187": "=J187*K187"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 188,
+        "model": null,
+        "description": "Transportation",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 1000,
+        "quantity": 0,
+        "total": 0,
+        "unit": "Day",
+        "remark": 10000,
+        "formulas": {
+          "L188": "=J188*K188",
+          "N188": "=SUM(L186:L188)"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 189,
+        "model": null,
+        "description": "Installation ,Test",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 5000,
+        "quantity": 1,
+        "total": 5000,
+        "unit": "Day",
+        "remark": "",
+        "formulas": {
+          "L189": "=J189*K189"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 190,
+        "model": null,
+        "description": "Transportation",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 2000,
+        "quantity": 1,
+        "total": 2000,
+        "unit": "Day",
+        "remark": "",
+        "formulas": {
+          "L190": "=J190*K190"
+        }
+      },
+      {
+        "sheet": "004_COST_ME",
+        "row": 191,
+        "model": null,
+        "description": "Accommodation + Daily Allowance",
+        "supplier": "",
+        "brand": "",
+        "lead_time": "",
+        "quote_revision": "",
+        "unit_price": 950,
+        "quantity": 0,
+        "total": 0,
+        "unit": "Day",
+        "remark": 7000,
+        "formulas": {
+          "L191": "=J191*K191",
+          "N191": "=SUM(L189:L191)"
+        }
+      }
+    ]
+  },
+  "recommended_import_items": [
+    {
+      "sheet": "002_STD",
+      "row": 10,
+      "model": "LR-ZH500N",
+      "description": "LASER SENSOR",
+      "supplier": "Keyence",
+      "brand": "Keyence",
+      "lead_time": "Keyence",
+      "quote_revision": "Keyence",
+      "unit_price": 0,
+      "quantity": 2,
+      "total": 0,
+      "unit": null,
+      "remark": "Customer Provide",
+      "formulas": {
+        "L10": "=J10*K10"
+      },
+      "category": "Standard equipment",
+      "summary_row": 9,
+      "note": "Customer Provide; quantity from summary; no purchase cost."
+    },
+    {
+      "sheet": "002_STD",
+      "row": 35,
+      "model": "OP-88682",
+      "description": "D-SUB CABLE 5M.",
+      "supplier": "Keyence",
+      "brand": "Keyence",
+      "lead_time": "Keyence",
+      "quote_revision": "Keyence",
+      "unit_price": 0,
+      "quantity": 2,
+      "total": 0,
+      "unit": null,
+      "remark": "Customer Provide",
+      "formulas": {
+        "L35": "=J35*K35"
+      },
+      "category": "Standard equipment",
+      "summary_row": 10,
+      "note": "Customer Provide; quantity from summary; no purchase cost."
+    },
+    {
+      "sheet": "002_STD",
+      "row": 58,
+      "model": "OP-87404",
+      "description": "Bracket Sensor",
+      "supplier": "Keyence",
+      "brand": "Keyence",
+      "lead_time": "Keyence",
+      "quote_revision": "Keyence",
+      "unit_price": 0,
+      "quantity": 2,
+      "total": 0,
+      "unit": null,
+      "remark": "Customer Provide",
+      "formulas": {
+        "L58": "=J58*K58"
+      },
+      "category": "Standard equipment",
+      "summary_row": 11,
+      "note": "Customer Provide; quantity from summary; no purchase cost."
+    },
+    {
+      "sheet": "003_COST_EE",
+      "row": 10,
+      "model": "KVC-36 3C 0.5MM2",
+      "description": "Control Cable  (100m)",
+      "supplier": "Planet T&S",
+      "brand": "Kuramo",
+      "lead_time": "5 Day",
+      "quote_revision": null,
+      "unit_price": 2520.0,
+      "quantity": 1.0,
+      "total": 2520.0,
+      "unit": null,
+      "remark": null,
+      "formulas": {
+        "L10": "=J10*K10"
+      },
+      "category": "Electrical material",
+      "summary_row": 14,
+      "note": "Part of Control Box; replaces summary aggregate row14."
+    },
+    {
+      "sheet": "003_COST_EE",
+      "row": 11,
+      "model": "CE-2",
+      "description": "Close End Wire Connector",
+      "supplier": "Piyapoj Electric",
+      "brand": "Bandex",
+      "lead_time": "2 Day",
+      "quote_revision": null,
+      "unit_price": 150.0,
+      "quantity": 1.0,
+      "total": 150.0,
+      "unit": null,
+      "remark": null,
+      "formulas": {
+        "L11": "=J11*K11"
+      },
+      "category": "Electrical material",
+      "summary_row": 14,
+      "note": "Part of Control Box; replaces summary aggregate row14."
+    },
+    {
+      "sheet": "003_COST_EE",
+      "row": 12,
+      "model": "HFCC8PACK-B",
+      "description": "Parts for Aluminium Frame (Series 8)",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": "2 Day",
+      "quote_revision": null,
+      "unit_price": 680.0,
+      "quantity": 1.0,
+      "total": 680.0,
+      "unit": null,
+      "remark": null,
+      "formulas": {
+        "L12": "=J12*K12"
+      },
+      "category": "Electrical material",
+      "summary_row": 14,
+      "note": "Part of Control Box; replaces summary aggregate row14."
+    },
+    {
+      "sheet": "003_COST_EE",
+      "row": 13,
+      "model": "SW-10B",
+      "description": "Spiral Wrapping Band (O.D =10) - Black",
+      "supplier": "Piyapoj Electric",
+      "brand": "Bandex",
+      "lead_time": "2 Day",
+      "quote_revision": null,
+      "unit_price": 150.0,
+      "quantity": 2.0,
+      "total": 300.0,
+      "unit": null,
+      "remark": null,
+      "formulas": {
+        "L13": "=J13*K13"
+      },
+      "category": "Electrical material",
+      "summary_row": 14,
+      "note": "Part of Control Box; replaces summary aggregate row14."
+    },
+    {
+      "sheet": "003_COST_EE",
+      "row": 14,
+      "model": null,
+      "description": "Cable Ties",
+      "supplier": "Piyapoj Electric",
+      "brand": "Bandex",
+      "lead_time": "2 Day",
+      "quote_revision": null,
+      "unit_price": 300.0,
+      "quantity": 1.0,
+      "total": 300.0,
+      "unit": null,
+      "remark": null,
+      "formulas": {
+        "L14": "=J14*K14"
+      },
+      "category": "Electrical material",
+      "summary_row": 14,
+      "note": "Part of Control Box; replaces summary aggregate row14."
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 19,
+      "model": "Electical labore cost",
+      "description": "Drawing design",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000.0,
+      "quantity": 1.0,
+      "total": 5000.0,
+      "unit": "Man Day",
+      "remark": "Page 3/6",
+      "formulas": {
+        "E19": "='003_COST_EE'!E131",
+        "L19": "=J19*K19"
+      },
+      "category": "Electrical labor",
+      "summary_row": 19,
+      "note": "Summary is authoritative; detail quantities differ for drawing and assembly."
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 20,
+      "model": null,
+      "description": "Assembly + Wiring",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000.0,
+      "quantity": 1.0,
+      "total": 5000.0,
+      "unit": "Man Day",
+      "remark": "Page 3/6",
+      "formulas": {
+        "E20": "='003_COST_EE'!E132",
+        "L20": "=J20*K20"
+      },
+      "category": "Electrical labor",
+      "summary_row": 20,
+      "note": "Summary is authoritative; detail quantities differ for drawing and assembly."
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 21,
+      "model": null,
+      "description": "Installation and AutoID Configuration",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000.0,
+      "quantity": 1.0,
+      "total": 5000.0,
+      "unit": "Man Day",
+      "remark": "Page 3/6",
+      "formulas": {
+        "E21": "='003_COST_EE'!E133",
+        "K21": "='003_COST_EE'!K133",
+        "L21": "=J21*K21"
+      },
+      "category": "Electrical labor",
+      "summary_row": 21,
+      "note": "Summary is authoritative; detail quantities differ for drawing and assembly."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 11,
+      "model": "NEFS8-4040-1600",
+      "description": "8 Series Aluminum Frame - Square 40x40mm",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 580.0,
+      "quantity": 2.0,
+      "total": 1160.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L11": "=J11*K11"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 12,
+      "model": "NEFS8-4040-800",
+      "description": "8 Series Aluminum Frame - Square 40x40mm",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 300.0,
+      "quantity": 2.0,
+      "total": 600.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L12": "=J12*K12"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 13,
+      "model": "NEFS8-4040-350",
+      "description": "8 Series Aluminum Frame - Square 40x40mm",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 150.0,
+      "quantity": 2.0,
+      "total": 300.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L13": "=J13*K13"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 14,
+      "model": "NEFS8-4040-500-LAT45-RAT45",
+      "description": "8 Series Aluminum Frame - Square 40x40mm",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 550.0,
+      "quantity": 2.0,
+      "total": 1100.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L14": "=J14*K14"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 15,
+      "model": "HBLFSNF8",
+      "description": "Aluminum Frame Bracket",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 30.0,
+      "quantity": 8.0,
+      "total": 240.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L15": "=J15*K15"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 16,
+      "model": "SL-HBL45TS8",
+      "description": "Aluminum Frame Bracket",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 205.0,
+      "quantity": 4.0,
+      "total": 820.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L16": "=J16*K16"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 17,
+      "model": "SL-HBL135TS8",
+      "description": "Aluminum Frame Bracket",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 220.0,
+      "quantity": 4.0,
+      "total": 880.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L17": "=J17*K17"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 18,
+      "model": "SHPTTS8",
+      "description": "Aluminum Frame Bracket",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 80.0,
+      "quantity": 2.0,
+      "total": 160.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L18": "=J18*K18"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 19,
+      "model": "HFC8-4040-B",
+      "description": "Aluminum Frame End Cap",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 20.0,
+      "quantity": 6.0,
+      "total": 120.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L19": "=J19*K19"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 20,
+      "model": "HLFC8-4040",
+      "description": "Foot Base",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 325.0,
+      "quantity": 2.0,
+      "total": 650.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L20": "=J20*K20"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 21,
+      "model": "NFJN10-75",
+      "description": "Adjust Pad",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 60.0,
+      "quantity": 2.0,
+      "total": 120.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L21": "=J21*K21"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 22,
+      "model": "MFSTF12",
+      "description": "Device Stands",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 360.0,
+      "quantity": 6.0,
+      "total": 2160.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L22": "=J22*K22"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 23,
+      "model": "PSFJ12-100",
+      "description": "Shaft",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 135.0,
+      "quantity": 4.0,
+      "total": 540.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L23": "=J23*K23"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 24,
+      "model": "PSFJ12-200",
+      "description": "Shaft",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 175.0,
+      "quantity": 2.0,
+      "total": 350.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L24": "=J24*K24"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 25,
+      "model": "MKA12-50",
+      "description": "Strut Clamps",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": "12D",
+      "quote_revision": null,
+      "unit_price": 680.0,
+      "quantity": 2.0,
+      "total": 1360.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L25": "=J25*K25"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 26,
+      "model": "PACK-HNTP8-8",
+      "description": "Insert Nut M8",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 1300.0,
+      "quantity": 2.0,
+      "total": 2600.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L26": "=J26*K26"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 27,
+      "model": "PACK-HNTP8-6",
+      "description": "Insert Nut M6",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 1300.0,
+      "quantity": 2.0,
+      "total": 2600.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L27": "=J27*K27"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 28,
+      "model": "HNTP8-5",
+      "description": "Insert Nut M5",
+      "supplier": "Misumi",
+      "brand": "Misumi",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 15.0,
+      "quantity": 20.0,
+      "total": 300.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L28": "=J28*K28"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 29,
+      "model": "Bolt and Accessorry",
+      "description": null,
+      "supplier": "Local",
+      "brand": "Local",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 1000.0,
+      "quantity": 2.0,
+      "total": 2000.0,
+      "unit": "Set",
+      "remark": null,
+      "formulas": {
+        "L29": "=J29*K29"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 30,
+      "model": "MZ00-U001-001",
+      "description": "Stand bkt",
+      "supplier": "Local",
+      "brand": "Local",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 750.0,
+      "quantity": 4.0,
+      "total": 3000.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L30": "=J30*K30"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 31,
+      "model": "MZ00-U001-002",
+      "description": "Stand bkt",
+      "supplier": "Local",
+      "brand": "Local",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 500.0,
+      "quantity": 4.0,
+      "total": 2000.0,
+      "unit": "Pcs",
+      "remark": null,
+      "formulas": {
+        "L31": "=J31*K31"
+      },
+      "category": "Mechanical material",
+      "summary_row": 24,
+      "note": "BOM per jig multiplied by two jigs from summary K24; replaces summary aggregate row24."
+    },
+    {
+      "sheet": "004_COST_ME",
+      "row": 34,
+      "model": null,
+      "description": "Sefety cost",
+      "supplier": "-",
+      "brand": "-",
+      "lead_time": "-",
+      "quote_revision": null,
+      "unit_price": 970,
+      "quantity": 2,
+      "total": 1940,
+      "unit": null,
+      "remark": null,
+      "formulas": {},
+      "category": "Mechanical safety cost",
+      "summary_row": 24,
+      "note": "970 per jig fixed amount in L34; J34 is0 and K34 blank. Two jigs from summary K24."
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 29,
+      "model": "Mechanical labore cost",
+      "description": "Drawing Design",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000.0,
+      "quantity": 1.0,
+      "total": 5000.0,
+      "unit": "Man Day",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E29": "='004_COST_ME'!E186",
+        "J29": "='004_COST_ME'!J186",
+        "K29": "='004_COST_ME'!K186",
+        "L29": "=J29*K29"
+      },
+      "category": "Mechanical labor",
+      "summary_row": 29,
+      "note": ""
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 30,
+      "model": null,
+      "description": "Assembly",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000.0,
+      "quantity": 1.0,
+      "total": 5000.0,
+      "unit": "Man Day",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E30": "='004_COST_ME'!E187",
+        "J30": "='004_COST_ME'!J187",
+        "K30": "='004_COST_ME'!K187",
+        "L30": "=J30*K30"
+      },
+      "category": "Mechanical labor",
+      "summary_row": 30,
+      "note": ""
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 31,
+      "model": null,
+      "description": "Installation ,Test",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 5000.0,
+      "quantity": 1.0,
+      "total": 5000.0,
+      "unit": "Set",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E31": "='004_COST_ME'!E189",
+        "J31": "='004_COST_ME'!J189",
+        "K31": "='004_COST_ME'!K189",
+        "L31": "=J31*K31"
+      },
+      "category": "Mechanical labor",
+      "summary_row": 31,
+      "note": ""
+    },
+    {
+      "sheet": "001_Summary cost",
+      "row": 32,
+      "model": null,
+      "description": "Transportation",
+      "supplier": "TOMAS TECH",
+      "brand": "IoT Team",
+      "lead_time": null,
+      "quote_revision": null,
+      "unit_price": 2000.0,
+      "quantity": 1.0,
+      "total": 2000.0,
+      "unit": "Day",
+      "remark": "Page 4/6",
+      "formulas": {
+        "E32": "='004_COST_ME'!E190",
+        "J32": "='004_COST_ME'!J190",
+        "K32": "='004_COST_ME'!K190",
+        "L32": "=J32*K32"
+      },
+      "category": "Transportation",
+      "summary_row": 32,
+      "note": ""
+    }
+  ],
+  "totals": {
+    "currency": "THB",
+    "direct_cost": 60950,
+    "profit_markup_rate": 0.55,
+    "profit_amount": 33522.5,
+    "overhead_rate": 0.05,
+    "overhead_amount": 3047.5,
+    "grand_total": 97520,
+    "summary_safety_cost": 0,
+    "mechanical_safety_cost_in_direct_cost": 1940,
+    "vat": "Not specified in workbook"
+  },
+  "summary_total_formulas": {
+    "L59": "=SUM(L9:L58)",
+    "L60": "=$L$59*$K$60",
+    "L61": "=$L$59*$K$61",
+    "L62": "=SUM(L59:L61)"
+  },
+  "formula_errors": [
+    {
+      "sheet": "001_Summary cost",
+      "cell": "E46",
+      "cached": "#NAME?",
+      "formula": "=-ZH500N"
+    }
+  ],
+  "notes": [
+    "Use user project PJ260022; summary E5 contains Inquiry, a template header.",
+    "Use 001_Summary cost as commercial scope and totals; do not sum every sheet.",
+    "Summary19/20 each has quantity1 and cost5000; detail003_COST_EE K131/K132 are0. Import summary values, retain discrepancy note.",
+    "003_COST_EE row134 Installation5000 is not referenced by summary and must not add to estimate.",
+    "004_COST_ME L34 fixed970 safety cost per jig is included in L35=12500. For two jigs include1940. Do not double count aggregate Sensor Jig Stand25000 when importing its BOM.",
+    "Unused 005_COST_Server_PC L60/L122,006_COST_IF L60,007_COST_PG L60 each carry10000 safety placeholders absent from summary. Exclude.",
+    "001_Summary cost E46 formula=-ZH500N has cached#NAME? in description only. No quantity/unitprice/lineamount and no reference in financial formulas; exclude junk row.",
+    "Profit55% and overhead5% are both calculated on direct cost60950, not gross margin on sales or markup on subtotal+overhead.",
+    "Unit for summary31 Installation,Test is Set although detailM189 says Day; preserve summary Set.",
+    "Unselected zeros/accommodation, miscellaneous notes and manpower template sheets are not extra cost scope."
+  ],
+  "reconciliation": {
+    "item_count": 37,
+    "direct_cost_sum": 60950.0,
+    "customer_provided_item_count": 3,
+    "electrical_material": 3950,
+    "mechanical_material_including_safety": 25000,
+    "electrical_labor": 15000,
+    "mechanical_labor": 15000,
+    "transportation": 2000
+  }
+}

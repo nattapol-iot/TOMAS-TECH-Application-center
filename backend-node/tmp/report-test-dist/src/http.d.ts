@@ -1,0 +1,15 @@
+export declare function firstQueryValue(value: unknown): string | undefined;
+export declare function optionalText(value: unknown, maxLength: number, label: string): string | null;
+export declare function positiveLong(value: unknown, label: string): number;
+export declare function optionalPositiveLong(value: unknown, label: string): number | null;
+export declare function clampedInteger(value: unknown, fallback: number, minimum: number, maximum: number): number;
+export declare function booleanQuery(value: unknown, fallback?: boolean): boolean;
+export declare function dateOnly(value: Date | string | null): string | null;
+export declare function bodyObject(value: unknown): Record<string, unknown>;
+export declare function requiredText(value: unknown, maxLength: number, label: string): string;
+export declare function optionalBodyText(value: unknown, maxLength: number, label: string): string | null;
+export declare function requiredInteger(value: unknown, label: string, minimum?: number, maximum?: number): number;
+export declare function oneOf(value: string, label: string, allowed: readonly string[]): string;
+export declare function parseDateOnly(value: unknown, label: string, optional?: boolean): string | null;
+export declare function parseRowVersion(value: unknown): Buffer;
+export declare function timestamp(value: Date | string): Date | string;

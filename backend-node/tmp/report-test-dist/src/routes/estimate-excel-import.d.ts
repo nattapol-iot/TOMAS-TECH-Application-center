@@ -1,0 +1,30 @@
+import type { FastifyInstance } from "fastify";
+import type { Database } from "../db.js";
+import type { CurrentUserService } from "../users.js";
+export declare function parseExcelImport(body: Record<string, unknown>): {
+    sourceName: string;
+    sourceHash: string;
+    sourceDate: string;
+    sourceTotal: number;
+    hoursPerDay: number;
+    lines: {
+        kind: string;
+        categoryCode: string;
+        itemCode: string;
+        module: string;
+        quantity: number;
+        unitCost: number;
+        supplierId: number | null;
+        costType: string;
+        description: string;
+        unit: string;
+        source: string;
+        department: string;
+        brand: string;
+        model: string;
+        supplierName: string;
+        remark: string;
+    }[];
+    sourceRevision: string;
+};
+export declare function registerEstimateExcelImportRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void;

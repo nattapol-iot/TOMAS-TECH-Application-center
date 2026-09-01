@@ -1,0 +1,1 @@
+const fs=require('fs'),path=require('path');const stage=fs.readFileSync('tmp/excel-import-stage.txt','utf8').trim();let test=fs.readFileSync('tmp/test-excel-import-integration.mjs','utf8').replace("'../backend-node/dist/src/app.js'",JSON.stringify(require('url').pathToFileURL(path.join(stage,'dist/src/app.js')).href));fs.writeFileSync('tmp/test-excel-import-stage.mjs',test);

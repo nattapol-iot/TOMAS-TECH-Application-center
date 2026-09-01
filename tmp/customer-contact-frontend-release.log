@@ -1,0 +1,69 @@
+
+> site-creator-vinext-starter@0.1.0 prebuild:local
+> npm run prepare:ocr
+
+
+> site-creator-vinext-starter@0.1.0 prepare:ocr
+> node scripts/prepare-ocr-assets.mjs
+
+Prepared 7 local OCR assets in public/ocr
+
+> site-creator-vinext-starter@0.1.0 build:local
+> vinext build
+
+
+  vinext build  (Vite 8.0.13)
+
+[1/5] analyze client references...
+[2K
+transforming...✓ 224 modules transformed.
+rendering chunks...
+✓ built in 365ms
+[2/5] analyze server references...
+[2K
+transforming...✓ 315 modules transformed.
+rendering chunks...
+✓ built in 1.70s
+[3/5] build rsc environment...
+[2K
+transforming...✓ 222 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 515ms
+[4/5] build client environment...
+[2K
+transforming...✓ 379 modules transformed.
+rendering chunks...
+computing gzip size...
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.88s
+[5/5] build ssr environment...
+[2K
+transforming...✓ 357 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 2.52s
+[0m
+  Route (app)
+  ┌ ? /                  
+  ├ ? /demo              
+  ├ ƒ /report-sign/:token
+  └ ? /verify            
+
+  ƒ Dynamic  ? Unknown
+
+  ? Some routes could not be classified. vinext currently uses static analysis
+    and cannot detect dynamic API usage (headers(), cookies(), etc.) at build time.
+    Automatic classification will be improved in a future release.
+  Build complete. Run `vinext start` to start the production server.
+
+
+Status  ProcessId LanOrigin                
+------  --------- ---------                
+RUNNING     32620 http://192.168.1.160:3000
+
+

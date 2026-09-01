@@ -33,7 +33,72 @@ GO
 
 USE [$(DatabaseName)];
 GO
+:r database/migrations/008_estimate_workspace_integrity.sql
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7)) <> 7
+USE [$(DatabaseName)];
+GO
+:r database/migrations/009_inquiry_workspace.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/010_inquiry_qualification.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/011_employee_master.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/012_supplier_price_history.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/013_supplier_quotations.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/014_knowledge_hub.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/015_knowledge_hub_workflow_hardening.sql
+
+USE [$(DatabaseName)];
+GO
+:r database/migrations/016_sales_intake_site_visit.sql
+
+USE [$(DatabaseName)];
+GO
+
+:r database/migrations/017_node_backend_permissions.sql
+
+USE [$(DatabaseName)];
+GO
+
+:r database/migrations/018_document_signing.sql
+
+USE [$(DatabaseName)];
+GO
+
+:r database/migrations/019_resource_planning.sql
+:r database/migrations/020_module_templates.sql
+:r database/migrations/021_drawing_task_workflow.sql
+:r database/migrations/022_employee_directory_assignments.sql
+:r database/migrations/023_management_signing_role.sql
+:r database/migrations/024_resource_task_lifecycle.sql
+:r database/migrations/025_reports.sql
+:r database/migrations/026_performance_reviews.sql
+:r database/migrations/027_report_templates.sql
+:r database/migrations/028_end_user_companies.sql
+:r database/migrations/029_sales_performance_reviews.sql
+:r database/migrations/030_customer_multilingual_names.sql
+:r database/migrations/031_customer_contact_titles.sql
+:r database/migrations/032_estimate_excel_import.sql
+:r database/migrations/033_historical_pr_import.sql
+
+USE [$(DatabaseName)];
+GO
+
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33)) <> 33
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 GO

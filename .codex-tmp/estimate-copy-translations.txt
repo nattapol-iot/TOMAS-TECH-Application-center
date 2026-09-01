@@ -1,0 +1,199 @@
+ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate|Adjust filters or create an estimate from an inquiry without an estimate.|条件を変更するか、見積未作成の引合から見積を作成してください。
+Registered inquiry *|งานสอบถามราคาที่ลงทะเบียน *|登録済み引合 *
+ทุก Inquiry มี Estimate แล้ว หรือบัญชีนี้ไม่มี Inquiry ที่อ่านได้|All inquiries already have estimates, or this account has no accessible inquiries.|すべての引合に見積があるか、このアカウントで参照できる引合がありません。
+must be resolved before submission or approval.|ต้องแก้ไขก่อนส่งตรวจหรืออนุมัติ|提出・承認前に解決してください。
+do not block workflow, but should be reviewed.|ไม่ปิดกั้นขั้นตอนงาน แต่ควรตรวจทาน|処理を妨げませんが、確認が必要です。
+Review warnings|ตรวจทานคำเตือน|警告を確認
+Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow|This revision is locked. Costs are read-only; create a new revision to make changes.|この版はロックされています。原価は参照専用です。変更するには改訂手順で新しい版を作成してください。
+Cost by main module|ต้นทุนตามโมดูลหลัก|メインモジュール別原価
+กดชื่อโมดูลเพื่อเปิดตาราง Cost Items ตรงโมดูลนั้น|Select a module name to open its cost items.|モジュール名を選ぶと、その原価明細が開きます。
+Main module|โมดูลหลัก|メインモジュール
+ครบทุก item|All items included|全明細を含む
+Cost items — all modules|รายการต้นทุนทุกโมดูล|全モジュールの原価明細
+No main module yet|ยังไม่มีโมดูลหลัก|メインモジュールがありません
+สร้าง Main Module แล้วเพิ่ม item แรกในแท็บ Cost Items|Create a main module, then add its first item in Cost Items.|メインモジュールを作成し、原価明細タブで最初の明細を追加してください。
+ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง|Totals are shown above. Check submission readiness here.|合計は上部に表示されます。ここで提出準備を確認できます。
+cost item ·|รายการต้นทุน ·|原価明細・
+module|โมดูล|モジュール
+man-days|คน-วัน|人日
+man-hour line ·|รายการค่าแรง ·|工数明細・
+project cost line|รายการค่าใช้จ่ายโครงการ|プロジェクト経費明細
+Revision information|ข้อมูลฉบับแก้ไข|改訂情報
+Last updated|แก้ไขล่าสุด|最終更新
+Lock|การล็อก|ロック
+By discipline|แยกตามหมวดงาน|分野別
+หมวด 01–10 ของ revision ปัจจุบัน|Categories 01–10 in the current revision|現在の版の分類01～10
+ยังไม่มีรายการต้นทุนใน revision นี้|This revision has no cost items.|この版には原価明細がありません。
+Top 5 cost items|รายการต้นทุนสูงสุด 5 อันดับ|原価上位5明細
+รายการที่มีผลกับยอดรวมมากที่สุด|Items with the greatest impact on the total|合計への影響が最も大きい明細
+item|รายการ|明細
+ to fix|ต้องแก้ไข|要修正
+Add item|เพิ่มรายการ|明細を追加
+Add with details|เพิ่มพร้อมรายละเอียด|詳細を指定して追加
+Save as template|บันทึกเป็นแม่แบบ|テンプレートとして保存
+Copy Previous Estimate|คัดลอกจากประมาณการต้นทุนเดิม|既存見積からコピー
+เลือกจาก Template|Choose a template|テンプレートから選択
+All disciplines|ทุกหมวดงาน|すべての分野
+Description / Specification|รายละเอียด / ข้อกำหนด|内容・仕様
+Price source|แหล่งราคา|価格の参照元
+ยังไม่เลือกผู้ขาย|Supplier not selected|仕入先未選択
+รอราคา|Awaiting price|価格待ち
+Add item to|เพิ่มรายการใน|明細を追加：
+ยังไม่มี item ในโมดูลนี้ — เพิ่ม item แรกเพื่อบันทึกโมดูลลง revision|This module has no items. Add its first item to save it in this revision.|このモジュールに明細がありません。最初の明細を追加すると、この版に保存されます。
+Modules|โมดูล|モジュール
+Shown lines|รายการที่แสดง|表示中の明細
+Shown subtotal|ยอดรวมย่อยที่แสดง|表示中の小計
+live price record(s)|รายการราคาปัจจุบัน|現在の価格記録
+Loading live Price Library…|กำลังโหลดคลังราคาปัจจุบัน…|現在の価格ライブラリを読み込み中…
+Use price|ใช้ราคานี้|この価格を使用
+No matching price|ไม่พบราคาที่ตรงกัน|一致する価格がありません
+ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร|Search by part number, description, brand, supplier or document number.|部品番号、内容、ブランド、仕入先、書類番号で検索してください。
+Copy|คัดลอก|コピー
+item(s)|รายการ|明細
+Source estimate *|ประมาณการต้นทุนต้นทาง *|コピー元の見積 *
+Loading source estimate…|กำลังโหลดประมาณการต้นทุนต้นทาง…|コピー元の見積を読み込み中…
+valid of|รายการถูกต้องจากทั้งหมด|有効件数／全件数
+row(s)|แถว|行
+Import|นำเข้า|インポート
+Excel file *|ไฟล์ Excel *|Excelファイル *
+Header ที่รองรับ เช่น Category, Module, Item Code, Description, Brand, Model, Supplier, Qty, Unit, Unit Cost|Supported headers include Category, Module, Item Code, Description, Brand, Model, Supplier, Qty, Unit, Unit Cost.|対応列名：Category、Module、Item Code、Description、Brand、Model、Supplier、Qty、Unit、Unit Cost。
+Apply Master Template|ใช้แม่แบบมาตรฐาน|標準テンプレートを適用
+Loading templates…|กำลังโหลดแม่แบบ…|テンプレートを読み込み中…
+No template|ไม่พบแม่แบบ|テンプレートがありません
+ไม่พบชุดที่พร้อมใช้งาน — สร้างได้ที่หน้า Module Templates หรือปุ่ม Save as template บนแถบโมดูล|No template is available. Create one in Module Templates or use Save as template on a module.|使用できるテンプレートがありません。モジュールテンプレート画面、またはモジュールの「テンプレートとして保存」から作成できます。
+· Revision|· ฉบับแก้ไข|・改訂
+· สร้างโดย|· Created by|・作成者
+· แก้ไขล่าสุดโดย|· Last updated by|・最終更新者
+เมื่อ|on|更新日時
+ชื่อโมดูลในใบนี้ *|Module name in this estimate *|この見積でのモジュール名 *
+จำนวนชุด *|Number of sets *|セット数 *
+ราคา|Price|価格
+ใช้ราคาอ้างอิงจาก template|Use template reference prices|テンプレートの参考価格を使用
+ราคาอ้างอิงเก่าสุดในชุดนี้อายุ|Oldest reference price in this set is|このセットの最も古い参考価格の経過日数：
+วัน — ควรทบทวนราคาหลังลงรายการ|days old. Review prices after adding the items.|日。明細追加後に価格を確認してください。
+จะลงรายการด้วยราคา 0 ทุกบรรทัด แล้วค่อยใส่ราคาเองหรือดึงจาก Price Library|All items will start at zero price. Enter prices or select them from the Price Library afterward.|すべての明細を価格0で追加します。その後、価格を入力するか価格ライブラリから選択してください。
+Added to estimate|เพิ่มลงประมาณการต้นทุนแล้ว|見積に追加済み
+Save as Master Template|บันทึกเป็นแม่แบบมาตรฐาน|標準テンプレートとして保存
+Template code *|รหัสแม่แบบ *|テンプレートコード *
+Template name *|ชื่อแม่แบบ *|テンプレート名 *
+ไม่ระบุ|Not specified|未指定
+ราคาที่เก็บไปเป็น|Saved prices are|保存する価格は
+ราคาอ้างอิง|reference prices|参考価格
+พร้อมวันที่ ไม่ใช่ราคาปัจจุบัน ตอนดึงไปใช้จะเตือนถ้าเก่าเกิน|with a reference date, not current prices. A warning appears when reused prices are too old.|です。参照日も保存しますが、現在価格ではありません。再利用時に古すぎる価格を警告します。
+Continue to first item|ไปเพิ่มรายการแรก|最初の明細へ進む
+Main module name *|ชื่อโมดูลหลัก *|メインモジュール名 *
+Main Module จะถูกบันทึกจริงเมื่อ Item แรกถูกสร้าง เพื่อไม่ให้เกิดโมดูลว่างในฐานข้อมูล|The main module is saved when its first item is created, avoiding empty modules.|空のモジュールを作らないため、メインモジュールは最初の明細作成時に保存されます。
+Engineering Man-hour & Site Expense|ค่าแรงวิศวกรรมและค่าใช้จ่ายหน้างาน|設計工数・現場経費
+Work package → activity → cost · engineering, installation, supplier man-hour และค่าเดินทางอยู่ในโครงเดียวกัน|Work package → activity → cost: engineering, installation, supplier labor and travel share one structure.|作業パッケージ→作業→原価。設計、設置、外注工数、出張費を同じ構成で管理します。
+Installation &amp; Service cost|ค่าติดตั้งและบริการ|設置・サービス費
+· Installation|· งานติดตั้ง|・設置
+· Supplier|· ผู้ขาย|・仕入先
+· Expense|· ค่าใช้จ่าย|・経費
+Activity / Description|กิจกรรม / รายละเอียด|作業・内容
+Cost Type|ประเภทต้นทุน|原価区分
+Hours / Day|ชั่วโมง / วัน|時間／日
+Rate|อัตรา|単価
+MD|คน-วัน|人日
+Add expense|เพิ่มค่าใช้จ่าย|経費を追加
+HR|ชั่วโมง|時間
+Own engineer|วิศวกรภายใน|社内エンジニア
+Rate master|อัตราค่าแรงมาตรฐาน|標準工数単価
+On save|เมื่อบันทึก|保存時
+Add activity to|เพิ่มกิจกรรมใน|作業を追加：
+Add travel, accommodation or other expense to|เพิ่มค่าเดินทาง ที่พัก หรือค่าใช้จ่ายอื่นใน|出張費、宿泊費、その他経費を追加：
+No work package yet|ยังไม่มีชุดงาน|作業パッケージがありません
+สร้าง Work Package แล้วเพิ่ม Activity, Supplier man-hour หรือค่าเดินทางที่เกี่ยวข้อง|Create a work package, then add activities, supplier labor or related travel expenses.|作業パッケージを作成し、作業、外注工数、関連する出張費を追加してください。
+Installation &amp; service|งานติดตั้งและบริการ|設置・サービス
+Travel / hotel / per diem|เดินทาง / ที่พัก / เบี้ยเลี้ยง|交通費・宿泊費・日当
+Outsource & Other Project Cost|งานจ้างภายนอกและค่าใช้จ่ายโครงการอื่น|外注費・その他プロジェクト経費
+Cost line ที่ไม่ใช่ material หรือ man-hour|Costs other than materials or labor|材料費・工数以外の原価明細
+Add other cost|เพิ่มค่าใช้จ่ายอื่น|その他経費を追加
+No other project cost|ยังไม่มีค่าใช้จ่ายโครงการอื่น|その他プロジェクト経費がありません
+ยังไม่มี outsource, transportation, accommodation หรือ other cost|No outsourcing, transportation, accommodation or other costs yet.|外注費、交通費、宿泊費、その他経費がありません。
+Applied by SQL Server to the current cost base|คำนวณจากฐานต้นทุนปัจจุบัน|現在の原価ベースに適用
+Preview total after contingency|ยอดรวมหลังเผื่อค่าใช้จ่าย|予備費を含む合計のプレビュー
+Save contingency|บันทึกค่าเผื่อ|予備費を保存
+Cost base|ฐานต้นทุน|原価ベース
+Transportation|ค่าเดินทาง|交通費
+Accommodation|ค่าที่พัก|宿泊費
+Subtotal|ยอดรวมย่อย|小計
+Estimate sections|ส่วนงานประมาณการต้นทุน|見積の担当区分
+ผู้รับผิดชอบ วันครบกำหนด สถานะ และ progress จากฐานข้อมูล|Saved owners, due dates, statuses and progress|保存済みの担当者、期限、状態、進捗
+Assign section|มอบหมายส่วนงาน|担当区分を割り当て
+Responsible Engineer|วิศวกรผู้รับผิดชอบ|担当エンジニア
+Support Engineer|วิศวกรสนับสนุน|支援エンジニア
+No section assignment|ยังไม่ได้มอบหมายส่วนงาน|担当区分が未割り当てです
+Estimate completion|ความคืบหน้าประมาณการต้นทุน|見積の完成状況
+Overall assignment progress|ความคืบหน้างานที่มอบหมายทั้งหมด|割り当て作業全体の進捗
+Permission|สิทธิ์ใช้งาน|権限
+Estimate Validation|ตรวจสอบประมาณการต้นทุน|見積の検証
+ตรวจโดย API/SQL Server ก่อน Submit และ Approve|Validated by the system before submission and approval|提出・承認前にシステムで検証します
+Open line|เปิดรายการ|明細を開く
+Server validation passed|ผ่านการตรวจสอบจากระบบ|システム検証に合格
+Revision ปัจจุบันไม่มี critical issue หรือ advisory warning|The current revision has no critical issues or advisory warnings.|現在の版に重大な問題や注意事項はありません。
+Result|ผลลัพธ์|結果
+Rules enforced|กฎที่ใช้ตรวจสอบ|検証ルール
+Positive quantity|จำนวนมากกว่าศูนย์|数量は正の値
+Every persisted line must have quantity greater than zero.|ทุกรายการที่บันทึกต้องมีจำนวนมากกว่าศูนย์|保存するすべての明細は数量が0より大きい必要があります。
+Unit cost and owner|ต้นทุนต่อหน่วยและผู้รับผิดชอบ|単価と担当者
+Required references are checked at the API boundary.|ระบบตรวจสอบข้อมูลอ้างอิงที่จำเป็นก่อนบันทึก|保存前に必要な参照情報を確認します。
+Supplier and quotation are mandatory.|ต้องระบุผู้ขายและใบเสนอราคา|仕入先と見積書は必須です。
+Non-empty revision|ฉบับแก้ไขต้องมีรายการ|明細のある版
+At least one cost or effort line is required.|ต้องมีรายการต้นทุนหรือค่าแรงอย่างน้อยหนึ่งรายการ|原価または工数の明細が1件以上必要です。
+Revision Control|ควบคุมฉบับแก้ไข|改訂管理
+Revision history เป็น immutable record; เปิด revision ใหม่จากแถบคำสั่งของรายการที่ Approved หรือ Locked|Revision history cannot be changed. Create a new revision from an approved or locked estimate's action bar.|改訂履歴は変更できません。承認済みまたはロック済み見積の操作バーから新しい版を作成してください。
+Reviewed by|ผู้ตรวจทาน|確認者
+Reviewed|ตรวจทานแล้ว|確認済み
+No revision history|ยังไม่มีประวัติฉบับแก้ไข|改訂履歴がありません
+ยังไม่มี revision record ที่ API ส่งกลับ|No revision records were returned.|改訂記録がありません。
+Comparison is not available yet|ยังเปรียบเทียบไม่ได้|比較はまだ利用できません
+ต้องมี revision history อย่างน้อยสอง revision; ระบบไม่สร้างข้อมูลเปรียบเทียบจำลอง|At least two saved revisions are required for comparison.|比較には保存済みの版が2つ以上必要です。
+Compare Estimate Revision|เปรียบเทียบฉบับประมาณการต้นทุน|見積の版を比較
+เปรียบเทียบยอดรวมจาก revision history จริง|Compare totals from saved revision history|保存済み改訂履歴の合計を比較
+From revision|จากฉบับ|比較元の版
+To revision|ถึงฉบับ|比較先の版
+Difference|ส่วนต่าง|差額
+Line-by-line historical comparison จะเปิดเมื่อ backend ส่ง revision snapshots; หน้านี้แสดงเฉพาะ revision totals ที่มีอยู่จริง|Only saved revision totals are shown. Line-by-line comparison requires historical item snapshots.|保存済みの版の合計のみ表示します。明細ごとの比較には過去の明細スナップショットが必要です。
+Cost summary|สรุปต้นทุน|原価集計
+Approval covers internal engineering cost only — no margin|อนุมัติเฉพาะต้นทุนวิศวกรรมภายใน ไม่รวมส่วนกำไร|承認対象は社内設計原価のみで、利益は含みません
+Top 10 highest cost items|รายการต้นทุนสูงสุด 10 อันดับ|原価上位10明細
+ยังไม่มี cost item สำหรับ review|No cost items are available for review.|確認する原価明細がありません。
+Engineering man-hour by department|ค่าแรงวิศวกรรมแยกตามแผนก|部門別の設計工数
+No man-hour|ยังไม่มีค่าแรง|工数がありません
+ยังไม่มี engineering effort สำหรับ review|No engineering effort is available for review.|確認する設計工数がありません。
+Reviewer decision|การตัดสินใจของผู้ตรวจทาน|確認者の判断
+Actions shown from API capabilities|แสดงคำสั่งตามสิทธิ์ที่ระบบอนุญาต|権限に応じた操作を表示
+Submit for Engineering Review|ส่งให้วิศวกรรมตรวจทาน|設計レビューに提出
+Approve Estimate Cost|อนุมัติประมาณการต้นทุน|見積原価を承認
+บัญชีนี้ไม่มี workflow action สำหรับสถานะปัจจุบัน|This account has no available workflow actions for the current status.|現在の状態で、このアカウントが実行できる操作はありません。
+critical error(s) block submission and approval.|ข้อผิดพลาดสำคัญปิดกั้นการส่งตรวจและอนุมัติ|重大なエラーがあるため提出・承認できません。
+warning(s) are advisory and do not block workflow.|คำเตือนเป็นข้อแนะนำ ไม่ปิดกั้นขั้นตอนงาน|警告は注意事項であり、処理を妨げません。
+Validation for reviewer|ผลตรวจสอบสำหรับผู้ตรวจทาน|確認者向けの検証結果
+No server validation issue.|ไม่พบปัญหาจากการตรวจสอบของระบบ|システム検証の問題はありません。
+Main module *|โมดูลหลัก *|メインモジュール *
+Reference number|เลขที่อ้างอิง|参照番号
+Reference project|โครงการอ้างอิง|参照プロジェクト
+Line status|สถานะรายการ|明細の状態
+Continue to activity|ไปเพิ่มกิจกรรม|作業へ進む
+Work package name *|ชื่อชุดงาน *|作業パッケージ名 *
+Cost type *|ประเภทต้นทุน *|原価区分 *
+Work Package จะเกิดขึ้นจริงเมื่อ Activity แรกถูกบันทึก เพื่อไม่สร้าง Package ว่างในฐานข้อมูล|The work package is saved with its first activity, avoiding empty packages.|空のパッケージを作らないため、作業パッケージは最初の作業の保存時に作成されます。
+Work package *|ชุดงาน *|作業パッケージ *
+Provider *|ผู้ให้บริการ *|作業提供者 *
+Engineer level *|ระดับวิศวกร *|エンジニアの等級 *
+Select supplier|เลือกผู้ขาย|仕入先を選択
+Quotation number|เลขที่ใบเสนอราคา|見積書番号
+Quotation date|วันที่ใบเสนอราคา|見積書日付
+Engineer qty *|จำนวนวิศวกร *|エンジニア人数 *
+Hours / day *|ชั่วโมง / วัน *|時間／日 *
+Line cost|ต้นทุนรายการ|明細の原価
+Expense type *|ประเภทค่าใช้จ่าย *|経費区分 *
+Unit cost (THB) *|ต้นทุนต่อหน่วย (บาท) *|単価（THB） *
+Assign estimate section|มอบหมายส่วนงานประมาณการต้นทุน|見積の担当区分を割り当て
+ระบบจะส่งอีเมลให้ Responsible Engineer และ Support Engineer ที่เลือก โดยการบันทึก assignment จะไม่สูญหายหากระบบอีเมลขัดข้อง|The system emails the selected responsible and support engineers. Assignment records remain saved if email delivery fails.|選択した担当・支援エンジニアにメールを送信します。メール送信に失敗しても、割り当て記録は保存されます。
+Section *|ส่วนงาน *|担当区分 *
+Responsible engineer *|วิศวกรผู้รับผิดชอบ *|担当エンジニア *
+Support engineer|วิศวกรสนับสนุน|支援エンジニア
+None|ไม่มี|なし
+Assignment note|หมายเหตุการมอบหมาย|割り当てメモ
+Progress %|ความคืบหน้า %|進捗率 %

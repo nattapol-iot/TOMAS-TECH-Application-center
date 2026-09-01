@@ -1,0 +1,33 @@
+import sql from "mssql/msnodesqlv8.js";
+import type { Transaction as TransactionType } from "mssql";
+import type { Database } from "./db.js";
+import type { CurrentUser } from "./types.js";
+export declare const DOCUMENT_TYPES: readonly ["Controlled Document", "Working Document", "Knowledge Article", "Presentation", "Template", "Project Document", "Supplier Document", "External Reference"];
+export declare const CONFIDENTIALITIES: readonly ["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"];
+export declare const ARTICLE_TYPES: readonly ["How-to", "Troubleshooting", "FAQ", "Technical Note", "Best Practice", "Design Guideline", "Lessons Learned", "Root Cause Analysis", "Training Note"];
+export declare const RELATION_TYPES: Record<string, string>;
+export declare const KNOWLEDGE_VISIBILITY = "(\n  d.owner_id=@me OR @can_manage=1 OR d.confidentiality=N'Company'\n  OR (d.confidentiality=N'Department Only' AND d.department_code=@my_department AND LEN(d.department_code)>0)\n  OR (d.confidentiality=N'Project Team Only' AND EXISTS(\n    SELECT 1 FROM dbo.knowledge_document_relations kr INNER JOIN dbo.projects project ON project.id=kr.entity_id AND kr.entity_type=N'Project'\n    WHERE kr.document_id=d.id AND (project.manager_id=@me OR project.lead_engineer_id=@me OR EXISTS(SELECT 1 FROM dbo.project_members pm WHERE pm.project_id=project.id AND pm.user_id=@me))))\n  OR EXISTS(SELECT 1 FROM dbo.knowledge_document_permissions kp LEFT JOIN dbo.users pu ON pu.id=@me\n    WHERE (kp.document_id=d.id OR kp.category_id=d.category_id) AND (\n      (kp.subject_type=N'User' AND kp.subject_user_id=@me) OR (kp.subject_type=N'Role' AND kp.subject_role_id=pu.role_id)\n      OR (kp.subject_type=N'Department' AND kp.subject_department_code=@my_department)\n      OR (kp.subject_type=N'Project' AND EXISTS(SELECT 1 FROM dbo.projects project WHERE project.id=kp.subject_project_id AND (project.manager_id=@me OR project.lead_engineer_id=@me OR EXISTS(SELECT 1 FROM dbo.project_members pm WHERE pm.project_id=project.id AND pm.user_id=@me)))))))";
+export declare const ARTICLE_VISIBILITY = "(\n  a.owner_id=@me OR @can_manage=1 OR a.confidentiality=N'Company'\n  OR (a.confidentiality=N'Department Only' AND ao.department=@my_department AND LEN(ao.department)>0)\n  OR EXISTS(SELECT 1 FROM dbo.knowledge_document_permissions kp LEFT JOIN dbo.users pu ON pu.id=@me\n    WHERE (kp.article_id=a.id OR kp.category_id=a.category_id) AND (\n      (kp.subject_type=N'User' AND kp.subject_user_id=@me) OR (kp.subject_type=N'Role' AND kp.subject_role_id=pu.role_id)\n      OR (kp.subject_type=N'Department' AND kp.subject_department_code=@my_department)\n      OR (kp.subject_type=N'Project' AND EXISTS(SELECT 1 FROM dbo.projects project WHERE project.id=kp.subject_project_id AND (project.manager_id=@me OR project.lead_engineer_id=@me OR EXISTS(SELECT 1 FROM dbo.project_members pm WHERE pm.project_id=project.id AND pm.user_id=@me)))))))";
+export declare function bindKnowledgeVisibility(request: InstanceType<typeof sql.Request>, actor: CurrentUser, canManage: boolean): void;
+export declare function canManageKnowledge(database: Database, actor: CurrentUser): Promise<boolean>;
+export declare function auditKnowledge(transaction: TransactionType, input: {
+    documentId?: number | null;
+    versionId?: number | null;
+    articleId?: number | null;
+    actor: CurrentUser;
+    action: string;
+    before?: unknown;
+    after?: unknown;
+    reason?: string | null;
+    relatedEntityType?: string | null;
+    relatedEntityId?: number | null;
+}): Promise<void>;
+export declare function demandDocumentEditor(transaction: TransactionType, documentId: number, actor: CurrentUser, canManage: boolean): Promise<void>;
+export declare function readKnowledgeVersion(transaction: TransactionType, versionId: number): Promise<{
+    documentId: number;
+    status: string;
+    createdBy: number;
+}>;
+export declare function setKnowledgeStatus(transaction: TransactionType, documentId: number, versionId: number, status: string): Promise<void>;
+export declare function issueKnowledgeNumber(transaction: TransactionType, prefix: string, scope: string): Promise<string>;
+export declare function safeStoredName(fileName: string): string;

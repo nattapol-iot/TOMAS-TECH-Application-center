@@ -263,9 +263,15 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
     $inquiry = Invoke-Api POST '/api/v1/inquiries' 'dev-user' ([ordered]@{
         customerId = $customer.id; contact = ''; projectName = 'CI Full Material Flow'; projectType = 'Integration';
         rfqNo = 'CI-RFQ'; salesOwner = 'CI'; estimateOwnerId = $dev.id; dueDate = $future; priority = 'Normal';
+        projectProbability = 60; customerInterestGrade = 'B'; qualificationNote = 'CI initial qualification';
         requirement = 'Automated material flow'; background = $null; scopeSummary = 'Integration'; technical = $null;
         targetDelivery = $delivery; siteLocation = 'CI'; standard = $null; special = $null; remark = $null
     })
+    $qualification = Invoke-Api PUT "/api/v1/inquiries/$($inquiry.id)/qualification" 'dev-user' ([ordered]@{
+        projectProbability = 80; customerInterestGrade = 'A'; qualificationNote = 'CI confirmed budget and timeline'; rowVersion = $inquiry.rowVersion
+    })
+    Assert-Equal $qualification.projectProbability 80 'Inquiry project probability'
+    Assert-Equal $qualification.customerInterestGrade 'A' 'Inquiry customer interest grade'
     $estimate = Invoke-Api POST '/api/v1/estimates' 'dev-user' ([ordered]@{
         inquiryId = $inquiry.id; ownerId = $dev.id; dueDate = $future; contingencyRate = 0
     })
@@ -276,9 +282,146 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
         priceSource = 'Supplier Quotation'; referenceNumber = 'CI'; referenceProject = $null; priceDate = $today;
         remark = $null; ownerId = $dev.id
     })
-    $submittedEstimate = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/submit" 'dev-user' ([ordered]@{
-        comment = 'CI submit'; rowVersion = $costItem.estimateRowVersion
+
+    # An engineer assigned only to section 01 may edit section-01 material cost,
+    # but must not inherit write access to section 06 man-hour, section 10
+    # expenses, other project cost, or another material category.
+    Invoke-SqlQuery $databaseName "UPDATE dbo.estimate_assignments SET owner_id = $($otherEngineer.id), support_id = NULL WHERE estimate_id = $($estimate.id) AND section = N'01'; IF @@ROWCOUNT <> 1 THROW 51122, 'Scoped estimate assignment fixture was not created.', 1;"
+    $scopedEstimateWorkspace = Invoke-Api GET "/api/v1/estimates/$($estimate.id)/cost-workspace" 'engineer-oid'
+    Assert-Equal $scopedEstimateWorkspace.capabilities.canEditCostItems $true 'Section-scoped cost capability'
+    Assert-Equal $scopedEstimateWorkspace.capabilities.canEditManhour $false 'Section-scoped man-hour capability'
+    Assert-Equal $scopedEstimateWorkspace.capabilities.canEditExpenses $false 'Section-scoped expense capability'
+    Assert-Equal $scopedEstimateWorkspace.capabilities.canEditOtherCosts $false 'Section-scoped other-cost capability'
+    $scopedCostItem = @($scopedEstimateWorkspace.costItems | Where-Object { $_.id -eq $costItem.id })[0]
+    Assert-Equal $scopedCostItem.canEdit $true 'Assigned category cost-line capability'
+    $null = Assert-ApiError POST "/api/v1/estimates/$($estimate.id)/manhour-lines" 'engineer-oid' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $null
+        package = 'Unauthorized CI Engineering'; activity = 'Unauthorized CI design'; department = 'CI Engineering'; level = 'CI Engineer'
+        costType = 'Engineering'; provider = 'Internal'; supplierId = $null; quotationNumber = $null; priceDate = $null
+        engineers = 1; manDays = 1; hoursPerDay = 8; dailyRate = 0; ownerId = $otherEngineer.id; remark = $null
+    }) 'estimate_section_forbidden' 403
+    $null = Assert-ApiError POST "/api/v1/estimates/$($estimate.id)/expense-lines" 'engineer-oid' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $null
+        package = 'Unauthorized CI Expense'; expenseType = 'Other'; description = 'Unauthorized CI expense'; costType = 'Engineering'
+        supplierId = $null; referenceNumber = 'CI-DENIED'; quantity = 1; unit = 'lot'; unitCost = 1
+        ownerId = $otherEngineer.id; remark = $null
+    }) 'estimate_section_forbidden' 403
+    $null = Assert-ApiError POST "/api/v1/estimates/$($estimate.id)/other-cost-lines" 'engineer-oid' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $null
+        category = 'Other Cost'; description = 'Unauthorized CI other cost'; quantity = 1; unit = 'lot'; unitCost = 1; remark = $null
+    }) 'estimate_owner_required' 403
+    $null = Assert-ApiError POST "/api/v1/estimates/$($estimate.id)/cost-items" 'engineer-oid' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $null; categoryCode = '02'; category = 'Software';
+        subcategory = ''; module = 'CI'; itemCode = 'CI-DENIED'; description = 'Unauthorized category'; brand = ''; model = '';
+        specification = $null; supplierId = $null; quantity = 1; unit = 'pcs'; unitCost = 1;
+        priceSource = 'Manual Estimate'; referenceNumber = 'CI-DENIED'; referenceProject = $null; priceDate = $today;
+        remark = $null; ownerId = $otherEngineer.id
+    }) 'estimate_section_forbidden' 403
+
+    # Owning a line is not a lasting authorization grant: revoking the category
+    # assignment must immediately revoke update/remove access as well.
+    Invoke-SqlQuery $databaseName "UPDATE dbo.estimate_assignments SET owner_id = $($dev.id), support_id = NULL WHERE estimate_id = $($estimate.id) AND section = N'01'; IF @@ROWCOUNT <> 1 THROW 51123, 'Scoped estimate assignment revocation fixture failed.', 1;"
+    $null = Assert-ApiError PUT "/api/v1/estimates/$($estimate.id)/cost-items/$($costItem.id)" 'engineer-oid' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $costItem.rowVersion; categoryCode = '01'; category = 'Hardware';
+        subcategory = ''; module = 'CI'; itemCode = 'CI-ITEM'; description = 'CI material'; brand = ''; model = '';
+        specification = $null; supplierId = $supplier.id; quantity = 10; unit = 'pcs'; unitCost = 10;
+        priceSource = 'Supplier Quotation'; referenceNumber = 'CI'; referenceProject = $null; priceDate = $today;
+        remark = $null; ownerId = $dev.id
+    }) 'cost_line_forbidden' 403
+
+    # Values fit each source column but their computed product does not fit the
+    # decimal(19,4) ledger. The API must reject this as a 400 before SQL DML.
+    $null = Assert-ApiError POST "/api/v1/estimates/$($estimate.id)/manhour-lines" 'dev-user' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $null
+        package = 'CI Overflow'; activity = 'CI overflow guard'; department = 'CI Engineering'; level = 'CI Engineer'
+        costType = 'Engineering'; provider = 'Internal'; supplierId = $null; quotationNumber = $null; priceDate = $null
+        engineers = 1000000; manDays = 1000000; hoursPerDay = 8; dailyRate = 0; ownerId = $dev.id; remark = $null
+    }) 'validation_failed' 400
+
+    # Exercise optimistic concurrency and soft-delete through the public API. The
+    # temporary line must affect live totals while active and disappear after
+    # removal without ever being deleted from the audit/history tables.
+    $temporaryCostItem = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/cost-items" 'dev-user' ([ordered]@{
+        estimateRowVersion = $costItem.estimateRowVersion; lineRowVersion = $null; categoryCode = '01'; category = 'Hardware';
+        subcategory = ''; module = 'CI'; itemCode = 'CI-TEMP'; description = 'CI temporary material'; brand = ''; model = '';
+        specification = $null; supplierId = $supplier.id; quantity = 1; unit = 'pcs'; unitCost = 50;
+        priceSource = 'Supplier Quotation'; referenceNumber = 'CI-TEMP'; referenceProject = $null; priceDate = $today;
+        remark = 'Temporary integration line'; ownerId = $dev.id
     })
+    $updatedTemporaryCostItem = Invoke-Api PUT "/api/v1/estimates/$($estimate.id)/cost-items/$($temporaryCostItem.id)" 'dev-user' ([ordered]@{
+        estimateRowVersion = $temporaryCostItem.estimateRowVersion; lineRowVersion = $temporaryCostItem.rowVersion; categoryCode = '01'; category = 'Hardware';
+        subcategory = ''; module = 'CI'; itemCode = 'CI-TEMP'; description = 'CI temporary material'; brand = ''; model = '';
+        specification = $null; supplierId = $supplier.id; quantity = 1; unit = 'pcs'; unitCost = 60;
+        priceSource = 'Supplier Quotation'; referenceNumber = 'CI-TEMP'; referenceProject = $null; priceDate = $today;
+        remark = 'Temporary integration line updated'; ownerId = $dev.id
+    })
+    $null = Assert-ApiError PUT "/api/v1/estimates/$($estimate.id)/cost-items/$($temporaryCostItem.id)" 'dev-user' ([ordered]@{
+        estimateRowVersion = $temporaryCostItem.estimateRowVersion; lineRowVersion = $temporaryCostItem.rowVersion; categoryCode = '01'; category = 'Hardware';
+        subcategory = ''; module = 'CI'; itemCode = 'CI-TEMP'; description = 'CI stale material update'; brand = ''; model = '';
+        specification = $null; supplierId = $supplier.id; quantity = 1; unit = 'pcs'; unitCost = 70;
+        priceSource = 'Supplier Quotation'; referenceNumber = 'CI-TEMP'; referenceProject = $null; priceDate = $today;
+        remark = 'This stale update must fail'; ownerId = $dev.id
+    }) 'concurrency_conflict' 409
+    $workspaceAfterTemporaryUpdate = Invoke-Api GET "/api/v1/estimates/$($estimate.id)/cost-workspace" 'dev-user'
+    Assert-Equal $workspaceAfterTemporaryUpdate.header.totals.material 160 'Estimate material total after cost update'
+    Assert-Equal @($workspaceAfterTemporaryUpdate.costItems | Where-Object { $_.id -eq $temporaryCostItem.id }).Count 1 'Updated temporary cost line visibility'
+
+    $removedTemporaryCostItem = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/cost-items/$($temporaryCostItem.id)/remove" 'dev-user' ([ordered]@{
+        estimateRowVersion = $updatedTemporaryCostItem.estimateRowVersion
+        lineRowVersion = $updatedTemporaryCostItem.rowVersion
+        reason = 'CI soft-delete verification'
+    })
+    $workspaceAfterTemporaryRemove = Invoke-Api GET "/api/v1/estimates/$($estimate.id)/cost-workspace" 'dev-user'
+    Assert-Equal $workspaceAfterTemporaryRemove.header.totals.material 100 'Estimate material total after cost removal'
+    Assert-Equal @($workspaceAfterTemporaryRemove.costItems | Where-Object { $_.id -eq $temporaryCostItem.id }).Count 0 'Removed temporary cost line visibility'
+
+    # Add every remaining cost family through the same production endpoints used
+    # by the Estimate workspace. Internal engineering rate is derived server-side.
+    $manhourLine = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/manhour-lines" 'dev-user' ([ordered]@{
+        estimateRowVersion = $removedTemporaryCostItem.estimateRowVersion; lineRowVersion = $null
+        package = 'CI Engineering'; activity = 'CI design'; department = 'CI Engineering'; level = 'CI Engineer'
+        costType = 'Engineering'; provider = 'Internal'; supplierId = $null; quotationNumber = $null; priceDate = $null
+        engineers = 1; manDays = 2; hoursPerDay = 8; dailyRate = 0; ownerId = $dev.id
+        remark = 'CI internal engineering'
+    })
+    $expenseLine = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/expense-lines" 'dev-user' ([ordered]@{
+        estimateRowVersion = $manhourLine.estimateRowVersion; lineRowVersion = $null
+        package = 'CI Engineering'; expenseType = 'Other'; description = 'CI engineering expense'; costType = 'Engineering'
+        supplierId = $null; referenceNumber = 'CI-EXP'; quantity = 1; unit = 'lot'; unitCost = 100
+        ownerId = $dev.id; remark = 'CI expense'
+    })
+    $otherCostLine = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/other-cost-lines" 'dev-user' ([ordered]@{
+        estimateRowVersion = $expenseLine.estimateRowVersion; lineRowVersion = $null
+        category = 'Other Cost'; description = 'CI other project cost'; quantity = 1; unit = 'lot'; unitCost = 200
+        remark = 'CI other cost'
+    })
+    $contingency = Invoke-Api PUT "/api/v1/estimates/$($estimate.id)/contingency" 'dev-user' ([ordered]@{
+        rowVersion = $otherCostLine.estimateRowVersion; contingencyRate = 5
+    })
+    $estimateWorkspace = Invoke-Api GET "/api/v1/estimates/$($estimate.id)/cost-workspace" 'dev-user'
+    Assert-Equal $estimateWorkspace.header.totals.material 100 'Estimate workspace material total'
+    Assert-Equal $estimateWorkspace.header.totals.engineering 8000 'Estimate workspace engineering total'
+    Assert-Equal $estimateWorkspace.header.totals.other 300 'Estimate workspace other total'
+    Assert-Equal $estimateWorkspace.header.totals.subtotal 8400 'Estimate workspace subtotal'
+    Assert-Equal $estimateWorkspace.header.totals.contingency 420 'Estimate workspace contingency'
+    Assert-Equal $estimateWorkspace.header.totals.total 8820 'Estimate workspace grand total'
+    Assert-Equal $estimateWorkspace.header.contingencyRate 5 'Estimate workspace contingency rate'
+    Assert-Equal @($estimateWorkspace.manhourLines).Count 1 'Estimate workspace man-hour line count'
+    Assert-Equal @($estimateWorkspace.manhourLines)[0].dailyRate 4000 'Estimate workspace derived engineering daily rate'
+    Assert-Equal @($estimateWorkspace.manhourLines)[0].lineCost 8000 'Estimate workspace engineering line cost'
+    Assert-Equal @($estimateWorkspace.expenseLines).Count 1 'Estimate workspace expense line count'
+    Assert-Equal @($estimateWorkspace.expenseLines)[0].lineTotal 100 'Estimate workspace expense line total'
+    Assert-Equal @($estimateWorkspace.otherCostLines).Count 1 'Estimate workspace other-cost line count'
+    Assert-Equal @($estimateWorkspace.otherCostLines)[0].lineTotal 200 'Estimate workspace other-cost line total'
+    Assert-Equal @($estimateWorkspace.validationIssues | Where-Object { $_.severity -eq 'Error' }).Count 0 'Estimate workspace blocking validation issue count'
+    Assert-Equal @($estimateWorkspace.validationIssues | Where-Object { $_.severity -eq 'Warning' -and $_.code -eq 'transportation_category_missing' }).Count 1 'Estimate workspace non-blocking warning count'
+
+    $submittedEstimate = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/submit" 'dev-user' ([ordered]@{
+        comment = 'CI submit'; rowVersion = $contingency.rowVersion
+    })
+    $null = Assert-ApiError POST "/api/v1/estimates/$($estimate.id)/request-revision" 'dev-user' ([ordered]@{
+        comment = 'CI self revision must be rejected'; rowVersion = $submittedEstimate.rowVersion
+    }) 'self_revision_forbidden' 403
     $approvedEstimate = Invoke-Api POST "/api/v1/estimates/$($estimate.id)/approve" 'mgr-oid' ([ordered]@{
         comment = 'CI approve'; rowVersion = $submittedEstimate.rowVersion
     })
@@ -803,6 +946,12 @@ END;
     $assertionSql = @"
 SET NOCOUNT ON;
 IF NOT EXISTS (SELECT 1 FROM dbo.reservations WHERE id = $($reservation.id) AND project_id = $($project.id) AND qty = 4 AND status = N'Consumed') THROW 51062, 'Reservation consumption mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.cost_items WHERE id = $($temporaryCostItem.id) AND estimate_id = $($estimate.id) AND deleted_at IS NOT NULL AND unit_cost = 60) THROW 51117, 'Estimate cost-line soft-delete persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.manhour_lines WHERE id = $($manhourLine.id) AND estimate_id = $($estimate.id) AND deleted_at IS NULL AND cost_type = N'Engineering' AND provider = N'Internal' AND daily_rate = 4000 AND line_cost = 8000) THROW 51118, 'Estimate man-hour persistence or internal-rate derivation mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.expense_lines WHERE id = $($expenseLine.id) AND estimate_id = $($estimate.id) AND deleted_at IS NULL AND qty = 1 AND unit_cost = 100 AND line_total = 100) THROW 51119, 'Estimate expense persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.other_cost_lines WHERE id = $($otherCostLine.id) AND estimate_id = $($estimate.id) AND deleted_at IS NULL AND qty = 1 AND unit_cost = 200 AND line_total = 200) THROW 51120, 'Estimate other-cost persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.estimates WHERE id = $($estimate.id) AND status = N'Approved' AND contingency_rate = 5) THROW 51121, 'Estimate approval or contingency persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.inquiries WHERE id = $($inquiry.id) AND project_probability = 80 AND customer_interest_grade = 'A' AND qualification_note = N'CI confirmed budget and timeline') THROW 51124, 'Inquiry qualification persistence mismatch.', 1;
 IF EXISTS (SELECT 1 FROM dbo.reservations WHERE project_id = $($project.id) AND status = N'Active') THROW 51073, 'Active reservation remained.', 1;
 IF COALESCE((SELECT status FROM dbo.mat_prs WHERE id = $($pr.id)), N'') <> N'Converted to PO' THROW 51063, 'PR status mismatch.', 1;
 IF COALESCE((SELECT status FROM dbo.mat_pos WHERE id = $($po.id)), N'') <> N'Received' THROW 51064, 'PO status mismatch.', 1;

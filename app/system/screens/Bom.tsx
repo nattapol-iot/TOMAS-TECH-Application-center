@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useMemo, useState } from "react";
 import {
   BOM_LINES, BOM_SECTIONS, BOMS, CUSTOMERS, ESTIMATES, PROJECTS,
@@ -20,6 +22,7 @@ import type { ScreenProps } from "../routes";
    ========================================================================== */
 
 export function BomList({ go }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   useMatStore();
 
@@ -37,7 +40,7 @@ export function BomList({ go }: ScreenProps) {
               <tr>
                 <th>{t("BOM No.")}</th><th>{t("Rev.")}</th><th>{t("Project")}</th><th>{t("Customer")}</th>
                 <th>{t("Estimate")}</th><th className="num">{t("Lines")}</th><th className="num">{t("BOM Budget")}</th>
-                <th className="num">{t("Purchase Required")}</th><th>{t("Generated")}</th><th>{t("Status")}</th><th aria-label="Action" />
+                <th className="num">{t("Purchase Required")}</th><th>{t("Generated")}</th><th>{t("Status")}</th><th aria-label={uiText("Action")} />
               </tr>
             </thead>
             <tbody>
@@ -57,7 +60,7 @@ export function BomList({ go }: ScreenProps) {
                     <td className="num">{lines.length}</td>
                     <td className="num">{moneyShort(lines.reduce((sum, line) => sum + line.qtyRequired * line.estUnitCost, 0))}</td>
                     <td className="num">{shortage ? <Badge tone="red">{shortage} {t("lines")}</Badge> : <Badge tone="green">0</Badge>}</td>
-                    <td>{formatDate(bom.generatedAt)} · {userName(bom.generatedBy)}</td>
+                    <td>{formatDate(bom.generatedAt)} <LocalizedText text={"·"} /> {userName(bom.generatedBy)}</td>
                     <td><Badge tone={bom.status === "Released" ? "green" : bom.status === "Draft" ? "blue" : "slate"}>{t(bom.status)}</Badge></td>
                     <td><span className="row-action"><Icon name="chevronRight" /></span></td>
                   </tr>
@@ -92,6 +95,7 @@ export function BomList({ go }: ScreenProps) {
    ========================================================================== */
 
 export function BomWorkspace({ id, go, notify }: ScreenProps & { id: string }) {
+  const uiText = useUiText();
   const t = useT();
   const session = useSession();
   const store = useMatStore();
@@ -154,7 +158,7 @@ export function BomWorkspace({ id, go, notify }: ScreenProps & { id: string }) {
           <>
             <div><span>{t("Status")}</span><strong><Badge tone={locked ? "green" : "blue"}>{t(bom.status)}</Badge></strong></div>
             <div><span>{t("Lines")}</span><strong>{lines.length}</strong></div>
-            <div><span>{t("Purchase shortage")}</span><strong className={shortageValue ? "red-text" : "green-text"}>{moneyShort(shortageValue)} THB</strong></div>
+            <div><span>{t("Purchase shortage")}</span><strong className={shortageValue ? "red-text" : "green-text"}>{moneyShort(shortageValue)} <LocalizedText text={"THB"} /></strong></div>
           </>
         }
         actions={
@@ -186,8 +190,7 @@ export function BomWorkspace({ id, go, notify }: ScreenProps & { id: string }) {
       {reconcile.length === 0 ? (
         <div className="info-strip green">
           <Icon name="checkCircle" />
-          {t("All BOM quantities reconcile with Estimate Revision")} {bom.estimateRev} — {t("BOM budget")} {moneyShort(kpis.bomBudget)} {t("of")} {moneyShort(kpis.approvedBudget)} THB
-        </div>
+          {t("All BOM quantities reconcile with Estimate Revision")} {bom.estimateRev} — {t("BOM budget")} {moneyShort(kpis.bomBudget)} {t("of")} {moneyShort(kpis.approvedBudget)} <LocalizedText text={"THB"} /> </div>
       ) : (
         <div className="info-strip amber">
           <Icon name="alertTriangle" />
@@ -253,7 +256,7 @@ export function BomWorkspace({ id, go, notify }: ScreenProps & { id: string }) {
                   <th className="num">{t("On Hand")}</th><th className="num">{t("Reserved")}</th><th className="num">{t("Available")}</th>
                   <th className="num">{t("Allocated")}</th><th className="num">{t("On Order")}</th><th className="num">{t("To Buy")}</th>
                   <th>{t("Required")}</th><th>{t("Preferred Supplier")}</th><th className="num">{t("Lead")}</th>
-                  <th>{t("Estimate Ref.")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th aria-label="Actions" />
+                  <th>{t("Estimate Ref.")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th aria-label={uiText("Actions")} />
                 </tr>
               </thead>
               <tbody>
@@ -270,7 +273,7 @@ export function BomWorkspace({ id, go, notify }: ScreenProps & { id: string }) {
                       <td><span className="cell-text" title={line.remark || undefined}><strong>{line.description}</strong>{line.remark ? " ⓘ" : ""}</span></td>
                       <td><span className="cell-text">{line.brand}</span></td>
                       <td><span className="cell-text muted">{line.specification}</span></td>
-                      <td><span className="cell-text num">{line.qtyRequired}{line.customerSupplied ? <em className="muted"> ({line.customerSupplied} {t("cust.")})</em> : null}</span></td>
+                      <td><span className="cell-text num">{line.qtyRequired}{line.customerSupplied ? <em className="muted"> ({line.customerSupplied} {t("cust.")}<LocalizedText text={")"} /></em> : null}</span></td>
                       <td><span className="cell-text">{line.unit}</span></td>
                       <td><span className="cell-text num">{moneyShort(line.estUnitCost)}</span></td>
                       <td><span className="cell-text num"><strong>{moneyShort(facts.budget)}</strong></span></td>
@@ -429,42 +432,42 @@ export function TraceModal({ line, onClose }: { line: BomLine; onClose: () => vo
         <div className="trace-step">
           <span className="trace-tag est">{t("Estimate")}</span>
           {chain.estimateLine ? (
-            <p><strong>{chain.estimateLine.itemCode}</strong> · {chain.estimateLine.description} · {chain.estimateLine.qty} × {moneyShort(chain.estimateLine.unitCost)} = <strong>{moneyShort(chain.estimateLine.qty * chain.estimateLine.unitCost)}</strong></p>
+            <p><strong>{chain.estimateLine.itemCode}</strong> <LocalizedText text={"·"} /> {chain.estimateLine.description} <LocalizedText text={"·"} /> {chain.estimateLine.qty} × {moneyShort(chain.estimateLine.unitCost)} = <strong>{moneyShort(chain.estimateLine.qty * chain.estimateLine.unitCost)}</strong></p>
           ) : <p className="muted">—</p>}
         </div>
         <div className="trace-step">
-          <span className="trace-tag bom">BOM</span>
-          <p><strong>{line.itemCode}</strong> · {line.qtyRequired} {line.unit} × {moneyShort(line.estUnitCost)} = <strong>{moneyShort(facts.budget)}</strong>
+          <span className="trace-tag bom"><LocalizedText text={"BOM"} /></span>
+          <p><strong>{line.itemCode}</strong> <LocalizedText text={"·"} /> {line.qtyRequired} {line.unit} × {moneyShort(line.estUnitCost)} = <strong>{moneyShort(facts.budget)}</strong>
             {line.customerSupplied ? ` · ${line.customerSupplied} ${t("customer supplied")}` : ""}</p>
         </div>
         <div className="trace-step">
-          <span className="trace-tag pr">PR</span>
+          <span className="trace-tag pr"><LocalizedText text={"PR"} /></span>
           {chain.prLines.length ? chain.prLines.map(({ pr, line: prLine }) => (
-            <p key={prLine.id}><strong className="mono">{pr.no}</strong> · {prLine.qty} × {moneyShort(prLine.unitPrice)} · <Badge tone={pr.status === "Rejected" ? "red" : pr.status === "Converted to PO" ? "green" : "blue"}>{t(pr.status)}</Badge> · {t("by")} {userName(pr.requestedBy)}</p>
+            <p key={prLine.id}><strong className="mono">{pr.no}</strong> <LocalizedText text={"·"} /> {prLine.qty} × {moneyShort(prLine.unitPrice)} <LocalizedText text={"·"} /> <Badge tone={pr.status === "Rejected" ? "red" : pr.status === "Converted to PO" ? "green" : "blue"}>{t(pr.status)}</Badge> <LocalizedText text={"·"} /> {t("by")} {userName(pr.requestedBy)}</p>
           )) : <p className="muted">{t("No requisition yet")}</p>}
         </div>
         <div className="trace-step">
-          <span className="trace-tag po">PO</span>
+          <span className="trace-tag po"><LocalizedText text={"PO"} /></span>
           {chain.poLines.length ? chain.poLines.map(({ po, line: poLine }) => (
-            <p key={poLine.id}><strong className="mono">{po.no}</strong> · {po.supplier} · {poLine.qty} × {moneyShort(poLine.unitPrice)} · <Badge tone="violet">{t(po.status)}</Badge></p>
+            <p key={poLine.id}><strong className="mono">{po.no}</strong> <LocalizedText text={"·"} /> {po.supplier} <LocalizedText text={"·"} /> {poLine.qty} × {moneyShort(poLine.unitPrice)} <LocalizedText text={"·"} /> <Badge tone="violet">{t(po.status)}</Badge></p>
           )) : <p className="muted">{t("No purchase order")}</p>}
         </div>
         <div className="trace-step">
           <span className="trace-tag grn">GRN</span>
           {chain.grnLines.length ? chain.grnLines.map(({ grn, line: grnLine }) => (
-            <p key={grnLine.id}><strong className="mono">{grn.no}</strong> · {t("received")} {grnLine.receivedQty} ({grnLine.acceptedQty} {t("accepted")}, {grnLine.damagedQty} {t("damaged")}) · {userName(grn.receivedBy)} {grn.receivedAt.slice(0, 10)}</p>
+            <p key={grnLine.id}><strong className="mono">{grn.no}</strong> <LocalizedText text={"·"} /> {t("received")} {grnLine.receivedQty} ({grnLine.acceptedQty} {t("accepted")}, {grnLine.damagedQty} {t("damaged")}) · {userName(grn.receivedBy)} {grn.receivedAt.slice(0, 10)}</p>
           )) : <p className="muted">{t("Nothing received yet")}</p>}
         </div>
         <div className="trace-step">
           <span className="trace-tag stk">{t("Stock")}</span>
           {chain.reservations.length ? chain.reservations.map((rsv) => (
-            <p key={rsv.id}>{t("Reserved")} {rsv.qty} · {userName(rsv.ownerId)} · <Badge tone={rsv.status === "Active" ? "blue" : rsv.status === "Consumed" ? "green" : "slate"}>{t(rsv.status)}</Badge></p>
+            <p key={rsv.id}>{t("Reserved")} {rsv.qty} <LocalizedText text={"·"} /> {userName(rsv.ownerId)} <LocalizedText text={"·"} /> <Badge tone={rsv.status === "Active" ? "blue" : rsv.status === "Consumed" ? "green" : "slate"}>{t(rsv.status)}</Badge></p>
           )) : <p className="muted">{t("No reservation")}</p>}
         </div>
         <div className="trace-step">
           <span className="trace-tag mir">{t("Issue")}</span>
           {chain.mirLines.length ? chain.mirLines.map(({ mir, line: mirLine }) => (
-            <p key={mirLine.id}><strong className="mono">{mir.no}</strong> · {t("issued")} {mirLine.issueQty}{mirLine.returnedQty ? `, ${mirLine.returnedQty} ${t("returned")}` : ""} · {t("received by")} {mir.receivedBy ? userName(mir.receivedBy) : "—"}</p>
+            <p key={mirLine.id}><strong className="mono">{mir.no}</strong> <LocalizedText text={"·"} /> {t("issued")} {mirLine.issueQty}{mirLine.returnedQty ? `, ${mirLine.returnedQty} ${t("returned")}` : ""} <LocalizedText text={"·"} /> {t("received by")} {mir.receivedBy ? userName(mir.receivedBy) : "—"}</p>
           )) : <p className="muted">{t("Not issued yet")}</p>}
         </div>
       </div>

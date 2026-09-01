@@ -1,0 +1,72 @@
+
+> @tomas-tech/iot-team-center-api@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> @tomas-tech/iot-team-center-api@0.1.0 test
+> node --import tsx --test tests/*.test.ts
+
+✔ audit JSON keeps object/array payloads and envelopes scalar values for SQL ISJSON (0.8475ms)
+✔ Team Test codes match the existing HMAC-SHA256 base64url contract (1.0514ms)
+✔ private LAN detection accepts only RFC1918 IPv4 (4.032ms)
+✔ Windows business time zone ids are normalized for Node.js (17.7647ms)
+✔ TeamTest fails closed outside staging (0.4146ms)
+✔ drawing workflow uses three named project participants (1.1773ms)
+✔ drawing cannot be submitted without both project approvers (0.4252ms)
+✔ neither author self-approval nor combined leader-manager is permitted (0.2764ms)
+✔ query helpers preserve the ASP.NET validation and clamping rules (1.1612ms)
+✔ write helpers validate text, integer, dates and SQL row versions (1.3447ms)
+✔ identifier and boolean query helpers reject ambiguous values (0.2726ms)
+✔ sales catalog accepts bounded company SharePoint data (1.7118ms)
+✔ sales catalog rejects external links and duplicate source rows (0.5867ms)
+✔ template pagination totals use the same search filter as the rows (290.9923ms)
+✔ template JSON identifiers accept frontend numbers and reject invalid values before SQL (18.4946ms)
+✔ resource planning requires server-side read permission (294.0173ms)
+✔ source planning requires schedule.plan AND source write permission before database mutation (9.1841ms)
+✔ capacity and effort inputs reject invalid amounts, dates and arbitrary table names (10.3662ms)
+✔ task duration skips weekends and company holidays while effort stays independent (3.1683ms)
+✔ workload distinguishes zero capacity, missing capacity, and over capacity (0.6447ms)
+✔ invalid fractional duration, negative effort and malformed date are rejected (0.5373ms)
+✔ replacement compares actual before and after rather than dropping the old plan (0.3236ms)
+{"level":30,"time":1788622793151,"pid":37500,"hostname":"BOY-TMT","reqId":"req-1","req":{"method":"GET","url":"/health/live/","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+✔ frontend collection URLs select the same route with or without a trailing slash (220.3716ms)
+{"level":30,"time":1788622793154,"pid":37500,"hostname":"BOY-TMT","reqId":"req-1","res":{"statusCode":200},"responseTime":2.71550000000002,"msg":"request completed"}
+✔ placement rejects non-finite, off-page, zero-sized and unknown pages (3.2771ms)
+✔ display coordinates map to PDF CropBox for every right-angle rotation (0.1958ms)
+✔ PDF validation rejects changed source bytes and unsupported formats (8.5781ms)
+✔ the canonical payload is order-independent and drops absent fields (0.8308ms)
+✔ the chain links each event to the one before it (0.3007ms)
+✔ a verification code is readable off paper and validates its own shape (1.0677ms)
+✔ document classes, prefixes and revision labels are validated, not assumed (0.7418ms)
+✔ signing assurance reports how presence was established, and refuses stale credentials (0.4152ms)
+✔ sales intake readiness blocks missing customer-critical information (0.7849ms)
+✔ site visit workflow enforces both state and permission (0.6707ms)
+✔ skill match is normalized and reports missing skills (1.0742ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1507.246
+
+> @tomas-tech/iot-team-center-api@0.1.0 build
+> tsc -p tsconfig.json
+
+npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+
+added 168 packages, and audited 169 packages in 9s
+
+46 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+Status         : UPDATED
+ReleasePath    : C:\Users\natta\AppData\Local\IoTTeamCenter\TeamTest\releases\20260905-153948
+ProcessId      : 51492
+LocalOrigin    : http://127.0.0.1:5105
+LanOrigin      : http://192.168.1.160:5105
+FrontendOrigin : http://192.168.1.160:3000
+

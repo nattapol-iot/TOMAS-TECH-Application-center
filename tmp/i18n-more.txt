@@ -1,0 +1,29 @@
+DOCUMENTS & SIGNING|เอกสารและการลงนาม|文書・署名
+Sign Inbox|เอกสารรอลงนาม|署名受信箱
+Signed Documents|เอกสารลงนาม|署名文書
+Company Stamps|ตราประทับบริษัท|会社印
+My Signature|ลายเซ็นของฉัน|自分の署名
+DOCUMENTS|เอกสาร|文書
+Waiting me|รอฉันลงนาม|自分の署名待ち
+I initiated|ฉันเป็นผู้เริ่ม|自分が開始
+Returned to me|ส่งกลับมาที่ฉัน|自分への差戻し
+Signed · 30 days|ลงนามแล้ว · 30 วัน|署名済み・30日間
+No signing access|ไม่มีสิทธิ์ลงนาม|署名権限がありません
+Template library|คลังแม่แบบ|テンプレートライブラリ
+KNOWLEDGE|ความรู้|ナレッジ
+Standards, SOP, templates and technical knowledge|มาตรฐาน ขั้นตอนปฏิบัติงาน แม่แบบ และความรู้ทางเทคนิค|規格・標準作業手順・テンプレート・技術知識
+Controlled standards, templates, presentations and technical knowledge in one register|รวมมาตรฐาน แม่แบบ งานนำเสนอ และความรู้ทางเทคนิคไว้ในทะเบียนเดียว|管理された規格・テンプレート・プレゼンテーション・技術知識を一元管理
+No access to the knowledge library|ไม่มีสิทธิ์เข้าถึงคลังความรู้|ナレッジライブラリへのアクセス権がありません
+No documents yet|ยังไม่มีเอกสาร|文書がありません
+No presentations yet|ยังไม่มีงานนำเสนอ|プレゼンテーションがありません
+No shared documents|ยังไม่มีเอกสารที่แชร์|共有文書がありません
+Nothing waiting for you|ไม่มีรายการรอคุณดำเนินการ|対応待ちの項目はありません
+No knowledge article found|ไม่พบบทความความรู้|ナレッジ記事が見つかりません
+No audit events|ไม่มีบันทึกการเปลี่ยนแปลง|監査イベントがありません
+Not linked yet|ยังไม่เชื่อมโยง|未連携
+No comments|ยังไม่มีความคิดเห็น|コメントがありません
+Revisions|ฉบับแก้ไข|改訂履歴
+Related records|รายการที่เกี่ยวข้อง|関連レコード
+Comments|ความคิดเห็น|コメント
+Access|สิทธิ์เข้าถึง|アクセス権
+Audit|ประวัติการเปลี่ยนแปลง|監査

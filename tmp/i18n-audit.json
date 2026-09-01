@@ -1,0 +1,11074 @@
+[
+  [
+    "Supplier",
+    41
+  ],
+  [
+    "Item",
+    25
+  ],
+  [
+    "MD",
+    25
+  ],
+  [
+    "Reason",
+    23
+  ],
+  [
+    "Total",
+    23
+  ],
+  [
+    "Remark",
+    22
+  ],
+  [
+    "Code",
+    20
+  ],
+  [
+    "Engineer",
+    20
+  ],
+  [
+    "Required",
+    20
+  ],
+  [
+    "Category",
+    19
+  ],
+  [
+    "Actions",
+    18
+  ],
+  [
+    "THB",
+    17
+  ],
+  [
+    "Project type",
+    14
+  ],
+  [
+    "Revision",
+    14
+  ],
+  [
+    "Lines",
+    14
+  ],
+  [
+    "HR",
+    14
+  ],
+  [
+    "Action",
+    13
+  ],
+  [
+    "Discipline",
+    13
+  ],
+  [
+    "Source",
+    12
+  ],
+  [
+    "Type",
+    12
+  ],
+  [
+    "Estimate owner",
+    12
+  ],
+  [
+    "Title",
+    12
+  ],
+  [
+    "Model",
+    10
+  ],
+  [
+    "Role",
+    10
+  ],
+  [
+    "Man-days",
+    10
+  ],
+  [
+    "Man-hours",
+    10
+  ],
+  [
+    "days",
+    10
+  ],
+  [
+    "Requested By",
+    10
+  ],
+  [
+    "Change",
+    9
+  ],
+  [
+    "Amount",
+    9
+  ],
+  [
+    "Decision",
+    9
+  ],
+  [
+    "Item code",
+    8
+  ],
+  [
+    "Total estimated cost",
+    8
+  ],
+  [
+    "Due date",
+    8
+  ],
+  [
+    "Purpose",
+    8
+  ],
+  [
+    "ลองใหม่",
+    7
+  ],
+  [
+    "Price date",
+    7
+  ],
+  [
+    "Module",
+    7
+  ],
+  [
+    "Comment",
+    7
+  ],
+  [
+    "Attachments",
+    7
+  ],
+  [
+    "Approver",
+    7
+  ],
+  [
+    "Variance",
+    7
+  ],
+  [
+    "Note",
+    7
+  ],
+  [
+    "โหลดข้อมูลไม่สำเร็จ",
+    6
+  ],
+  [
+    "Phone",
+    6
+  ],
+  [
+    "Description *",
+    6
+  ],
+  [
+    "Search Price Library",
+    6
+  ],
+  [
+    "subtotal",
+    6
+  ],
+  [
+    "Supplier man-hour",
+    6
+  ],
+  [
+    "Add Meeting Record",
+    6
+  ],
+  [
+    "User",
+    6
+  ],
+  [
+    "Rev",
+    6
+  ],
+  [
+    "Subject",
+    6
+  ],
+  [
+    "View",
+    6
+  ],
+  [
+    "Requester",
+    6
+  ],
+  [
+    "Contact",
+    5
+  ],
+  [
+    "From",
+    5
+  ],
+  [
+    "Effective",
+    5
+  ],
+  [
+    "Contingency",
+    5
+  ],
+  [
+    "Unit *",
+    5
+  ],
+  [
+    "Owner *",
+    5
+  ],
+  [
+    "Unit cost",
+    5
+  ],
+  [
+    "Line total",
+    5
+  ],
+  [
+    "Share",
+    5
+  ],
+  [
+    "New Main Module",
+    5
+  ],
+  [
+    "Reference",
+    5
+  ],
+  [
+    "New Work Package",
+    5
+  ],
+  [
+    "Download",
+    5
+  ],
+  [
+    "Document",
+    5
+  ],
+  [
+    "Returned",
+    5
+  ],
+  [
+    "State",
+    5
+  ],
+  [
+    "English",
+    5
+  ],
+  [
+    "saved",
+    5
+  ],
+  [
+    "Visit No.",
+    5
+  ],
+  [
+    "deliveries",
+    5
+  ],
+  [
+    "Price Date",
+    5
+  ],
+  [
+    "Industry",
+    4
+  ],
+  [
+    "Loading live report…",
+    4
+  ],
+  [
+    "No report loaded",
+    4
+  ],
+  [
+    "Usable",
+    4
+  ],
+  [
+    "Created by",
+    4
+  ],
+  [
+    "Due date *",
+    4
+  ],
+  [
+    "Category *",
+    4
+  ],
+  [
+    "No supplier",
+    4
+  ],
+  [
+    "Unit cost (THB) *",
+    4
+  ],
+  [
+    "ดำเนินการไม่สำเร็จ",
+    4
+  ],
+  [
+    "OK",
+    4
+  ],
+  [
+    "Name",
+    4
+  ],
+  [
+    "Subcategory",
+    4
+  ],
+  [
+    "No cost item",
+    4
+  ],
+  [
+    "No.",
+    4
+  ],
+  [
+    "Brand / Model",
+    4
+  ],
+  [
+    "Add activity",
+    4
+  ],
+  [
+    "Engineering cost",
+    4
+  ],
+  [
+    "Quotation No.",
+    4
+  ],
+  [
+    "Section",
+    4
+  ],
+  [
+    "Inquiry date",
+    4
+  ],
+  [
+    "Customer RFQ No.",
+    4
+  ],
+  [
+    "Participants",
+    4
+  ],
+  [
+    "Activity",
+    4
+  ],
+  [
+    "Needs attention",
+    4
+  ],
+  [
+    "Document type",
+    4
+  ],
+  [
+    "Document No.",
+    4
+  ],
+  [
+    "Tags",
+    4
+  ],
+  [
+    "By",
+    4
+  ],
+  [
+    "Quantity",
+    4
+  ],
+  [
+    "PR",
+    4
+  ],
+  [
+    "Unit price",
+    4
+  ],
+  [
+    "Use",
+    4
+  ],
+  [
+    "PO",
+    4
+  ],
+  [
+    "QC",
+    4
+  ],
+  [
+    "When",
+    4
+  ],
+  [
+    "Currency",
+    4
+  ],
+  [
+    "Peak",
+    4
+  ],
+  [
+    "Mark",
+    4
+  ],
+  [
+    "Reason (required)",
+    4
+  ],
+  [
+    "Block",
+    4
+  ],
+  [
+    "Nothing waiting",
+    4
+  ],
+  [
+    "Remove",
+    4
+  ],
+  [
+    "Yes",
+    4
+  ],
+  [
+    "No",
+    4
+  ],
+  [
+    "Engineers",
+    4
+  ],
+  [
+    "ENGINEERING",
+    4
+  ],
+  [
+    "Default",
+    4
+  ],
+  [
+    "Demo only — the production workspace writes to SQL Server.",
+    4
+  ],
+  [
+    "This is the /demo prototype on sample data. The production workspace is the API-backed one.",
+    4
+  ],
+  [
+    "MASTER DATA",
+    3
+  ],
+  [
+    "Add customer",
+    3
+  ],
+  [
+    "Inquiries",
+    3
+  ],
+  [
+    "Avg. cost",
+    3
+  ],
+  [
+    "Approved budget",
+    3
+  ],
+  [
+    "Entity",
+    3
+  ],
+  [
+    "Actor",
+    3
+  ],
+  [
+    "Item code *",
+    3
+  ],
+  [
+    "Quantity *",
+    3
+  ],
+  [
+    "Previous Project",
+    3
+  ],
+  [
+    "Items",
+    3
+  ],
+  [
+    "Reorder",
+    3
+  ],
+  [
+    "Add supplier",
+    3
+  ],
+  [
+    "Add inventory item",
+    3
+  ],
+  [
+    "Transportation",
+    3
+  ],
+  [
+    "Accommodation",
+    3
+  ],
+  [
+    "Total Estimated Cost",
+    3
+  ],
+  [
+    "Add item",
+    3
+  ],
+  [
+    "Copy Previous Estimate",
+    3
+  ],
+  [
+    "Price source",
+    3
+  ],
+  [
+    "Add item to",
+    3
+  ],
+  [
+    "Own engineer",
+    3
+  ],
+  [
+    "Result",
+    3
+  ],
+  [
+    "Difference",
+    3
+  ],
+  [
+    "Line status",
+    3
+  ],
+  [
+    "Cost type *",
+    3
+  ],
+  [
+    "Estimate due",
+    3
+  ],
+  [
+    "Site location",
+    3
+  ],
+  [
+    "Scope summary",
+    3
+  ],
+  [
+    "Requirement Information",
+    3
+  ],
+  [
+    "Date / Time",
+    3
+  ],
+  [
+    "Knowledge Hub",
+    3
+  ],
+  [
+    "New Document",
+    3
+  ],
+  [
+    "Confidentiality",
+    3
+  ],
+  [
+    "Summary",
+    3
+  ],
+  [
+    "Scope",
+    3
+  ],
+  [
+    "Japanese name",
+    3
+  ],
+  [
+    "Creating…",
+    3
+  ],
+  [
+    "Not linked yet",
+    3
+  ],
+  [
+    "Released BOM",
+    3
+  ],
+  [
+    "Required date",
+    3
+  ],
+  [
+    "Current step",
+    3
+  ],
+  [
+    "Outstanding",
+    3
+  ],
+  [
+    "Complete",
+    3
+  ],
+  [
+    "Held",
+    3
+  ],
+  [
+    "Confirm",
+    3
+  ],
+  [
+    "Adjustment",
+    3
+  ],
+  [
+    "Outcome",
+    3
+  ],
+  [
+    "ยกเลิก",
+    3
+  ],
+  [
+    "WBS",
+    3
+  ],
+  [
+    "ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้",
+    3
+  ],
+  [
+    "Price age",
+    3
+  ],
+  [
+    "JPY",
+    3
+  ],
+  [
+    "USD",
+    3
+  ],
+  [
+    "KB",
+    3
+  ],
+  [
+    "Supplier Quotations",
+    3
+  ],
+  [
+    "Upload quotation",
+    3
+  ],
+  [
+    "Attachment",
+    3
+  ],
+  [
+    "Assignment timeline",
+    3
+  ],
+  [
+    "Committed man-days",
+    3
+  ],
+  [
+    "ผู้รับผิดชอบ",
+    3
+  ],
+  [
+    "No signing access",
+    3
+  ],
+  [
+    "บทบาทของคุณยังไม่มีสิทธิ์ signing.read กรุณาติดต่อผู้ดูแลระบบ",
+    3
+  ],
+  [
+    "You",
+    3
+  ],
+  [
+    "Document class",
+    3
+  ],
+  [
+    "Amount (THB)",
+    3
+  ],
+  [
+    "Version",
+    3
+  ],
+  [
+    "v",
+    3
+  ],
+  [
+    "Missing",
+    3
+  ],
+  [
+    "To",
+    3
+  ],
+  [
+    "accepted",
+    3
+  ],
+  [
+    "Response",
+    3
+  ],
+  [
+    "Record",
+    3
+  ],
+  [
+    "Kind",
+    3
+  ],
+  [
+    "SLA",
+    3
+  ],
+  [
+    "Latest price",
+    3
+  ],
+  [
+    "BOM budget",
+    3
+  ],
+  [
+    "issued",
+    3
+  ],
+  [
+    "items",
+    3
+  ],
+  [
+    "Comment (required)",
+    3
+  ],
+  [
+    "Actual",
+    3
+  ],
+  [
+    "Valid Until",
+    3
+  ],
+  [
+    "Request Date",
+    3
+  ],
+  [
+    "PO No.",
+    3
+  ],
+  [
+    "Unit Cost",
+    3
+  ],
+  [
+    "Customer master shared by inquiry, estimate and reporting.",
+    2
+  ],
+  [
+    "Search customer code, name or industry…",
+    2
+  ],
+  [
+    "Main contact",
+    2
+  ],
+  [
+    "Open estimates",
+    2
+  ],
+  [
+    "เลือกช่วงเวลาแล้วกด Refresh",
+    2
+  ],
+  [
+    "On time",
+    2
+  ],
+  [
+    "Stage",
+    2
+  ],
+  [
+    "Completed",
+    2
+  ],
+  [
+    "Approved estimate",
+    2
+  ],
+  [
+    "New Rate",
+    2
+  ],
+  [
+    "Effective from",
+    2
+  ],
+  [
+    "No audit events",
+    2
+  ],
+  [
+    "Connected",
+    2
+  ],
+  [
+    "Estimates",
+    2
+  ],
+  [
+    "Estimate owner *",
+    2
+  ],
+  [
+    "Normal",
+    2
+  ],
+  [
+    "High",
+    2
+  ],
+  [
+    "Search estimate, inquiry, project or customer…",
+    2
+  ],
+  [
+    "R",
+    2
+  ],
+  [
+    "Price source *",
+    2
+  ],
+  [
+    "Uploaded",
+    2
+  ],
+  [
+    "MATERIAL CONTROL",
+    2
+  ],
+  [
+    "Part no.",
+    2
+  ],
+  [
+    "No inventory item found",
+    2
+  ],
+  [
+    "Brands",
+    2
+  ],
+  [
+    "Search item code, part number, description or brand…",
+    2
+  ],
+  [
+    "No active team member",
+    2
+  ],
+  [
+    "Open validation",
+    2
+  ],
+  [
+    "Other Cost",
+    2
+  ],
+  [
+    "No main module yet",
+    2
+  ],
+  [
+    "Lock",
+    2
+  ],
+  [
+    "ยังไม่มีรายการต้นทุนใน revision นี้",
+    2
+  ],
+  [
+    "Enter: save and create the next row · Esc: cancel",
+    2
+  ],
+  [
+    "Reference No.",
+    2
+  ],
+  [
+    "Reference project",
+    2
+  ],
+  [
+    "item",
+    2
+  ],
+  [
+    "Add with details",
+    2
+  ],
+  [
+    "All disciplines",
+    2
+  ],
+  [
+    "Modules",
+    2
+  ],
+  [
+    "Use price",
+    2
+  ],
+  [
+    "Copy",
+    2
+  ],
+  [
+    "item(s)",
+    2
+  ],
+  [
+    "row(s)",
+    2
+  ],
+  [
+    "ค้นหา code, ชื่อ, item, brand",
+    2
+  ],
+  [
+    "No template",
+    2
+  ],
+  [
+    "ไม่ระบุ",
+    2
+  ],
+  [
+    "วัน",
+    2
+  ],
+  [
+    "Engineering Man-hour & Site Expense",
+    2
+  ],
+  [
+    "Installation &amp; Service cost",
+    2
+  ],
+  [
+    "· Supplier",
+    2
+  ],
+  [
+    "· Expense",
+    2
+  ],
+  [
+    "Activity / Description",
+    2
+  ],
+  [
+    "Engineer Level",
+    2
+  ],
+  [
+    "Cost Type",
+    2
+  ],
+  [
+    "Hours / Day",
+    2
+  ],
+  [
+    "Rate",
+    2
+  ],
+  [
+    "Add expense",
+    2
+  ],
+  [
+    "Activity *",
+    2
+  ],
+  [
+    "TOMAS TECH",
+    2
+  ],
+  [
+    "Add activity to",
+    2
+  ],
+  [
+    "Add travel, accommodation or other expense to",
+    2
+  ],
+  [
+    "No work package yet",
+    2
+  ],
+  [
+    "Installation &amp; service",
+    2
+  ],
+  [
+    "Travel / hotel / per diem",
+    2
+  ],
+  [
+    "Outsource & Other Project Cost",
+    2
+  ],
+  [
+    "Add other cost",
+    2
+  ],
+  [
+    "No other project cost",
+    2
+  ],
+  [
+    "Cost base",
+    2
+  ],
+  [
+    "Estimate sections",
+    2
+  ],
+  [
+    "Responsible Engineer",
+    2
+  ],
+  [
+    "Support Engineer",
+    2
+  ],
+  [
+    "Estimate completion",
+    2
+  ],
+  [
+    "Estimate Validation",
+    2
+  ],
+  [
+    "Revision Control",
+    2
+  ],
+  [
+    "Compare Estimate Revision",
+    2
+  ],
+  [
+    "From revision",
+    2
+  ],
+  [
+    "To revision",
+    2
+  ],
+  [
+    "Cost summary",
+    2
+  ],
+  [
+    "Top 10 highest cost items",
+    2
+  ],
+  [
+    "Reviewer decision",
+    2
+  ],
+  [
+    "Approve Estimate Cost",
+    2
+  ],
+  [
+    "Reference number",
+    2
+  ],
+  [
+    "Work package *",
+    2
+  ],
+  [
+    "Status *",
+    2
+  ],
+  [
+    "Search inquiry no., project, customer or RFQ no.…",
+    2
+  ],
+  [
+    "กำหนดตอบกลับ",
+    2
+  ],
+  [
+    "No inquiry matches the filter",
+    2
+  ],
+  [
+    "Adjust the filters above or register a new customer inquiry.",
+    2
+  ],
+  [
+    "NEW INQUIRY",
+    2
+  ],
+  [
+    "Register customer inquiry",
+    2
+  ],
+  [
+    "Customer Contact",
+    2
+  ],
+  [
+    "Project Background",
+    2
+  ],
+  [
+    "Scope Summary",
+    2
+  ],
+  [
+    "Technical Requirement",
+    2
+  ],
+  [
+    "Target Delivery",
+    2
+  ],
+  [
+    "Site Location",
+    2
+  ],
+  [
+    "Customer Standard",
+    2
+  ],
+  [
+    "Special Requirement",
+    2
+  ],
+  [
+    "Inquiry Attachments",
+    2
+  ],
+  [
+    "Drag and drop files here or click to browse",
+    2
+  ],
+  [
+    "· queued for upload",
+    2
+  ],
+  [
+    "Inquiry status",
+    2
+  ],
+  [
+    "Open estimate",
+    2
+  ],
+  [
+    "Assign owner",
+    2
+  ],
+  [
+    "Inquiry information",
+    2
+  ],
+  [
+    "Customer contact",
+    2
+  ],
+  [
+    "Estimate progress",
+    2
+  ],
+  [
+    "No estimate yet",
+    2
+  ],
+  [
+    "Create the estimate cost to start collecting engineering cost for this inquiry.",
+    2
+  ],
+  [
+    "Latest meetings",
+    2
+  ],
+  [
+    "No meeting recorded yet.",
+    2
+  ],
+  [
+    "Meeting Log",
+    2
+  ],
+  [
+    "Why the estimate requirement changed, recorded meeting by meeting",
+    2
+  ],
+  [
+    "participants",
+    2
+  ],
+  [
+    "Technical discussion",
+    2
+  ],
+  [
+    "Open point",
+    2
+  ],
+  [
+    "Action item",
+    2
+  ],
+  [
+    "Meeting Record",
+    2
+  ],
+  [
+    "No meeting recorded yet",
+    2
+  ],
+  [
+    "Add the kickoff meeting so engineers understand where the requirement came from.",
+    2
+  ],
+  [
+    "No estimate cost created",
+    2
+  ],
+  [
+    "Create an estimate to divide the engineering scope and start collecting cost.",
+    2
+  ],
+  [
+    "Estimate cost linked to this inquiry",
+    2
+  ],
+  [
+    "Each file is tagged with a document category and linked to this inquiry",
+    2
+  ],
+  [
+    "Capture the decision so the estimate revision has a traceable reason",
+    2
+  ],
+  [
+    "Meeting Date",
+    2
+  ],
+  [
+    "Meeting Type",
+    2
+  ],
+  [
+    "Separate names with a comma",
+    2
+  ],
+  [
+    "Technical Discussion",
+    2
+  ],
+  [
+    "Open Point",
+    2
+  ],
+  [
+    "Action Item",
+    2
+  ],
+  [
+    "KNOWLEDGE &amp; DOCUMENT HUB",
+    2
+  ],
+  [
+    "Controlled standards, templates, presentations and technical knowledge in one register",
+    2
+  ],
+  [
+    "Published",
+    2
+  ],
+  [
+    "current revision in force",
+    2
+  ],
+  [
+    "In workflow",
+    2
+  ],
+  [
+    "review or approval pending",
+    2
+  ],
+  [
+    "review due or expired",
+    2
+  ],
+  [
+    "Standards register",
+    2
+  ],
+  [
+    "One row per document; the revision shown is the current one",
+    2
+  ],
+  [
+    "Next Review",
+    2
+  ],
+  [
+    "Assigned",
+    2
+  ],
+  [
+    "Article type",
+    2
+  ],
+  [
+    "New category",
+    2
+  ],
+  [
+    "Prefix",
+    2
+  ],
+  [
+    "Last number",
+    2
+  ],
+  [
+    "Padding",
+    2
+  ],
+  [
+    "Parent category",
+    2
+  ],
+  [
+    "Archive",
+    2
+  ],
+  [
+    "This document is obsolete. Do not use it as a reference for new work.",
+    2
+  ],
+  [
+    "This document has passed its expiry date and must not be cited.",
+    2
+  ],
+  [
+    "Effective date",
+    2
+  ],
+  [
+    "Next review",
+    2
+  ],
+  [
+    "Approval route",
+    2
+  ],
+  [
+    "Reviewer",
+    2
+  ],
+  [
+    "Link this document to an inquiry, project, estimate, BOM, PR or PO to make it findable from that record.",
+    2
+  ],
+  [
+    "Granted by",
+    2
+  ],
+  [
+    "Loading from production API…",
+    2
+  ],
+  [
+    "Purchase required",
+    2
+  ],
+  [
+    "Covered",
+    2
+  ],
+  [
+    "Select project…",
+    2
+  ],
+  [
+    "PROCURE TO PAY",
+    2
+  ],
+  [
+    "Buy despite stock",
+    2
+  ],
+  [
+    "Step",
+    2
+  ],
+  [
+    "Select BOM…",
+    2
+  ],
+  [
+    "Override",
+    2
+  ],
+  [
+    "No released BOM",
+    2
+  ],
+  [
+    "Outstanding units",
+    2
+  ],
+  [
+    "Value",
+    2
+  ],
+  [
+    "Delivery note",
+    2
+  ],
+  [
+    "Received date",
+    2
+  ],
+  [
+    "GRN",
+    2
+  ],
+  [
+    "Received by",
+    2
+  ],
+  [
+    "Previously",
+    2
+  ],
+  [
+    "MIR",
+    2
+  ],
+  [
+    "Issue",
+    2
+  ],
+  [
+    "BOM qty",
+    2
+  ],
+  [
+    "On hand",
+    2
+  ],
+  [
+    "Requested by",
+    2
+  ],
+  [
+    "Issued by",
+    2
+  ],
+  [
+    "Return quantity",
+    2
+  ],
+  [
+    "Current usable",
+    2
+  ],
+  [
+    "Request adjustment",
+    2
+  ],
+  [
+    "Quantity change",
+    2
+  ],
+  [
+    "สถานะ",
+    2
+  ],
+  [
+    "ทุกสถานะ",
+    2
+  ],
+  [
+    "เลิกใช้งาน",
+    2
+  ],
+  [
+    "ล้างตัวกรอง",
+    2
+  ],
+  [
+    "Reference total",
+    2
+  ],
+  [
+    "Used",
+    2
+  ],
+  [
+    "ผู้สร้าง",
+    2
+  ],
+  [
+    "ต่อ 1 ชุด",
+    2
+  ],
+  [
+    "เปิด",
+    2
+  ],
+  [
+    "Used in",
+    2
+  ],
+  [
+    "Delete my task",
+    2
+  ],
+  [
+    "Add schedule row",
+    2
+  ],
+  [
+    "PROJECT CONTROL",
+    2
+  ],
+  [
+    "PIC",
+    2
+  ],
+  [
+    "Import Drawing",
+    2
+  ],
+  [
+    "CAPACITY VISIBILITY",
+    2
+  ],
+  [
+    "Planned effort",
+    2
+  ],
+  [
+    "COST KNOWLEDGE",
+    2
+  ],
+  [
+    "Source / Reference",
+    2
+  ],
+  [
+    "Estimate / Project",
+    2
+  ],
+  [
+    "Loading cost workspaces…",
+    2
+  ],
+  [
+    "Upload supplier quotation",
+    2
+  ],
+  [
+    "EUR",
+    2
+  ],
+  [
+    "SUPPLIER SOURCING",
+    2
+  ],
+  [
+    "Inquiry / Project",
+    2
+  ],
+  [
+    "PRICE FOLLOW-UP",
+    2
+  ],
+  [
+    "ENGINEERING RESOURCE",
+    2
+  ],
+  [
+    "Export plan",
+    2
+  ],
+  [
+    "Weekly capacity",
+    2
+  ],
+  [
+    "Workload",
+    2
+  ],
+  [
+    "Work items",
+    2
+  ],
+  [
+    "Engineers on the plan",
+    2
+  ],
+  [
+    "Over capacity",
+    2
+  ],
+  [
+    "Overdue work",
+    2
+  ],
+  [
+    "Search engineer, inquiry, project or customer…",
+    2
+  ],
+  [
+    "Start date",
+    2
+  ],
+  [
+    "Nobody matches the filter",
+    2
+  ],
+  [
+    "Clear the department or search filter to see the team again.",
+    2
+  ],
+  [
+    "Each bar is one commitment; the shaded part is progress",
+    2
+  ],
+  [
+    "Weekly load",
+    2
+  ],
+  [
+    "Engineer workload",
+    2
+  ],
+  [
+    "Needs a decision",
+    2
+  ],
+  [
+    "Load by department",
+    2
+  ],
+  [
+    "Plan effort",
+    2
+  ],
+  [
+    "Assign an inquiry",
+    2
+  ],
+  [
+    "Company stamp",
+    2
+  ],
+  [
+    "DOCUMENTS",
+    2
+  ],
+  [
+    "SHA-256",
+    2
+  ],
+  [
+    "Frozen",
+    2
+  ],
+  [
+    "Output SHA-256",
+    2
+  ],
+  [
+    "Evidence",
+    2
+  ],
+  [
+    "Note (optional)",
+    2
+  ],
+  [
+    "stamp",
+    2
+  ],
+  [
+    "ไทย",
+    2
+  ],
+  [
+    "History",
+    2
+  ],
+  [
+    "Valid",
+    2
+  ],
+  [
+    "Holder",
+    2
+  ],
+  [
+    "Valid from",
+    2
+  ],
+  [
+    "Search intake no., subject, customer or site…",
+    2
+  ],
+  [
+    "Clear search",
+    2
+  ],
+  [
+    "No intake matches the filter",
+    2
+  ],
+  [
+    "Check the information is complete before an engineer is committed to a date.",
+    2
+  ],
+  [
+    "Waiting for review",
+    2
+  ],
+  [
+    "Returned to sales",
+    2
+  ],
+  [
+    "Ready to schedule",
+    2
+  ],
+  [
+    "My intakes",
+    2
+  ],
+  [
+    "Pending technical review",
+    2
+  ],
+  [
+    "Returned for information",
+    2
+  ],
+  [
+    "Upcoming visits",
+    2
+  ],
+  [
+    "Completed visits",
+    2
+  ],
+  [
+    "Waiting for a report",
+    2
+  ],
+  [
+    "Converted to inquiry",
+    2
+  ],
+  [
+    "Intake by status",
+    2
+  ],
+  [
+    "· v",
+    2
+  ],
+  [
+    "Not found",
+    2
+  ],
+  [
+    "Site not named",
+    2
+  ],
+  [
+    "Visit purpose and skills",
+    2
+  ],
+  [
+    "Not selected",
+    2
+  ],
+  [
+    "Status history",
+    2
+  ],
+  [
+    "No history yet",
+    2
+  ],
+  [
+    "Status changes appear here.",
+    2
+  ],
+  [
+    "Change status to",
+    2
+  ],
+  [
+    "Working…",
+    2
+  ],
+  [
+    "Reason / comment",
+    2
+  ],
+  [
+    "Everything is present.",
+    2
+  ],
+  [
+    "created",
+    2
+  ],
+  [
+    "Every requested, scheduled and completed visit, with who is going and whether the report has landed.",
+    2
+  ],
+  [
+    "site visits",
+    2
+  ],
+  [
+    "Intake",
+    2
+  ],
+  [
+    "Customer / Site",
+    2
+  ],
+  [
+    "Not scheduled",
+    2
+  ],
+  [
+    "E",
+    2
+  ],
+  [
+    "C",
+    2
+  ],
+  [
+    "Colour follows the visit status, so an unconfirmed appointment never looks like a firm one.",
+    2
+  ],
+  [
+    "Waiting for assignment",
+    2
+  ],
+  [
+    "Waiting for confirmation",
+    2
+  ],
+  [
+    "Visits today",
+    2
+  ],
+  [
+    "Visits this week",
+    2
+  ],
+  [
+    "Conflict overrides",
+    2
+  ],
+  [
+    "Reports overdue",
+    2
+  ],
+  [
+    "Workload by engineer",
+    2
+  ],
+  [
+    "Skill demand",
+    2
+  ],
+  [
+    "By department",
+    2
+  ],
+  [
+    "report due",
+    2
+  ],
+  [
+    "minutes",
+    2
+  ],
+  [
+    "Match",
+    2
+  ],
+  [
+    "Assigned by",
+    2
+  ],
+  [
+    "Required when declining or asking for information",
+    2
+  ],
+  [
+    "Nothing recorded",
+    2
+  ],
+  [
+    "Detail",
+    2
+  ],
+  [
+    "Reviewer comment",
+    2
+  ],
+  [
+    "ENGINEER",
+    2
+  ],
+  [
+    "Accept the job, check in when you arrive, and write the report before the clock runs out.",
+    2
+  ],
+  [
+    "Visit purposes, skills, checklists, service levels, engineer profiles and unavailability.",
+    2
+  ],
+  [
+    "Thai",
+    2
+  ],
+  [
+    "Japanese",
+    2
+  ],
+  [
+    "Duration",
+    2
+  ],
+  [
+    "h",
+    2
+  ],
+  [
+    "Sort order",
+    2
+  ],
+  [
+    "Engineers holding it",
+    2
+  ],
+  [
+    "Prompt",
+    2
+  ],
+  [
+    "Visit type",
+    2
+  ],
+  [
+    "Review (days)",
+    2
+  ],
+  [
+    "Lead (days)",
+    2
+  ],
+  [
+    "Report due (days)",
+    2
+  ],
+  [
+    "Warn (hours)",
+    2
+  ],
+  [
+    "Add user",
+    2
+  ],
+  [
+    "Off",
+    2
+  ],
+  [
+    "material",
+    2
+  ],
+  [
+    "All sections",
+    2
+  ],
+  [
+    "by",
+    2
+  ],
+  [
+    "returned",
+    2
+  ],
+  [
+    "Waiting supplier price",
+    2
+  ],
+  [
+    "Estimated Cost",
+    2
+  ],
+  [
+    "Drag and drop files here",
+    2
+  ],
+  [
+    "Avg Cost",
+    2
+  ],
+  [
+    "Adjust Stock",
+    2
+  ],
+  [
+    "Approved — the warehouse can pick",
+    2
+  ],
+  [
+    "Supplier quotations",
+    2
+  ],
+  [
+    "Price (THB)",
+    2
+  ],
+  [
+    "Price Age",
+    2
+  ],
+  [
+    "Trend",
+    2
+  ],
+  [
+    "Last Used",
+    2
+  ],
+  [
+    "Use Price",
+    2
+  ],
+  [
+    "Uploaded By",
+    2
+  ],
+  [
+    "Supplier Quotation No.",
+    2
+  ],
+  [
+    "Open items",
+    2
+  ],
+  [
+    "Required Date",
+    2
+  ],
+  [
+    "Warehouse",
+    2
+  ],
+  [
+    "opened",
+    2
+  ],
+  [
+    ".pdf",
+    2
+  ],
+  [
+    "PDF",
+    2
+  ],
+  [
+    "New Purchase Requisition",
+    2
+  ],
+  [
+    "PR lines",
+    2
+  ],
+  [
+    "Buy",
+    2
+  ],
+  [
+    "unplanned",
+    2
+  ],
+  [
+    "d",
+    2
+  ],
+  [
+    "Add line",
+    2
+  ],
+  [
+    "References",
+    2
+  ],
+  [
+    "Check",
+    2
+  ],
+  [
+    "Cost Category",
+    2
+  ],
+  [
+    "Main Module",
+    2
+  ],
+  [
+    "Reference Project",
+    2
+  ],
+  [
+    "Calculated by the system — Qty × Unit Cost",
+    2
+  ],
+  [
+    "— not set —",
+    2
+  ],
+  [
+    "Other project cost and contingency",
+    2
+  ],
+  [
+    "— select supplier —",
+    2
+  ],
+  [
+    "Cost type",
+    2
+  ],
+  [
+    "THB · material and cost items",
+    2
+  ],
+  [
+    "e.g. Main Control Box",
+    2
+  ],
+  [
+    "ไม่มีสิทธิ์เปิดหน้านี้",
+    1
+  ],
+  [
+    "No customer found",
+    1
+  ],
+  [
+    "ปรับคำค้นหา หรือเพิ่มลูกค้ารายแรกเมื่อมีสิทธิ์ master.write",
+    1
+  ],
+  [
+    "Customer code",
+    1
+  ],
+  [
+    "Customer name",
+    1
+  ],
+  [
+    "LIVE ANALYTICS",
+    1
+  ],
+  [
+    "รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้",
+    1
+  ],
+  [
+    "Production API",
+    1
+  ],
+  [
+    "Select project",
+    1
+  ],
+  [
+    "เลือกวันที่แล้วกด Refresh",
+    1
+  ],
+  [
+    "Inventory value",
+    1
+  ],
+  [
+    "Slow moving",
+    1
+  ],
+  [
+    "Inventory valuation",
+    1
+  ],
+  [
+    "Total value",
+    1
+  ],
+  [
+    "Last movement",
+    1
+  ],
+  [
+    "No inventory value",
+    1
+  ],
+  [
+    "ยังไม่มี stock transaction ถึงวันที่รายงาน",
+    1
+  ],
+  [
+    "Supplier performance",
+    1
+  ],
+  [
+    "POs",
+    1
+  ],
+  [
+    "Fill rate",
+    1
+  ],
+  [
+    "Defect",
+    1
+  ],
+  [
+    "Lead days",
+    1
+  ],
+  [
+    "No supplier activity",
+    1
+  ],
+  [
+    "ไม่พบ Purchase Order ในช่วงวันที่นี้",
+    1
+  ],
+  [
+    "PR count",
+    1
+  ],
+  [
+    "Create → Submit",
+    1
+  ],
+  [
+    "Submit → Approve",
+    1
+  ],
+  [
+    "Create → PO",
+    1
+  ],
+  [
+    "Approval stage duration",
+    1
+  ],
+  [
+    "Minimum",
+    1
+  ],
+  [
+    "Maximum",
+    1
+  ],
+  [
+    "No completed stages",
+    1
+  ],
+  [
+    "ยังไม่มีขั้นตอนอนุมัติที่เสร็จในช่วงวันที่นี้",
+    1
+  ],
+  [
+    "PR status",
+    1
+  ],
+  [
+    "Select a project",
+    1
+  ],
+  [
+    "เลือกโครงการเพื่อคำนวณต้นทุนจาก estimate, procurement และ stock ledger",
+    1
+  ],
+  [
+    "กด Refresh เพื่อลองอีกครั้ง",
+    1
+  ],
+  [
+    "Material actual",
+    1
+  ],
+  [
+    "Forecast exposure",
+    1
+  ],
+  [
+    "Remaining material",
+    1
+  ],
+  [
+    "Procurement exposure",
+    1
+  ],
+  [
+    "Procurement ledger",
+    1
+  ],
+  [
+    "Accounting scope",
+    1
+  ],
+  [
+    "COST MASTER",
+    1
+  ],
+  [
+    "อัตราที่มีผลตามช่วงวันที่จาก SQL Server",
+    1
+  ],
+  [
+    "Search level, department or creator…",
+    1
+  ],
+  [
+    "Enabled records only",
+    1
+  ],
+  [
+    "Effective-dated engineering and installation rates",
+    1
+  ],
+  [
+    "Engineering / hour",
+    1
+  ],
+  [
+    "Engineering / day",
+    1
+  ],
+  [
+    "Installation / hour",
+    1
+  ],
+  [
+    "Installation / day",
+    1
+  ],
+  [
+    "No engineering rates",
+    1
+  ],
+  [
+    "เพิ่มอัตราแรกเมื่อมีสิทธิ์ master.write",
+    1
+  ],
+  [
+    "New engineering rate",
+    1
+  ],
+  [
+    "ช่วงวันที่และอัตราซ้ำซ้อนจะถูกตรวจใน transaction",
+    1
+  ],
+  [
+    "Engineering hourly",
+    1
+  ],
+  [
+    "Engineering daily",
+    1
+  ],
+  [
+    "Installation hourly",
+    1
+  ],
+  [
+    "Installation daily",
+    1
+  ],
+  [
+    "Effective to",
+    1
+  ],
+  [
+    "IMMUTABLE LEDGER",
+    1
+  ],
+  [
+    "รวม Core audit และ Material audit แบบ read-only จากฐานข้อมูลจริง",
+    1
+  ],
+  [
+    "Append only",
+    1
+  ],
+  [
+    "Search document, action, actor or reason…",
+    1
+  ],
+  [
+    "e.g. Estimate",
+    1
+  ],
+  [
+    "This endpoint is read-only; both audit ledgers remain append-only",
+    1
+  ],
+  [
+    "Occurred",
+    1
+  ],
+  [
+    "Project / Qty",
+    1
+  ],
+  [
+    "Project #",
+    1
+  ],
+  [
+    "View JSON",
+    1
+  ],
+  [
+    "Before",
+    1
+  ],
+  [
+    "After",
+    1
+  ],
+  [
+    "ไม่พบเหตุการณ์ตามตัวกรองนี้",
+    1
+  ],
+  [
+    "RUNTIME STATUS",
+    1
+  ],
+  [
+    "ข้อมูลสถานะจริงแบบ read-only ไม่มีปุ่ม Save จำลอง",
+    1
+  ],
+  [
+    "Signed-in identity",
+    1
+  ],
+  [
+    "Resolved by the API and SQL user registry",
+    1
+  ],
+  [
+    "Database user ID",
+    1
+  ],
+  [
+    "Live connections",
+    1
+  ],
+  [
+    "Verified by the successful bootstrap request",
+    1
+  ],
+  [
+    "SQL Server via API",
+    1
+  ],
+  [
+    "Bootstrap, master and permissions loaded successfully",
+    1
+  ],
+  [
+    "API origin",
+    1
+  ],
+  [
+    "Configured",
+    1
+  ],
+  [
+    "Business timezone",
+    1
+  ],
+  [
+    "Authentication",
+    1
+  ],
+  [
+    "สิทธิ์ RBAC ที่ API ส่งให้บัญชีปัจจุบัน",
+    1
+  ],
+  [
+    "Configuration ownership",
+    1
+  ],
+  [
+    "ค่า connection string, Entra, CORS และ host ถูกจัดการที่ server environment เพื่อไม่ให้ browser แก้ไขความปลอดภัยของ Production ได้",
+    1
+  ],
+  [
+    "Connected ·",
+    1
+  ],
+  [
+    "Active projects",
+    1
+  ],
+  [
+    "Pending approvals",
+    1
+  ],
+  [
+    "สถานะของเส้นทางข้อมูลจริง",
+    1
+  ],
+  [
+    "Microsoft SQL Server",
+    1
+  ],
+  [
+    "Frontend ไม่เชื่อมฐานข้อมูลโดยตรง ทุกคำสั่งผ่าน API และ RBAC",
+    1
+  ],
+  [
+    "Audit & concurrency",
+    1
+  ],
+  [
+    "การเปลี่ยนสถานะสำคัญมี audit log และตรวจ row version",
+    1
+  ],
+  [
+    "Enabled",
+    1
+  ],
+  [
+    "รายการนี้มาจาก SQL Server และเลข Inquiry ถูกออกแบบ transaction-safe",
+    1
+  ],
+  [
+    "Search inquiry, project or customer…",
+    1
+  ],
+  [
+    "No inquiry found",
+    1
+  ],
+  [
+    "ปรับตัวกรองหรือสร้าง Inquiry รายการแรก",
+    1
+  ],
+  [
+    "New production inquiry",
+    1
+  ],
+  [
+    "เลขเอกสารจะสร้างโดย SQL Server เมื่อบันทึกสำเร็จ",
+    1
+  ],
+  [
+    "Customer *",
+    1
+  ],
+  [
+    "Project name *",
+    1
+  ],
+  [
+    "Project type *",
+    1
+  ],
+  [
+    "Priority *",
+    1
+  ],
+  [
+    "Low",
+    1
+  ],
+  [
+    "Urgent",
+    1
+  ],
+  [
+    "Project probability *",
+    1
+  ],
+  [
+    "Customer interest *",
+    1
+  ],
+  [
+    "A — Hot",
+    1
+  ],
+  [
+    "B — Warm",
+    1
+  ],
+  [
+    "C — Nurture",
+    1
+  ],
+  [
+    "D — Low",
+    1
+  ],
+  [
+    "Requirement",
+    1
+  ],
+  [
+    "ต้นทุน Material, Engineering และ Total คำนวณจากข้อมูลจริงในฐานข้อมูล",
+    1
+  ],
+  [
+    "Create from inquiry",
+    1
+  ],
+  [
+    "Customer / Project",
+    1
+  ],
+  [
+    "Workflow",
+    1
+  ],
+  [
+    "Costs",
+    1
+  ],
+  [
+    "Revise",
+    1
+  ],
+  [
+    "No estimate found",
+    1
+  ],
+  [
+    "สร้าง Estimate จาก Inquiry ที่ลงทะเบียนแล้ว",
+    1
+  ],
+  [
+    "Add cost item",
+    1
+  ],
+  [
+    "New cost item",
+    1
+  ],
+  [
+    "Module *",
+    1
+  ],
+  [
+    "Budgetary",
+    1
+  ],
+  [
+    "Reference no.",
+    1
+  ],
+  [
+    "No cost item in this revision",
+    1
+  ],
+  [
+    "Loading cost workspace…",
+    1
+  ],
+  [
+    "Create estimate from inquiry",
+    1
+  ],
+  [
+    "ข้อมูลลูกค้าและโครงการจะคัดลอกจาก Inquiry",
+    1
+  ],
+  [
+    "ไม่มี Inquiry สถานะ New ที่ยังไม่สร้าง Estimate และอยู่ในสิทธิ์ของคุณ",
+    1
+  ],
+  [
+    "Inquiry *",
+    1
+  ],
+  [
+    "Contingency (%)",
+    1
+  ],
+  [
+    "APPROVED WORK",
+    1
+  ],
+  [
+    "Search project or customer…",
+    1
+  ],
+  [
+    "Manager",
+    1
+  ],
+  [
+    "No project found",
+    1
+  ],
+  [
+    "สร้าง Project จาก Estimate ที่อนุมัติแล้ว",
+    1
+  ],
+  [
+    "Project folder *",
+    1
+  ],
+  [
+    "Document type *",
+    1
+  ],
+  [
+    "เช่น Drawing, Manual, Report",
+    1
+  ],
+  [
+    "File * · Maximum 50 MiB",
+    1
+  ],
+  [
+    "บัญชีนี้อ่านและดาวน์โหลดเอกสารได้ แต่ไม่มีสิทธิ์อัปโหลดเอกสารโครงการ",
+    1
+  ],
+  [
+    "No document uploaded",
+    1
+  ],
+  [
+    "Create production project",
+    1
+  ],
+  [
+    "ใช้ได้เฉพาะ Estimate สถานะ Approved",
+    1
+  ],
+  [
+    "Approved estimate *",
+    1
+  ],
+  [
+    "Select approved estimate",
+    1
+  ],
+  [
+    "Customer PO number *",
+    1
+  ],
+  [
+    "PO date *",
+    1
+  ],
+  [
+    "Project manager *",
+    1
+  ],
+  [
+    "Lead engineer *",
+    1
+  ],
+  [
+    "Start date *",
+    1
+  ],
+  [
+    "Target delivery *",
+    1
+  ],
+  [
+    "Site *",
+    1
+  ],
+  [
+    "Available units",
+    1
+  ],
+  [
+    "Reorder alerts",
+    1
+  ],
+  [
+    "Search item, part no., description or brand…",
+    1
+  ],
+  [
+    "Reorder only",
+    1
+  ],
+  [
+    "On order",
+    1
+  ],
+  [
+    "เพิ่ม Material master และรับสินค้าเข้าระบบก่อน",
+    1
+  ],
+  [
+    "CONTROLLED MASTER RECORDS",
+    1
+  ],
+  [
+    "ค้นหาและจัดการข้อมูลกลางสำหรับลูกค้า ผู้ขาย บุคลากร สินค้า และอัตราค่าแรง",
+    1
+  ],
+  [
+    "โปรดตรวจสอบรายการนี้",
+    1
+  ],
+  [
+    "Search supplier code, name or category…",
+    1
+  ],
+  [
+    "ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier",
+    1
+  ],
+  [
+    "Supplier name",
+    1
+  ],
+  [
+    "No supplier found",
+    1
+  ],
+  [
+    "ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย",
+    1
+  ],
+  [
+    "ใช้ใน Cost item และ Preferred supplier",
+    1
+  ],
+  [
+    "Supplier code *",
+    1
+  ],
+  [
+    "SUP-001",
+    1
+  ],
+  [
+    "Supplier name *",
+    1
+  ],
+  [
+    "Automation equipment",
+    1
+  ],
+  [
+    "Siemens, Omron, SMC",
+    1
+  ],
+  [
+    "คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร",
+    1
+  ],
+  [
+    "ทะเบียนสินค้าใช้ร่วมกับ Inventory · การเพิ่มสินค้าไม่เพิ่มยอด Stock",
+    1
+  ],
+  [
+    "Inventory item rules",
+    1
+  ],
+  [
+    "ข้อมูลตั้งต้นสำหรับ Stock ledger",
+    1
+  ],
+  [
+    "Stable item code",
+    1
+  ],
+  [
+    "รหัส Item ต้องไม่ซ้ำ และรองรับตัวอักษร ตัวเลข . _ / -",
+    1
+  ],
+  [
+    "Opening balance is separate",
+    1
+  ],
+  [
+    "การสร้าง Master ไม่เพิ่มยอด Stock; ยอดคงเหลือมาจาก Stock ledger เท่านั้น",
+    1
+  ],
+  [
+    "active suppliers",
+    1
+  ],
+  [
+    "Preferred supplier เป็นตัวเลือก ไม่บังคับสำหรับการสร้าง Item",
+    1
+  ],
+  [
+    "ข้อมูลสินค้าอ้างอิง · ดูยอดคงเหลือและการเคลื่อนไหวที่เมนู Inventory",
+    1
+  ],
+  [
+    "ลองเปลี่ยนคำค้นหา หรือเพิ่มข้อมูลสินค้า",
+    1
+  ],
+  [
+    "สร้าง Material master โดยไม่สร้างยอด Stock เริ่มต้น",
+    1
+  ],
+  [
+    "MAT-001",
+    1
+  ],
+  [
+    "Part number",
+    1
+  ],
+  [
+    "Preferred supplier",
+    1
+  ],
+  [
+    "No preferred supplier",
+    1
+  ],
+  [
+    "Reorder level *",
+    1
+  ],
+  [
+    "Average unit cost (THB) *",
+    1
+  ],
+  [
+    "Lead time (days) *",
+    1
+  ],
+  [
+    "Departments",
+    1
+  ],
+  [
+    "บัญชีที่เข้าใช้งานระบบและบทบาทสิทธิ์ แยกจากทะเบียนพนักงานในแท็บ Employees",
+    1
+  ],
+  [
+    "Provision users before creating rate references",
+    1
+  ],
+  [
+    "ACCESS CONTROL",
+    1
+  ],
+  [
+    "Team & permissions",
+    1
+  ],
+  [
+    "Supplier #",
+    1
+  ],
+  [
+    "(inactive)",
+    1
+  ],
+  [
+    "จัดทำต้นทุน ตรวจสอบ revision และอนุมัติจากข้อมูล SQL Server ชุดเดียวกัน",
+    1
+  ],
+  [
+    "No estimate matches the filters",
+    1
+  ],
+  [
+    "ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate",
+    1
+  ],
+  [
+    "SQL Server ออกเลข Estimate และสร้าง R00 ภายใน transaction เดียว",
+    1
+  ],
+  [
+    "Loading inquiries…",
+    1
+  ],
+  [
+    "Registered inquiry *",
+    1
+  ],
+  [
+    "Today through five years",
+    1
+  ],
+  [
+    "Contingency %",
+    1
+  ],
+  [
+    "No inquiry available",
+    1
+  ],
+  [
+    "ทุก Inquiry มี Estimate แล้ว หรือบัญชีนี้ไม่มี Inquiry ที่อ่านได้",
+    1
+  ],
+  [
+    "Loading estimate workspace…",
+    1
+  ],
+  [
+    "Validation",
+    1
+  ],
+  [
+    "critical validation issue(s)",
+    1
+  ],
+  [
+    "must be resolved before submission or approval.",
+    1
+  ],
+  [
+    "advisory warning(s)",
+    1
+  ],
+  [
+    "do not block workflow, but should be reviewed.",
+    1
+  ],
+  [
+    "Review warnings",
+    1
+  ],
+  [
+    "Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow",
+    1
+  ],
+  [
+    "Material Cost",
+    1
+  ],
+  [
+    "Engineering Cost",
+    1
+  ],
+  [
+    "Cost by main module",
+    1
+  ],
+  [
+    "กดชื่อโมดูลเพื่อเปิดตาราง Cost Items ตรงโมดูลนั้น",
+    1
+  ],
+  [
+    "Main module",
+    1
+  ],
+  [
+    "ครบทุก item",
+    1
+  ],
+  [
+    "Cost items — all modules",
+    1
+  ],
+  [
+    "สร้าง Main Module แล้วเพิ่ม item แรกในแท็บ Cost Items",
+    1
+  ],
+  [
+    "ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง",
+    1
+  ],
+  [
+    "cost item ·",
+    1
+  ],
+  [
+    "module",
+    1
+  ],
+  [
+    "man-days",
+    1
+  ],
+  [
+    "man-hour line ·",
+    1
+  ],
+  [
+    "project cost line",
+    1
+  ],
+  [
+    "Revision information",
+    1
+  ],
+  [
+    "Last updated",
+    1
+  ],
+  [
+    "By discipline",
+    1
+  ],
+  [
+    "หมวด 01–10 ของ revision ปัจจุบัน",
+    1
+  ],
+  [
+    "Top 5 cost items",
+    1
+  ],
+  [
+    "รายการที่มีผลกับยอดรวมมากที่สุด",
+    1
+  ],
+  [
+    "Part No. *",
+    1
+  ],
+  [
+    "to fix",
+    1
+  ],
+  [
+    "เก็บโมดูลนี้เข้าคลัง Master Template",
+    1
+  ],
+  [
+    "Save as template",
+    1
+  ],
+  [
+    "เลือกจาก Template",
+    1
+  ],
+  [
+    "หุบทุกโมดูล",
+    1
+  ],
+  [
+    "Collapse all",
+    1
+  ],
+  [
+    "กางทุกโมดูล",
+    1
+  ],
+  [
+    "Expand all",
+    1
+  ],
+  [
+    "Description / Specification",
+    1
+  ],
+  [
+    "ยังไม่เลือกผู้ขาย",
+    1
+  ],
+  [
+    "รอราคา",
+    1
+  ],
+  [
+    "ยังไม่มี item ในโมดูลนี้ — เพิ่ม item แรกเพื่อบันทึกโมดูลลง revision",
+    1
+  ],
+  [
+    "Shown lines",
+    1
+  ],
+  [
+    "Shown subtotal",
+    1
+  ],
+  [
+    "ค้นจาก Estimate เดิมและประวัติราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา",
+    1
+  ],
+  [
+    "live price record(s)",
+    1
+  ],
+  [
+    "Search item code, description, brand, supplier or estimate…",
+    1
+  ],
+  [
+    "Loading live Price Library…",
+    1
+  ],
+  [
+    "No matching price",
+    1
+  ],
+  [
+    "ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร",
+    1
+  ],
+  [
+    "คัดลอกเฉพาะหมวดที่เลือกจาก Estimate จริง แล้วสร้างเป็นรายการใหม่ใน revision นี้",
+    1
+  ],
+  [
+    "Source estimate *",
+    1
+  ],
+  [
+    "Loading source estimate…",
+    1
+  ],
+  [
+    "รองรับ .xlsx, .csv และ .tsv · อ่านชีตแรก · ตรวจ Preview ก่อนเขียนลง SQL Server",
+    1
+  ],
+  [
+    "valid of",
+    1
+  ],
+  [
+    "Import",
+    1
+  ],
+  [
+    "Excel file *",
+    1
+  ],
+  [
+    "Header ที่รองรับ เช่น Category, Module, Item Code, Description, Brand, Model, Supplier, Qty, Unit, Unit Cost",
+    1
+  ],
+  [
+    "Apply Master Template",
+    1
+  ],
+  [
+    "เลือกโมดูลจากคลัง ใส่จำนวนชุด แล้วดูผลก่อนลงจริง",
+    1
+  ],
+  [
+    "Loading templates…",
+    1
+  ],
+  [
+    "ไม่พบชุดที่พร้อมใช้งาน — สร้างได้ที่หน้า Module Templates หรือปุ่ม Save as template บนแถบโมดูล",
+    1
+  ],
+  [
+    "· Revision",
+    1
+  ],
+  [
+    "· สร้างโดย",
+    1
+  ],
+  [
+    "· แก้ไขล่าสุดโดย",
+    1
+  ],
+  [
+    "เมื่อ",
+    1
+  ],
+  [
+    "ชื่อโมดูลในใบนี้ *",
+    1
+  ],
+  [
+    "จำนวนชุด *",
+    1
+  ],
+  [
+    "ราคา",
+    1
+  ],
+  [
+    "ใช้ราคาอ้างอิงจาก template",
+    1
+  ],
+  [
+    "ราคาอ้างอิงเก่าสุดในชุดนี้อายุ",
+    1
+  ],
+  [
+    "วัน — ควรทบทวนราคาหลังลงรายการ",
+    1
+  ],
+  [
+    "จะลงรายการด้วยราคา 0 ทุกบรรทัด แล้วค่อยใส่ราคาเองหรือดึงจาก Price Library",
+    1
+  ],
+  [
+    "Added to estimate",
+    1
+  ],
+  [
+    "Save as Master Template",
+    1
+  ],
+  [
+    "Template code *",
+    1
+  ],
+  [
+    "เช่น CTU-A-800",
+    1
+  ],
+  [
+    "Template name *",
+    1
+  ],
+  [
+    "ชุดนี้ใช้กับงานแบบไหน มีอะไรที่ต้องรู้ก่อนดึงไปใช้",
+    1
+  ],
+  [
+    "ราคาที่เก็บไปเป็น",
+    1
+  ],
+  [
+    "ราคาอ้างอิง",
+    1
+  ],
+  [
+    "พร้อมวันที่ ไม่ใช่ราคาปัจจุบัน ตอนดึงไปใช้จะเตือนถ้าเก่าเกิน",
+    1
+  ],
+  [
+    "ตั้งชื่อ Main Module แล้วเพิ่ม Item แรกเพื่อบันทึกลง revision ปัจจุบัน",
+    1
+  ],
+  [
+    "Continue to first item",
+    1
+  ],
+  [
+    "Discipline *",
+    1
+  ],
+  [
+    "Main module name *",
+    1
+  ],
+  [
+    "เช่น Control Panel หรือ PLC System",
+    1
+  ],
+  [
+    "Main Module จะถูกบันทึกจริงเมื่อ Item แรกถูกสร้าง เพื่อไม่ให้เกิดโมดูลว่างในฐานข้อมูล",
+    1
+  ],
+  [
+    "Work package → activity → cost · engineering, installation, supplier man-hour และค่าเดินทางอยู่ในโครงเดียวกัน",
+    1
+  ],
+  [
+    "· Installation",
+    1
+  ],
+  [
+    "Rate master",
+    1
+  ],
+  [
+    "On save",
+    1
+  ],
+  [
+    "สร้าง Work Package แล้วเพิ่ม Activity, Supplier man-hour หรือค่าเดินทางที่เกี่ยวข้อง",
+    1
+  ],
+  [
+    "Cost line ที่ไม่ใช่ material หรือ man-hour",
+    1
+  ],
+  [
+    "ยังไม่มี outsource, transportation, accommodation หรือ other cost",
+    1
+  ],
+  [
+    "Applied by SQL Server to the current cost base",
+    1
+  ],
+  [
+    "Preview total after contingency",
+    1
+  ],
+  [
+    "Save contingency",
+    1
+  ],
+  [
+    "Subtotal",
+    1
+  ],
+  [
+    "ผู้รับผิดชอบ วันครบกำหนด สถานะ และ progress จากฐานข้อมูล",
+    1
+  ],
+  [
+    "No section assignment",
+    1
+  ],
+  [
+    "Assignment จะถูกสร้างเมื่อ cost section ถูกมอบหมายให้ engineer",
+    1
+  ],
+  [
+    "Overall assignment progress",
+    1
+  ],
+  [
+    "Permission",
+    1
+  ],
+  [
+    "ตรวจโดย API/SQL Server ก่อน Submit และ Approve",
+    1
+  ],
+  [
+    "Open line",
+    1
+  ],
+  [
+    "Server validation passed",
+    1
+  ],
+  [
+    "Revision ปัจจุบันไม่มี critical issue หรือ advisory warning",
+    1
+  ],
+  [
+    "Rules enforced",
+    1
+  ],
+  [
+    "Positive quantity",
+    1
+  ],
+  [
+    "Every persisted line must have quantity greater than zero.",
+    1
+  ],
+  [
+    "Unit cost and owner",
+    1
+  ],
+  [
+    "Required references are checked at the API boundary.",
+    1
+  ],
+  [
+    "Supplier and quotation are mandatory.",
+    1
+  ],
+  [
+    "Non-empty revision",
+    1
+  ],
+  [
+    "At least one cost or effort line is required.",
+    1
+  ],
+  [
+    "Revision history เป็น immutable record; UI นี้ไม่แสดงปุ่มสร้าง revision จนกว่า backend revision-clone endpoint จะพร้อม",
+    1
+  ],
+  [
+    "Reviewed by",
+    1
+  ],
+  [
+    "Reviewed",
+    1
+  ],
+  [
+    "No revision history",
+    1
+  ],
+  [
+    "ยังไม่มี revision record ที่ API ส่งกลับ",
+    1
+  ],
+  [
+    "Comparison is not available yet",
+    1
+  ],
+  [
+    "ต้องมี revision history อย่างน้อยสอง revision; ระบบไม่สร้างข้อมูลเปรียบเทียบจำลอง",
+    1
+  ],
+  [
+    "เปรียบเทียบยอดรวมจาก revision history จริง",
+    1
+  ],
+  [
+    "Line-by-line historical comparison จะเปิดเมื่อ backend ส่ง revision snapshots; หน้านี้แสดงเฉพาะ revision totals ที่มีอยู่จริง",
+    1
+  ],
+  [
+    "Approval covers internal engineering cost only — no margin",
+    1
+  ],
+  [
+    "ยังไม่มี cost item สำหรับ review",
+    1
+  ],
+  [
+    "Engineering man-hour by department",
+    1
+  ],
+  [
+    "No man-hour",
+    1
+  ],
+  [
+    "ยังไม่มี engineering effort สำหรับ review",
+    1
+  ],
+  [
+    "Actions shown from API capabilities",
+    1
+  ],
+  [
+    "Submit for Engineering Review",
+    1
+  ],
+  [
+    "บัญชีนี้ไม่มี workflow action สำหรับสถานะปัจจุบัน",
+    1
+  ],
+  [
+    "critical error(s) block submission and approval.",
+    1
+  ],
+  [
+    "warning(s) are advisory and do not block workflow.",
+    1
+  ],
+  [
+    "Validation for reviewer",
+    1
+  ],
+  [
+    "No server validation issue.",
+    1
+  ],
+  [
+    "Main module *",
+    1
+  ],
+  [
+    "ตั้งชื่อ Package แล้วเพิ่ม Activity แรกเพื่อบันทึกลง revision ปัจจุบัน",
+    1
+  ],
+  [
+    "Continue to activity",
+    1
+  ],
+  [
+    "Work package name *",
+    1
+  ],
+  [
+    "เช่น Design & Engineering หรือ Site Installation",
+    1
+  ],
+  [
+    "Work Package จะเกิดขึ้นจริงเมื่อ Activity แรกถูกบันทึก เพื่อไม่สร้าง Package ว่างในฐานข้อมูล",
+    1
+  ],
+  [
+    "Internal rate is validated by the API; supplier effort requires a supplier and quotation",
+    1
+  ],
+  [
+    "Provider *",
+    1
+  ],
+  [
+    "Department *",
+    1
+  ],
+  [
+    "Engineer level *",
+    1
+  ],
+  [
+    "Select supplier",
+    1
+  ],
+  [
+    "Quotation number",
+    1
+  ],
+  [
+    "Quotation date",
+    1
+  ],
+  [
+    "Engineer qty *",
+    1
+  ],
+  [
+    "Man-days *",
+    1
+  ],
+  [
+    "Hours / day *",
+    1
+  ],
+  [
+    "Line cost",
+    1
+  ],
+  [
+    "Expense is reported under transportation, accommodation or other cost",
+    1
+  ],
+  [
+    "Expense type *",
+    1
+  ],
+  [
+    "Outsource, transportation, accommodation and other project cost",
+    1
+  ],
+  [
+    "Responsible engineer *",
+    1
+  ],
+  [
+    "Support engineer",
+    1
+  ],
+  [
+    "None",
+    1
+  ],
+  [
+    "Progress %",
+    1
+  ],
+  [
+    "Inquiry · รับเรื่องลูกค้า",
+    1
+  ],
+  [
+    "เริ่มเรื่องที่นี่ → ขอเข้าหน้างานเมื่อจำเป็น → ทำ Estimate จากเรื่องเดิม",
+    1
+  ],
+  [
+    "รับเรื่องใหม่",
+    1
+  ],
+  [
+    "Inquiry / งาน",
+    1
+  ],
+  [
+    "หนึ่งเรื่องลูกค้า ใช้ต่อได้ทั้งการสำรวจหน้างานและการประมาณราคา",
+    1
+  ],
+  [
+    "รับเรื่องลูกค้า",
+    1
+  ],
+  [
+    "บันทึกข้อมูลหลักก่อน แล้วเลือกทำ Estimate หรือขอเข้าหน้างาน",
+    1
+  ],
+  [
+    "กำหนดตอบกลับ / Estimate due",
+    1
+  ],
+  [
+    "รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน ผู้ติดต่อ และข้อมูลทางเทคนิค",
+    1
+  ],
+  [
+    "ผู้ประเมินเริ่มต้น:",
+    1
+  ],
+  [
+    "· เปลี่ยนได้ในส่วนนี้",
+    1
+  ],
+  [
+    "0% = unlikely, 100% = highly likely",
+    1
+  ],
+  [
+    "Record the evidence behind the grade and probability",
+    1
+  ],
+  [
+    "Files are stored in the configured company document storage and linked to the inquiry",
+    1
+  ],
+  [
+    "PDF, Excel, Word, DWG or image — maximum 50 MB per file",
+    1
+  ],
+  [
+    "Loading inquiry from SQL Server…",
+    1
+  ],
+  [
+    "ขอเข้าหน้างาน",
+    1
+  ],
+  [
+    "Update qualification",
+    1
+  ],
+  [
+    "Sales signal and forecast are tracked independently",
+    1
+  ],
+  [
+    "Forecast guide",
+    1
+  ],
+  [
+    "75–100% High · 50–74% Medium · 25–49% Early · 0–24% Low",
+    1
+  ],
+  [
+    "The engineering basis recorded against this inquiry",
+    1
+  ],
+  [
+    "Files are stored in the configured company document storage",
+    1
+  ],
+  [
+    "Upload an inquiry document",
+    1
+  ],
+  [
+    "No attachment yet",
+    1
+  ],
+  [
+    "Upload the customer RFQ, drawing or specification for this inquiry.",
+    1
+  ],
+  [
+    "Every production change recorded against this inquiry and its estimate",
+    1
+  ],
+  [
+    "No activity yet",
+    1
+  ],
+  [
+    "Changes to this inquiry will appear here.",
+    1
+  ],
+  [
+    "Assign estimate owner",
+    1
+  ],
+  [
+    "Independent forecast score from 0 to 100",
+    1
+  ],
+  [
+    "Example: Budget approved; customer requested final technical proposal by Friday",
+    1
+  ],
+  [
+    "Upload inquiry attachment",
+    1
+  ],
+  [
+    "Document category",
+    1
+  ],
+  [
+    "KNOWLEDGE",
+    1
+  ],
+  [
+    "Standards, SOP, templates and technical knowledge",
+    1
+  ],
+  [
+    "No access to the knowledge library",
+    1
+  ],
+  [
+    "An administrator must grant the knowledge.view permission to your role.",
+    1
+  ],
+  [
+    "Knowledge documents",
+    1
+  ],
+  [
+    "permission-filtered library",
+    1
+  ],
+  [
+    "Search document number, title, tag, owner or category…",
+    1
+  ],
+  [
+    "Review due only",
+    1
+  ],
+  [
+    "Retry",
+    1
+  ],
+  [
+    "No documents yet",
+    1
+  ],
+  [
+    "Create a standard, SOP or template to start the register.",
+    1
+  ],
+  [
+    "No presentations yet",
+    1
+  ],
+  [
+    "Upload a company, sales or technical presentation to build the library.",
+    1
+  ],
+  [
+    "No shared documents",
+    1
+  ],
+  [
+    "Working, project and supplier documents shared with you will appear here.",
+    1
+  ],
+  [
+    "Team shared workspace",
+    1
+  ],
+  [
+    "Working, project and supplier documents visible to you",
+    1
+  ],
+  [
+    "Nothing waiting for you",
+    1
+  ],
+  [
+    "Standards assigned to you for reading will appear here until you confirm them.",
+    1
+  ],
+  [
+    "Documents requiring your acknowledgement",
+    1
+  ],
+  [
+    "Confirming records that you have read this exact revision",
+    1
+  ],
+  [
+    "I have read this",
+    1
+  ],
+  [
+    "Search how-to, troubleshooting, lessons learned…",
+    1
+  ],
+  [
+    "New article",
+    1
+  ],
+  [
+    "Technical knowledge",
+    1
+  ],
+  [
+    "How-to, troubleshooting, best practices and lessons learned",
+    1
+  ],
+  [
+    "No knowledge article found",
+    1
+  ],
+  [
+    "Create the first technical article for the team.",
+    1
+  ],
+  [
+    "Helpful",
+    1
+  ],
+  [
+    "Views",
+    1
+  ],
+  [
+    "Edit knowledge article",
+    1
+  ],
+  [
+    "New knowledge article",
+    1
+  ],
+  [
+    "Content is stored as safe plain text/Markdown; HTML is never injected",
+    1
+  ],
+  [
+    "Save article",
+    1
+  ],
+  [
+    "Content",
+    1
+  ],
+  [
+    "Headings, lists, links, tables and code blocks can be written in Markdown",
+    1
+  ],
+  [
+    "Review date",
+    1
+  ],
+  [
+    "Was this helpful?",
+    1
+  ],
+  [
+    "Category administration",
+    1
+  ],
+  [
+    "Maintain hierarchy, display order, defaults and availability",
+    1
+  ],
+  [
+    "Order",
+    1
+  ],
+  [
+    "Parent",
+    1
+  ],
+  [
+    "Default type",
+    1
+  ],
+  [
+    "Document number sequences",
+    1
+  ],
+  [
+    "Concurrency-safe prefix and scope counters; existing counters can only move forward",
+    1
+  ],
+  [
+    "New sequence",
+    1
+  ],
+  [
+    "Edit category",
+    1
+  ],
+  [
+    "Display order",
+    1
+  ],
+  [
+    "Default document type",
+    1
+  ],
+  [
+    "Default confidentiality",
+    1
+  ],
+  [
+    "Edit number sequence",
+    1
+  ],
+  [
+    "New number sequence",
+    1
+  ],
+  [
+    "The last number cannot move backwards",
+    1
+  ],
+  [
+    "Scope code",
+    1
+  ],
+  [
+    "Scope description",
+    1
+  ],
+  [
+    "New document",
+    1
+  ],
+  [
+    "The document number is issued by the server when you create it",
+    1
+  ],
+  [
+    "Create document",
+    1
+  ],
+  [
+    "Number prefix",
+    1
+  ],
+  [
+    "STD, SOP, WI, TMP, PRS, KB, LL",
+    1
+  ],
+  [
+    "Number scope",
+    1
+  ],
+  [
+    "Department segment, e.g. EE, ME, SW, PR",
+    1
+  ],
+  [
+    "Next review date",
+    1
+  ],
+  [
+    "Required for a controlled document",
+    1
+  ],
+  [
+    "Optional",
+    1
+  ],
+  [
+    "Separate with semicolons",
+    1
+  ],
+  [
+    "Optional. PDF, Word, Excel, PowerPoint, text, CSV, PNG or JPG",
+    1
+  ],
+  [
+    "Loading document…",
+    1
+  ],
+  [
+    "Why are changes needed?",
+    1
+  ],
+  [
+    "Request changes",
+    1
+  ],
+  [
+    "Complete review",
+    1
+  ],
+  [
+    "Publish",
+    1
+  ],
+  [
+    "Reason for restoring this document",
+    1
+  ],
+  [
+    "Reason for archiving this document",
+    1
+  ],
+  [
+    "Restore",
+    1
+  ],
+  [
+    "Current revision",
+    1
+  ],
+  [
+    "Activity on this document will appear here.",
+    1
+  ],
+  [
+    "Read acknowledgement",
+    1
+  ],
+  [
+    "Assignments are bound to this exact published revision",
+    1
+  ],
+  [
+    "Members",
+    1
+  ],
+  [
+    "Assign acknowledgement",
+    1
+  ],
+  [
+    "Link document",
+    1
+  ],
+  [
+    "Link one document to many records without copying the file",
+    1
+  ],
+  [
+    "Record type",
+    1
+  ],
+  [
+    "Record ID",
+    1
+  ],
+  [
+    "Relation type",
+    1
+  ],
+  [
+    "Link record",
+    1
+  ],
+  [
+    "Reply to comment",
+    1
+  ],
+  [
+    "Add comment",
+    1
+  ],
+  [
+    "Comments stay linked to this document revision",
+    1
+  ],
+  [
+    "Write a comment or review note…",
+    1
+  ],
+  [
+    "Cancel reply",
+    1
+  ],
+  [
+    "Post comment",
+    1
+  ],
+  [
+    "No comments",
+    1
+  ],
+  [
+    "Review discussions will appear here.",
+    1
+  ],
+  [
+    "v#",
+    1
+  ],
+  [
+    "Resolved",
+    1
+  ],
+  [
+    "Reply",
+    1
+  ],
+  [
+    "Reopen",
+    1
+  ],
+  [
+    "Resolve",
+    1
+  ],
+  [
+    "Permission summary",
+    1
+  ],
+  [
+    "Server-side authorization is checked again on every read and download",
+    1
+  ],
+  [
+    "Subject type",
+    1
+  ],
+  [
+    "Project ID",
+    1
+  ],
+  [
+    "Permission level",
+    1
+  ],
+  [
+    "Grant access",
+    1
+  ],
+  [
+    "At least one other team member is needed before this can be submitted, because the author cannot approve their own document.",
+    1
+  ],
+  [
+    "The author cannot be the final approver",
+    1
+  ],
+  [
+    "Upload a new revision",
+    1
+  ],
+  [
+    "A published revision is never overwritten; this creates the next one",
+    1
+  ],
+  [
+    "Change type",
+    1
+  ],
+  [
+    "Major",
+    1
+  ],
+  [
+    "Minor",
+    1
+  ],
+  [
+    "Required — it becomes part of the revision history",
+    1
+  ],
+  [
+    "Upload revision",
+    1
+  ],
+  [
+    "เหตุผลหรือข้อมูลประกอบสำหรับ audit trail",
+    1
+  ],
+  [
+    "ภาพรวมนี้คำนวณจาก BOM, PR, PO, GRN และ MIR จริงใน SQL Server",
+    1
+  ],
+  [
+    "Waiting approval",
+    1
+  ],
+  [
+    "Open PO value",
+    1
+  ],
+  [
+    "Draft receipts",
+    1
+  ],
+  [
+    "Live procurement queue",
+    1
+  ],
+  [
+    "Project / supplier",
+    1
+  ],
+  [
+    "Value / quantity",
+    1
+  ],
+  [
+    "Next action",
+    1
+  ],
+  [
+    "Purchase Order",
+    1
+  ],
+  [
+    "No procurement transaction yet",
+    1
+  ],
+  [
+    "สร้างและ release BOM ก่อนเริ่ม PR และ PO",
+    1
+  ],
+  [
+    "BOM ถูกสร้างจาก approved estimate และแสดง balance / shortage แบบ live",
+    1
+  ],
+  [
+    "Generate BOM",
+    1
+  ],
+  [
+    "Search BOM, project or estimate…",
+    1
+  ],
+  [
+    "Released",
+    1
+  ],
+  [
+    "· R",
+    1
+  ],
+  [
+    "Release",
+    1
+  ],
+  [
+    "No BOM found",
+    1
+  ],
+  [
+    "Generate BOM from a project whose estimate is approved",
+    1
+  ],
+  [
+    "Section / item",
+    1
+  ],
+  [
+    "On PO",
+    1
+  ],
+  [
+    "Open PR",
+    1
+  ],
+  [
+    "Reserve",
+    1
+  ],
+  [
+    "BOM has no lines",
+    1
+  ],
+  [
+    "The linked estimate did not produce material lines",
+    1
+  ],
+  [
+    "Generate production BOM",
+    1
+  ],
+  [
+    "ระบบจะ copy รายการจาก approved estimate revision ของ project เพียงครั้งเดียว",
+    1
+  ],
+  [
+    "No project available",
+    1
+  ],
+  [
+    "Create a project from an approved estimate first",
+    1
+  ],
+  [
+    "PR, approval route, budget flags และการแปลงเป็น PO ทำงานผ่าน API / SQL จริง",
+    1
+  ],
+  [
+    "New PR",
+    1
+  ],
+  [
+    "Search PR, project, BOM or requester…",
+    1
+  ],
+  [
+    "Project / BOM",
+    1
+  ],
+  [
+    "Create PO",
+    1
+  ],
+  [
+    "No purchase requisition found",
+    1
+  ],
+  [
+    "Release a BOM, then create a requisition for its shortage lines",
+    1
+  ],
+  [
+    "PR value",
+    1
+  ],
+  [
+    "Forecast after",
+    1
+  ],
+  [
+    "Approval rules triggered",
+    1
+  ],
+  [
+    "Stock snapshot",
+    1
+  ],
+  [
+    "ทุก step มาจาก rule engine ของ API",
+    1
+  ],
+  [
+    "Rule",
+    1
+  ],
+  [
+    "Acted",
+    1
+  ],
+  [
+    "New purchase requisition",
+    1
+  ],
+  [
+    "เลือก shortage จาก released BOM; API จะ validate stock, budget และ approval rules อีกครั้ง",
+    1
+  ],
+  [
+    "Override ยังไม่ครบ",
+    1
+  ],
+  [
+    "รายการเกิน shortage ต้องเลือก Unplanned; รายการที่ stock เพียงพอต้องเลือก Buy despite stock และทุก override ต้องมีเหตุผล",
+    1
+  ],
+  [
+    "Supplier master is empty",
+    1
+  ],
+  [
+    "เพิ่ม supplier ใน Master Data ก่อนสร้าง PR",
+    1
+  ],
+  [
+    "Emergency",
+    1
+  ],
+  [
+    "Project material / site requirement",
+    1
+  ],
+  [
+    "Item / description",
+    1
+  ],
+  [
+    "Shortage",
+    1
+  ],
+  [
+    "Select…",
+    1
+  ],
+  [
+    "Previous Purchase",
+    1
+  ],
+  [
+    "Manual",
+    1
+  ],
+  [
+    "Unplanned",
+    1
+  ],
+  [
+    "No BOM line available",
+    1
+  ],
+  [
+    "This released BOM has no shortage or material line",
+    1
+  ],
+  [
+    "Release a BOM before creating a requisition",
+    1
+  ],
+  [
+    "ระบบจะแยก PO ตาม supplier และ lock PR revision ด้วย row version",
+    1
+  ],
+  [
+    "Expected delivery date",
+    1
+  ],
+  [
+    "PO สร้างจาก PR ที่อนุมัติแล้วเท่านั้น และยอดรับคำนวณจาก confirmed GRN",
+    1
+  ],
+  [
+    "Ordered value",
+    1
+  ],
+  [
+    "Open commitment",
+    1
+  ],
+  [
+    "Search PO, PR, project or supplier…",
+    1
+  ],
+  [
+    "PR / project",
+    1
+  ],
+  [
+    "Order date",
+    1
+  ],
+  [
+    "Receive",
+    1
+  ],
+  [
+    "No purchase order found",
+    1
+  ],
+  [
+    "Approve a PR and convert it to a PO first",
+    1
+  ],
+  [
+    "Ordered units",
+    1
+  ],
+  [
+    "Received units",
+    1
+  ],
+  [
+    "Previously received",
+    1
+  ],
+  [
+    "Line value",
+    1
+  ],
+  [
+    "Default location",
+    1
+  ],
+  [
+    "บันทึกเป็น Draft ก่อน; stock ledger จะเปลี่ยนเมื่อกด Confirm GRN เท่านั้น",
+    1
+  ],
+  [
+    "Supplier delivery note",
+    1
+  ],
+  [
+    "Quantity split mismatch",
+    1
+  ],
+  [
+    "Accepted + damaged + rejected ต้องเท่ากับ received quantity ในทุกบรรทัด",
+    1
+  ],
+  [
+    "Over",
+    1
+  ],
+  [
+    "Passed",
+    1
+  ],
+  [
+    "Pending",
+    1
+  ],
+  [
+    "Failed",
+    1
+  ],
+  [
+    "No PO line",
+    1
+  ],
+  [
+    "This purchase order has no receivable line",
+    1
+  ],
+  [
+    "INBOUND MATERIAL",
+    1
+  ],
+  [
+    "Draft GRN เก็บหลักฐานการรับ; Confirm จะ append stock / quarantine ledger แบบ idempotent",
+    1
+  ],
+  [
+    "Search GRN, PO, supplier or delivery note…",
+    1
+  ],
+  [
+    "No goods receipt found",
+    1
+  ],
+  [
+    "Open a purchase order and record the first delivery",
+    1
+  ],
+  [
+    "Lot / serial",
+    1
+  ],
+  [
+    "OUTBOUND MATERIAL",
+    1
+  ],
+  [
+    "MIR คุม chain of custody ตั้งแต่ request, approval, issue, receipt ถึง return",
+    1
+  ],
+  [
+    "New MIR",
+    1
+  ],
+  [
+    "Search MIR, project or requester…",
+    1
+  ],
+  [
+    "Qty requested",
+    1
+  ],
+  [
+    "Confirm receipt",
+    1
+  ],
+  [
+    "No material issue request found",
+    1
+  ],
+  [
+    "Release a BOM and create the first material issue request",
+    1
+  ],
+  [
+    "New material issue request",
+    1
+  ],
+  [
+    "ขอเบิกได้เฉพาะ stock line ใน released BOM และไม่เกินยอดคงเหลือของ BOM",
+    1
+  ],
+  [
+    "Installation, assembly, FAT, site work…",
+    1
+  ],
+  [
+    "Previously issued",
+    1
+  ],
+  [
+    "Request qty",
+    1
+  ],
+  [
+    "Location override",
+    1
+  ],
+  [
+    "Use item default",
+    1
+  ],
+  [
+    "Release a BOM before requesting material",
+    1
+  ],
+  [
+    "Net issued",
+    1
+  ],
+  [
+    "Net",
+    1
+  ],
+  [
+    "Return",
+    1
+  ],
+  [
+    "Chain of custody",
+    1
+  ],
+  [
+    "· required",
+    1
+  ],
+  [
+    "Approved by",
+    1
+  ],
+  [
+    "Unused material, wrong part, project complete…",
+    1
+  ],
+  [
+    "CONTROL & GOVERNANCE",
+    1
+  ],
+  [
+    "แสดงเฉพาะรายการจริงที่ role / user ปัจจุบันมีสิทธิ์ตัดสินใจ และห้าม self-approval",
+    1
+  ],
+  [
+    "Waiting for me",
+    1
+  ],
+  [
+    "Purchase requisitions",
+    1
+  ],
+  [
+    "Stock controls",
+    1
+  ],
+  [
+    "Purchase requisition approvals",
+    1
+  ],
+  [
+    "Approval route and current approver are calculated by the API",
+    1
+  ],
+  [
+    "Changes",
+    1
+  ],
+  [
+    "No purchase requisition waiting",
+    1
+  ],
+  [
+    "ไม่มี PR ที่กำลังรอ user / role ปัจจุบัน",
+    1
+  ],
+  [
+    "Material issue approvals",
+    1
+  ],
+  [
+    "Requester cannot approve their own MIR",
+    1
+  ],
+  [
+    "No material issue waiting",
+    1
+  ],
+  [
+    "ไม่มี MIR ที่รออนุมัติจากผู้ใช้ปัจจุบัน",
+    1
+  ],
+  [
+    "Stock adjustment approvals",
+    1
+  ],
+  [
+    "Stock changes only after Inventory Controller approval",
+    1
+  ],
+  [
+    "No stock adjustment waiting",
+    1
+  ],
+  [
+    "ไม่มี stock discrepancy ที่รอ Inventory Controller",
+    1
+  ],
+  [
+    "INVENTORY CONTROL",
+    1
+  ],
+  [
+    "Stock Operations",
+    1
+  ],
+  [
+    "Corrections use approval workflow; quarantine releases always carry an outcome and reason",
+    1
+  ],
+  [
+    "Stock adjustments",
+    1
+  ],
+  [
+    "Approved adjustments append a ledger event; balances are never edited directly",
+    1
+  ],
+  [
+    "No stock adjustment",
+    1
+  ],
+  [
+    "No discrepancy has been raised",
+    1
+  ],
+  [
+    "Damaged / rejected receipts stay unavailable until an explicit decision",
+    1
+  ],
+  [
+    "Held since",
+    1
+  ],
+  [
+    "Decide",
+    1
+  ],
+  [
+    "Quarantine is clear",
+    1
+  ],
+  [
+    "No damaged or rejected material is currently on hold",
+    1
+  ],
+  [
+    "Request stock adjustment",
+    1
+  ],
+  [
+    "คำขอนี้ยังไม่เปลี่ยน stock จนกว่า Inventory Controller จะอนุมัติ",
+    1
+  ],
+  [
+    "Inventory item",
+    1
+  ],
+  [
+    "Select item…",
+    1
+  ],
+  [
+    "(usable",
+    1
+  ],
+  [
+    "ใช้ค่าบวกเพื่อเพิ่ม และค่าลบเพื่อลด",
+    1
+  ],
+  [
+    "Cycle count discrepancy, damaged stock, correction…",
+    1
+  ],
+  [
+    "Return to Supplier",
+    1
+  ],
+  [
+    "Scrap",
+    1
+  ],
+  [
+    "QC result and disposition reason",
+    1
+  ],
+  [
+    "กำหนดรายการต่อ 1 ชุด • ตอนใช้ใน Estimate เลือกจำนวนชุดได้",
+    1
+  ],
+  [
+    "รายการ ·",
+    1
+  ],
+  [
+    "/ ชุด",
+    1
+  ],
+  [
+    "มีข้อมูลที่ยังไม่บันทึก ต้องการปิดฟอร์มหรือไม่?",
+    1
+  ],
+  [
+    "แก้ไขต่อ",
+    1
+  ],
+  [
+    "ไม่บันทึกและปิด",
+    1
+  ],
+  [
+    "1. ข้อมูลชุด",
+    1
+  ],
+  [
+    "ชื่อ Template *",
+    1
+  ],
+  [
+    "เช่น ชุด PLC ควบคุมสายพาน",
+    1
+  ],
+  [
+    "รหัส Template *",
+    1
+  ],
+  [
+    "ระบบตั้งให้แล้ว เปลี่ยนได้ ใช้ A–Z, 0–9 และ . _ / -",
+    1
+  ],
+  [
+    "Discipline หลัก",
+    1
+  ],
+  [
+    "ประเภทโครงการ",
+    1
+  ],
+  [
+    "คำอธิบายการใช้งาน",
+    1
+  ],
+  [
+    "เหมาะกับงานแบบไหน มีอะไรที่ต้องปรับก่อนใช้",
+    1
+  ],
+  [
+    "2. รายการต่อ 1 ชุด",
+    1
+  ],
+  [
+    "เพิ่มรายการ",
+    1
+  ],
+  [
+    "ใช้ฟิลด์เดียวกับ Estimate Cost · Quantity คือจำนวนต่อ 1 ชุด เช่น Sensor 4 ตัว × 3 ชุด = 12 ตัว ชื่อโมดูลและผู้รับผิดชอบกำหนดตอนนำไปใช้",
+    1
+  ],
+  [
+    "นำรายการออกแล้ว",
+    1
+  ],
+  [
+    "เลิกทำ",
+    1
+  ],
+  [
+    "นำรายการออก",
+    1
+  ],
+  [
+    "เพิ่มอย่างน้อย 1 รายการก่อนบันทึก",
+    1
+  ],
+  [
+    "3. สถานะการใช้งาน",
+    1
+  ],
+  [
+    "ฉบับร่าง — เตรียมข้อมูลก่อน ยังไม่แสดงใน Estimate",
+    1
+  ],
+  [
+    "พร้อมใช้งาน — ทีมเลือกใช้ใน Estimate ได้",
+    1
+  ],
+  [
+    "ระบบบันทึกผู้สร้าง ผู้แก้ไข และเวลาให้อัตโนมัติ",
+    1
+  ],
+  [
+    "No access",
+    1
+  ],
+  [
+    "บัญชีนี้ไม่มีสิทธิ์อ่านคลัง Master Template",
+    1
+  ],
+  [
+    "Master data",
+    1
+  ],
+  [
+    "Module Templates",
+    1
+  ],
+  [
+    "คลังกลุ่มอุปกรณ์ที่ทีมสร้างเองแล้วดึงไปใช้ในใบเสนอราคาได้ทุกใบ",
+    1
+  ],
+  [
+    "สร้าง Template",
+    1
+  ],
+  [
+    "สร้างชุด → เพิ่มรายการต่อ 1 ชุด → เลือกใช้ใน Estimate",
+    1
+  ],
+  [
+    "กดสร้าง Template หรือบันทึกจาก Estimate ด้วย Save as template • เมื่อต้องการใช้: Estimate → Cost Items → เลือกจาก Template → ระบุจำนวนชุด",
+    1
+  ],
+  [
+    "Template library",
+    1
+  ],
+  [
+    "ค้นหาและจัดการชุดอุปกรณ์สำหรับใบเสนอราคา",
+    1
+  ],
+  [
+    "ค้นหาเทมเพลต",
+    1
+  ],
+  [
+    "ทุก discipline",
+    1
+  ],
+  [
+    "ใช้งาน",
+    1
+  ],
+  [
+    "ฉบับร่าง",
+    1
+  ],
+  [
+    "ผลการค้นหา",
+    1
+  ],
+  [
+    "เทมเพลตทั้งหมด",
+    1
+  ],
+  [
+    "กำลังโหลดเทมเพลต…",
+    1
+  ],
+  [
+    "โหลดเทมเพลตไม่สำเร็จ",
+    1
+  ],
+  [
+    "ลองโหลดข้อมูลอีกครั้ง",
+    1
+  ],
+  [
+    "ลองอีกครั้ง",
+    1
+  ],
+  [
+    "Oldest price",
+    1
+  ],
+  [
+    "อัปเดตล่าสุด",
+    1
+  ],
+  [
+    "เปิดรายละเอียด",
+    1
+  ],
+  [
+    "ไม่พบเทมเพลตที่ตรงกัน",
+    1
+  ],
+  [
+    "ลองเปลี่ยนคำค้นหา หรือเลือก discipline และสถานะอื่น",
+    1
+  ],
+  [
+    "ยังไม่มีเทมเพลต",
+    1
+  ],
+  [
+    "กดสร้าง Template เพื่อเพิ่มชุดแรก หรือเปิดใบเสนอราคาแล้วกด Save as template ในแท็บ Cost Items",
+    1
+  ],
+  [
+    "ปิด",
+    1
+  ],
+  [
+    "คัดลอกเป็นชุดใหม่",
+    1
+  ],
+  [
+    "แก้ไขชุดและรายการ",
+    1
+  ],
+  [
+    "เลิกใช้งานชุดนี้? ทีมจะเลือกใช้ใน Estimate ใหม่ไม่ได้ แต่ใบเดิมยังคงรายการไว้",
+    1
+  ],
+  [
+    "ยืนยันเลิกใช้งาน",
+    1
+  ],
+  [
+    "ใบเสนอราคา",
+    1
+  ],
+  [
+    "ผู้แก้ไขล่าสุด",
+    1
+  ],
+  [
+    "(เวลาไทย)",
+    1
+  ],
+  [
+    "มีรายการที่ไม่ระบุวันที่ราคา หรือราคาเกิน 180 วัน ควรตรวจสอบราคาก่อนใช้ใน Estimate",
+    1
+  ],
+  [
+    "Qty / ชุด",
+    1
+  ],
+  [
+    "Ref. cost",
+    1
+  ],
+  [
+    "ไม่พบสิทธิ์เข้าถึง",
+    1
+  ],
+  [
+    "รายการนี้ถูกจำกัดตามบทบาท",
+    1
+  ],
+  [
+    "Percent complete *",
+    1
+  ],
+  [
+    "Actual finish",
+    1
+  ],
+  [
+    "Forecast finish",
+    1
+  ],
+  [
+    "PERSONAL WORKSPACE",
+    1
+  ],
+  [
+    "งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน",
+    1
+  ],
+  [
+    "ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้",
+    1
+  ],
+  [
+    "Everything assigned to you, across every project. Updates here are written to the live project schedule and SQL audit log.",
+    1
+  ],
+  [
+    "Loading your live schedule…",
+    1
+  ],
+  [
+    "What you reported, in order — loaded from the append-only SQL audit trail",
+    1
+  ],
+  [
+    "— set the forecast date so the plan tells the truth.",
+    1
+  ],
+  [
+    "◆ Milestone",
+    1
+  ],
+  [
+    "more days",
+    1
+  ],
+  [
+    "Add a private detail task",
+    1
+  ],
+  [
+    "Days (fixed to the parent plan)",
+    1
+  ],
+  [
+    "Row kind *",
+    1
+  ],
+  [
+    "Phase (roll-up)",
+    1
+  ],
+  [
+    "Visibility *",
+    1
+  ],
+  [
+    "Internal",
+    1
+  ],
+  [
+    "Name *",
+    1
+  ],
+  [
+    "Parent phase",
+    1
+  ],
+  [
+    "Top-level task",
+    1
+  ],
+  [
+    "Plan start *",
+    1
+  ],
+  [
+    "Plan days *",
+    1
+  ],
+  [
+    "Plan man-days",
+    1
+  ],
+  [
+    "PIC (known project member)",
+    1
+  ],
+  [
+    "External PIC",
+    1
+  ],
+  [
+    "Milestone (1 day)",
+    1
+  ],
+  [
+    "Phase เป็นแถวสรุป",
+    1
+  ],
+  [
+    "วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase",
+    1
+  ],
+  [
+    "Create schedule baseline",
+    1
+  ],
+  [
+    "Freeze วันที่แผนปัจจุบันเป็น revision ใหม่ใน SQL Server",
+    1
+  ],
+  [
+    "Label *",
+    1
+  ],
+  [
+    "Reason *",
+    1
+  ],
+  [
+    "Review request for more days",
+    1
+  ],
+  [
+    "calendar day",
+    1
+  ],
+  [
+    "requested. Accepting extends the task duration and recalculates the project schedule.",
+    1
+  ],
+  [
+    "PM note (required)",
+    1
+  ],
+  [
+    "Explain the decision for the team and audit trail",
+    1
+  ],
+  [
+    "แผนงานและความคืบหน้าจากฐานข้อมูลจริง",
+    1
+  ],
+  [
+    "ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้",
+    1
+  ],
+  [
+    "จัดทำแผน อัปเดตความคืบหน้า และเก็บ Baseline พร้อม concurrency control",
+    1
+  ],
+  [
+    "Create baseline",
+    1
+  ],
+  [
+    "Plan period",
+    1
+  ],
+  [
+    "Visibility",
+    1
+  ],
+  [
+    "Effort",
+    1
+  ],
+  [
+    "Update",
+    1
+  ],
+  [
+    "Requests waiting for the PM",
+    1
+  ],
+  [
+    "Accepting extends the task plan; rejecting leaves the dates unchanged",
+    1
+  ],
+  [
+    "requested by",
+    1
+  ],
+  [
+    "Review request",
+    1
+  ],
+  [
+    "Recent schedule activity",
+    1
+  ],
+  [
+    "100 รายการล่าสุดจาก audit trail ของ Schedule",
+    1
+  ],
+  [
+    "Field",
+    1
+  ],
+  [
+    "Loading schedule…",
+    1
+  ],
+  [
+    "No accessible project",
+    1
+  ],
+  [
+    "สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule",
+    1
+  ],
+  [
+    "ภาระงานจริงจาก Project Schedule",
+    1
+  ],
+  [
+    "ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Project และ Schedule ให้บทบาทนี้",
+    1
+  ],
+  [
+    "สรุป PIC และ Planned man-days จาก Schedule จริง; ระบบไม่สมมติ Capacity ที่ยังไม่มี Master data",
+    1
+  ],
+  [
+    "Projects loaded",
+    1
+  ],
+  [
+    "Planned tasks",
+    1
+  ],
+  [
+    "บางโครงการไม่ถูกนำมารวม",
+    1
+  ],
+  [
+    "โหลด Schedule ไม่สำเร็จหรือไม่มีสิทธิ์",
+    1
+  ],
+  [
+    "โครงการจาก",
+    1
+  ],
+  [
+    "โครงการ",
+    1
+  ],
+  [
+    "Effort แบ่งเท่ากันเมื่อ Task มี PIC หลายคน",
+    1
+  ],
+  [
+    "Team member",
+    1
+  ],
+  [
+    "Role / Department",
+    1
+  ],
+  [
+    "Next finish",
+    1
+  ],
+  [
+    "Provision users before assigning schedule work",
+    1
+  ],
+  [
+    "Schedule coverage",
+    1
+  ],
+  [
+    "ข้อมูลที่ใช้คำนวณ Resource Plan",
+    1
+  ],
+  [
+    "No schedule data",
+    1
+  ],
+  [
+    "สร้าง Schedule ในโครงการเพื่อเริ่ม Resource Plan",
+    1
+  ],
+  [
+    "No date",
+    1
+  ],
+  [
+    "Price view บางส่วนไม่ถูกโหลด",
+    1
+  ],
+  [
+    "ไม่สามารถอ่าน Cost workspace",
+    1
+  ],
+  [
+    "จาก",
+    1
+  ],
+  [
+    "estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น",
+    1
+  ],
+  [
+    "ราคาที่ใช้งานจริงจาก Estimate cost items",
+    1
+  ],
+  [
+    "รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price",
+    1
+  ],
+  [
+    "Price usages",
+    1
+  ],
+  [
+    "Fresh 0–90 days",
+    1
+  ],
+  [
+    "Aging 91–180",
+    1
+  ],
+  [
+    "Stale / undated",
+    1
+  ],
+  [
+    "Search item, brand, model, supplier, project or reference…",
+    1
+  ],
+  [
+    "แต่ละแถวสืบย้อนกลับไปยัง Estimate หรือ PR/PO ที่ซื้อจริงได้",
+    1
+  ],
+  [
+    "Qty / Unit",
+    1
+  ],
+  [
+    "Price date / Age",
+    1
+  ],
+  [
+    "No priced cost item found",
+    1
+  ],
+  [
+    "ไม่พบข้อมูลตามตัวกรอง หรือยังไม่มี Unit cost ใน Estimate",
+    1
+  ],
+  [
+    "ระบบออกเลข SQ-YYMM-XXXX และเก็บไฟล์กับ metadata ลงฐานข้อมูลจริง",
+    1
+  ],
+  [
+    "Upload failed",
+    1
+  ],
+  [
+    "System quotation no.",
+    1
+  ],
+  [
+    "Generated automatically after upload",
+    1
+  ],
+  [
+    "Supplier *",
+    1
+  ],
+  [
+    "Supplier quotation / reference",
+    1
+  ],
+  [
+    "e.g. QT-2609-001",
+    1
+  ],
+  [
+    "Related inquiry",
+    1
+  ],
+  [
+    "Not linked",
+    1
+  ],
+  [
+    "Received date *",
+    1
+  ],
+  [
+    "Valid until *",
+    1
+  ],
+  [
+    "Currency *",
+    1
+  ],
+  [
+    "Quotation amount *",
+    1
+  ],
+  [
+    "Quotation file *",
+    1
+  ],
+  [
+    "PDF, Excel, CSV, JPG or PNG · maximum 50 MB",
+    1
+  ],
+  [
+    "ทะเบียนใบเสนอราคาผู้ขาย",
+    1
+  ],
+  [
+    "อัปโหลดและติดตามใบเสนอราคาผู้ขายจริง พร้อมไฟล์ต้นฉบับ เลขอ้างอิง และอายุเอกสาร",
+    1
+  ],
+  [
+    "All quotations",
+    1
+  ],
+  [
+    "Valid on this page",
+    1
+  ],
+  [
+    "Expiring on this page",
+    1
+  ],
+  [
+    "Expired on this page",
+    1
+  ],
+  [
+    "Search quotation no., supplier, inquiry, project or file…",
+    1
+  ],
+  [
+    "Quotation status",
+    1
+  ],
+  [
+    "เอกสารทุกแถวจัดเก็บใน secure document storage และ metadata อยู่ใน SQL Server",
+    1
+  ],
+  [
+    "Supplier reference",
+    1
+  ],
+  [
+    "Valid until",
+    1
+  ],
+  [
+    "Loading supplier quotations…",
+    1
+  ],
+  [
+    "No supplier quotation found",
+    1
+  ],
+  [
+    "อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก",
+    1
+  ],
+  [
+    "รายการราคาผู้ขายที่ต้องติดตาม",
+    1
+  ],
+  [
+    "Derivation: Cost item ต้องมี Supplier และราคาเป็นศูนย์/ไม่มี Price date/เก่ากว่า 180 วัน โดยคำนวณจากวันที่ปัจจุบัน",
+    1
+  ],
+  [
+    "Needs follow-up",
+    1
+  ],
+  [
+    "Missing / zero",
+    1
+  ],
+  [
+    "Missing date",
+    1
+  ],
+  [
+    "Older than 180",
+    1
+  ],
+  [
+    "Search supplier, item, estimate or project…",
+    1
+  ],
+  [
+    "รายการนี้เป็นมุมมองคำนวณจากข้อมูลจริง ไม่ได้เปลี่ยนสถานะ Cost item อัตโนมัติ",
+    1
+  ],
+  [
+    "Current price",
+    1
+  ],
+  [
+    "Estimate status",
+    1
+  ],
+  [
+    "No supplier price needs follow-up",
+    1
+  ],
+  [
+    "ไม่พบ Cost item ที่มี Supplier และเข้าเกณฑ์ราคาไม่พร้อมใช้งาน",
+    1
+  ],
+  [
+    "Assignment details unavailable; estimate owner shown.",
+    1
+  ],
+  [
+    "Schedules unavailable",
+    1
+  ],
+  [
+    "Permission denied",
+    1
+  ],
+  [
+    "project.read + schedule.read",
+    1
+  ],
+  [
+    "Resource Plan · Tasks & Workload",
+    1
+  ],
+  [
+    "ดูภาระงานก่อนมอบหมาย · อนุมัติแผน · สมาชิกตอบรับและติดตามผล",
+    1
+  ],
+  [
+    "CSV",
+    1
+  ],
+  [
+    "Inquiry owner",
+    1
+  ],
+  [
+    "Displayed data may be stale. Refresh before planning.",
+    1
+  ],
+  [
+    "work items",
+    1
+  ],
+  [
+    "Within selected horizon",
+    1
+  ],
+  [
+    "Peak week above 100%",
+    1
+  ],
+  [
+    "Past the committed end date",
+    1
+  ],
+  [
+    "Weeks",
+    1
+  ],
+  [
+    "Sort",
+    1
+  ],
+  [
+    "Capacity uses saved working days/week, Monday–Friday, excluding company holidays. Personal leave is not deducted.",
+    1
+  ],
+  [
+    "Unplanned effort and capacity are shown as —, not zero.",
+    1
+  ],
+  [
+    "Incomplete plans are excluded from totals; utilisation is a lower bound until effort is complete.",
+    1
+  ],
+  [
+    "Estimate effort is shared equally among its assigned owners/support; Project effort is split across PICs.",
+    1
+  ],
+  [
+    "No scheduled work in this horizon",
+    1
+  ],
+  [
+    "Planned man-days / available man-days · green under 85%, amber up to 100%, red above",
+    1
+  ],
+  [
+    "Set weekly capacity",
+    1
+  ],
+  [
+    "Open the source to change owners or project dates; plan pre-sales effort here.",
+    1
+  ],
+  [
+    "Total estimating effort, not project delivery effort. Shared equally between estimate assignees.",
+    1
+  ],
+  [
+    "Working days per week (Monday–Friday)",
+    1
+  ],
+  [
+    "ไม่มีสิทธิ์ดูแผนงาน",
+    1
+  ],
+  [
+    "ต้องมีสิทธิ์ schedule.read เพื่อดูและตอบรับงาน",
+    1
+  ],
+  [
+    "ค้นหาชื่องาน หรือเลข Inquiry / Project…",
+    1
+  ],
+  [
+    "รีเฟรช",
+    1
+  ],
+  [
+    "ลองโหลดใหม่",
+    1
+  ],
+  [
+    "เฉพาะงานในขอบเขตสิทธิ์ของคุณ · งานที่ยังไม่อนุมัติไม่รวมใน Workload",
+    1
+  ],
+  [
+    "กำลังโหลดงาน…",
+    1
+  ],
+  [
+    "งาน / ที่มา",
+    1
+  ],
+  [
+    "แผนที่อนุมัติ",
+    1
+  ],
+  [
+    "ความคืบหน้า",
+    1
+  ],
+  [
+    "สถานะ / การตอบรับ",
+    1
+  ],
+  [
+    "ตอบรับ",
+    1
+  ],
+  [
+    "เปิดงาน",
+    1
+  ],
+  [
+    "ไม่มีงานในรายการนี้",
+    1
+  ],
+  [
+    "Workload ก่อน → หลังรับงาน",
+    1
+  ],
+  [
+    "แผน",
+    1
+  ],
+  [
+    "ถึง",
+    1
+  ],
+  [
+    "· กำลังทำงาน",
+    1
+  ],
+  [
+    "มี",
+    1
+  ],
+  [
+    "งานที่แผนหรือ Effort ไม่ครบ ตัวเลขนี้ยังไม่ใช่ภาระงานทั้งหมด",
+    1
+  ],
+  [
+    "ยังไม่กำหนด Weekly capacity จึงคำนวณเปอร์เซ็นต์ไม่ได้",
+    1
+  ],
+  [
+    "งานนี้ทำให้มีสัปดาห์เกินกำลัง กรุณาปรับคน/วัน หรือระบุเหตุผลก่อนอนุมัติ",
+    1
+  ],
+  [
+    "สัปดาห์เริ่ม",
+    1
+  ],
+  [
+    "เดิม",
+    1
+  ],
+  [
+    "แทนแผนเดิม / เพิ่ม",
+    1
+  ],
+  [
+    "รวม",
+    1
+  ],
+  [
+    "เมื่ออนุมัติงานย่อยแรก Inquiry นี้จะนับ Effort จาก Task แทนก้อนเดิม กรุณาแจกแจงงานของ Inquiry ให้ครบ",
+    1
+  ],
+  [
+    "ผู้แจ้ง:",
+    1
+  ],
+  [
+    "แผนอนุมัติ:",
+    1
+  ],
+  [
+    "ผลการพิจารณา:",
+    1
+  ],
+  [
+    "เปิดงานใน Project Schedule",
+    1
+  ],
+  [
+    "เลือกที่มาของงาน",
+    1
+  ],
+  [
+    "ความสำคัญ",
+    1
+  ],
+  [
+    "ชื่องาน",
+    1
+  ],
+  [
+    "ผู้แจ้ง / ลูกค้า / เลขอ้างอิง",
+    1
+  ],
+  [
+    "รายละเอียดและผลลัพธ์ที่ต้องการ",
+    1
+  ],
+  [
+    "เริ่มทำงาน",
+    1
+  ],
+  [
+    "ระยะเวลา (วันทำงาน)",
+    1
+  ],
+  [
+    "ไม่นับเสาร์–อาทิตย์และวันหยุดบริษัท",
+    1
+  ],
+  [
+    "Effort ที่ใช้ (Man-days)",
+    1
+  ],
+  [
+    "เช่น ใช้ครึ่งวันต่อวันเป็นเวลา 4 วัน = 2 MD",
+    1
+  ],
+  [
+    "กำลังคำนวณ Workload…",
+    1
+  ],
+  [
+    "แผนที่เสนอ",
+    1
+  ],
+  [
+    "เริ่ม",
+    1
+  ],
+  [
+    "วันทำงาน ·",
+    1
+  ],
+  [
+    "MD ·",
+    1
+  ],
+  [
+    "กำลังตรวจ Workload ล่าสุด…",
+    1
+  ],
+  [
+    "ส่งกลับแก้ไข",
+    1
+  ],
+  [
+    "อนุมัติและแจ้งให้สมาชิกตอบรับ",
+    1
+  ],
+  [
+    "รอหัวหน้าหรือผู้จัดการพิจารณา แผนเดิมยังไม่เปลี่ยน",
+    1
+  ],
+  [
+    "รับทราบและยอมรับแผนงาน",
+    1
+  ],
+  [
+    "เสนอวัน / Effort ใหม่",
+    1
+  ],
+  [
+    "อัปเดตการทำงาน",
+    1
+  ],
+  [
+    "ความคืบหน้า (%)",
+    1
+  ],
+  [
+    "วันเริ่มจริง",
+    1
+  ],
+  [
+    "วันเสร็จจริง",
+    1
+  ],
+  [
+    "ผลการทำงาน / ปัญหาที่ติด",
+    1
+  ],
+  [
+    "บันทึกความคืบหน้า",
+    1
+  ],
+  [
+    "ผลตรวจรับ / ยืนยันกับลูกค้า",
+    1
+  ],
+  [
+    "ตรวจรับและปิด",
+    1
+  ],
+  [
+    "Use these positions / ยืนยันตำแหน่ง",
+    1
+  ],
+  [
+    "Loading frozen revision…",
+    1
+  ],
+  [
+    "Signature",
+    1
+  ],
+  [
+    "Move selected mark to page",
+    1
+  ],
+  [
+    "ลากลายเซ็นเพื่อย้าย • ลากมุม ↘ เพื่อปรับขนาด • เลือกหน้าที่ต้องการ • ลายเซ็นเดิมแก้ไม่ได้",
+    1
+  ],
+  [
+    "earlier marks have no page coordinates; their evidence remains on the signature certificate.",
+    1
+  ],
+  [
+    "ตรวจสอบหน้า ตำแหน่ง และขนาดแล้ว (การลงนามจะเกิดเมื่อกด SIGN DOCUMENT เท่านั้น)",
+    1
+  ],
+  [
+    "Signed file / ไฟล์ที่ลงนามแล้ว",
+    1
+  ],
+  [
+    "Download signed file",
+    1
+  ],
+  [
+    "Read-only • ตำแหน่งลายเซ็นที่ลงนามแล้วถูกล็อก ต้องสร้าง Revision ใหม่หากต้องการแก้ไข",
+    1
+  ],
+  [
+    "Loading signed file…",
+    1
+  ],
+  [
+    "Legacy HTML signature certificate (original signed evidence preserved).",
+    1
+  ],
+  [
+    "Signed certificate",
+    1
+  ],
+  [
+    "เหตุผลจะถูกเก็บถาวรใน signature event chain และแสดงบนหน้าเอกสาร",
+    1
+  ],
+  [
+    "ระบุสิ่งที่ต้องแก้ไข เพื่อให้เจ้าของเอกสารทำต่อได้ทันที",
+    1
+  ],
+  [
+    "Sign Inbox",
+    1
+  ],
+  [
+    "ทุกคลาสเอกสารอยู่ในรายการเดียว เพราะหน้านี้อ่านจาก signature step ไม่ได้ผูกกับโมดูลใดโมดูลหนึ่ง",
+    1
+  ],
+  [
+    "Waiting me",
+    1
+  ],
+  [
+    "I initiated",
+    1
+  ],
+  [
+    "Returned to me",
+    1
+  ],
+  [
+    "Signed · 30 days",
+    1
+  ],
+  [
+    "ยังไม่มีลายเซ็นของคุณ",
+    1
+  ],
+  [
+    "ต้องสร้างลายเซ็นก่อนจึงจะลงนามได้ ลายเซ็นนี้ใช้เฉพาะเวลาคุณเซ็นเท่านั้น ไม่ถูกส่งให้ผู้ใช้อื่นและดาวน์โหลดไม่ได้",
+    1
+  ],
+  [
+    "สร้างลายเซ็น",
+    1
+  ],
+  [
+    "เรียงตามกำหนดส่ง เก่าที่สุดขึ้นก่อน · แต่ละแถวบอก block และ mark ที่ต้องใช้ก่อนเปิดไฟล์",
+    1
+  ],
+  [
+    "No signature waiting for you",
+    1
+  ],
+  [
+    "ไม่มีเอกสารที่รอลายเซ็นของคุณอยู่ในขณะนี้",
+    1
+  ],
+  [
+    "คุณเป็นเจ้าของเอกสาร · แก้ไขต้นฉบับ แล้ว freeze revision ใหม่หรือเปิดคำขอลงนามอีกครั้ง",
+    1
+  ],
+  [
+    "Nothing returned",
+    1
+  ],
+  [
+    "ไม่มีเอกสารที่ถูกส่งกลับมาให้คุณแก้ไข",
+    1
+  ],
+  [
+    "รายการตามงาน เหมือนที่ Team Attention ทำกับ work item แต่ทำกับเอกสาร",
+    1
+  ],
+  [
+    "Nothing pending",
+    1
+  ],
+  [
+    "ไม่มีคำขอลงนามที่คุณเปิดไว้และยังค้างอยู่",
+    1
+  ],
+  [
+    "by role · first to act wins",
+    1
+  ],
+  [
+    "· no authority",
+    1
+  ],
+  [
+    "Open &amp; sign",
+    1
+  ],
+  [
+    "Locale",
+    1
+  ],
+  [
+    "Chain",
+    1
+  ],
+  [
+    "The file being signed",
+    1
+  ],
+  [
+    "ไฟล์นี้เปลี่ยนไม่ได้ · การแก้ไขต้นฉบับคือ revision ใหม่ และจะยกเลิกทุก step ที่ยังไม่ได้เซ็น",
+    1
+  ],
+  [
+    "Frozen by",
+    1
+  ],
+  [
+    "เปิดไฟล์ที่กำลังจะเซ็น",
+    1
+  ],
+  [
+    "Preview file &amp; signatures",
+    1
+  ],
+  [
+    "No signature request is running",
+    1
+  ],
+  [
+    "Freeze a revision then request signatures",
+    1
+  ],
+  [
+    "Company stamp at Manager approval",
+    1
+  ],
+  [
+    "Manager must hold current stamp authority. No stamp is applied before approval.",
+    1
+  ],
+  [
+    "Signature only (no company stamp)",
+    1
+  ],
+  [
+    "Request signatures",
+    1
+  ],
+  [
+    "Freeze new revision",
+    1
+  ],
+  [
+    "Signed output",
+    1
+  ],
+  [
+    "ไฟล์นี้คือสิ่งที่ส่งออกจริง · มี certificate page และรหัสตรวจสอบ",
+    1
+  ],
+  [
+    "Verify code",
+    1
+  ],
+  [
+    "Produced",
+    1
+  ],
+  [
+    "View signed file / ดูไฟล์ที่เซ็นแล้ว",
+    1
+  ],
+  [
+    "Open signed output in new tab",
+    1
+  ],
+  [
+    "Append-only และผูกกันด้วย hash · hash = SHA256(prev_hash + '|' + payload_hash)",
+    1
+  ],
+  [
+    "Hash",
+    1
+  ],
+  [
+    "step",
+    1
+  ],
+  [
+    "No events yet",
+    1
+  ],
+  [
+    "ยังไม่มีการเปิดคำขอลงนามบนเอกสารนี้",
+    1
+  ],
+  [
+    "Revision ใหม่จะยกเลิก step ที่ยังไม่ได้เซ็น และเก็บ step ที่เซ็นแล้วไว้กับไฟล์เดิมเท่านั้น",
+    1
+  ],
+  [
+    "ประวัติคำขอที่ปิดแล้ว",
+    1
+  ],
+  [
+    "Opened",
+    1
+  ],
+  [
+    "Signed",
+    1
+  ],
+  [
+    "View signed file",
+    1
+  ],
+  [
+    "อัปโหลดสำเนาที่ลูกค้าเซ็นไว้ในหน้า Project Documents ก่อน แล้วเลือกไฟล์นั้นที่นี่ — ระบบบันทึกว่าใครเป็นผู้แนบ",
+    1
+  ],
+  [
+    "Scanned copy",
+    1
+  ],
+  [
+    "เช่น ลูกค้าเซ็นหน้างาน 1 ก.ย.",
+    1
+  ],
+  [
+    "ช่องนี้เป็นตัวเลือก เอกสารสามารถถึงสถานะ SIGNED ได้โดยไม่มีลายเซ็นลูกค้า",
+    1
+  ],
+  [
+    "ช่องนี้จำเป็น — การตรวจรับที่ไม่มีลายเซ็นลูกค้าไม่ใช่การตรวจรับ",
+    1
+  ],
+  [
+    "Assignee",
+    1
+  ],
+  [
+    "Decided",
+    1
+  ],
+  [
+    "Marks",
+    1
+  ],
+  [
+    "optional",
+    1
+  ],
+  [
+    "delegated by",
+    1
+  ],
+  [
+    "&ldquo;",
+    1
+  ],
+  [
+    "&rdquo;",
+    1
+  ],
+  [
+    "Preview, move &amp; resize signature",
+    1
+  ],
+  [
+    "This file format uses the signature certificate; convert to PDF for positioned signing.",
+    1
+  ],
+  [
+    "ลายเซ็นของคุณ",
+    1
+  ],
+  [
+    "แสดงเฉพาะกับคุณ · ไม่มี route ที่ส่งลายเซ็นของผู้ใช้อื่น",
+    1
+  ],
+  [
+    "ยังไม่มีลายเซ็น — สร้างก่อนลงนาม",
+    1
+  ],
+  [
+    "ตราประทับบริษัท",
+    1
+  ],
+  [
+    "ชื่อของคุณจะถูกพิมพ์ใต้ตราประทับ และระบบบันทึกว่า",
+    1
+  ],
+  [
+    "เป็นผู้ประทับพร้อมสิทธิ์ที่ใช้ — ระบบนี้ไม่สามารถผลิตประโยคว่า &ldquo;บริษัทประทับตรา&rdquo; ได้",
+    1
+  ],
+  [
+    "เก็บไว้ใน event chain",
+    1
+  ],
+  [
+    "ยืนยันตัวตนของคุณ",
+    1
+  ],
+  [
+    "ระบบนี้ไม่เก็บรหัสผ่าน การลงนามจึงต้องผ่านการเข้าสู่ระบบ Microsoft ใหม่ทันทีก่อนเซ็น และเวลาที่ยืนยันจะถูกบันทึกลงใน chain",
+    1
+  ],
+  [
+    "Return to owner",
+    1
+  ],
+  [
+    "Delegate",
+    1
+  ],
+  [
+    "Delegate this signature step",
+    1
+  ],
+  [
+    "การมอบหมายคือการย้าย step ไม่ใช่การเซ็นแทน — ชื่อและลายเซ็นของผู้รับมอบจะปรากฏบนเอกสาร",
+    1
+  ],
+  [
+    "Delegate to",
+    1
+  ],
+  [
+    "Signed Documents",
+    1
+  ],
+  [
+    "เอกสารที่ลงนามหรือกำลังรอลงนาม พร้อม hash ของไฟล์ ลำดับเหตุการณ์ และรหัสตรวจสอบ",
+    1
+  ],
+  [
+    "Verify a code",
+    1
+  ],
+  [
+    "New signable document",
+    1
+  ],
+  [
+    "ค้นหาเลขเอกสารหรือชื่อเรื่อง",
+    1
+  ],
+  [
+    "ทุกคลาส",
+    1
+  ],
+  [
+    "Signing เป็น shared service — คลาสเอกสารต่างกันแค่ที่ flow template",
+    1
+  ],
+  [
+    "No signable document",
+    1
+  ],
+  [
+    "ยังไม่มีเอกสารที่ถูก freeze เข้าสู่กระบวนการลงนาม",
+    1
+  ],
+  [
+    "Freeze a document for signature",
+    1
+  ],
+  [
+    "ระบบจะไม่เซ็นไฟล์ที่ตัวเองไม่ได้ freeze — เลือกไฟล์ที่อัปโหลดไว้แล้ว ระบบจะบันทึก SHA-256 ของไฟล์นั้นไว้ถาวร",
+    1
+  ],
+  [
+    "Stored file",
+    1
+  ],
+  [
+    "My Design task",
+    1
+  ],
+  [
+    "เฉพาะงานย่อยที่คุณได้รับมอบหมาย · Member เป็นผู้จัดทำ",
+    1
+  ],
+  [
+    "Select assigned task",
+    1
+  ],
+  [
+    "· Leader:",
+    1
+  ],
+  [
+    "· Manager:",
+    1
+  ],
+  [
+    "เลือกไฟล์ใหม่ หรือใช้ Stored file ด้านบน · ต้นฉบับและ SHA-256 จะถูกเก็บก่อนส่งอนุมัติ",
+    1
+  ],
+  [
+    "R ตามด้วยตัวเลข",
+    1
+  ],
+  [
+    "Document locale",
+    1
+  ],
+  [
+    "ภาษาของเอกสาร ไม่ใช่ภาษาหน้าจอของผู้เซ็น",
+    1
+  ],
+  [
+    "ใช้เลือก value band ของ flow เท่านั้น เช่น PR/PO",
+    1
+  ],
+  [
+    "Revision ใหม่จะยกเลิกทุก step ที่ยังไม่ได้เซ็น และไม่ยกลายเซ็นเดิมมาใช้ต่อ — นี่คือกฎที่กันไม่ให้ลายเซ็นอยู่รอดไฟล์ที่มันเซ็น",
+    1
+  ],
+  [
+    "Replacement file",
+    1
+  ],
+  [
+    "Import revised Drawing",
+    1
+  ],
+  [
+    "Revision label",
+    1
+  ],
+  [
+    "Verify a signed document",
+    1
+  ],
+  [
+    "ใส่รหัสจาก certificate page หรือ QR บนเอกสารที่พิมพ์ออกมา",
+    1
+  ],
+  [
+    "Verification code",
+    1
+  ],
+  [
+    "รูปแบบ TC-XXXX-XXXX-XXXX",
+    1
+  ],
+  [
+    "TC-5K3P-9QW2-7XR1",
+    1
+  ],
+  [
+    "Class",
+    1
+  ],
+  [
+    "Source SHA-256",
+    1
+  ],
+  [
+    "Signed by",
+    1
+  ],
+  [
+    "Signer",
+    1
+  ],
+  [
+    "หน้านี้บอกอะไร",
+    1
+  ],
+  [
+    "PREFERENCES",
+    1
+  ],
+  [
+    "My Signature",
+    1
+  ],
+  [
+    "ลายเซ็นนี้ใช้เฉพาะเวลาคุณเซ็น ไม่ถูกแสดงให้ผู้ใช้อื่น ดาวน์โหลดไม่ได้ และปรากฏเฉพาะเมื่อถูก render ลงในเอกสารที่ลงนามแล้ว",
+    1
+  ],
+  [
+    "Initials:",
+    1
+  ],
+  [
+    "เอกสารที่ลงนามแล้วยังอ้างอิงเวอร์ชันที่ใช้จริง — การเปลี่ยนลายเซ็นไม่ย้อนไปแก้เอกสารเก่า",
+    1
+  ],
+  [
+    "Active from",
+    1
+  ],
+  [
+    "Retired",
+    1
+  ],
+  [
+    "active",
+    1
+  ],
+  [
+    "No specimen",
+    1
+  ],
+  [
+    "ยังไม่เคยสร้างลายเซ็น",
+    1
+  ],
+  [
+    "My signature",
+    1
+  ],
+  [
+    "วาดคือค่าเริ่มต้น เพราะเป็นวิธีเดียวที่ต้องมีตัวคนอยู่จริง — ชื่อพิมพ์เป็นตัวเลือกท้ายสุดและอ่อนแอที่สุด",
+    1
+  ],
+  [
+    "วิธีสร้าง",
+    1
+  ],
+  [
+    "วาดด้วยเมาส์ สไตลัส หรือนิ้ว",
+    1
+  ],
+  [
+    "ไฟล์ PNG พื้นหลังโปร่งใส",
+    1
+  ],
+  [
+    "กว้างอย่างน้อย 600 px และไม่เกิน 2 MB",
+    1
+  ],
+  [
+    "ชื่อที่จะใช้เป็นลายเซ็น",
+    1
+  ],
+  [
+    "ชื่อพิมพ์เป็นเครื่องหมายที่อ่อนแอที่สุด มีไว้สำหรับคนที่วาดไม่ได้จริง ๆ",
+    1
+  ],
+  [
+    "Somchai Prem",
+    1
+  ],
+  [
+    "ตัวย่อ (สำหรับช่องลายเซ็นในกรอบชื่อแบบ)",
+    1
+  ],
+  [
+    "ช่อง DRAWN BY ในกรอบชื่อแบบกว้างเพียง 18 มม. ลายเซ็นเต็มจะอ่านไม่ออก",
+    1
+  ],
+  [
+    "S.P",
+    1
+  ],
+  [
+    "Undo",
+    1
+  ],
+  [
+    "Clear",
+    1
+  ],
+  [
+    "Company Stamps",
+    1
+  ],
+  [
+    "ตราประทับเป็นเครื่องหมายขององค์กร ไม่ใช่ของบุคคล ทุกครั้งที่ประทับ ระบบบันทึกคนที่ประทับและพิมพ์ชื่อไว้ใต้ตรา",
+    1
+  ],
+  [
+    "New stamp",
+    1
+  ],
+  [
+    "Stamps",
+    1
+  ],
+  [
+    "Signature flows",
+    1
+  ],
+  [
+    "Grant authority",
+    1
+  ],
+  [
+    "Artwork",
+    1
+  ],
+  [
+    "on file",
+    1
+  ],
+  [
+    "not uploaded",
+    1
+  ],
+  [
+    "ใครมีสิทธิ์ประทับตรานี้",
+    1
+  ],
+  [
+    "Classes",
+    1
+  ],
+  [
+    "revoked",
+    1
+  ],
+  [
+    "Revoke",
+    1
+  ],
+  [
+    "ยังไม่มีใครได้รับสิทธิ์ประทับตรานี้",
+    1
+  ],
+  [
+    "การยกเลิกสิทธิ์ไม่ทำให้เอกสาร",
+    1
+  ],
+  [
+    "ฉบับที่ประทับไปแล้วเป็นโมฆะ · Admin ไม่สามารถอยู่ในรายการนี้ได้ — Admin ตั้งค่าระบบ ฝ่ายธุรกิจเป็นผู้ลงนาม",
+    1
+  ],
+  [
+    "No company stamp",
+    1
+  ],
+  [
+    "ยังไม่ได้บันทึกตราประทับ · flow ที่ต้องใช้ตราจะยังลงนามด้วยลายเซ็นเท่านั้น",
+    1
+  ],
+  [
+    "Signature flow templates",
+    1
+  ],
+  [
+    "แปดคลาสเอกสารต่างกันเฉพาะที่นี่ · คำขอที่กำลังรันจะยึด template version ของตัวเองไว้ การแก้ template ไม่กระทบงานที่ค้างอยู่",
+    1
+  ],
+  [
+    "Steps",
+    1
+  ],
+  [
+    "Rules",
+    1
+  ],
+  [
+    "Running",
+    1
+  ],
+  [
+    "return to",
+    1
+  ],
+  [
+    "revision voids unsigned · locked",
+    1
+  ],
+  [
+    "Estimate ไม่อยู่ในรายการนี้โดยเจตนา — เป็นเอกสารต้นทุนภายในที่มี APPROVAL สองขั้นอยู่แล้ว สิ่งที่ลูกค้าได้รับคือ Quotation ซึ่งเป็นตัวที่ลงนามและประทับตรา",
+    1
+  ],
+  [
+    "No flow template",
+    1
+  ],
+  [
+    "ยังไม่ได้ตั้งค่า signature flow",
+    1
+  ],
+  [
+    "New company stamp",
+    1
+  ],
+  [
+    "ตราประทับเป็นของนิติบุคคล ไม่ใช่ของระบบ — ต้องระบุว่าเป็นตราของบริษัทใด และใครเป็นผู้รับผิดชอบในโลกจริง",
+    1
+  ],
+  [
+    "TT-QUOT",
+    1
+  ],
+  [
+    "Legal entity",
+    1
+  ],
+  [
+    "Tomas Tech Co., Ltd.",
+    1
+  ],
+  [
+    "ชื่อ (ไทย)",
+    1
+  ],
+  [
+    "Name (English)",
+    1
+  ],
+  [
+    "Custodian role",
+    1
+  ],
+  [
+    "ใครรับผิดชอบตราประทับนี้ในโลกจริง",
+    1
+  ],
+  [
+    "Scope — คลาสเอกสารที่ตรานี้ครอบคลุม",
+    1
+  ],
+  [
+    "ภาพตราประทับอัปโหลดแยกและต้องใช้สิทธิ์ระดับผู้จัดการ เพราะเป็นสิ่งที่ปรากฏบนกระดาษของลูกค้าจริง ไฟล์ภาพถูกเก็บไว้ในที่ที่ไม่มี route ใดส่งออกได้",
+    1
+  ],
+  [
+    "สิทธิ์คือรายการที่มีผู้ให้และวันหมดอายุ ไม่ใช่ช่องติ๊ก — คำถามที่โลกจริงถามคือ ใครอนุญาตให้คุณใช้ตราบริษัท และถึงเมื่อไหร่",
+    1
+  ],
+  [
+    "Named person",
+    1
+  ],
+  [
+    "Person",
+    1
+  ],
+  [
+    "สิทธิ์ระดับบทบาทตั้งค่าโดยผู้ดูแลระบบ เพราะต้องใช้ role id",
+    1
+  ],
+  [
+    "เว้นว่างหมายถึงทุกคลาสที่อยู่ใน scope ของตรานี้",
+    1
+  ],
+  [
+    "ทุกคลาสใน scope",
+    1
+  ],
+  [
+    "Valid to",
+    1
+  ],
+  [
+    "เว้นว่างคือไม่มีกำหนด",
+    1
+  ],
+  [
+    "Your role does not include",
+    1
+  ],
+  [
+    "คำขอเข้าหน้างาน",
+    1
+  ],
+  [
+    "คำขอ / ลูกค้า",
+    1
+  ],
+  [
+    "ขั้นตอนถัดไป",
+    1
+  ],
+  [
+    "นัดเข้าหน้างาน",
+    1
+  ],
+  [
+    "คำขอ:",
+    1
+  ],
+  [
+    "Adjust the filters above, or record a new customer request.",
+    1
+  ],
+  [
+    "ENGINEERING COORDINATOR",
+    1
+  ],
+  [
+    "Review queue",
+    1
+  ],
+  [
+    "Ordered by status, then priority, then the response date the customer was promised",
+    1
+  ],
+  [
+    "Every submitted intake has been reviewed.",
+    1
+  ],
+  [
+    "SALES",
+    1
+  ],
+  [
+    "Where each of your customer requests has got to.",
+    1
+  ],
+  [
+    "Waiting for the customer",
+    1
+  ],
+  [
+    "No data yet",
+    1
+  ],
+  [
+    "Register the first intake to populate this chart.",
+    1
+  ],
+  [
+    "Needs your attention",
+    1
+  ],
+  [
+    "Drafts, returned intakes, and anything past its promised response date",
+    1
+  ],
+  [
+    "Nothing waiting on you",
+    1
+  ],
+  [
+    "Every intake you own is moving.",
+    1
+  ],
+  [
+    "file(s) uploaded",
+    1
+  ],
+  [
+    "Save a draft at any time. Submitting for technical review needs the mandatory information below.",
+    1
+  ],
+  [
+    "ดึงข้อมูลจาก Inquiry แล้ว — เติมรายละเอียดสำหรับการเข้าหน้างาน ผลสำรวจจะอยู่ในเรื่องเดิม",
+    1
+  ],
+  [
+    "Inquiry ที่เกี่ยวข้อง",
+    1
+  ],
+  [
+    "เชื่อมรายการเดิมกับเรื่องของลูกค้ารายนี้ โดยเก็บข้อมูลคำขอเดิมไว้",
+    1
+  ],
+  [
+    "ค้นหาเลข Inquiry หรือชื่องาน",
+    1
+  ],
+  [
+    "เรื่องหลัก",
+    1
+  ],
+  [
+    "ยังไม่ได้เชื่อม Inquiry",
+    1
+  ],
+  [
+    "Where the engineer is going and who will meet them",
+    1
+  ],
+  [
+    "Enough for a driver to find the gate",
+    1
+  ],
+  [
+    "Position",
+    1
+  ],
+  [
+    "Reference numbers, ownership and how urgent this is",
+    1
+  ],
+  [
+    "Allocated on save — read only",
+    1
+  ],
+  [
+    "Generated on save",
+    1
+  ],
+  [
+    "May repeat; the system warns rather than merging",
+    1
+  ],
+  [
+    "This customer reference already appears on another intake",
+    1
+  ],
+  [
+    "Nothing has been merged. Check whether this is a genuine second request.",
+    1
+  ],
+  [
+    "In their words. Engineering adds its own assessment separately and never edits this.",
+    1
+  ],
+  [
+    "At least a couple of sentences — this is the mandatory one",
+    1
+  ],
+  [
+    "What is true after the work is done",
+    1
+  ],
+  [
+    "Only if the customer said so",
+    1
+  ],
+  [
+    "รายละเอียดเครื่องจักรและความปลอดภัยหน้างาน",
+    1
+  ],
+  [
+    "Everything that decides whether an engineer can actually do the work on the day",
+    1
+  ],
+  [
+    "Permits, escorts, induction — anything that stops an engineer at the gate",
+    1
+  ],
+  [
+    "Restrictions",
+    1
+  ],
+  [
+    "Sales' best guess. The coordinator may correct the skills, and both are kept.",
+    1
+  ],
+  [
+    "No visit purpose is configured yet. An administrator can add them in Visit Master Data.",
+    1
+  ],
+  [
+    "Ranges the customer offered, most preferred first",
+    1
+  ],
+  [
+    "Preference",
+    1
+  ],
+  [
+    "Remove window",
+    1
+  ],
+  [
+    "No availability recorded",
+    1
+  ],
+  [
+    "Ask the customer for one or two ranges. It is the difference between one phone call and five.",
+    1
+  ],
+  [
+    "Photos, drawings, specifications and the email the request arrived in",
+    1
+  ],
+  [
+    "Image, video, PDF, Office or drawing — maximum 50 MB per file",
+    1
+  ],
+  [
+    "queued",
+    1
+  ],
+  [
+    "Already attached",
+    1
+  ],
+  [
+    "What is still needed before this can go to technical review",
+    1
+  ],
+  [
+    "Nothing recorded in this section.",
+    1
+  ],
+  [
+    "This intake no longer exists.",
+    1
+  ],
+  [
+    "Archived",
+    1
+  ],
+  [
+    "· เปิดเรื่องหลัก",
+    1
+  ],
+  [
+    "Site Visits",
+    1
+  ],
+  [
+    "Recomputed by the API from what is actually stored",
+    1
+  ],
+  [
+    "Skills requested by sales",
+    1
+  ],
+  [
+    "Skills confirmed by the coordinator",
+    1
+  ],
+  [
+    "The coordinator's list is the one used for assignment. Sales' original selection is kept above.",
+    1
+  ],
+  [
+    "No window was proposed.",
+    1
+  ],
+  [
+    "Where this request ended up",
+    1
+  ],
+  [
+    "Recorded by sales. Engineering conclusions live on the Technical Review tab.",
+    1
+  ],
+  [
+    "Engineering's assessment. It sits beside the sales record and never replaces it.",
+    1
+  ],
+  [
+    "hours",
+    1
+  ],
+  [
+    "Not reviewed yet",
+    1
+  ],
+  [
+    "Once sales submits, a coordinator records their assessment here.",
+    1
+  ],
+  [
+    "Site visits raised from this intake",
+    1
+  ],
+  [
+    "No site visit yet",
+    1
+  ],
+  [
+    "A site visit can be requested once technical review is complete.",
+    1
+  ],
+  [
+    "Version, uploader and time are recorded for every file",
+    1
+  ],
+  [
+    "Scan",
+    1
+  ],
+  [
+    "Uploaded at",
+    1
+  ],
+  [
+    "Attachment archived",
+    1
+  ],
+  [
+    "No attachment",
+    1
+  ],
+  [
+    "A photo of the real machine is the single most useful thing to add.",
+    1
+  ],
+  [
+    "Append-only. Every move records who, when and why.",
+    1
+  ],
+  [
+    "This is recorded in the append-only status history with your name and the time.",
+    1
+  ],
+  [
+    "Mandatory information is still missing",
+    1
+  ],
+  [
+    "Required when returning, holding or cancelling",
+    1
+  ],
+  [
+    "Required when returning, holding or cancelling — say exactly what is missing",
+    1
+  ],
+  [
+    "Correcting this does not erase what sales asked for",
+    1
+  ],
+  [
+    "This visit needs manager approval before it is scheduled",
+    1
+  ],
+  [
+    "Customer's preferred window",
+    1
+  ],
+  [
+    "Duration (hours)",
+    1
+  ],
+  [
+    "Never shown to the customer",
+    1
+  ],
+  [
+    "Search visit no., intake no., subject or customer…",
+    1
+  ],
+  [
+    "No site visit matches the filter",
+    1
+  ],
+  [
+    "A visit is created from an intake once technical review is complete.",
+    1
+  ],
+  [
+    "SCHEDULING",
+    1
+  ],
+  [
+    "Calendar view",
+    1
+  ],
+  [
+    "Anchor date",
+    1
+  ],
+  [
+    "visits",
+    1
+  ],
+  [
+    "unavailable periods",
+    1
+  ],
+  [
+    "Nobody is booked in this range.",
+    1
+  ],
+  [
+    "What is unassigned, what is unconfirmed, and which report is late.",
+    1
+  ],
+  [
+    "Active assignments, excluding cancelled and closed visits",
+    1
+  ],
+  [
+    "Nobody assigned yet",
+    1
+  ],
+  [
+    "Assignments appear here as soon as engineers are placed.",
+    1
+  ],
+  [
+    "What open intakes are asking for",
+    1
+  ],
+  [
+    "No skill requested yet",
+    1
+  ],
+  [
+    "Skills appear once intakes name them.",
+    1
+  ],
+  [
+    "Unassigned, awaiting confirmation, or with an overdue report",
+    1
+  ],
+  [
+    "Nothing outstanding",
+    1
+  ],
+  [
+    "Every visit is assigned, confirmed and reported.",
+    1
+  ],
+  [
+    "Management view",
+    1
+  ],
+  [
+    "Conversion and service level across the whole book",
+    1
+  ],
+  [
+    "Intakes",
+    1
+  ],
+  [
+    "Site visits",
+    1
+  ],
+  [
+    "Lead time to confirmed",
+    1
+  ],
+  [
+    "Completion rate",
+    1
+  ],
+  [
+    "Report SLA compliance",
+    1
+  ],
+  [
+    "Visit → estimate",
+    1
+  ],
+  [
+    "Visit → project",
+    1
+  ],
+  [
+    "Rescheduled",
+    1
+  ],
+  [
+    "Customer no-show",
+    1
+  ],
+  [
+    "By customer",
+    1
+  ],
+  [
+    "By sales owner",
+    1
+  ],
+  [
+    "By visit type",
+    1
+  ],
+  [
+    "linked",
+    1
+  ],
+  [
+    "This site visit no longer exists.",
+    1
+  ],
+  [
+    "กลับ Inquiry · ทำ Estimate ต่อ",
+    1
+  ],
+  [
+    "สร้าง Inquiry สำหรับรายการเดิม",
+    1
+  ],
+  [
+    "จัดการสถานะ",
+    1
+  ],
+  [
+    "เอกสารเชื่อมโยงและประวัติ",
+    1
+  ],
+  [
+    "Visit",
+    1
+  ],
+  [
+    "Skill coverage",
+    1
+  ],
+  [
+    "Required skills come from the coordinator's list when there is one",
+    1
+  ],
+  [
+    "No skill requirement recorded",
+    1
+  ],
+  [
+    "The assigned team does not cover every required skill",
+    1
+  ],
+  [
+    "Nobody assigned",
+    1
+  ],
+  [
+    "Assign a lead engineer to move this forward.",
+    1
+  ],
+  [
+    "Append-only: old time, new time, reason and who did it",
+    1
+  ],
+  [
+    "Never rescheduled",
+    1
+  ],
+  [
+    "The original time still stands.",
+    1
+  ],
+  [
+    "Both the engineer's answer and the customer's, with the channel it came through",
+    1
+  ],
+  [
+    "Recorded by",
+    1
+  ],
+  [
+    "Nothing confirmed yet",
+    1
+  ],
+  [
+    "Record the engineer's acceptance and the customer's answer here.",
+    1
+  ],
+  [
+    "Inquiry, estimate and project",
+    1
+  ],
+  [
+    "Site visit findings feed these records. They are never overwritten by a later visit.",
+    1
+  ],
+  [
+    "รายงานของการเข้าหน้างานครั้งนี้อยู่ภายใต้เรื่องเดิม เปิดแท็บ Report เพื่อดูผล แล้วกลับ Inquiry เพื่อทำ Estimate ต่อ",
+    1
+  ],
+  [
+    "The report is not approved yet",
+    1
+  ],
+  [
+    "An inquiry is created from a confirmed site visit, so approve the report first.",
+    1
+  ],
+  [
+    "Number",
+    1
+  ],
+  [
+    "Relation",
+    1
+  ],
+  [
+    "Create an inquiry from the approved report, then an estimate from the inquiry.",
+    1
+  ],
+  [
+    "Append-only. A trigger refuses any change.",
+    1
+  ],
+  [
+    "Recorded in the append-only status history with your name and the time.",
+    1
+  ],
+  [
+    "Required for reschedule, hold, cancel and no-show",
+    1
+  ],
+  [
+    "required",
+    1
+  ],
+  [
+    "Respond",
+    1
+  ],
+  [
+    "Withdraw",
+    1
+  ],
+  [
+    "Assignment withdrawn",
+    1
+  ],
+  [
+    "No engineer assigned",
+    1
+  ],
+  [
+    "Assign a lead engineer. The candidate list shows skill match, workload and any schedule conflict.",
+    1
+  ],
+  [
+    "Withdrawn, declined and replaced assignments are kept, never deleted",
+    1
+  ],
+  [
+    "Assigned at",
+    1
+  ],
+  [
+    "assigned",
+    1
+  ],
+  [
+    "skill match",
+    1
+  ],
+  [
+    "not scheduled",
+    1
+  ],
+  [
+    "Assigning…",
+    1
+  ],
+  [
+    "Assign",
+    1
+  ],
+  [
+    "Required skills",
+    1
+  ],
+  [
+    "none recorded",
+    1
+  ],
+  [
+    "Select",
+    1
+  ],
+  [
+    "Open jobs",
+    1
+  ],
+  [
+    "Booked (h)",
+    1
+  ],
+  [
+    "Travel",
+    1
+  ],
+  [
+    "Conflict",
+    1
+  ],
+  [
+    "Already assigned",
+    1
+  ],
+  [
+    "min",
+    1
+  ],
+  [
+    "Free",
+    1
+  ],
+  [
+    "does not hold",
+    1
+  ],
+  [
+    "Add a supporting engineer who does.",
+    1
+  ],
+  [
+    "At least ten characters. Recorded against the assignment and the audit log.",
+    1
+  ],
+  [
+    "Only an engineering manager may override. Without the permission the API refuses regardless of this form.",
+    1
+  ],
+  [
+    "Assignment response",
+    1
+  ],
+  [
+    "Record response",
+    1
+  ],
+  [
+    "Proposed start",
+    1
+  ],
+  [
+    "Proposed end",
+    1
+  ],
+  [
+    "Party",
+    1
+  ],
+  [
+    "Channel",
+    1
+  ],
+  [
+    "Confirmed by",
+    1
+  ],
+  [
+    "The person's name, as they gave it",
+    1
+  ],
+  [
+    "Customer comment",
+    1
+  ],
+  [
+    "Attach the evidence — an email or a chat screenshot — on the Execution tab, then reference it here.",
+    1
+  ],
+  [
+    "rescheduled",
+    1
+  ],
+  [
+    "Every assigned engineer is re-checked against the new time, and both confirmations are cleared — the parties agreed to a time, not to a visit.",
+    1
+  ],
+  [
+    "New start",
+    1
+  ],
+  [
+    "New end",
+    1
+  ],
+  [
+    "Mandatory. Stored in the append-only reschedule history.",
+    1
+  ],
+  [
+    "closed",
+    1
+  ],
+  [
+    "Closing…",
+    1
+  ],
+  [
+    "This visit has an approved report.",
+    1
+  ],
+  [
+    "No approved report",
+    1
+  ],
+  [
+    "Closing without one needs a written explanation of at least twenty characters.",
+    1
+  ],
+  [
+    "created from",
+    1
+  ],
+  [
+    "Customer, site, contact, the customer's requirement, the site findings, the proposed scope, the assumptions, the exclusions and the risks — from the approved report.",
+    1
+  ],
+  [
+    "Project name",
+    1
+  ],
+  [
+    "Estimate due date",
+    1
+  ],
+  [
+    "Everything the engineer needs on one page. Print this before leaving.",
+    1
+  ],
+  [
+    "Print",
+    1
+  ],
+  [
+    "Restricted — ask before taking any picture",
+    1
+  ],
+  [
+    "Allowed",
+    1
+  ],
+  [
+    "Not required",
+    1
+  ],
+  [
+    "Nothing outstanding — the intake was complete.",
+    1
+  ],
+  [
+    "No file was attached to the intake.",
+    1
+  ],
+  [
+    "First visit to this customer.",
+    1
+  ],
+  [
+    "บันทึกตอนนี้",
+    1
+  ],
+  [
+    "ข้อมูลการสำรวจ · อ่านอย่างเดียว",
+    1
+  ],
+  [
+    "No template selected",
+    1
+  ],
+  [
+    "ข้อบันทึกแล้ว",
+    1
+  ],
+  [
+    "เฉพาะข้อบังคับที่ยังไม่ครบ (",
+    1
+  ],
+  [
+    "required item(s) still unanswered",
+    1
+  ],
+  [
+    "Check-out is refused until they are answered or marked not applicable.",
+    1
+  ],
+  [
+    "ข้อ · เหลือข้อบังคับ",
+    1
+  ],
+  [
+    "เพิ่มหมายเหตุ",
+    1
+  ],
+  [
+    "No checklist",
+    1
+  ],
+  [
+    "This visit type has no checklist template. An administrator can add one.",
+    1
+  ],
+  [
+    "Photos, videos and documents",
+    1
+  ],
+  [
+    "No file yet",
+    1
+  ],
+  [
+    "A photograph of what you are describing is worth more than the description.",
+    1
+  ],
+  [
+    "Recorded separately from the sales requirement and carried into the report",
+    1
+  ],
+  [
+    "Record what you saw, what you measured and what worries you.",
+    1
+  ],
+  [
+    "Not shared",
+    1
+  ],
+  [
+    "recorded",
+    1
+  ],
+  [
+    "A finding is added and archived, never silently edited — the report quotes it.",
+    1
+  ],
+  [
+    "This device cannot report a location.",
+    1
+  ],
+  [
+    "The location could not be read. Check-in works without it.",
+    1
+  ],
+  [
+    "checked in",
+    1
+  ],
+  [
+    "Checking in…",
+    1
+  ],
+  [
+    "Optional. Nothing is stored unless you tick this.",
+    1
+  ],
+  [
+    "checked out",
+    1
+  ],
+  [
+    "Checking out…",
+    1
+  ],
+  [
+    "required checklist item(s) unanswered",
+    1
+  ],
+  [
+    "The API will refuse the check-out and name them. Answer them or mark them not applicable first.",
+    1
+  ],
+  [
+    "Checking out starts the report clock. The report draft is created for you, pre-filled from the intake and your findings.",
+    1
+  ],
+  [
+    "Closing note",
+    1
+  ],
+  [
+    "No report yet",
+    1
+  ],
+  [
+    "The report is created automatically when the engineer checks out.",
+    1
+  ],
+  [
+    "Report saved",
+    1
+  ],
+  [
+    "submitted for review",
+    1
+  ],
+  [
+    "due",
+    1
+  ],
+  [
+    "Customer acknowledged",
+    1
+  ],
+  [
+    "ก่อนส่งตรวจ: เติม",
+    1
+  ],
+  [
+    "อย่างน้อยช่องละ 20 ตัวอักษร",
+    1
+  ],
+  [
+    "ตรวจรายละเอียดประกอบ · ความต้องการ ขอบเขต เงื่อนไข และความเสี่ยง",
+    1
+  ],
+  [
+    "ข้อมูลที่มีอยู่ถูกเก็บไว้แล้ว แก้เฉพาะส่วนที่ต้องเพิ่มหรือเปลี่ยน",
+    1
+  ],
+  [
+    "รายละเอียดรายงานทั้งหมด",
+    1
+  ],
+  [
+    "บันทึกหน้างานและไฟล์ประกอบ ·",
+    1
+  ],
+  [
+    "บันทึก /",
+    1
+  ],
+  [
+    "ไฟล์",
+    1
+  ],
+  [
+    "สิ่งที่บันทึกระหว่างสำรวจ",
+    1
+  ],
+  [
+    "ยังไม่มีบันทึกเพิ่มเติมจากหน้างาน",
+    1
+  ],
+  [
+    "ค่าที่วัดไว้",
+    1
+  ],
+  [
+    "No action item",
+    1
+  ],
+  [
+    "Anything the visit left open belongs here, with an owner and a date.",
+    1
+  ],
+  [
+    "An approved revision is frozen by a database trigger; a revision request opens the next one",
+    1
+  ],
+  [
+    "approved by",
+    1
+  ],
+  [
+    "The author cannot approve their own report. Requesting a revision opens the next revision and keeps this one intact.",
+    1
+  ],
+  [
+    "Required when requesting a revision",
+    1
+  ],
+  [
+    "acknowledged",
+    1
+  ],
+  [
+    "Record acknowledgement",
+    1
+  ],
+  [
+    "The customer representative's name, as they gave it",
+    1
+  ],
+  [
+    "A digital customer signature is planned for a later phase; the name and time are recorded now.",
+    1
+  ],
+  [
+    "Action item recorded",
+    1
+  ],
+  [
+    "Call",
+    1
+  ],
+  [
+    "Brief",
+    1
+  ],
+  [
+    "Nothing assigned to you",
+    1
+  ],
+  [
+    "Assignments appear here as soon as a coordinator places you on a visit.",
+    1
+  ],
+  [
+    "Send",
+    1
+  ],
+  [
+    "This visit has no time yet.",
+    1
+  ],
+  [
+    "You may edit",
+    1
+  ],
+  [
+    "Read only",
+    1
+  ],
+  [
+    "visit purposes",
+    1
+  ],
+  [
+    "A purpose carries the default duration, crew size and checklist a coordinator starts from",
+    1
+  ],
+  [
+    "CL_GENERAL",
+    1
+  ],
+  [
+    "Edit visit type",
+    1
+  ],
+  [
+    "Letters, digits, underscore. Cannot be changed once used.",
+    1
+  ],
+  [
+    "Default duration (minutes)",
+    1
+  ],
+  [
+    "Default engineers",
+    1
+  ],
+  [
+    "Requires manager approval before scheduling",
+    1
+  ],
+  [
+    "skills",
+    1
+  ],
+  [
+    "The vocabulary used for skill matching and for engineer profiles",
+    1
+  ],
+  [
+    "Edit skill",
+    1
+  ],
+  [
+    "Checklist templates",
+    1
+  ],
+  [
+    "Answered items are deactivated rather than deleted, so a finished visit keeps the question it answered",
+    1
+  ],
+  [
+    "Save template",
+    1
+  ],
+  [
+    "Any (fallback)",
+    1
+  ],
+  [
+    "Guidance",
+    1
+  ],
+  [
+    "Run the master seed, or create a template.",
+    1
+  ],
+  [
+    "Service levels",
+    1
+  ],
+  [
+    "Report due days drive the check-out clock, the 'due soon' warning and the SLA compliance figure",
+    1
+  ],
+  [
+    "All",
+    1
+  ],
+  [
+    "Skill match on the assignment screen reads directly from this table",
+    1
+  ],
+  [
+    "Skill",
+    1
+  ],
+  [
+    "&nbsp;",
+    1
+  ],
+  [
+    "Skill granted",
+    1
+  ],
+  [
+    "Skill removed",
+    1
+  ],
+  [
+    "No skill profile yet",
+    1
+  ],
+  [
+    "Until engineers have skills, every skill match reads 0%.",
+    1
+  ],
+  [
+    "Leave, training or a holiday. The assignment check refuses a booking that overlaps one of these.",
+    1
+  ],
+  [
+    "Recorded, but these visits overlap",
+    1
+  ],
+  [
+    "Unavailability recorded",
+    1
+  ],
+  [
+    "From 30 days ago onwards",
+    1
+  ],
+  [
+    "Removed",
+    1
+  ],
+  [
+    "Nobody has recorded time off",
+    1
+  ],
+  [
+    "Recording leave here is what stops a booking landing on it.",
+    1
+  ],
+  [
+    "ANALYSIS",
+    1
+  ],
+  [
+    "Engineering estimate reporting — cost, effort, lead time and workload. No commercial figures.",
+    1
+  ],
+  [
+    "Export PDF",
+    1
+  ],
+  [
+    "Executed",
+    1
+  ],
+  [
+    "First price",
+    1
+  ],
+  [
+    "Days late",
+    1
+  ],
+  [
+    "Open the dedicated screen",
+    1
+  ],
+  [
+    "Waiting supplier price has its own working screen with status control.",
+    1
+  ],
+  [
+    "Revisions",
+    1
+  ],
+  [
+    "Avg. lead time",
+    1
+  ],
+  [
+    "Report library",
+    1
+  ],
+  [
+    "Excel and PDF export on every report",
+    1
+  ],
+  [
+    "One controlled vocabulary for every estimate — so different engineers cannot use different calculation methods.",
+    1
+  ],
+  [
+    "Engineering rate master",
+    1
+  ],
+  [
+    "Customer Master",
+    1
+  ],
+  [
+    "Supplier Master",
+    1
+  ],
+  [
+    "Employee Master",
+    1
+  ],
+  [
+    "Cost Category / Cost Breakdown Structure",
+    1
+  ],
+  [
+    "Cost category",
+    1
+  ],
+  [
+    "Subcategories",
+    1
+  ],
+  [
+    "Subcategory list",
+    1
+  ],
+  [
+    "Cost Subcategory Master",
+    1
+  ],
+  [
+    "Item Master",
+    1
+  ],
+  [
+    "Engineering Rate Master",
+    1
+  ],
+  [
+    "Standard hourly and daily cost per employee level — used automatically when engineering effort is estimated",
+    1
+  ],
+  [
+    "Add rate",
+    1
+  ],
+  [
+    "Employee Level",
+    1
+  ],
+  [
+    "Engineering Hourly",
+    1
+  ],
+  [
+    "Engineering Daily",
+    1
+  ],
+  [
+    "Install. &amp; Service Hourly",
+    1
+  ],
+  [
+    "Install. &amp; Service Daily",
+    1
+  ],
+  [
+    "Service uplift",
+    1
+  ],
+  [
+    "ADMIN CONTROLLED",
+    1
+  ],
+  [
+    "Employee / Engineering Rate Master",
+    1
+  ],
+  [
+    "Engineers select a level instead of remembering a rate. Only the Engineering Manager and Admin can change these numbers.",
+    1
+  ],
+  [
+    "Engineering Manager / Admin only",
+    1
+  ],
+  [
+    "How the rate is used",
+    1
+  ],
+  [
+    "Centralised calculation",
+    1
+  ],
+  [
+    "Total Man-hour = Engineer Qty × Man-days × Hours per Day",
+    1
+  ],
+  [
+    "Hours per day defaults to 8 and can be changed per activity.",
+    1
+  ],
+  [
+    "Engineering Cost = Engineer Qty × Man-days × Daily Cost",
+    1
+  ],
+  [
+    "Or Total Hours × Hourly Cost when the activity is booked hourly.",
+    1
+  ],
+  [
+    "Installation &amp; service work uses its own rate",
+    1
+  ],
+  [
+    "Each work package is marked Engineering cost or Installation &amp; Service cost; the estimate reads the matching rate automatically, and travel, accommodation and per diem are estimated inside the package.",
+    1
+  ],
+  [
+    "Supplier man-hour is quoted, not rated",
+    1
+  ],
+  [
+    "Outsourced effort carries its supplier and quotation number instead of a master rate.",
+    1
+  ],
+  [
+    "Rates are never typed on an estimate",
+    1
+  ],
+  [
+    "The estimate reads the rate from this master so two engineers cannot use different numbers.",
+    1
+  ],
+  [
+    "TRACEABILITY",
+    1
+  ],
+  [
+    "Every cost, scope and workflow change with its previous value, new value and reason. Normal users cannot delete entries.",
+    1
+  ],
+  [
+    "Search user, estimate, action or reason…",
+    1
+  ],
+  [
+    "Retained permanently",
+    1
+  ],
+  [
+    "Previous Value",
+    1
+  ],
+  [
+    "New Value",
+    1
+  ],
+  [
+    "Roles, notifications, numbering standard and document storage.",
+    1
+  ],
+  [
+    "Users",
+    1
+  ],
+  [
+    "Role permissions",
+    1
+  ],
+  [
+    "Approval covers technical scope and cost only — there is no margin approval in this system",
+    1
+  ],
+  [
+    "Notification rules",
+    1
+  ],
+  [
+    "Sent by email and in-app",
+    1
+  ],
+  [
+    "Numbering standard",
+    1
+  ],
+  [
+    "Generated by the system — users never type a number",
+    1
+  ],
+  [
+    "Pattern",
+    1
+  ],
+  [
+    "Example",
+    1
+  ],
+  [
+    "INQ-YYMM-XXXX",
+    1
+  ],
+  [
+    "INQ-2608-0001",
+    1
+  ],
+  [
+    "INQ-2608-0015",
+    1
+  ],
+  [
+    "EST-YYMM-XXXX",
+    1
+  ],
+  [
+    "EST-2608-0001",
+    1
+  ],
+  [
+    "EST-2608-0007",
+    1
+  ],
+  [
+    "R00, R01, R02…",
+    1
+  ],
+  [
+    "R02",
+    1
+  ],
+  [
+    "R03",
+    1
+  ],
+  [
+    "SQ-YYMM-XXXX",
+    1
+  ],
+  [
+    "SQ-2608-0001",
+    1
+  ],
+  [
+    "SQ-2608-0036",
+    1
+  ],
+  [
+    "PR-YYMM-XXXX",
+    1
+  ],
+  [
+    "PR-2608-0001",
+    1
+  ],
+  [
+    "PR-2609-0004",
+    1
+  ],
+  [
+    "Data integrity rules",
+    1
+  ],
+  [
+    "Document storage",
+    1
+  ],
+  [
+    "The estimate database stores a storage key, not a file path — so the backing store can change without a migration",
+    1
+  ],
+  [
+    "Current storage provider",
+    1
+  ],
+  [
+    "Microsoft 365 / SharePoint",
+    1
+  ],
+  [
+    "Company NAS",
+    1
+  ],
+  [
+    "Site / share",
+    1
+  ],
+  [
+    "Folder pattern",
+    1
+  ],
+  [
+    "Applied to every uploaded document",
+    1
+  ],
+  [
+    "Migrating to the company NAS later only changes the storage adapter — inquiry, estimate and revision records stay untouched.",
+    1
+  ],
+  [
+    "General",
+    1
+  ],
+  [
+    "Default language",
+    1
+  ],
+  [
+    "TH",
+    1
+  ],
+  [
+    "EN",
+    1
+  ],
+  [
+    "JP",
+    1
+  ],
+  [
+    "Default hours per day",
+    1
+  ],
+  [
+    "Default contingency (%)",
+    1
+  ],
+  [
+    "Price age warning (days)",
+    1
+  ],
+  [
+    "Price age critical (days)",
+    1
+  ],
+  [
+    "Estimate defaults",
+    1
+  ],
+  [
+    "Estimate due lead time (days)",
+    1
+  ],
+  [
+    "Require price reference",
+    1
+  ],
+  [
+    "Warning",
+    1
+  ],
+  [
+    "Block approval",
+    1
+  ],
+  [
+    "Auto save",
+    1
+  ],
+  [
+    "Every 30 seconds",
+    1
+  ],
+  [
+    "Every 2 minutes",
+    1
+  ],
+  [
+    "No margin, markup or selling price field exists anywhere in this system.",
+    1
+  ],
+  [
+    "Send invitation",
+    1
+  ],
+  [
+    "Full name",
+    1
+  ],
+  [
+    "e.g. Somchai Rattana",
+    1
+  ],
+  [
+    "name@tomastc.com",
+    1
+  ],
+  [
+    "Engineer level",
+    1
+  ],
+  [
+    "Generated from the approved estimate — every line keeps its link back to the estimate and forward to PR, PO, receipt and issue.",
+    1
+  ],
+  [
+    "Generated",
+    1
+  ],
+  [
+    "Projects without a BOM",
+    1
+  ],
+  [
+    "Generate the BOM the day the estimate is approved",
+    1
+  ],
+  [
+    "Open project",
+    1
+  ],
+  [
+    "Released by",
+    1
+  ],
+  [
+    "Purchase shortage",
+    1
+  ],
+  [
+    "BOM exported to Excel — values only, with the estimate references",
+    1
+  ],
+  [
+    "This BOM is released — lines cannot be edited directly. Changes need a new BOM revision or an approved change request.",
+    1
+  ],
+  [
+    "BOM revision R02 drafted — release it to supersede R01",
+    1
+  ],
+  [
+    "All BOM quantities reconcile with Estimate Revision",
+    1
+  ],
+  [
+    "estimate line(s) exceeded by the BOM",
+    1
+  ],
+  [
+    "open PO value",
+    1
+  ],
+  [
+    "issued minus returned",
+    1
+  ],
+  [
+    "actual + commitment + reserved",
+    1
+  ],
+  [
+    "BOM structure",
+    1
+  ],
+  [
+    "Released — add items on the next revision",
+    1
+  ],
+  [
+    "Released BOM — create a revision first",
+    1
+  ],
+  [
+    "New BOM line added",
+    1
+  ],
+  [
+    "Purchase Required = Quantity − Allocated − Customer Supplied − On Order, never negative",
+    1
+  ],
+  [
+    "cust.",
+    1
+  ],
+  [
+    "Consumed",
+    1
+  ],
+  [
+    "Still to buy",
+    1
+  ],
+  [
+    "reserved for",
+    1
+  ],
+  [
+    "Estimate line",
+    1
+  ],
+  [
+    "Estimate budget",
+    1
+  ],
+  [
+    "A reserved quantity belongs to one project until released or issued.",
+    1
+  ],
+  [
+    "Still needed",
+    1
+  ],
+  [
+    "Reserve quantity",
+    1
+  ],
+  [
+    "estimate line to member receipt, one chain",
+    1
+  ],
+  [
+    "customer supplied",
+    1
+  ],
+  [
+    "No requisition yet",
+    1
+  ],
+  [
+    "No purchase order",
+    1
+  ],
+  [
+    "received",
+    1
+  ],
+  [
+    "damaged",
+    1
+  ],
+  [
+    "Nothing received yet",
+    1
+  ],
+  [
+    "Stock",
+    1
+  ],
+  [
+    "No reservation",
+    1
+  ],
+  [
+    "received by",
+    1
+  ],
+  [
+    "Not issued yet",
+    1
+  ],
+  [
+    "New inquiry",
+    1
+  ],
+  [
+    "Estimate by Status",
+    1
+  ],
+  [
+    "Current pipeline",
+    1
+  ],
+  [
+    "Estimate by Department",
+    1
+  ],
+  [
+    "Engineering man-days committed",
+    1
+  ],
+  [
+    "Estimate by Project Type",
+    1
+  ],
+  [
+    "Active estimates",
+    1
+  ],
+  [
+    "Monthly Estimated Cost",
+    1
+  ],
+  [
+    "Total estimated cost issued per month (M THB)",
+    1
+  ],
+  [
+    "Engineering Man-hour by Department",
+    1
+  ],
+  [
+    "Estimated engineering cost",
+    1
+  ],
+  [
+    "Top Cost Categories",
+    1
+  ],
+  [
+    "Across all open estimates",
+    1
+  ],
+  [
+    "Latest activity across the engineering team",
+    1
+  ],
+  [
+    "View all estimates",
+    1
+  ],
+  [
+    "Estimate progress by section",
+    1
+  ],
+  [
+    "Multi-engineer completion for EST-2608-0001 R02",
+    1
+  ],
+  [
+    "Responsible",
+    1
+  ],
+  [
+    "% complete",
+    1
+  ],
+  [
+    "Deadlines, missing prices and reviews",
+    1
+  ],
+  [
+    "is overdue",
+    1
+  ],
+  [
+    "— due",
+    1
+  ],
+  [
+    "— required",
+    1
+  ],
+  [
+    "Supplier quotation expired",
+    1
+  ],
+  [
+    "SQ-2606-0028 HIKROBOT — expired 18-Aug-2026",
+    1
+  ],
+  [
+    "Open waiting supplier price",
+    1
+  ],
+  [
+    "Engineering cost snapshot",
+    1
+  ],
+  [
+    "Customer workload",
+    1
+  ],
+  [
+    "Inquiries received this year",
+    1
+  ],
+  [
+    "Search estimate no., inquiry no., project or customer…",
+    1
+  ],
+  [
+    "No estimate matches the filter",
+    1
+  ],
+  [
+    "Clear a filter, or create an estimate from a registered inquiry.",
+    1
+  ],
+  [
+    "Inquiry numbers are generated by the system and can never duplicate",
+    1
+  ],
+  [
+    "The inquiry number is generated by the system. Duplicate numbers are impossible.",
+    1
+  ],
+  [
+    "Register inquiry",
+    1
+  ],
+  [
+    "General Information",
+    1
+  ],
+  [
+    "Customer, project and estimate ownership",
+    1
+  ],
+  [
+    "Generated automatically — read only",
+    1
+  ],
+  [
+    "e.g. K. Somsak Chareon",
+    1
+  ],
+  [
+    "e.g. Cobot Picking Machine",
+    1
+  ],
+  [
+    "RFQ-XXX-26-0000",
+    1
+  ],
+  [
+    "Estimate Due Date",
+    1
+  ],
+  [
+    "What the customer asked for, and the engineering context behind it",
+    1
+  ],
+  [
+    "What must the system do?",
+    1
+  ],
+  [
+    "Why is the customer asking for this now?",
+    1
+  ],
+  [
+    "Cycle time, payload, interface, safety category…",
+    1
+  ],
+  [
+    "Plant, line, province",
+    1
+  ],
+  [
+    "e.g. ISO 10218-2",
+    1
+  ],
+  [
+    "RFQ, drawings, layouts and standards — stored on SharePoint today, NAS later",
+    1
+  ],
+  [
+    "PDF, Excel, Word, DWG or image — each file is tagged with a document category",
+    1
+  ],
+  [
+    "Create estimate cost",
+    1
+  ],
+  [
+    "Frozen with each revision so engineers can see what the cost was based on",
+    1
+  ],
+  [
+    "Document storage runs on Microsoft 365 / SharePoint today and can move to the company NAS without touching the estimate database",
+    1
+  ],
+  [
+    "Every change recorded against this inquiry and its estimate",
+    1
+  ],
+  [
+    "Save meeting record",
+    1
+  ],
+  [
+    "Nattaphon Prasert, K. Somsak Chareon",
+    1
+  ],
+  [
+    "Drop the meeting minutes here",
+    1
+  ],
+  [
+    "Every balance is computed from the transaction ledger — On Hand includes quarantine; Available = On Hand − Reserved − Quarantine.",
+    1
+  ],
+  [
+    "Cycle count CC-2609-0001 started for WH1 — count sheet printed",
+    1
+  ],
+  [
+    "QR labels sent to the label printer",
+    1
+  ],
+  [
+    "Print QR Label",
+    1
+  ],
+  [
+    "free to allocate",
+    1
+  ],
+  [
+    "Reserved Stock",
+    1
+  ],
+  [
+    "reservations",
+    1
+  ],
+  [
+    "ordered − received",
+    1
+  ],
+  [
+    "waiting inspection or action",
+    1
+  ],
+  [
+    "requests to pick",
+    1
+  ],
+  [
+    "no movement, nothing reserved",
+    1
+  ],
+  [
+    "inventory controller approval",
+    1
+  ],
+  [
+    "Stock Adjustments Pending Approval",
+    1
+  ],
+  [
+    "A balance is never edited — an approved adjustment writes a ledger transaction",
+    1
+  ],
+  [
+    "Adjustment approved — ledger transaction written",
+    1
+  ],
+  [
+    "Waiting for the inventory controller",
+    1
+  ],
+  [
+    "Click a row for the transaction ledger — balances cannot be typed over",
+    1
+  ],
+  [
+    "Quar.",
+    1
+  ],
+  [
+    "Issued (month)",
+    1
+  ],
+  [
+    "Slow-moving",
+    1
+  ],
+  [
+    "Over-reserved",
+    1
+  ],
+  [
+    "Low stock",
+    1
+  ],
+  [
+    "Fully reserved",
+    1
+  ],
+  [
+    "Active reservations — one quantity belongs to one project until it is released or issued",
+    1
+  ],
+  [
+    "Reserved Qty",
+    1
+  ],
+  [
+    "reservation released back to available stock",
+    1
+  ],
+  [
+    "No active reservation",
+    1
+  ],
+  [
+    "Reserve stock from a BOM line or from this screen.",
+    1
+  ],
+  [
+    "Transaction Ledger — append-only. Balances are the sum of these rows; nobody can type over them.",
+    1
+  ],
+  [
+    "Transfer posted as a ledger transaction — pick the target location on the store terminal",
+    1
+  ],
+  [
+    "Transfer Stock",
+    1
+  ],
+  [
+    "Ref.",
+    1
+  ],
+  [
+    "Adjustment rejected",
+    1
+  ],
+  [
+    "Adjustment requested — pending the inventory controller",
+    1
+  ],
+  [
+    "Reject adjustment",
+    1
+  ],
+  [
+    "Why the count is not accepted",
+    1
+  ],
+  [
+    "An adjustment never edits the balance — it waits for the inventory controller, then writes a ledger transaction.",
+    1
+  ],
+  [
+    "e.g. cycle count found a discrepancy",
+    1
+  ],
+  [
+    "Request → project approval → picking → warehouse issue → member receipt. Received quantity and issued quantity are never the same number by accident.",
+    1
+  ],
+  [
+    "issue requests",
+    1
+  ],
+  [
+    "Requested Qty",
+    1
+  ],
+  [
+    "Issued Qty",
+    1
+  ],
+  [
+    "Picking list PICK-2608-0008 printed",
+    1
+  ],
+  [
+    "Issued — stock moved out on the ledger, reservations consumed",
+    1
+  ],
+  [
+    "Receipt confirmed — the material is now yours to use or return",
+    1
+  ],
+  [
+    "You raised this request — it is waiting for the project owner's approval.",
+    1
+  ],
+  [
+    "A member may request material only on projects they are assigned to, for items on the BOM, within the remaining BOM quantity.",
+    1
+  ],
+  [
+    "Issue workflow",
+    1
+  ],
+  [
+    "Issue lines",
+    1
+  ],
+  [
+    "Requested quantity may not exceed the remaining BOM quantity without approval — issue quantity is what actually left the store",
+    1
+  ],
+  [
+    "BOM Qty",
+    1
+  ],
+  [
+    "Prev. Issued",
+    1
+  ],
+  [
+    "Lot/Serial",
+    1
+  ],
+  [
+    "Over BOM — needs approval",
+    1
+  ],
+  [
+    "Short",
+    1
+  ],
+  [
+    "Exact actor history — who asked, who approved, who picked, who received",
+    1
+  ],
+  [
+    "Used For",
+    1
+  ],
+  [
+    "Returns and damage",
+    1
+  ],
+  [
+    "Unused material goes back to the store on a return transaction — it re-enters Available Stock and reduces the project's actual cost.",
+    1
+  ],
+  [
+    "Returns open after the member confirms receipt.",
+    1
+  ],
+  [
+    "Damage / loss report DR-2609-#### drafted — the inventory controller is notified",
+    1
+  ],
+  [
+    "Rejected — returned to the requester as a draft",
+    1
+  ],
+  [
+    "Return posted — the quantity is back in Available Stock",
+    1
+  ],
+  [
+    "Approve issue request",
+    1
+  ],
+  [
+    "Reject issue request",
+    1
+  ],
+  [
+    "This request exceeds the remaining BOM quantity — your comment goes on the audit record.",
+    1
+  ],
+  [
+    "Why — the requester sees this",
+    1
+  ],
+  [
+    "already returned",
+    1
+  ],
+  [
+    "Post return",
+    1
+  ],
+  [
+    "e.g. over-picked / not used",
+    1
+  ],
+  [
+    "The demo library is read-only. Use the production workspace to create a document.",
+    1
+  ],
+  [
+    "in the demo library",
+    1
+  ],
+  [
+    "Search document number, title, owner or tag…",
+    1
+  ],
+  [
+    "No documents match",
+    1
+  ],
+  [
+    "Adjust the search or the filters above.",
+    1
+  ],
+  [
+    "Knowledge base",
+    1
+  ],
+  [
+    "Troubleshooting notes, best practice and lessons learned",
+    1
+  ],
+  [
+    "Related records",
+    1
+  ],
+  [
+    "Every pending decision in the material flow — requisitions, material issues and stock adjustments. Requesters never see approve buttons on their own documents.",
+    1
+  ],
+  [
+    "Rule flags",
+    1
+  ],
+  [
+    "exception",
+    1
+  ],
+  [
+    "No requisition is waiting for a decision.",
+    1
+  ],
+  [
+    "waiting for project approval",
+    1
+  ],
+  [
+    "No issue request is waiting for approval.",
+    1
+  ],
+  [
+    "Stock Adjustments",
+    1
+  ],
+  [
+    "waiting for the inventory controller",
+    1
+  ],
+  [
+    "Decide in",
+    1
+  ],
+  [
+    "No adjustment is pending.",
+    1
+  ],
+  [
+    "Budget, commitment, consumption and inventory risk across every running project — the management view.",
+    1
+  ],
+  [
+    "Open PR Value",
+    1
+  ],
+  [
+    "Open PO Value",
+    1
+  ],
+  [
+    "PR Over Budget",
+    1
+  ],
+  [
+    "needs exception approval",
+    1
+  ],
+  [
+    "Overdue Deliveries",
+    1
+  ],
+  [
+    "partial",
+    1
+  ],
+  [
+    "Inventory Value",
+    1
+  ],
+  [
+    "Slow-moving Inventory",
+    1
+  ],
+  [
+    "unused project stock",
+    1
+  ],
+  [
+    "Pending Material Issues",
+    1
+  ],
+  [
+    "waiting approval or picking",
+    1
+  ],
+  [
+    "Actual Material Consumption",
+    1
+  ],
+  [
+    "Budget vs Commitment vs Actual by Project",
+    1
+  ],
+  [
+    "Forecast = actual consumed + open commitment + reserved stock — the red line is the approved material budget",
+    1
+  ],
+  [
+    "Consumption",
+    1
+  ],
+  [
+    "Monthly PR Value",
+    1
+  ],
+  [
+    "Requested purchasing value per month (THB)",
+    1
+  ],
+  [
+    "Cost Variance by Section",
+    1
+  ],
+  [
+    "PR price minus estimate, per BOM section",
+    1
+  ],
+  [
+    "Supplier On-time Delivery Rate",
+    1
+  ],
+  [
+    "Last 12 months",
+    1
+  ],
+  [
+    "Purchasing exceptions",
+    1
+  ],
+  [
+    "variance",
+    1
+  ],
+  [
+    "expected",
+    1
+  ],
+  [
+    "open value",
+    1
+  ],
+  [
+    "REFERENCE DATA",
+    1
+  ],
+  [
+    "Every price used on an estimate is stored here with its source, so engineers never search old Excel files again.",
+    1
+  ],
+  [
+    "Add price record",
+    1
+  ],
+  [
+    "Price records",
+    1
+  ],
+  [
+    "Current (0–90 days)",
+    1
+  ],
+  [
+    "Safe to reuse",
+    1
+  ],
+  [
+    "Aging (91–180 days)",
+    1
+  ],
+  [
+    "Confirm before approval",
+    1
+  ],
+  [
+    "Older than 180 days",
+    1
+  ],
+  [
+    "Request a new price",
+    1
+  ],
+  [
+    "Search item, brand, model, supplier, previous project or price…",
+    1
+  ],
+  [
+    "Green 0–90 days · orange 91–180 days · red older than 180 days",
+    1
+  ],
+  [
+    "Price History",
+    1
+  ],
+  [
+    "View source",
+    1
+  ],
+  [
+    "No price record found",
+    1
+  ],
+  [
+    "Try a different brand or model, or request a supplier price instead.",
+    1
+  ],
+  [
+    "Price sources in use",
+    1
+  ],
+  [
+    "Every cost should ideally carry a reference",
+    1
+  ],
+  [
+    "Meaning",
+    1
+  ],
+  [
+    "Records",
+    1
+  ],
+  [
+    "Change since",
+    1
+  ],
+  [
+    "Use latest price",
+    1
+  ],
+  [
+    "Price Trend",
+    1
+  ],
+  [
+    "Price history",
+    1
+  ],
+  [
+    "Quotation Reference",
+    1
+  ],
+  [
+    "Project Used",
+    1
+  ],
+  [
+    "Where this item was used",
+    1
+  ],
+  [
+    "Item information",
+    1
+  ],
+  [
+    "Current source",
+    1
+  ],
+  [
+    "Last used",
+    1
+  ],
+  [
+    "SUPPLIER",
+    1
+  ],
+  [
+    "Quotation documents are linked to cost items, so any price on an estimate can be traced to its source.",
+    1
+  ],
+  [
+    "Search quotation no., supplier, project or inquiry…",
+    1
+  ],
+  [
+    "PDF, Excel and image files are accepted",
+    1
+  ],
+  [
+    "Link to cost item",
+    1
+  ],
+  [
+    "The quotation becomes selectable as a price source on any cost item",
+    1
+  ],
+  [
+    "Drop the quotation file here",
+    1
+  ],
+  [
+    "PDF, Excel or image",
+    1
+  ],
+  [
+    "Generated as SQ-YYMM-XXXX",
+    1
+  ],
+  [
+    "Received Date",
+    1
+  ],
+  [
+    "INQ-2608-0001 — Cobot Picking Machine",
+    1
+  ],
+  [
+    "INQ-2608-0004 — IoT Energy Monitoring Phase 2",
+    1
+  ],
+  [
+    "ESTIMATE BLOCKERS",
+    1
+  ],
+  [
+    "Every cost item that has no price yet — this is where estimate delays become visible to the manager.",
+    1
+  ],
+  [
+    "Request prices",
+    1
+  ],
+  [
+    "Blocking an estimate",
+    1
+  ],
+  [
+    "Past required date",
+    1
+  ],
+  [
+    "Escalate to the supplier",
+    1
+  ],
+  [
+    "Not requested yet",
+    1
+  ],
+  [
+    "Engineer action",
+    1
+  ],
+  [
+    "Price updated",
+    1
+  ],
+  [
+    "Estimate unblocked",
+    1
+  ],
+  [
+    "Missing price management",
+    1
+  ],
+  [
+    "Update the status as the request moves forward",
+    1
+  ],
+  [
+    "Not requested",
+    1
+  ],
+  [
+    "Status meaning",
+    1
+  ],
+  [
+    "Item, brand, model, supplier, previous project or price — no Excel file needed",
+    1
+  ],
+  [
+    "matching item(s) · prices older than 180 days are flagged in red",
+    1
+  ],
+  [
+    "e.g. KV-8000, KEYENCE, control panel, FTS Traceability…",
+    1
+  ],
+  [
+    "Price",
+    1
+  ],
+  [
+    "Age",
+    1
+  ],
+  [
+    "Nothing found in the price library",
+    1
+  ],
+  [
+    "Try the brand or model only, or request a new supplier price instead.",
+    1
+  ],
+  [
+    "from",
+    1
+  ],
+  [
+    ", priced",
+    1
+  ],
+  [
+    "on",
+    1
+  ],
+  [
+    "days old",
+    1
+  ],
+  [
+    "Actual + committed",
+    1
+  ],
+  [
+    "Reserved stock",
+    1
+  ],
+  [
+    "Installation & Service",
+    1
+  ],
+  [
+    "Material forecast vs budget",
+    1
+  ],
+  [
+    "No estimate linked to this project.",
+    1
+  ],
+  [
+    "Open BOM",
+    1
+  ],
+  [
+    "THB ·",
+    1
+  ],
+  [
+    "One PO per supplier, always born from an approved PR — receiving quantity is tracked line by line.",
+    1
+  ],
+  [
+    "purchase orders",
+    1
+  ],
+  [
+    "From PR",
+    1
+  ],
+  [
+    "Order Date",
+    1
+  ],
+  [
+    "PO Value",
+    1
+  ],
+  [
+    "Open Value",
+    1
+  ],
+  [
+    "waiting confirmation",
+    1
+  ],
+  [
+    "Partial deliveries are normal — accepted quantity goes to stock, damaged and rejected quantity goes to quarantine, never to Available.",
+    1
+  ],
+  [
+    "Select the PO on the receiving terminal to start a new receipt",
+    1
+  ],
+  [
+    "New Goods Receipt",
+    1
+  ],
+  [
+    "Waiting for delivery",
+    1
+  ],
+  [
+    "Open purchase order lines",
+    1
+  ],
+  [
+    "goods receipts",
+    1
+  ],
+  [
+    "GRN No.",
+    1
+  ],
+  [
+    "Delivery",
+    1
+  ],
+  [
+    "Photos",
+    1
+  ],
+  [
+    "attached",
+    1
+  ],
+  [
+    "View PO",
+    1
+  ],
+  [
+    "View PR",
+    1
+  ],
+  [
+    "Receiving label printed",
+    1
+  ],
+  [
+    "Print Receiving Label",
+    1
+  ],
+  [
+    "notified — partial delivery received",
+    1
+  ],
+  [
+    "Notify Requester",
+    1
+  ],
+  [
+    "Receipt confirmed — accepted quantity is now in stock, damage is in quarantine",
+    1
+  ],
+  [
+    "damaged quantity is in quarantine, not in Available Stock",
+    1
+  ],
+  [
+    "Received lines",
+    1
+  ],
+  [
+    "Accepted → stock · Damaged / Rejected → quarantine · Remaining stays On Order",
+    1
+  ],
+  [
+    "Prev. Received",
+    1
+  ],
+  [
+    "This Time",
+    1
+  ],
+  [
+    "Lot No.",
+    1
+  ],
+  [
+    "Serial",
+    1
+  ],
+  [
+    "Project Allocation",
+    1
+  ],
+  [
+    "Received This Time",
+    1
+  ],
+  [
+    "Accepted → stock",
+    1
+  ],
+  [
+    "Remaining on order",
+    1
+  ],
+  [
+    "Receiving rules",
+    1
+  ],
+  [
+    "Damaged, rejected and quarantine quantities never enter Available Stock",
+    1
+  ],
+  [
+    "Receiving more than the PO quantity requires approval",
+    1
+  ],
+  [
+    "Every receipt writes ledger transactions — the balance is never typed",
+    1
+  ],
+  [
+    "Supporting documents",
+    1
+  ],
+  [
+    "DR-2608-0002.pdf",
+    1
+  ],
+  [
+    "photos",
+    1
+  ],
+  [
+    "Raised from BOM shortages, checked against the project budget, and approved before a single baht is committed.",
+    1
+  ],
+  [
+    "PR(s) are waiting for your decision",
+    1
+  ],
+  [
+    "requisitions",
+    1
+  ],
+  [
+    "vs Estimate",
+    1
+  ],
+  [
+    "Waiting on",
+    1
+  ],
+  [
+    "Supplier quotation attached to the requisition",
+    1
+  ],
+  [
+    "Draft saved",
+    1
+  ],
+  [
+    "submitted — Section Owner Review is next",
+    1
+  ],
+  [
+    "item(s) can be supplied from existing stock — they are not on this PR",
+    1
+  ],
+  [
+    "item(s) require purchasing",
+    1
+  ],
+  [
+    "exceeds the estimated unit cost by",
+    1
+  ],
+  [
+    "management approval will be added",
+    1
+  ],
+  [
+    "Current PR is within the total project budget",
+    1
+  ],
+  [
+    "This PR pushes the forecast over the approved budget — a budget exception approval will be added",
+    1
+  ],
+  [
+    "Quantities prefilled from the live BOM shortage — stock-covered items never appear here",
+    1
+  ],
+  [
+    "Req.",
+    1
+  ],
+  [
+    "Avail.",
+    1
+  ],
+  [
+    "Business reason (required)",
+    1
+  ],
+  [
+    "Remove line",
+    1
+  ],
+  [
+    "No shortage",
+    1
+  ],
+  [
+    "Everything on the BOM is covered by stock or already ordered.",
+    1
+  ],
+  [
+    "Not in the approved estimate — it needs a business reason, a technical justification and an additional approver.",
+    1
+  ],
+  [
+    "Management approval is added automatically",
+    1
+  ],
+  [
+    "Business reason",
+    1
+  ],
+  [
+    "Why is this needed when it is not in the estimate?",
+    1
+  ],
+  [
+    "Cost section",
+    1
+  ],
+  [
+    "Technical justification",
+    1
+  ],
+  [
+    "Technical detail the approver needs",
+    1
+  ],
+  [
+    "Supporting document",
+    1
+  ],
+  [
+    "Attach",
+    1
+  ],
+  [
+    "Additional approver",
+    1
+  ],
+  [
+    "Project Owner",
+    1
+  ],
+  [
+    "Budget Status",
+    1
+  ],
+  [
+    "Forwarded — Yuki Tanaka added as an additional approver on this step",
+    1
+  ],
+  [
+    "Forward to Additional Approver",
+    1
+  ],
+  [
+    "created — one PO per supplier",
+    1
+  ],
+  [
+    "Submitted — Section Owner Review is next",
+    1
+  ],
+  [
+    "You raised this PR — the approval buttons are disabled for you. It is waiting for",
+    1
+  ],
+  [
+    "The requester can never approve their own PR — rule-added steps show why they exist",
+    1
+  ],
+  [
+    "Every line keeps its estimate cost beside the requested price",
+    1
+  ],
+  [
+    "Stock at request",
+    1
+  ],
+  [
+    "M",
+    1
+  ],
+  [
+    "View Calculation Trace",
+    1
+  ],
+  [
+    "Estimate value",
+    1
+  ],
+  [
+    "Forecast = actual consumed + open commitment + reserved stock",
+    1
+  ],
+  [
+    "open PO",
+    1
+  ],
+  [
+    "Forecast before this PR",
+    1
+  ],
+  [
+    "Remaining Budget after approval",
+    1
+  ],
+  [
+    "Snapshot now — buying despite available stock needs a reason",
+    1
+  ],
+  [
+    "Available now",
+    1
+  ],
+  [
+    "Stock covers this — justify",
+    1
+  ],
+  [
+    "Purchase needed",
+    1
+  ],
+  [
+    "BOM Reference",
+    1
+  ],
+  [
+    "EST-2608-0001 R03",
+    1
+  ],
+  [
+    "Estimate Cost Reference",
+    1
+  ],
+  [
+    "Previous Purchase History",
+    1
+  ],
+  [
+    "Last purchase",
+    1
+  ],
+  [
+    "No purchase history",
+    1
+  ],
+  [
+    "Append-only — records cannot be edited or deleted",
+    1
+  ],
+  [
+    "No audit entries yet.",
+    1
+  ],
+  [
+    "Approved — the next step is notified",
+    1
+  ],
+  [
+    "Rejected — the requester is notified",
+    1
+  ],
+  [
+    "Returned to the requester for changes",
+    1
+  ],
+  [
+    "rule flag(s) on this PR — your comment goes on the audit record",
+    1
+  ],
+  [
+    "Comment (optional)",
+    1
+  ],
+  [
+    "Why — the next reader of the audit trail needs this",
+    1
+  ],
+  [
+    "Resource Plan & Workload",
+    1
+  ],
+  [
+    "Who is holding which inquiry, estimate and project — and how full their weeks are.",
+    1
+  ],
+  [
+    "Horizon",
+    1
+  ],
+  [
+    "item(s) ·",
+    1
+  ],
+  [
+    "No work assigned",
+    1
+  ],
+  [
+    "Average and peak utilisation over the horizon",
+    1
+  ],
+  [
+    "Average load",
+    1
+  ],
+  [
+    "Next due",
+    1
+  ],
+  [
+    "is over capacity",
+    1
+  ],
+  [
+    "% — move a task or extend a due date.",
+    1
+  ],
+  [
+    "has",
+    1
+  ],
+  [
+    "overdue item(s)",
+    1
+  ],
+  [
+    "engineer(s) below 60% load",
+    1
+  ],
+  [
+    "Capacity available for the next inquiry.",
+    1
+  ],
+  [
+    "No plan yet",
+    1
+  ],
+  [
+    "WD",
+    1
+  ],
+  [
+    "Everything the customer told sales, in one record, before an engineer is sent anywhere.",
+    1
+  ],
+  [
+    "intakes",
+    1
+  ],
+  [
+    "Readiness is what decides whether an intake may be submitted",
+    1
+  ],
+  [
+    "Adjust the filters above.",
+    1
+  ],
+  [
+    "Machine",
+    1
+  ],
+  [
+    "Somchai P.",
+    1
+  ],
+  [
+    "answered",
+    1
+  ],
+  [
+    "The visit has not happened yet.",
+    1
+  ],
+  [
+    "assignments",
+    1
+  ],
+  [
+    "CL_ELECTRICAL",
+    1
+  ],
+  [
+    "Approved revision locked",
+    1
+  ],
+  [
+    "More",
+    1
+  ],
+  [
+    "critical error(s)",
+    1
+  ],
+  [
+    "must be resolved before this estimate can be approved.",
+    1
+  ],
+  [
+    "Total Material Cost",
+    1
+  ],
+  [
+    "Total Engineering Cost",
+    1
+  ],
+  [
+    "Total Outsource Cost",
+    1
+  ],
+  [
+    "Total Installation &amp; Service Cost",
+    1
+  ],
+  [
+    "Total Transportation",
+    1
+  ],
+  [
+    "Delete work package",
+    1
+  ],
+  [
+    "Removing the package also removes the travel and accommodation cost estimated under it.",
+    1
+  ],
+  [
+    "Delete module",
+    1
+  ],
+  [
+    "Deleting is recorded in the audit log and can be reversed by creating a new revision from",
+    1
+  ],
+  [
+    "Estimate validation",
+    1
+  ],
+  [
+    "Estimate Cost Table",
+    1
+  ],
+  [
+    "Discipline → main module → items · Enter opens a new line in the same module · Total Cost is calculated as Qty × Unit Cost and cannot be typed over",
+    1
+  ],
+  [
+    "Add discipline / module",
+    1
+  ],
+  [
+    "modules ·",
+    1
+  ],
+  [
+    "New module",
+    1
+  ],
+  [
+    "Add an item to this module",
+    1
+  ],
+  [
+    "Rename module",
+    1
+  ],
+  [
+    "Delete module and its items",
+    1
+  ],
+  [
+    "— unassigned —",
+    1
+  ],
+  [
+    "Describe the item…",
+    1
+  ],
+  [
+    "Find price",
+    1
+  ],
+  [
+    "Duplicate row",
+    1
+  ],
+  [
+    "Delete row",
+    1
+  ],
+  [
+    "This module has no item yet — add the equipment, material and service lines it is built from.",
+    1
+  ],
+  [
+    "Create a main module such as “Main Control Box”, then add the items it is built from — or import an Excel estimate.",
+    1
+  ],
+  [
+    "% of estimate",
+    1
+  ],
+  [
+    "group(s)",
+    1
+  ],
+  [
+    "Estimate cost summary",
+    1
+  ],
+  [
+    "Four main blocks, plus everything that belongs to none of them",
+    1
+  ],
+  [
+    "Export summary",
+    1
+  ],
+  [
+    "What it collects",
+    1
+  ],
+  [
+    "Four main blocks",
+    1
+  ],
+  [
+    "Hardware",
+    1
+  ],
+  [
+    "Software",
+    1
+  ],
+  [
+    "Engineering / Service",
+    1
+  ],
+  [
+    "Share of the estimate",
+    1
+  ],
+  [
+    "Reconciliation",
+    1
+  ],
+  [
+    "What the cost tabs rolled up, and what the summary re-counted",
+    1
+  ],
+  [
+    "Material (hardware + software)",
+    1
+  ],
+  [
+    "Man-hour and site expense",
+    1
+  ],
+  [
+    "Rolled up from the cost tabs",
+    1
+  ],
+  [
+    "Adjusted in this summary",
+    1
+  ],
+  [
+    "Summary total",
+    1
+  ],
+  [
+    "Cost / unit",
+    1
+  ],
+  [
+    "Total (THB)",
+    1
+  ],
+  [
+    "Rolled up from the cost tabs — the cost of one set",
+    1
+  ],
+  [
+    "Add a line to",
+    1
+  ],
+  [
+    "total",
+    1
+  ],
+  [
+    "Lines added in the cost items or man-hour tab appear here automatically.",
+    1
+  ],
+  [
+    "Work package → activity → cost · engineering and installation work are rated differently, and man-hour bought from a supplier carries its quotation",
+    1
+  ],
+  [
+    "· Installation &amp; service",
+    1
+  ],
+  [
+    "Supplier MH",
+    1
+  ],
+  [
+    "Attach SQ…",
+    1
+  ],
+  [
+    "Pick a supplier quotation",
+    1
+  ],
+  [
+    "Quoted rate from the supplier quotation",
+    1
+  ],
+  [
+    "e.g. Hotel near site, 2 rooms x 5 nights",
+    1
+  ],
+  [
+    "Vendor",
+    1
+  ],
+  [
+    "This work package is empty — add the activities and the travel or accommodation cost they need.",
+    1
+  ],
+  [
+    "Create a work package such as “Site Installation”, then add its activities and the travel and accommodation cost that go with them.",
+    1
+  ],
+  [
+    "Engineering + site expense",
+    1
+  ],
+  [
+    "Engineering vs Installation &amp; Service cost",
+    1
+  ],
+  [
+    "Same engineer, different standard rate",
+    1
+  ],
+  [
+    "Effort cost",
+    1
+  ],
+  [
+    "of which supplier",
+    1
+  ],
+  [
+    "Expense",
+    1
+  ],
+  [
+    "Engineering Cost Summary",
+    1
+  ],
+  [
+    "Site expense by type",
+    1
+  ],
+  [
+    "Reported under transportation, accommodation and other cost",
+    1
+  ],
+  [
+    "No site expense",
+    1
+  ],
+  [
+    "Add travel, accommodation or per diem to an on-site work package.",
+    1
+  ],
+  [
+    "Outsource service, transportation, accommodation and other project cost",
+    1
+  ],
+  [
+    "Add outsource service, transportation or accommodation cost lines.",
+    1
+  ],
+  [
+    "Applied to the whole cost base",
+    1
+  ],
+  [
+    "Engineering judgement for unknown scope, approved by the Engineering Manager",
+    1
+  ],
+  [
+    "Contingency cost",
+    1
+  ],
+  [
+    "What the contingency is applied to",
+    1
+  ],
+  [
+    "Other cost",
+    1
+  ],
+  [
+    "One estimate divided across departments — each section has its own owner, due date and status",
+    1
+  ],
+  [
+    "Remind owners",
+    1
+  ],
+  [
+    "— none —",
+    1
+  ],
+  [
+    "Add a comment…",
+    1
+  ],
+  [
+    "What the manager sees",
+    1
+  ],
+  [
+    "Overall",
+    1
+  ],
+  [
+    "Section owners",
+    1
+  ],
+  [
+    "Run automatically on save and before every review submission",
+    1
+  ],
+  [
+    "Checks passed",
+    1
+  ],
+  [
+    "Warnings",
+    1
+  ],
+  [
+    "Review before approval",
+    1
+  ],
+  [
+    "Critical errors",
+    1
+  ],
+  [
+    "Must be resolved",
+    1
+  ],
+  [
+    "Go to cost items",
+    1
+  ],
+  [
+    "Rule reference",
+    1
+  ],
+  [
+    "Total Cost = Qty × Unit Cost",
+    1
+  ],
+  [
+    "Calculated centrally; the field is read-only in the table.",
+    1
+  ],
+  [
+    "Man-hour = Engineers × Man-days × Hours/Day",
+    1
+  ],
+  [
+    "Daily rate comes from the Engineering Rate Master.",
+    1
+  ],
+  [
+    "Category Total = Σ cost items",
+    1
+  ],
+  [
+    "Subtotals are derived, never typed.",
+    1
+  ],
+  [
+    "Estimate Total",
+    1
+  ],
+  [
+    "Material + Engineering + Outsource + Installation & Service + Transportation + Accommodation + Other + Contingency.",
+    1
+  ],
+  [
+    "An approved revision is locked. Editing it requires a new revision.",
+    1
+  ],
+  [
+    "Change Description",
+    1
+  ],
+  [
+    "Created By",
+    1
+  ],
+  [
+    "Created Date",
+    1
+  ],
+  [
+    "Reviewed By",
+    1
+  ],
+  [
+    "Green added · red removed · orange changed",
+    1
+  ],
+  [
+    "added",
+    1
+  ],
+  [
+    "removed",
+    1
+  ],
+  [
+    "changed",
+    1
+  ],
+  [
+    "unchanged",
+    1
+  ],
+  [
+    "% versus",
+    1
+  ],
+  [
+    "Material cost difference",
+    1
+  ],
+  [
+    "Engineering / outsource",
+    1
+  ],
+  [
+    "No change in this revision",
+    1
+  ],
+  [
+    "Line by line comparison",
+    1
+  ],
+  [
+    "Cost Item",
+    1
+  ],
+  [
+    "Qty Diff.",
+    1
+  ],
+  [
+    "Cost Diff.",
+    1
+  ],
+  [
+    "Change Type",
+    1
+  ],
+  [
+    "Approval covers technical scope, cost accuracy, engineering effort and completeness — no margin approval exists here",
+    1
+  ],
+  [
+    "Cost category breakdown",
+    1
+  ],
+  [
+    "Engineering man-hour",
+    1
+  ],
+  [
+    "By department, and by where the work is done",
+    1
+  ],
+  [
+    "expense",
+    1
+  ],
+  [
+    "Engineering Manager",
+    1
+  ],
+  [
+    "Scope, cost accuracy, engineering effort, completeness…",
+    1
+  ],
+  [
+    "Critical validation errors block approval.",
+    1
+  ],
+  [
+    "Warnings for the reviewer",
+    1
+  ],
+  [
+    "No warning — every price has a reference and is current.",
+    1
+  ],
+  [
+    "Top cost supplier",
+    1
+  ],
+  [
+    "Discipline / cost category",
+    1
+  ],
+  [
+    "Module name",
+    1
+  ],
+  [
+    "Main Control Box",
+    1
+  ],
+  [
+    "Common modules in",
+    1
+  ],
+  [
+    "The module is created empty — add its items straight in the sheet, from the price library, or with the detailed form. Its item codes run as",
+    1
+  ],
+  [
+    "and so on.",
+    1
+  ],
+  [
+    "Attach supplier quotation",
+    1
+  ],
+  [
+    "Man-hour bought from a supplier must carry the quotation its rate came from",
+    1
+  ],
+  [
+    "quotation(s) · upload a new one from the Supplier Quotation screen",
+    1
+  ],
+  [
+    "Search quotation no., supplier or project…",
+    1
+  ],
+  [
+    "The quotation number, supplier and quotation date are written onto the man-hour line, so the quoted rate can always be traced back to its document.",
+    1
+  ],
+  [
+    "Installation & service work uses the higher standard rate",
+    1
+  ],
+  [
+    "Package name",
+    1
+  ],
+  [
+    "e.g. Site Installation",
+    1
+  ],
+  [
+    "Site Installation",
+    1
+  ],
+  [
+    "Common",
+    1
+  ],
+  [
+    "packages",
+    1
+  ],
+  [
+    "Add Cost Item",
+    1
+  ],
+  [
+    "Search the price library first — typing a price by hand should be the last resort",
+    1
+  ],
+  [
+    "Save &amp; Add Another",
+    1
+  ],
+  [
+    "Use Last Price",
+    1
+  ],
+  [
+    "Pick an existing module or type a new name",
+    1
+  ],
+  [
+    "HW-PLC-001",
+    1
+  ],
+  [
+    "PLC CPU Unit with EtherNet/IP",
+    1
+  ],
+  [
+    "Unit Cost (THB)",
+    1
+  ],
+  [
+    "Calculated by the system",
+    1
+  ],
+  [
+    "Reference Number",
+    1
+  ],
+  [
+    "SQ-2608-0012",
+    1
+  ],
+  [
+    "THB =",
+    1
+  ],
+  [
+    "Create new revision",
+    1
+  ],
+  [
+    "Create",
+    1
+  ],
+  [
+    "Cost items, engineering man-hour, assignment and attachments are copied into the new revision.",
+    1
+  ],
+  [
+    "New revision",
+    1
+  ],
+  [
+    "Revision Reason",
+    1
+  ],
+  [
+    "What changed?",
+    1
+  ],
+  [
+    "Written into the revision history and the audit log",
+    1
+  ],
+  [
+    "e.g. Added safety fence with interlock door after the safety review.",
+    1
+  ],
+  [
+    "Import Existing Estimate",
+    1
+  ],
+  [
+    "Upload the current Excel estimate, map the columns and review the validation before importing",
+    1
+  ],
+  [
+    "1 row has a missing unit cost and 1 row has zero quantity — both are flagged, not silently imported.",
+    1
+  ],
+  [
+    "Import 5 rows",
+    1
+  ],
+  [
+    "Estimate_Cost_ASTEMO_R01.xlsx",
+    1
+  ],
+  [
+    "Sheet &quot;Summary cost&quot; · 5 data rows detected",
+    1
+  ],
+  [
+    "Column mapping",
+    1
+  ],
+  [
+    "— not mapped —",
+    1
+  ],
+  [
+    "Validation preview",
+    1
+  ],
+  [
+    "Excel row",
+    1
+  ],
+  [
+    "Copy From Previous Estimate",
+    1
+  ],
+  [
+    "Copied prices keep their original reference and are marked “Reference From Previous Estimate”",
+    1
+  ],
+  [
+    "section(s)",
+    1
+  ],
+  [
+    "Previous project",
+    1
+  ],
+  [
+    "FTS Traceability 2026 — EST-2601-0004 R02",
+    1
+  ],
+  [
+    "AAPICO Press Line — EST-2604-0022 R01",
+    1
+  ],
+  [
+    "TTS Robot Cell — EST-2605-0031 R00",
+    1
+  ],
+  [
+    "Meiji OEE Phase 1 — EST-2512-0007 R03",
+    1
+  ],
+  [
+    "Sections to copy",
+    1
+  ],
+  [
+    "Prices older than 180 days will be flagged red in the estimate so they are confirmed before approval.",
+    1
+  ]
+]

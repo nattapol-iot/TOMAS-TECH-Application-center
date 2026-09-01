@@ -1,0 +1,69 @@
+
+> @tomas-tech/iot-team-center-api@0.1.0 test
+> node --import tsx --test tests/*.test.ts
+
+✔ audit JSON keeps object/array payloads and envelopes scalar values for SQL ISJSON (0.8393ms)
+✔ Team Test codes match the existing HMAC-SHA256 base64url contract (5.3564ms)
+✔ private LAN detection accepts only RFC1918 IPv4 (5.7169ms)
+✔ Windows business time zone ids are normalized for Node.js (221.4004ms)
+✔ TeamTest fails closed outside staging (0.683ms)
+✔ Microsoft Graph email fails closed when confidential settings are incomplete (1.2202ms)
+✔ drawing workflow uses three named project participants (3.6917ms)
+✔ drawing cannot be submitted without both project approvers (0.7429ms)
+✔ neither author self-approval nor combined leader-manager is permitted (0.1999ms)
+✔ disabled assignment email reports recipients without making a network request (7.0119ms)
+✔ Microsoft Graph assignment email deduplicates recipients, escapes HTML and reuses the access token (171.0446ms)
+✔ Microsoft Graph failure does not throw after the assignment has been committed (0.9784ms)
+✔ query helpers preserve the ASP.NET validation and clamping rules (1.6875ms)
+✔ write helpers validate text, integer, dates and SQL row versions (4.1895ms)
+✔ identifier and boolean query helpers reject ambiguous values (0.3484ms)
+✔ sales catalog accepts bounded company SharePoint data (2.5068ms)
+✔ sales catalog rejects external links and duplicate source rows (1.2349ms)
+✔ template pagination totals use the same search filter as the rows (404.2501ms)
+✔ template JSON identifiers accept frontend numbers and reject invalid values before SQL (30.3089ms)
+✔ all report types retain only reusable definitions and strip source/result/evidence data (2.942ms)
+✔ allowlist does not copy inherited fields or unknown report types (1.1214ms)
+✔ template metadata accepts empty descriptions and 200-character names (0.2951ms)
+✔ creator/master ownership never substitutes for report.write permission (0.1759ms)
+✔ resource planning requires server-side read permission (406.849ms)
+✔ source planning requires schedule.plan AND source write permission before database mutation (16.9458ms)
+✔ capacity and effort inputs reject invalid amounts, dates and arbitrary table names (10.5184ms)
+✔ task duration skips weekends and company holidays while effort stays independent (13.8588ms)
+✔ workload distinguishes zero capacity, missing capacity, and over capacity (0.9203ms)
+✔ invalid fractional duration, negative effort and malformed date are rejected (0.8497ms)
+✔ replacement compares actual before and after rather than dropping the old plan (1.2629ms)
+{"level":30,"time":1788634873198,"pid":30936,"hostname":"BOY-TMT","reqId":"req-1","req":{"method":"GET","url":"/health/live/","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+✔ frontend collection URLs select the same route with or without a trailing slash (348.2555ms)
+{"level":30,"time":1788634873204,"pid":30936,"hostname":"BOY-TMT","reqId":"req-1","res":{"statusCode":200},"responseTime":4.820600000000013,"msg":"request completed"}
+✔ sales company validation generates bounded unique codes and requires contact identity (2.0951ms)
+✔ sales contact validation handles optional fields and rejects malformed values (0.9014ms)
+✔ permission fallback accepts only explicit permission-denied, never auth or database failures (0.4838ms)
+✔ HTTP create endpoints reject read-only users before any write or actor lookup (319.8939ms)
+✔ Sales intake.write can reach validation without master.write; malformed site and contact writes stop before transaction (6.9396ms)
+✔ placement rejects non-finite, off-page, zero-sized and unknown pages (4.5163ms)
+✔ display coordinates map to PDF CropBox for every right-angle rotation (0.2928ms)
+✔ PDF validation rejects changed source bytes and unsupported formats (16.0558ms)
+✔ the canonical payload is order-independent and drops absent fields (1.3285ms)
+✔ the chain links each event to the one before it (0.545ms)
+✔ a verification code is readable off paper and validates its own shape (2.3789ms)
+✔ document classes, prefixes and revision labels are validated, not assumed (0.9922ms)
+✔ signing assurance reports how presence was established, and refuses stale credentials (0.6002ms)
+✔ sales intake readiness blocks missing customer-critical information (2.7952ms)
+✔ site visit workflow enforces both state and permission (1.0914ms)
+✔ skill match is normalized and reports missing skills (2.9973ms)
+✔ report source semantics separate delivery reports and pre-sales POC (1.4225ms)
+✔ customer acknowledgment requires identity, explicit consent and the correct evidence mode (1.3218ms)
+✔ report JSON is bounded and optional reviewer does not invent report facts (5.199ms)
+✔ snapshot evidence hash changes when signed content changes (0.5058ms)
+✔ submission requires common facts and type-specific evidence while draft parsing stays permissive (1.9863ms)
+✔ complete row never hides partially completed UAT/Inspection/POC rows (0.8316ms)
+✔ structured results accept only recorded PASS, FAIL or PARTIAL and every row must be complete (0.6115ms)
+✔ optional repeat sections ignore fully blank placeholders but reject incomplete evidence or activities (0.534ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2962.6727

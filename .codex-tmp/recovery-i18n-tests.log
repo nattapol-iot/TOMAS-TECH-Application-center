@@ -1,0 +1,18 @@
+✔ static screen copy follows TH → JP → EN without adding DOM wrappers (4.8079ms)
+✔ shared labels and search hints change language while entered data stays intact (5.3437ms)
+✔ translated filters retain canonical option values used by APIs (1.6699ms)
+✔ dictionary has both translations and unknown business content is preserved (1.6522ms)
+✔ status badges keep their semantic colour in every language (0.7418ms)
+✔ Thai-authored screens can provide English and Japanese without changing canonical API values (0.1124ms)
+✔ chart labels use the selected language (1.5002ms)
+✔ every literal tab label has complete TH, EN and JP behavior (477.1391ms)
+✔ the Thai-authored resource workspace has no bare Thai JSX copy (5.5273ms)
+✔ the production login has complete TH and JP copy instead of a mixed-language footer (0.9487ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1165.5239

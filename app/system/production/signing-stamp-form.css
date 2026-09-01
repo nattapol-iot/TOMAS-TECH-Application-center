@@ -1,0 +1,84 @@
+.signing-stamp-form {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.signing-stamp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.signing-stamp-form-group {
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.signing-stamp-form-group legend {
+  max-width: 100%;
+  padding: 0 6px;
+  color: var(--ink-soft);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.signing-stamp-form .field small {
+  line-height: 1.5;
+}
+
+.signing-stamp-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.signing-stamp-scope .btn {
+  justify-content: flex-start;
+  min-height: 40px;
+  height: auto;
+  min-width: 0;
+  padding: 9px 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.signing-stamp-scope .btn.ghost {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.signing-stamp-scope .btn.ghost:hover:not(:disabled) {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+
+.signing-stamp-form-note {
+  margin: 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--line);
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .signing-stamp-form-grid,
+  .signing-stamp-scope {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signing-stamp-form-grid > .field.span-2 {
+    grid-column: auto;
+  }
+
+  .signing-stamp-form-group {
+    padding: 12px;
+  }
+}

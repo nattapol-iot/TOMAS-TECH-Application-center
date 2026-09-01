@@ -1,0 +1,499 @@
+{
+  "occurrences": 100,
+  "unique": 82,
+  "missing": 0,
+  "rows": [
+    {
+      "file": "app/system/production/SiteVisitScreens.tsx",
+      "line": 1962,
+      "value": "1 · เตรียมเข้าหน้างาน",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/SiteVisitScreens.tsx",
+      "line": 1963,
+      "value": "2 · บันทึกสำรวจ",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/SiteVisitScreens.tsx",
+      "line": 1964,
+      "value": "3 · สรุปและส่งตรวจ",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/InquiryScreens.tsx",
+      "line": 335,
+      "value": "เข้าหน้างาน / ผลสำรวจ",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/SiteVisitScreens.tsx",
+      "line": 264,
+      "value": "คำขอเข้าหน้างาน / Visit preparation",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/SiteVisitScreens.tsx",
+      "line": 1498,
+      "value": "คำขอ / ตรวจข้อมูล",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ReportScreens.tsx",
+      "line": 121,
+      "value": "รายงานทั้งหมด",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 401,
+      "value": "วันนี้",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 402,
+      "value": "สัปดาห์นี้",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 403,
+      "value": "เสร็จแล้ว",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 1105,
+      "value": "Access",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/InquiryScreens.tsx",
+      "line": 335,
+      "value": "Activity",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Assignment",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Resource.tsx",
+      "line": 92,
+      "value": "Assignment timeline",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/InquiryScreens.tsx",
+      "line": 335,
+      "value": "Attachments",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 1106,
+      "value": "Audit",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 323,
+      "value": "Brand",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 1104,
+      "value": "Comments",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Compare Revision",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ReportScreens.tsx",
+      "line": 285,
+      "value": "Content",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 321,
+      "value": "Cost Category",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Cost Items",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 322,
+      "value": "Cost Subcategory",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 316,
+      "value": "Customer",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 957,
+      "value": "Customers",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ReportScreens.tsx",
+      "line": 285,
+      "value": "Customer signing",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 328,
+      "value": "Document Category",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 664,
+      "value": "Document Storage",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 318,
+      "value": "Employee",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 959,
+      "value": "Employees",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 326,
+      "value": "Engineering Activity",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Engineering Man-hour",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 327,
+      "value": "Engineering Rate",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 961,
+      "value": "Engineering rates",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Engineering Review",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 319,
+      "value": "Engineer Level",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/InquiryScreens.tsx",
+      "line": 335,
+      "value": "Estimate Cost",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 665,
+      "value": "General",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ReportScreens.tsx",
+      "line": 285,
+      "value": "History",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 960,
+      "value": "Inventory items",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/AdminAnalyticsScreens.tsx",
+      "line": 435,
+      "value": "Inventory Value",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 324,
+      "value": "Item Master",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 254,
+      "value": "Knowledge Admin",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Knowledge.tsx",
+      "line": 373,
+      "value": "Knowledge Base",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/PerformanceScreen.tsx",
+      "line": 286,
+      "value": "KPI framework",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/InquiryScreens.tsx",
+      "line": 335,
+      "value": "Meeting Log",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 253,
+      "value": "My Acknowledgements",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/PerformanceScreen.tsx",
+      "line": 284,
+      "value": "My KPI",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/PlanningPricingScreens.tsx",
+      "line": 729,
+      "value": "My tasks",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/PlanningPricingScreens.tsx",
+      "line": 729,
+      "value": "My updates",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 662,
+      "value": "Notifications",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 663,
+      "value": "Numbering Standard",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Other Project Cost",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 1101,
+      "value": "Overview",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/AdminAnalyticsScreens.tsx",
+      "line": 436,
+      "value": "PR Cycle Time",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 250,
+      "value": "Presentation Library",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/AdminAnalyticsScreens.tsx",
+      "line": 437,
+      "value": "Project Cost",
+      "translated": true
+    },
+    {
+      "file": "app/system/ProductionApp.tsx",
+      "line": 476,
+      "value": "Project schedule tasks",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 329,
+      "value": "Project Standard",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 320,
+      "value": "Project Type",
+      "translated": true
+    },
+    {
+      "file": "app/system/ProductionApp.tsx",
+      "line": 480,
+      "value": "Punchlist · Issue ลูกค้า",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 1103,
+      "value": "Related records",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/InquiryScreens.tsx",
+      "line": 335,
+      "value": "Requirement",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Revision History",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 1102,
+      "value": "Revisions",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 252,
+      "value": "Shared & Project",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 249,
+      "value": "Standards Register",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Summary",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 317,
+      "value": "Supplier",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/AdminAnalyticsScreens.tsx",
+      "line": 436,
+      "value": "Supplier Performance",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 958,
+      "value": "Suppliers",
+      "translated": true
+    },
+    {
+      "file": "app/system/ProductionApp.tsx",
+      "line": 476,
+      "value": "Task inbox · ตอบรับงาน",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ResourcePlanningScreen.tsx",
+      "line": 574,
+      "value": "Tasks · อนุมัติและตอบรับ",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ReportScreens.tsx",
+      "line": 285,
+      "value": "Team & approvals",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/PerformanceScreen.tsx",
+      "line": 285,
+      "value": "Team progress",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/KnowledgeScreens.tsx",
+      "line": 251,
+      "value": "Technical Knowledge",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/ReportScreens.tsx",
+      "line": 121,
+      "value": "Template ของทีม",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 325,
+      "value": "Unit",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/CoreScreens.tsx",
+      "line": 962,
+      "value": "User accounts",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Admin.tsx",
+      "line": 661,
+      "value": "Users & Roles",
+      "translated": true
+    },
+    {
+      "file": "app/system/production/EstimateScreens.tsx",
+      "line": 586,
+      "value": "Validation",
+      "translated": true
+    },
+    {
+      "file": "app/system/screens/Resource.tsx",
+      "line": 93,
+      "value": "Workload",
+      "translated": true
+    }
+  ]
+}

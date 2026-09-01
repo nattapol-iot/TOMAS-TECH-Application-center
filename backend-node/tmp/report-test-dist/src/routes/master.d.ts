@@ -1,0 +1,26 @@
+import type { FastifyInstance } from "fastify";
+import type { Database } from "../db.js";
+import type { CurrentUserService } from "../users.js";
+type CustomerInput = {
+    contactTitleTh: string;
+    contactTitleEn: string;
+    contactTitleJa: string;
+    code: string;
+    name: string;
+    nameTh: string;
+    nameEn: string;
+    nameJa: string;
+    contact: string;
+    contactNameTh: string;
+    contactNameEn: string;
+    contactNameJa: string;
+    email: string;
+    phone: string;
+    industry: string;
+    site: string;
+    department: string;
+    position: string;
+};
+export declare function customerInput(body: Record<string, unknown>): CustomerInput;
+export declare function registerMasterRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void;
+export {};

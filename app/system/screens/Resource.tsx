@@ -1,5 +1,6 @@
 "use client";
 
+import { LocalizedText } from "../LocalizedText";
 import { useState } from "react";
 import { DEPARTMENTS, USERS, WORK_ITEMS, CAPACITY_PER_WEEK, type WorkItem } from "../data";
 import {
@@ -55,10 +56,10 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
         actions={
           <>
             <button className="btn default" type="button" onClick={() => notify("Resource plan exported to Excel")}>
-              <Icon name="download" />Export plan
+              <Icon name="download" /><LocalizedText text={"Export plan"} />
             </button>
             <button className="btn primary" type="button" onClick={() => go({ name: "inquiries" })}>
-              <Icon name="inbox" />Assign an inquiry
+              <Icon name="inbox" /><LocalizedText text={"Assign an inquiry"} />
             </button>
           </>
         }
@@ -78,9 +79,9 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
         <Select label="Horizon" value={horizon} onChange={setHorizon} options={Object.keys(HORIZONS)} />
         <span className="spacer" />
         <span className="row tight">
-          <Badge tone="blue">Inquiry</Badge>
-          <Badge tone="violet">Estimate</Badge>
-          <Badge tone="green">Project</Badge>
+          <Badge tone="blue">{"Inquiry"}</Badge>
+          <Badge tone="violet">{"Estimate"}</Badge>
+          <Badge tone="green">{"Project"}</Badge>
         </span>
       </Toolbar>
 
@@ -99,7 +100,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
             <div className="gantt-wrap">
               <div className="gantt" style={{ ["--weeks" as string]: weeks.length }}>
                 <div className="gantt-head">
-                  <div className="gantt-side">Engineer</div>
+                  <div className="gantt-side"><LocalizedText text={"Engineer"} /></div>
                   <div className="gantt-weeks">
                     {weeks.map((week) => (
                       <span key={week.label} className={week.isCurrent ? "current" : undefined}>
@@ -116,7 +117,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                       <span className="avatar sm">{load.user.initials}</span>
                       <div>
                         <strong>{load.user.name}</strong>
-                        <small>{load.user.department} · {load.items.length} item(s) · {Math.round(load.committedManDays)} MD</small>
+                        <small>{load.user.department} <LocalizedText text={"·"} /> {load.items.length} item(s) · {Math.round(load.committedManDays)} <LocalizedText text={"MD"} /></small>
                       </div>
                       <Badge tone={loadTone(load.peakUtilisation)}>{Math.round(load.peakUtilisation)}%</Badge>
                     </div>
@@ -140,7 +141,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                               }}
                             >
                               <i style={{ width: `${item.progress}%` }} />
-                              <span>{item.reference} · {item.title}</span>
+                              <span>{item.reference} <LocalizedText text={"·"} /> {item.title}</span>
                             </button>
                           </div>
                         );
@@ -163,7 +164,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
               <table className="heat">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: 220 }}>Engineer</th>
+                    <th style={{ minWidth: 220 }}><LocalizedText text={"Engineer"} /></th>
                     {weeks.map((week) => <th key={week.label} className={week.isCurrent ? "num current" : "num"}>{week.label}</th>)}
                   </tr>
                 </thead>
@@ -175,7 +176,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                           <span className="avatar sm">{load.user.initials}</span>
                           <span>
                             <strong>{load.user.name}</strong>
-                            <small className="muted"> · {load.user.department}</small>
+                            <small className="muted"> <LocalizedText text={"·"} /> {load.user.department}</small>
                           </span>
                         </div>
                       </td>
@@ -201,10 +202,10 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                 <table>
                   <thead>
                     <tr>
-                      <th>Engineer</th><th>Department</th><th>Level</th>
-                      <th className="num">Open items</th><th className="num">Committed</th>
+                      <th><LocalizedText text={"Engineer"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th>
+                      <th className="num"><LocalizedText text={"Open items"} /></th><th className="num"><LocalizedText text={"Committed"} /></th>
                       <th style={{ minWidth: 150 }}>Average load</th>
-                      <th className="num">Peak</th><th>Next due</th><th className="num">Overdue</th>
+                      <th className="num">Peak</th><th>Next due</th><th className="num"><LocalizedText text={"Overdue"} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -216,7 +217,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                         <td>{load.user.department}</td>
                         <td className="muted">{load.user.level}</td>
                         <td className="num">{load.openItems}</td>
-                        <td className="num">{Math.round(load.committedManDays)} MD</td>
+                        <td className="num">{Math.round(load.committedManDays)} <LocalizedText text={"MD"} /></td>
                         <td>
                           <div className="progress-cell">
                             <Progress value={Math.min(load.averageUtilisation, 100)} tone={loadTone(load.averageUtilisation)} />
@@ -226,7 +227,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                         <td className="num"><Badge tone={loadTone(load.peakUtilisation)}>{Math.round(load.peakUtilisation)}%</Badge></td>
                         <td>
                           {load.nextDue
-                            ? <span className={toDate(load.nextDue.end) < TODAY ? "red-text" : undefined}>{formatDate(load.nextDue.end)} · {load.nextDue.reference}</span>
+                            ? <span className={toDate(load.nextDue.end) < TODAY ? "red-text" : undefined}>{formatDate(load.nextDue.end)} <LocalizedText text={"·"} /> {load.nextDue.reference}</span>
                             : <span className="muted">—</span>}
                         </td>
                         <td className="num">{load.overdueItems ? <span className="red-text">{load.overdueItems}</span> : "—"}</td>

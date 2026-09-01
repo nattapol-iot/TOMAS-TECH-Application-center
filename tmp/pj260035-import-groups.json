@@ -1,0 +1,827 @@
+[
+  {
+    "category": "03 — Electrical",
+    "name": "Control panel box",
+    "items": [
+      [
+        "WCB-12",
+        "Control panel box 550 x 700 x 250 mm",
+        1.0,
+        5000,
+        "TWCK",
+        "TWCK",
+        "003_COST_EE",
+        10,
+        ""
+      ],
+      [
+        "MES-G8RJ-ST",
+        "ECONOMY INDUSTRIAL SWITCH 8 port",
+        2.0,
+        4097.73,
+        "MISUMI",
+        "MISUMI",
+        "003_COST_EE",
+        11,
+        ""
+      ],
+      [
+        "EW32AAG-2P015B",
+        "CIRCITBRAEAKER 15A",
+        1.0,
+        2500,
+        "FUJI",
+        "MISUMI",
+        "003_COST_EE",
+        12,
+        ""
+      ],
+      [
+        "BW9BTAA-S2",
+        "CIRCIT BRAEAKER ACCESSORIES",
+        1.0,
+        133.33,
+        "FUJI",
+        "MISUMI",
+        "003_COST_EE",
+        13,
+        ""
+      ],
+      [
+        "CP30FM-2P003",
+        "CIRCIT BRAEAKER 3A",
+        2.0,
+        1500,
+        "FUJI",
+        "MISUMI",
+        "003_COST_EE",
+        14,
+        ""
+      ],
+      [
+        "CP30FM-2P005",
+        "CIRCIT BRAEAKER 5A",
+        2.0,
+        1500,
+        "FUJI",
+        "MISUMI",
+        "003_COST_EE",
+        15,
+        ""
+      ],
+      [
+        "A2T2.5",
+        "Terminal 2.5 sq.mm. 2 layer",
+        40.0,
+        40,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        16,
+        ""
+      ],
+      [
+        "AEP 2T 2.5",
+        "End plate ,A-series Terminal 2.5 sq.mm.",
+        5.0,
+        8,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        17,
+        ""
+      ],
+      [
+        "AEB 35 SC/1",
+        "End bracket ,A-series Terminal 2.5 sq.mm.",
+        20.0,
+        25,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        18,
+        ""
+      ],
+      [
+        "A2T 2.5 PE DL",
+        "PE terminal, PUSH IN, 2.5 mm², Green/yellow",
+        10.0,
+        120,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        19,
+        ""
+      ],
+      [
+        "ZQV 2.5N/10 RD",
+        "Cross-connector (terminal), Plugged, red, 24 A, Number of poles: 10, Pitch in mm (P): 5.10, Insulated: Yes, Width: 48.7 mm",
+        6.0,
+        125,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        20,
+        ""
+      ],
+      [
+        "A2C 2.5",
+        "Terminal 2.5 sq.mm.",
+        10.0,
+        21,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        21,
+        ""
+      ],
+      [
+        "AEP 2C 2.5",
+        "End plate Terminal 2.5 sq.mm.",
+        2.0,
+        12,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        22,
+        ""
+      ],
+      [
+        "A2C 2.5 PE",
+        "PE terminal, PUSH IN, 2.5 mm², Green/yellow",
+        3.0,
+        73,
+        "weidmuller",
+        "Planet",
+        "003_COST_EE",
+        23,
+        ""
+      ],
+      [
+        "29082",
+        "H05V-K PVC single core, 0.5 sq.mm. Green/Yellow",
+        1.0,
+        493,
+        "HELUKABEL",
+        "AutomationCad",
+        "003_COST_EE",
+        24,
+        ""
+      ],
+      [
+        "29093",
+        "H05V-K PVC single core, 0.5 sq.mm. D-Bu",
+        1.0,
+        493,
+        "HELUKABEL",
+        "AutomationCad",
+        "003_COST_EE",
+        25,
+        ""
+      ],
+      [
+        "29146",
+        "H07V-K PVC single core, 2.5 sq.mm. Green/Yellow",
+        1.0,
+        2300,
+        "HELUKABEL",
+        "AutomationCad",
+        "003_COST_EE",
+        26,
+        ""
+      ],
+      [
+        "29147",
+        "H07V-K PVC single core, 2.5 sq.mm. Blue",
+        1.0,
+        2300,
+        "HELUKABEL",
+        "AutomationCad",
+        "003_COST_EE",
+        27,
+        ""
+      ],
+      [
+        "29148",
+        "H07V-K PVC single core, 2.5 sq.mm. Brown",
+        1.0,
+        2300,
+        "HELUKABEL",
+        "AutomationCad",
+        "003_COST_EE",
+        28,
+        ""
+      ],
+      [
+        "R 2.5-6",
+        "RING TERMINAL , 2.5 sq.mm. M6",
+        1.0,
+        300,
+        "T-lug",
+        "AutomationCad",
+        "003_COST_EE",
+        29,
+        ""
+      ],
+      [
+        "Y 1.5-3S",
+        "SPADE TERMINAL (Y TYPE)  , 1.5 sq.mm. M3",
+        1.0,
+        90,
+        "T-lug",
+        "AutomationCad",
+        "003_COST_EE",
+        30,
+        ""
+      ],
+      [
+        "CE0.5-8",
+        "CORD-END SLEEVE",
+        1.0,
+        90,
+        "T-lug",
+        "AutomationCad",
+        "003_COST_EE",
+        31,
+        ""
+      ],
+      [
+        "CE2.5-10",
+        "CORD-END SLEEVE",
+        1.0,
+        100,
+        "T-lug",
+        "AutomationCad",
+        "003_COST_EE",
+        32,
+        ""
+      ],
+      [
+        "WD-4060-8-BANDEX",
+        "WD-4060-8 รางวายดักส์ (W40xH60) BANDEX 2m",
+        3.0,
+        305,
+        "BANDEX",
+        "",
+        "003_COST_EE",
+        33,
+        ""
+      ],
+      [
+        "PJ260035-003-34",
+        "Din rail 1 meter",
+        4.0,
+        65,
+        "",
+        "JW Tech",
+        "003_COST_EE",
+        34,
+        ""
+      ],
+      [
+        "S8VK-C12024",
+        "Switching Power Supplies 24VDC 5A",
+        1.0,
+        3539,
+        "Omron",
+        "Misumi",
+        "003_COST_EE",
+        35,
+        ""
+      ],
+      [
+        "AC30-16A",
+        "ปลั๊ก3ตา AC30 Din Rail 3 Plug 10to16A 250V Multifunction Modular Socket universal power electric switch multiplle",
+        1.0,
+        60,
+        "",
+        "SPE",
+        "003_COST_EE",
+        36,
+        ""
+      ],
+      [
+        "YW1P-1UQM3W",
+        "YW1P-1UQM3W IDEC ไพล็อทแลมป์ หัวเรียบ LAMP LED 220V สีขาว",
+        1.0,
+        100,
+        "IDEC",
+        "JW Tech",
+        "003_COST_EE",
+        37,
+        ""
+      ],
+      [
+        "PJ260035-003-38",
+        "Name plate lamp พื้นขาว ตัวอักษรสีดำ 22mm. \"POWER\"",
+        1.0,
+        50,
+        "TWCK",
+        "TWCK",
+        "003_COST_EE",
+        38,
+        ""
+      ],
+      [
+        "WB922H7PI-D2L-G",
+        "Fan 3.5'' 24VDC",
+        1.0,
+        700,
+        "AutomationCad",
+        "Windstorm",
+        "003_COST_EE",
+        39,
+        ""
+      ],
+      [
+        "G-92",
+        "ตะแกรง G-92",
+        1.0,
+        50,
+        "AutomationCad",
+        "Windstorm",
+        "003_COST_EE",
+        40,
+        ""
+      ],
+      [
+        "WFP-802",
+        "Filter",
+        2.0,
+        300,
+        "AutomationCad",
+        "Windstorm",
+        "003_COST_EE",
+        41,
+        ""
+      ],
+      [
+        "PJ260035-003-47",
+        "Sefety cost",
+        1.0,
+        10000,
+        "-",
+        "-",
+        "003_COST_EE",
+        47,
+        ""
+      ]
+    ]
+  },
+  {
+    "category": "03 — Electrical",
+    "name": "Junction box and Tower light (2 sets)",
+    "items": [
+      [
+        "TJ-20P-M",
+        "(Plastic Terminal Block Box IP66) 20Pole 10A Size : 223x100x75 mm.",
+        2.0,
+        1084.6,
+        "TIBOX",
+        "Rubicon Engineering",
+        "003_COST_EE",
+        123,
+        ""
+      ],
+      [
+        "PG-16",
+        "CABLE GLAND PG-16 สีดำ",
+        10.0,
+        8,
+        "",
+        "sirichaielectric",
+        "003_COST_EE",
+        124,
+        ""
+      ],
+      [
+        "PG-25",
+        "CABLE GLAND PG-25 สีดำ",
+        10.0,
+        22,
+        "",
+        "sirichaielectric",
+        "003_COST_EE",
+        125,
+        ""
+      ],
+      [
+        "PJ260035-003-126",
+        "JZ500 10C0.5",
+        40.0,
+        100,
+        "Helukabel",
+        "Activo",
+        "003_COST_EE",
+        126,
+        ""
+      ],
+      [
+        "PJ260035-003-127",
+        "Sensor LR500",
+        2.0,
+        10000,
+        "KEYENCE",
+        "KEYENCE",
+        "003_COST_EE",
+        127,
+        ""
+      ],
+      [
+        "LR4-202LJNW-GY",
+        "Tower Lamp 2 layer green,red",
+        2.0,
+        2797.15,
+        "Patlite",
+        "Misumi",
+        "003_COST_EE",
+        128,
+        ""
+      ],
+      [
+        "PJ260035-003-172",
+        "Sefety cost",
+        1.0,
+        10000,
+        "-",
+        "-",
+        "003_COST_EE",
+        172,
+        ""
+      ]
+    ]
+  },
+  {
+    "category": "04 — Mechanical",
+    "name": "Support SR-X300 and Sensor (2 sets)",
+    "items": [
+      [
+        "PSSAGN12-300-F7-M8",
+        "Linear Shafts One End Threaded with Undercut 12x300 mm",
+        2.0,
+        880.74,
+        "MISUMI",
+        "MISUMI",
+        "004_COST_ME",
+        10,
+        " https://th.misumi-ec.com/en/vona2/detail/110302570770?HissuCode=PSSAGN12-300-F7-M8 "
+      ],
+      [
+        "E-ATHWCBL12",
+        "Shaft Supports 12mm",
+        2.0,
+        437.01,
+        "MISUMI",
+        "MISUMI",
+        "004_COST_ME",
+        11,
+        " https://th.misumi-ec.com/en/vona2/detail/110310687869?HissuCode=E-ATHWCBL12 "
+      ],
+      [
+        "PSSFG12-300",
+        "Shaft SUS304 12x300 mm",
+        8.0,
+        597.24,
+        "MISUMI",
+        "MISUMI",
+        "004_COST_ME",
+        12,
+        " https://th.misumi-ec.com/en/vona2/detail/110302634310?HissuCode=PSSFG12-300 "
+      ],
+      [
+        "ALKC12",
+        "Strut Clamps equal Dia.12 mm",
+        4.0,
+        305.59,
+        "MISUMI",
+        "MISUMI",
+        "004_COST_ME",
+        13,
+        " https://th.misumi-ec.com/en/vona2/detail/110300221320?HissuCode=ALKC12 "
+      ],
+      [
+        "KLSR12",
+        "Strut Clamps equal Dia.12 mm (Rotation)",
+        2.0,
+        823.32,
+        "MISUMI",
+        "MISUMI",
+        "004_COST_ME",
+        14,
+        " https://th.misumi-ec.com/en/vona2/detail/110300223240?HissuCode=KLSR12 "
+      ],
+      [
+        "MGNBS80",
+        "Magnetic Bases",
+        2.0,
+        2158.15,
+        "MISUMI",
+        "MISUMI",
+        "004_COST_ME",
+        15,
+        " https://th.misumi-ec.com/en/vona2/detail/110300201540?HissuCode=MGNBS80 "
+      ],
+      [
+        "PJ260035-004-57",
+        "Sefety cost",
+        2.0,
+        10000,
+        "-",
+        "-",
+        "004_COST_ME",
+        57,
+        ""
+      ]
+    ]
+  },
+  {
+    "category": "01 — Hardware",
+    "name": "PC for operation",
+    "items": [
+      [
+        "T360",
+        "Server Dell Tower egde T360 + Window",
+        1.0,
+        120000,
+        "Dell",
+        "2BShop",
+        "005_COST_Sev.",
+        10,
+        ""
+      ],
+      [
+        "SRV1KI",
+        "APC Easy UPS SRV 1000VA/800W 230V",
+        1.0,
+        9490,
+        "APC",
+        "2BShop",
+        "005_COST_Sev.",
+        11,
+        ""
+      ],
+      [
+        "E200Qbi",
+        "Monitor 19.5'' ACER E200Qbi (TN, VGA, HDMI) 75Hz",
+        1.0,
+        2500,
+        "ACER",
+        "Advice",
+        "005_COST_Sev.",
+        12,
+        ""
+      ],
+      [
+        "MK220",
+        "2IN1 WIRELESS LOGITECH MK220 BLACK",
+        1.0,
+        680,
+        "Logitech",
+        "Advice",
+        "005_COST_Sev.",
+        13,
+        ""
+      ],
+      [
+        "PJ260035-005-58",
+        "Accessory",
+        1.0,
+        10000,
+        "",
+        "",
+        "005_COST_Sev.",
+        58,
+        ""
+      ],
+      [
+        "PJ260035-005-59",
+        "Sefety cost",
+        1.0,
+        10000,
+        "-",
+        "-",
+        "005_COST_Sev.",
+        59,
+        ""
+      ]
+    ]
+  },
+  {
+    "category": "06 — Engineering",
+    "name": "Electrical labor",
+    "items": [
+      [
+        "PJ260035-SUM-19",
+        "Drawing design",
+        5.0,
+        3500,
+        "",
+        "",
+        "001_Summary cost",
+        19,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-20",
+        "Assembly",
+        3.0,
+        3500,
+        "",
+        "",
+        "001_Summary cost",
+        20,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-21",
+        "Wiring",
+        2.0,
+        5000,
+        "",
+        "",
+        "001_Summary cost",
+        21,
+        "Original unit: Day"
+      ]
+    ]
+  },
+  {
+    "category": "07 — Outsource",
+    "name": "Electrical installation - LKT",
+    "items": [
+      [
+        "PJ260035-SUM-22",
+        "Installation",
+        2.0,
+        10000,
+        "LKT",
+        "LKT",
+        "001_Summary cost",
+        22,
+        "Original unit: Day"
+      ]
+    ]
+  },
+  {
+    "category": "06 — Engineering",
+    "name": "Mechanical labor",
+    "items": [
+      [
+        "PJ260035-SUM-29",
+        "Drawing design",
+        5.0,
+        3500,
+        "",
+        "",
+        "001_Summary cost",
+        29,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-30",
+        "Assembly",
+        1.0,
+        3500,
+        "",
+        "",
+        "001_Summary cost",
+        30,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-32",
+        "Installation",
+        5.0,
+        5000,
+        "",
+        "",
+        "001_Summary cost",
+        32,
+        "Original unit: Day"
+      ]
+    ]
+  },
+  {
+    "category": "08 — Transportation",
+    "name": "Packing and Transportation",
+    "items": [
+      [
+        "PJ260035-SUM-33",
+        "Packing and Transportation",
+        1.0,
+        5000,
+        "",
+        "",
+        "001_Summary cost",
+        33,
+        "Original unit: Job"
+      ]
+    ]
+  },
+  {
+    "category": "06 — Engineering",
+    "name": "Software development - In-site",
+    "items": [
+      [
+        "PJ260035-SUM-37",
+        "Specification design",
+        2.0,
+        3500,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        37,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-38",
+        "Program PLC design and Development",
+        20.0,
+        3500,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        38,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-39",
+        "Windows application development",
+        15.0,
+        3500,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        39,
+        "Original unit: Day"
+      ]
+    ]
+  },
+  {
+    "category": "06 — Engineering",
+    "name": "Software development - Out-site",
+    "items": [
+      [
+        "PJ260035-SUM-42",
+        "Program installation",
+        7.0,
+        5000,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        42,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-43",
+        "Program I/O Check and data machine collection",
+        5.0,
+        5000,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        43,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-44",
+        "Program test",
+        5.0,
+        5000,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        44,
+        "Original unit: Day"
+      ],
+      [
+        "PJ260035-SUM-45",
+        "Program commistioning",
+        2.0,
+        5000,
+        "IoT Team",
+        "TOMAS TECH",
+        "001_Summary cost",
+        45,
+        "Original unit: Day"
+      ]
+    ]
+  },
+  {
+    "category": "10 — Other Cost",
+    "name": "Project safety",
+    "items": [
+      [
+        "PJ260035-SUM-58",
+        "Sefety cost",
+        1.0,
+        5000,
+        "-",
+        "-",
+        "001_Summary cost",
+        58,
+        "Original unit: not stated"
+      ]
+    ]
+  }
+]

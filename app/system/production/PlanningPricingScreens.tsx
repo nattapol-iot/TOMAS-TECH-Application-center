@@ -1,16 +1,27 @@
 "use client";
+import { useT as useStaticCopy } from "../i18n";
 
+import { currentLocale, useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CreateSignableDocumentModal } from "./SigningScreens";
 import {
   ApiClientError,
   apiRequest,
+  createSupplierQuotation,
+  downloadSupplierQuotation,
   listEstimates,
+  listInquiries,
   listProjects,
+  listSupplierQuotations,
+  listSupplierPriceHistory,
   loadEstimateCostWorkspace,
   type BootstrapData,
   type EstimateCostItem,
   type EstimateSummary,
   type ProjectSummary,
+  type SupplierQuotationRecord,
+  type SupplierPriceHistoryRecord,
 } from "../api-client";
 import {
   Badge,
@@ -20,12 +31,13 @@ import {
   KpiCard,
   Modal,
   PageHeader,
+  Pagination,
   Panel,
   Pill,
   ProgressCell,
   SearchInput,
   Select,
-  SummaryTile,
+  TablePageSize,
   Tabs,
   Toolbar,
 } from "../ui";
@@ -99,7 +111,7 @@ type MyWorkUpdate = {
 
 type SchedulePic = { id: number; name: string; email: string };
 
-type ScheduleTask = {
+export type ScheduleTask = {
   id: number;
   parentId: number | null;
   sortOrder: number;
@@ -164,7 +176,7 @@ type ScheduleUpdate = {
   actor: { id: number; name: string };
 };
 
-type ProjectSchedule = {
+export type ProjectSchedule = {
   projectId: number;
   projectNo: string;
   projectName: string;
@@ -190,6 +202,7 @@ type ProjectSchedule = {
 
 type PriceRecord = {
   key: string;
+  sourceKind: "Estimate" | "Historical Purchase";
   estimateId: number;
   estimateNo: string;
   estimateStatus: string;
@@ -217,10 +230,11 @@ type PriceRecord = {
 type PriceLoadState = {
   records: PriceRecord[];
   estimateCount: number;
+  historicalCount: number;
   skippedWorkspaces: number;
 };
 
-type ScheduleLoadState = {
+export type ScheduleLoadState = {
   projects: ProjectSummary[];
   schedules: ProjectSchedule[];
   skippedSchedules: number;
@@ -243,16 +257,16 @@ const toError = (error: unknown) => error instanceof Error ? error.message : "Th
 const isConcurrencyConflict = (error: unknown) => error instanceof ApiClientError
   && error.status === 409
   && error.code === "concurrency_conflict";
-const money = (value: number) => new Intl.NumberFormat("th-TH", {
+const money = (value: number) => new Intl.NumberFormat(currentLocale(), {
   style: "currency",
   currency: "THB",
   maximumFractionDigits: 2,
 }).format(value);
-const number = (value: number, maximumFractionDigits = 2) => new Intl.NumberFormat("th-TH", { maximumFractionDigits }).format(value);
+const number = (value: number, maximumFractionDigits = 2) => new Intl.NumberFormat(currentLocale(), { maximumFractionDigits }).format(value);
 const date = (value: string | null) => value
-  ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`))
+  ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`))
   : "—";
-const dateTime = (value: string) => new Intl.DateTimeFormat("th-TH", {
+const dateTime = (value: string) => new Intl.DateTimeFormat(currentLocale(), {
   dateStyle: "short",
   timeStyle: "short",
 }).format(new Date(value));
@@ -269,15 +283,14 @@ const ageInDays = (value: string | null) => {
   const today = Date.parse(`${isoToday()}T00:00:00Z`);
   return Math.max(0, Math.floor((today - parsed) / 86_400_000));
 };
-const sourceIncludesSupplier = (value: string) => /supplier|quotation|quote/i.test(value);
 const flattenTasks = (tasks: ScheduleTask[]): ScheduleTask[] => tasks.flatMap((task) => [task, ...flattenTasks(task.children)]);
 const leafTasks = (schedule: ProjectSchedule) => flattenTasks(schedule.tasks).filter((task) => task.kind !== "phase" && task.children.length === 0);
 
 function LoadError({ message, retry }: { message: string; retry: () => void }) {
   return <div className="callout danger" role="alert">
     <Icon name="alertTriangle" />
-    <span><strong>โหลดข้อมูลไม่สำเร็จ</strong><small>{message}</small></span>
-    <button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" />ลองใหม่</button>
+    <span><strong><LocalizedText text={"Could not load"} /></strong><small>{message}</small></span>
+    <button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>
   </div>;
 }
 
@@ -309,6 +322,17 @@ async function loadAllProjects() {
   }
 }
 
+async function loadAllSupplierPriceHistory() {
+  const items: SupplierPriceHistoryRecord[] = [];
+  let page = 1;
+  while (true) {
+    const result = await listSupplierPriceHistory({ page, pageSize: 200 });
+    items.push(...result.items);
+    if (items.length >= result.total || result.items.length === 0) return items;
+    page += 1;
+  }
+}
+
 async function mapSettledLimited<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>) {
   const results: ({ ok: true; value: R } | { ok: false })[] = new Array(items.length);
   let next = 0;
@@ -328,7 +352,7 @@ async function mapSettledLimited<T, R>(items: T[], limit: number, work: (item: T
 }
 
 async function loadPriceRecords(): Promise<PriceLoadState> {
-  const estimates = await loadAllEstimates();
+  const [estimates, historical] = await Promise.all([loadAllEstimates(), loadAllSupplierPriceHistory()]);
   const settled = await mapSettledLimited(estimates, 5, async (estimate) => ({
     estimate,
     workspace: await loadEstimateCostWorkspace(estimate.id),
@@ -339,6 +363,7 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
     const { estimate, workspace } = result.value;
     workspace.costItems.forEach((item: EstimateCostItem) => records.push({
       key: `${estimate.id}:${item.id}`,
+      sourceKind: "Estimate",
       estimateId: estimate.id,
       estimateNo: estimate.number,
       estimateStatus: estimate.status,
@@ -363,15 +388,42 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
       ageDays: ageInDays(item.priceDate),
     }));
   });
+  historical.forEach((item) => records.push({
+    key: `history:${item.id}`,
+    sourceKind: "Historical Purchase",
+    estimateId: 0,
+    estimateNo: item.purchaseOrderNumber || item.projectNumber,
+    estimateStatus: "Purchased",
+    projectName: `${item.projectNumber} · ${item.projectName}`,
+    customerName: item.customerName,
+    itemId: item.id,
+    itemCode: item.itemCode,
+    description: item.description,
+    brand: item.brand,
+    model: "",
+    supplierId: item.supplierId,
+    supplierName: item.supplierName,
+    quantity: Number(item.quantity),
+    unit: item.unit,
+    unitCost: Number(item.actualUnitCost),
+    lineTotal: Number(item.actualLineCost),
+    priceSource: "Historical Purchase",
+    referenceNumber: item.quotationNumber || item.purchaseOrderNumber,
+    priceDate: item.quotationDate,
+    ownerName: "PR import",
+    lineStatus: item.purchaseOrderStatus || "Purchased",
+    ageDays: ageInDays(item.quotationDate),
+  }));
   records.sort((a, b) => (b.priceDate ?? "").localeCompare(a.priceDate ?? "") || b.itemId - a.itemId);
   return {
     records,
     estimateCount: estimates.length,
+    historicalCount: historical.length,
     skippedWorkspaces: settled.filter((item) => !item.ok).length,
   };
 }
 
-async function loadSchedules(): Promise<ScheduleLoadState> {
+export async function loadSchedules(): Promise<ScheduleLoadState> {
   const projects = await loadAllProjects();
   const settled = await mapSettledLimited(projects, 5, (project) =>
     apiRequest<ProjectSchedule>(`/api/v1/projects/${project.id}/schedule`));
@@ -383,7 +435,7 @@ async function loadSchedules(): Promise<ScheduleLoadState> {
 }
 
 function usePrices(enabled: boolean) {
-  const [state, setState] = useState<PriceLoadState>({ records: [], estimateCount: 0, skippedWorkspaces: 0 });
+  const [state, setState] = useState<PriceLoadState>({ records: [], estimateCount: 0, historicalCount: 0, skippedWorkspaces: 0 });
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
@@ -487,20 +539,20 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
     subtitle={`${target.projectNo} · บันทึกลง SQL Server และ audit log`}
     onClose={onClose}
     footer={<>
-      <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>Cancel</button>
+      <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
       <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || invalid}>
-        <Icon name="check" />{busy ? "Saving…" : "Save progress"}
+        <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Save progress"}
       </button>
     </>}
   >
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
-      <label className="field"><span>Status *</span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option>Not Started</option><option>In Progress</option><option>Blocked</option><option>Done</option></select></label>
-      <label className="field"><span>Percent complete *</span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => setPercent(Number(event.target.value))} /></label>
-      <label className="field"><span>Actual start</span><input type="date" value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
-      <label className="field"><span>Actual finish</span><input type="date" min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
-      <label className="field"><span>Forecast finish</span><input type="date" min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
-      <label className="field span-2"><span>{status === "Blocked" ? "Blocked reason *" : "Remark"}</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"}><LocalizedText text={"Done"} /></option></select></label>
+      <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => setPercent(Number(event.target.value))} /></label>
+      <label className="field"><span><LocalizedText text={"Actual start"} /></span><input type="date" value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Actual finish"} /></span><input type="date" min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><input type="date" min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
+      <label className="field span-2"><span>{status === "Blocked" ? "Blocked reason *" : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
     </div>
   </Modal>;
 }
@@ -513,6 +565,7 @@ const workIsStale = (item: MyWorkItem) => item.status === "In Progress"
   && Date.now() - Date.parse(item.updatedAt) > 5 * 86_400_000;
 const workNeedsUpdate = (item: MyWorkItem) => workIsLate(item) || item.status === "Blocked"
   || workNeedsForecast(item) || workIsStale(item);
+const workUserNote = (value: string | null) => value?.trim().startsWith("Imported from Overall Project Plan") ? "" : value ?? "";
 const daysFromToday = (value: string | null) => value
   ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
   : null;
@@ -527,12 +580,17 @@ type MyWorkProgressInput = {
   remark: string;
 };
 
+type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting" | "all";
+type MyWorkSort = "priority" | "due" | "project";
+
 export function ProductionMyWork({
   bootstrap,
   notify,
   openProjectSchedule,
   onMyWorkUrgentCountChange,
 }: ProductionPlanningProps) {
+  const localizeCopy = useStaticCopy();
+  const uiText = useUiText();
   const hasProgressPermission = bootstrap.permissions.includes("schedule.progress");
   const hasReadPermission = bootstrap.permissions.includes("schedule.read");
   const allowed = hasProgressPermission && hasReadPermission;
@@ -544,6 +602,11 @@ export function ProductionMyWork({
   const [saving, setSaving] = useState<Set<number>>(() => new Set());
   const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
   const [addingFor, setAddingFor] = useState<MyWorkItem | null>(null);
+  const [editingFor, setEditingFor] = useState<MyWorkItem | null>(null);
+  const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("attention");
+  const [taskSort, setTaskSort] = useState<MyWorkSort>("priority");
+  const [taskSearch, setTaskSearch] = useState("");
+  const [projectFilter, setProjectFilter] = useState("all");
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -575,13 +638,33 @@ export function ProductionMyWork({
     return days !== null && days >= 0 && days <= 7;
   }), [actionableOpen]);
   const waiting = useMemo(() => items.filter((item) => item.pendingRequest), [items]);
-  const projects = useMemo(() => Array.from(new Map(items.map((item) => [item.projectId, {
-    id: item.projectId,
-    no: item.projectNo,
-    name: item.projectName,
-    managerName: item.managerName,
-    rows: items.filter((candidate) => candidate.projectId === item.projectId),
-  }])).values()), [items]);
+  const projectOptions = useMemo(() => Array.from(new Map(items.map((item) => [String(item.projectId), `${item.projectNo} · ${item.projectName}`])).entries()), [items]);
+  const visibleTasks = useMemo(() => {
+    const needle = taskSearch.trim().toLocaleLowerCase();
+    const selected = items.filter((item) => {
+      if (projectFilter !== "all" && String(item.projectId) !== projectFilter) return false;
+      if (needle && ![item.projectNo, item.projectName, item.wbs, item.name, item.phaseName ?? "", item.status]
+        .some((value) => value.toLocaleLowerCase().includes(needle))) return false;
+      if (taskFilter === "attention") return item.canUpdate && item.status !== "Done" && workNeedsUpdate(item);
+      if (taskFilter === "open") return item.status !== "Done";
+      if (taskFilter === "late") return item.canUpdate && workIsLate(item);
+      if (taskFilter === "blocked") return item.canUpdate && item.status === "Blocked";
+      if (taskFilter === "week") return item.canUpdate && item.status !== "Done" && (() => {
+        const days = daysFromToday(workEffectiveFinish(item));
+        return days !== null && days >= 0 && days <= 7;
+      })();
+      if (taskFilter === "waiting") return Boolean(item.pendingRequest);
+      return true;
+    });
+    return selected.sort((left, right) => {
+      if (taskSort === "project") return `${left.projectNo}:${left.wbs}`.localeCompare(`${right.projectNo}:${right.wbs}`, undefined, { numeric: true });
+      const leftDue = workEffectiveFinish(left) ?? "9999-12-31";
+      const rightDue = workEffectiveFinish(right) ?? "9999-12-31";
+      if (taskSort === "due") return leftDue.localeCompare(rightDue);
+      const urgency = (item: MyWorkItem) => item.status === "Blocked" ? 0 : workIsLate(item) ? 1 : workNeedsForecast(item) ? 2 : workIsStale(item) ? 3 : 4;
+      return urgency(left) - urgency(right) || leftDue.localeCompare(rightDue);
+    });
+  }, [items, projectFilter, taskFilter, taskSearch, taskSort]);
 
   useEffect(() => {
     onMyWorkUrgentCountChange?.(needsUpdate.length);
@@ -627,61 +710,75 @@ export function ProductionMyWork({
 
   if (!allowed) {
     const missing = [!hasProgressPermission ? "schedule.progress" : "", !hasReadPermission ? "schedule.read" : ""].filter(Boolean).join(" + ");
-    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title="My Work" subtitle="งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้" /></>;
+    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle="งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้" /></>;
   }
 
   return <>
     <PageHeader
       eyebrow="MY WORK"
-      title="My Work"
+      title={uiText("My Work")}
       subtitle="Everything assigned to you, across every project. Updates here are written to the live project schedule and SQL audit log."
-      actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>}
+      actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>}
     />
-    <div className="info-strip"><Icon name="lock" />You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change.</div>
-    <section className="summary-strip">
-      <SummaryTile label="Needs update" value={`${needsUpdate.length}`} tone={needsUpdate.length ? "amber" : "green"} strong />
-      <SummaryTile label="Late" value={`${actionableOpen.filter(workIsLate).length}`} tone={actionableOpen.some(workIsLate) ? "red" : "green"} />
-      <SummaryTile label="Blocked" value={`${actionableOpen.filter((item) => item.status === "Blocked").length}`} tone={actionableOpen.some((item) => item.status === "Blocked") ? "red" : "green"} />
-      <SummaryTile label="Due this week" value={`${dueThisWeek.length}`} />
-      <SummaryTile label="Awaiting the PM" value={`${waiting.length}`} note={waiting.length ? "requests sent" : "nothing pending"} />
+    <div className="info-strip my-work-guidance"><Icon name="lock" /><LocalizedText text={"You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change."} /></div>
+    <section className="my-work-kpis" aria-label={localizeCopy("Task overview")}>
+      <MyWorkStat label="Needs update" value={needsUpdate.length} tone="navy" active={taskFilter === "attention"} onClick={() => setTaskFilter("attention")} />
+      <MyWorkStat label="Late" value={actionableOpen.filter(workIsLate).length} tone="red" active={taskFilter === "late"} onClick={() => setTaskFilter("late")} />
+      <MyWorkStat label="Blocked" value={actionableOpen.filter((item) => item.status === "Blocked").length} tone="amber" active={taskFilter === "blocked"} onClick={() => setTaskFilter("blocked")} />
+      <MyWorkStat label="Due this week" value={dueThisWeek.length} tone="blue" active={taskFilter === "week"} onClick={() => setTaskFilter("week")} />
+      <MyWorkStat label="Awaiting the PM" value={waiting.length} tone="violet" active={taskFilter === "waiting"} onClick={() => setTaskFilter("waiting")} />
     </section>
-    <Tabs active={tab} onChange={setTab} tabs={[{ id: "tasks", label: "My tasks", count: open.length }, { id: "updates", label: "My updates" }]} />
+    <Tabs<"tasks" | "updates"> active={tab} onChange={setTab} tabs={[{ id: "tasks", label: "My tasks", count: open.length }, { id: "updates", label: "My updates" }]} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
 
     {tab === "tasks" ? <>
-      {needsUpdate.length ? <Panel title="Needs your update" subtitle="Late, blocked or quiet for too long — clear these first" flush>
-        {needsUpdate.map((item) => <ProductionWorkQueueRow
-          key={`urgent:${item.taskId}`}
-          item={item}
-          busy={saving.has(item.taskId)}
-          notify={notify}
-          patchProgress={patchProgress}
-          onRequest={() => setRequestFor(item)}
-        />)}
-      </Panel> : null}
-
-      {projects.map((project) => <Panel
-        key={project.id}
-        title={`${project.no} — ${project.name}`}
-        subtitle={`${project.rows.filter((item) => item.status === "Done").length}/${project.rows.length} done · Project manager: ${project.managerName}`}
-        actions={<button className="btn default sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(project.id)}><Icon name="calendar" />Whole plan</button>}
+      <Panel
+        title={taskFilter === "attention" ? uiText("Needs your update") : `${visibleTasks.length} task${visibleTasks.length === 1 ? "" : "s"}`}
+        subtitle={taskFilter === "attention" ? "Late, blocked or quiet for too long — clear these first" : "Search, filter and update without leaving this workspace"}
         flush
       >
-        {Array.from(new Map(project.rows.map((item) => [`${item.phaseWbs ?? ""}:${item.phaseName ?? "Other work"}`, {
-          wbs: item.phaseWbs,
-          name: item.phaseName ?? "Other work",
-          rows: project.rows.filter((candidate) => candidate.phaseWbs === item.phaseWbs && candidate.phaseName === item.phaseName),
-        }])).values()).map((phase) => <div className="phase-group" key={`${project.id}:${phase.wbs ?? phase.name}`}>
-          <p className="phase-label">
-            {phase.wbs ? <span className="mono muted">{phase.wbs}</span> : null} {phase.name}
-            <Badge>{Math.round(phase.rows.reduce((sum, item) => sum + Number(item.percentComplete), 0) / phase.rows.length)}%</Badge>
-          </p>
-          {phase.rows.map((item) => <ProductionMyTaskRow
+        <div className="my-work-toolbar">
+          <SearchInput value={taskSearch} onChange={setTaskSearch} placeholder="Search project, WBS or task…" />
+          <label className="select-field my-work-project-filter">
+            <span className="sr-only"><LocalizedText text={"Project"} /></span>
+            <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label={localizeCopy("Project")}>
+              <option value="all"><LocalizedText text={"All projects"} /></option>
+              {projectOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+            <Icon name="chevronDown" />
+          </label>
+          <label className="select-field my-work-sort">
+            <span className="sr-only"><LocalizedText text={"Sort tasks"} /></span>
+            <select value={taskSort} onChange={(event) => setTaskSort(event.target.value as MyWorkSort)} aria-label={localizeCopy("Sort tasks")}>
+              <option value="priority"><LocalizedText text={"Priority first"} /></option>
+              <option value="due"><LocalizedText text={"Due date"} /></option>
+              <option value="project"><LocalizedText text={"Project & WBS"} /></option>
+            </select>
+            <Icon name="chevronDown" />
+          </label>
+        </div>
+        <div className="my-work-filter-row" role="group" aria-label={localizeCopy("Task filters")}>
+          {([
+            ["attention", "Needs update", needsUpdate.length],
+            ["open", "All open", open.length],
+            ["late", "Late", actionableOpen.filter(workIsLate).length],
+            ["blocked", "Blocked", actionableOpen.filter((item) => item.status === "Blocked").length],
+            ["week", "Due this week", dueThisWeek.length],
+            ["waiting", "Awaiting the PM", waiting.length],
+            ["all", "All tasks", items.length],
+          ] as [MyWorkFilter, string, number][]).map(([id, label, count]) => <button key={id} type="button" className={taskFilter === id ? "active" : ""} onClick={() => setTaskFilter(id)}>{label}<span>{count}</span></button>)}
+          <span className="my-work-result-count"><LocalizedText text={"Showing"} /> <strong>{visibleTasks.length}</strong></span>
+        </div>
+
+        <div className="my-work-task-list">
+          {visibleTasks.map((item) => <ProductionMyTaskRow
             key={item.taskId}
             item={item}
             busy={saving.has(item.taskId)}
             notify={notify}
             patchProgress={patchProgress}
+            openProjectSchedule={openProjectSchedule}
+            onEdit={() => setEditingFor(item)}
             onRequest={() => setRequestFor(item)}
             onAdd={() => setAddingFor(item)}
             onDelete={async () => {
@@ -701,14 +798,15 @@ export function ProductionMyWork({
               }
             }}
           />)}
-        </div>)}
-      </Panel>)}
+          {!visibleTasks.length && !loading ? <EmptyState icon="search" title="No tasks match these filters" message="Try another project, status or search term." action={<button className="btn default" type="button" onClick={() => { setTaskSearch(""); setProjectFilter("all"); setTaskFilter("open"); }}><LocalizedText text={"Clear filters"} /></button>} /> : null}
+        </div>
+      </Panel>
 
-      {!items.length && !loading ? <Panel title="My tasks" flush><EmptyState icon="checkCircle" title="Nothing assigned to you yet" message="When the project manager assigns you a task it appears here." /></Panel> : null}
-      {loading && !items.length ? <div className="empty"><span className="spinner" />Loading your live schedule…</div> : null}
+      {!items.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message="When the project manager assigns you a task it appears here." /></Panel> : null}
+      {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
     </> : null}
 
-    {tab === "updates" ? <Panel title="My updates" subtitle="What you reported, in order — loaded from the append-only SQL audit trail" flush>
+    {tab === "updates" ? <Panel title={uiText("My updates")} subtitle="What you reported, in order — loaded from the append-only SQL audit trail" flush>
       <div className="panel-body feed">
         {updates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
           <span className="avatar sm">{myWorkInitials(bootstrap.user.name)}</span>
@@ -724,7 +822,7 @@ export function ProductionMyWork({
           </div>
           <span className="muted mono" style={{ fontSize: 11 }}>{dateTime(entry.occurredAt)}</span>
         </div>)}
-        {!updates.length && !loading ? <p className="muted">No update yet.</p> : null}
+        {!updates.length && !loading ? <p className="muted"><LocalizedText text={"No update yet."} /></p> : null}
       </div>
     </Panel> : null}
 
@@ -738,7 +836,26 @@ export function ProductionMyWork({
       notify("Your task was added to the live schedule");
       await load();
     }} /> : null}
+    {editingFor ? <ProgressModal
+      target={{ ...editingFor, remark: workUserNote(editingFor.remark) }}
+      onClose={() => setEditingFor(null)}
+      onConflict={load}
+      onSubmit={async (input) => {
+        await apiRequest(`/api/v1/schedule/tasks/${editingFor.taskId}/updates`, {
+          method: "POST",
+          body: JSON.stringify({ scheduleVersion: editingFor.scheduleVersion, rowVersion: editingFor.rowVersion, ...input }),
+        });
+        notify(`${editingFor.wbs} progress updated`);
+        await load();
+      }}
+    /> : null}
   </>;
+}
+
+function MyWorkStat({ label, value, tone, active, onClick }: { label: string; value: number; tone: string; active: boolean; onClick: () => void }) {
+  return <button className={`my-work-stat ${tone}${active ? " active" : ""}`} type="button" onClick={onClick} aria-pressed={active}>
+    <span>{label}</span><strong>{value}</strong><small><LocalizedText text={"View tasks"} /></small>
+  </button>;
 }
 
 function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }: {
@@ -748,10 +865,12 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
   patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
   onRequest: () => void;
 }) {
+  const uiText = useUiText();
   const today = isoToday();
   const editable = item.canUpdate && !busy;
+  const userNote = workUserNote(item.remark);
   return <div className="quick-controls">
-    <div className="pct-strip" role="group" aria-label="Percent done">
+    <div className="pct-strip" role="group" aria-label={uiText("Percent done")}>
       {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" disabled={!editable || (item.status === "Done" && value !== 100)} className={Number(item.percentComplete) === value ? "on" : undefined} onClick={() => {
         patchProgress(item, {
           percentComplete: value,
@@ -762,7 +881,7 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
     </div>
     <select disabled={!editable} value={item.status} onChange={(event) => {
       const status = event.target.value;
-      if (status === "Blocked" && !item.remark?.trim()) {
+      if (status === "Blocked" && !userNote.trim()) {
         notify("Enter the blocking reason in Note first, then choose Blocked");
         return;
       }
@@ -774,20 +893,20 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
         ...(status === "Done" ? { percentComplete: 100, actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
       }, `${item.wbs} status changed to ${status}`);
     }}>
-      <option>Not Started</option><option>In Progress</option><option>Blocked</option><option>Done</option>
+      <option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"}><LocalizedText text={"Done"} /></option>
     </select>
-    {!item.actualStart ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: today, status: "In Progress" }, `${item.wbs} started today`)}><Icon name="play" />Start today</button> : null}
-    {item.status !== "Done" ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? today, actualFinish: today, percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" />Finish today</button> : null}
-    {workNeedsForecast(item) || workIsLate(item) ? <label className="forecast-inline"><span>Forecast</span><input type="date" disabled={!editable} value={item.forecastFinish ?? ""} className={workNeedsForecast(item) ? "needs-input" : undefined} min={item.actualStart ?? undefined} onChange={(event) => patchProgress(item, { forecastFinish: event.target.value || null }, `${item.wbs} forecast updated`)} /></label> : null}
+    {!item.actualStart ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: today, status: "In Progress" }, `${item.wbs} started today`)}><Icon name="play" /><LocalizedText text={"Start today"} /></button> : null}
+    {item.status !== "Done" ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? today, actualFinish: today, percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
+    {workNeedsForecast(item) || workIsLate(item) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input type="date" disabled={!editable} value={item.forecastFinish ?? ""} className={workNeedsForecast(item) ? "needs-input" : undefined} min={item.actualStart ?? undefined} onChange={(event) => patchProgress(item, { forecastFinish: event.target.value || null }, `${item.wbs} forecast updated`)} /></label> : null}
     <input
       key={`${item.taskId}:${item.updatedAt}:note`}
       className="note-inline"
       disabled={!editable}
       placeholder={item.status === "Blocked" ? "What is blocking it? (required)" : "Note…"}
-      defaultValue={item.remark ?? ""}
+      defaultValue={userNote}
       onBlur={(event) => {
         const value = event.target.value.trim();
-        if (value === (item.remark ?? "")) return;
+        if (value === userNote) return;
         if (item.status === "Blocked" && !value) { notify("Blocked tasks require a reason"); return; }
         patchProgress(item, { remark: value }, `${item.wbs} note updated`);
       }}
@@ -796,44 +915,69 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
   </div>;
 }
 
-function ProductionWorkQueueRow(props: {
+function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSchedule, onEdit, onRequest, onAdd, onDelete }: {
   item: MyWorkItem;
   busy: boolean;
   notify: (message: string) => void;
   patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
-  onRequest: () => void;
-}) {
-  const { item } = props;
-  const reason = item.status === "Blocked" ? "Blocked" : workIsLate(item) ? "Late" : workNeedsForecast(item) ? "Needs a forecast" : "No update for 5 days";
-  return <div className={`queue-row ${item.status === "Blocked" || workIsLate(item) ? "hot" : ""}`}>
-    <div className="queue-head"><Badge>{reason}</Badge><strong>{item.projectNo} · {item.wbs} {item.name}</strong><span className="muted">{date(item.planStart)} → {date(item.planFinish)}</span></div>
-    <ProductionWorkControls {...props} />
-    {workNeedsForecast(item) ? <p className="queue-nag"><Icon name="alertTriangle" />This was due {date(item.planFinish)} — set the forecast date so the plan tells the truth.</p> : null}
-  </div>;
-}
-
-function ProductionMyTaskRow({ item, busy, notify, patchProgress, onRequest, onAdd, onDelete }: {
-  item: MyWorkItem;
-  busy: boolean;
-  notify: (message: string) => void;
-  patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
+  openProjectSchedule?: (projectId: number) => void;
+  onEdit: () => void;
   onRequest: () => void;
   onAdd: () => void;
   onDelete: () => Promise<void>;
 }) {
-  return <div className={`my-task ${workIsLate(item) ? "late" : ""}`}>
-    <div className="my-task-head">
-      <span className="mono muted">{item.wbs}</span><strong>{item.name}</strong>
-      {item.isOwnDetail ? <Pill tone="blue">own</Pill> : null}
-      {item.isMilestone ? <Pill tone="violet">◆ Milestone</Pill> : null}
-      <span className="muted">{date(item.planStart)} → {date(item.planFinish)} · {item.workDays} work days</span>
-      {item.pendingRequest ? <Pill tone="amber">Requested {item.pendingRequest.requestDays} more days</Pill> : null}
-      {!item.canUpdate ? <Pill tone="slate">{item.projectStatus}</Pill> : null}
+  const localizeCopy = useStaticCopy();
+  const late = workIsLate(item);
+  const needsForecast = workNeedsForecast(item);
+  const dueDays = daysFromToday(workEffectiveFinish(item));
+  const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : needsForecast ? "Forecast needed" : workIsStale(item) ? "Update due" : null;
+  const timing = item.status === "Done" ? "Completed"
+    : dueDays === null ? "No due date"
+      : dueDays < 0 ? `${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? "" : "s"} late`
+        : dueDays === 0 ? "Due today" : dueDays <= 7 ? `Due in ${dueDays} days` : `Due ${date(workEffectiveFinish(item))}`;
+  return <article className={`my-task-card${late ? " late" : ""}${item.status === "Blocked" ? " blocked" : ""}`}>
+    <div className="my-task-card-main">
+      <div className="my-task-identity">
+        <div className="my-task-kicker">
+          {attention ? <Badge>{attention}</Badge> : <Badge>{item.status}</Badge>}
+          <button className="my-task-project" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}>{item.projectNo}</button>
+          <span className="mono">WBS {item.wbs}</span>
+          {item.isOwnDetail ? <Pill tone="blue"><LocalizedText text={"own"} /></Pill> : null}
+          {item.isMilestone ? <Pill tone="violet"><LocalizedText text={"◆ Milestone"} /></Pill> : null}
+        </div>
+        <h3>{item.name}</h3>
+        <div className="my-task-meta">
+          <span><Icon name="calendar" />{date(item.planStart)} → {date(item.planFinish)}</span>
+          <span>{item.workDays} <LocalizedText text={"work days"} /></span>
+          <span><Icon name="layers" />{item.phaseWbs ? `${item.phaseWbs} · ` : ""}{item.phaseName ?? "Other work"}</span>
+          <span><LocalizedText text={"PM:"} /> {item.managerName}</span>
+        </div>
+      </div>
+      <div className="my-task-progress">
+        <ProgressCell value={Number(item.percentComplete)} />
+        <span className={late ? "late-text" : ""}>{timing}</span>
+      </div>
     </div>
-    <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} />
-    {item.canAddDetail ? <button className="link-btn" type="button" disabled={busy} title="Add a private detail task" onClick={onAdd}><Icon name="plus" />Add my task</button> : null}
-    {item.canDeleteDetail ? <button className="link-btn danger-text" type="button" disabled={busy} title="Delete my task" onClick={() => { void onDelete(); }}><Icon name="trash" />Delete my task</button> : null}
-  </div>;
+
+    {item.pendingRequest ? <div className="my-task-request"><Icon name="clock" /><strong><LocalizedText text={"Awaiting the PM"} /></strong><span>{item.pendingRequest.requestDays} <LocalizedText text={"more days requested"} />{item.pendingRequest.comment ? ` · ${item.pendingRequest.comment}` : ""}</span></div> : null}
+    {needsForecast ? <div className="my-task-alert"><Icon name="alertTriangle" /><span><LocalizedText text={"This was due"} /> {date(item.planFinish)}<LocalizedText text={". Add a forecast date in Update details."} /></span></div> : null}
+
+    <div className="my-task-actions">
+      {item.canUpdate && !item.actualStart ? <button className="btn default sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: isoToday(), status: "In Progress" }, `${item.wbs} started today`)}><Icon name="play" /><LocalizedText text={"Start today"} /></button> : null}
+      {item.canUpdate ? <button className="btn primary sm" type="button" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
+      {item.canUpdate && item.status !== "Done" ? <button className="btn default sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? isoToday(), actualFinish: isoToday(), percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
+      {item.canUpdate ? <button className="btn ghost sm" type="button" disabled={busy || Boolean(item.pendingRequest)} onClick={onRequest}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
+      <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}><Icon name="calendar" /><LocalizedText text={"Whole plan"} /></button>
+      <span className="spacer" />
+      {item.canAddDetail ? <button className="link-btn" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add my task"} /></button> : null}
+      {item.canDeleteDetail ? <button className="link-btn danger-text" type="button" disabled={busy} title={localizeCopy("Delete my task")} onClick={() => { void onDelete(); }}><Icon name="trash" /><LocalizedText text={"Delete my task"} /></button> : null}
+    </div>
+
+    {item.canUpdate ? <details className="my-task-quick-update">
+      <summary><Icon name="settings" /><LocalizedText text={"Quick update"} /></summary>
+      <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} />
+    </details> : null}
+  </article>;
 }
 
 function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
@@ -841,6 +985,7 @@ function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
   onClose: () => void;
   onSubmitted: () => Promise<void>;
 }) {
+  const uiText = useUiText();
   const [days, setDays] = useState(2);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -853,13 +998,13 @@ function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
     } catch (requestError) { setError(toError(requestError)); }
     finally { setBusy(false); }
   };
-  return <Modal title="Request more days" subtitle={`${item.wbs} ${item.name} · plan ${date(item.planStart)} → ${date(item.planFinish)}`} onClose={onClose} footer={<>
-    <span className="muted">The dates change only when the PM accepts.</span><span className="spacer" />
-    <button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button>
-    <button className="btn primary" type="button" disabled={busy || days < 1 || !comment.trim()} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Sending…" : "Send request"}</button>
+  return <Modal title={uiText("Request more days")} subtitle={`${item.wbs} ${item.name} · plan ${date(item.planStart)} → ${date(item.planFinish)}`} onClose={onClose} footer={<>
+    <span className="muted"><LocalizedText text={"The dates change only when the PM accepts."} /></span><span className="spacer" />
+    <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn primary" type="button" disabled={busy || days < 1 || !comment.trim()} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Sending…" : <LocalizedText text={"Send request"} />}</button>
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="form-grid"><Field label="Extra days needed"><input className="num" type="number" min="1" max="3650" value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value)))} /></Field><Field label="Why? (required — the PM decides with this)" span={3}><input maxLength={20000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder="e.g. rack anchor rework — re-drilling takes 3 days" /></Field></div>
+    <div className="form-grid"><Field label="Extra days needed"><input className="num" type="number" min="1" max="3650" value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value)))} /></Field><Field label="Why? (required — the PM decides with this)" span={3}><input maxLength={20000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={uiText("e.g. rack anchor rework — re-drilling takes 3 days")} /></Field></div>
   </Modal>;
 }
 
@@ -868,6 +1013,7 @@ function ProductionAddDetailModal({ item, onClose, onCreated }: {
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
+  const uiText = useUiText();
   const [name, setName] = useState("");
   const planSpan = item.planStart && item.planFinish
     ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1
@@ -883,7 +1029,7 @@ function ProductionAddDetailModal({ item, onClose, onCreated }: {
     } catch (requestError) { setError(toError(requestError)); }
     finally { setBusy(false); }
   };
-  return <Modal title="Add my task" subtitle={`${item.projectNo} · inside ${item.wbs} ${item.name} · internal visibility`} onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="btn primary" type="button" disabled={busy || !name.trim() || planDays < 1} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? "Adding…" : "Add task"}</button></>}>
+  return <Modal title={uiText("Add my task")} subtitle={`${item.projectNo} · inside ${item.wbs} ${item.name} · internal visibility`} onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim() || planDays < 1} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? "Adding…" : <LocalizedText text={"Add task"} />}</button></>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid"><Field label="What will you do inside this task?" span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></Field><Field label="Days (fixed to the parent plan)"><input className="num" type="number" value={planDays} readOnly /></Field></div>
   </Modal>;
@@ -972,23 +1118,23 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
     }
   };
   return <Modal title="Add schedule row" subtitle={`${schedule.projectNo} · บันทึกแผนลงฐานข้อมูลจริง`} size="lg" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>Cancel</button>
-    <button className="btn primary" type="button" disabled={busy || !name.trim() || (kind === "task" && (!planStart || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? "Saving…" : "Create row"}</button>
+    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn primary" type="button" disabled={busy || !name.trim() || (kind === "task" && (!planStart || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create row"}</button>
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
-      <label className="field"><span>Row kind *</span><select value={kind} onChange={(event) => { const value = event.target.value as "phase" | "task"; setKind(value); if (value === "phase") setParentId(""); }}><option value="task">Task</option><option value="phase">Phase (roll-up)</option></select></label>
-      <label className="field"><span>Visibility *</span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option>Internal</option><option>Customer</option></select></label>
-      <label className="field span-2"><span>Name *</span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Row kind *"} /></span><select value={kind} onChange={(event) => { const value = event.target.value as "phase" | "task"; setKind(value); if (value === "phase") setParentId(""); }}><option value="task"><LocalizedText text={"Task"} /></option><option value="phase"><LocalizedText text={"Phase (roll-up)"} /></option></select></label>
+      <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
+      <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       {kind === "task" ? <>
-        <label className="field"><span>Parent phase</span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Top-level task</option>{phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.wbs} · {phase.name}</option>)}</select></label>
-        <label className="field"><span>Plan start *</span><input type="date" value={planStart} onChange={(event) => setPlanStart(event.target.value)} /></label>
-        <label className="field"><span>Plan days *</span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
-        <label className="field"><span>Plan man-days</span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
-        <label className="field"><span>PIC (known project member)</span><select value={picUserId} onChange={(event) => setPicUserId(event.target.value)}><option value="">Unassigned</option>{eligibleMembers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.department}</option>)}</select><small>{eligibleMembers.length ? "แสดงเฉพาะ Project Manager, ผู้ใช้ปัจจุบัน และ PIC ที่พบใน Schedule; API จะตรวจสอบสมาชิกอีกครั้ง" : "ยังไม่พบผู้ใช้ที่ยืนยันได้จาก Schedule นี้ จึงบันทึกเป็น Unassigned เท่านั้น"}</small></label>
-        <label className="field"><span>External PIC</span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
-        <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} />Milestone (1 day)</label>
-      </> : <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong>Phase เป็นแถวสรุป</strong><small>วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase</small></span></div>}
+        <label className="field"><span><LocalizedText text={"Parent phase"} /></span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value=""><LocalizedText text={"Top-level task"} /></option>{phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.wbs} <LocalizedText text={"·"} /> {phase.name}</option>)}</select></label>
+        <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={planStart} onChange={(event) => setPlanStart(event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
+        <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
+        <label className="field"><span><LocalizedText text={"PIC (known project member)"} /></span><select value={picUserId} onChange={(event) => setPicUserId(event.target.value)}><option value=""><LocalizedText text={"Unassigned"} /></option>{eligibleMembers.map((member) => <option key={member.id} value={member.id}>{member.name} <LocalizedText text={"·"} /> {member.department}</option>)}</select><small>{eligibleMembers.length ? "แสดงเฉพาะ Project Manager, ผู้ใช้ปัจจุบัน และ PIC ที่พบใน Schedule; API จะตรวจสอบสมาชิกอีกครั้ง" : "ยังไม่พบผู้ใช้ที่ยืนยันได้จาก Schedule นี้ จึงบันทึกเป็น Unassigned เท่านั้น"}</small></label>
+        <label className="field"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
+        <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>
+      </> : <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div>}
     </div>
   </Modal>;
 }
@@ -1027,13 +1173,13 @@ function BaselineModal({ schedule, onClose, onCreated, onConflict }: {
     finally { setBusy(false); }
   };
   return <Modal title="Create schedule baseline" subtitle="Freeze วันที่แผนปัจจุบันเป็น revision ใหม่ใน SQL Server" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>Cancel</button>
-    <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || !label.trim() || !reason.trim()}><Icon name="check" />{busy ? "Saving…" : "Create baseline"}</button>
+    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || !label.trim() || !reason.trim()}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create baseline"}</button>
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
-      <label className="field span-2"><span>Label *</span><input maxLength={200} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
-      <label className="field span-2"><span>Reason *</span><textarea maxLength={20000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
+      <label className="field span-2"><span><LocalizedText text={"Label *"} /></span><input maxLength={200} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
+      <label className="field span-2"><span><LocalizedText text={"Reason *"} /></span><textarea maxLength={20000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
     </div>
   </Modal>;
 }
@@ -1045,6 +1191,7 @@ function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAns
   onClose: () => void;
   onAnswered: (answer: "Accepted" | "Rejected") => Promise<void>;
 }) {
+  const localizeCopy = useStaticCopy();
   const [answer, setAnswer] = useState<"Accepted" | "Rejected">("Accepted");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1075,18 +1222,19 @@ function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAns
     title="Review request for more days"
     subtitle={`${schedule.projectNo} · ${taskLabel}`}
     onClose={onClose}
-    footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className={answer === "Accepted" ? "btn success" : "btn danger"} type="button" disabled={busy || !task || !note.trim()} onClick={() => { void submit(); }}><Icon name={answer === "Accepted" ? "check" : "x"} />{busy ? "Saving…" : answer}</button></>}
+    footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className={answer === "Accepted" ? "btn success" : "btn danger"} type="button" disabled={busy || !task || !note.trim()} onClick={() => { void submit(); }}><Icon name={answer === "Accepted" ? "check" : "x"} />{busy ? <LocalizedText text={"Saving…"} /> : answer}</button></>}
   >
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="request-impact"><Icon name="clock" /><span>{request.requestDays} calendar day{request.requestDays === 1 ? "" : "s"} requested. Accepting extends the task duration and recalculates the project schedule.</span></div>
+    <div className="request-impact"><Icon name="clock" /><span>{request.requestDays} <LocalizedText text={"calendar day"} />{request.requestDays === 1 ? "" : "s"} <LocalizedText text={"requested. Accepting extends the task duration and recalculates the project schedule."} /></span></div>
     <div className="form-grid two">
-      <Field label="Decision"><select value={answer} onChange={(event) => setAnswer(event.target.value as "Accepted" | "Rejected")}><option>Accepted</option><option>Rejected</option></select></Field>
-      <Field label="PM note (required)" span={2}><textarea maxLength={20000} rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Explain the decision for the team and audit trail" /></Field>
+      <Field label="Decision"><select value={answer} onChange={(event) => setAnswer(event.target.value as "Accepted" | "Rejected")}><option value={"Accepted"}><LocalizedText text={"Accepted"} /></option><option value={"Rejected"}><LocalizedText text={"Rejected"} /></option></select></Field>
+      <Field label="PM note (required)" span={2}><textarea maxLength={20000} rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder={localizeCopy("Explain the decision for the team and audit trail")} /></Field>
     </div>
   </Modal>;
 }
 
 export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId }: ProductionPlanningProps) {
+  const uiText = useUiText();
   const allowed = bootstrap.permissions.includes("schedule.read");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -1097,6 +1245,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [createOpen, setCreateOpen] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
+  const [drawingTask, setDrawingTask] = useState<{projectId:number;taskId:number} | null>(null);
   const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
@@ -1143,13 +1292,13 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       scheduleRequestId.current += 1;
     };
   }, [loadSchedule]);
-  if (!allowed) return <><PageHeader eyebrow="PROJECT CONTROL" title="Project Schedule" subtitle="แผนงานและความคืบหน้าจากฐานข้อมูลจริง" /><PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" /></>;
+  if (!allowed) return <><PageHeader eyebrow="PROJECT CONTROL" title={uiText("Project Schedule")} subtitle="แผนงานและความคืบหน้าจากฐานข้อมูลจริง" /><PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" /></>;
   const activeSchedule = schedule?.projectId === selectedId && !loadingSchedule ? schedule : null;
   const rows = activeSchedule ? flattenTasks(activeSchedule.tasks) : [];
   const canPlan = Boolean(activeSchedule?.canPlan && bootstrap.permissions.includes("schedule.plan"));
   const pendingDayRequests = activeSchedule?.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer) ?? [];
   return <>
-    <PageHeader eyebrow="PROJECT CONTROL" title="Project Schedule" subtitle="จัดทำแผน อัปเดตความคืบหน้า และเก็บ Baseline พร้อม concurrency control" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" />Refresh</button>} />
+    <PageHeader eyebrow="PROJECT CONTROL" title={uiText("Project Schedule")} subtitle="จัดทำแผน อัปเดตความคืบหน้า และเก็บ Baseline พร้อม concurrency control" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <Toolbar>
       <label className="select-field" style={{ minWidth: 320 }}><select style={{ maxWidth: 520, width: "100%" }} value={selectedId ?? ""} onChange={(event) => {
         const nextId = event.target.value ? Number(event.target.value) : null;
@@ -1161,10 +1310,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         setSchedule(null);
         setLoadingSchedule(Boolean(nextId));
         setSelectedId(nextId);
-      }} aria-label="Project"><option value="">Select project…</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} · {project.name}</option>)}</select><Icon name="chevronDown" /></label>
+      }} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>)}</select><Icon name="chevronDown" /></label>
       <span className="spacer" />
-      {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" />Create baseline</button> : null}
-      {canPlan ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" />Add schedule row</button> : null}
+      {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
+      {canPlan ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
     {activeSchedule ? <>
@@ -1175,7 +1324,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         <KpiCard label="Baseline" value={activeSchedule.latestBaseline ? `R${activeSchedule.latestBaseline.revision}` : "None"} note={activeSchedule.latestBaseline?.label ?? "ยังไม่มี baseline"} tone="violet" icon="gitBranch" />
       </div>
       <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} schedule rows · ${activeSchedule.projectStatus}`} flush>
-        {rows.length ? <div className="table-wrap"><table><thead><tr><th>WBS</th><th>Task</th><th>Visibility</th><th>Plan</th><th>Work days</th><th>PIC</th><th>Effort</th><th>Progress</th><th>Status</th><th /></tr></thead><tbody>{rows.map((task) => {
+        {rows.length ? <div className="table-wrap"><table><thead><tr><th>WBS</th><th><LocalizedText text={"Task"} /></th><th><LocalizedText text={"Visibility"} /></th><th><LocalizedText text={"Plan"} /></th><th><LocalizedText text={"Work days"} /></th><th><LocalizedText text={"PIC"} /></th><th><LocalizedText text={"Effort"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th /></tr></thead><tbody>{rows.map((task) => {
           const canProgress = activeSchedule.canUpdateProgress
             && bootstrap.permissions.includes("schedule.progress")
             && task.kind !== "phase"
@@ -1183,36 +1332,39 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             && task.pics.some((pic) => pic.id === bootstrap.user.id);
           return <tr key={task.id}>
             <td><strong className="mono">{task.wbs}</strong></td>
-            <td style={{ paddingLeft: 10 + task.depth * 18 }}><div className="cell-primary"><strong>{task.name}</strong><span>{task.kind}{task.isMilestone ? " · Milestone" : ""} · {task.origin}</span></div></td>
+            <td style={{ paddingLeft: 10 + task.depth * 18 }}><div className="cell-primary"><strong>{task.name}</strong><span>{task.kind}{task.isMilestone ? " · Milestone" : ""} <LocalizedText text={"·"} /> {task.origin}</span></div></td>
             <td><Badge tone={task.visibility === "Customer" ? "blue" : "slate"}>{task.visibility}</Badge></td>
             <td>{date(task.planStart)} – {date(task.planFinish)}</td>
             <td className="num">{task.workDays}</td>
             <td>{task.pics.length ? task.pics.map((pic) => pic.name).join(", ") : task.picExternal || "—"}</td>
-            <td className="num">{number(task.planManDays)} MD</td>
+            <td className="num">{number(task.planManDays)} <LocalizedText text={"MD"} /></td>
             <td style={{ minWidth: 120 }}><ProgressCell value={Number(task.percentComplete)} /></td>
             <td><Badge>{task.status}</Badge></td>
-            <td>{canProgress ? <button className="btn sm default" type="button" onClick={() => setProgressTask(task)}><Icon name="edit" />Update</button> : null}</td>
+            <td>{canProgress ? <button className="btn sm default" type="button" onClick={() => setProgressTask(task)}><Icon name="edit" /><LocalizedText text={"Update"} /></button> : null}
+              {canProgress && bootstrap.permissions.includes("signing.request") ? <button className="btn sm default" type="button" onClick={() => setDrawingTask({projectId:activeSchedule.projectId,taskId:task.id})}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
+            </td>
           </tr>;
-        })}</tbody></table></div> : loadingSchedule ? <div className="empty"><span className="spinner" />Loading…</div> : <EmptyState icon="calendar" title="This project has no schedule yet" message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
+        })}</tbody></table></div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
       {canPlan && pendingDayRequests.length ? <Panel title="Requests waiting for the PM" subtitle="Accepting extends the task plan; rejecting leaves the dates unchanged" flush><div className="panel-body">
         {pendingDayRequests.map((request) => {
           const requestedTask = request.taskId ? rows.find((task) => task.id === request.taskId) : null;
-          return <div className="request-row" key={`pending:${request.id}`}><div className="request-head"><Badge tone="amber">+{request.requestDays} days</Badge><strong>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : `Task ${request.taskId ?? "—"}`}</strong><span className="muted">requested by {request.actor.name} · {dateTime(request.occurredAt)}</span></div><p className="muted">{request.comment || "No reason provided"}</p><button className="btn primary sm" type="button" disabled={!requestedTask} onClick={() => setAnswerRequest(request)}><Icon name="checkCircle" />Review request</button></div>;
+          return <div className="request-row" key={`pending:${request.id}`}><div className="request-head"><Badge tone="amber">+{request.requestDays} {"days"}</Badge><strong>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : `Task ${request.taskId ?? "—"}`}</strong><span className="muted"><LocalizedText text={"requested by"} /> {request.actor.name} <LocalizedText text={"·"} /> {dateTime(request.occurredAt)}</span></div><p className="muted">{request.comment || "No reason provided"}</p><button className="btn primary sm" type="button" disabled={!requestedTask} onClick={() => setAnswerRequest(request)}><Icon name="checkCircle" /><LocalizedText text={"Review request"} /></button></div>;
         })}
       </div></Panel> : null}
-      {activeSchedule.recentUpdates.length ? <Panel title="Recent schedule activity" subtitle="100 รายการล่าสุดจาก audit trail ของ Schedule" flush><div className="table-wrap"><table><thead><tr><th>When</th><th>Actor</th><th>Task</th><th>Field</th><th>Change</th><th>Comment</th><th>Decision</th></tr></thead><tbody>{activeSchedule.recentUpdates.slice(0, 20).map((update) => {
+      {activeSchedule.recentUpdates.length ? <Panel title="Recent schedule activity" subtitle="100 รายการล่าสุดจาก audit trail ของ Schedule" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"When"} /></th><th><LocalizedText text={"Actor"} /></th><th><LocalizedText text={"Task"} /></th><th><LocalizedText text={"Field"} /></th><th><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Decision"} /></th></tr></thead><tbody>{activeSchedule.recentUpdates.slice(0, 20).map((update) => {
         const requestedTask = update.taskId ? rows.find((task) => task.id === update.taskId) : null;
         const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
         return <tr key={update.id}>
           <td>{dateTime(update.occurredAt)}</td><td>{update.actor.name}</td><td>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : update.taskId ?? "Schedule"}</td><td><Badge>{update.field}</Badge></td>
           <td className="wrap">{update.requestDays > 0 ? `+${update.requestDays} days requested` : `${update.fromValue ?? "—"} → ${update.toValue ?? "—"}`}</td>
           <td className="wrap">{update.comment || "—"}</td>
-          <td>{pendingRequest && requestedTask && canPlan ? <button className="btn sm primary" type="button" onClick={() => setAnswerRequest(update)}><Icon name="checkCircle" />Review</button> : update.answer ? <div className="cell-primary"><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge><span>{update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span></div> : "—"}</td>
+          <td>{pendingRequest && requestedTask && canPlan ? <button className="btn sm primary" type="button" onClick={() => setAnswerRequest(update)}><Icon name="checkCircle" /><LocalizedText text={"Review"} /></button> : update.answer ? <div className="cell-primary"><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge><span>{update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span></div> : "—"}</td>
         </tr>;
       })}</tbody></table></div></Panel> : null}
-    </> : loadingProjects || loadingSchedule ? <Panel><div className="empty"><span className="spinner" />Loading schedule…</div></Panel> : <Panel><EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" /></Panel>}
+    </> : loadingProjects || loadingSchedule ? <Panel><div className="empty"><span className="spinner" /><LocalizedText text={"Loading schedule…"} /></div></Panel> : <Panel><EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" /></Panel>}
     {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} onClose={() => setCreateOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} schedule row created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
+    {drawingTask ? <CreateSignableDocumentModal initialProjectId={drawingTask.projectId} initialTaskId={drawingTask.taskId} onClose={() => setDrawingTask(null)} onCreated={message => {setDrawingTask(null);notify(`${message} · Open Signed Documents to request approval`);}} /> : null}
     {baselineOpen && activeSchedule ? <BaselineModal schedule={activeSchedule} onClose={() => setBaselineOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} baseline created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, forecastFinish: progressTask.forecastFinish, remark: progressTask.remark }} onClose={() => setProgressTask(null)} onSubmit={async (input) => {
       await apiRequest(`/api/v1/schedule/tasks/${progressTask.id}/updates`, { method: "POST", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: progressTask.rowVersion, ...input }) });
@@ -1230,13 +1382,14 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
 }
 
 export function ProductionResourcePlan({ bootstrap }: ProductionPlanningProps) {
+  const uiText = useUiText();
   const hasScheduleRead = bootstrap.permissions.includes("schedule.read");
   const hasProjectRead = bootstrap.permissions.includes("project.read");
   const allowed = hasScheduleRead && hasProjectRead;
   const { projects, schedules, skippedSchedules, loading, error, load } = useSchedules(allowed);
   if (!allowed) {
     const missing = [!hasScheduleRead ? "schedule.read" : "", !hasProjectRead ? "project.read" : ""].filter(Boolean).join(" + ");
-    return <><PageHeader eyebrow="CAPACITY VISIBILITY" title="Resource Plan" subtitle="ภาระงานจริงจาก Project Schedule" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Project และ Schedule ให้บทบาทนี้" /></>;
+    return <><PageHeader eyebrow="CAPACITY VISIBILITY" title={uiText("Resource Plan")} subtitle="ภาระงานจริงจาก Project Schedule" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Project และ Schedule ให้บทบาทนี้" /></>;
   }
   const allLeaves = schedules.flatMap((schedule) => leafTasks(schedule).map((task) => ({ schedule, task })));
   const resourceRows = bootstrap.team.map((member) => {
@@ -1250,105 +1403,385 @@ export function ProductionResourcePlan({ bootstrap }: ProductionPlanningProps) {
   const unassigned = allLeaves.filter(({ task }) => task.pics.length === 0).length;
   const plannedEffort = allLeaves.reduce((sum, { task }) => sum + Number(task.planManDays), 0);
   return <>
-    <PageHeader eyebrow="CAPACITY VISIBILITY" title="Resource Plan" subtitle="สรุป PIC และ Planned man-days จาก Schedule จริง; ระบบไม่สมมติ Capacity ที่ยังไม่มี Master data" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>} />
+    <PageHeader eyebrow="CAPACITY VISIBILITY" title={uiText("Resource Plan")} subtitle="สรุป PIC และ Planned man-days จาก Schedule จริง; ระบบไม่สมมติ Capacity ที่ยังไม่มี Master data" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <div className="kpi-grid four">
       <KpiCard label="Projects loaded" value={schedules.length} note={`${projects.length} projects returned by portfolio`} tone="blue" icon="folder" />
       <KpiCard label="Planned tasks" value={allLeaves.length} note="leaf schedule tasks" tone="violet" icon="checkCircle" />
       <KpiCard label="Planned effort" value={`${number(plannedEffort)} MD`} note="ยังไม่หักวันหยุดรายบุคคล" tone="green" icon="users" />
       <KpiCard label="Unassigned" value={unassigned} note="tasks without internal PIC" tone={unassigned ? "amber" : "green"} icon="alertTriangle" />
     </div>
-    {skippedSchedules ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong>บางโครงการไม่ถูกนำมารวม</strong><small>โหลด Schedule ไม่สำเร็จหรือไม่มีสิทธิ์ {skippedSchedules} โครงการจาก {projects.length} โครงการ</small></span></div> : null}
+    {skippedSchedules ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"บางโครงการไม่ถูกนำมารวม"} /></strong><small><LocalizedText text={"โหลด Schedule ไม่สำเร็จหรือไม่มีสิทธิ์"} /> {skippedSchedules} <LocalizedText text={"โครงการจาก"} /> {projects.length} <LocalizedText text={"โครงการ"} /></small></span></div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <div className="grid-main">
       <Panel title={`${resourceRows.length} active team members`} subtitle="Effort แบ่งเท่ากันเมื่อ Task มี PIC หลายคน" flush>
-        {resourceRows.length ? <div className="table-wrap"><table><thead><tr><th>Team member</th><th>Role / Department</th><th>Assigned</th><th>Active</th><th>Overdue</th><th>Planned effort</th><th>Next finish</th></tr></thead><tbody>{resourceRows.map(({ member, assigned, active, overdue, effort, nextFinish }) => <tr key={member.id}><td><div className="cell-primary"><strong>{member.name}</strong><span>{member.email}</span></div></td><td><div className="cell-primary"><strong>{member.role}</strong><span>{member.department} · {member.level || "—"}</span></div></td><td className="num">{assigned}</td><td className="num">{active}</td><td className="num">{overdue ? <Badge tone="red">{overdue}</Badge> : "0"}</td><td className="num"><strong>{number(effort)} MD</strong></td><td>{date(nextFinish)}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading…</div> : <EmptyState icon="users" title="No active team member" message="Provision users before assigning schedule work" />}
+        {resourceRows.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Team member"} /></th><th><LocalizedText text={"Role / Department"} /></th><th><LocalizedText text={"Assigned"} /></th><th><LocalizedText text={"Active"} /></th><th><LocalizedText text={"Overdue"} /></th><th><LocalizedText text={"Planned effort"} /></th><th><LocalizedText text={"Next finish"} /></th></tr></thead><tbody>{resourceRows.map(({ member, assigned, active, overdue, effort, nextFinish }) => <tr key={member.id}><td><div className="cell-primary"><strong>{member.name}</strong><span>{member.email}</span></div></td><td><div className="cell-primary"><strong>{member.role}</strong><span>{member.department} <LocalizedText text={"·"} /> {member.level || "—"}</span></div></td><td className="num">{assigned}</td><td className="num">{active}</td><td className="num">{overdue ? <Badge tone="red">{overdue}</Badge> : "0"}</td><td className="num"><strong>{number(effort)} <LocalizedText text={"MD"} /></strong></td><td>{date(nextFinish)}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="users" title="No active team member" message="Provision users before assigning schedule work" />}
       </Panel>
       <Panel title="Schedule coverage" subtitle="ข้อมูลที่ใช้คำนวณ Resource Plan" flush>
-        {schedules.length ? <div className="table-wrap"><table><thead><tr><th>Project</th><th>Tasks</th><th>Progress</th><th>Plan finish</th></tr></thead><tbody>{schedules.map((schedule) => <tr key={schedule.projectId}><td><div className="cell-primary"><strong className="mono">{schedule.projectNo}</strong><span>{schedule.projectName}</span></div></td><td className="num">{schedule.summary.taskCount}</td><td style={{ minWidth: 105 }}><ProgressCell value={Number(schedule.summary.percentComplete)} /></td><td>{date(schedule.summary.planFinish)}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading…</div> : <EmptyState icon="calendar" title="No schedule data" message="สร้าง Schedule ในโครงการเพื่อเริ่ม Resource Plan" />}
+        {schedules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Tasks"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Plan finish"} /></th></tr></thead><tbody>{schedules.map((schedule) => <tr key={schedule.projectId}><td><div className="cell-primary"><strong className="mono">{schedule.projectNo}</strong><span>{schedule.projectName}</span></div></td><td className="num">{schedule.summary.taskCount}</td><td style={{ minWidth: 105 }}><ProgressCell value={Number(schedule.summary.percentComplete)} /></td><td>{date(schedule.summary.planFinish)}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title="No schedule data" message="สร้าง Schedule ในโครงการเพื่อเริ่ม Resource Plan" />}
       </Panel>
     </div>
   </>;
 }
 
 function PriceAgeBadge({ record }: { record: PriceRecord }) {
-  if (record.ageDays === null) return <Badge tone="amber">No date</Badge>;
-  if (record.ageDays <= 90) return <Badge tone="green">{record.ageDays} days</Badge>;
-  if (record.ageDays <= 180) return <Badge tone="amber">{record.ageDays} days</Badge>;
-  return <Badge tone="red">{record.ageDays} days</Badge>;
+  if (record.ageDays === null) return <Badge tone="amber"><LocalizedText text={"No date"} /></Badge>;
+  if (record.ageDays <= 90) return <Badge tone="green">{record.ageDays} {"days"}</Badge>;
+  if (record.ageDays <= 180) return <Badge tone="amber">{record.ageDays} {"days"}</Badge>;
+  return <Badge tone="red">{record.ageDays} {"days"}</Badge>;
 }
 
 function PriceLoadWarning({ estimateCount, skippedWorkspaces }: Pick<PriceLoadState, "estimateCount" | "skippedWorkspaces">) {
-  return skippedWorkspaces ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong>Price view บางส่วนไม่ถูกโหลด</strong><small>ไม่สามารถอ่าน Cost workspace {skippedWorkspaces} จาก {estimateCount} estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น</small></span></div> : null;
+  return skippedWorkspaces ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Price view บางส่วนไม่ถูกโหลด"} /></strong><small><LocalizedText text={"ไม่สามารถอ่าน Cost workspace"} /> {skippedWorkspaces} <LocalizedText text={"From"} /> {estimateCount} <LocalizedText text={"estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น"} /></small></span></div> : null;
 }
 
 export function ProductionPriceLibrary({ bootstrap }: ProductionPlanningProps) {
+  const uiText = useUiText();
   const allowed = bootstrap.permissions.includes("estimate.read");
-  const { records, estimateCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
+  const { records, estimateCount, historicalCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("All sources");
-  if (!allowed) return <><PageHeader eyebrow="COST KNOWLEDGE" title="Price Library" subtitle="ราคาที่ใช้งานจริงจาก Estimate cost items" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
+  const [supplier, setSupplier] = useState("All suppliers");
+  const [age, setAge] = useState("All ages");
+  const [pageSize, setPageSize] = useState(50);
+  const [page, setPage] = useState(1);
+  if (!allowed) return <><PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="ราคาที่ใช้งานจริงจาก Estimate cost items" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
   const priced = records.filter((record) => record.unitCost > 0);
   const sources = ["All sources", ...Array.from(new Set(priced.map((record) => record.priceSource).filter(Boolean))).sort()];
+  const suppliers = ["All suppliers", ...Array.from(new Set(priced.map((record) => record.supplierName).filter((value): value is string => Boolean(value)))).sort()];
   const rows = priced.filter((record) => {
     const haystack = `${record.itemCode} ${record.description} ${record.brand} ${record.model} ${record.supplierName ?? ""} ${record.estimateNo} ${record.projectName} ${record.referenceNumber ?? ""}`.toLowerCase();
-    return haystack.includes(search.toLowerCase()) && (source === "All sources" || record.priceSource === source);
+    const ageMatches = age === "All ages"
+      || (age === "Fresh 0–90 days" && record.ageDays !== null && record.ageDays <= 90)
+      || (age === "Aging 91–180 days" && record.ageDays !== null && record.ageDays > 90 && record.ageDays <= 180)
+      || (age === "Stale / undated" && (record.ageDays === null || record.ageDays > 180));
+    return haystack.includes(search.toLowerCase())
+      && (source === "All sources" || record.priceSource === source)
+      && (supplier === "All suppliers" || record.supplierName === supplier)
+      && ageMatches;
   });
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const from = rows.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const to = Math.min(currentPage * pageSize, rows.length);
+  const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const fresh = priced.filter((record) => record.ageDays !== null && record.ageDays <= 90).length;
   const aging = priced.filter((record) => record.ageDays !== null && record.ageDays > 90 && record.ageDays <= 180).length;
   const stale = priced.filter((record) => record.ageDays === null || record.ageDays > 180).length;
   return <>
-    <PageHeader eyebrow="COST KNOWLEDGE" title="Price Library" subtitle="สร้างจาก Cost item ของ revision ปัจจุบันใน Estimate จริงที่เข้าถึงได้; ไม่มี Mock price" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>} />
-    <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`from ${estimateCount} estimates`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
-    <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search item, brand, model, supplier, project or reference…" /><Select label="Price source" value={source} onChange={setSource} options={sources} /></Toolbar>
+    <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
+    <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchase records`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
+    <Toolbar>
+      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
+      <Select label="Price source" value={source} onChange={(value) => { setSource(value); setPage(1); }} options={sources} />
+      <Select label="Supplier" value={supplier} onChange={(value) => { setSupplier(value); setPage(1); }} options={suppliers} />
+      <Select label="Price age" value={age} onChange={(value) => { setAge(value); setPage(1); }} options={["All ages", "Fresh 0–90 days", "Aging 91–180 days", "Stale / undated"]} />
+    </Toolbar>
     <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${rows.length} live price records`} subtitle="แต่ละแถวคือการใช้ราคาใน Estimate cost item จริง" flush>
-      {rows.length ? <div className="table-wrap"><table><thead><tr><th>Item</th><th>Brand / Model</th><th>Supplier</th><th>Unit price</th><th>Price date / Age</th><th>Source</th><th>Reference</th><th>Estimate / Project</th><th>Owner</th></tr></thead><tbody>{rows.map((record) => <tr key={record.key}><td><div className="cell-primary"><strong className="mono">{record.itemCode || `LINE-${record.itemId}`}</strong><span>{record.description}</span></div></td><td><div className="cell-primary"><strong>{record.brand || "—"}</strong><span>{record.model || "—"}</span></div></td><td>{record.supplierName || "—"}</td><td className="num"><strong>{money(record.unitCost)}</strong><small className="muted"> / {record.unit}</small></td><td><div className="cell-primary"><strong>{date(record.priceDate)}</strong><span><PriceAgeBadge record={record} /></span></div></td><td><Badge>{record.priceSource || "Unspecified"}</Badge></td><td className="mono">{record.referenceNumber || "—"}</td><td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td><td>{record.ownerName}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading cost workspaces…</div> : <EmptyState icon="book" title="No priced cost item found" message="เพิ่ม Unit cost ใน Estimate เพื่อสร้าง Price record จริงรายการแรก" />}
+    <Panel title={rows.length + " live price records"} subtitle="แต่ละแถวสืบย้อนกลับไปยัง Estimate หรือ PR/PO ที่ซื้อจริงได้" flush>
+      <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
+      {pageRows.length ? <div className="table-wrap">
+        <table style={{ minWidth: 1580 }}>
+          <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Qty / Unit"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Line total"} /></th><th><LocalizedText text={"Price date / Age"} /></th><th><LocalizedText text={"Source / Reference"} /></th><th><LocalizedText text={"Estimate / Project"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
+          <tbody>{pageRows.map((record) => <tr key={record.key}>
+            <td><div className="cell-primary"><strong className="mono">{record.itemCode || "LINE-" + record.itemId}</strong><span>{record.description}</span></div></td>
+            <td><div className="cell-primary"><strong>{record.brand || "—"}</strong><span>{record.model || "—"}</span></div></td>
+            <td>{record.supplierName || "—"}</td>
+            <td className="num"><strong>{number(record.quantity)}</strong><small className="muted"> {record.unit}</small></td>
+            <td className="num"><strong>{money(record.unitCost)}</strong><small className="muted"> <LocalizedText text={"of"} /> {record.unit}</small></td>
+            <td className="num"><strong>{money(record.lineTotal)}</strong></td>
+            <td><div className="cell-primary"><strong>{date(record.priceDate)}</strong><span><PriceAgeBadge record={record} /></span></div></td>
+            <td><div className="cell-primary"><strong>{record.priceSource || "Unspecified"}</strong><span className="mono">{record.referenceNumber || "—"} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td>
+            <td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td>
+            <td>{record.ownerName}</td>
+            <td><Badge>{record.lineStatus}</Badge></td>
+          </tr>)}</tbody>
+        </table>
+      </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading cost workspaces…"} /></div> : <EmptyState icon="book" title="No priced cost item found" message="ไม่พบข้อมูลตามตัวกรอง หรือยังไม่มี Unit cost ใน Estimate" />}
+      <Pagination page={currentPage} pageCount={pageCount} from={from} to={to} total={rows.length} onPage={setPage} />
     </Panel>
   </>;
 }
 
-export function ProductionSupplierQuotations({ bootstrap }: ProductionPlanningProps) {
+const supplierQuotationCurrency = (value: number, currency: SupplierQuotationRecord["currency"]) =>
+  new Intl.NumberFormat(currentLocale(), { style: "currency", currency, maximumFractionDigits: currency === "JPY" ? 0 : 2 }).format(value);
+
+const addIsoDays = (value: string, days: number) => {
+  const parsed = new Date(value + "T00:00:00Z");
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+};
+
+const quotationFileKind = (name: string) => {
+  const extension = name.split(".").pop()?.toLowerCase();
+  if (extension === "pdf") return "PDF";
+  if (extension === "xls" || extension === "xlsx" || extension === "csv") return "Excel";
+  if (extension === "jpg" || extension === "jpeg" || extension === "png") return "Image";
+  return "File";
+};
+
+function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
+  bootstrap: BootstrapData;
+  onClose: () => void;
+  onCreated: (quotationNumber: string) => Promise<void>;
+}) {
+  const [supplierId, setSupplierId] = useState(String(bootstrap.suppliers[0]?.id ?? ""));
+  const [supplierReference, setSupplierReference] = useState("");
+  const [receivedDate, setReceivedDate] = useState(isoToday());
+  const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
+  const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>("THB");
+  const [amount, setAmount] = useState("");
+  const [inquiryId, setInquiryId] = useState("");
+  const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void listInquiries({ page: 1, pageSize: 100 }).then((response) => {
+      if (active) setInquiries(response.items.map((item) => ({
+        id: item.id,
+        number: item.number,
+        projectName: item.projectName,
+        customerName: item.customerName,
+      })));
+    }).catch((requestError) => {
+      if (active) setError(toError(requestError));
+    });
+    return () => { active = false; };
+  }, []);
+
+  const parsedAmount = Number(amount);
+  const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
+    || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
+  const submit = async () => {
+    if (invalid || !file) return;
+    setBusy(true);
+    setError("");
+    try {
+      const created = await createSupplierQuotation({
+        file,
+        supplierId: Number(supplierId),
+        supplierReference: supplierReference.trim(),
+        receivedDate,
+        validUntil,
+        inquiryId: inquiryId ? Number(inquiryId) : undefined,
+        currency,
+        amount: parsedAmount,
+      });
+      await onCreated(created.quotationNumber);
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <Modal
+    title="Upload supplier quotation"
+    subtitle="ระบบออกเลข SQ-YYMM-XXXX และเก็บไฟล์กับ metadata ลงฐานข้อมูลจริง"
+    size="lg"
+    onClose={onClose}
+    footer={<>
+      <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+      <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
+        <Icon name="upload" /><LocalizedText text={busy ? "Uploading…" : "Upload quotation"} />
+      </button>
+    </>}
+  >
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Upload failed"} /></strong><small>{error}</small></span></div> : null}
+    <div className="form-grid two">
+      <Field label="System quotation no." hint="Generated automatically after upload">
+        <input value="SQ-YYMM-XXXX" readOnly />
+      </Field>
+      <Field label="Supplier *">
+        <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} <LocalizedText text={"·"} /> {supplier.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Supplier quotation / reference">
+        <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
+      </Field>
+      <Field label="Related inquiry">
+        <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
+          <option value=""><LocalizedText text={"Not linked"} /></option>
+          {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} <LocalizedText text={"·"} /> {inquiry.projectName} <LocalizedText text={"·"} /> {inquiry.customerName}</option>)}
+        </select>
+      </Field>
+      <Field label="Received date *">
+        <input type="date" value={receivedDate} onChange={(event) => {
+          setReceivedDate(event.target.value);
+          if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
+        }} />
+      </Field>
+      <Field label="Valid until *">
+        <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+      </Field>
+      <Field label="Currency *">
+        <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
+          <option value={"THB"}><LocalizedText text={"THB"} /></option><option value={"JPY"}>JPY</option><option value={"USD"}>USD</option><option value={"EUR"}>EUR</option>
+        </select>
+      </Field>
+      <Field label="Quotation amount *">
+        <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
+      </Field>
+      <Field label="Quotation file *" hint="PDF, Excel, CSV, JPG or PNG · maximum 50 MB" span={2}>
+        <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+      </Field>
+    </div>
+    {file ? <div className="file-row"><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} <LocalizedText text={"·"} /> {number(file.size / 1024, 1)} KB</span></div></div> : null}
+  </Modal>;
+}
+
+export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPlanningProps) {
   const allowed = bootstrap.permissions.includes("estimate.read");
-  const { records, estimateCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
+  const canUpload = bootstrap.permissions.includes("estimate.write");
+  const [result, setResult] = useState<{ items: SupplierQuotationRecord[]; page: number; pageSize: number; total: number }>({
+    items: [], page: 1, pageSize: 50, total: 0,
+  });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
-  if (!allowed) return <><PageHeader eyebrow="SUPPLIER SOURCING" title="Supplier Quotations" subtitle="แหล่งราคาผู้ขายที่ผูกกับ Estimate" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
-  const supplierRows = records.filter((record) => record.supplierId !== null && (sourceIncludesSupplier(record.priceSource) || Boolean(record.referenceNumber)));
-  const rows = supplierRows.filter((record) => `${record.supplierName ?? ""} ${record.referenceNumber ?? ""} ${record.itemCode} ${record.description} ${record.estimateNo} ${record.projectName}`.toLowerCase().includes(search.toLowerCase()));
-  const supplierCount = new Set(supplierRows.map((record) => record.supplierId)).size;
-  const referenced = supplierRows.filter((record) => Boolean(record.referenceNumber)).length;
-  const stale = supplierRows.filter((record) => record.ageDays === null || record.ageDays > 180).length;
+  const [supplierId, setSupplierId] = useState("");
+  const [status, setStatus] = useState("All statuses");
+  const [loading, setLoading] = useState(allowed);
+  const [error, setError] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const load = useCallback(async () => {
+    if (!allowed) return;
+    void refreshKey;
+    setLoading(true);
+    setError("");
+    try {
+      setResult(await listSupplierQuotations({
+        page,
+        pageSize,
+        search: search.trim() || undefined,
+        supplierId: supplierId ? Number(supplierId) : undefined,
+        status: status === "All statuses" ? undefined : status,
+      }));
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [allowed, page, pageSize, refreshKey, search, status, supplierId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  if (!allowed) return <><PageHeader eyebrow="SUPPLIER SOURCING" title="Supplier Quotations" subtitle="ทะเบียนใบเสนอราคาผู้ขาย" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
+
+  const pageCount = Math.max(1, Math.ceil(result.total / pageSize));
+  const from = result.total ? (page - 1) * pageSize + 1 : 0;
+  const to = Math.min(page * pageSize, result.total);
+  const countStatus = (value: SupplierQuotationRecord["status"]) => result.items.filter((item) => item.status === value).length;
+  const download = async (record: SupplierQuotationRecord) => {
+    setDownloadingId(record.id);
+    try {
+      const downloaded = await downloadSupplierQuotation(record.id);
+      const href = URL.createObjectURL(downloaded.blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = downloaded.fileName || record.fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+    } catch (requestError) {
+      notify("Download failed: " + toError(requestError));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return <>
-    <PageHeader eyebrow="SUPPLIER SOURCING" title="Supplier Quotations" subtitle="รายการนี้สรุปจาก Cost item ที่มี Supplier และ Price source/reference จริง; ระบบยังไม่สร้างเอกสาร quotation จำลอง" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>} />
-    <div className="kpi-grid four"><KpiCard label="Supplier-linked lines" value={supplierRows.length} note={`from ${estimateCount} estimates`} tone="blue" icon="quote" /><KpiCard label="Suppliers" value={supplierCount} note="unique linked suppliers" tone="violet" icon="truck" /><KpiCard label="With reference" value={referenced} note="traceable source number" tone="green" icon="paperclip" /><KpiCard label="Stale / undated" value={stale} note="older than 180 days" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
-    <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search supplier, quotation reference, item, estimate or project…" /></Toolbar>
-    <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
+    <PageHeader
+      eyebrow="SUPPLIER SOURCING"
+      title="Supplier Quotations"
+      subtitle="อัปโหลดและติดตามใบเสนอราคาผู้ขายจริง พร้อมไฟล์ต้นฉบับ เลขอ้างอิง และอายุเอกสาร"
+      actions={<>
+        <button className="btn ghost" type="button" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+        {canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
+      </>}
+    />
+    <div className="kpi-grid four">
+      <KpiCard label="All quotations" value={result.total} note="stored quotation documents" tone="blue" icon="quote" />
+      <KpiCard label="Valid on this page" value={countStatus("Valid")} note="more than 30 days remaining" tone="green" icon="checkCircle" />
+      <KpiCard label="Expiring on this page" value={countStatus("Expiring")} note="within 30 days" tone="amber" icon="clock" />
+      <KpiCard label="Expired on this page" value={countStatus("Expired")} note="validity ended" tone={countStatus("Expired") ? "red" : "green"} icon="alertTriangle" />
+    </div>
+    <Toolbar>
+      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search quotation no., supplier, inquiry, project or file…" />
+      <label className="select-field">
+        <span className="sr-only"><LocalizedText text={"Supplier"} /></span>
+        <select value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setPage(1); }}>
+          <option value=""><LocalizedText text={"All suppliers"} /></option>
+          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} <LocalizedText text={"·"} /> {supplier.name}</option>)}
+        </select>
+        <Icon name="chevronDown" />
+      </label>
+      <Select label="Quotation status" value={status} options={["All statuses", "Valid", "Expiring", "Expired", "Superseded"]} onChange={(value) => { setStatus(value); setPage(1); }} />
+    </Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${rows.length} supplier-linked price records`} subtitle="เลขอ้างอิงว่างหมายถึง Cost item ยังไม่ได้ผูกเลขเอกสารผู้ขาย" flush>
-      {rows.length ? <div className="table-wrap"><table><thead><tr><th>Reference</th><th>Supplier</th><th>Item</th><th>Price</th><th>Date / Age</th><th>Source</th><th>Estimate</th><th>Project</th><th>Status</th></tr></thead><tbody>{rows.map((record) => <tr key={record.key}><td><strong className="mono">{record.referenceNumber || "No reference"}</strong></td><td>{record.supplierName}</td><td><div className="cell-primary"><strong className="mono">{record.itemCode || `LINE-${record.itemId}`}</strong><span>{record.description}</span></div></td><td className="num"><strong>{money(record.unitCost)}</strong></td><td><div className="cell-primary"><strong>{date(record.priceDate)}</strong><span><PriceAgeBadge record={record} /></span></div></td><td><Badge>{record.priceSource}</Badge></td><td className="mono">{record.estimateNo}</td><td>{record.projectName}</td><td><Badge>{record.lineStatus}</Badge></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading cost workspaces…</div> : <EmptyState icon="quote" title="No supplier-linked price source" message="ระบุ Supplier และ Price source/reference ใน Estimate cost item เพื่อให้แสดงที่นี่" />}
+    <Panel title={result.total + " supplier quotations"} subtitle="เอกสารทุกแถวจัดเก็บใน secure document storage และ metadata อยู่ใน SQL Server" flush>
+      <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
+      {result.items.length ? <div className="table-wrap">
+        <table style={{ minWidth: 1500 }}>
+          <thead><tr><th><LocalizedText text={"Quotation No."} /></th><th><LocalizedText text={"Supplier reference"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Valid until"} /></th><th><LocalizedText text={"Inquiry / Project"} /></th><th><LocalizedText text={"Currency"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Attachment"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead>
+          <tbody>{result.items.map((record) => <tr key={record.id}>
+            <td><strong className="mono">{record.quotationNumber}</strong></td>
+            <td className="mono">{record.supplierReference || "—"}</td>
+            <td><strong>{record.supplierName}</strong></td>
+            <td>{date(record.receivedDate)}</td>
+            <td>{date(record.validUntil)}</td>
+            <td><div className="cell-primary"><strong className="mono">{record.inquiryNumber || "Not linked"}</strong><span>{record.projectName || "—"}</span></div></td>
+            <td><Badge>{record.currency}</Badge></td>
+            <td className="num"><strong>{supplierQuotationCurrency(record.amount, record.currency)}</strong></td>
+            <td><div className="cell-primary"><strong>{record.uploadedByName}</strong><span>{dateTime(record.uploadedAt)}</span></div></td>
+            <td><Badge>{record.status}</Badge></td>
+            <td><div className="cell-primary"><strong>{quotationFileKind(record.fileName)}</strong><span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span></div></td>
+            <td><button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}><Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button></td>
+          </tr>)}</tbody>
+        </table>
+      </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading supplier quotations…"} /></div> : <EmptyState icon="quote" title="No supplier quotation found" message="อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก" action={canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : undefined} />}
+      <Pagination page={page} pageCount={pageCount} from={from} to={to} total={result.total} onPage={setPage} />
     </Panel>
+    {showUpload ? <SupplierQuotationUploadModal bootstrap={bootstrap} onClose={() => setShowUpload(false)} onCreated={async (quotationNumber) => {
+      setShowUpload(false);
+      setPage(1);
+      setRefreshKey((value) => value + 1);
+      notify("Supplier quotation " + quotationNumber + " uploaded");
+    }} /> : null}
   </>;
 }
 
 export function ProductionWaitingSupplierPrice({ bootstrap }: ProductionPlanningProps) {
+  const uiText = useUiText();
   const allowed = bootstrap.permissions.includes("estimate.read");
   const { records, estimateCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
   const [search, setSearch] = useState("");
-  if (!allowed) return <><PageHeader eyebrow="PRICE FOLLOW-UP" title="Waiting Supplier Price" subtitle="รายการราคาผู้ขายที่ต้องติดตาม" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
-  const waiting = records.filter((record) => record.supplierId !== null && (record.unitCost <= 0 || record.ageDays === null || record.ageDays > 180));
+  if (!allowed) return <><PageHeader eyebrow="PRICE FOLLOW-UP" title={uiText("Waiting Supplier Price")} subtitle="รายการราคาผู้ขายที่ต้องติดตาม" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
+  const waiting = records.filter((record) => record.sourceKind === "Estimate" && record.supplierId !== null && (record.unitCost <= 0 || record.ageDays === null || record.ageDays > 180));
   const rows = waiting.filter((record) => `${record.supplierName ?? ""} ${record.itemCode} ${record.description} ${record.estimateNo} ${record.projectName}`.toLowerCase().includes(search.toLowerCase()));
   const missing = waiting.filter((record) => record.unitCost <= 0).length;
   const undated = waiting.filter((record) => record.unitCost > 0 && record.ageDays === null).length;
   const stale = waiting.filter((record) => record.unitCost > 0 && record.ageDays !== null && record.ageDays > 180).length;
   const reason = (record: PriceRecord) => record.unitCost <= 0 ? "Missing / zero price" : record.ageDays === null ? "Missing price date" : `Stale ${record.ageDays} days`;
   return <>
-    <PageHeader eyebrow="PRICE FOLLOW-UP" title="Waiting Supplier Price" subtitle="Derivation: Cost item ต้องมี Supplier และราคาเป็นศูนย์/ไม่มี Price date/เก่ากว่า 180 วัน โดยคำนวณจากวันที่ปัจจุบัน" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />Refresh</button>} />
+    <PageHeader eyebrow="PRICE FOLLOW-UP" title={uiText("Waiting Supplier Price")} subtitle="Derivation: Cost item ต้องมี Supplier และราคาเป็นศูนย์/ไม่มี Price date/เก่ากว่า 180 วัน โดยคำนวณจากวันที่ปัจจุบัน" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <div className="kpi-grid four"><KpiCard label="Needs follow-up" value={waiting.length} note={`from ${estimateCount} estimates`} tone="amber" icon="clock" /><KpiCard label="Missing / zero" value={missing} note="no usable unit price" tone={missing ? "red" : "green"} icon="alertTriangle" /><KpiCard label="Missing date" value={undated} note="cannot validate price age" tone={undated ? "amber" : "green"} icon="calendar" /><KpiCard label="Older than 180" value={stale} note="request reconfirmation" tone={stale ? "red" : "green"} icon="refresh" /></div>
     <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search supplier, item, estimate or project…" /></Toolbar>
     <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${rows.length} supplier price follow-ups`} subtitle="รายการนี้เป็นมุมมองคำนวณจากข้อมูลจริง ไม่ได้เปลี่ยนสถานะ Cost item อัตโนมัติ" flush>
-      {rows.length ? <div className="table-wrap"><table><thead><tr><th>Reason</th><th>Supplier</th><th>Item</th><th>Current price</th><th>Price date</th><th>Estimate / Project</th><th>Estimate status</th><th>Owner</th><th>Line status</th></tr></thead><tbody>{rows.map((record) => <tr key={record.key}><td><Badge tone="red">{reason(record)}</Badge></td><td>{record.supplierName}</td><td><div className="cell-primary"><strong className="mono">{record.itemCode || `LINE-${record.itemId}`}</strong><span>{record.description}</span></div></td><td className="num">{record.unitCost > 0 ? money(record.unitCost) : "—"}</td><td>{date(record.priceDate)}</td><td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td><td><Badge>{record.estimateStatus}</Badge></td><td>{record.ownerName}</td><td><Badge>{record.lineStatus}</Badge></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" />Loading cost workspaces…</div> : <EmptyState icon="checkCircle" title="No supplier price needs follow-up" message="ไม่พบ Cost item ที่มี Supplier และเข้าเกณฑ์ราคาไม่พร้อมใช้งาน" />}
+      {rows.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Current price"} /></th><th><LocalizedText text={"Price date"} /></th><th><LocalizedText text={"Estimate / Project"} /></th><th><LocalizedText text={"Estimate status"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Line status"} /></th></tr></thead><tbody>{rows.map((record) => <tr key={record.key}><td><Badge tone="red">{reason(record)}</Badge></td><td>{record.supplierName}</td><td><div className="cell-primary"><strong className="mono">{record.itemCode || `LINE-${record.itemId}`}</strong><span>{record.description}</span></div></td><td className="num">{record.unitCost > 0 ? money(record.unitCost) : "—"}</td><td>{date(record.priceDate)}</td><td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td><td><Badge>{record.estimateStatus}</Badge></td><td>{record.ownerName}</td><td><Badge>{record.lineStatus}</Badge></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading cost workspaces…"} /></div> : <EmptyState icon="checkCircle" title="No supplier price needs follow-up" message="ไม่พบ Cost item ที่มี Supplier และเข้าเกณฑ์ราคาไม่พร้อมใช้งาน" />}
     </Panel>
   </>;
 }

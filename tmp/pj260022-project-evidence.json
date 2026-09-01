@@ -1,0 +1,69 @@
+{
+  "projectCode": "PJ260022",
+  "recommendedProjectName": "SR Jig for HOWA",
+  "customer": "SATO AUTO-ID (THAILAND) CO., LTD.",
+  "endUser": "HOWA PACKAGING (THAILAND) CO., LTD.",
+  "customerEvidence": ["20260205 - 【PJ260022】Project schedule for HOWA - SR Jig Stand.xlsx: GanttChart!B2 end user, B3 customer", "SATO Signed Back .pdf: page1 To and Project fields"],
+  "signedQuotation": {
+    "source": "SATO Signed Back .pdf",
+    "page": 1,
+    "number": "QT260122-01",
+    "date": "2026-01-22",
+    "revision": "#01",
+    "quotationBy": "Ryo Nozaki",
+    "customerSignatureNameVisible": "SATO Sakabe",
+    "handwrittenCustomerSignatureDate": null,
+    "salesAmountBeforeVat": 105260,
+    "vatRate": 0.07,
+    "vatAmount": 7368.20,
+    "grandTotalIncludingVat": 112628.20,
+    "currency": "THB",
+    "paymentTerms": ["50% DP upon PO within 7 days", "40% after Delivery", "10% after hand over"],
+    "leadTime": "4-8 weeks after received P/O",
+    "expiryDate": "2026-02-25",
+    "exclusion": "Does not include Keyence hardware",
+    "items": [
+      {"description":"Sensor Jig Stand modification parts","quantity":2,"unit":"set","unitPrice":15630,"total":31260},
+      {"description":"Control Box modification parts","quantity":2,"unit":"set","unitPrice":4000,"total":8000},
+      {"description":"Mechanical Drawing Design","quantity":1,"unit":"job","unitPrice":8000,"total":8000},
+      {"description":"Mechanical Assembly and Test","quantity":1,"unit":"job","unitPrice":8000,"total":8000},
+      {"description":"Mechanical Installation, Test","quantity":2,"unit":"job","unitPrice":8000,"total":16000},
+      {"description":"Transportation","quantity":1,"unit":"job","unitPrice":2000,"total":2000},
+      {"description":"Electrical Drawing design","quantity":1,"unit":"job","unitPrice":8000,"total":8000},
+      {"description":"Electrical Assembly + Wiring","quantity":1,"unit":"job","unitPrice":8000,"total":8000},
+      {"description":"Installation and AutoID Configuration","quantity":2,"unit":"job","unitPrice":8000,"total":16000}
+    ]
+  },
+  "po": {
+    "numberFromFilenameOnly": "PO26020003",
+    "source": "PO26020003_Jig Stand for SR-X100W.pdf",
+    "page": 1,
+    "content": "Engineering drawing SR JIG STAND MZ00-U001, not a purchase-order document",
+    "drawingDate": "2026-01-22",
+    "handwrittenDrawingAcceptanceDate": "2026-02-03",
+    "designedDrawnCheckedBy": "Warit",
+    "projectNumberInDrawing": "PJ000000",
+    "poDate": null,
+    "poAmount": null
+  },
+  "schedule": {
+    "source": "20260205 - 【PJ260022】Project schedule for HOWA - SR Jig Stand.xlsx",
+    "sheet": "GanttChart",
+    "startDate": "2026-02-01",
+    "startDateCell": "C4",
+    "plannedInstallationAndTrialDate": "2026-02-16",
+    "plannedInstallationAndTrialCells": "E18:F20",
+    "projectLead": null,
+    "projectLeadIssue": "C5 under Project Lead contains a date2026-02-16 instead of person",
+    "knownTaskPics": {"Jig Stand Drawing":"TMT-Nattawat","PR-Request":"TMT-Nattawat","Assemble Jig Stand":"TMT-Nattawat","Hardware procurement":"TMT-Siriwilai","Hardware pre-shipment confirmation":"TMT-Siriwilai"},
+    "historicalCompletedTasks": ["Requirements confirmation H9=100%","Jig Stand Drawing H11=100%","PR-Request H12=100%"],
+    "completionEvidence": "No actual project completion evidence. Installation, configuration and testing H18:H20 are0% in this historical schedule.",
+    "latestKnownScheduleDateFromFilename": "2026-02-05"
+  },
+  "notes": [
+    "Keep user-requested estimate workbook calculation60,950 direct cost /97,520 estimated sale separate from signedquotation105,260 beforeVAT. Do not silently revise one to match the other.",
+    "Customer signature on quotation is not evidence of internal estimate approval or project completion.",
+    "Do not assign PM based on cost-sheet creator, quotation author, drawing designer or task PIC alone.",
+    "A PO identifier in filename is only an unverified reference; PDF content contains no purchaseorder details."
+  ]
+}

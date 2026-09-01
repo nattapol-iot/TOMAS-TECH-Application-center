@@ -23,11 +23,22 @@ public static class EstimateEndpoints
         int pageSize,
         string? search,
         string? status,
+        long? customerId,
+        string? projectType,
+        long? ownerId,
+        string? department,
+        int? revision,
         SqlConnectionFactory connections,
         CurrentUserService users,
         CancellationToken cancellationToken)
     {
         await users.DemandPermissionAsync("estimate.read", cancellationToken);
+        InputValidation.OptionalText(search, 200, "Search");
+        InputValidation.OptionalText(status, 50, "Status");
+        InputValidation.OptionalText(projectType, 100, "Project type");
+        InputValidation.OptionalText(department, 100, "Department");
+        if (customerId is <= 0 || ownerId is <= 0 || revision is < 0)
+            throw new ApiException(StatusCodes.Status400BadRequest, "validation_failed", "Customer, owner and revision filters must contain valid positive identifiers and a non-negative revision.");
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize == 0 ? 25 : pageSize, 1, 100);
         await using var connection = await connections.OpenAsync(cancellationToken);
@@ -36,8 +47,9 @@ public static class EstimateEndpoints
                 e.id, e.estimate_no, i.inquiry_no, e.customer_id, c.name,
                 e.project_name, e.project_type, e.owner_id, u.name, e.revision,
                 e.due_date, e.status, e.progress,
-                t.material_total, t.engineering_total, t.total,
-                e.updated_at, e.row_version, COUNT_BIG(*) OVER()
+                t.material_total, t.engineering_total, t.outsource_total, t.transportation_total,
+                t.accommodation_total, t.other_total, t.contingency_total, t.total,
+                e.created_date, e.updated_at, e.row_version, COUNT_BIG(*) OVER()
             FROM dbo.estimates e
             INNER JOIN dbo.inquiries i ON i.id = e.inquiry_id
             INNER JOIN dbo.customers c ON c.id = e.customer_id
@@ -45,6 +57,11 @@ public static class EstimateEndpoints
             INNER JOIN dbo.v_estimate_totals t ON t.estimate_id = e.id
             WHERE e.deleted_at IS NULL
               AND (@status IS NULL OR e.status = @status)
+              AND (@customer_id IS NULL OR e.customer_id = @customer_id)
+              AND (@project_type IS NULL OR e.project_type = @project_type)
+              AND (@owner_id IS NULL OR e.owner_id = @owner_id)
+              AND (@department IS NULL OR u.department = @department)
+              AND (@revision IS NULL OR e.revision = @revision)
               AND (@search IS NULL OR e.estimate_no LIKE N'%' + @search + N'%'
                    OR i.inquiry_no LIKE N'%' + @search + N'%'
                    OR e.project_name LIKE N'%' + @search + N'%'
@@ -54,6 +71,11 @@ public static class EstimateEndpoints
             """, connection);
         command.Parameters.AddParameter("@status", SqlDbType.NVarChar, string.IsNullOrWhiteSpace(status) ? null : status.Trim(), 50);
         command.Parameters.AddParameter("@search", SqlDbType.NVarChar, string.IsNullOrWhiteSpace(search) ? null : search.Trim(), 200);
+        command.Parameters.AddParameter("@customer_id", SqlDbType.BigInt, customerId);
+        command.Parameters.AddParameter("@project_type", SqlDbType.NVarChar, string.IsNullOrWhiteSpace(projectType) ? null : projectType.Trim(), 100);
+        command.Parameters.AddParameter("@owner_id", SqlDbType.BigInt, ownerId);
+        command.Parameters.AddParameter("@department", SqlDbType.NVarChar, string.IsNullOrWhiteSpace(department) ? null : department.Trim(), 100);
+        command.Parameters.AddParameter("@revision", SqlDbType.Int, revision);
         command.Parameters.AddParameter("@offset", SqlDbType.Int, (page - 1) * pageSize);
         command.Parameters.AddParameter("@page_size", SqlDbType.Int, pageSize);
 
@@ -62,12 +84,14 @@ public static class EstimateEndpoints
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            total = reader.GetInt64(18);
+            total = reader.GetInt64(24);
             items.Add(new EstimateSummary(
                 reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt64(3), reader.GetString(4),
                 reader.GetString(5), reader.GetString(6), reader.GetInt64(7), reader.GetString(8), reader.GetInt32(9),
                 reader.GetFieldValue<DateOnly>(10), reader.GetString(11), reader.GetDecimal(12), reader.GetDecimal(13),
-                reader.GetDecimal(14), reader.GetDecimal(15), reader.GetFieldValue<DateTimeOffset>(16), reader.RowVersionString(17)));
+                reader.GetDecimal(14), reader.GetDecimal(15), reader.GetDecimal(16), reader.GetDecimal(17), reader.GetDecimal(18),
+                reader.GetDecimal(19), reader.GetDecimal(20), reader.GetFieldValue<DateOnly>(21), reader.GetFieldValue<DateTimeOffset>(22),
+                reader.RowVersionString(23)));
         }
         return Results.Ok(new PagedResult<EstimateSummary>(items, page, pageSize, total));
     }
@@ -189,6 +213,12 @@ public static class EstimateEndpoints
     {
         await users.DemandPermissionAsync("estimate.read", cancellationToken);
         await using var connection = await connections.OpenAsync(cancellationToken);
+        await using (var exists = new SqlCommand("SELECT CASE WHEN EXISTS (SELECT 1 FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END;", connection))
+        {
+            exists.Parameters.AddParameter("@id", SqlDbType.BigInt, id);
+            if (!((bool?)await exists.ExecuteScalarAsync(cancellationToken) ?? false))
+                throw new ApiException(StatusCodes.Status404NotFound, "estimate_not_found", "Estimate not found.");
+        }
         var issues = await GetValidationIssuesAsync(connection, null, id, cancellationToken);
         return Results.Ok(new { estimateId = id, valid = issues.Count == 0, issues });
     }
@@ -241,10 +271,11 @@ public static class EstimateEndpoints
             string inquiryNumber;
             string inquiryCurrentStatus;
             decimal inquiryCurrentProgress;
+            long estimateOwnerId;
             byte[] actualRowVersion;
             await using (var lookup = new SqlCommand("""
                 SELECT e.estimate_no, e.status, e.progress, e.revision, e.inquiry_id, e.row_version,
-                       i.inquiry_no, i.status, i.progress
+                       i.inquiry_no, i.status, i.progress, e.owner_id
                 FROM dbo.estimates e WITH (UPDLOCK, HOLDLOCK)
                 INNER JOIN dbo.inquiries i WITH (UPDLOCK, HOLDLOCK) ON i.id = e.inquiry_id
                 WHERE e.id = @id AND e.deleted_at IS NULL AND i.deleted_at IS NULL;
@@ -263,18 +294,19 @@ public static class EstimateEndpoints
                 inquiryNumber = reader.GetString(6);
                 inquiryCurrentStatus = reader.GetString(7);
                 inquiryCurrentProgress = reader.GetDecimal(8);
+                estimateOwnerId = reader.GetInt64(9);
             }
 
             if (!actualRowVersion.AsSpan().SequenceEqual(expectedRowVersion))
                 throw new ApiException(StatusCodes.Status409Conflict, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
             if (!string.Equals(currentStatus, "Engineering Review", StringComparison.OrdinalIgnoreCase))
                 throw new ApiException(StatusCodes.Status409Conflict, "invalid_transition", $"Cannot request a revision while the estimate is '{currentStatus}'.");
+            if (estimateOwnerId == actor.Id)
+                throw new ApiException(StatusCodes.Status403Forbidden, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
 
-            await SnapshotRevisionAsync(connection, transaction, id, currentRevision, reason, actor.Id, cancellationToken);
+            await SnapshotRevisionAsync(connection, transaction, id, currentRevision, reason, "Revision Required", actor.Id, cancellationToken);
 
             var nextRevision = checked(currentRevision + 1);
-            await CloneCurrentCostsAsync(connection, transaction, id, currentRevision, nextRevision, actor.Id, cancellationToken);
-
             byte[] nextRowVersion;
             await using (var updateEstimate = new SqlCommand("""
                 UPDATE dbo.estimates
@@ -293,6 +325,10 @@ public static class EstimateEndpoints
                 nextRowVersion = await updateEstimate.ExecuteScalarAsync(cancellationToken) as byte[]
                     ?? throw new ApiException(StatusCodes.Status409Conflict, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
             }
+
+            // Current-revision triggers validate inserted detail rows against the
+            // estimate header, so advance the header before cloning the new revision.
+            await CloneCurrentCostsAsync(connection, transaction, id, currentRevision, nextRevision, actor.Id, cancellationToken);
 
             await UpdateInquiryWorkflowAsync(connection, transaction, inquiryId, "Estimating", 75, actor.Id, cancellationToken);
 
@@ -396,6 +432,8 @@ public static class EstimateEndpoints
             await using var update = new SqlCommand("""
                 UPDATE dbo.estimates
                 SET status = @status, progress = @progress,
+                    locked_at = CASE WHEN @lock_estimate = 1 THEN SYSUTCDATETIME() ELSE locked_at END,
+                    locked_by = CASE WHEN @lock_estimate = 1 THEN @actor ELSE locked_by END,
                     updated_by = @actor, updated_at = SYSUTCDATETIME()
                 OUTPUT inserted.row_version
                 WHERE id = @id AND row_version = @row_version;
@@ -403,11 +441,15 @@ public static class EstimateEndpoints
             update.Parameters.AddParameter("@status", SqlDbType.NVarChar, targetStatus, 50);
             update.Parameters.AddParameter("@progress", SqlDbType.Decimal, targetProgress, precision: 5, scale: 2);
             update.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+            update.Parameters.AddParameter("@lock_estimate", SqlDbType.Bit, string.Equals(action, "Approved", StringComparison.Ordinal));
             update.Parameters.AddParameter("@id", SqlDbType.BigInt, id);
             update.Parameters.AddParameter("@row_version", SqlDbType.Timestamp, expectedRowVersion);
             var result = await update.ExecuteScalarAsync(cancellationToken);
             if (result is null)
                 throw new ApiException(StatusCodes.Status409Conflict, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+
+            if (string.Equals(action, "Approved", StringComparison.Ordinal))
+                await SnapshotRevisionAsync(connection, (SqlTransaction)transaction, id, currentRevision, "Approved", "Approved", actor.Id, cancellationToken);
 
             await UpdateInquiryWorkflowAsync(connection, (SqlTransaction)transaction, inquiryId, inquiryStatus, inquiryProgress, actor.Id, cancellationToken);
 
@@ -437,6 +479,7 @@ public static class EstimateEndpoints
         long estimateId,
         int revision,
         string reason,
+        string snapshotStatus,
         long actorId,
         CancellationToken cancellationToken)
     {
@@ -484,7 +527,7 @@ public static class EstimateEndpoints
                 reviewed_by, reviewed_at, status, total)
             OUTPUT inserted.id
             SELECT e.id, e.revision, @reason, @snapshot, @actor,
-                   @actor, SYSUTCDATETIME(), N'Revision Required', t.total
+                   @actor, SYSUTCDATETIME(), @snapshot_status, t.total
             FROM dbo.estimates e
             INNER JOIN dbo.v_estimate_totals t ON t.estimate_id = e.id
             WHERE e.id = @estimate_id AND e.revision = @revision;
@@ -492,6 +535,7 @@ public static class EstimateEndpoints
         command.Parameters.AddParameter("@estimate_id", SqlDbType.BigInt, estimateId);
         command.Parameters.AddParameter("@revision", SqlDbType.Int, revision);
         command.Parameters.AddParameter("@reason", SqlDbType.NVarChar, reason, 100);
+        command.Parameters.AddParameter("@snapshot_status", SqlDbType.NVarChar, snapshotStatus, 50);
         command.Parameters.AddParameter("@actor", SqlDbType.BigInt, actorId);
         if (await command.ExecuteScalarAsync(cancellationToken) is null)
             throw new ApiException(StatusCodes.Status409Conflict, "revision_snapshot_failed", "The current estimate revision could not be snapshotted.");

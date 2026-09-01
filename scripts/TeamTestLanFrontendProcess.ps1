@@ -4,7 +4,8 @@ function Test-TeamTestLanFrontendCommandLine(
     $Process,
     [string] $Entrypoint,
     [string] $LanAddress,
-    [int] $FrontendPort
+    [int] $FrontendPort,
+    [ValidateSet('dev', 'start')][string] $RuntimeCommand = 'start'
 ) {
     if (!$Process `
         -or $Process.Name -ne 'node.exe' `
@@ -21,7 +22,8 @@ function Test-TeamTestLanFrontendCommandLine(
     $entrypointPattern = [regex]::Escape($canonicalEntrypoint)
     $addressPattern = [regex]::Escape($LanAddress)
     $portPattern = [regex]::Escape([string]$FrontendPort)
-    $argumentPattern = '(?:^|\s)"?' + $entrypointPattern + '"?\s+dev\s+--hostname\s+"?' +
+    $commandPattern = [regex]::Escape($RuntimeCommand)
+    $argumentPattern = '(?:^|\s)"?' + $entrypointPattern + '"?\s+' + $commandPattern + '\s+--hostname\s+"?' +
         $addressPattern + '"?\s+--port\s+"?' + $portPattern + '"?\s*$'
     return [regex]::IsMatch(
         [string]$Process.CommandLine,

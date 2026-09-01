@@ -1,0 +1,399 @@
+All|ทั้งหมด|すべて
+No customer found|ไม่พบลูกค้า|顧客が見つかりません
+Customer code|รหัสลูกค้า|顧客コード
+Select project|เลือกโครงการ|プロジェクトを選択
+Inventory valuation|มูลค่าสินค้าคงคลัง|在庫評価
+Avg. cost|ต้นทุนเฉลี่ย|平均原価
+Total value|มูลค่ารวม|合計金額
+No inventory value|ไม่มีมูลค่าสินค้าคงคลัง|在庫評価データなし
+Fill rate|อัตราจัดส่งครบ|充足率
+Defect|ข้อบกพร่อง|不良
+On time|ตรงเวลา|期限内
+Lead days|ระยะเวลานำ (วัน)|リードタイム（日）
+No supplier activity|ไม่มีรายการของผู้ขาย|仕入先の取引なし
+Approval stage duration|ระยะเวลาแต่ละขั้นอนุมัติ|承認段階の所要時間
+Stage|ขั้นตอน|段階
+Minimum|ต่ำสุด|最小
+Maximum|สูงสุด|最大
+No completed stages|ยังไม่มีขั้นตอนที่เสร็จ|完了した段階なし
+PR status|สถานะใบขอซื้อ|購買依頼の状態
+Select a project|เลือกโครงการ|プロジェクトを選択
+Procurement exposure|ภาระจัดซื้อ|購買負担
+Procurement ledger|บัญชีจัดซื้อ|購買台帳
+Accounting scope|ขอบเขตทางบัญชี|会計範囲
+COST MASTER|ข้อมูลต้นทุนกลาง|原価マスター
+New Rate|เพิ่มอัตรา|単価を追加
+Enabled records only|แสดงเฉพาะรายการที่เปิดใช้|有効な項目のみ
+Engineering / hour|วิศวกรรม / ชั่วโมง|設計／時間
+Engineering / day|วิศวกรรม / วัน|設計／日
+Installation / hour|ติดตั้ง / ชั่วโมง|設置／時間
+Installation / day|ติดตั้ง / วัน|設置／日
+No engineering rates|ยังไม่มีอัตราค่าวิศวกรรม|技術単価なし
+New engineering rate|เพิ่มอัตราค่าวิศวกรรม|技術単価を追加
+Engineering hourly|ค่าวิศวกรรมต่อชั่วโมง|設計時間単価
+Engineering daily|ค่าวิศวกรรมต่อวัน|設計日単価
+Installation hourly|ค่าติดตั้งต่อชั่วโมง|設置時間単価
+Installation daily|ค่าติดตั้งต่อวัน|設置日単価
+Effective from|มีผลตั้งแต่|適用開始日
+Effective to|มีผลถึง|適用終了日
+IMMUTABLE LEDGER|ประวัติที่แก้ไขย้อนหลังไม่ได้|変更不可の履歴
+Append only|บันทึกเพิ่มเท่านั้น|追記のみ
+Entity|ประเภทข้อมูล|対象種別
+Occurred|เกิดขึ้นเมื่อ|発生日時
+Actor|ผู้ดำเนินการ|実行者
+Project / Qty|โครงการ / จำนวน|プロジェクト／数量
+Project #|เลขโครงการ|プロジェクト番号
+View JSON|ดูข้อมูล JSON|JSONを表示
+Before|ก่อนแก้ไข|変更前
+After|หลังแก้ไข|変更後
+RUNTIME STATUS|สถานะระบบ|システム状態
+Signed-in identity|บัญชีที่เข้าสู่ระบบ|ログイン中のユーザー
+Database user ID|รหัสผู้ใช้ฐานข้อมูล|データベースユーザーID
+Live connections|การเชื่อมต่อปัจจุบัน|現在の接続
+API origin|ที่อยู่ API|API接続先
+Configured|ตั้งค่าแล้ว|設定済み
+Business timezone|เขตเวลาทำการ|業務タイムゾーン
+Authentication|การยืนยันตัวตน|認証
+Configuration ownership|ผู้ดูแลการตั้งค่า|設定の管理者
+Sign|ลงนาม|署名
+Approval|การอนุมัติ|承認
+PR|ใบขอซื้อ|購買依頼
+PO|ใบสั่งซื้อ|発注書
+No inquiry found|ไม่พบ Inquiry|引合が見つかりません
+New production inquiry|สร้าง Inquiry|引合を作成
+Low|ต่ำ|低
+Normal|ปกติ|通常
+High|สูง|高
+Urgent|เร่งด่วน|緊急
+A — Hot|A — สนใจมาก|A — 高関心
+B — Warm|B — สนใจ|B — 関心あり
+C — Nurture|C — ติดตามต่อ|C — 継続フォロー
+D — Low|D — สนใจน้อย|D — 低関心
+Create from inquiry|สร้างจาก Inquiry|引合から作成
+Customer / Project|ลูกค้า / โครงการ|顧客／プロジェクト
+Workflow|ขั้นตอนงาน|ワークフロー
+Costs|ต้นทุน|原価
+Revise|แก้ไขฉบับใหม่|改訂
+No estimate found|ไม่พบประมาณการ|見積が見つかりません
+Add cost item|เพิ่มรายการต้นทุน|原価項目を追加
+New cost item|รายการต้นทุนใหม่|新規原価項目
+Unit cost (THB)|ต้นทุนต่อหน่วย (บาท)|単価（THB）
+Previous Project|โครงการก่อนหน้า|過去のプロジェクト
+Budgetary|ราคาเบื้องต้น|概算価格
+Reference no.|เลขอ้างอิง|参照番号
+No cost item in this revision|ไม่มีรายการต้นทุนในฉบับนี้|この改訂に原価項目はありません
+Loading cost workspace…|กำลังโหลดรายละเอียดต้นทุน…|原価情報を読み込み中…
+Create estimate from inquiry|สร้างประมาณการจาก Inquiry|引合から見積を作成
+Contingency (%)|เงินสำรองเผื่อ (%)|予備費（%）
+APPROVED WORK|งานที่อนุมัติแล้ว|承認済みの業務
+No project found|ไม่พบโครงการ|プロジェクトが見つかりません
+Project folder|โฟลเดอร์โครงการ|プロジェクトフォルダー
+File * · Maximum 50 MiB|ไฟล์ * · ไม่เกิน 50 MiB|ファイル * · 最大50 MiB
+Uploaded|อัปโหลดแล้ว|アップロード済み
+No document uploaded|ยังไม่มีเอกสาร|文書は未登録です
+Create production project|สร้างโครงการ|プロジェクトを作成
+Select approved estimate|เลือกประมาณการที่อนุมัติแล้ว|承認済み見積を選択
+Customer PO number|เลขใบสั่งซื้อของลูกค้า|顧客発注番号
+PO date|วันที่ใบสั่งซื้อ|発注日
+MATERIAL CONTROL|การควบคุมวัสดุ|資材管理
+Reorder only|เฉพาะรายการต้องสั่งเพิ่ม|補充が必要な項目のみ
+Part no.|รหัสชิ้นส่วน|部品番号
+Reorder|สั่งเพิ่ม|補充
+OK|ปกติ|正常
+No inventory item found|ไม่พบสินค้าในคลัง|在庫品が見つかりません
+CONTROLLED MASTER RECORDS|ข้อมูลกลางที่ควบคุม|管理対象マスター
+Add supplier|เพิ่มผู้ขาย|仕入先を追加
+Supplier name|ชื่อผู้ขาย|仕入先名
+No supplier found|ไม่พบผู้ขาย|仕入先が見つかりません
+Supplier code|รหัสผู้ขาย|仕入先コード
+Brands|ยี่ห้อ|ブランド
+Add inventory item|เพิ่มสินค้าในคลัง|在庫品を追加
+Inventory item rules|กติกาข้อมูลสินค้า|在庫品のルール
+Stable item code|รหัสสินค้าคงที่|固定の品目コード
+Opening balance is separate|ยอดยกมาบันทึกแยกต่างหาก|期首残高は別途登録
+active suppliers|ผู้ขายที่ใช้งานอยู่|有効な仕入先
+No preferred supplier|ยังไม่มีผู้ขายหลัก|優先仕入先なし
+Reorder level|จุดสั่งซื้อเพิ่ม|発注点
+Average unit cost (THB)|ต้นทุนเฉลี่ยต่อหน่วย (บาท)|平均単価（THB）
+Lead time (days)|ระยะเวลานำ (วัน)|リードタイム（日）
+Departments|แผนก|部署
+No active team member|ไม่มีสมาชิกที่ใช้งานอยู่|有効なメンバーなし
+ACCESS CONTROL|การควบคุมสิทธิ์|アクセス管理
+Supplier #|รหัสผู้ขาย|仕入先番号
+(inactive)|(ปิดใช้งาน)|(無効)
+No estimate matches the filters|ไม่พบประมาณการตามตัวกรอง|条件に一致する見積なし
+Loading inquiries…|กำลังโหลด Inquiry…|引合を読み込み中…
+Registered inquiry|Inquiry ที่ลงทะเบียนแล้ว|登録済み引合
+Today through five years|ตั้งแต่วันนี้ถึงอีกห้าปี|本日から5年後まで
+Contingency %|เงินสำรองเผื่อ %|予備費 %
+No inquiry available|ไม่มี Inquiry ให้เลือก|選択できる引合なし
+Loading estimate workspace…|กำลังโหลดประมาณการ…|見積を読み込み中…
+critical validation issue(s)|ข้อผิดพลาดที่ต้องแก้|要修正の問題
+Open validation|เปิดผลตรวจสอบ|検証結果を開く
+advisory warning(s)|ข้อควรตรวจสอบ|確認事項
+Notifications|การแจ้งเตือน|通知
+unread notifications|รายการที่ยังไม่ได้อ่าน|件の未読通知
+Mark all as read|อ่านทั้งหมด|すべて既読にする
+No new notifications|ยังไม่มีรายการใหม่|新しい通知はありません
+Discard unsaved report changes?|ออกโดยไม่บันทึกการแก้ไขรายงานหรือไม่?|レポートの未保存の変更を破棄しますか？
+On order|อยู่ระหว่างสั่งซื้อ|発注中
+Date / Time|วันที่ / เวลา|日時
+No attachment yet|ยังไม่มีไฟล์แนบ|添付ファイルなし
+Upload an inquiry document|อัปโหลดเอกสาร Inquiry|引合の文書をアップロード
+Upload the customer RFQ, drawing or specification for this inquiry.|อัปโหลดคำขอราคา แบบ หรือข้อกำหนดของลูกค้า|引合のRFQ・図面・仕様書をアップロードしてください。
+Each file is tagged with a document category and linked to this inquiry|ไฟล์แต่ละรายการระบุหมวดเอกสารและเชื่อมกับ Inquiry นี้|各ファイルに文書分類を付け、この引合に紐付けます。
+No activity yet|ยังไม่มีประวัติการดำเนินการ|操作履歴はまだありません
+Changes to this inquiry will appear here.|การเปลี่ยนแปลง Inquiry จะแสดงที่นี่|引合の変更履歴がここに表示されます。
+Daily rate (Excel)|อัตราต่อวันจาก Excel|Excelの日単価
+Daily rate (Rate Master)|อัตราต่อวันจากข้อมูลกลาง|単価マスターの日単価
+Original Excel rate is retained when adjusting quantity|เมื่อแก้จำนวนจะยังคงอัตราเดิมจาก Excel|数量を変更してもExcelの元の単価を維持します。
+Ratings 1, 2 and 5 require concrete work evidence. Another manager must complete your own review.|คะแนน 1, 2 และ 5 ต้องมีหลักฐานผลงานชัดเจน และให้ผู้จัดการคนอื่นปิดการประเมินของคุณ|評価1・2・5には具体的な業務証跡が必要です。本人の評価は別の管理者が確定します。
+ชื่อบริษัท (ไทย)|ชื่อบริษัท (ไทย)|会社名（タイ語）|Company name (Thai)
+Company name (English)|ชื่อบริษัท (อังกฤษ)|会社名（英語）
+会社名 (日本語)|ชื่อบริษัท (ญี่ปุ่น)|会社名（日本語）|Company name (Japanese)
+ชื่อผู้ติดต่อ (ไทย)|ชื่อผู้ติดต่อ (ไทย)|担当者名（タイ語）|Contact name (Thai)
+Contact name (English)|ชื่อผู้ติดต่อ (อังกฤษ)|担当者名（英語）
+担当者名 (日本語)|ชื่อผู้ติดต่อ (ญี่ปุ่น)|担当者名（日本語）|Contact name (Japanese)
+แผนก|แผนก|部署|Department
+ตำแหน่ง|ตำแหน่ง|役職|Position
+อีเมล|อีเมล|メール|Email
+โทรศัพท์|โทรศัพท์|電話|Phone
+ที่อยู่|ที่อยู่|住所|Address
+คำนำหน้าผู้ติดต่อ (ไทย)|คำนำหน้าผู้ติดต่อ (ไทย)|敬称（タイ語）|Contact title (Thai)
+เลือกหรือพิมพ์เองได้ เว้นว่างได้|เลือกหรือพิมพ์เองได้ เว้นว่างได้|選択または入力できます。空欄も可能です。|Select or type; optional
+Contact title (English)|คำนำหน้าผู้ติดต่อ (อังกฤษ)|敬称（英語）
+敬称 (日本語)|คำต่อท้ายชื่อ (ญี่ปุ่น)|敬称（日本語）|Contact honorific (Japanese)
+แสดงหลังชื่อภาษาญี่ปุ่น|แสดงหลังชื่อภาษาญี่ปุ่น|日本語の名前の後に表示します|Displayed after the Japanese name
+ตำแหน่ง / Position|ตำแหน่ง|役職|Position
+แผนก / Department|แผนก|部署|Department
+ไม่มีสิทธิ์เปิดหน้านี้|ไม่มีสิทธิ์เปิดหน้านี้|このページにアクセスする権限がありません|You do not have access to this page
+LIVE ANALYTICS|รายงานจากข้อมูลปัจจุบัน|最新データの分析
+เลือกวันที่แล้วกด Refresh|เลือกวันที่แล้วกดรีเฟรช|日付を選択して更新してください|Select a date, then refresh
+เลือกช่วงเวลาแล้วกด Refresh|เลือกช่วงเวลาแล้วกดรีเฟรช|期間を選択して更新してください|Select a period, then refresh
+ไม่พบ Purchase Order ในช่วงวันที่นี้|ไม่พบใบสั่งซื้อในช่วงวันที่นี้|この期間の発注書はありません|No purchase order in this date range
+กด Refresh เพื่อลองอีกครั้ง|กดรีเฟรชเพื่อลองอีกครั้ง|更新して再試行してください|Refresh to try again
+ไม่พบเหตุการณ์ตามตัวกรองนี้|ไม่พบเหตุการณ์ตามตัวกรองนี้|条件に一致する履歴がありません|No events match these filters
+สแกนนามบัตร|สแกนนามบัตร|名刺を読み取る|Scan business card
+ไม่อัปโหลดรูป|ไม่อัปโหลดรูป|画像は送信されません|Image stays on this device
+เลือกรูปนามบัตร|เลือกรูปนามบัตร|名刺画像を選択|Choose business card image
+ถ่ายรูปนามบัตร|ถ่ายรูปนามบัตร|名刺を撮影|Photograph business card
+ยกเลิก|ยกเลิก|キャンセル|Cancel
+ชื่อบริษัทที่จะใช้|ชื่อบริษัทที่จะใช้|使用する会社名|Company name to use
+ชื่อผู้ติดต่อที่จะใช้|ชื่อผู้ติดต่อที่จะใช้|使用する担当者名|Contact name to use
+เติมข้อมูลที่เลือกในช่องว่าง|เติมข้อมูลที่เลือกในช่องว่าง|選択した情報を空欄に入力|Fill empty fields with selected data
+ความชัดเจนจาก OCR|ความชัดเจนจาก OCR|OCR認識の信頼度|OCR confidence
+ดูข้อความที่อ่านได้|ดูข้อความที่อ่านได้|認識した文字を表示|View recognized text
+ปรับตัวกรองหรือสร้าง Inquiry รายการแรก|ปรับตัวกรองหรือสร้าง Inquiry รายการแรก|条件を変更するか、最初の引合を作成してください|Adjust filters or create your first inquiry
+End user / ผู้ใช้งานปลายทาง|บริษัทผู้ใช้งานปลายทาง|エンドユーザー|End user
+ยังไม่ระบุ / Not specified|ยังไม่ระบุ|未指定|Not specified
+แก้ไข End user / Edit|แก้ไขผู้ใช้งานปลายทาง|エンドユーザーを編集|Edit end user
+สร้าง Project จาก Estimate ที่อนุมัติแล้ว|สร้างโครงการจากประมาณการที่อนุมัติแล้ว|承認済み見積からプロジェクトを作成|Create a project from an approved estimate
+ดำเนินการไม่สำเร็จ|ดำเนินการไม่สำเร็จ|処理に失敗しました|Operation failed
+โปรดตรวจสอบรายการนี้|โปรดตรวจสอบรายการนี้|この項目を確認してください|Please review this item
+ใช้ใน Cost item และ Preferred supplier|ใช้ในรายการต้นทุนและผู้ขายหลัก|原価項目と優先仕入先に使用します|Used in cost items and preferred suppliers
+ข้อมูลตั้งต้นสำหรับ Stock ledger|ข้อมูลตั้งต้นสำหรับบัญชีคลังสินค้า|在庫台帳の基本データ|Master data for the stock ledger
+ลองเปลี่ยนคำค้นหา หรือเพิ่มข้อมูลสินค้า|ลองเปลี่ยนคำค้นหา หรือเพิ่มข้อมูลสินค้า|検索条件を変えるか品目を追加してください|Change the search or add an item
+End user / บริษัทผู้ใช้งานปลายทาง|บริษัทผู้ใช้งานปลายทาง|エンドユーザーの会社|End-user company
+บริษัทที่เลือกไว้ / Selected company #|บริษัทที่เลือกไว้ #|選択中の会社 #|Selected company #
+บริษัทเดียวกับผู้ว่าจ้าง / Same customer|บริษัทเดียวกับผู้ว่าจ้าง|契約先と同じ会社|Same as contracting customer
+เพิ่มบริษัท / New company|เพิ่มบริษัท|会社を追加|New company
+แก้ไข End user / Edit end user|แก้ไขผู้ใช้งานปลายทาง|エンドユーザーを編集|Edit end user
+โหลดข้อมูลล่าสุด / Reload latest|โหลดข้อมูลล่าสุด|最新情報を読み込む|Reload latest
+ยกเลิก / Cancel|ยกเลิก|キャンセル|Cancel
+ไฟล์|ไฟล์|ファイル|File
+→ ระบบ R|→ ระบบ R|→ システム R|→ System R
+· ต้นทุน|· ต้นทุน|· 原価|· Cost
+ลูกค้าจัดหา:|ลูกค้าจัดหา:|顧客支給：|Customer supplied:
+· ไม่นับเป็นต้นทุนซื้อ|· ไม่นับเป็นต้นทุนซื้อ|· 購入原価には含めません|· Excluded from purchase cost
+นำเข้า Excel Estimate Cost|นำเข้า Excel Estimate Cost|Excel原価見積を取り込む|Import Excel Estimate Cost
+ปลายทาง:|ปลายทาง:|取込先：|Destination:
+ไฟล์ Estimate Cost (.xlsx)|ไฟล์ Estimate Cost (.xlsx)|原価見積ファイル（.xlsx）|Estimate Cost file (.xlsx)
+ตารางทั่วไป / CSV / TSV|ตารางทั่วไป / CSV / TSV|通常の表／CSV／TSV|General table / CSV / TSV
+กำลังอ่าน Summary และชีตรายละเอียด…|กำลังอ่านสรุปและชีตรายละเอียด…|サマリーと明細シートを読み込み中…|Reading summary and detail sheets…
+· ไฟล์|· ไฟล์|· ファイル|· File
+วันที่ราคาจากต้นฉบับ|วันที่ราคาจากต้นฉบับ|元の価格日付|Source price date
+ชั่วโมงต่อวันสำหรับค่าแรง|ชั่วโมงต่อวันสำหรับค่าแรง|工数の1日あたり時間|Labor hours per day
+นำเข้า|นำเข้า|取込|Import
+ส่วนต่าง|ส่วนต่าง|差額|Difference
+อุปกรณ์/ค่าใช้จ่าย|อุปกรณ์/ค่าใช้จ่าย|機器・経費|Equipment / expenses
+· ค่าแรง|· ค่าแรง|· 人件費|· Labor
+· ลูกค้าจัดหา|· ลูกค้าจัดหา|· 顧客支給|· Customer supplied
+พบรายการเดิม|พบรายการเดิม|既存の項目が見つかりました|Existing items found
+รายการ เช่น|รายการ เช่น|件（例）|items, for example
+รายการที่ไม่นำเข้า (|รายการที่ไม่นำเข้า (|取込対象外（|Excluded items (
+) และข้อควรตรวจ|) และข้อควรตรวจ|）と確認事項|) and review notes
+บันทึกเป็น|บันทึกเป็น|保存形式|Save as
+หมวดงาน / รายการ|หมวดงาน / รายการ|作業区分／項目|Work package / item
+ต้นทาง|ต้นทาง|参照元|Source
+จำนวน|จำนวน|数量|Quantity
+ราคาต่อหน่วย|ราคาต่อหน่วย|単価|Unit price
+รวม|รวม|合計|Total
+Production API|API ระบบใช้งานจริง|業務API
+Confidentiality|ระดับความลับ|機密区分
+Review due only|เฉพาะรายการถึงกำหนดทบทวน|見直し期限の項目のみ
+Retry|ลองอีกครั้ง|再試行
+Next Review|ทบทวนครั้งถัดไป|次回見直し
+Team shared workspace|พื้นที่เอกสารของทีม|チーム共有スペース
+Assigned|มอบหมายแล้ว|割当済み
+I have read this|อ่านและรับทราบแล้ว|内容を確認しました
+Article type|ประเภทบทความ|記事の種類
+New article|เพิ่มบทความ|記事を作成
+Helpful|มีประโยชน์|役に立った
+Views|จำนวนการอ่าน|閲覧数
+Edit knowledge article|แก้ไขบทความความรู้|ナレッジ記事を編集
+New knowledge article|สร้างบทความความรู้|ナレッジ記事を作成
+Save article|บันทึกบทความ|記事を保存
+Review date|วันที่ทบทวน|見直し日
+Was this helpful?|เนื้อหานี้มีประโยชน์หรือไม่?|役に立ちましたか？
+Category administration|จัดการหมวดหมู่|カテゴリ管理
+New category|เพิ่มหมวดหมู่|カテゴリを追加
+Order|ลำดับ|表示順
+Parent|หมวดหลัก|親カテゴリ
+Default type|ประเภทเริ่มต้น|既定の種類
+Document number sequences|ชุดเลขเอกสาร|文書の採番設定
+New sequence|เพิ่มชุดเลข|採番設定を追加
+Prefix|คำนำหน้าเลข|接頭辞
+Scope|ขอบเขต|範囲
+Last number|เลขล่าสุด|最終番号
+Padding|จำนวนหลัก|桁数
+Edit category|แก้ไขหมวดหมู่|カテゴリを編集
+Display order|ลำดับแสดงผล|表示順
+Japanese name|ชื่อภาษาญี่ปุ่น|日本語名
+Parent category|หมวดหมู่หลัก|親カテゴリ
+Default document type|ประเภทเอกสารเริ่มต้น|既定の文書種別
+Default confidentiality|ระดับความลับเริ่มต้น|既定の機密区分
+Edit number sequence|แก้ไขชุดเลขเอกสาร|採番設定を編集
+New number sequence|เพิ่มชุดเลขเอกสาร|採番設定を追加
+The last number cannot move backwards|เลขล่าสุดลดลงไม่ได้|最終番号を小さくすることはできません
+Scope code|รหัสขอบเขต|範囲コード
+Scope description|คำอธิบายขอบเขต|範囲の説明
+Creating…|กำลังสร้าง…|作成中…
+Create document|สร้างเอกสาร|文書を作成
+Number prefix|คำนำหน้าเลขเอกสาร|文書番号の接頭辞
+Number scope|ขอบเขตเลขเอกสาร|文書番号の範囲
+Next review date|วันทบทวนครั้งถัดไป|次回見直し日
+Required for a controlled document|จำเป็นสำหรับเอกสารควบคุม|管理文書では必須
+Optional|ไม่บังคับ|任意
+Separate with semicolons|คั่นแต่ละรายการด้วย ;|セミコロンで区切ってください
+Loading document…|กำลังโหลดเอกสาร…|文書を読み込み中…
+Why are changes needed?|เหตุใดจึงต้องแก้ไข?|変更が必要な理由は？
+Publish|เผยแพร่|公開
+Reason for restoring this document|เหตุผลที่คืนเอกสาร|文書を復元する理由
+Reason for archiving this document|เหตุผลที่เก็บเอกสารถาวร|文書を保管する理由
+Restore|คืนเอกสาร|復元
+Archive|เก็บถาวร|アーカイブ
+Current revision|ฉบับปัจจุบัน|現在の改訂
+Effective date|วันที่มีผล|適用日
+Next review|ทบทวนครั้งถัดไป|次回見直し
+Approval route|เส้นทางอนุมัติ|承認ルート
+Reviewer|ผู้ตรวจทาน|確認者
+Read acknowledgement|การรับทราบเอกสาร|既読確認
+Members|สมาชิก|メンバー
+Assign acknowledgement|มอบหมายให้อ่านรับทราบ|既読確認を依頼
+Link document|เชื่อมเอกสาร|文書を関連付け
+Record type|ประเภทข้อมูล|レコード種別
+Record ID|รหัสข้อมูล|レコードID
+Relation type|ประเภทความสัมพันธ์|関連種別
+Link record|เชื่อมข้อมูล|レコードを関連付け
+Reply to comment|ตอบความคิดเห็น|コメントに返信
+Add comment|เพิ่มความคิดเห็น|コメントを追加
+Write a comment or review note…|เขียนความคิดเห็นหรือบันทึกการตรวจ…|コメントや確認メモを入力…
+Cancel reply|ยกเลิกการตอบ|返信をキャンセル
+Post comment|ส่งความคิดเห็น|コメントを送信
+Resolved|แก้ไขแล้ว|解決済み
+Reply|ตอบกลับ|返信
+Reopen|เปิดประเด็นอีกครั้ง|再開
+Resolve|ระบุว่าแก้ไขแล้ว|解決にする
+Permission summary|สรุปสิทธิ์|権限の概要
+Subject type|ประเภทผู้รับสิทธิ์|権限対象の種類
+Project ID|รหัสโครงการ|プロジェクトID
+Permission level|ระดับสิทธิ์|権限レベル
+Grant access|ให้สิทธิ์เข้าถึง|アクセス権を付与
+Granted by|ผู้ให้สิทธิ์|権限付与者
+The author cannot be the final approver|ผู้เขียนเป็นผู้อนุมัติสุดท้ายไม่ได้|作成者は最終承認者になれません
+Upload a new revision|อัปโหลดฉบับแก้ไข|新しい改訂をアップロード
+Change type|ประเภทการแก้ไข|変更の種類
+Major|แก้ไขหลัก|メジャー
+Minor|แก้ไขย่อย|マイナー
+Upload revision|อัปโหลดฉบับแก้ไข|改訂をアップロード
+Percent complete|ความคืบหน้า (%)|進捗率（%）
+Forecast finish|คาดว่าจะเสร็จ|完了予定
+PERSONAL WORKSPACE|พื้นที่งานส่วนตัว|個人ワークスペース
+Sort tasks|เรียงงาน|タスクを並べ替え
+Priority first|งานสำคัญก่อน|優先度順
+Project & WBS|โครงการและโครงสร้างงาน|プロジェクトとWBS
+KNOWLEDGE & DOCUMENT HUB|ศูนย์ความรู้และเอกสาร|ナレッジ・文書管理
+Loading your live schedule…|กำลังโหลดแผนงานปัจจุบัน…|最新の予定を読み込み中…
+View tasks|ดูงาน|タスクを表示
+◆ Milestone|◆ จุดส่งมอบ|◆ マイルストーン
+PM:|ผู้จัดการโครงการ:|プロジェクト管理者：
+more days requested|วันที่ขอเพิ่ม|延長申請日数
+. Add a forecast date in Update details.| เพิ่มวันที่คาดว่าจะเสร็จในรายละเอียด|「詳細を更新」で完了予定日を入力してください。
+Update details|อัปเดตรายละเอียด|詳細を更新
+Delete my task|ลบงานของฉัน|自分のタスクを削除
+Quick update|อัปเดตด่วน|簡易更新
+Days (fixed to the parent plan)|วัน (ตามแผนงานหลัก)|日数（親計画に固定）
+Add schedule row|เพิ่มรายการแผนงาน|予定行を追加
+Row kind|ประเภทรายการ|行の種類
+Phase (roll-up)|ระยะงาน (สรุปงานย่อย)|フェーズ（集計）
+Visibility|การมองเห็น|公開範囲
+Internal|ภายใน|内部
+Parent phase|ระยะงานหลัก|親フェーズ
+Top-level task|งานระดับบนสุด|最上位タスク
+Plan start|วันเริ่มตามแผน|計画開始日
+Plan days|จำนวนวันตามแผน|計画日数
+Plan man-days|แรงงานตามแผน (คน-วัน)|計画工数（人日）
+PIC (known project member)|ผู้รับผิดชอบ (สมาชิกโครงการ)|担当者（プロジェクトメンバー）
+External PIC|ผู้รับผิดชอบภายนอก|外部担当者
+Milestone (1 day)|จุดส่งมอบ (1 วัน)|マイルストーン（1日）
+Create schedule baseline|สร้างแผนตั้งต้น|基準計画を作成
+Review request for more days|ตรวจคำขอเพิ่มวัน|延長申請を確認
+calendar day|วันปฏิทิน|暦日
+PM note (required)|หมายเหตุผู้จัดการโครงการ (จำเป็น)|管理者メモ（必須）
+Select project…|เลือกโครงการ…|プロジェクトを選択…
+Create baseline|สร้างแผนตั้งต้น|基準計画を作成
+PIC|ผู้รับผิดชอบ|担当者
+Effort|ปริมาณแรงงาน|工数
+Update|อัปเดต|更新
+Import Drawing|นำเข้าแบบ|図面を取り込む
+Requests waiting for the PM|คำขอรอผู้จัดการโครงการ|管理者待ちの申請
+Review request|ตรวจคำขอ|申請を確認
+Recent schedule activity|ประวัติแผนงานล่าสุด|最近の予定変更
+When|เมื่อ|日時
+Field|ช่องข้อมูล|項目
+Loading schedule…|กำลังโหลดแผนงาน…|予定を読み込み中…
+CAPACITY VISIBILITY|ภาพรวมกำลังคน|稼働状況
+Team member|สมาชิกทีม|チームメンバー
+Role / Department|บทบาท / แผนก|役割／部署
+Next finish|งานถัดไปที่ครบกำหนด|次の完了予定
+Schedule coverage|ขอบเขตแผนงาน|予定の対象範囲
+No date|ไม่ระบุวันที่|日付なし
+COST KNOWLEDGE|คลังข้อมูลต้นทุน|原価ナレッジ
+Price age|อายุราคา|価格の経過日数
+Qty / Unit|จำนวน / หน่วย|数量／単位
+Price date / Age|วันที่ราคา / อายุ|価格日／経過日数
+Source / Reference|ที่มา / อ้างอิง|参照元／参照番号
+Estimate / Project|ประมาณการ / โครงการ|見積／プロジェクト
+Loading cost workspaces…|กำลังโหลดข้อมูลต้นทุน…|原価情報を読み込み中…
+Upload supplier quotation|อัปโหลดใบเสนอราคาผู้ขาย|仕入先見積書をアップロード
+Upload failed|อัปโหลดไม่สำเร็จ|アップロード失敗
+System quotation no.|เลขใบเสนอราคาในระบบ|システム見積番号
+Generated automatically after upload|สร้างอัตโนมัติหลังอัปโหลด|アップロード後に自動採番
+Supplier quotation / reference|ใบเสนอราคาผู้ขาย / เลขอ้างอิง|仕入先見積／参照番号
+Related inquiry|Inquiry ที่เกี่ยวข้อง|関連する引合
+Not linked|ยังไม่เชื่อม|未関連付け
+Received date|วันที่ได้รับ|受領日
+Valid until|ใช้ได้ถึงวันที่|有効期限
+Currency|สกุลเงิน|通貨
+Quotation amount|ยอดใบเสนอราคา|見積金額
+Quotation file|ไฟล์ใบเสนอราคา|見積ファイル
+PDF, Excel, CSV, JPG or PNG · maximum 50 MB|PDF, Excel, CSV, JPG หรือ PNG · ไม่เกิน 50 MB|PDF・Excel・CSV・JPG・PNG（最大50 MB）
+SUPPLIER SOURCING|จัดหาผู้ขาย|仕入先調達
+Quotation status|สถานะใบเสนอราคา|見積の状態
+Supplier reference|เลขอ้างอิงผู้ขาย|仕入先参照番号
+Attachment|ไฟล์แนบ|添付ファイル
+PRICE FOLLOW-UP|ติดตามราคา|価格フォロー
+Current price|ราคาปัจจุบัน|現在価格
+Estimate status|สถานะประมาณการ|見積の状態
+Line status|สถานะรายการ|明細の状態
+Customer name|ชื่อลูกค้า|顧客名

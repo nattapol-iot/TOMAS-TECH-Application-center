@@ -79,6 +79,73 @@ export async function acquireApiToken(): Promise<string> {
   }
 }
 
+const graphFilesScope = "Files.Read";
+
+async function acquireGraphFilesToken(): Promise<string> {
+  const client = await getInstance();
+  const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
+  if (!account) throw new Error("กรุณาเข้าสู่ระบบด้วย Microsoft ก่อน Auto update");
+  try {
+    return (await client.acquireTokenSilent({ account, scopes: [graphFilesScope] })).accessToken;
+  } catch (error) {
+    if (!(error instanceof InteractionRequiredAuthError)) throw error;
+    const result = await client.acquireTokenPopup({ account, scopes: [graphFilesScope] });
+    if (result.account) client.setActiveAccount(result.account);
+    return result.accessToken;
+  }
+}
+
+function graphShareId(sharingUrl: string): string {
+  const bytes = new TextEncoder().encode(sharingUrl);
+  let binary = "";
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return `u!${btoa(binary).replaceAll("/", "_").replaceAll("+", "-").replace(/=+$/, "")}`;
+}
+
+export async function downloadMicrosoftSharedFile(sharingUrl: string): Promise<Blob> {
+  const token = await acquireGraphFilesToken();
+  const response = await fetch(`https://graph.microsoft.com/v1.0/shares/${graphShareId(sharingUrl)}/driveItem/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("ไม่สามารถอ่านรายการต้นฉบับจาก Microsoft 365 ได้ กรุณาตรวจสิทธิ์ของบัญชี");
+  return response.blob();
+}
+
+export async function getMicrosoftSharedFilePreview(sharingUrl: string): Promise<string> {
+  const token = await acquireGraphFilesToken();
+  const response = await fetch(`https://graph.microsoft.com/v1.0/shares/${graphShareId(sharingUrl)}/driveItem/preview`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) throw new Error("Microsoft 365 ไม่สามารถสร้าง Preview สำหรับไฟล์นี้ได้");
+  const preview = await response.json() as { getUrl?: string };
+  if (!preview.getUrl) throw new Error("Microsoft 365 ไม่ได้ส่ง URL สำหรับ Preview กลับมา");
+  const previewUrl = new URL(preview.getUrl);
+  if (previewUrl.protocol !== "https:") throw new Error("Microsoft 365 ส่ง URL สำหรับ Preview ที่ไม่ปลอดภัย");
+  return previewUrl.href;
+}
+
+/**
+ * Forces an interactive Microsoft sign-in immediately before a signature.
+ *
+ * A signature image proves nothing on its own — it can be pasted. This
+ * application holds no password, so the assurance that the person is present is
+ * a fresh credential: this deliberately bypasses the silent cache with an
+ * interactive prompt, and the API then checks how recently the token was issued
+ * and records that evidence in the signature event chain.
+ */
+export async function reauthenticateForSigning(): Promise<void> {
+  const client = await getInstance();
+  const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
+  if (!account) throw new Error('No signed-in Microsoft account is available.');
+  const result = await client.acquireTokenPopup({ account, scopes: [apiScope], prompt: 'login' });
+  if (result.account) client.setActiveAccount(result.account);
+}
+
 export async function signOutMicrosoft() {
   const client = await getInstance();
   await client.logoutPopup({ account: client.getActiveAccount() ?? undefined, mainWindowRedirectUri: window.location.origin });

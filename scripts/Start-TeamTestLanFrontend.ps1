@@ -26,24 +26,27 @@ if ($settings.FrontendOrigin -ne $frontendOrigin) {
 
 $nodePath = (Get-Command node -ErrorAction Stop).Source
 $vinextCli = Join-Path $projectRoot 'node_modules\vinext\dist\cli.js'
+$runtimeCommand = 'start'
 if (!(Test-Path -LiteralPath $vinextCli)) { throw 'vinext is not installed. Run npm install first.' }
 
 if (Test-Path -LiteralPath $pidPath) {
     $existingState = Get-Content -LiteralPath $pidPath -Raw | ConvertFrom-Json
     $savedProcessId = 0
     $savedFrontendPort = 0
+    $savedRuntimeCommand = if ($existingState.RuntimeCommand) { [string]$existingState.RuntimeCommand } else { 'dev' }
     $savedStateMatches = [int]::TryParse([string]$existingState.ProcessId, [ref]$savedProcessId) `
         -and $savedProcessId -gt 0 `
         -and [int]::TryParse([string]$existingState.FrontendPort, [ref]$savedFrontendPort) `
         -and $savedFrontendPort -eq $FrontendPort `
         -and [string]::Equals([string]$existingState.LanAddress, $lanAddress, [StringComparison]::Ordinal) `
-        -and [string]::Equals([string]$existingState.Entrypoint, $vinextCli, [StringComparison]::OrdinalIgnoreCase)
+        -and [string]::Equals([string]$existingState.Entrypoint, $vinextCli, [StringComparison]::OrdinalIgnoreCase) `
+        -and [string]::Equals($savedRuntimeCommand, $runtimeCommand, [StringComparison]::Ordinal)
     $existingProcess = if ($savedProcessId -gt 0) {
         Get-CimInstance Win32_Process -Filter "ProcessId = $savedProcessId" -ErrorAction SilentlyContinue
     }
     if ($existingProcess `
         -and $savedStateMatches `
-        -and (Test-TeamTestLanFrontendCommandLine $existingProcess $vinextCli $lanAddress $FrontendPort) `
+        -and (Test-TeamTestLanFrontendCommandLine $existingProcess $vinextCli $lanAddress $FrontendPort $runtimeCommand) `
         -and (Test-TeamTestLanFrontendListener $savedProcessId $lanAddress $FrontendPort)) {
         if (!(Test-TeamTestLanFrontendHealth $lanAddress $FrontendPort)) {
             throw 'The saved Team Test frontend owns the expected listener but is unhealthy.'
@@ -52,7 +55,7 @@ if (Test-Path -LiteralPath $pidPath) {
         exit 0
     }
     if ($existingProcess) {
-        throw 'The saved frontend process does not match the exact entrypoint, dev arguments, address, port, and listener; refusing to replace it.'
+        throw 'The saved frontend process does not match the exact production entrypoint, address, port, and listener; refusing to replace it.'
     }
     Remove-Item -LiteralPath $pidPath -Force
 }
@@ -76,8 +79,11 @@ $logStamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss', [Globalization.Cultur
 $entrypointArgument = '"' + $vinextCli + '"'
 
 try {
+    & npm --prefix $projectRoot run build:local
+    if ($LASTEXITCODE -ne 0) { throw 'Team Test frontend production build failed.' }
+
     $process = Start-Process -FilePath $nodePath `
-        -ArgumentList @($entrypointArgument, 'dev', '--hostname', $lanAddress, '--port', [string]$FrontendPort) `
+        -ArgumentList @($entrypointArgument, $runtimeCommand, '--hostname', $lanAddress, '--port', [string]$FrontendPort) `
         -WorkingDirectory $projectRoot `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $logRoot "frontend-$logStamp.out.log") `
@@ -104,7 +110,8 @@ try {
                 (Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)" -ErrorAction SilentlyContinue) `
                 $vinextCli `
                 $lanAddress `
-                $FrontendPort) `
+                $FrontendPort `
+                $runtimeCommand) `
             -or !(Test-TeamTestLanFrontendListener $process.Id $lanAddress $FrontendPort)) {
             throw 'Team Test frontend did not start with the exact private LAN address, port, and listener ownership.'
         }
@@ -113,6 +120,7 @@ try {
             Entrypoint = $vinextCli
             LanAddress = $lanAddress
             FrontendPort = $FrontendPort
+            RuntimeCommand = $runtimeCommand
             StartedAt = [DateTimeOffset]::Now.ToString('O')
         } | ConvertTo-Json))
         [pscustomobject]@{ Status = 'RUNNING'; ProcessId = $process.Id; LanOrigin = $frontendOrigin }
