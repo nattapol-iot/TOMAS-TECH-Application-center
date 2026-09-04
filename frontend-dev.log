@@ -1,0 +1,15 @@
+
+> site-creator-vinext-starter@0.1.0 dev
+> vinext dev
+
+
+  vinext dev  (Vite 8.0.13)
+
+Using secrets defined in .env.local
+  ➜  Local:   http://localhost:3000/
+  ➜  Debug:   http://localhost:3000/__debug
+ GET / 200 in 2.3s (compile: 1788423068.1s, render: 2.2s)
+ GET / 200 in 49ms (compile: 1788423068.0s, render: 30ms)
+ GET / 200 in 55ms (compile: 1788423068.0s, render: 27ms)
+ GET / 200 in 94ms (compile: 1788423068.0s, render: 51ms)
+ GET / 200 in 72ms (compile: 1788423068.0s, render: 42ms)
