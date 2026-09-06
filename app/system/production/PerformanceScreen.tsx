@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LocalizedText } from "../LocalizedText";
 import { useT } from "../i18n";
+import { ActivityKpiSummary } from "./ActivityKpiSummary";
 import { Badge, Icon, Modal, PageHeader, Progress, SearchInput, Select, Tabs, type IconName, type Tone } from "../ui";
 import {
   completePerformanceAssessment,
@@ -36,6 +37,7 @@ type Props = {
 
 type ReviewStatus = "Not started" | "Self review" | "Manager review" | "Calibration" | "Completed";
 type ReviewRecord = {
+  activity?: PerformanceAssessment["activity"];
   employeeId: string;
   role: string;
   score: number;
@@ -94,7 +96,7 @@ function fromApi(review: PerformanceAssessment): ReviewRecord {
   const scores = review.displayScores.map((value) => value ?? 0);
   const areas = areasForRole(review.role);
   return {
-    employeeId: String(review.employeeId), role: review.role, score: Number(scoreAverage(scores, areas).toFixed(1)), status: API_STATUS[review.status],
+    employeeId: String(review.employeeId), role: review.role, score: review.overallScore === undefined ? Number(scoreAverage(scores, areas).toFixed(1)) : review.overallScore ?? 0, activity:review.activity, status: API_STATUS[review.status],
     updated: review.updatedAt ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short" }).format(new Date(review.updatedAt)) : "Not updated",
     scores, selfScores, managerScores, evidence: review.evidence, selfEvidence: review.selfEvidence, managerEvidence: review.managerEvidence, selfSummary: review.selfSummary,
     managerSummary: review.managerSummary, developmentGoal: review.developmentGoal, rowVersion: review.rowVersion,
@@ -356,7 +358,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
                 {selectedAreas.map((area, index) => (
                   <div key={area.name}>
                     <span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span>
-                    <span><strong>{t(area.name)}</strong><small>{area.weight}<LocalizedText text={"% weight"} /></small></span>
+                    <span><strong>{t(area.name)}</strong><small>{area.weight * (selectedReview.activity?.mode === "ACTIVE" && selectedReview.activity.eligible ? 0.9 : 1)}<LocalizedText text={"% weight"} /></small></span>
                     <b>{selectedReview.scores[index] ? `${selectedReview.scores[index]}.0` : "—"}</b>
                   </div>
                 ))}
@@ -367,6 +369,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
               <p className="performance-private"><Icon name="lock" /><LocalizedText text={"Only the employee and review managers can see written feedback."} /></p>
             </aside>
           </div>
+          <ActivityKpiSummary activity={selectedReview.activity}/>
           <WorkEvidencePanel
             role={selected.role}
             evidence={workEvidence?.employeeId === Number(memberKey(selected)) ? workEvidence : null}
@@ -441,10 +444,11 @@ function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evi
         <button className="btn primary" type="button" disabled={!canEdit} onClick={onEdit}><Icon name={canEdit ? "edit" : "lock"} />{review.status === "Not started" ? <LocalizedText text={"Start self review"} /> : canEdit ? <LocalizedText text={"Update self review"} /> : review.status === "Completed" ? <LocalizedText text={"Review completed"} /> : <LocalizedText text={"Submitted to manager"} />}</button>
       </section>
 
+      <ActivityKpiSummary activity={review.activity}/>
       <section className="performance-goal-grid">
         {areas.map((area, index) => (
           <article className="performance-goal" key={area.name}>
-            <header><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><Badge tone={area.tone}>{area.weight}%</Badge></header>
+            <header><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><Badge tone={area.tone}>{area.weight * (review.activity?.mode === "ACTIVE" && review.activity.eligible ? 0.9 : 1)}%</Badge></header>
             <h3>{t(area.name)}</h3><p>{t(area.description)}</p>
             <div className="performance-goal-result"><span>{review.evidence[index] || t(area.evidence)}</span><Score value={review.scores[index]} /></div>
           </article>

@@ -7,9 +7,16 @@ GO
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 35) THROW 51350, 'Team Activity migration 035 is required.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 34)
+   OR OBJECT_ID(N'dbo.support_tickets', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.support_recognition', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.tr_support_events_immutable', N'TR') IS NULL
+    THROW 51342, 'Support Center migration 034 is required.', 1;
 
 IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 25)
    OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 26)

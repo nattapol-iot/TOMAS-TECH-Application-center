@@ -148,7 +148,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
         const dto=await taskDto(tx,r,actor,db);if(dto.status!=='Done'||!note||r.pending_plan)throw new ApiError(409,'close_task','Complete the task, resolve pending proposals and record verification before closing.');
         await q.query(`UPDATE dbo.resource_tasks SET state=N'Closed',decision_note=@note,updated_at=SYSUTCDATETIME() WHERE id=@id`);
       }
-      const saved=await taskRow(tx,id);await insertAudit(tx,actor.id,'Resource Task',id,`TASK-${id}`,action,{state:r.state,pendingPlan:r.pending_plan,acknowledgedAt:r.acknowledged_at},{state:saved.state,pendingPlan:saved.pending_plan,note});return taskDto(tx,saved,actor,db);
+      const saved=await taskRow(tx,id);await insertAudit(tx,actor.id,'Resource Task',id,`TASK-${id}`,action,{state:r.state,pendingPlan:r.pending_plan,acknowledgedAt:r.acknowledged_at,percentComplete:Number(r.percent_done),status:r.execution_status},{state:saved.state,pendingPlan:saved.pending_plan,note,percentComplete:Number(saved.percent_done),status:saved.execution_status,...(action==='progress'?{remark:bodyObject(request.body).remark??null}:{})});return taskDto(tx,saved,actor,db);
     },sql.ISOLATION_LEVEL.SERIALIZABLE);
   });
 }

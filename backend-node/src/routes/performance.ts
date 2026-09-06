@@ -1,4 +1,6 @@
 import sql from "mssql/msnodesqlv8.js";
+import { activityCycleScore, freezeActivityScore, activityScope, activityRoster, fullMember } from "../activity-service.js";
+import { combineActivityKpi } from "../activity-rules.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Transaction } from "mssql";
 import { insertAudit } from "../audit.js";
@@ -164,7 +166,10 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       .input("actor", sql.BigInt, actor.id).input("actor_role", sql.NVarChar(100), actor.role));
     const rows = result.recordsets[0] as unknown as AssessmentRow[];
     const scoreRows = result.recordsets[1] as unknown as AssessmentScoreRow[];
-    const assessments = rows.map((row) => {
+    const activityAccess = await activityScope(database, actor);
+    const activityMembers = await activityRoster(database, activityAccess);
+    const assessments = [];
+    for (const row of rows) {
       const framework = frameworkForRole(row.role);
       const savedScores = scoreRows.filter((score) => Number(score.assessment_id) === Number(row.id));
       const selfScores = framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.self_score ?? null);
@@ -175,16 +180,23 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       const displayScores = managerScores.some((value) => value !== null) ? managerScores : selfScores;
       const selfEvidence = framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.self_evidence ?? "");
       const managerEvidence = framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.manager_evidence ?? "");
-      return {
+      const activity = await activityCycleScore(database, Number(row.user_id), Number(selectedCycle.id));
+      const hasActivityAccess = activityMembers.some(member=>member.id===Number(row.user_id)&&fullMember(activityAccess,member));
+      const weights = framework.code === 'SALES' ? [30,25,20,15,10] : [35,25,25,15];
+      const baseScore = displayScores.every(value=>value!==null) ? displayScores.reduce<number>((sum,value,index)=>sum+value!*weights[index]!/100,0) : null;
+      assessments.push({
         id: row.id === null ? 0 : Number(row.id), employeeId: Number(row.employee_id), userId: Number(row.user_id),
         name: row.name, department: row.department, level: row.level, role: row.role, frameworkCode: framework.code, areaCodes: framework.areaCodes, status: row.status,
         selfScores, managerScores, displayScores,
         evidence: managerScores.some((value) => value !== null) ? managerEvidence : selfEvidence,
         selfEvidence, managerEvidence,
         selfSummary: row.self_summary, managerSummary: visibleManager ? row.manager_summary : "",
+        activity: hasActivityAccess ? { mode:activity.mode, weight:activity.weight, eligible:activity.eligible, eligibleDays:activity.eligibleDays, automatic:activity.automatic,
+          total:visibleManager?activity.total:null, rating:visibleManager?activity.rating:null, frozen:activity.frozen } : undefined,
+        overallScore:baseScore===null?null:combineActivityKpi(baseScore,{...activity,rating:hasActivityAccess&&visibleManager?activity.rating:null}),
         developmentGoal: row.development_goal, updatedAt: row.updated_at, rowVersion: row.row_version?.toString("base64") ?? null,
-      };
-    });
+      });
+    }
     if (!canManage && assessments.length === 0) throw new ApiError(403, "performance_employee_not_linked", "Your account is not linked to an active employee profile.");
     return { cycles, selectedCycle, canManage, assessments };
   });
@@ -306,6 +318,7 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
     const actor = await users.required(request), body = bodyObject(request.body);
     const code = requiredText(body.code, 30, "Cycle code"), name = requiredText(body.name, 200, "Cycle name");
     const periodStart = parseDateOnly(body.periodStart, "Period start")!, periodEnd = parseDateOnly(body.periodEnd, "Period end")!, reviewDueDate = parseDateOnly(body.reviewDueDate, "Review due date")!;
+    if (periodStart <= periodEnd && (new Date(periodEnd).getTime()-new Date(periodStart).getTime())/86400_000 > 365) throw invalid("A KPI cycle may span at most 366 days.");
     if (periodStart > periodEnd || periodEnd > reviewDueDate) throw invalid("The cycle dates must be in period-start, period-end, review-due order.");
     try {
       const created = await database.transaction(async (transaction) => {
@@ -408,6 +421,11 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       if (!canManagePerformanceTarget(actor.role, target.target_role)) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
       if (Number(target.user_id) === actor.id) throw new ApiError(403, "performance_self_completion_denied", "Another review manager must complete your assessment.");
       const requiredAreaCount = frameworkForRole(target.target_role).areaCodes.length;
+      const activityAccess = await activityScope(database, actor);
+      const activityMembers = await activityRoster(database, activityAccess);
+      const activityPolicy = await activityCycleScore(database, Number(target.user_id), cycleId, transaction);
+      if (activityPolicy.mode === "ACTIVE" && !activityMembers.some(member=>member.id===Number(target.user_id)&&fullMember(activityAccess,member))) throw new ApiError(403,"activity_review_scope","A department review manager must finalize an active activity KPI.");
+      await freezeActivityScore(database, transaction, Number(target.user_id), cycleId);
       const update = new sql.Request(transaction);
       update.input("note", sql.NVarChar(1000), note).input("actor", sql.BigInt, actor.id).input("cycle", sql.BigInt, cycleId)
         .input("employee", sql.BigInt, employeeId).input("version", sql.VarBinary(8), version).input("required_count", sql.Int, requiredAreaCount);

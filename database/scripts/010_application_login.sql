@@ -396,6 +396,12 @@ REVOKE DELETE ON dbo.kpi_review_cycles FROM [iot_team_app_role];
 REVOKE DELETE ON dbo.kpi_assessments FROM [iot_team_app_role];
 REVOKE DELETE ON dbo.kpi_assessment_scores FROM [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON dbo.report_templates TO [iot_team_app_role];
+GRANT SELECT ON dbo.support_categories TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.support_members TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.support_tickets TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.support_events TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.support_attachments TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.support_recognition TO [iot_team_app_role];
 REVOKE DELETE ON dbo.report_templates FROM [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON dbo.unified_report_revisions TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON dbo.unified_report_customer_links TO [iot_team_app_role];
@@ -421,4 +427,17 @@ IF (SELECT COUNT_BIG(*)
       AND class = 3 AND major_id = SCHEMA_ID(N'dbo') AND state = 'D'
       AND permission_name IN (N'ALTER', N'TAKE OWNERSHIP')) <> 2
     THROW 51045, 'The dbo schema ownership guardrails were not applied.', 1;
+GO
+
+
+-- Team Activity object-scoped grants.
+GRANT SELECT ON dbo.activity_settings TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.activity_sessions TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.activity_rules TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_events TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_exceptions TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_cycle_policies TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.activity_quality TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_snapshots TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_clarifications TO [iot_team_app_role];
 GO

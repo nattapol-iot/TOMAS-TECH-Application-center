@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import { registerActivityRoutes } from "./routes/activity.js";
 import { registerEstimateExcelImportRoutes } from "./routes/estimate-excel-import.js";
 import { registerHistoricalPrRoutes } from "./routes/historical-pr.js";
 import { registerUnifiedReportRoutes } from "./routes/unified-reports.js";
@@ -164,6 +165,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerUnifiedReportRoutes(app, database, users);
   registerReportTemplateRoutes(app, database, users);
   registerPerformanceRoutes(app, database, users);
+  registerActivityRoutes(app, database, users);
   app.addHook("onClose", async () => database.close());
   return { app, database };
 }

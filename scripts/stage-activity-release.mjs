@@ -1,0 +1,22 @@
+import {readFileSync,readdirSync,mkdirSync,cpSync,writeFileSync} from 'node:fs';
+import {resolve,join,relative} from 'node:path';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const repo=process.cwd(),runtime=join(process.env.LOCALAPPDATA,'IoTTeamCenter','TeamTest');
+const settings=JSON.parse(readFileSync(join(runtime,'settings.json'),'utf8').replace(/^\uFEFF/,''));
+assert.equal(settings.ApiRuntime,'Node');assert.equal(settings.DatabaseName,'IoTTeamCenter_CodexTest_20260830_04');
+const baseline=resolve(settings.ReleasePath),compiled=join(repo,'backend-node','dist');
+const oldApp=readFileSync(join(baseline,'dist','src','app.js'),'utf8');
+const anchor='    app.addHook("onClose", async () => database.close());';
+assert.equal(oldApp.split(anchor).length,2);
+const stage=join(repo,'backend-node','tmp',`activity-stage-${Date.now()}`);mkdirSync(stage,{recursive:true});cpSync(join(baseline,'dist'),join(stage,'dist'),{recursive:true});
+writeFileSync(join(stage,'package.json'),'{"type":"module"}\n');
+for(const stem of ['audit','errors','activity-rules','activity-service','activity-recorder','routes/activity','routes/performance','routes/resource-tasks','routes/health'])for(const suffix of ['.js','.js.map','.d.ts'])cpSync(join(compiled,'src',stem+suffix),join(stage,'dist','src',stem+suffix));
+const stagedApp=oldApp.includes('registerActivityRoutes')?oldApp:'import { registerActivityRoutes } from "./routes/activity.js";\n'+oldApp.replace(anchor,'    registerActivityRoutes(app, database, users);\n'+anchor);
+writeFileSync(join(stage,'dist','src','app.js'),stagedApp.replace(/\/\/# sourceMappingURL=app.js.map\s*$/,''));
+const digest=file=>createHash('sha256').update(readFileSync(file)).digest('hex'),files=[];
+function collect(dir){for(const entry of readdirSync(dir,{withFileTypes:true})){const file=join(dir,entry.name);if(entry.isDirectory())collect(file);else files.push({path:relative(stage,file).replaceAll('\\','/'),sha256:digest(file)});}}
+collect(join(stage,'dist'));
+writeFileSync(join(stage,'activity-release.json'),JSON.stringify({baseline,files,migrationSha256:digest(join(repo,'database','migrations','035_team_activity.sql'))},null,2));
+writeFileSync(join(repo,'tmp','activity-stage.txt'),stage);
+console.log(JSON.stringify({stage,artifacts:files.length,baseline}));

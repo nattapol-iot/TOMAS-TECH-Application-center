@@ -98,6 +98,8 @@ export type PerformanceCycle = {
 };
 
 export type PerformanceAssessment = {
+  overallScore?: number | null;
+  activity?: {mode:string;weight:number;eligible:boolean;eligibleDays:number;automatic:number|null;total:number|null;rating:number|null;frozen:boolean};
   id: number;
   employeeId: number;
   userId: number;

@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 
-const REQUIRED_SCHEMA_VERSION = 33;
+const REQUIRED_SCHEMA_VERSION = 35;
 
 export function registerHealthRoutes(
   app: FastifyInstance,
@@ -36,7 +36,7 @@ export function registerHealthRoutes(
       }
 
       const result = await database.query<{ schema_version: number; required_schemas_ready:number }>(
-        "SELECT COALESCE(MAX(version), 0) AS schema_version, CASE WHEN COUNT(DISTINCT CASE WHEN version BETWEEN 25 AND 33 THEN version END)=9 THEN 1 ELSE 0 END AS required_schemas_ready FROM dbo.schema_versions;",
+        "SELECT COALESCE(MAX(version), 0) AS schema_version, CASE WHEN COUNT(DISTINCT CASE WHEN version BETWEEN 25 AND 35 THEN version END)=11 THEN 1 ELSE 0 END AS required_schemas_ready FROM dbo.schema_versions;",
       );
       const schemaVersion = Number(result.recordset[0]?.schema_version ?? 0);
       if (schemaVersion < REQUIRED_SCHEMA_VERSION || !result.recordset[0]?.required_schemas_ready) {
@@ -46,7 +46,7 @@ export function registerHealthRoutes(
             status: "migrations_required",
             schemaVersion,
             requiredSchemaVersion: REQUIRED_SCHEMA_VERSION,
-            requiredSchemaVersions: [25, 26, 27, 28, 29, 30, 31, 32, 33],
+            requiredSchemaVersions: [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
             timestamp: new Date().toISOString(),
           });
       }

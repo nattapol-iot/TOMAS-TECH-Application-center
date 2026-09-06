@@ -38,6 +38,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Customers": { th: "ลูกค้า", jp: "顧客" },
   "Projects": { th: "โปรเจกต์", jp: "プロジェクト" },
   "Reports": { th: "รายงาน", jp: "レポート" },
+  "Team Activity": { th: "ติดตามการใช้งานทีม", jp: "チーム利用状況" },
   "KPI & Growth": { th: "KPI และการเติบโต", jp: "KPI・成長" },
   "Master Data": { th: "ข้อมูลหลัก", jp: "マスタデータ" },
   "Engineering Rate": { th: "อัตราค่าแรงวิศวกรรม", jp: "技術単価" },

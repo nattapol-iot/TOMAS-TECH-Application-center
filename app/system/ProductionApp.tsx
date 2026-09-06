@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TeamActivityScreen } from "./production/TeamActivityScreen";
+import { useActivityPresence } from "./use-activity-presence";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
@@ -67,7 +69,7 @@ type View =
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
-  | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
 type MyWorkUrgencyItem = {
@@ -126,6 +128,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "documents", label: "Signed Documents", icon: "shield", permission: "signing.read" },
   ] },
   { group: "ORGANISATION", items: [
+    { view: "activity", label: "Team Activity", icon: "chart", permission: "activity.read" },
     { view: "performance", label: "KPI & Growth", icon: "trendingUp", permission: "performance.read" },
     { view: "reports", label: "Reports", icon: "chart", permission: "report.read" },
   ] },
@@ -184,11 +187,18 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     t: (text: string) => translate(text, language),
   }), [language, setLanguage]);
   const t = languageValue.t;
+  useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));
   const confirmReportNavigation = useCallback(() => !reportDirty.current || window.confirm(t("Discard unsaved report changes?")), [t]);
   const setView = useCallback((next: View) => {
     if (next !== view && !confirmReportNavigation()) return;
+    if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
     setViewState(next);
   }, [view, confirmReportNavigation]);
+
+  useEffect(() => {
+    const follow = () => { if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) setView("activity"); };
+    follow(); window.addEventListener("hashchange", follow); return () => window.removeEventListener("hashchange", follow);
+  }, [bootstrap, setView]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -483,7 +493,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         </header>
         <main className="page">
           {view === "dashboard" ? <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={(destination) => { setView(destination); window.scrollTo({ top: 0 }); }} /> : null}
-          {view === "my-work" ? <>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}<Tabs tabs={[{id:"inbox",label:"Task inbox · ตอบรับงาน",count:taskAcknowledgmentCount},{id:"schedule",label:"Project schedule tasks"}]} active={myWorkTab} onChange={setMyWorkTab} />{myWorkTab === "inbox" ? <ResourceTaskWorkspace {...common} mine openProjectSchedule={openProjectSchedule} onChanged={() => setTaskInboxRevision(value => value + 1)} /> : <ProductionMyWork {...moduleProps} />}</> : null}
+          {view === "my-work" ? <><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}<Tabs tabs={[{id:"inbox",label:"Task inbox · ตอบรับงาน",count:taskAcknowledgmentCount},{id:"schedule",label:"Project schedule tasks"}]} active={myWorkTab} onChange={setMyWorkTab} />{myWorkTab === "inbox" ? <ResourceTaskWorkspace {...common} mine openProjectSchedule={openProjectSchedule} onChanged={() => setTaskInboxRevision(value => value + 1)} /> : <ProductionMyWork {...moduleProps} />}</> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
           {view === "projects" ? <>
@@ -522,6 +532,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={() => setView("my-work")} onOpenSignature={() => setView("signature")} /> : null}
           {view === "customers" ? <ProductionCustomers {...common} onOpenInquiries={() => setView("inquiries")} /> : null}
           {view === "reports" ? reportTab === "workspace" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => { if (confirmReportNavigation()) setReportTab("analytics"); }} /> : <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
+          {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={(type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else setView("my-work");}}/> : null}
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "master" ? <ProductionMasterData {...common} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}

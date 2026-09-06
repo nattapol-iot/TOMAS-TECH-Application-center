@@ -1,5 +1,6 @@
 import sql from "mssql/msnodesqlv8.js";
 import type { Transaction as TransactionType } from "mssql";
+import { recordNativeActivity } from "./activity-recorder.js";
 
 /** SQL Server ISJSON() (without a type constraint) requires object/array roots. */
 export function auditJson(value: unknown): string | null {
@@ -29,4 +30,5 @@ export async function insertAudit(
     INSERT INTO dbo.audit_log (actor_id, entity_type, entity_id, entity_no, action, before_json, after_json)
     VALUES (@actor, @entity_type, @entity_id, @entity_no, @action, @before, @after);
   `);
+  await recordNativeActivity(transaction, actorId, entityType, entityId, action, before, after);
 }
