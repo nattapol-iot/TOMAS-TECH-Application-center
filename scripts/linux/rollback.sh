@@ -68,7 +68,12 @@ for image in "${images[@]}"; do
   docker tag "${image}:previous" "${image}:current"
 done
 
-docker compose -f docker-compose.prod.yml up -d --no-build "${services[@]}"
+if ! docker compose -f docker-compose.prod.yml up -d --no-build "${services[@]}"; then
+  log "docker compose up -d failed -- checking what's bound to ports ${API_PORT}/${FRONTEND_PORT}:"
+  ss -ltnp 2>/dev/null | grep -E ":(${API_PORT}|${FRONTEND_PORT})\b" \
+    || echo "(nothing reported listening on these ports -- the conflict may be transient, or ss/iproute2 is unavailable)"
+  die "docker compose up -d failed -- see the port diagnostic above. If a non-Docker process is listed, stop it (e.g. 'sudo systemctl stop <unit>' or 'sudo kill <pid>') and re-run rollback."
+fi
 
 # ASP.NET Core's automatic host-filtering middleware rejects any request whose Host
 # header doesn't match AllowedHosts with a 400 -- our own health-check curls against
