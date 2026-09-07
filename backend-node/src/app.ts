@@ -1,5 +1,7 @@
 import cors from "@fastify/cors";
+import { registerExecutiveDashboardRoutes } from "./routes/executive-dashboard.js";
 import { registerActivityRoutes } from "./routes/activity.js";
+import { registerSupportRoutes } from "./routes/support.js";
 import { registerEstimateExcelImportRoutes } from "./routes/estimate-excel-import.js";
 import { registerHistoricalPrRoutes } from "./routes/historical-pr.js";
 import { registerUnifiedReportRoutes } from "./routes/unified-reports.js";
@@ -124,6 +126,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
   registerBootstrapRoutes(app, database, users);
+  registerExecutiveDashboardRoutes(app, database, users);
   registerBomRoutes(app, config, database, users);
   registerPricingRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users);
@@ -162,9 +165,10 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerSupplierQuotationRoutes(app, config, database, users);
   registerVisitMasterRoutes(app, database, users);
   registerAdminRoutes(app, database, users);
-  registerUnifiedReportRoutes(app, database, users);
+  registerUnifiedReportRoutes(app, config, database, users);
   registerReportTemplateRoutes(app, database, users);
   registerPerformanceRoutes(app, database, users);
+  registerSupportRoutes(app, config, database, users);
   registerActivityRoutes(app, database, users);
   app.addHook("onClose", async () => database.close());
   return { app, database };

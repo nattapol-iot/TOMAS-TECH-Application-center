@@ -1,0 +1,52 @@
+Use case: infographic-diagram.
+Create a finished detailed English business workflow infographic for TOMAS TECH's IoT Team Center. High-resolution landscape 16:9 preferably 3840x2160. White and very pale blue background, navy headlines, brand blue #0B57A4 and sky blue #189BE0, restrained gold for decisions, green for approval, orange for revision loops. Modern sans serif typography, flat vector-style icons, crisp connectors with clear arrowheads and no crossings through text. Professional executive process diagram, highly readable. Plain TOMAS TECH wordmark, no invented logo.
+This is the second page of a two-page explainer, dedicated to workflow and handoffs. English only. No fictional metrics or deployment promises.
+
+LAYOUT AND LOGIC:
+Header at top 10%. Use three distinct wide horizontal flow bands, occupying approximately 25%, 24%, and 27%, then a bottom insight strip at 14%. Main flow moves left to right within each band. Explicit inter-band connectors as described. Every process card contains a bold title, a short owner label and 1-2 small descriptive lines. Use exact copy below, wrapping sensibly.
+BAND A: "A / DEFINE & APPROVE THE ENGINEERING COST"
+Main path LEFT TO RIGHT:
+A1 rectangular card title "Capture Inquiry", owner "Sales / Coordinator", details "Record customer needs, scope," and "contacts and reference files."
+A2 rectangular card title "Prepare Estimate", owner "Engineering Team", details "Material costs + engineering effort" and "+ project expenses."
+A3 rectangular card title "Validate & Submit", owner "Estimate Owner", details "Resolve critical errors." and "Submit for engineering review."
+A4 GOLD decision diamond containing "Engineering" and "review approved?"
+A5 green rectangular card title "Approved & Locked", owner "Authorized Reviewer", details "Preserve the approved revision."
+Arrows A1 -> A2 -> A3 -> A4; YES arrow A4 -> A5.
+NO path from A4 loops BELOW main process back into A2. Label the loop "Request revision → Update estimate → Resubmit". Route the loop so it cannot overlap node text.
+A small supporting note BELOW A1 reading "Site visit when needed: assign engineer → visit → report → inform inquiry." This optional branch is explanatory and must not imply all inquiries require a visit.
+Small note under A2: "Price references: Price Library / Supplier Quotations"
+Route arrow from A5 down into the FIRST process of band B along outside of nodes; label "Create project from approved estimate".
+
+BAND B: "B / PLAN & EXECUTE THE PROJECT"
+B1 card: "Create Project"; owner "Project Lead"; detail "Link approved scope and cost."
+B2 card: "Plan & Assign"; owner "Project Lead / Manager"; detail "Schedule tasks, dates and resources."
+B3 card: "Execute & Update"; owner "Assigned Employees"; detail "Use My Work to update progress."
+B4 card: "Report & Sign"; owner "Project Team / Signers"; detail "Prepare reports and route documents for signing."
+B5 card: "Monitor & Follow Up"; owner "Managers"; detail "Review progress, workload and open actions."
+Arrows B1 -> B2 -> B3 -> B4 -> B5.
+A thin feedback arrow from B5 loops above band B back to B2, label "Adjust plans and priorities". Keep loop away from all other lines.
+A separate connector down from B1 into C1 of band C labeled "Material requirements". Band C is a supporting process that runs alongside execution, not a step after reporting.
+
+BAND C: "C / SUPPLY MATERIALS FOR PROJECT EXECUTION"
+C1 card title "Generate & Release BOM"; details "Bill of Materials" and "Check stock and shortages."
+C2 GOLD decision diamond text "Shortage?"
+YES arrow to C3: "Purchase Requisition (PR)"; detail "Request purchase and obtain approval."
+C3 -> C4: "Purchase Order (PO)"; detail "Place the approved supplier order."
+C4 -> C5: "Goods Receiving"; detail "Record received quantities."
+C5 -> C6: "Inventory & Material Issue"; detail "Request → Approve → Issue → Receive."
+NO branch from C2 bypasses C3-C5 and connects to C6. Label this lower connector "Stock available → Use existing inventory". Route below cards and above bottom strip.
+C6 small output label "Materials supplied to the project team".
+NOTE under this band "Purchasing and inventory teams manage this process with authorized approvers."
+Add a short unobtrusive note beside C3: "Unapproved requests return for correction."
+
+BOTTOM STRIP: heading "Visibility and support across every stage"
+Three balanced small callouts:
+"Management visibility" / "Dashboard • Reports • KPI & Growth"
+"Shared working information" / "Documents • Knowledge Hub • Master Data"
+"Control and assistance" / "Role-based access • Audit Log • Support Center"
+
+FOOTER:
+"Internal engineering cost only. Actions and approvals depend on user permissions."
+"02 / WORKFLOW & HANDOFFS"
+
+Important: Draw ONLY the logical relationships specified. No arrow from reporting into procurement. Revision MUST loop to Prepare Estimate. Stock-available bypass MUST lead into Inventory & Material Issue. Procurement supports project execution alongside task work. Prefer short exact text over decorative clutter; preserve all essential stages and branch labels. No technical system architecture, payment processing, customer selling prices, financial performance statistics, promises of automatic project creation or automatic external messages.

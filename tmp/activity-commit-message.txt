@@ -1,0 +1,14 @@
+feat: add scoped team activity and KPI reporting
+
+Track foreground sessions and successful work updates, define reporting duties,
+review daily evidence, and freeze trial or 10% activity KPI contributions.
+Include migration 034 as the existing schema prerequisite for migration 035.
+
+Independent security, KPI and UI reviewers fixed LAN HTTP report submission,
+project-scoped privacy, aggregate-score inference, missing-report completion,
+draft switching and oversized date validation. Preserve unrelated workspace work.
+
+Validation: SQL/API 80 checks passed against working source, exact deployed
+stage and selected commit source; backend 86; working UI/guardrails 68;
+selected commit applicable UI/guardrails 58; typechecks, scoped lint and builds.
+See docs/team-activity-qa.md for known repository test limitations.

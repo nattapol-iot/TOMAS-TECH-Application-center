@@ -227,7 +227,7 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
   const uiText = useUiText();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(10);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<BootstrapData["customers"][number] | null>(null);
   const customers = useMemo(() => {

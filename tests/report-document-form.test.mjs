@@ -99,3 +99,15 @@ test("report timestamp uses the saved document locale and Bangkok time", () => {
   assert.match(reportTimestamp("ja", "2026-09-06T00:00:00Z"), /2026/);
   assert.match(reportTimestamp("th", "2026-09-06T00:00:00Z"), /2569/);
 });
+
+test("evidence editor is touch-friendly and requires context before a camera or photo-library upload", () => {
+  const evidenceSections=[{key:"evidence",label:"Evidence",repeat:true,fields:[{key:"topic",label:"Report topic",options:["Commissioning"]},{key:"description",label:"What is shown"},{key:"purpose",label:"Evidence purpose"},{key:"reference",label:"File / document reference"},{key:"url",label:"Evidence URL",type:"url"}]}];
+  const html=render({reportType:"INSTALLATION",sections:evidenceSections,body:{evidence:[{}]},onChange(){},onUploadEvidence:async()=>({})});
+  assert.ok(html.includes('capture="environment"'));
+  assert.ok(html.includes('accept="image/jpeg,image/png,image/heic,image/heif'));
+  assert.ok(html.includes("Report topic *"));
+  assert.ok(html.includes("What is shown *"));
+  assert.ok(html.includes("Evidence purpose *"));
+  assert.ok(html.includes("Take photo"));
+  assert.ok(html.includes("Choose from Photos"));
+});

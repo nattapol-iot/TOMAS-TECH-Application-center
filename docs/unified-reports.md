@@ -68,9 +68,11 @@ spreadsheets.
   corrective actions.
 - **POC:** hypothesis, success criteria, baseline, trial method, result, and limits.
 
-Evidence fields store references or links to controlled files. They do not embed image
-data in the report JSON. The only image accepted by the public acknowledgment API is
-the customer's drawn PNG signature, capped and validated by the server.
+Evidence entries identify the related report topic, what the image shows, and why it
+is attached. Preparers can take a photo with an iPad camera or choose one from Photos;
+the browser downsizes it before upload. JPEG/PNG bytes are stored in controlled document
+storage while the report JSON records only immutable metadata and SHA-256. The approved
+snapshot exposes only images referenced by that exact revision to the customer link.
 
 ## Security and audit rules
 

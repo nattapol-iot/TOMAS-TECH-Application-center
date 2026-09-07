@@ -153,12 +153,12 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
           <th style={{ width: 130 }}><LocalizedText text={"Project type"} /></th>
           <th className="num" style={{ width: 70 }}><LocalizedText text={"Lines"} /></th>
           <th className="num" style={{ width: 150 }}><LocalizedText text={"Reference total"} /></th>
-          <th style={{ width: 150 }}>Oldest price</th>
+          <th style={{ width: 150 }}><LocalizedText text={"Oldest price"} /></th>
           <th className="num" style={{ width: 70 }}><LocalizedText text={"Used"} /></th>
           <th style={{ width: 100 }}><LocalizedText text={"Status"} /></th>
-          <th style={{ width: 170 }}>ผู้สร้าง</th>
+          <th style={{ width: 170 }}><LocalizedText text={"ผู้สร้าง"} /></th>
           <th style={{ width: 200 }}><LocalizedText text={"Last Updated"} /></th>
-          <th style={{ width: 80 }}><span className="sr-only">เปิดรายละเอียด</span></th>
+          <th style={{ width: 80 }}><span className="sr-only"><LocalizedText text={"เปิดรายละเอียด"} /></span></th>
         </tr></thead>
         <tbody>{items.map((template) => {
           const age = priceAgeInDays(template.oldestPriceDate);
@@ -167,7 +167,7 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
             <td><span className="pill">{template.categoryCode}</span> {template.category}</td>
             <td>{template.projectType || "—"}</td>
             <td className="num">{template.lineCount}</td>
-            <td className="num"><strong>{formatMoney(template.referenceTotal)}</strong><span className="module-template-unit">ต่อ 1 ชุด</span></td>
+            <td className="num"><strong>{formatMoney(template.referenceTotal)}</strong><span className="module-template-unit"><LocalizedText text={"ต่อ 1 ชุด"} /></span></td>
             <td>{age !== null && age > STALE_TEMPLATE_PRICE_DAYS
               ? <span className="soft-warn">{formatDate(template.oldestPriceDate)} <LocalizedText text={"·"} /> {age} <LocalizedText text={"days"} /></span>
               : formatDate(template.oldestPriceDate)}</td>
@@ -189,28 +189,28 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
       onClose={() => { if (!busy) setSelected(null); }}
       footer={<>
         <button className="btn ghost" type="button" disabled={busy} onClick={() => setSelected(null)}><LocalizedText text={"Close"} /></button>
-        {canEdit ? <button className="btn default" type="button" disabled={busy} onClick={() => setEditor({ mode: "copy", template: selected })}><Icon name="copy" />คัดลอกเป็นชุดใหม่</button> : null}
+        {canEdit ? <button className="btn default" type="button" disabled={busy} onClick={() => setEditor({ mode: "copy", template: selected })}><Icon name="copy" /><LocalizedText text={"คัดลอกเป็นชุดใหม่"} /></button> : null}
         {canRetire && selected.status !== "Retired"
           ? <button className="btn warn" type="button" disabled={busy} onClick={() => setRetireConfirm(true)}><Icon name="trash" /><LocalizedText text={"เลิกใช้งาน"} /></button>
           : null}
         <span className="spacer" />
         {canEdit && selected.status !== "Retired"
-          ? <button className="btn primary" type="button" disabled={busy} onClick={() => setEditor({ mode: "edit", template: selected })}><Icon name="edit" />แก้ไขชุดและรายการ</button>
+          ? <button className="btn primary" type="button" disabled={busy} onClick={() => setEditor({ mode: "edit", template: selected })}><Icon name="edit" /><LocalizedText text={"แก้ไขชุดและรายการ"} /></button>
           : null}
       </>}
     >
       {detailError ? <div className="info-strip red" role="alert">{detailError}</div> : null}
-      {retireConfirm ? <div className="info-strip amber"><span>เลิกใช้งานชุดนี้? ทีมจะเลือกใช้ใน Estimate ใหม่ไม่ได้ แต่ใบเดิมยังคงรายการไว้</span><button type="button" className="btn default sm" disabled={busy} onClick={() => setRetireConfirm(false)}><LocalizedText text={"Cancelled"} /></button><button type="button" className="btn warn sm" disabled={busy} onClick={() => { void retire(selected); }}>ยืนยันเลิกใช้งาน</button></div> : null}
+      {retireConfirm ? <div className="info-strip amber"><span><LocalizedText text={"เลิกใช้งานชุดนี้? ทีมจะเลือกใช้ใน Estimate ใหม่ไม่ได้ แต่ใบเดิมยังคงรายการไว้"} /></span><button type="button" className="btn default sm" disabled={busy} onClick={() => setRetireConfirm(false)}><LocalizedText text={"Cancelled"} /></button><button type="button" className="btn warn sm" disabled={busy} onClick={() => { void retire(selected); }}><LocalizedText text={"ยืนยันเลิกใช้งาน"} /></button></div> : null}
       <dl className="def-list module-template-summary"><div><dt><LocalizedText text={"Discipline"} /></dt><dd><span className="pill">{selected.categoryCode}</span> {selected.category}</dd></div>
         <div><dt><LocalizedText text={"Project type"} /></dt><dd>{selected.projectType || "—"}</dd></div>
-        <div><dt><LocalizedText text="Reference total" /></dt><dd><strong>{formatMoney(selected.referenceTotal)}</strong><span className="module-template-summary-suffix"> / 1 ชุด</span></dd></div>
+        <div><dt><LocalizedText text="Reference total" /></dt><dd><strong>{formatMoney(selected.referenceTotal)}</strong><span className="module-template-summary-suffix"> <LocalizedText text={"/ 1 ชุด"} /></span></dd></div>
         <div><dt><LocalizedText text="Used in" /></dt><dd>{selected.usageCount} <LocalizedText text="Estimates" /></dd></div>
         <div><dt><LocalizedText text="Created by" /></dt><dd>{selected.createdByName}<time>{formatUpdated(selected.createdAt)}</time></dd></div>
         <div><dt><LocalizedText text="Last updated by" /></dt><dd>{selected.updatedByName}<time>{formatUpdated(selected.updatedAt)}</time></dd></div>
         <div><dt><LocalizedText text={"Revision"} /></dt><dd>{selected.revision}</dd></div>
         <div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{selected.status}</Badge></dd></div>
       </dl>
-      {selected.lines.some((line) => !line.referencePriceDate || (priceAgeInDays(line.referencePriceDate) ?? 0) > STALE_TEMPLATE_PRICE_DAYS) ? <div className="info-strip amber"><Icon name="clock" /><span>มีรายการที่ไม่ระบุวันที่ราคา หรือราคาเกิน 180 วัน ควรตรวจสอบราคาก่อนใช้ใน Estimate</span></div> : null}
+      {selected.lines.some((line) => !line.referencePriceDate || (priceAgeInDays(line.referencePriceDate) ?? 0) > STALE_TEMPLATE_PRICE_DAYS) ? <div className="info-strip amber"><Icon name="clock" /><span><LocalizedText text={"มีรายการที่ไม่ระบุวันที่ราคา หรือราคาเกิน 180 วัน ควรตรวจสอบราคาก่อนใช้ใน Estimate"} /></span></div> : null}
       {selected.description ? <div className="module-template-description"><Icon name="file" /><div><span><LocalizedText text="Template description" /></span><p>{selected.description}</p></div></div> : null}
       <div className="module-template-lines-head"><div><h3><LocalizedText text="Items in template" /></h3><p>{selected.lineCount} <LocalizedText text="Items" /> <LocalizedText text={"·"} /> <LocalizedText text="Quantity per set" /></p></div><TablePageSize value={linePageSize} onChange={(size) => { setLinePageSize(size); setLinePage(1); }} /></div>
       <div className="table-wrap module-template-detail-table"><table>
@@ -243,7 +243,7 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
           savedId = (await createModuleTemplate(values)).id;
         }
         setEditor(null);
-        notify(`${values.name} · บันทึก Template แล้ว`);
+        notify(`${values.name} · ${uiText("บันทึก Template แล้ว")}`);
         await load();
         await open(savedId);
       }}

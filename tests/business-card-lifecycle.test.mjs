@@ -55,7 +55,8 @@ function mountScanner(workerFactory, { createBitmap = async () => ({ width: 300,
       }
     },
   };
-  const jsx = (type, props) => ({ type, props });
+  const LocalizedText = ({ text }) => text;
+  const jsx = (type, props) => type === LocalizedText ? LocalizedText(props) : ({ type, props });
   const parser = { exports: {} };
   runInNewContext(parserCode, { module: parser, exports: parser.exports });
   const mod = { exports: {} };
@@ -64,6 +65,8 @@ function mountScanner(workerFactory, { createBitmap = async () => ({ width: 300,
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
     "../../../lib/business-card": parser.exports,
     "../ui": { Icon: "icon" },
+    "../i18n": { useT: () => text => text },
+    "../LocalizedText": { LocalizedText },
     "tesseract.js": { createWorker: workerFactory, OEM: { LSTM_ONLY: 1 }, PSM: { SPARSE_TEXT: 11 } },
   };
   runInNewContext(componentCode, {

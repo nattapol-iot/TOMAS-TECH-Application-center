@@ -1,0 +1,10 @@
+import {execFileSync} from 'node:child_process';
+import {mkdirSync,writeFileSync,symlinkSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+const env={...process.env,GIT_INDEX_FILE:resolve('tmp/activity-commit.index')};
+const files=execFileSync('git',['ls-files','-z'],{env,encoding:'utf8',maxBuffer:8*1024*1024}).split('\0').filter(Boolean).filter(p=>!p.includes('/')||/^(app|database|scripts|tests|docs|backend-node\/(src|tests)|backend)\//.test(p)||/^backend-node\/[^/]+$/.test(p)).filter(p=>!/(^|\/)(node_modules|bin|obj|tmp|\.next|dist|\.git)(\/|$)/.test(p));
+const root=resolve('tmp',`activity-commit-review-${Date.now()}`);mkdirSync(root,{recursive:true});
+execFileSync('git',['checkout-index','--stdin','-z','--prefix='+root.replaceAll('\\','/')+'/'],{env,input:files.join('\0')+'\0',stdio:['pipe','pipe','pipe']});
+symlinkSync(resolve('backend-node/node_modules'),join(root,'backend-node/node_modules'),'junction');
+writeFileSync('tmp/activity-commit-review.txt',root);
+console.log(JSON.stringify({root,files:files.length}));

@@ -81,7 +81,7 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     // a specimen is a preference, reached from the user menu, because putting it
     // in the sidebar would imply the image is what authorises.
     "Sign Inbox", "Signed Documents",
-    "Team Activity", "KPI & Growth", "Reports", "Master Data", "Module Templates",
+    "Team Activity", "KPI & Growth", "Reports", "Support Center", "Master Data", "Module Templates",
     "Company Stamps", "Audit Log", "Visit Master Data", "Settings",
   ];
   for (const label of menuLabels) {
@@ -1159,4 +1159,16 @@ test("a signature specimen is every signed-in user own preference, by design", a
   const navSource = shell.slice(shell.indexOf("const NAV"), shell.indexOf("const IS_AUTH_CONFIGURED"));
   assert.doesNotMatch(navSource, /My signature/);
   assert.ok(shell.includes('setView("signature")'));
+});
+
+test("Master Data Customers table defaults to 10 rows and supports page-size selection", async () => {
+  const screen = await readFile(new URL("app/system/production/AdminAnalyticsScreens.tsx", root), "utf8");
+  const customers = screen.slice(
+    screen.indexOf("export function ProductionCustomers"),
+    screen.indexOf("function LocalizedNameStack"),
+  );
+
+  assert.match(customers, /const \[pageSize, setPageSize\] = useState\(10\)/);
+  assert.match(customers, /<TablePageSize value=\{pageSize\}/);
+  assert.match(customers, /setPageSize\(value\); setPage\(1\)/);
 });

@@ -1,0 +1,1 @@
+import{t as e}from"./rsc-DxYyk6mq.js";var t=e(()=>{throw Error(`Unexpectedly client reference export 'default' is called on server`)},`a07056c7e511`,`default`);export{t as default};

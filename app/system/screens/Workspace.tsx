@@ -1822,7 +1822,7 @@ function OtherCostTab({ others, contingency, totals, locked, onContingency, onPa
             <div><dt><LocalizedText text={"Outsource"} /></dt><dd>{money(totals.outsource)}</dd></div>
             <div><dt><LocalizedText text={"Transportation"} /></dt><dd>{money(totals.transportation)}</dd></div>
             <div><dt><LocalizedText text={"Accommodation"} /></dt><dd>{money(totals.accommodation)}</dd></div>
-            <div><dt>Other cost</dt><dd>{money(totals.other)}</dd></div>
+            <div><dt><LocalizedText text={"Other cost"} /></dt><dd>{money(totals.other)}</dd></div>
             <div><dt><LocalizedText text={"Contingency"} /></dt><dd>{money(totals.contingency)}</dd></div>
             <div><dt><LocalizedText text={"Total estimated cost"} /></dt><dd><strong>{money(totals.total)}</strong></dd></div>
           </dl>
@@ -2091,7 +2091,7 @@ function CompareTab({ estimate }: { estimate: Estimate }) {
           <table>
             <thead>
               <tr>
-                <th>Cost Item</th><th><LocalizedText text={"Category"} /></th>
+                <th><LocalizedText text={"Cost Item"} /></th><th><LocalizedText text={"Category"} /></th>
                 <th className="num">{from} <LocalizedText text={"Qty"} /></th><th className="num">{to} <LocalizedText text={"Qty"} /></th><th className="num">Qty Diff.</th>
                 <th className="num">{from} <LocalizedText text={"Cost"} /></th><th className="num">{to} <LocalizedText text={"Cost"} /></th><th className="num">Cost Diff.</th>
                 <th><LocalizedText text={"Change Type"} /></th>

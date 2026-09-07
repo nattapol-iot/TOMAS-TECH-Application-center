@@ -1,0 +1,108 @@
+Use case: infographic-diagram
+Asset type: Page 3 of an English executive application infographic series.
+Input image: the most recent workflow infographic is a STYLE REFERENCE ONLY. Match its visual language, typography, TOMAS TECH deep blue and sky blue palette, gold decision accents, green success signals, crisp flat enterprise icons, white and pale-blue background, panel borders and spacing. Do not copy its process content.
+Primary request: Create a detailed landscape 16:9 infographic explaining the PROPOSED interface between IoT Team Center and the company's ERP system. High resolution, preferably 3840x2160. English only. Highly readable for executives, employees and IT teams. Accurate arrows, no crossed connectors, no tiny unreadable text.
+
+HEADER:
+Plain text wordmark "TOMAS TECH"
+Product name "IoT TEAM CENTER"
+Page title "ERP INTERFACE & DATA FLOW"
+Badge "PROPOSED INTEGRATION CONCEPT"
+Page label at top right "PAGE 3 OF 3"
+Subtitle "Connect engineering work with the company’s official customer, cost and procurement records."
+
+SYSTEM OWNERSHIP STRIP:
+Create three wide system panels across the page:
+LEFT: "COMPANY ERP" with enterprise database/building icon
+Text: "Enterprise master and official transaction records"
+CENTER: "INTEGRATION CONTROL" with bidirectional arrows and shield/check icon
+Text: "Validate • Map • Transfer • Track • Retry"
+RIGHT: "IoT TEAM CENTER" with engineering dashboard/team icon
+Text: "Engineering requirements, estimates, projects and material context"
+
+Under the three panels, show THREE clearly separated horizontal numbered swimlanes. Every connector must visibly start and end at the correct system panel. Use large labels and concise field chips.
+
+LANE 01 — CUSTOMER DATA INTERFACE
+Heading: "01  CUSTOMER DATA INTERFACE"
+Purpose line: "Use one trusted customer identity across inquiries, site visits, estimates and projects."
+Main arrow direction: COMPANY ERP → INTEGRATION CONTROL → IoT TEAM CENTER
+ERP card:
+"Customer Master"
+chips: "Customer code" • "Company names" • "Address & tax data" • "Contacts" • "Active status"
+Center control card:
+"Validate & Map"
+lines: "Check required fields and duplicates"
+"Match ERP customer code to IoT customer ID"
+IoT card:
+"Available to Engineering"
+lines: "Select the approved customer record"
+"Use it throughout the work lifecycle"
+Small return arrow from Integration Control back to ERP labeled "Rejected records / correction required"
+Small result label on the forward arrow: "New and approved master-data changes"
+Ownership tag: "System of record: ERP"
+
+LANE 02 — ESTIMATE COST INTERFACE
+Heading: "02  ESTIMATE COST INTERFACE"
+Purpose line: "Transfer reviewed internal engineering cost without exposing editable draft revisions."
+Main arrow direction: IoT TEAM CENTER → INTEGRATION CONTROL → COMPANY ERP
+IoT card:
+"Approved & Locked Estimate"
+chips: "Estimate number" • "Revision" • "Project / customer" • "Cost categories" • "Approved total"
+Center control card:
+"Validate & Transform"
+lines: "Send approved revision only"
+"Map cost categories and ERP references"
+ERP card:
+"Cost Record Received"
+lines: "Create or update the linked ERP record"
+"Return ERP document number and processing status"
+A slim return arrow direction ERP → Integration Control → IoT Team Center labeled "ERP reference • accepted / rejected status • error detail"
+Ownership tags below lane:
+"Engineering detail: IoT Team Center"
+"Posted enterprise record: ERP"
+Gold control note: "Internal engineering cost only — no selling price or margin."
+
+LANE 03 — PR–PO INTERFACE
+Heading: "03  PR–PO INTERFACE"
+Purpose line: "Connect BOM shortages and approved purchase needs to the company procurement process."
+Show this exact forward flow from RIGHT to LEFT:
+IoT Team Center card "BOM Shortage"
+arrow to IoT Team Center card "Approved Purchase Requisition"
+arrow through Integration Control card "Validate supplier, items, quantities and project codes"
+arrow to ERP card "Create Official PR"
+arrow to ERP card "Approval & Purchase Order"
+Use a clear blue forward arrow over this entire flow labeled "Purchase request data"
+Show a separate green return flow from LEFT to RIGHT BELOW the forward flow:
+ERP card "PR / PO number and status"
+arrow through Integration Control
+arrow to IoT Team Center card "Update procurement tracking"
+Return-flow label "Approval status • PO details • supplier • expected date • receipt status"
+Add an orange exception loop from Integration Control back to "Approved Purchase Requisition" labeled "Validation error → correct and resubmit"
+Ownership tags:
+"Engineering demand and BOM context: IoT Team Center"
+"Official PR / PO transaction: ERP"
+
+BOTTOM BAND:
+Heading "CONTROL POINTS FOR ALL THREE INTERFACES"
+Five equal icon callouts:
+"Authorization" / "Only approved users and service identities"
+"Data Validation" / "Required fields, formats and code mapping"
+"Traceability" / "Source ID, ERP reference and audit history"
+"Reliability" / "Idempotent transfer, retry and reconciliation"
+"Exception Handling" / "Visible status, owner and correction path"
+
+BOTTOM DECISION NOTE:
+"Before implementation: confirm field mapping, transfer frequency, approval ownership and the system of record for each document."
+Footer:
+"Integration design shown here is proposed scope; it does not claim that the ERP interfaces are already implemented."
+"03 / ERP INTERFACE & DATA FLOW"
+
+Constraints:
+- Reproduce all visible text correctly and legibly.
+- Present the three interfaces as proposed future integration, not as completed functionality.
+- Exact directional logic: Customer Data ERP to IoT; approved Estimate Cost IoT to ERP with status return; approved PR IoT to ERP, official PR/PO status ERP back to IoT.
+- ERP is the proposed system of record for customer master and official PR/PO; IoT Team Center owns engineering detail and BOM context.
+- Do not name or invent an ERP vendor, API, middleware product, protocol, frequency, automatic approval, customer selling price, profit or margin.
+- No fabricated metrics, charts, percentages or production claims.
+- Use arrows and system positioning rather than decorative illustrations as the primary storytelling.
+- Keep text comfortably readable on presentation screens; use concise cards and no crowded paragraphs.

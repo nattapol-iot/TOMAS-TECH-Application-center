@@ -1,0 +1,1 @@
+import{h as e,m as t,x as n}from"../../index.js";import r from"./ProductionApp-DJPZCbS2.js";var i=n(t(),1),a=e();function o(){let[e]=(0,i.useState)(()=>new URLSearchParams(window.location.search).get(`code`)?.trim().toUpperCase()??``);return(0,a.jsx)(r,{initialVerifyCode:e})}export{o as default};

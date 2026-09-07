@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import "./report-document.css";
 import { reportCopy, reportFieldLabel, reportLocale } from "./report-locale";
+import type { ReportEvidenceAttachment } from "../api-client";
 
 export type InputField = { key: string; label: string; type?: "date" | "datetime-local" | "number" | "url" | "email" | "tel"; options?: string[] };
 export type Section = { key: string; label: string; fields: InputField[]; repeat?: boolean };
 type Body = Record<string, unknown>;
-type Props = { locale?: string; reportType: string; body: Body; onChange?: (body: Body) => void; readOnly?: boolean; reusableOnly?: boolean; sections: Section[] };
+type Props = { locale?: string; reportType: string; body: Body; onChange?: (body: Body) => void; readOnly?: boolean; reusableOnly?: boolean; sections: Section[]; onUploadEvidence?: (file:File)=>Promise<ReportEvidenceAttachment>; evidenceImageSource?: (attachmentId:number)=>string|Promise<string> };
 const object = (value: unknown): Body => value && typeof value === "object" && !Array.isArray(value) ? value as Body : {};
 const text = (value: unknown) => typeof value === "string" || typeof value === "number" ? String(value) : "";
 const requiredFields: Record<string, string[]> = {
@@ -31,7 +32,48 @@ function FieldControl({ field, value, label, readOnly, onChange, locale }: { loc
   return <textarea aria-label={label} rows={1} maxLength={10000} value={content} ref={resize} onChange={event => { resize(event.currentTarget); onChange(event.target.value); }} />;
 }
 
-export function ReportDocumentForm({ locale = "th", reportType, body, onChange, readOnly = false, reusableOnly = false, sections: passedSections }: Props) {
+function EvidenceImage({attachmentId,description,source,locale}: {attachmentId:number;description:string;source?:Props["evidenceImageSource"];locale:string}) {
+  const t=(value:string)=>reportCopy(locale,value);
+  const [resolved,setResolved]=useState<{attachmentId:number;source:NonNullable<Props["evidenceImageSource"]>;url:string;failed:boolean}|null>(null);
+  useEffect(()=>{
+    let active=true,created="";
+    if(!source)return;
+    void Promise.resolve().then(()=>source(attachmentId)).then(value=>{if(active){created=value;setResolved({attachmentId,source,url:value,failed:false});}}).catch(()=>{if(active)setResolved({attachmentId,source,url:"",failed:true});});
+    return()=>{active=false;if(created.startsWith("blob:"))URL.revokeObjectURL(created);};
+  },[attachmentId,source]);
+  const current=resolved?.attachmentId===attachmentId&&resolved.source===source?resolved:null;
+  if(!source||current?.failed)return <div className="report-evidence-image-status" role="alert">{t("Image unavailable")}</div>;
+  if(!current?.url)return <div className="report-evidence-image-status">{t("Loading image…")}</div>;
+  // Evidence is served only by authenticated or one-use customer report routes.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="report-evidence-image" src={current.url} alt={description||"Report evidence"} />;
+}
+
+function EvidenceCard({locale,row,index,fields,readOnly,onChange,onRemove,onUpload,imageSource}: {locale:string;row:Body;index:number;fields:InputField[];readOnly:boolean;onChange:(row:Body)=>void;onRemove:()=>void;onUpload?:Props["onUploadEvidence"];imageSource?:Props["evidenceImageSource"]}) {
+  const t=(value:string)=>reportCopy(locale,value),[uploading,setUploading]=useState(false),[error,setError]=useState("");
+  const attachmentId=Number(row.attachmentId)||0,description=text(row.description),attachmentName=text(row.attachmentName);
+  const update=(key:string,value:string)=>onChange({...row,[key]:value});
+  const upload=async(file:File)=>{
+    if(!onUpload||uploading)return;setUploading(true);setError("");
+    try{const attachment=await onUpload(file);onChange({...row,...attachment});}
+    catch(failure){setError(failure instanceof Error?failure.message:t("Image upload failed."));}
+    finally{setUploading(false);}
+  };
+  return <article className="report-evidence-card">
+    <header><strong>{t("Evidence image")} {index+1}</strong>{!readOnly?<button type="button" className="report-evidence-remove" onClick={onRemove} aria-label={`${t("Delete")} ${t("Evidence image")} ${index+1}`}>×</button>:null}</header>
+    <div className="report-evidence-card-body">
+      <div className="report-evidence-fields">{fields.map(field=>{const label=`${reportFieldLabel(locale,field.key,field.label)}${["topic","description","purpose"].includes(field.key)?" *":""}`;return <label className="report-document-field" key={field.key}><span>{label}</span><FieldControl locale={locale} field={field} value={row[field.key]} label={label} readOnly={readOnly} onChange={value=>update(field.key,value)} /></label>;})}</div>
+      <div className="report-evidence-photo">
+        {attachmentId?<EvidenceImage attachmentId={attachmentId} description={description} source={imageSource} locale={locale}/>:<div className="report-evidence-image-placeholder">{t("No image attached")}</div>}
+        {attachmentName?<small>{attachmentName} · {Math.max(1,Math.round(Number(row.attachmentSizeBytes)/1024))} KB</small>:null}
+        {!readOnly&&onUpload?<div className="report-evidence-upload-actions"><label className="report-evidence-upload"><span>{uploading?t("Preparing image…"):attachmentId?t("Take replacement photo"):t("Take photo")}</span><input type="file" accept="image/*" capture="environment" disabled={uploading} onChange={event=>{const file=event.target.files?.[0];event.currentTarget.value="";if(file)void upload(file);}} /></label><label className="report-evidence-upload"><span>{attachmentId?t("Choose replacement from Photos"):t("Choose from Photos")}</span><input type="file" accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif" disabled={uploading} onChange={event=>{const file=event.target.files?.[0];event.currentTarget.value="";if(file)void upload(file);}} /></label></div>:null}
+        {error?<p className="report-evidence-upload-error" role="alert">{error}</p>:null}
+      </div>
+    </div>
+  </article>;
+}
+
+export function ReportDocumentForm({ locale = "th", reportType, body, onChange, readOnly = false, reusableOnly = false, sections: passedSections, onUploadEvidence, evidenceImageSource }: Props) {
   const t = (value: string) => reportCopy(locale, value);
   // These optional document fields live in the existing report body; templates use only the caller's sanitized fields.
   const optionalFields: Record<string, InputField[]> = {
@@ -60,8 +102,13 @@ export function ReportDocumentForm({ locale = "th", reportType, body, onChange, 
     // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
     return <><div className="report-document-table-scroll" role="region" aria-label={t(titles[section.key] ?? section.label)} tabIndex={0}><table className={`report-document-table table-${section.key}`}><thead><tr><th className="report-document-row-number" scope="col">No.</th>{section.fields.map(field => <th scope="col" key={field.key} className={`column-${field.key}`}>{labelFor(section, field)}</th>)}{!readOnly ? <th className="report-document-row-action" scope="col"><span className="report-document-sr-only">{t("ลบรายการ")}</span></th> : null}</tr></thead><tbody>{visible.map((value, index) => <tr key={index}><th scope="row" className="report-document-row-number">{index + 1}</th>{section.fields.map(field => <td className={`column-${field.key}`} key={field.key}><FieldControl locale={locale} field={field} label={`${t(titles[section.key] ?? section.label)} · ${labelFor(section, field)} · ${t("Row")} ${index + 1}`} value={object(value)[field.key]} readOnly={readOnly} onChange={next => update(index, field.key, next)} /></td>)}{!readOnly ? <td className="report-document-row-action"><button type="button" aria-label={`${t("Delete")} ${t(titles[section.key] ?? section.label)} ${t("Row")} ${index + 1}`} disabled={!stored.length} onClick={() => onChange?.({ ...body, [section.key]: stored.filter((_, rowIndex) => rowIndex !== index) })}>×</button></td> : null}</tr>)}</tbody></table>{!visible.length ? <p className="report-document-empty">{t("ยังไม่มีรายการ / No entries recorded")}</p> : null}</div>{!readOnly ? <button className="report-document-add" type="button" onClick={() => onChange?.({ ...body, [section.key]: [...(stored.length ? stored : [{}]), {}] })}>{t("＋ เพิ่มแถว / Add row")}</button> : null}</>;
   };
+  const renderEvidence=(section:Section)=>{
+    const stored=Array.isArray(body.evidence)?body.evidence:[],visible=stored.length?stored:readOnly?[]:[{}];
+    const change=(index:number,row:Body)=>{const next=stored.length?[...stored]:[{}];next[index]=row;onChange?.({...body,evidence:next});};
+    return <>{!readOnly?<p className="report-document-evidence-note">{t("Choose the report topic, explain what the image shows and why it is attached. Take a photo with the iPad camera or choose one from Photos.")}</p>:null}<div className="report-evidence-grid">{visible.map((row,index)=><EvidenceCard key={`${index}-${text(object(row).attachmentId)}`} locale={locale} row={object(row)} index={index} fields={section.fields} readOnly={readOnly} onChange={value=>change(index,value)} onRemove={()=>onChange?.({...body,evidence:stored.filter((_,rowIndex)=>rowIndex!==index)})} onUpload={onUploadEvidence} imageSource={evidenceImageSource}/>)}</div>{!visible.length?<p className="report-document-empty">{t("No evidence recorded")}</p>:null}{!readOnly?<button className="report-document-add" type="button" onClick={()=>onChange?.({...body,evidence:[...(stored.length?stored:[{}]),{}]})}>{t("＋ Add evidence image")}</button>:null}</>;
+  };
   const block = (title: string, children: ReactNode, key: string) => <section className="report-document-section" key={key}><h3>{t(title)}</h3>{children}</section>;
-  const renderSection = (key: string, title?: string) => { const section = find(key); return section ? block(title ?? titles[key] ?? section.label, <>{key === "evidence" && !readOnly ? <p className="report-document-evidence-note">{t("ระบุรูปภาพหรือเอกสารที่ใช้อ้างอิง โดยกรอกชื่อไฟล์ / เลขเอกสาร หรือลิงก์หลักฐานอย่างน้อยหนึ่งช่องต่อรายการ / File reference or evidence URL")}</p> : null}{section.repeat ? renderTable(section) : renderFields(section)}</>, key) : null; };
+  const renderSection = (key: string, title?: string) => { const section = find(key); return section ? block(title ?? titles[key] ?? section.label, key === "evidence" ? renderEvidence(section) : section.repeat ? renderTable(section) : renderFields(section), key) : null; };
   const servicePart = (keys: string[], title: string, key: string) => { const section = find("service"); const fields = section?.fields.filter(field => keys.includes(field.key)); return section && fields?.length ? block(title, renderFields(section, fields), key) : null; };
   const knownService = ["symptom", "impact", "rootCause", "action", "downtime", "backup", "rollback", "verification", "testResult", "customerAcceptance", "followUp", "followUpOwner", "nextActionDate", "revisionUsed"];
   const used = reportType === "SERVICE" ? ["context", "overview", "hardware", "software", "service", "issues", "evidence", "deliverables", "closing"] : reportType === "UAT" ? ["context", "overview", "uatSummary", "deliverables", "closing", "scenarios", "punchlist", "evidence"] : [];

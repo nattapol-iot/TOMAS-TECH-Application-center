@@ -407,8 +407,10 @@ GRANT SELECT, INSERT, UPDATE ON dbo.unified_report_revisions TO [iot_team_app_ro
 GRANT SELECT, INSERT, UPDATE ON dbo.unified_report_customer_links TO [iot_team_app_role];
 GRANT SELECT, INSERT ON dbo.unified_report_acknowledgments TO [iot_team_app_role];
 GRANT SELECT, INSERT ON dbo.unified_report_signatures TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.unified_report_evidence_files TO [iot_team_app_role];
 REVOKE UPDATE, DELETE ON dbo.unified_report_acknowledgments FROM [iot_team_app_role];
 REVOKE UPDATE, DELETE ON dbo.unified_report_signatures FROM [iot_team_app_role];
+REVOKE UPDATE, DELETE ON dbo.unified_report_evidence_files FROM [iot_team_app_role];
 
 IF EXISTS (
     SELECT 1

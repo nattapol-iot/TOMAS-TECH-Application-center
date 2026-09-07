@@ -91,7 +91,7 @@ export function progressInput(value: unknown): ProgressInput {
   return { scheduleVersion: body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"), rowVersion: parseRowVersion(body.rowVersion), percentComplete, actualStart, actualFinish, forecastFinish, status, remark };
 }
 
-function taskRow(row: Record<string, unknown> & { row_version: Buffer }): TaskRow {
+export function taskRow(row: Record<string, unknown> & { row_version: Buffer }): TaskRow {
   return {
     id: Number(row.id), projectId: Number(row.project_id), parentId: row.parent_id === null ? null : Number(row.parent_id),
     sortOrder: Number(row.sort_order), kind: String(row.kind), name: String(row.name), isMilestone: Boolean(row.is_milestone),

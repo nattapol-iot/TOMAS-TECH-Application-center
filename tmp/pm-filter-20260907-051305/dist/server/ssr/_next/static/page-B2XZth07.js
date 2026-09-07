@@ -1,0 +1,1 @@
+import{h as e}from"../../index.js";import{t}from"./dynamic-Db1IdEd5.js";var n=e(),r=t(()=>import(`./VerifyEntry-Cg8hIGdV.js`),{ssr:!1,loading:()=>(0,n.jsx)(`main`,{className:`demo-loading`,"aria-live":`polite`,children:`Opening document verification…`}),loadableGenerated:{modules:[`app/system/VerifyEntry.tsx`]}});function i(){return(0,n.jsx)(r,{})}export{i as default};

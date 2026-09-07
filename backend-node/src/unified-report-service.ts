@@ -41,6 +41,27 @@ export function parseReportBody(value:unknown) {
  if(Buffer.byteLength(encoded,'utf8')>200000)throw new ApiError(400,'report_body_large','Report content exceeds 200 KB.');
  return encoded;
 }
+export type ReportEvidenceReference={rowIndex:number;id:number;name:string;contentType:string;sizeBytes:number;sha256:string};
+export function reportEvidenceReferences(bodyJson:string):ReportEvidenceReference[] {
+ const body=JSON.parse(bodyJson) as Record<string,unknown>,evidence=Array.isArray(body.evidence)?body.evidence:[];
+ return evidence.flatMap((value,rowIndex)=>{
+  if(!value||typeof value!=='object'||Array.isArray(value))return [];
+  const row=value as Record<string,unknown>;
+  if(row.attachmentId==null)return [];
+  return [{rowIndex,id:Number(row.attachmentId),name:String(row.attachmentName??''),contentType:String(row.attachmentContentType??''),sizeBytes:Number(row.attachmentSizeBytes),sha256:String(row.attachmentSha256??'')}];
+ });
+}
+export async function validateReportEvidenceFiles(tx:Transaction,r:Pick<ReportRow,'id'|'body_json'>) {
+ const references=reportEvidenceReferences(r.body_json);if(!references.length)return;
+ const rows=(await new sql.Request(tx).input('report',sql.BigInt,r.id).query<{id:number;file_name:string;content_type:string;size_bytes:number;sha256:string}>('SELECT id,file_name,content_type,size_bytes,sha256 FROM dbo.unified_report_evidence_files WHERE report_id=@report')).recordset;
+ const files=new Map(rows.map(file=>[Number(file.id),file]));
+ const issues:{path:string;message:string}[]=[];
+ references.forEach(reference=>{
+  const file=files.get(reference.id);
+  if(!file||file.file_name!==reference.name||file.content_type!==reference.contentType||Number(file.size_bytes)!==reference.sizeBytes||file.sha256!==reference.sha256)issues.push({path:`evidence[${reference.rowIndex}].attachmentId`,message:`Evidence image ${reference.rowIndex+1} is missing or its saved metadata does not match.`});
+ });
+ if(issues.length)throw new ApiError(422,'report_evidence_file','One or more evidence images are unavailable. Upload the images again before submitting.',{issues});
+}
 /** Drafts remain unrestricted. A signature may only freeze a usable report. */
 export function validateReportForSubmission(reportType:string,bodyJson:string) {
  const issues:{path:string;message:string}[]=[];
@@ -86,9 +107,12 @@ export function validateReportForSubmission(reportType:string,bodyJson:string) {
  rows('deliverables',['item','status']);
  rows('issues',['issue','owner','status']);
  rows('punchlist',['scenario','step','issue','owner','status']);
- rows('evidence',['description']);
+ rows('evidence',['topic','description','purpose']);
  if(Array.isArray(body.evidence))body.evidence.forEach((row:unknown,index:number)=>{
-  if(object(row)&&!blank(row)&&!present(row.reference)&&!present(row.url))problem(`evidence[${index}].reference`,`Evidence row ${index+1} needs a file/document reference or URL.`);
+  if(!object(row)||blank(row))return;
+  const attachment=row.attachmentId;
+  if(attachment!=null&&(!Number.isSafeInteger(attachment)||Number(attachment)<1||typeof row.attachmentName!=='string'||!row.attachmentName.trim()||!['image/jpeg','image/png'].includes(String(row.attachmentContentType))||!Number.isSafeInteger(row.attachmentSizeBytes)||Number(row.attachmentSizeBytes)<1||!/^[a-f\d]{64}$/.test(String(row.attachmentSha256))))problem(`evidence[${index}].attachmentId`,`Evidence image ${index+1} has invalid attachment metadata.`);
+  if(!present(row.reference)&&!present(row.url)&&attachment==null)problem(`evidence[${index}].attachmentId`,`Evidence row ${index+1} needs an image, file/document reference or URL.`);
  });
  if(issues.length)throw new ApiError(422,'report_incomplete',`Report is incomplete: ${issues.slice(0,3).map(issue=>issue.message).join(' ')}${issues.length>3?` (${issues.length} items need attention.)`:''}`,{issues});
 }

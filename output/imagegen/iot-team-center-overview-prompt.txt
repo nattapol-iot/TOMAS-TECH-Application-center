@@ -1,0 +1,92 @@
+Use case: infographic-diagram
+Asset type: polished Thai-language overview infographic for internal executive presentations and employee onboarding.
+Create ONE finished, high-resolution landscape infographic, preferably 3840x2160, 16:9. All text must render correctly in Thai. Use generous spacing, crisp modern Thai sans-serif typography similar to Noto Sans Thai, clear hierarchy, very large legible labels, white and pale blue background. Brand palette from the application: deep blue #0B57A4, sky blue #189BE0, navy and small gold #FFC20E accents. Professional enterprise editorial design with refined flat illustrated icons, subtle rounded cards, restrained shadows, and small human figures only where helpful. Do not create a screenshot or browser chrome. Do not invent a logo; use the plain TOMAS TECH wordmark.
+
+Subject: IoT Team Center, TOMAS TECH's internal engineering work management application. Explain how information and work connect and how two audiences use it. This is an overview of functionality, not a claim of production deployment. Internal engineering cost only; no sales-price calculations or profit KPIs.
+
+Layout:
+Top 18%: TOMAS TECH wordmark small upper left, large central product title, Thai subtitle, brief connective line.
+Middle 37%: one ordered left-to-right business workflow of SIX equal numbered cards linked by clear simple arrows. Every card has a meaningful blue illustrated icon, number, bold Thai title, smaller English menu label, and two short Thai explanatory lines. Six cards all in one row; sufficient width and large clear type.
+Next 20%: a horizontal group of FOUR supporting module cards, each with one icon and two short lines. These support the entire workflow, not additional sequential steps. Group heading.
+Bottom 22%: TWO spacious audience panels side by side. Left executive panel with dashboard icon; right employee panel with task/person icon. Each has a large heading and three concise lines. A thin footer carries two short notes.
+Use precise exact text below. Preserve Thai spelling, tone marks and every word. Do not add extra prose, duplicate text, random numbers, fake charts, statistics, technical infrastructure, URLs or badges.
+
+TEXT:
+Brand: "TOMAS TECH"
+Main title: "IoT Team Center"
+Subtitle: "ศูนย์กลางบริหารงานทีมวิศวกรรม"
+Connective line: "เชื่อมข้อมูลงาน ต้นทุน คน วัสดุ และเอกสารไว้ในที่เดียว"
+
+Workflow heading: "ภาพรวมการทำงาน"
+Card 1:
+"01"
+"รับโจทย์ลูกค้า"
+"Inquiry • Site Visit"
+"บันทึกความต้องการ"
+"สำรวจและเก็บข้อมูลหน้างาน"
+Icon: customer conversation and location pin.
+Card 2:
+"02"
+"ประเมินต้นทุน"
+"Estimate Cost"
+"วัสดุ ค่าแรง และค่าใช้จ่าย"
+"อ้างอิงราคาจากซัพพลายเออร์"
+Icon: calculator and item list.
+Card 3:
+"03"
+"ทบทวนและอนุมัติ"
+"Engineering Review"
+"ตรวจขอบเขตและต้นทุน"
+"อนุมัติหรือส่งกลับแก้ไข"
+Icon: document and approval check.
+Card 4:
+"04"
+"วางแผนโครงการ"
+"Projects • Resource Plan"
+"วางแผนเวลาและกำลังคน"
+"มอบหมายงานให้ผู้รับผิดชอบ"
+Icon: project timeline and team.
+Card 5:
+"05"
+"จัดซื้อและวัสดุ"
+"Material & Procurement"
+"รายการวัสดุ → ขอซื้อ → สั่งซื้อ"
+"รับเข้า คุมสต็อก และเบิกใช้"
+Icon: package, warehouse and purchasing.
+Card 6:
+"06"
+"ติดตามและรายงาน"
+"My Work • Reports"
+"อัปเดตความคืบหน้างาน"
+"จัดทำรายงานและเอกสาร"
+Icon: progress checklist and report.
+
+Supporting group heading: "เครื่องมือที่ช่วยให้ทุกขั้นตอนทำงานร่วมกัน"
+Supporting card A:
+"ข้อมูลอ้างอิง"
+"ลูกค้า • ซัพพลายเออร์ • คลังราคา"
+Supporting card B:
+"เอกสารและลายเซ็น"
+"จัดเก็บเอกสาร • ส่งลงนาม • ตรวจสอบ"
+Supporting card C:
+"ความรู้และการพัฒนา"
+"Knowledge Hub • KPI & Growth"
+Supporting card D:
+"แจ้งปัญหาและติดตาม"
+"Support Center"
+
+Executive panel heading: "ผู้บริหารเห็นภาพรวม"
+Executive lines:
+"ติดตามสถานะโครงการและต้นทุน"
+"ดูกำลังคน ภาระงาน และงานที่ต้องเร่ง"
+"ใช้ Dashboard และรายงานประกอบการตัดสินใจ"
+Employee panel heading: "พนักงานรู้สิ่งที่ต้องทำ"
+Employee lines:
+"ดูงานที่ได้รับมอบหมายและกำหนดส่ง"
+"อัปเดตงาน แนบข้อมูล และส่งอนุมัติ"
+"ค้นหาเอกสาร ความรู้ และแจ้งปัญหา"
+
+Footer note 1: "ขอบเขตต้นทุน: ต้นทุนวิศวกรรมภายใน"
+Footer note 2: "การเข้าถึงข้อมูลและเมนูขึ้นอยู่กับสิทธิ์ผู้ใช้งาน"
+
+Constraints: clean and polished balanced visual storytelling, exact readable Thai text, appropriate for both executives and staff with no software jargon beyond the provided real menu labels. Illustrations are supporting elements; content and hierarchy are primary. No invented financial results or production-readiness promises.

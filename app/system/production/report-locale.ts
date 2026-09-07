@@ -223,8 +223,16 @@ const fields: Record<string, { th: string; ja: string }> = {
     "ja": "参照改訂"
   },
   "description": {
-    "th": "คำอธิบาย",
-    "ja": "説明"
+    "th": "รูปนี้คืออะไร",
+    "ja": "写真の内容"
+  },
+  "topic": {
+    "th": "หัวข้อในรายงาน",
+    "ja": "レポート項目"
+  },
+  "purpose": {
+    "th": "แนบเพื่อยืนยันอะไร",
+    "ja": "添付目的 / 確認事項"
   },
   "reference": {
     "th": "เอกสาร / ไฟล์อ้างอิง",
@@ -296,6 +304,34 @@ export function reportFieldLabel(locale: string | undefined, key: string, englis
  return language === "en" ? english : fields[key]?.[language] ?? english;
 }
 const copy: Record<string, [string, string, string]> = {
+  "Evidence image": ["รูปหลักฐาน", "Evidence image", "証拠写真"],
+  "No image attached": ["ยังไม่ได้แนบรูป", "No image attached", "写真未添付"],
+  "Take photo": ["ถ่ายรูป", "Take photo", "写真を撮る"],
+  "Take replacement photo": ["ถ่ายรูปใหม่", "Take replacement photo", "写真を撮り直す"],
+  "Choose from Photos": ["เลือกจาก Photos", "Choose from Photos", "写真ライブラリから選択"],
+  "Choose replacement from Photos": ["เลือกรูปใหม่จาก Photos", "Choose replacement from Photos", "写真ライブラリから選び直す"],
+  "Preparing image…": ["กำลังเตรียมรูป…", "Preparing image…", "写真を処理中…"],
+  "Image upload failed.": ["แนบรูปไม่สำเร็จ", "Image upload failed.", "写真をアップロードできませんでした。"],
+  "Image unavailable": ["ไม่สามารถเปิดรูปได้", "Image unavailable", "写真を表示できません"],
+  "Loading image…": ["กำลังโหลดรูป…", "Loading image…", "写真を読み込み中…"],
+  "No evidence recorded": ["ยังไม่มีหลักฐาน", "No evidence recorded", "証拠資料はありません"],
+  "＋ Add evidence image": ["＋ เพิ่มรูปหลักฐาน", "＋ Add evidence image", "＋ 証拠写真を追加"],
+  "Choose the report topic, explain what the image shows and why it is attached. Take a photo with the iPad camera or choose one from Photos.": ["เลือกหัวข้อในรายงาน ระบุว่ารูปนี้คืออะไรและแนบเพื่อยืนยันอะไร จากนั้นถ่ายด้วยกล้อง iPad หรือเลือกจากรูปภาพ", "Choose the report topic, explain what the image shows and why it is attached. Take a photo with the iPad camera or choose one from Photos.", "レポート項目、写真の内容、添付目的を入力し、iPadで撮影するか写真ライブラリから選択してください。"],
+  "Work details": ["ข้อมูลการปฏิบัติงาน", "Work details", "作業情報"],
+  "Scope & objective": ["ขอบเขตและวัตถุประสงค์", "Scope & objective", "範囲と目的"],
+  "Hardware": ["อุปกรณ์", "Hardware", "ハードウェア"],
+  "Software": ["โปรแกรมและการตั้งค่า", "Software", "ソフトウェア"],
+  "Problem & resolution": ["ปัญหาและการแก้ไข", "Problem & resolution", "問題と解決内容"],
+  "Verification & handover": ["การทดสอบและส่งมอบ", "Verification & handover", "検証と引渡し"],
+  "Pending actions": ["งานค้าง", "Pending actions", "残作業"],
+  "Deliverables": ["งานส่งมอบ", "Deliverables", "成果物"],
+  "UAT summary": ["สรุปผล UAT", "UAT summary", "UAT結果概要"],
+  "UAT test scenarios": ["รายการทดสอบ UAT", "UAT test scenarios", "UAT試験項目"],
+  "UAT punchlist": ["รายการปัญหา UAT", "UAT punchlist", "UATパンチリスト"],
+  "Commissioning": ["ตรวจสอบการติดตั้ง", "Commissioning", "試運転確認"],
+  "Inspection checkpoints": ["รายการตรวจสอบ", "Inspection checkpoints", "検査項目"],
+  "POC trials": ["รายการทดลอง POC", "POC trials", "POC試験"],
+  "Template:": ["Template:", "Template:", "???????"],
   "ข้อมูลการปฏิบัติงาน / Work details": [
     "ข้อมูลการปฏิบัติงาน",
     "Work details",

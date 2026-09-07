@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalizedText } from "../LocalizedText";
-import { useT } from "../i18n";
+import { useLanguage, useT } from "../i18n";
 import { ActivityKpiSummary } from "./ActivityKpiSummary";
+import { performanceEvidenceText } from "./performance-evidence-copy";
+import { canSubmitPerformanceScores, performanceDate, performanceScoreText, weightedPerformanceScore } from "./performance-presentation";
 import { Badge, Icon, Modal, PageHeader, Progress, SearchInput, Select, Tabs, type IconName, type Tone } from "../ui";
 import {
   completePerformanceAssessment,
@@ -86,8 +88,7 @@ const API_STATUS: Record<PerformanceAssessment["status"], ReviewStatus> = {
   NOT_STARTED: "Not started", SELF_REVIEW: "Self review", MANAGER_REVIEW: "Manager review", CALIBRATION: "Calibration", COMPLETED: "Completed",
 };
 function scoreAverage(scores: number[], areas: KpiArea[]) {
-  if (!scores.length || scores.some((value) => value < 1)) return 0;
-  return scores.reduce((sum, value, index) => sum + value * (areas[index]?.weight ?? 0), 0) / 100;
+  return weightedPerformanceScore(scores, areas.map(area => area.weight));
 }
 
 function fromApi(review: PerformanceAssessment): ReviewRecord {
@@ -97,10 +98,16 @@ function fromApi(review: PerformanceAssessment): ReviewRecord {
   const areas = areasForRole(review.role);
   return {
     employeeId: String(review.employeeId), role: review.role, score: review.overallScore === undefined ? Number(scoreAverage(scores, areas).toFixed(1)) : review.overallScore ?? 0, activity:review.activity, status: API_STATUS[review.status],
-    updated: review.updatedAt ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short" }).format(new Date(review.updatedAt)) : "Not updated",
+    updated: review.updatedAt ?? "Not updated",
     scores, selfScores, managerScores, evidence: review.evidence, selfEvidence: review.selfEvidence, managerEvidence: review.managerEvidence, selfSummary: review.selfSummary,
     managerSummary: review.managerSummary, developmentGoal: review.developmentGoal, rowVersion: review.rowVersion,
   };
+}
+
+function emptyReview(member: TeamMember): ReviewRecord {
+  const scores = areasForRole(member.role).map(() => 0);
+  const evidence = scores.map(() => "");
+  return {employeeId: memberKey(member), role: member.role, score: 0, status: "Not started", updated: "Not updated", scores, selfScores: [...scores], managerScores: [...scores], evidence, selfEvidence: [...evidence], managerEvidence: [...evidence], selfSummary: "", managerSummary: "", developmentGoal: "", rowVersion: null};
 }
 
 function seedReviews(team: TeamMember[]): ReviewRecord[] {
@@ -120,7 +127,9 @@ function seedReviews(team: TeamMember[]): ReviewRecord[] {
 
 export default function Performance({ team, currentUser, notify, apiBacked = false, openProjectSchedule, openInquiry, openMyWork }: Props) {
   const t = useT();
-  const members = useMemo(() => team.filter((member) => ["Engineer", "Engineering Manager", "Project Manager", "Sales Engineer", "Sales Manager"].includes(member.role)), [team]);
+  const { lang } = useLanguage();
+  const [apiMembers, setApiMembers] = useState<TeamMember[]>([]);
+  const members = useMemo(() => apiBacked ? apiMembers : team.filter((member) => ["Engineer", "Engineering Manager", "Project Manager", "Sales Engineer", "Sales Manager"].includes(member.role)), [apiBacked, apiMembers, team]);
   const currentMember = members.find((member) => String(member.id) === String(currentUser.id)) ?? currentUser;
   const hasOwnAssessment = !apiBacked || members.some((member) => String(member.id) === String(currentUser.id));
   const [reviews, setReviews] = useState<ReviewRecord[]>(() => apiBacked ? [] : seedReviews(members));
@@ -144,8 +153,8 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
   const [evidenceError, setEvidenceError] = useState("");
 
   const selected = members.find((member) => memberKey(member) === selectedId) ?? members[0] ?? currentMember;
-  const selectedReview = reviews.find((review) => review.employeeId === memberKey(selected)) ?? seedReviews([selected])[0];
-  const mine = reviews.find((review) => review.employeeId === memberKey(currentMember)) ?? seedReviews([currentMember])[0];
+  const selectedReview = reviews.find((review) => review.employeeId === memberKey(selected)) ?? emptyReview(selected);
+  const mine = reviews.find((review) => review.employeeId === memberKey(currentMember)) ?? emptyReview(currentMember);
   const selectedAreas = areasForRole(selected.role);
   const departments = [...new Set(members.map((member) => member.department))].sort();
   const visible = members.filter((member) => {
@@ -163,6 +172,8 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
   const evidenceEmployeeId = tab === "team" && managerView ? Number(memberKey(selected)) : Number(memberKey(currentMember));
 
   const applyOverview = useCallback((data: Awaited<ReturnType<typeof loadPerformanceOverview>>) => {
+    setApiMembers(data.assessments.map(review => ({id: review.userId, employeeId: review.employeeId, name: review.name, department: review.department, role: review.role, level: review.level})));
+    setSelectedId(current => data.assessments.some(review => String(review.employeeId) === current) ? current : String(data.assessments[0]?.employeeId ?? ""));
     setReviews(data.assessments.map(fromApi));
     setCycles(data.cycles);
     setSelectedCycle(data.selectedCycle);
@@ -187,23 +198,25 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
     return () => { cancelled = true; };
   }, [apiBacked, applyOverview]); // the production endpoint owns the initial cycle selection
 
+  const evidenceRequest = useRef(0);
   const reloadWorkEvidence = useCallback(async (employeeId: number, cycleId: number) => {
+    const requestId = ++evidenceRequest.current;
     setEvidenceLoading(true);
     setEvidenceError("");
-    try { setWorkEvidence(await loadPerformanceEvidence(employeeId, cycleId)); }
-    catch (error) { setWorkEvidence(null); setEvidenceError(error instanceof Error ? error.message : "Unable to load work evidence."); }
-    finally { setEvidenceLoading(false); }
+    try { const result = await loadPerformanceEvidence(employeeId, cycleId); if (requestId === evidenceRequest.current) setWorkEvidence(result); }
+    catch (error) { if (requestId === evidenceRequest.current) { setWorkEvidence(null); setEvidenceError(error instanceof Error ? error.message : "Unable to load work evidence."); } }
+    finally { if (requestId === evidenceRequest.current) setEvidenceLoading(false); }
   }, []);
 
   useEffect(() => {
-    if (!apiBacked || !selectedCycle || tab === "framework" || !Number.isSafeInteger(evidenceEmployeeId)) return;
+    if (!apiBacked || !selectedCycle || tab === "framework" || !members.some(member => Number(memberKey(member)) === evidenceEmployeeId)) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
       void reloadWorkEvidence(evidenceEmployeeId, selectedCycle.id);
     });
-    return () => { cancelled = true; };
-  }, [apiBacked, evidenceEmployeeId, reloadWorkEvidence, selectedCycle, tab]);
+    return () => { cancelled = true; evidenceRequest.current += 1; };
+  }, [apiBacked, evidenceEmployeeId, members, reloadWorkEvidence, selectedCycle, tab]);
 
   const openEvidenceSource = (sourceType: PerformanceEvidence["areas"][number]["signals"][number]["sourceType"], sourceId: number) => {
     if (!sourceId) return;
@@ -245,7 +258,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
         <PageHeader eyebrow="PEOPLE & PERFORMANCE" title="KPI & Growth" subtitle="Fair, evidence-based reviews connected to the work each role delivers." />
         <section className="panel"><div className="panel-body performance-api-state">
           <span className={`performance-area-icon ${loadError ? "amber" : "blue"}`}><Icon name={loadError ? "alertTriangle" : "refresh"} /></span>
-          <div><strong>{loadError ? <LocalizedText text={"KPI reviews could not be loaded"} /> : <LocalizedText text={"Loading KPI reviews…"} />}</strong><p>{loadError || "Reading the current cycle and your permitted assessments."}</p></div>
+          <div><strong>{loadError ? <LocalizedText text={"KPI reviews could not be loaded"} /> : <LocalizedText text={"Loading KPI reviews…"} />}</strong><p>{loadError ? t(loadError) : t("Reading the current cycle and your permitted assessments.")}</p></div>
           {loadError ? <button className="btn default" type="button" onClick={() => { void reload(); }}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button> : null}
         </div></section>
       </div>
@@ -271,7 +284,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
         <div className="performance-cycle-copy">
           <span><LocalizedText text={"CURRENT CYCLE"} /></span>
           <strong>{cycle} · {selectedCycle?.name ?? t("Performance review")}</strong>
-          <p>{selectedCycle ? `Performance period ${formatCycleDate(selectedCycle.periodStart)}–${formatCycleDate(selectedCycle.periodEnd)} · Reviews due ${formatCycleDate(selectedCycle.reviewDueDate)}` : <LocalizedText text={"Performance period 1 Jul–31 Dec · Reviews due 18 Jan 2027"} />}</p>
+          <p>{selectedCycle ? `${performanceEvidenceText("Performance period", lang, t)} ${performanceDate(selectedCycle.periodStart, lang)}–${performanceDate(selectedCycle.periodEnd, lang)} · ${performanceEvidenceText("Reviews due", lang, t)} ${performanceDate(selectedCycle.reviewDueDate, lang)}` : <LocalizedText text={"Performance period 1 Jul–31 Dec · Reviews due 18 Jan 2027"} />}</p>
         </div>
         <div className="performance-cycle-progress">
           <span><b>{complete}</b>  <LocalizedText text={"of"} /> {reviews.length}  <LocalizedText text={"completed"} /></span>
@@ -290,11 +303,11 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
         ]}
       />
 
-      {tab === "mine" ? (
+      {tab === "mine" && hasOwnAssessment ? (
         <MyKpi
           member={currentMember}
           review={mine}
-          canEdit={!apiBacked || ["Not started", "Self review"].includes(mine.status)}
+          canEdit={!apiBacked || (selectedCycle?.status !== "CLOSED" && ["Not started", "Self review"].includes(mine.status))}
           onEdit={() => setEditingId(memberKey(currentMember))}
           evidence={workEvidence?.employeeId === Number(memberKey(currentMember)) ? workEvidence : null}
           evidenceLoading={evidenceLoading}
@@ -325,7 +338,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
                   <thead><tr><th><LocalizedText text={"Employee"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Overall"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th><span className="sr-only"><LocalizedText text={"Open"} /></span></th></tr></thead>
                   <tbody>
                     {visible.map((member) => {
-                      const review = reviews.find((entry) => entry.employeeId === memberKey(member)) ?? seedReviews([member])[0];
+                      const review = reviews.find((entry) => entry.employeeId === memberKey(member)) ?? emptyReview(member);
                       const active = memberKey(member) === memberKey(selected);
                       return (
                         <tr key={member.id} className={active ? "selected" : undefined}>
@@ -333,8 +346,8 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
                           <td><strong className="performance-role">{t(member.level || member.role)}</strong><small className="performance-meta">{t(member.role)}</small></td>
                           <td><Score value={review.score} /></td>
                           <td><Badge tone={statusTone(review.status)} dot>{review.status}</Badge></td>
-                          <td className="muted">{t(review.updated)}</td>
-                          <td><button className="row-action" type="button" aria-label={`View ${member.name}`} onClick={() => setSelectedId(memberKey(member))}><Icon name="chevronRight" /></button></td>
+                          <td className="muted">{/^\d{4}-\d{2}-\d{2}/.test(review.updated) ? performanceDate(review.updated, lang, false) : t(review.updated)}</td>
+                          <td><button className="row-action" type="button" aria-label={`${t("View")} ${member.name}`} onClick={() => setSelectedId(memberKey(member))}><Icon name="chevronRight" /></button></td>
                         </tr>
                       );
                     })}
@@ -344,14 +357,14 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
               </div>
             </section>
 
-            <aside className="panel performance-profile">
+            {members.length ? <aside className="panel performance-profile">
               <div className="performance-profile-head">
                 <span className="avatar md">{selected.initials ?? initialsFor(selected.name)}</span>
                 <div><strong>{selected.name}</strong><span>{t(selected.level || selected.role)} · {t(selected.department)}</span></div>
                 <Badge tone={statusTone(selectedReview.status)}>{selectedReview.status}</Badge>
               </div>
               <div className="performance-score-hero">
-                <div className="performance-score-ring" style={{ ["--score" as string]: `${selectedReview.score * 20}%` }}><strong>{selectedReview.score.toFixed(1)}</strong><span>/ 5.0</span></div>
+                <div className="performance-score-ring" style={{ ["--score" as string]: `${selectedReview.score * 20}%` }}><strong>{performanceScoreText(selectedReview.score)}</strong><span>/ 5.0</span></div>
                 <div><span><LocalizedText text={"Overall performance"} /></span><strong>{t(ratingLabel(selectedReview.score))}</strong><p><LocalizedText text={"Weighted across the role-specific KPI framework"} /></p></div>
               </div>
               <div className="performance-area-list">
@@ -363,11 +376,11 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
                   </div>
                 ))}
               </div>
-              {selectedReview.status === "Calibration" && apiBacked && memberKey(selected) !== memberKey(currentMember)
+              {selectedReview.status === "Calibration" && apiBacked && selectedCycle?.status !== "CLOSED" && memberKey(selected) !== memberKey(currentMember)
                 ? <button className="btn success block" type="button" onClick={() => setCompletingId(memberKey(selected))}><Icon name="checkCircle" /><LocalizedText text={"Complete calibration"} /></button>
-                : <button className="btn primary block" type="button" disabled={memberKey(selected) === memberKey(currentMember) || selectedReview.status === "Completed" || (apiBacked && !["Manager review", "Calibration"].includes(selectedReview.status))} onClick={() => setEditingId(memberKey(selected))}><Icon name={selectedReview.status === "Completed" ? "lock" : "edit"} />{selectedReview.status === "Completed" ? <LocalizedText text={"Review completed"} /> : apiBacked && !["Manager review", "Calibration"].includes(selectedReview.status) ? t("Awaiting self review") : t("Open assessment")}</button>}
+                : <button className="btn primary block" type="button" disabled={selectedCycle?.status === "CLOSED" || memberKey(selected) === memberKey(currentMember) || selectedReview.status === "Completed" || (apiBacked && !["Manager review", "Calibration"].includes(selectedReview.status))} onClick={() => setEditingId(memberKey(selected))}><Icon name={selectedReview.status === "Completed" ? "lock" : "edit"} />{selectedReview.status === "Completed" ? <LocalizedText text={"Review completed"} /> : apiBacked && !["Manager review", "Calibration"].includes(selectedReview.status) ? t("Awaiting self review") : t("Open assessment")}</button>}
               <p className="performance-private"><Icon name="lock" /><LocalizedText text={"Only the employee and review managers can see written feedback."} /></p>
-            </aside>
+            </aside> : null}
           </div>
           <ActivityKpiSummary activity={selectedReview.activity}/>
           <WorkEvidencePanel
@@ -416,9 +429,7 @@ function ratingLabel(score: number) {
   return score >= 4.5 ? "Exceptional impact" : score >= 4 ? "Exceeds expectations" : score >= 3 ? "Strong contribution" : score > 0 ? "Needs support" : "Not rated";
 }
 
-function formatCycleDate(value: string) {
-  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
-}
+
 
 function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evidenceError, onRetry, onOpenSource }: {
   member: TeamMember;
@@ -432,6 +443,7 @@ function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evi
   onOpenSource: (sourceType: "PROJECT" | "INQUIRY" | "TASK", sourceId: number) => void;
 }) {
   const t = useT();
+  const { lang } = useLanguage();
   const areas = areasForRole(member.role);
   return (
     <div className="performance-my-layout">
@@ -440,7 +452,7 @@ function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evi
           <span className="avatar md">{member.initials ?? initialsFor(member.name)}</span>
           <div><p><LocalizedText text={"MY PERFORMANCE SNAPSHOT"} /></p><h2>{member.name}</h2><span>{t(member.level || member.role)} · {t(member.department)}</span></div>
         </div>
-        <div className="performance-my-result"><span><LocalizedText text={"Weighted score"} /></span><strong>{review.score.toFixed(1)}<small>/5.0</small></strong><Badge tone={statusTone(review.status)} dot>{review.status}</Badge></div>
+        <div className="performance-my-result"><span><LocalizedText text={"Weighted score"} /></span><strong>{performanceScoreText(review.score)}<small>/5.0</small></strong><Badge tone={statusTone(review.status)} dot>{review.status}</Badge></div>
         <button className="btn primary" type="button" disabled={!canEdit} onClick={onEdit}><Icon name={canEdit ? "edit" : "lock"} />{review.status === "Not started" ? <LocalizedText text={"Start self review"} /> : canEdit ? <LocalizedText text={"Update self review"} /> : review.status === "Completed" ? <LocalizedText text={"Review completed"} /> : <LocalizedText text={"Submitted to manager"} />}</button>
       </section>
 
@@ -450,7 +462,7 @@ function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evi
           <article className="performance-goal" key={area.name}>
             <header><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><Badge tone={area.tone}>{area.weight * (review.activity?.mode === "ACTIVE" && review.activity.eligible ? 0.9 : 1)}%</Badge></header>
             <h3>{t(area.name)}</h3><p>{t(area.description)}</p>
-            <div className="performance-goal-result"><span>{review.evidence[index] || t(area.evidence)}</span><Score value={review.scores[index]} /></div>
+            <div className="performance-goal-result"><span>{review.evidence[index] || performanceEvidenceText(area.evidence, lang, t)}</span><Score value={review.scores[index]} /></div>
           </article>
         ))}
       </section>
@@ -470,6 +482,7 @@ function WorkEvidencePanel({ role, evidence, loading, error, onRetry, onOpenSour
   onOpenSource: (sourceType: "PROJECT" | "INQUIRY" | "TASK", sourceId: number) => void;
 }) {
   const t = useT();
+  const { lang } = useLanguage();
   const areas = areasForRole(role);
   const confidenceTone: Tone = evidence?.confidence === "HIGH" ? "green" : evidence?.confidence === "MEDIUM" ? "blue" : "amber";
   if (loading && !evidence) {
@@ -482,30 +495,30 @@ function WorkEvidencePanel({ role, evidence, loading, error, onRetry, onOpenSour
   return (
     <section className="panel performance-work-evidence">
       <div className="panel-head performance-evidence-head">
-        <div><h2><LocalizedText text={"Work evidence · ข้อมูลผลงานจริง"} /></h2><p><LocalizedText text={"Connected to assigned work from"} /> {formatCycleDate(evidence.periodStart)}  <LocalizedText text={"to"} /> {formatCycleDate(evidence.periodEnd)}</p></div>
-        <Badge tone={confidenceTone} dot>{evidence.confidence.toLowerCase()}  <LocalizedText text={"confidence"} /></Badge>
+        <div><h2><LocalizedText text={"Work evidence"} /></h2><p><LocalizedText text={"Connected to assigned work from"} /> {performanceDate(evidence.periodStart, lang)}  <LocalizedText text={"to"} /> {performanceDate(evidence.periodEnd, lang)}</p></div>
+        <Badge tone={confidenceTone} dot>{t(evidence.confidence === "HIGH" ? "High" : evidence.confidence === "MEDIUM" ? "Medium" : "Low")}  <LocalizedText text={"confidence"} /></Badge>
       </div>
       <div className="panel-body">
         <div className="performance-source-strip">
           {evidence.sources.map((source) => (
-            <div className="performance-source-card" key={source.key}><span className="performance-source-icon"><Icon name={source.key === "PROJECT" ? "folder" : source.key === "INQUIRY" ? "inbox" : source.key === "MEETING" ? "calendar" : source.key === "ESTIMATE" ? "quote" : "checkCircle"} /></span><div className="performance-source-copy"><strong>{source.count}</strong><small>{source.label}</small></div><Badge tone={source.count ? "green" : "slate"}>{source.count ? <LocalizedText text={"Connected"} /> : <LocalizedText text={"No records"} />}</Badge></div>
+            <div className="performance-source-card" key={source.key}><span className="performance-source-icon"><Icon name={source.key === "PROJECT" ? "folder" : source.key === "INQUIRY" ? "inbox" : source.key === "MEETING" ? "calendar" : source.key === "ESTIMATE" ? "quote" : "checkCircle"} /></span><div className="performance-source-copy"><strong>{source.count}</strong><small>{performanceEvidenceText(source.label, lang, t)}</small></div><Badge tone={source.count ? "green" : "slate"}>{source.count ? <LocalizedText text={"Connected"} /> : <LocalizedText text={"No records"} />}</Badge></div>
           ))}
           {evidence.frameworkCode !== "SALES" ? <div className="performance-source-card"><span className="performance-source-icon"><Icon name="calendar" /></span><div className="performance-source-copy"><strong>{evidence.metrics.onTimeTaskCount}/{evidence.metrics.dueTaskCount}</strong><small><LocalizedText text={"Due tasks on time"} /></small></div><Badge tone={evidence.metrics.overdueTaskCount ? "amber" : "green"}>{evidence.metrics.overdueTaskCount}  <LocalizedText text={"overdue"} /></Badge></div> : null}
         </div>
-        <div className="performance-method"><Icon name="shield" /><span><strong><LocalizedText text={"Decision support, not an automatic final rating."} /></strong> {evidence.methodology}</span><small><LocalizedText text={"Data as of"} /> {formatCycleDate(evidence.asOf)}</small></div>
+        <div className="performance-method"><Icon name="shield" /><span><strong><LocalizedText text={"Decision support, not an automatic final rating."} /></strong> {performanceEvidenceText(evidence.methodology, lang, t)}</span><small><LocalizedText text={"Data as of"} /> {performanceDate(evidence.asOf, lang)}</small></div>
         <div className="performance-evidence-areas">
           {areas.map((area) => {
             const areaEvidence = evidence.areas.find((entry) => entry.areaCode === area.code);
             return (
               <article key={area.name}>
                 <header><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><div><h3>{t(area.short)}</h3><small>{area.weight}<LocalizedText text={"% of final KPI"} /></small></div>{areaEvidence?.suggestedScore !== null && areaEvidence?.suggestedScore !== undefined ? <Badge tone={area.tone}><LocalizedText text={"Signal"} /> {areaEvidence.suggestedScore.toFixed(1)}/5</Badge> : <Badge tone="slate"><LocalizedText text={"Manager judgement"} /></Badge>}</header>
-                <p>{areaEvidence?.evidenceText ?? t("No measurable signal is available for this area.")}</p>
+                <p>{areaEvidence ? performanceEvidenceText(areaEvidence.evidenceText, lang, t) : t("No measurable signal is available for this area.")}</p>
                 <ul>
                   {areaEvidence?.signals.length ? areaEvidence.signals.map((signal) => (
                     <li key={signal.id}>
                       <span className={`performance-signal-dot ${signal.tone}`} />
-                      <span><strong>{signal.title}</strong><small>{signal.sourceLabel} · {signal.detail}</small></span>
-                      {signal.sourceId ? <button type="button" onClick={() => onOpenSource(signal.sourceType, signal.sourceId)} aria-label={`Open ${signal.sourceLabel}`}><Icon name="externalLink" /></button> : null}
+                      <span><strong>{signal.id === "sales-forecast-summary" || signal.id === "quality-issue-summary" || signal.id === "delivery-task-summary" ? performanceEvidenceText(signal.title, lang, t) : signal.title}</strong><small>{signal.sourceId ? signal.sourceLabel : performanceEvidenceText(signal.sourceLabel, lang, t)} · {performanceEvidenceText(signal.detail, lang, t)}</small></span>
+                      {signal.sourceId ? <button type="button" onClick={() => onOpenSource(signal.sourceType, signal.sourceId)} aria-label={`${performanceEvidenceText("Open source", lang, t)} ${signal.sourceId ? signal.sourceLabel : performanceEvidenceText(signal.sourceLabel, lang, t)}`}><Icon name="externalLink" /></button> : null}
                     </li>
                   )) : <li className="performance-no-signal"><span><LocalizedText text={"No source records for this area in the selected cycle."} /></span></li>}
                 </ul>
@@ -520,10 +533,11 @@ function WorkEvidencePanel({ role, evidence, loading, error, onRetry, onOpenSour
 
 function Framework({ role, canManage }: { role: string; canManage: boolean }) {
   const t = useT();
+  const { lang } = useLanguage();
   const showEngineeringFramework = canManage || !isSalesRole(role);
   const showSalesFramework = canManage || isSalesRole(role);
   const renderFramework = (title: string, subtitle: string, areas: KpiArea[]) => (
-    <section className="panel"><div className="panel-head"><div><h2>{t(title)}</h2><p>{t(subtitle)}</p></div><Badge tone="green"><LocalizedText text={"100% total weight"} /></Badge></div><div className="panel-body"><div className="performance-framework-list">{areas.map((area) => <article key={area.name}><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><div><h3>{t(area.name)}<Badge tone={area.tone}>{area.weight}%</Badge></h3><p>{t(area.description)}</p><small><LocalizedText text={"Typical evidence:"} /> {t(area.evidence)}</small></div></article>)}</div></div></section>
+    <section className="panel"><div className="panel-head"><div><h2>{t(title)}</h2><p>{t(subtitle)}</p></div><Badge tone="green"><LocalizedText text={"100% total weight"} /></Badge></div><div className="panel-body"><div className="performance-framework-list">{areas.map((area) => <article key={area.name}><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><div><h3>{t(area.name)}<Badge tone={area.tone}>{area.weight}%</Badge></h3><p>{t(area.description)}</p><small><LocalizedText text={"Typical evidence:"} /> {performanceEvidenceText(area.evidence, lang, t)}</small></div></article>)}</div></div></section>
   );
   return (
     <div className="performance-framework">
@@ -536,6 +550,7 @@ function Framework({ role, canManage }: { role: string; canManage: boolean }) {
 
 function AssessmentModal({ member, review, isManager, workEvidence, onClose, onSave }: { member: TeamMember; review: ReviewRecord; isManager: boolean; workEvidence: PerformanceEvidence | null; onClose: () => void; onSave: (scores: number[], evidence: string[], submit: boolean, summary: string, developmentGoal: string) => Promise<void> }) {
   const t = useT();
+  const { lang } = useLanguage();
   const areas = areasForRole(member.role);
   const perspectiveScores = isManager ? review.managerScores : review.selfScores;
   const [scores, setScores] = useState(perspectiveScores);
@@ -545,24 +560,24 @@ function AssessmentModal({ member, review, isManager, workEvidence, onClose, onS
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const weighted = scoreAverage(scores, areas);
-  const valid = scores.every((score, index) => score >= 1 && score <= 5 && (score === 3 || score === 4 || Boolean(evidence[index]?.trim())));
+  const valid = canSubmitPerformanceScores(scores, evidence, areas.length);
   const save = async (submit: boolean) => {
-    if (!valid) { setError(t(`Rate all ${areas.length} areas and add evidence for every rating of 1, 2 or 5.`)); return; }
+    if (submit && !valid) { setError(t(`Rate all ${areas.length} areas and add evidence for every rating of 1, 2 or 5.`)); return; }
     setBusy(true); setError("");
     try { await onSave(scores, evidence, submit, summary, developmentGoal); }
     catch (caught) { setError(caught instanceof Error ? caught.message : t("The assessment could not be saved.")); setBusy(false); }
   };
   return (
-    <Modal title={`${t(isManager ? "Manager assessment" : "Self review")} · ${member.name}`} subtitle="Rate demonstrated impact and add a specific example where it helps." size="xl" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void save(false); }}><LocalizedText text={"Save draft"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void save(true); }}><Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : t(isManager ? "Send to calibration" : "Submit self review")}</button></>}>
+    <Modal title={`${t(isManager ? "Manager assessment" : "Self review")} · ${member.name}`} subtitle="Rate demonstrated impact and add a specific example where it helps." size="xl" onClose={() => { if (!busy) onClose(); }} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void save(false); }}><LocalizedText text={"Save draft"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void save(true); }}><Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : t(isManager ? "Send to calibration" : "Submit self review")}</button></>}>
       {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-      <div className="performance-modal-summary"><div className="performance-score-ring compact" style={{ ["--score" as string]: `${weighted * 20}%` }}><strong>{weighted.toFixed(1)}</strong><span>/ 5.0</span></div><div><strong>{t(ratingLabel(weighted))}</strong><p><LocalizedText text={"Weighted score updates as you rate each area."} /></p></div></div>
+      <div className="performance-modal-summary"><div className="performance-score-ring compact" style={{ ["--score" as string]: `${weighted * 20}%` }}><strong>{performanceScoreText(weighted)}</strong><span>/ 5.0</span></div><div><strong>{t(ratingLabel(weighted))}</strong><p><LocalizedText text={"Weighted score updates as you rate each area."} /></p></div></div>
       <div className="performance-score-editor">
         {areas.map((area, index) => {
           const suggestion = workEvidence?.areas.find((entry) => entry.areaCode === area.code);
           return <section key={area.name}>
             <div className="performance-score-title"><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><div><strong>{t(area.name)}</strong><small>{area.weight}% · {t(area.description)}</small>{isManager && review.selfEvidence[index] ? <em className="performance-employee-evidence"><LocalizedText text={"Employee evidence:"} /> {review.selfEvidence[index]}</em> : null}</div></div>
             <div className="performance-rating-buttons" role="radiogroup" aria-label={`${t(area.name)} ${t("rating")}`}>{[1,2,3,4,5].map((value) => <button key={value} type="button" role="radio" aria-checked={scores[index] === value} className={scores[index] === value ? "active" : undefined} onClick={() => setScores((current) => current.map((score, scoreIndex) => scoreIndex === index ? value : score))}><b>{value}</b><small>{t(value === 1 ? "Critical" : value === 2 ? "Developing" : value === 3 ? "Strong" : value === 4 ? "Exceeds" : "Exceptional")}</small></button>)}</div>
-            {suggestion ? <div className="performance-evidence-suggestion"><span><Icon name="database" /><span><strong>{suggestion.suggestedScore !== null ? `${t("Measured signal")} ${suggestion.suggestedScore.toFixed(1)}/5` : <LocalizedText text={"Context signal only"} />}</strong><small>{suggestion.evidenceText}</small></span></span><button type="button" onClick={() => setEvidence((current) => current.map((item, evidenceIndex) => evidenceIndex === index ? suggestion.evidenceText : item))}><LocalizedText text={"Use evidence"} /></button></div> : null}
+            {suggestion ? <div className="performance-evidence-suggestion"><span><Icon name="database" /><span><strong>{suggestion.suggestedScore !== null ? `${t("Measured signal")} ${suggestion.suggestedScore.toFixed(1)}/5` : <LocalizedText text={"Context signal only"} />}</strong><small>{performanceEvidenceText(suggestion.evidenceText, lang, t)}</small></span></span><button type="button" onClick={() => setEvidence((current) => current.map((item, evidenceIndex) => evidenceIndex === index ? suggestion.evidenceText : item))}><LocalizedText text={"Use evidence"} /></button></div> : null}
             <label className="performance-area-evidence"><span>{isManager ? <LocalizedText text={"Manager evidence"} /> : <LocalizedText text={"Work evidence"} />}{[1, 2, 5].includes(scores[index]) ? <LocalizedText text="· required for this rating" /> : <LocalizedText text="· optional" />}</span><textarea value={evidence[index]} onChange={(event) => setEvidence((current) => current.map((item, evidenceIndex) => evidenceIndex === index ? event.target.value : item))} rows={2} maxLength={1000} placeholder={t(isSalesRole(member.role) ? "Link the rating to an Inquiry, customer meeting, estimate outcome or Project handover…" : "Link the rating to a milestone, quality signal, technical contribution or team outcome…")} /></label>
           </section>;
         })}

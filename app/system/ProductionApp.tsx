@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TeamActivityScreen } from "./production/TeamActivityScreen";
+import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
+import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { useActivityPresence } from "./use-activity-presence";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
@@ -55,6 +57,9 @@ import {
 import { ProductionKnowledgeHub } from "./production/KnowledgeScreens";
 import { ProductionModuleTemplates } from "./production/ModuleTemplateScreens";
 import { ProductionProfile } from "./production/ProfileScreen";
+import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens";
+import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
+import { supportLabel } from "./support-copy";
 import Performance from "./production/PerformanceScreen";
 import {
   ProductionMyAssignments,
@@ -69,7 +74,7 @@ type View =
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
 type MyWorkUrgencyItem = {
@@ -132,6 +137,10 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "performance", label: "KPI & Growth", icon: "trendingUp", permission: "performance.read" },
     { view: "reports", label: "Reports", icon: "chart", permission: "report.read" },
   ] },
+  { items: [
+    { view: "manual", label: "Employee Manual", icon: "book" },
+    { view: "support", label: "Support Center", icon: "inbox" },
+  ] },
   { group: "ADMINISTRATION", items: [
     { view: "master", label: "Master Data", icon: "database", permission: "master.read" },
     { view: "module-templates", label: "Module Templates", icon: "package", permission: "estimate.read" },
@@ -173,6 +182,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [language, setLanguageState] = useState<Lang>("EN");
   const setLanguage = useCallback((next: Lang) => { applyDocumentLanguage(next); setLanguageState(next); }, []);
   const reportDirty = useRef(false);
+  const supportDirty = useRef(false);
+  const onSupportDirtyChange = useCallback((dirty: boolean) => { supportDirty.current = dirty; }, []);
+  const [supportTicketId, setSupportTicketId] = useState<number | null>(null);
+  const [supportCreate, setSupportCreate] = useState(false);
+  const [supportRevision, setSupportRevision] = useState(0);
   const onReportDirtyChange = useCallback((dirty: boolean) => { reportDirty.current = dirty; }, []);
   const [languageReady, setLanguageReady] = useState(false);
   const [collapsedNavGroups, setCollapsedNavGroups] = useState<string[]>([]);
@@ -184,13 +198,14 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const languageValue = useMemo(() => ({
     lang: language,
     setLang: setLanguage,
-    t: (text: string) => translate(text, language),
+    t: (text: string) => text === "Support Center" ? supportLabel(text, language) : translate(text, language),
   }), [language, setLanguage]);
   const t = languageValue.t;
   useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));
-  const confirmReportNavigation = useCallback(() => !reportDirty.current || window.confirm(t("Discard unsaved report changes?")), [t]);
+  const confirmReportNavigation = useCallback(() => (!reportDirty.current && !supportDirty.current) || window.confirm(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?")), [t, language]);
   const setView = useCallback((next: View) => {
     if (next !== view && !confirmReportNavigation()) return;
+    if (next !== "support" && /^#support(?:\/|$)/.test(window.location.hash)) window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
     setViewState(next);
   }, [view, confirmReportNavigation]);
@@ -199,6 +214,34 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const follow = () => { if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) setView("activity"); };
     follow(); window.addEventListener("hashchange", follow); return () => window.removeEventListener("hashchange", follow);
   }, [bootstrap, setView]);
+
+  const openSupport = (id: number | null) => {
+    if (!confirmReportNavigation()) return;
+    setSupportTicketId(id); setSupportCreate(false); setViewState("support");
+    window.history.replaceState(null, "", window.location.pathname + window.location.search + (id ? `#support/${id}` : "#support"));
+  };
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const match = window.location.hash.match(/^#support(?:\/(\d+))?$/);
+      if (match) { const id = Number(match[1]); setSupportTicketId(Number.isSafeInteger(id) && id > 0 ? id : null); setViewState("support"); }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    const followSupportLink = () => {
+      const match = window.location.hash.match(/^#support(?:\/(\d+))?$/);
+      if (!match) return;
+      if (!confirmReportNavigation()) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search + (view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : ""));
+        return;
+      }
+      const id = Number(match[1]);
+      setSupportTicketId(Number.isSafeInteger(id) && id > 0 ? id : null);
+      setViewState("support");
+    };
+    window.addEventListener("hashchange", followSupportLink);
+    return () => window.removeEventListener("hashchange", followSupportLink);
+  }, [confirmReportNavigation, view, supportTicketId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -333,6 +376,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         .catch(() => { void refreshNotifications(); });
     }
     if (item.entityType === "GoodsReceipt") setView("receiving");
+    if (item.entityType === "SupportTicket" && item.entityId) openSupport(item.entityId);
   };
 
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {
@@ -418,6 +462,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     );
   }
 
+  const personalDashboard = <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={(destination) => { setView(destination); window.scrollTo({ top: 0 }); }} />;
   const common = { bootstrap, notify: setToast, refreshBootstrap };
   const moduleProps = {
     bootstrap,
@@ -443,7 +488,10 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                   </button>
                 ) : null}
                 <div className="nav-group-items" hidden={collapsed}>
-                  {section.items.map((item) => <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={sidebarCollapsed ? t(item.label) : undefined} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{t(item.label)}</span>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount) ? <em>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)}</em> : null}</button>)}
+                  {section.items.map((item) => {
+                    const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
+                    return <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={sidebarCollapsed ? label : undefined} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount) ? <em>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)}</em> : null}</button>;
+                  })}
                 </div>
               </div>
             );
@@ -465,6 +513,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           </button>
           <div className="production-indicator"><span className="status-dot online" /><strong>{t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</strong><small>{t("SQL Server API")}</small></div>
           <div className="topbar-right">
+            <button className="btn default sm" type="button" onClick={() => setSupportCreate(true)}><Icon name="inbox" />{supportLabel("Report a problem", language)}</button>
             <div className="lang-switch" role="group" aria-label={t("Language")}>
               {LANGUAGES.map((code) => (
                 <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => setLanguage(code)}>{code}</button>
@@ -480,19 +529,24 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div className="notification-list">
                   {notifications.length ? notifications.map((item) => <button key={item.id} type="button" className={item.isRead ? "notification-item" : "notification-item unread"} onClick={() => openNotification(item)}>
                     <span className={`notification-icon ${item.kind === "MATERIAL_RECEIVED" ? "material" : ""}`}><Icon name={item.kind === "MATERIAL_RECEIVED" ? "package" : "bell"} /></span>
-                    <span><strong>{item.title}</strong><small>{item.detail}</small><time>{new Intl.DateTimeFormat(language === "TH" ? "th-TH" : language === "JP" ? "ja-JP" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>
+                    <span><strong>{item.entityType === "SupportTicket" ? supportLabel(item.kind === "SUPPORT_RECOGNITION" ? "Support recognition" : "Support update", language) : item.title}</strong><small>{item.entityType === "SupportTicket" ? supportLabel("View ticket", language) : item.detail}</small><time>{new Intl.DateTimeFormat(language === "TH" ? "th-TH" : language === "JP" ? "ja-JP" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>
                   </button>) : <div className="notification-empty"><Icon name="checkCircle" /><span>{t("No new notifications")}</span></div>}
                 </div>
               </div> : null}
             </div>
             <div className="menu-wrap">
               <button className="topbar-user" type="button" onClick={() => { setUserOpen((value) => !value); setNotificationOpen(false); }}><span className="avatar sm">{initials(bootstrap.user.name)}</span><span>{bootstrap.user.name}<small>{bootstrap.user.role} · {bootstrap.user.department}</small></span><Icon name="chevronDown" /></button>
-              {userOpen ? <div className="menu" role="menu"><button type="button" onClick={() => { setUserOpen(false); setView("profile"); }}><Icon name="user" />{t("My Profile")}</button><button type="button" onClick={() => { setUserOpen(false); setView("signature"); }}><Icon name="edit" />{t("My signature")}</button><button type="button" disabled={busy} onClick={() => { setUserOpen(false); void signOut(); }}><Icon name="logout" />{t("Logout")}</button></div> : null}
+              {userOpen ? <div className="menu" role="menu"><button type="button" onClick={() => { setUserOpen(false); setView("profile"); }}><Icon name="user" />{t("My Profile")}</button><button type="button" onClick={() => { setUserOpen(false); setView("signature"); }}><Icon name="edit" />{t("My signature")}</button><button type="button" onClick={() => { setUserOpen(false); setView("manual"); }}><Icon name="book" />{employeeManualLabel(language)}</button><button type="button" disabled={busy} onClick={() => { setUserOpen(false); void signOut(); }}><Icon name="logout" />{t("Logout")}</button></div> : null}
             </div>
           </div>
         </header>
         <main className="page">
-          {view === "dashboard" ? <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={(destination) => { setView(destination); window.scrollTo({ top: 0 }); }} /> : null}
+          {view === "dashboard" ? DASHBOARD_ROLES.includes(bootstrap.user.role) ? <ExecutiveDashboard bootstrap={bootstrap} personal={personalDashboard} onOpen={(destination, id) => {
+            if (id && destination === "inquiries") openInquiry(id);
+            else if (id && destination === "estimates") openEstimate(id);
+            else if (id && destination === "projects") openProjectSchedule(id);
+            else { setView(destination); window.scrollTo({ top: 0 }); }
+          }} /> : personalDashboard : null}
           {view === "my-work" ? <><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}<Tabs tabs={[{id:"inbox",label:"Task inbox · ตอบรับงาน",count:taskAcknowledgmentCount},{id:"schedule",label:"Project schedule tasks"}]} active={myWorkTab} onChange={setMyWorkTab} />{myWorkTab === "inbox" ? <ResourceTaskWorkspace {...common} mine openProjectSchedule={openProjectSchedule} onChanged={() => setTaskInboxRevision(value => value + 1)} /> : <ProductionMyWork {...moduleProps} />}</> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
@@ -539,10 +593,13 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
           {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
           {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
+          {view === "manual" ? <EmployeeManualScreen /> : null}
+          {view === "support" ? <SupportCenter externalRevision={supportRevision} ticketId={supportTicketId} onSelect={openSupport} onCreate={() => setSupportCreate(true)} notify={setToast} onDirtyChange={onSupportDirtyChange} /> : null}
         </main>
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
+      {supportCreate ? <SupportCreateDialog context={{ module: view === "manual" ? employeeManualLabel(language) : NAV.flatMap(group => group.items).find(item => item.view === view)?.label ?? view }} onClose={() => setSupportCreate(false)} onCreated={() => { setSupportRevision(value => value + 1); void refreshNotifications(); }} onOpen={openSupport} /> : null}
     </div>
     </LanguageContext.Provider>
   );

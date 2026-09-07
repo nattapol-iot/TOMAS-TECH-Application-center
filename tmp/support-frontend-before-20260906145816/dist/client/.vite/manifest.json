@@ -1,0 +1,204 @@
+{
+  "_LocalizedText-Dw71jtYC.js": {
+    "file": "_next/static/chunks/LocalizedText-Dw71jtYC.js",
+    "name": "LocalizedText",
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "virtual:vinext-app-browser-entry",
+      "_framework-BzMsDkFz.js"
+    ],
+    "dynamicImports": [
+      "_LocalizedText-Dw71jtYC.js"
+    ]
+  },
+  "_PerformanceScreen-EeHEO7_k.js": {
+    "file": "_next/static/chunks/PerformanceScreen-EeHEO7_k.js",
+    "name": "PerformanceScreen",
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "_LocalizedText-Dw71jtYC.js",
+      "_framework-BzMsDkFz.js"
+    ],
+    "css": [
+      "_next/static/css/PerformanceScreen.BZNFaUEC.css"
+    ]
+  },
+  "_PerformanceScreen.BZNFaUEC.css": {
+    "file": "_next/static/css/PerformanceScreen.BZNFaUEC.css",
+    "src": "_PerformanceScreen.BZNFaUEC.css"
+  },
+  "_ReportScreens-WGHO17W9.js": {
+    "file": "_next/static/chunks/ReportScreens-WGHO17W9.js",
+    "name": "ReportScreens",
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "_LocalizedText-Dw71jtYC.js",
+      "_framework-BzMsDkFz.js"
+    ],
+    "css": [
+      "_next/static/css/ReportScreens.Dh7ZlNky.css"
+    ]
+  },
+  "_ReportScreens.Dh7ZlNky.css": {
+    "file": "_next/static/css/ReportScreens.Dh7ZlNky.css",
+    "src": "_ReportScreens.Dh7ZlNky.css"
+  },
+  "_dynamic-Bx-Gw07p.js": {
+    "file": "_next/static/chunks/dynamic-Bx-Gw07p.js",
+    "name": "dynamic",
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "virtual:vinext-app-browser-entry",
+      "_framework-BzMsDkFz.js"
+    ]
+  },
+  "_framework-BzMsDkFz.js": {
+    "file": "_next/static/chunks/framework-BzMsDkFz.js",
+    "name": "framework",
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js"
+    ]
+  },
+  "_rolldown-runtime-C5USp2td.js": {
+    "file": "_next/static/chunks/rolldown-runtime-C5USp2td.js",
+    "name": "rolldown-runtime"
+  },
+  "app/demo/page.tsx": {
+    "file": "_next/static/chunks/page-NPLV4HK6.js",
+    "name": "page",
+    "src": "app/demo/page.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "virtual:vinext-app-browser-entry",
+      "_framework-BzMsDkFz.js",
+      "_dynamic-Bx-Gw07p.js"
+    ],
+    "dynamicImports": [
+      "app/system/App.tsx"
+    ]
+  },
+  "app/system/App.tsx": {
+    "file": "_next/static/chunks/App-DQALjZTB.js",
+    "name": "App",
+    "src": "app/system/App.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "_PerformanceScreen-EeHEO7_k.js",
+      "_LocalizedText-Dw71jtYC.js",
+      "_framework-BzMsDkFz.js"
+    ]
+  },
+  "app/system/ProductionApp.tsx": {
+    "file": "_next/static/chunks/ProductionApp-CzbrX73n.js",
+    "name": "ProductionApp",
+    "src": "app/system/ProductionApp.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "virtual:vinext-app-browser-entry",
+      "_PerformanceScreen-EeHEO7_k.js",
+      "_LocalizedText-Dw71jtYC.js",
+      "_ReportScreens-WGHO17W9.js",
+      "_framework-BzMsDkFz.js"
+    ],
+    "dynamicImports": [
+      "node_modules/tesseract.js/src/index.js",
+      "node_modules/pdfjs-dist/build/pdf.mjs",
+      "_LocalizedText-Dw71jtYC.js"
+    ],
+    "css": [
+      "_next/static/css/ProductionApp.B9eqUanJ.css"
+    ],
+    "assets": [
+      "_next/static/media/pdf.worker.min.Dswkl-cV.mjs"
+    ]
+  },
+  "app/system/ReportCustomerSign.tsx": {
+    "file": "_next/static/chunks/ReportCustomerSign-DnbR8niW.js",
+    "name": "ReportCustomerSign",
+    "src": "app/system/ReportCustomerSign.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "_ReportScreens-WGHO17W9.js",
+      "_framework-BzMsDkFz.js"
+    ]
+  },
+  "app/system/VerifyEntry.tsx": {
+    "file": "_next/static/chunks/VerifyEntry-DzI-WdoV.js",
+    "name": "VerifyEntry",
+    "src": "app/system/VerifyEntry.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "app/system/ProductionApp.tsx",
+      "_framework-BzMsDkFz.js"
+    ]
+  },
+  "app/verify/page.tsx": {
+    "file": "_next/static/chunks/page-BxNB4s1W.js",
+    "name": "page",
+    "src": "app/verify/page.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "virtual:vinext-app-browser-entry",
+      "_framework-BzMsDkFz.js",
+      "_dynamic-Bx-Gw07p.js"
+    ],
+    "dynamicImports": [
+      "app/system/VerifyEntry.tsx"
+    ]
+  },
+  "node_modules/pdfjs-dist/build/pdf.mjs": {
+    "file": "_next/static/chunks/pdf-DS4LtXdk.js",
+    "name": "pdf",
+    "src": "node_modules/pdfjs-dist/build/pdf.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "virtual:vinext-app-browser-entry"
+    ]
+  },
+  "node_modules/pdfjs-dist/build/pdf.worker.min.mjs": {
+    "file": "_next/static/media/pdf.worker.min.Dswkl-cV.mjs",
+    "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
+  },
+  "node_modules/tesseract.js/src/index.js": {
+    "file": "_next/static/chunks/src-DBcIX0SR.js",
+    "name": "src",
+    "src": "node_modules/tesseract.js/src/index.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js"
+    ]
+  },
+  "node_modules/vinext/dist/shims/layout-segment-context.js": {
+    "file": "_next/static/chunks/layout-segment-context-C56Sv_8L.js",
+    "name": "layout-segment-context",
+    "src": "node_modules/vinext/dist/shims/layout-segment-context.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "virtual:vinext-app-browser-entry",
+      "_framework-BzMsDkFz.js"
+    ]
+  },
+  "virtual:vinext-app-browser-entry": {
+    "file": "_next/static/chunks/index-32blF2Y2.js",
+    "name": "index",
+    "src": "virtual:vinext-app-browser-entry",
+    "isEntry": true,
+    "imports": [
+      "_rolldown-runtime-C5USp2td.js",
+      "_framework-BzMsDkFz.js"
+    ],
+    "dynamicImports": [
+      "virtual:vinext-app-browser-entry",
+      "app/system/ProductionApp.tsx",
+      "node_modules/vinext/dist/shims/layout-segment-context.js",
+      "app/verify/page.tsx",
+      "app/system/ReportCustomerSign.tsx",
+      "app/demo/page.tsx"
+    ]
+  }
+}

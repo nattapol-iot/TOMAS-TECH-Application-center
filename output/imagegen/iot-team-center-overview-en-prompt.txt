@@ -1,0 +1,78 @@
+Use case: infographic-diagram.
+Create a finished English-language executive and employee application overview infographic. Landscape 16:9, high resolution preferably 3840x2160. Precise legible typography and excellent editorial layout. TOMAS TECH brand colors deep blue #0B57A4, sky blue #189BE0, navy, white, pale blue and restrained gold #FFC20E. Flat illustrated enterprise icons, lightly rounded cards, clean alignment and generous spacing. No fabricated company logo; plain text wordmark. This is a detailed explanatory companion to a separate workflow image. No arrows needed on this page. English only.
+Top header 14% of image, module grid 56%, role strip 23%, footer 7%. Six well-sized cards in a 3-column by 2-row grid. Each module card has a number and icon, large heading, short purpose text, and three bullet lines. Four role cards at bottom. Avoid miniature text; fit all copy cleanly. All following display copy must be reproduced verbatim, no extra claims or random numbers.
+
+HEADER:
+"TOMAS TECH"
+"IoT Team Center"
+"APPLICATION OVERVIEW"
+"One workspace for engineering costs, projects, people, materials and documents."
+
+GRID HEADING: "What the application helps teams manage"
+
+MODULE 01:
+"Customer Requirements & Site Visits"
+"Turn customer needs into a clear engineering scope."
+• "Inquiry: requirements, contacts and attachments"
+• "Site Visit: assignments, findings and reports"
+• "Output: information for cost estimation"
+
+MODULE 02:
+"Engineering Cost & Review"
+"Build a traceable internal engineering estimate."
+• "Materials, engineering effort and project expenses"
+• "Price Library and supplier quotation references"
+• "Validation, approval and revision history"
+
+MODULE 03:
+"Projects & Resource Planning"
+"Translate approved scope into assigned work."
+• "Project records, documents and schedules"
+• "Project Timeline and team workload planning"
+• "My Work: ownership, due dates and progress"
+
+MODULE 04:
+"Materials & Procurement"
+"Connect project material needs with purchasing and stock."
+• "Bill of Materials and shortage checks"
+• "Purchase requests, approvals and purchase orders"
+• "Goods receiving, inventory and material issues"
+
+MODULE 05:
+"Documents, Signing & Reporting"
+"Keep project evidence and reporting connected."
+• "Project files and structured reports"
+• "Sign Inbox and signed document records"
+• "Dashboard and reports for management visibility"
+
+MODULE 06:
+"Knowledge, Growth & Support"
+"Help the team learn, improve and resolve issues."
+• "Knowledge Hub: reusable team knowledge"
+• "KPI & Growth: performance and development"
+• "Support Center: report and follow up on problems"
+
+ROLE STRIP HEADING: "How each team uses it"
+ROLE 1:
+"Executives & Managers"
+"Review project status, costs and workload."
+"Act on approvals, delays and priorities."
+ROLE 2:
+"Engineers & Project Teams"
+"Prepare estimates and complete assigned work."
+"Update progress, findings and documents."
+ROLE 3:
+"Purchasing & Inventory Teams"
+"Process requests, orders and receipts."
+"Track stock availability and material issues."
+ROLE 4:
+"Administrators"
+"Maintain master data, users and permissions."
+"Review the audit history."
+
+FOOTER:
+"Cost scope: internal engineering cost."
+"Available records, menus and actions depend on user permissions."
+"01 / APPLICATION OVERVIEW"
+
+Constraints: explanatory professional poster for nontechnical staff and executives, grounded in app functionality, not marketing performance promises. No revenue, margin, selling price figures, live deployment claims, architecture, technology stack or invented automations. No cropped or repeated text.

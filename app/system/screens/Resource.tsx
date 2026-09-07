@@ -205,7 +205,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                       <th><LocalizedText text={"Engineer"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th>
                       <th className="num"><LocalizedText text={"Open items"} /></th><th className="num"><LocalizedText text={"Committed"} /></th>
                       <th style={{ minWidth: 150 }}>Average load</th>
-                      <th className="num">Peak</th><th>Next due</th><th className="num"><LocalizedText text={"Overdue"} /></th>
+                      <th className="num"><LocalizedText text={"Peak"} /></th><th>Next due</th><th className="num"><LocalizedText text={"Overdue"} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -255,7 +255,7 @@ export default function ResourcePlan({ go, notify }: ScreenProps) {
                       <Icon name="alertTriangle" />
                       <div>
                         <strong>{load.user.name} is over capacity</strong>
-                        <p>Peak {Math.round(load.peakUtilisation)}% — move a task or extend a due date.</p>
+                        <p><LocalizedText text={"Peak"} /> {Math.round(load.peakUtilisation)}% — move a task or extend a due date.</p>
                       </div>
                     </li>
                   ))}

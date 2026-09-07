@@ -1,0 +1,3 @@
+﻿import fs from'node:fs';import ts from'typescript';
+const file='app/system/final-workspace-copy.ts';let s=fs.readFileSync(file,'utf8');s=s.replace(/\n};\s*$/,',\n  "บันทึก Template แล้ว": { th: "บันทึก Template แล้ว", en: "Template saved", jp: "テンプレートを保存しました" }\n};\n');fs.writeFileSync(file,s);
+for(const name of ['final-workspace-copy.ts','production/ModuleTemplateEditor.tsx','production/ModuleTemplateScreens.tsx','production/EstimateExcelImport.tsx']){const path='app/system/'+name;const src=ts.createSourceFile(path,fs.readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true,name.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS);console.log(name,src.parseDiagnostics.map(d=>ts.flattenDiagnosticMessageText(d.messageText,' ')));}

@@ -157,7 +157,7 @@ try{
  const missingKpi=await api('member',`/api/v1/performance/overview?cycleId=${missingCycle.id}`);
  assert.equal(missingKpi.assessments[0].activity.frozen,true);assert.equal(missingKpi.assessments[0].activity.rating,1);
  assert.ok(Math.abs(missingKpi.assessments[0].overallScore-3.7)<1e-8);checks++;
- const ready=await api(null,'/health/ready');assert.equal(ready.schemaVersion,35);
+ const ready=await api(null,'/health/ready');assert.equal(ready.schemaVersion,36);
  console.log(`PASS ${checks} isolated Activity SQL/API checks with restricted application-role grants.`);
 }finally{
  if(application)await application.app.close();

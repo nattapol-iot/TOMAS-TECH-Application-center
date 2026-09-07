@@ -917,7 +917,52 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   return response.json() as Promise<T>;
 }
 
+export type ReportEvidenceAttachment = {
+  attachmentId: number;
+  attachmentName: string;
+  attachmentContentType: "image/jpeg" | "image/png";
+  attachmentSizeBytes: number;
+  attachmentSha256: string;
+};
+
+/** Downscale camera/library photos before upload so iPad users do not wait on full-resolution images. */
+export async function prepareReportEvidenceImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") && !/\.(heic|heif|jpe?g|png)$/i.test(file.name)) throw new Error("Choose an image from the camera or photo library.");
+  if (file.size > 30 * 1024 * 1024) throw new Error("The selected image is too large. Choose an image under 30 MB.");
+  const source = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("This image format cannot be opened. Choose a JPEG or PNG image.")); image.src = source; });
+    const maximum = 2400,scale = Math.min(1,maximum/Math.max(image.naturalWidth,image.naturalHeight));
+    const canvas = document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+    const context=canvas.getContext("2d");if(!context)throw new Error("This browser cannot prepare the image.");context.drawImage(image,0,0,canvas.width,canvas.height);
+    const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("The image could not be prepared.")),"image/jpeg",0.86));
+    const stem=(file.name||"evidence").replace(/\.[^.]+$/,"").replace(/[^\p{L}\p{N}._ -]+/gu,"-").slice(0,120)||"evidence";
+    return new File([blob],`${stem}.jpg`,{type:"image/jpeg",lastModified:Date.now()});
+  } finally { URL.revokeObjectURL(source); }
+}
+
+export async function uploadReportEvidence(reportId: number, file: File): Promise<ReportEvidenceAttachment> {
+  const body=new FormData();body.set("file",await prepareReportEvidenceImage(file));
+  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence`,{method:"POST",body},120_000)).json() as Promise<ReportEvidenceAttachment>;
+}
+
+export async function downloadReportEvidence(reportId: number, attachmentId: number): Promise<Blob> {
+  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence/${attachmentId}/content`,{headers:{Accept:"image/*"}},120_000)).blob();
+}
+
 export const loadBootstrap = () => apiRequest<BootstrapData>("/api/v1/bootstrap");
+
+export async function downloadSupportAttachment(ticketId: number, attachmentId: number) {
+  return (await authorizedFetch(`/api/v1/support/tickets/${ticketId}/attachments/${attachmentId}/content`, { headers: { Accept: "application/octet-stream" } }, 120_000)).blob();
+}
+
+export async function uploadSupportAttachment(ticketId: number, file: File, requestKey: string, internal = false) {
+  const body = new FormData();
+  body.append("file", file); body.append("requestKey", requestKey); body.append("internal", String(internal));
+  return (await authorizedFetch(`/api/v1/support/tickets/${ticketId}/attachments`, { method: "POST", body }, 120_000)).json() as Promise<{ id: number }>;
+}
 
 export async function downloadHistoricalPrSource(id: number): Promise<Blob> {
   const response = await authorizedFetch(`/api/v1/historical-pr/${id}/source`, { headers: { Accept: "application/octet-stream" } });

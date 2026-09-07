@@ -1,0 +1,8 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {ReleasePath:baseline}=JSON.parse(fs.readFileSync(path.join(process.env.LOCALAPPDATA,'IoTTeamCenter/TeamTest/settings.json'),'utf8'));
+const stage=path.resolve('backend-node/tmp/followthrough-stage-'+Date.now());
+fs.mkdirSync(stage,{recursive:true});fs.cpSync(path.join(baseline,'dist'),path.join(stage,'dist'),{recursive:true});fs.copyFileSync(path.join(baseline,'package.json'),path.join(stage,'package.json'));
+const changed=[];
+for(const module of ['routes/unified-reports'])for(const ext of ['.js','.js.map','.d.ts']){const rel='dist/src/'+module+ext;fs.copyFileSync(path.join('backend-node',rel),path.join(stage,rel));changed.push(rel);}
+const files=[];function walk(p){for(const e of fs.readdirSync(p,{withFileTypes:true})){const f=path.join(p,e.name);if(e.isDirectory())walk(f);else files.push({path:path.relative(stage,f),sha256:crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex').toUpperCase()});}}walk(path.join(stage,'dist'));
+fs.writeFileSync(path.join(stage,'hotfix.json'),JSON.stringify({baseline,changed,files},null,2));fs.writeFileSync('.codex-tmp/followthrough-stage.txt',stage);console.log(JSON.stringify({stage,changed,artifacts:files.length}));

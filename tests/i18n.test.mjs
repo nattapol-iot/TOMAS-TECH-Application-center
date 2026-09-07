@@ -94,6 +94,9 @@ test("dictionary has both translations and unknown business content is preserved
     assert.equal(translate(key, "EN"), entry.en ?? key);
   }
   for (const lang of ["TH", "JP", "EN"]) assert.equal(translate("ACME custom project 42", lang), "ACME custom project 42");
+  for (const key of ["Refresh", "Project", "Total price"]) {
+    assert.match(translate(key, "TH"), /[\u0E00-\u0E7F]/, `${key}: feature dictionaries must not overwrite shared Thai labels with English`);
+  }
 });
 
 test("status badges keep their semantic colour in every language", () => {

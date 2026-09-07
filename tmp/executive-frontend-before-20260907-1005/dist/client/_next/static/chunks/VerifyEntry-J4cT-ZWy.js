@@ -1,0 +1,1 @@
+import{o as e}from"./rolldown-runtime-C5USp2td.js";import{i as t,r as n}from"./framework-BzMsDkFz.js";import r from"./ProductionApp-CAxph2ZK.js";var i=e(n(),1),a=t();function o(){let[e]=(0,i.useState)(()=>new URLSearchParams(window.location.search).get(`code`)?.trim().toUpperCase()??``);return(0,a.jsx)(r,{initialVerifyCode:e})}export{o as default};

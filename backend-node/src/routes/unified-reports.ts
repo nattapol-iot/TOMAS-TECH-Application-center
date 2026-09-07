@@ -1,8 +1,10 @@
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import sql from 'mssql/msnodesqlv8.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { AppConfig } from '../config.js';
 import type { Transaction } from 'mssql';
-import type { Database } from '../db.js';
+import { DatabaseCommitOutcomeUnknownError, type Database } from '../db.js';
 import type { CurrentUserService } from '../users.js';
 import type { CurrentUser } from '../types.js';
 import { ApiError } from '../errors.js';
@@ -11,13 +13,22 @@ import { insertAudit } from '../audit.js';
 import { issueDocumentNumber } from '../document-number.js';
 import { clientIp, clientUserAgent } from '../signing-core.js';
 import { reportTemplateSnapshot } from '../report-template-service.js';
-import { CUSTOMER_CONSENT, TEAM_CONSENT, REPORT_TYPES, REPORT_SELECT, draftInput, eligibleReportSigners, reportSignerCapabilities, parseCustomerEvidence, readReport, reportAccess, reportDto, reportElevated, reportHash, reportSnapshot, reportSource, reportVersion, reportPermissions, signReport, validateReportSource, validateCustomerPng, validateReportForSubmission, type ReportRow } from '../unified-report-service.js';
+import { contentTypeFor, deleteStoredFile, DOCUMENT_DOWNLOAD_RATE_LIMIT, DOCUMENT_UPLOAD_RATE_LIMIT, readMultipartUpload, sendStoredFile, storageKey, uploadedFileName, validateFileExtension, writeStoredFile } from '../document-storage.js';
+import { CUSTOMER_CONSENT, TEAM_CONSENT, REPORT_TYPES, REPORT_SELECT, draftInput, eligibleReportSigners, reportSignerCapabilities, parseCustomerEvidence, readReport, reportAccess, reportDto, reportElevated, reportEvidenceReferences, reportHash, reportSnapshot, reportSource, reportVersion, reportPermissions, signReport, validateReportSource, validateCustomerPng, validateReportEvidenceFiles, validateReportForSubmission, type ReportRow } from '../unified-report-service.js';
 
 const sections:Record<string,string[]>={INSTALLATION:['hardware','software','commissioning'],UAT:['scenarios','steps','punchlist','summary'],SERVICE:['hardware','software','issues','verification'],INSPECTION:['checkpoints','correctiveActions'],POC:['hypothesis','criteria','baseline','trial','result','limitations']};
-export function registerUnifiedReportRoutes(app:FastifyInstance,db:Database,users:CurrentUserService) {
+const REPORT_EVIDENCE_MAX_FILE=8*1024*1024;
+const REPORT_IMAGE_EXTENSIONS=new Set(['.jpg','.jpeg','.png']);
+function validateReportEvidenceImage(bytes:Buffer,extension:string) {
+ const png=bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+ if(!(extension==='.png'&&png||['.jpg','.jpeg'].includes(extension)&&jpeg))throw new ApiError(415,'report_evidence_type','Use a valid JPEG or PNG image.');
+}
+export function registerUnifiedReportRoutes(app:FastifyInstance,config:AppConfig,db:Database,users:CurrentUserService) {
  const actorFor=async(request:FastifyRequest,permission='report.read')=>{await users.demandPermission(request,permission);return users.required(request);};
  const requireSourcePermission=async(request:FastifyRequest,r:{project_id:number|null})=>users.demandPermission(request,r.project_id?'project.read':'inquiry.read');
  const detail=async(tx:Transaction,id:number,request:FastifyRequest)=>reportDto(tx,await readReport(tx,id),await users.required(request));
+ const publicOptions={config:{public:true,rateLimit:{max:20,timeWindow:'1 minute'}},logLevel:'silent' as const};
+ const publicImageOptions={config:{public:true,rateLimit:{max:120,timeWindow:'1 minute'}},logLevel:'silent' as const};
 
  app.get('/api/v1/reports/workspace/templates',async request=>{
   await actorFor(request);
@@ -92,6 +103,33 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,db:Database,user
    await insertAudit(tx,actor.id,'Report',id,r.report_no,'Draft updated',null,{revision:r.revision});return detail(tx,id,request);
   });
  });
+ app.post('/api/v1/reports/workspace/:id/evidence',{config:{rateLimit:DOCUMENT_UPLOAD_RATE_LIMIT}},async(request,reply)=>{
+  const actor=await actorFor(request,'report.write'),id=positiveLong((request.params as {id:string}).id,'Report');
+  await db.transaction(async tx=>{const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor,true);if(r.state!=='DRAFT'||r.revision!==r.current_revision||Number(r.prepared_by)!==actor.id)throw new ApiError(409,'report_evidence_draft','Evidence images can be added only by the preparer of the current draft.');});
+  const upload=await readMultipartUpload(request,Math.min(REPORT_EVIDENCE_MAX_FILE,config.documentStorage.maxFileSizeBytes)),name=uploadedFileName(upload.file.filename),extension=validateFileExtension(name,REPORT_IMAGE_EXTENSIONS),mime=contentTypeFor(name);
+  validateReportEvidenceImage(await readFile(upload.file.filepath),extension);
+  const storage=storageKey(`reports/${id}/evidence`,extension),write=await writeStoredFile(config.documentStorage,storage,upload.file.filepath);
+  let keep=false;
+  try {
+   const attachment=await db.transaction(async tx=>{
+    const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor,true);
+    if(r.state!=='DRAFT'||r.revision!==r.current_revision||Number(r.prepared_by)!==actor.id)throw new ApiError(409,'report_evidence_draft','The report is no longer an editable draft.');
+    const q=new sql.Request(tx).input('report',sql.BigInt,id).input('actor',sql.BigInt,actor.id);
+    const count=Number((await q.query<{total:number}>('SELECT COUNT(*) total FROM dbo.unified_report_evidence_files WHERE report_id=@report')).recordset[0]?.total??0);
+    if(count>=100)throw new ApiError(400,'report_evidence_limit','A report can contain at most 100 uploaded evidence images across its revisions.');
+    q.input('name',sql.NVarChar(500),name).input('mime',sql.NVarChar(100),mime).input('storage',sql.NVarChar(1000),storage).input('size',sql.BigInt,write.sizeBytes).input('sha',sql.Char(64),write.sha256);
+    const file=(await q.query<{id:number}>(`INSERT dbo.unified_report_evidence_files(report_id,uploaded_by,file_name,content_type,storage_key,size_bytes,sha256) OUTPUT inserted.id VALUES(@report,@actor,@name,@mime,@storage,@size,@sha)`)).recordset[0]!;
+    await insertAudit(tx,actor.id,'Report',id,r.report_no,'Evidence image uploaded',null,{attachmentId:Number(file.id),fileName:name,sizeBytes:write.sizeBytes,sha256:write.sha256});
+    return {attachmentId:Number(file.id),attachmentName:name,attachmentContentType:mime,attachmentSizeBytes:write.sizeBytes,attachmentSha256:write.sha256};
+   });keep=true;return reply.status(201).send(attachment);
+  }catch(error){if(error instanceof DatabaseCommitOutcomeUnknownError){keep=true;request.log.error({storageKey:storage,reportId:id},'Report evidence upload commit unknown; retained for reconciliation');}throw error;}
+  finally{if(!keep)await deleteStoredFile(config.documentStorage,storage);}
+ });
+ app.get('/api/v1/reports/workspace/:id/evidence/:attachmentId/content',{config:{rateLimit:DOCUMENT_DOWNLOAD_RATE_LIMIT}},async(request,reply)=>{
+  const actor=await actorFor(request),params=request.params as {id:string;attachmentId:string},id=positiveLong(params.id,'Report'),attachmentId=positiveLong(params.attachmentId,'Evidence image');
+  const file=await db.transaction(async tx=>{const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor);const value=(await new sql.Request(tx).input('report',sql.BigInt,id).input('file',sql.BigInt,attachmentId).query<{file_name:string;content_type:string;storage_key:string;size_bytes:number;sha256:string}>('SELECT file_name,content_type,storage_key,size_bytes,sha256 FROM dbo.unified_report_evidence_files WHERE report_id=@report AND id=@file')).recordset[0];if(!value)throw new ApiError(404,'report_evidence_missing','The evidence image is unavailable.');return value;});
+  return sendStoredFile(request,reply,config.documentStorage,{storageKey:file.storage_key,fileName:file.file_name,contentType:file.content_type,sizeBytes:Number(file.size_bytes),sha256:file.sha256},{inline:true});
+ });
  app.post('/api/v1/reports/workspace/:id/:action',async request=>{
   const {id:rawId,action}=request.params as {id:string;action:string},id=positiveLong(rawId,'Report'),b=bodyObject(request.body);
   if(!['submit','review','approve','return','revise','void','customer-link','revoke-customer-link'].includes(action))throw new ApiError(400,'report_action','Unknown report action.');
@@ -104,6 +142,7 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,db:Database,user
    if(action==='submit') {
     if(r.state!=='DRAFT'||Number(r.prepared_by)!==actor.id)throw new ApiError(409,'report_transition','Only the preparer may submit a draft.');
     validateReportForSubmission(r.report_type,r.body_json);
+    await validateReportEvidenceFiles(tx,r);
     await eligibleReportSigners(tx,r,Number(r.prepared_by),r.reviewer_id===null?null:Number(r.reviewer_id),Number(r.approver_id));
     const snapshot=reportSnapshot(r,await reportAccess(tx,r,actor));
     await signReport(tx,db,request,actor,r,'PREPARE',snapshot,b.consent);next='SUBMITTED';
@@ -123,7 +162,8 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,db:Database,user
    } else if(action==='revise') {
     if(!['CHANGES_REQUESTED','APPROVED','COMPLETED','VOID'].includes(r.state)||Number(r.prepared_by)!==actor.id||!note)throw new ApiError(409,'report_revision','The preparer must provide a reason to create a new revision. Revoke an active customer link first.');
     const input={title:r.title,reportDate:r.report_date.toISOString().slice(0,10),locale:r.locale,bodyJson:r.body_json,reviewerId:r.reviewer_id===null?null:Number(r.reviewer_id),approverId:Number(r.approver_id)};
-    await eligibleReportSigners(tx,r,actor.id,input.reviewerId,input.approverId);
+    // A historical signer may have left or lost authority. Start an editable draft
+    // so the preparer can replace them; draft save and submission still validate signers.
     await insertRevision(tx,id,r.current_revision+1,actor.id,input);
     await q.query('UPDATE dbo.unified_report_customer_links SET revoked_at=SYSUTCDATETIME() WHERE revision_id=@revision AND consumed_at IS NULL AND revoked_at IS NULL;UPDATE dbo.unified_reports SET current_revision=current_revision+1,updated_at=SYSUTCDATETIME() WHERE id=@id');
     await insertAudit(tx,actor.id,'Report',id,r.report_no,'New revision',{revision:r.revision},{revision:r.current_revision+1,note});return detail(tx,id,request);
@@ -146,12 +186,21 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,db:Database,user
   });
  });
  // Suppress automatic request logging: the path contains a one-use bearer token.
- const publicOptions={config:{public:true,rateLimit:{max:20,timeWindow:'1 minute'}},logLevel:'silent' as const};
  app.get('/api/v1/report-acknowledgments/:token',publicOptions,async request=>db.transaction(async tx=>{
   const {r}=await customerRevision(tx,(request.params as {token:string}).token);
   const snapshot=JSON.parse(r.snapshot_json!) as Record<string,unknown>;
   return {number:r.report_no,reportType:r.report_type,revision:r.revision,title:r.title,reportDate:snapshot.reportDate,locale:r.locale,body:snapshot.body,sourceReference:snapshot.sourceReference,sourceTitle:snapshot.sourceTitle,customer:snapshot.customer,endUserCustomerId:snapshot.endUserCustomerId??null,endUserName:snapshot.endUserName??null,endUserCode:snapshot.endUserCode??null,snapshotSha256:r.snapshot_sha256,consentText:CUSTOMER_CONSENT,assurance:'CUSTOMER_SELF_ASSERTED_LINK',modes:['ACKNOWLEDGMENT','DRAWN_SIGNATURE']};
  }));
+ app.get('/api/v1/report-acknowledgments/:token/evidence/:attachmentId',publicImageOptions,async(request,reply)=>{
+  const params=request.params as {token:string;attachmentId:string},attachmentId=positiveLong(params.attachmentId,'Evidence image');
+  const file=await db.transaction(async tx=>{
+   const {r}=await customerRevision(tx,params.token),snapshot=JSON.parse(r.snapshot_json!) as {body?:Record<string,unknown>},reference=reportEvidenceReferences(JSON.stringify(snapshot.body??{})).find(item=>item.id===attachmentId);
+   if(!reference)throw new ApiError(404,'report_evidence_missing','The evidence image is not part of this approved report.');
+   const value=(await new sql.Request(tx).input('report',sql.BigInt,r.id).input('file',sql.BigInt,attachmentId).query<{file_name:string;content_type:string;storage_key:string;size_bytes:number;sha256:string}>('SELECT file_name,content_type,storage_key,size_bytes,sha256 FROM dbo.unified_report_evidence_files WHERE report_id=@report AND id=@file')).recordset[0];
+   if(!value||value.sha256!==reference.sha256)throw new ApiError(404,'report_evidence_missing','The evidence image is unavailable.');return value;
+  });
+  return sendStoredFile(request,reply,config.documentStorage,{storageKey:file.storage_key,fileName:file.file_name,contentType:file.content_type,sizeBytes:Number(file.size_bytes),sha256:file.sha256},{inline:true});
+ });
  app.post('/api/v1/report-acknowledgments/:token',{...publicOptions,bodyLimit:400000},async request=>{
   const input=parseCustomerEvidence(request.body),b=bodyObject(request.body);await validateCustomerPng(input.image);
   return db.transaction(async tx=>{

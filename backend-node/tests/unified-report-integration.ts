@@ -9,6 +9,10 @@ const repo=process.cwd(),name=`IoTTeamCenter_ReportCI_${randomUUID().replaceAll(
 assert.match(name,/^IoTTeamCenter_ReportCI_[a-f0-9]{32}$/);
 const args=['-S','localhost','-E','-C','-I','-b'];
 const run=(statement:string)=>execFileSync('sqlcmd',[...args,'-d',name,'-Q',statement],{cwd:repo,stdio:'pipe'});
+function imageMultipart(image:Buffer) {
+ const boundary=`----report-evidence-${randomUUID()}`,head=Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="test-evidence.png"\r\nContent-Type: image/png\r\n\r\n`),tail=Buffer.from(`\r\n--${boundary}--\r\n`);
+ return {payload:Buffer.concat([head,image,tail]),contentType:`multipart/form-data; boundary=${boundary}`};
+}
 let application:Awaited<ReturnType<typeof buildApp>>|undefined,checks=0;
 try {
  execFileSync('sqlcmd',[...args,'-i','database/scripts/020_deploy_fresh_database.sql','-v',`DatabaseName=${name}`],{cwd:repo,stdio:'pipe',encoding:'utf8'});
@@ -42,7 +46,12 @@ try {
  r=await api('member',`/api/v1/reports/workspace/${r.id}`,{...base,body:{},rowVersion:r.rowVersion},200,'PUT');assert.deepEqual(r.body,{});
  const incomplete=await api('member',`/api/v1/reports/workspace/${r.id}/submit`,{rowVersion:r.rowVersion,consent:true},422);assert.equal(incomplete.code,'report_incomplete');assert.ok(incomplete.details.issues.some((issue:{path:string})=>issue.path==='overview.objective'));
  const unchanged=await api('member',`/api/v1/reports/workspace/${r.id}`);assert.equal(unchanged.rowVersion,r.rowVersion);assert.equal(unchanged.signatures.length,0);assert.equal(unchanged.status,'DRAFT');
- r=await api('member',`/api/v1/reports/workspace/${r.id}`,{...base,rowVersion:r.rowVersion},200,'PUT');
+ const reportImage=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64'),multipart=imageMultipart(reportImage);
+ const uploadedResponse=await app.inject({method:'POST',url:`/api/v1/reports/workspace/${r.id}/evidence`,headers:{'x-dev-user-id':'drawing-member','content-type':multipart.contentType},payload:multipart.payload});assert.equal(uploadedResponse.statusCode,201,uploadedResponse.body);checks++;
+ const attachment=uploadedResponse.json();
+ const reportBody={...base.body,evidence:[{topic:'Commissioning',description:'TEST ONLY status lamp',purpose:'TEST ONLY prove successful startup',...attachment}]};
+ r=await api('member',`/api/v1/reports/workspace/${r.id}`,{...base,body:reportBody,rowVersion:r.rowVersion},200,'PUT');
+ const internalImage=await app.inject({method:'GET',url:`/api/v1/reports/workspace/${r.id}/evidence/${attachment.attachmentId}/content`,headers:{'x-dev-user-id':'drawing-member'}});assert.equal(internalImage.statusCode,200);assert.deepEqual(internalImage.rawPayload,reportImage);checks++;
  await api('other',`/api/v1/reports/workspace/${r.id}/submit`,{rowVersion:r.rowVersion,consent:true},409);
  await api('member',`/api/v1/reports/workspace/${r.id}/submit`,{rowVersion:r.rowVersion,consent:false},400);
  const draftVersion=r.rowVersion;r=await api('member',`/api/v1/reports/workspace/${r.id}/submit`,{rowVersion:r.rowVersion,consent:true});assert.equal(r.signatures.length,1);
@@ -54,7 +63,8 @@ try {
  run(`UPDATE dbo.projects SET end_user_customer_id=customer_id WHERE id=${project}`);
  const frozenEndUser=await api('member',`/api/v1/reports/workspace/${r.id}`);assert.equal(frozenEndUser.endUserName,null);
  let publicReport=await api(null,link.acknowledgmentPath);assert.equal(publicReport.endUserName,null);assert.equal(publicReport.snapshotSha256,r.snapshotSha256);assert.equal(publicReport.preparedById,undefined);
- r=await api('member',`/api/v1/reports/workspace/${r.id}/revoke-customer-link`,{rowVersion:r.rowVersion});await api(null,link.acknowledgmentPath,undefined,404);
+ const publicImagePath=`${link.acknowledgmentPath}/evidence/${attachment.attachmentId}`,publicImage=await app.inject({method:'GET',url:publicImagePath});assert.equal(publicImage.statusCode,200);assert.deepEqual(publicImage.rawPayload,reportImage);checks++;
+ r=await api('member',`/api/v1/reports/workspace/${r.id}/revoke-customer-link`,{rowVersion:r.rowVersion});await api(null,link.acknowledgmentPath,undefined,404);await api(null,publicImagePath,undefined,404);
  link=await api('member',`/api/v1/reports/workspace/${r.id}/customer-link`,{rowVersion:r.rowVersion});r=link.report;publicReport=await api(null,link.acknowledgmentPath);
  const evidence={name:'TEST ONLY Customer',title:'TEST QA',company:'TEST ONLY COMPANY',date:'2026-09-06',mode:'ACKNOWLEDGMENT',consent:true,snapshotSha256:publicReport.snapshotSha256};
  await api(null,link.acknowledgmentPath,{...evidence,snapshotSha256:'bad'},409);
@@ -63,7 +73,13 @@ try {
  r=await api('member',`/api/v1/reports/workspace/${r.id}`);assert.equal(r.status,'COMPLETED');assert.equal(r.customerAcknowledgment.name,evidence.name);assert.equal(r.customerAcknowledgment.signatureDataUrl,null);
  await assert.rejects(()=>database.query(`UPDATE dbo.unified_report_revisions SET title=N'tampered' WHERE report_id=${r.id}`));checks++;
  await assert.rejects(()=>database.query(`UPDATE dbo.unified_report_acknowledgments SET signer_name=N'tampered'`));checks++;
+ run(`UPDATE dbo.users SET is_active=0 WHERE id IN(${actors['drawing-manager']},${actors['drawing-leader']})`);
  const oldHash=r.snapshotSha256;r=await api('member',`/api/v1/reports/workspace/${r.id}/revise`,{rowVersion:r.rowVersion,note:'TEST ONLY next revision'});assert.equal(r.revision,1);assert.equal(r.status,'DRAFT');assert.equal(r.signatures.length,0);assert.equal(r.endUserName,r.customer);
+ const unavailableSigner=await api('member',`/api/v1/reports/workspace/${r.id}/submit`,{rowVersion:r.rowVersion,consent:true},422);assert.equal(unavailableSigner.code,'report_signer_ineligible');
+ run(`INSERT dbo.users(entra_object_id,email,name,role_id) SELECT N'drawing-replacement',N'replacement@test.invalid',N'TEST ONLY replacement approver',role_id FROM dbo.users WHERE id=${actors['drawing-manager']}`);
+ const replacement=Number((await database.query<{id:number}>("SELECT id FROM dbo.users WHERE entra_object_id=N'drawing-replacement'")).recordset[0]!.id);
+ r=await api('member',`/api/v1/reports/workspace/${r.id}`,{...base,reviewerId:null,approverId:replacement,rowVersion:r.rowVersion},200,'PUT');assert.equal(r.approverId,replacement);assert.equal(r.status,'DRAFT');assert.equal(r.signatures.length,0);
+ run(`UPDATE dbo.users SET is_active=1 WHERE id IN(${actors['drawing-manager']},${actors['drawing-leader']})`);
  const previous=await api('member',`/api/v1/reports/workspace/${r.id}?revision=0`);assert.equal(previous.snapshotSha256,oldHash);assert.equal(previous.status,'COMPLETED');assert.deepEqual(previous.allowedActions,[]);
  run(`UPDATE dbo.inquiries SET end_user_customer_id=customer_id WHERE id=${inquiry}`);
  let poc=await api('member','/api/v1/reports/workspace',{...base,reportType:'POC',sourceKind:'INQUIRY',sourceId:inquiry,reviewerId:null,body:{...commonBody,trials:[{hypothesis:'TEST ONLY improvement',successCriteria:'TEST ONLY threshold',trial:'TEST ONLY measure',result:'TEST ONLY measured'}]}},201);

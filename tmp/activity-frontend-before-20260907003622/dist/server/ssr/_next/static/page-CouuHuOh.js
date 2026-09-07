@@ -1,0 +1,1 @@
+import{h as e}from"../../index.js";import{t}from"./dynamic-Db1IdEd5.js";var n=e(),r=t(()=>import(`./App-DCugW6m4.js`),{ssr:!1,loading:()=>(0,n.jsx)(`main`,{className:`demo-loading`,"aria-live":`polite`,children:`Loading demo workspace…`}),loadableGenerated:{modules:[`app/system/App.tsx`]}});function i(){return(0,n.jsx)(r,{forceDemo:!0})}export{i as default};

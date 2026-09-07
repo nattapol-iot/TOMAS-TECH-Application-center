@@ -15,6 +15,7 @@ import { SITE_VISIT_COPY } from "./site-visit-copy";
 import { OPERATIONS_WORKSPACE_COPY } from "./operations-workspace-copy";
 import { REMAINING_WORKSPACE_COPY } from "./remaining-workspace-copy";
 import { INPUT_HINTS_COPY } from "./input-hints-copy";
+import { FINAL_WORKSPACE_COPY } from "./final-workspace-copy";
 import { LANGUAGE_COMPLETION } from "./language-completion";
 import { HISTORICAL_PR_COPY } from "./production/historical-pr-copy";
 
@@ -1470,7 +1471,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Reading assigned Project, Inquiry and Task activity for this review cycle.": { th: "กำลังอ่านกิจกรรมจาก Project, Inquiry และ Task ที่ได้รับมอบหมายในรอบนี้", jp: "この評価サイクルで割り当てられたプロジェクト・引合・タスクを確認しています。" },
   "Reading owned Inquiry, Meeting, Estimate and Project handover activity for this review cycle.": { th: "กำลังอ่าน Inquiry, Meeting, Estimate และการส่งต่องานเข้า Project ที่รับผิดชอบในรอบนี้", jp: "この評価サイクルで担当した引合・会議・見積・プロジェクト引継ぎを確認しています。" },
   "Work evidence could not be loaded": { th: "โหลดหลักฐานผลงานไม่สำเร็จ", jp: "業務実績を読み込めませんでした" },
-  "Work evidence · ข้อมูลผลงานจริง": { th: "หลักฐานผลงานจริง", jp: "業務実績" },
+  "Work evidence · ข้อมูลผลงานจริง": { en: "Work evidence", th: "หลักฐานผลงานจริง", jp: "業務実績" },
   "Connected to assigned work from": { th: "เชื่อมโยงกับงานที่ได้รับมอบหมายตั้งแต่", jp: "割り当て業務の対象期間" },
   "confidence": { th: "ความเชื่อมั่น", jp: "信頼度" },
   "Connected": { th: "เชื่อมโยงแล้ว", jp: "連携済み" },
@@ -2093,7 +2094,10 @@ export const DICTIONARY: Record<string, Entry> = {
   ...OPERATIONS_WORKSPACE_COPY,
   ...REMAINING_WORKSPACE_COPY,
   ...INPUT_HINTS_COPY,
+  ...FINAL_WORKSPACE_COPY,
   "Manual document": { en: "Manual", th: "คู่มือ", jp: "取扱説明書" },
+  "Expand navigation": { th: "ขยายเมนู", jp: "ナビゲーションを展開" },
+  "Collapse navigation": { th: "ย่อเมนู", jp: "ナビゲーションを折りたたむ" },
 };
 
 const normalizeLabel = (text: string) => text.trim().replace(/\s+/g, " ").replace(/\s*\*$/, "").toLocaleLowerCase("en");

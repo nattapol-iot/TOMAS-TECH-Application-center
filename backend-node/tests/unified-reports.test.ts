@@ -59,6 +59,15 @@ test('optional repeat sections ignore fully blank placeholders but reject incomp
  for(const section of [{software:[{module:'TEST only'}]},{commissioning:[{checkpoint:'TEST only'}]},{evidence:[{description:'TEST missing reference'}]},{issues:[{issue:'TEST no owner'}]},{deliverables:[{item:'TEST no status'}]}])assert.throws(()=>validateReportForSubmission('INSTALLATION',JSON.stringify({...body,...section})));
  assert.throws(()=>validateReportForSubmission('INSTALLATION',JSON.stringify({...common,hardware:[{}],software:[],commissioning:[]})));
 });
+test('evidence records explain their report topic, subject and purpose before submission',()=>{
+ const body=completeBodies.INSTALLATION!;
+ const linked={topic:'Commissioning',description:'TEST status lamp',purpose:'TEST prove successful startup',reference:'TEST-PHOTO-01'};
+ assert.doesNotThrow(()=>validateReportForSubmission('INSTALLATION',JSON.stringify({...body,evidence:[linked]})));
+ for(const missing of ['topic','description','purpose','reference'])assert.throws(()=>validateReportForSubmission('INSTALLATION',JSON.stringify({...body,evidence:[{...linked,[missing]:''}]})));
+ const attached={...linked,reference:'',attachmentId:7,attachmentName:'test.jpg',attachmentContentType:'image/jpeg',attachmentSizeBytes:1234,attachmentSha256:'a'.repeat(64)};
+ assert.doesNotThrow(()=>validateReportForSubmission('INSTALLATION',JSON.stringify({...body,evidence:[attached]})));
+ assert.throws(()=>validateReportForSubmission('INSTALLATION',JSON.stringify({...body,evidence:[{...attached,attachmentSha256:'changed'}]})));
+});
 
 test('approval candidate needs both approval and signing permission; unsigned review remains allowed',()=>{
  assert.deepEqual(reportSignerCapabilities(new Set(['report.approve'])),{canReview:false,canApprove:false});

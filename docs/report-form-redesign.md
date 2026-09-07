@@ -8,6 +8,10 @@ Service now uses paper-style metadata, numbered sections, side-by-side hardware/
 
 Optional original-form fields are stored in the existing report body JSON: work type and ticket reference, service follow-up owner/date/revision, pending materials and UAT summary remarks. Existing keys and extension data remain intact. Reusable templates render only their existing allowed fields; no results, customer facts, or signatures are copied into templates. No database migration or report-data rewrite was performed.
 
-This is a web-form adaptation, not an Excel round-trip exporter. Evidence still uses file/document references or URLs; direct embedded-photo upload is not added here. Customer acknowledgment applies to the approved report revision, not independently to each UAT page. Signature summaries show actual workflow records, not editable signature placeholders.
+This is a web-form adaptation, not an Excel round-trip exporter. Evidence supports a
+controlled JPEG/PNG upload as well as file/document references and URLs. Each entry must
+name its report topic, describe what the image shows, and state what it proves. Customer
+acknowledgment applies to the approved report revision, not independently to each UAT
+page. Signature summaries show actual workflow records, not editable signature placeholders.
 
 Validation: three React server-render regressions cover blank result preservation, read-only visibility of every UAT sheet and long evidence, safe evidence links, and template privacy. TypeScript and ESLint pass. A broader legacy .NET material-flow test failed with inventory usable quantity expected 5 versus 6; it does not exercise these report changes and was not modified. Browser interaction/visual QA was not performed. The managed frontend release and served report assets are checked separately.

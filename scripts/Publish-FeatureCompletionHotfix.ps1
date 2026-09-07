@@ -8,6 +8,12 @@ $stagePath = [IO.Path]::GetFullPath($StageRoot)
 if (!$stagePath.StartsWith($stageBase, [StringComparison]::OrdinalIgnoreCase)) { throw 'Stage must be inside backend-node/tmp.' }
 $manifest = Get-Content -LiteralPath (Join-Path $stagePath 'hotfix.json') -Raw | ConvertFrom-Json
 $runtimeRoot = Join-Path $env:LOCALAPPDATA 'IoTTeamCenter\TeamTest'
+# Recovery may expose the packaged-app runtime through the original junction.
+# Compare releases against its physical directory without loosening the scope check.
+$runtimeParent = Get-Item -LiteralPath (Split-Path -Parent $runtimeRoot)
+if ($runtimeParent.LinkType -eq 'Junction' -and @($runtimeParent.Target).Count -eq 1) {
+    $runtimeRoot = Join-Path ([string]@($runtimeParent.Target)[0]) 'TeamTest'
+}
 $settingsPath = Join-Path $runtimeRoot 'settings.json'
 $originalSettings = Get-Content -LiteralPath $settingsPath -Raw
 $settings = $originalSettings | ConvertFrom-Json

@@ -1,0 +1,42 @@
+import {readFileSync,writeFileSync,existsSync,rmSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+const index=resolve('tmp/activity-commit.index');
+if(existsSync(index))rmSync(index);
+const env={...process.env,GIT_INDEX_FILE:index};
+const git=(args,input)=>execFileSync('git',args,{env,input,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trimEnd();
+git(['read-tree','HEAD']);
+const full=['app/system/activity-client.ts','app/system/production/ActivityKpiSummary.tsx','app/system/production/TeamActivityScreen.tsx','app/system/production/team-activity.css','app/system/use-activity-presence.ts','backend-node/src/activity-rules.ts','backend-node/src/activity-service.ts','backend-node/src/activity-recorder.ts','backend-node/src/routes/activity.ts','backend-node/src/audit.ts','backend-node/src/errors.ts','backend-node/src/routes/health.ts','backend-node/src/routes/performance.ts','backend-node/src/routes/resource-tasks.ts','backend-node/tests/activity-rules.test.ts','backend-node/tests/activity-integration.ts','database/migrations/034_support_center.sql','database/migrations/035_team_activity.sql','database/scripts/010_application_login.sql','database/scripts/020_deploy_fresh_database.sql','database/scripts/080_verify_production_baseline.sql','scripts/stage-activity-release.mjs','scripts/Publish-TeamActivity.ps1','tests/team-activity-ui.test.mjs','tests/site-visit-guardrails.test.mjs','docs/team-activity.md','docs/team-activity-qa.md'];
+git(['add','--',...full]);
+const paths=[...full];
+const head=path=>git(['show','HEAD:'+path])+'\n';
+const current=path=>readFileSync(path,'utf8').replaceAll('\r\n','\n');
+function replace(text,from,to){assert.equal(text.split(from).length,2,'Unique anchor: '+from);return text.replace(from,to);}
+function stage(path,text){const oid=git(['hash-object','-w','--stdin'],text);git(['update-index','--add','--cacheinfo','100644',oid,path]);paths.push(path);}
+let path='app/system/ProductionApp.tsx',text=head(path),working=current(path);
+text=replace(text,'import { BrandLockup','import { TeamActivityScreen } from "./production/TeamActivityScreen";\nimport { useActivityPresence } from "./use-activity-presence";\nimport { BrandLockup');
+text=replace(text,'| "customers" | "reports"','| "activity" | "customers" | "reports"');
+text=replace(text,'  { group: "ORGANISATION", items: [','  { group: "ORGANISATION", items: [\n    { view: "activity", label: "Team Activity", icon: "chart", permission: "activity.read" },');
+text=replace(text,'  const t = languageValue.t;','  const t = languageValue.t;\n  useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));');
+text=replace(text,'    setViewState(next);','    if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);\n    setViewState(next);');
+const follow=working.slice(working.indexOf('  useEffect(() => {\n    const follow = () =>'),working.indexOf('  const openSupport'));
+assert.match(follow,/#activity/);assert.ok(text.includes('  useEffect(() => {'));text=text.replace('  useEffect(() => {',follow+'  useEffect(() => {');
+// The shell has several effects; insert at the first effect instead of replacing all.
+text=replace(text,'{view === "my-work" ? <>','{view === "my-work" ? <><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>');
+const activityLine=working.split('\n').find(line=>line.includes('{view === "activity" &&'));
+assert.ok(activityLine);text=replace(text,'          {view === "performance" ?',activityLine+'\n          {view === "performance" ?');stage(path,text);
+path='app/system/production/PerformanceScreen.tsx';text=head(path);
+text=replace(text,'import { useT } from "../i18n";','import { useT } from "../i18n";\nimport { ActivityKpiSummary } from "./ActivityKpiSummary";');
+text=replace(text,'type ReviewRecord = {','type ReviewRecord = {\n  activity?: PerformanceAssessment["activity"];');
+text=replace(text,'score: Number(scoreAverage(scores, areas).toFixed(1)), status:','score: review.overallScore === undefined ? Number(scoreAverage(scores, areas).toFixed(1)) : review.overallScore ?? 0, activity:review.activity, status:');
+text=replace(text,'{area.weight}<LocalizedText text={"% weight"}','{area.weight * (selectedReview.activity?.mode === "ACTIVE" && selectedReview.activity.eligible ? 0.9 : 1)}<LocalizedText text={"% weight"}');
+text=replace(text,'          <WorkEvidencePanel','          <ActivityKpiSummary activity={selectedReview.activity}/>\n          <WorkEvidencePanel');
+text=replace(text,'      <section className="performance-goal-grid">','      <ActivityKpiSummary activity={review.activity}/>\n      <section className="performance-goal-grid">');
+const myKpi=text.indexOf('function MyKpi('),afterMyKpi=text.indexOf('function WorkEvidencePanel(',myKpi);assert.ok(myKpi>0&&afterMyKpi>myKpi);text=text.slice(0,myKpi)+replace(text.slice(myKpi,afterMyKpi),'{area.weight}%</Badge>','{area.weight * (review.activity?.mode === "ACTIVE" && review.activity.eligible ? 0.9 : 1)}%</Badge>')+text.slice(afterMyKpi);stage(path,text);
+path='app/system/i18n.ts';text=head(path);const label=current(path).split('\n').find(line=>line.includes('"Team Activity":'));assert.ok(label);text=replace(text,'  "KPI & Growth":',label+'\n  "KPI & Growth":');stage(path,text);
+path='app/system/api-client.ts';text=head(path);const types=current(path).split('\n').filter(line=>line.startsWith('  overallScore?:')||line.startsWith('  activity?: {mode:')).join('\n');assert.ok(types);text=replace(text,'export type PerformanceAssessment = {','export type PerformanceAssessment = {\n'+types);stage(path,text);
+path='backend-node/src/app.ts';text=head(path);text=replace(text,'import cors from "@fastify/cors";','import cors from "@fastify/cors";\nimport { registerActivityRoutes } from "./routes/activity.js";');text=replace(text,'  app.addHook("onClose",','  registerActivityRoutes(app, database, users);\n  app.addHook("onClose",');stage(path,text);
+path='tests/production-guardrails.test.mjs';text=head(path);text=replace(text,'"KPI & Growth", "Reports",','"Team Activity", "KPI & Growth", "Reports",');text=text.replaceAll('32, 33\\)\\) <> 33','32, 33, 34, 35\\)\\) <> 35');stage(path,text);
+writeFileSync('tmp/activity-commit-paths.json',JSON.stringify(paths,null,2));
+console.log(git(['diff','--cached','--stat']));

@@ -1,0 +1,948 @@
+{
+  "source": "http://192.168.1.160:3000/",
+  "environment": "Team Test",
+  "capturedDate": "2026-09-06",
+  "method": "Real Chrome UI screenshots via Computer Use; JPEG bytes unaltered.",
+  "scope": "Employee account; no transactions submitted for capture. Empty lists reflect capture-time data. Some source application strings are not localized.",
+  "excluded": [
+    "signed-documents: loading error captured; not embedded in the handbook"
+  ],
+  "captures": [
+    {
+      "key": "analytics",
+      "language": "th",
+      "file": "analytics-th.jpg",
+      "caption": "Report analytics · Inventory Value และแท็บวิเคราะห์ทั้ง 4",
+      "sha256": "2b78f7d856535b1fca34f4086cb667b2dcded5a823154e80cf76cb46ca038226",
+      "bytes": 88873
+    },
+    {
+      "key": "analytics",
+      "language": "en",
+      "file": "analytics-en.jpg",
+      "caption": "Report analytics · Inventory Value and four analytics tabs",
+      "sha256": "a409d234c43054cb5e67f942ae5c1d20448b78a2a04338874b99d121f94a8f99",
+      "bytes": 98328
+    },
+    {
+      "key": "analytics",
+      "language": "ja",
+      "file": "analytics-jp.jpg",
+      "caption": "Report analytics・Inventory Valueと4つの分析タブ",
+      "sha256": "cdccf8cac37d1179e9542a09b06c09048c6abdc4063e8edafa2c4e53a23c3aad",
+      "bytes": 88121
+    },
+    {
+      "key": "assignments",
+      "language": "th",
+      "file": "assignments-th.jpg",
+      "caption": "My Assignments · งานเข้าหน้างานของบัญชีปัจจุบัน",
+      "sha256": "0cf3d00ac7701881850527bce5f452dcd4ea6b7d58a645754ec84feed3a7a90a",
+      "bytes": 63511
+    },
+    {
+      "key": "assignments",
+      "language": "en",
+      "file": "assignments-en.jpg",
+      "caption": "My Assignments · site work assigned to this account",
+      "sha256": "fa6b0776140e9f2ab4208d41bff623008aa3d7f8a3f2f46c78be9ded7c78b060",
+      "bytes": 69441
+    },
+    {
+      "key": "assignments",
+      "language": "ja",
+      "file": "assignments-jp.jpg",
+      "caption": "My Assignments・このアカウントの現地業務",
+      "sha256": "2a1d4d554f4ab35e8ee411ed495a1610bc2b07ccbdd908da8f2996b2dbd52fcc",
+      "bytes": 63432
+    },
+    {
+      "key": "bom",
+      "language": "th",
+      "file": "bom-th.jpg",
+      "caption": "BOM · รายการวัสดุที่อ้างอิง Estimate ของโครงการ",
+      "sha256": "b38f53cc46fa1334a2ae979898833a35b99a3abff99d08a4e46f5146f2bc91f7",
+      "bytes": 90659
+    },
+    {
+      "key": "bom",
+      "language": "en",
+      "file": "bom-en.jpg",
+      "caption": "BOM · material lists linked to project estimates",
+      "sha256": "397182487a22d668adc946f42504172733a66e0a122f4bb2583f10d524368538",
+      "bytes": 96852
+    },
+    {
+      "key": "bom",
+      "language": "ja",
+      "file": "bom-jp.jpg",
+      "caption": "BOM・プロジェクト見積に紐づく資材表",
+      "sha256": "f6a717accd011c27609335fe19b2ebf545c423666ac3b8f93921298a3d814662",
+      "bytes": 89390
+    },
+    {
+      "key": "dashboard",
+      "language": "th",
+      "file": "dashboard-th.jpg",
+      "caption": "Dashboard · ภาพรวมงานของบัญชีที่ใช้งาน",
+      "sha256": "a14b17e19cc79b8b028e7a5e6bdc42c29c0865d55a347cfc9291ac485c0579f4",
+      "bytes": 145707
+    },
+    {
+      "key": "dashboard",
+      "language": "en",
+      "file": "dashboard-en.jpg",
+      "caption": "Dashboard · work overview for the signed-in account",
+      "sha256": "79c28321aea83cc271567dbd5d7845581bb6705d87d911f96b1d27a20ec6facd",
+      "bytes": 154405
+    },
+    {
+      "key": "dashboard",
+      "language": "ja",
+      "file": "dashboard-jp.jpg",
+      "caption": "Dashboard・ログイン中アカウントの業務概要",
+      "sha256": "3f610396bc621e44dda826d5723a77e78b794e53cde19437c0bbc0ef44756778",
+      "bytes": 146077
+    },
+    {
+      "key": "estimate-cost",
+      "language": "th",
+      "file": "estimate-cost-th.jpg",
+      "caption": "Cost Items · รายการใน Category และ Module",
+      "sha256": "7b33e6ec94d817fe8f7b6cd491de0190a181687c6be21e036ab24e1ee3fc38dc",
+      "bytes": 171108
+    },
+    {
+      "key": "estimate-cost",
+      "language": "en",
+      "file": "estimate-cost-en.jpg",
+      "caption": "Cost Items · category and module line items",
+      "sha256": "6807a1a05a176ffc9de5ee5ef9310e030899b7feb2be6e294930ff34c388d499",
+      "bytes": 180284
+    },
+    {
+      "key": "estimate-cost",
+      "language": "ja",
+      "file": "estimate-cost-jp.jpg",
+      "caption": "Cost Items・分類とModuleの明細",
+      "sha256": "2a2f18fddf9fd7bcb22b0672016f008abadf4ca0d2a9270ed22e245548c3b75d",
+      "bytes": 169725
+    },
+    {
+      "key": "estimate-effort",
+      "language": "th",
+      "file": "estimate-effort-th.jpg",
+      "caption": "Engineering Man-hour · พื้นที่ Work package และต้นทุนแรงงาน",
+      "sha256": "b4489061573c9a0ba7344b4c85eff07d212e89cdd3e4fe1daf9148fd2f2b0783",
+      "bytes": 143608
+    },
+    {
+      "key": "estimate-effort",
+      "language": "en",
+      "file": "estimate-effort-en.jpg",
+      "caption": "Engineering Man-hour · work packages and labor costs",
+      "sha256": "72850f933630b2c87c92958e11c0b7d9b15e67d0e519f9f01fd0bc1ca38e4753",
+      "bytes": 155358
+    },
+    {
+      "key": "estimate-effort",
+      "language": "ja",
+      "file": "estimate-effort-jp.jpg",
+      "caption": "Engineering Man-hour・Work packageと労務原価",
+      "sha256": "906fedbe7d7ffb73c57e4b92f413059cb51b132793c6f707fcff1225643bd040",
+      "bytes": 138670
+    },
+    {
+      "key": "estimate-summary",
+      "language": "th",
+      "file": "estimate-summary-th.jpg",
+      "caption": "Estimate Summary · ตรวจเลขฉบับและต้นทุนรวม",
+      "sha256": "053b2bf50c82d992558cdf26fad4f2b3b0ca7491be4adb996ac54ac75e46fd43",
+      "bytes": 151223
+    },
+    {
+      "key": "estimate-summary",
+      "language": "en",
+      "file": "estimate-summary-en.jpg",
+      "caption": "Estimate Summary · revision and total costs",
+      "sha256": "da9dc9a3830c49a2afa19d0ab3f6aaa5c6e90b0da964df207a137b6b45a703dd",
+      "bytes": 161188
+    },
+    {
+      "key": "estimate-summary",
+      "language": "ja",
+      "file": "estimate-summary-jp.jpg",
+      "caption": "Estimate Summary・版と原価合計",
+      "sha256": "c3e52b09c7b3d8c9fad44b3f0c8d0c56293c7a0c0c168468cada50fd73db3422",
+      "bytes": 148443
+    },
+    {
+      "key": "estimate-validation",
+      "language": "th",
+      "file": "estimate-validation-th.jpg",
+      "caption": "Validation · ตรวจรายการที่ต้องแก้ก่อนส่งต่อ",
+      "sha256": "8f74d0796fc29d0c53137e555d74fe50c29ab4e9831726074089fefd340b629e",
+      "bytes": 160544
+    },
+    {
+      "key": "estimate-validation",
+      "language": "en",
+      "file": "estimate-validation-en.jpg",
+      "caption": "Validation · review issues before submission",
+      "sha256": "167388d4fdffa86768d32609aded03dfa34a08af7f691cc9bd0c4097ea3c5bf4",
+      "bytes": 169980
+    },
+    {
+      "key": "estimate-validation",
+      "language": "ja",
+      "file": "estimate-validation-jp.jpg",
+      "caption": "Validation・提出前の指摘事項確認",
+      "sha256": "30b8d7bbf717336640034285900c89c8a95d98db724b5a0dcf9992a6299cbede",
+      "bytes": 157014
+    },
+    {
+      "key": "inquiry",
+      "language": "th",
+      "file": "inquiry-th.jpg",
+      "caption": "Inquiry · ค้นหา กรอง และเปิดเรื่องลูกค้า",
+      "sha256": "22fb800708680d00d3b5e7b01a7677204f0a6d60ec1e8fd58fd145ff47dbe8f6",
+      "bytes": 156234
+    },
+    {
+      "key": "inquiry",
+      "language": "en",
+      "file": "inquiry-en.jpg",
+      "caption": "Inquiry · search, filter and open customer work",
+      "sha256": "948700dfda44de9efbe6d7aa1cfe59256087a7893df1e3be4456e19daabbbb85",
+      "bytes": 161246
+    },
+    {
+      "key": "inquiry",
+      "language": "ja",
+      "file": "inquiry-jp.jpg",
+      "caption": "Inquiry・顧客案件の検索・絞り込み・詳細",
+      "sha256": "8adeae801a394f42ea7de522d266ab72fcd5171712778ea0bd6616e206caddd9",
+      "bytes": 152848
+    },
+    {
+      "key": "inquiry-detail",
+      "language": "th",
+      "file": "inquiry-detail-th.jpg",
+      "caption": "Inquiry Overview · ตรวจเจ้าของงานและเปิดแท็บข้อมูลที่เกี่ยวข้อง",
+      "sha256": "02c27e059978ff873f162f6cbf17a39770d1e631b58a3c43adca1b4ad369674b",
+      "bytes": 134221
+    },
+    {
+      "key": "inquiry-detail",
+      "language": "en",
+      "file": "inquiry-detail-en.jpg",
+      "caption": "Inquiry Overview · ownership and related information tabs",
+      "sha256": "a792f22fd8ab3824b27c7710134d834dd4a13e559ab4c23420eadff8a1f5b4fb",
+      "bytes": 140733
+    },
+    {
+      "key": "inquiry-detail",
+      "language": "ja",
+      "file": "inquiry-detail-jp.jpg",
+      "caption": "Inquiry Overview・担当者と関連情報タブ",
+      "sha256": "ebd406fac431552abff1adc204acd49f86de5e17192f0b150df8db9a1fe37f20",
+      "bytes": 122474
+    },
+    {
+      "key": "inventory",
+      "language": "th",
+      "file": "inventory-th.jpg",
+      "caption": "Inventory · Stock Balances และแท็บ Adjustments & Quarantine",
+      "sha256": "78103631939da46b7e1625adddfb91aba2709dd17db4e2c24bdc037a1b00aed4",
+      "bytes": 83260
+    },
+    {
+      "key": "inventory",
+      "language": "en",
+      "file": "inventory-en.jpg",
+      "caption": "Inventory · stock balances and adjustment/quarantine tab",
+      "sha256": "2c206ac377a1314b5ec93bbd93bd892db7cac44636c1e0914b7a551af7199c86",
+      "bytes": 91215
+    },
+    {
+      "key": "inventory",
+      "language": "ja",
+      "file": "inventory-jp.jpg",
+      "caption": "Inventory・残高と調整・隔離品タブ",
+      "sha256": "667c3e16c9154bc741e53d2a5b93f887639b51a6bd238c011bd3fd61bb0a4575",
+      "bytes": 82379
+    },
+    {
+      "key": "issues",
+      "language": "th",
+      "file": "issues-th.jpg",
+      "caption": "Material Issues · คำขอเบิกและสถานะการส่งมอบ",
+      "sha256": "71a78bd24538190991d751d159b3cdcd9768926e30340ee63356661e51a9cedd",
+      "bytes": 78051
+    },
+    {
+      "key": "issues",
+      "language": "en",
+      "file": "issues-en.jpg",
+      "caption": "Material Issues · issue requests and handover status",
+      "sha256": "47b17ec8598830554256cfb752cfdffdeaed09612a7c3ba6139e040a5c96757a",
+      "bytes": 88685
+    },
+    {
+      "key": "issues",
+      "language": "ja",
+      "file": "issues-jp.jpg",
+      "caption": "Material Issues・払出申請と受渡し状態",
+      "sha256": "7f62786284c3fa2213408e332e6ee1180ea4471ed3828e9006b56106beddd1e4",
+      "bytes": 78396
+    },
+    {
+      "key": "knowledge",
+      "language": "th",
+      "file": "knowledge-th.jpg",
+      "caption": "Knowledge Hub · Solutions & Sales Materials และทางไปคลังเอกสาร",
+      "sha256": "886026fdd080e56892baac334e84e98aee689a4d1e6c40c4e1baaa3228432bd7",
+      "bytes": 111658
+    },
+    {
+      "key": "knowledge",
+      "language": "en",
+      "file": "knowledge-en.jpg",
+      "caption": "Knowledge Hub · Solutions & Sales Materials and document libraries",
+      "sha256": "e39ccad6763111623d684fcb15562706d4376a67055e027d0d1a7e4f15665316",
+      "bytes": 125190
+    },
+    {
+      "key": "knowledge",
+      "language": "ja",
+      "file": "knowledge-jp.jpg",
+      "caption": "Knowledge Hub・Solutions & Sales Materialsと文書ライブラリー",
+      "sha256": "3fae82248697817d6eab7af9751be958b2fb3b70cc24f9458178095dde47e3bb",
+      "bytes": 111907
+    },
+    {
+      "key": "master",
+      "language": "th",
+      "file": "master-th.jpg",
+      "caption": "Master Data · Customers และแท็บข้อมูลกลาง",
+      "sha256": "96a1f7a4fc123162b2fd9015fcf1e2670f1a7e6046fc3231648c9dda323922e3",
+      "bytes": 108913
+    },
+    {
+      "key": "master",
+      "language": "en",
+      "file": "master-en.jpg",
+      "caption": "Master Data · Customers and reference-data tabs",
+      "sha256": "490e519a1940a7b5e4ffd046c058ddd5135ec66113eed1f122e8c9a2156765ae",
+      "bytes": 117802
+    },
+    {
+      "key": "master",
+      "language": "ja",
+      "file": "master-jp.jpg",
+      "caption": "Master Data・Customersと共通マスタータブ",
+      "sha256": "b5097185bad266ca72ca4eff5b5c5a51e1ff6342aa3f691c08ba985e30ba1d2e",
+      "bytes": 108209
+    },
+    {
+      "key": "module-templates",
+      "language": "th",
+      "file": "module-templates-th.jpg",
+      "caption": "Module Templates · รายการโมดูลต้นทุนพร้อมนำกลับมาใช้",
+      "sha256": "69f6ff5c738bfedfe0ed91d81df5de832506103833d311adc5a1fb21b20080eb",
+      "bytes": 148771
+    },
+    {
+      "key": "module-templates",
+      "language": "en",
+      "file": "module-templates-en.jpg",
+      "caption": "Module Templates · reusable cost modules",
+      "sha256": "bcd8ac9cfa8849bccafd2c8a5ef3136e23fa5ee5b67dcd0f0d66e554180d7c68",
+      "bytes": 159409
+    },
+    {
+      "key": "module-templates",
+      "language": "ja",
+      "file": "module-templates-jp.jpg",
+      "caption": "Module Templates・再利用する原価Module",
+      "sha256": "2fe43b58a038b0095f552615ac00ec7e55baeba0fbf06a4cbba040550a5b6aca",
+      "bytes": 152913
+    },
+    {
+      "key": "my-work",
+      "language": "th",
+      "file": "my-work-th.jpg",
+      "caption": "My Work · Task inbox สำหรับงานที่ผ่านขั้นอนุมัติแผน",
+      "sha256": "ef7a07fe2b3134b6ec26c1945062338bc7030df1d14a97a8524303199b22b153",
+      "bytes": 93088
+    },
+    {
+      "key": "my-work",
+      "language": "en",
+      "file": "my-work-en.jpg",
+      "caption": "My Work · Task inbox for governed work",
+      "sha256": "a8078a7aff8a06b3b87f35e5960a48d14d6b715356613c2f9fe7fe03d9d57d1d",
+      "bytes": 101668
+    },
+    {
+      "key": "my-work",
+      "language": "ja",
+      "file": "my-work-jp.jpg",
+      "caption": "My Work・計画承認対象業務のTask inbox",
+      "sha256": "d1a8243ab92f14eab76a647afe39e5f4638a19dd02925a060aead34a5bd099e8",
+      "bytes": 96818
+    },
+    {
+      "key": "my-work-schedule",
+      "language": "th",
+      "file": "my-work-schedule-th.jpg",
+      "caption": "My Work · Project schedule tasks แยกจาก Task inbox",
+      "sha256": "67e98e8015495b222722f2d69ee925e3a2c06d35a37082c41a8b79a9b7019fc3",
+      "bytes": 126146
+    },
+    {
+      "key": "my-work-schedule",
+      "language": "en",
+      "file": "my-work-schedule-en.jpg",
+      "caption": "My Work · project schedule tasks, separate from Task inbox",
+      "sha256": "f1d36c7d5356486fddf83164d582be977a04d6bc155edfae431465e1ccb420f0",
+      "bytes": 136722
+    },
+    {
+      "key": "my-work-schedule",
+      "language": "ja",
+      "file": "my-work-schedule-jp.jpg",
+      "caption": "My Work・Task inboxとは別のProject schedule tasks",
+      "sha256": "5798852701a50bdc95c1c49d5d3eb141cc17be2a579488990e66414ded55c610",
+      "bytes": 130775
+    },
+    {
+      "key": "performance",
+      "language": "th",
+      "file": "performance-th.jpg",
+      "caption": "KPI framework · เกณฑ์และน้ำหนักการประเมิน โดยไม่เปิดคะแนนส่วนบุคคล",
+      "sha256": "468e0b40258bd7f965b764420ca8a41d2218a289a209873e2319c524cfa16420",
+      "bytes": 131058
+    },
+    {
+      "key": "performance",
+      "language": "en",
+      "file": "performance-en.jpg",
+      "caption": "KPI framework · criteria and weights without individual ratings",
+      "sha256": "70db0e2e4618d12e089d26a10cf318640bcd4c6c6b7d265ec9665cb30b2dc093",
+      "bytes": 144023
+    },
+    {
+      "key": "performance",
+      "language": "ja",
+      "file": "performance-jp.jpg",
+      "caption": "KPI framework・個人点数を表示しない評価基準と比重",
+      "sha256": "eb6b40a4d5929e7c5bb4717b4262002cc5bd58aacd8dd4031838a3bd68d34fc3",
+      "bytes": 126729
+    },
+    {
+      "key": "po",
+      "language": "th",
+      "file": "po-th.jpg",
+      "caption": "Purchase Orders · ยอดสั่งซื้อและจำนวนคงค้าง",
+      "sha256": "3c93a499bfd7574c001f2dcf89abeb990cc5de3f2655d515e1967beb3fbb1b1d",
+      "bytes": 81678
+    },
+    {
+      "key": "po",
+      "language": "en",
+      "file": "po-en.jpg",
+      "caption": "Purchase Orders · order values and outstanding quantities",
+      "sha256": "b898cff40b506206290bd137263f011781e81619d078c1e6ff2cc2d1563b59e9",
+      "bytes": 93424
+    },
+    {
+      "key": "po",
+      "language": "ja",
+      "file": "po-jp.jpg",
+      "caption": "Purchase Orders・発注額と未入庫数量",
+      "sha256": "562cbfdd4bf1bb3844852da5852537a67e7f44ca797cd2068888a6bc897f3cda",
+      "bytes": 83127
+    },
+    {
+      "key": "pr",
+      "language": "th",
+      "file": "pr-th.jpg",
+      "caption": "Purchase Requisitions · PR ปัจจุบันและพื้นที่ PR ย้อนหลัง",
+      "sha256": "afd298a9446c7342570e4da1a8430917bdf8ce4962b8f85cd2b4891b63c6176b",
+      "bytes": 98440
+    },
+    {
+      "key": "pr",
+      "language": "en",
+      "file": "pr-en.jpg",
+      "caption": "Purchase Requisitions · current PRs and historical PR area",
+      "sha256": "c25f1184f058e62c724f4cfca28a109dc5117693eeb9d515eb912b8d4c499a19",
+      "bytes": 111918
+    },
+    {
+      "key": "pr",
+      "language": "ja",
+      "file": "pr-jp.jpg",
+      "caption": "Purchase Requisitions・現行PRと過去PR領域",
+      "sha256": "fcb48b68674acbfa708dd0833cdfbeb0097b0cf4a5b3e036116597d1857173d3",
+      "bytes": 103029
+    },
+    {
+      "key": "pricing",
+      "language": "th",
+      "file": "pricing-th.jpg",
+      "caption": "Price Library · ค้นหาราคาจากข้อมูลอ้างอิง",
+      "sha256": "e000a70ba6df24d85e9fa755d9ba7b3d1115fe0043df1abfea6765e34bcd0b75",
+      "bytes": 159890
+    },
+    {
+      "key": "pricing",
+      "language": "en",
+      "file": "pricing-en.jpg",
+      "caption": "Price Library · search reference prices",
+      "sha256": "3c90ed538cc0ab66c0215360245166c88079c3ef17d05ad995763c93eeb2838f",
+      "bytes": 169077
+    },
+    {
+      "key": "pricing",
+      "language": "ja",
+      "file": "pricing-jp.jpg",
+      "caption": "Price Library・参考価格の検索",
+      "sha256": "0663062f0e3b190c92d967ceb19cc1bb5f91c40f288b8d0c3cc74d4acaddac62",
+      "bytes": 162552
+    },
+    {
+      "key": "procurement",
+      "language": "th",
+      "file": "procurement-th.jpg",
+      "caption": "Procurement Dashboard · ภาพรวมและคิววัสดุ",
+      "sha256": "4da3b38c94c7de56322cfb1f3fcc58158f7cbaeae704961cb7cd0e29220a0bdf",
+      "bytes": 81581
+    },
+    {
+      "key": "procurement",
+      "language": "en",
+      "file": "procurement-en.jpg",
+      "caption": "Procurement Dashboard · material overview and queue",
+      "sha256": "c40ff93dcc9a84627299a57a5b6efc1211aab0865fac4f7eb9346fe690a5c010",
+      "bytes": 93047
+    },
+    {
+      "key": "procurement",
+      "language": "ja",
+      "file": "procurement-jp.jpg",
+      "caption": "Procurement Dashboard・資材概要と処理待ち",
+      "sha256": "ba103f6e1808de45ebdea5f48dc5fc38dc9ffc4e0900e0b41e273022b23b084a",
+      "bytes": 84729
+    },
+    {
+      "key": "projects",
+      "language": "th",
+      "file": "projects-th.jpg",
+      "caption": "Project Portfolio · ค้นหาโครงการและเปิด Documents",
+      "sha256": "e492488742f2e1b2b3f8f27734b994d42bb86e3bd5470d9cffc3fa1607b674f3",
+      "bytes": 145491
+    },
+    {
+      "key": "projects",
+      "language": "en",
+      "file": "projects-en.jpg",
+      "caption": "Project Portfolio · find projects and open Documents",
+      "sha256": "a778f6cf5dbdd2cd12e8a589734a4d1d84031a5d8208d24b54c2fce4ca176eb1",
+      "bytes": 150748
+    },
+    {
+      "key": "projects",
+      "language": "ja",
+      "file": "projects-jp.jpg",
+      "caption": "Project Portfolio・プロジェクト検索とDocuments",
+      "sha256": "b6ef30f554e0dce4a5fc3dcd69c9bea1b3cab734dde6cd9b52ac8d5f2b7730c3",
+      "bytes": 143418
+    },
+    {
+      "key": "punchlist",
+      "language": "th",
+      "file": "punchlist-th.jpg",
+      "caption": "Punchlist · รายการ Issue ลูกค้าของโครงการ",
+      "sha256": "9b81da9bf11e4e0d4e6864e2bd913146a5d656c75f9a42fc746903e7eb78769e",
+      "bytes": 92107
+    },
+    {
+      "key": "punchlist",
+      "language": "en",
+      "file": "punchlist-en.jpg",
+      "caption": "Punchlist · project customer issues",
+      "sha256": "258184477bfe49067b9a610e52dceda5b9f6c07f102b4d4c6398dac39f456d28",
+      "bytes": 100673
+    },
+    {
+      "key": "punchlist",
+      "language": "ja",
+      "file": "punchlist-jp.jpg",
+      "caption": "Punchlist・プロジェクトの顧客課題",
+      "sha256": "63aaa3bc2ec3dd693eeedb4f04859a79cdadddbcdb37d743c3bc7cd2e97dc639",
+      "bytes": 95309
+    },
+    {
+      "key": "quotations",
+      "language": "th",
+      "file": "quotations-th.jpg",
+      "caption": "Supplier Quotation · ทะเบียนใบเสนอราคาผู้ขาย",
+      "sha256": "2e74b42e51cd8e31d9addd2883d4a6980f9a18dfdf5786b2d3a90d9a82bf81c7",
+      "bytes": 103290
+    },
+    {
+      "key": "quotations",
+      "language": "en",
+      "file": "quotations-en.jpg",
+      "caption": "Supplier Quotation · supplier quotation register",
+      "sha256": "764afc0a99b42f825b505fca760137ea98b44fd075ff299aff3aa9d22d7033e3",
+      "bytes": 111823
+    },
+    {
+      "key": "quotations",
+      "language": "ja",
+      "file": "quotations-jp.jpg",
+      "caption": "Supplier Quotation・仕入先見積書台帳",
+      "sha256": "de0a13bc82a4c05bf5a40b01c4d39422935591235666f77c84683f87d0fc5af2",
+      "bytes": 106134
+    },
+    {
+      "key": "receiving",
+      "language": "th",
+      "file": "receiving-th.jpg",
+      "caption": "Goods Receiving · ค้นหา GRN และตรวจสถานะรับของ",
+      "sha256": "14d836ffdc4eed56b3acb67388ec82e4e7f9d2de5a6a77fbb8089051d79e0131",
+      "bytes": 76781
+    },
+    {
+      "key": "receiving",
+      "language": "en",
+      "file": "receiving-en.jpg",
+      "caption": "Goods Receiving · find GRNs and receipt status",
+      "sha256": "240a461d414368cb4b31b8be69b4f1194775dd451930a8e2ee5d4a21a24fdc49",
+      "bytes": 88148
+    },
+    {
+      "key": "receiving",
+      "language": "ja",
+      "file": "receiving-jp.jpg",
+      "caption": "Goods Receiving・GRN検索と入庫状態",
+      "sha256": "6fc632fad252730525fcf07063340649a8b48d8efcf212cca1585b76180123ac",
+      "bytes": 75890
+    },
+    {
+      "key": "report-templates",
+      "language": "th",
+      "file": "report-templates-th.jpg",
+      "caption": "Team templates · เลือกโครงรายงานที่ใช้ซ้ำได้",
+      "sha256": "0c36e11cf0706b439a190cd38b65164f1fd8ace0a338d1e546f47a68e05ad93c",
+      "bytes": 105324
+    },
+    {
+      "key": "report-templates",
+      "language": "en",
+      "file": "report-templates-en.jpg",
+      "caption": "Team templates · reusable report structures",
+      "sha256": "321b61d33c4f765de90fc939b8062a169f9e281205ae453543721b92436b0aaf",
+      "bytes": 117507
+    },
+    {
+      "key": "report-templates",
+      "language": "ja",
+      "file": "report-templates-jp.jpg",
+      "caption": "Team templates・再利用する報告書構成",
+      "sha256": "e0fd3f1b515174de37396cc325a0202e3f0fd7c542f34b6a6d7b69e955b6effa",
+      "bytes": 107296
+    },
+    {
+      "key": "reports",
+      "language": "th",
+      "file": "reports-th.jpg",
+      "caption": "Reports · เลือกรายงาน 5 ประเภทและเปิดฉบับที่บันทึกไว้",
+      "sha256": "ed60e274d8221f1f3f20968175a82d20c2ae9c30d1c9dfe61126ba51c238eb91",
+      "bytes": 139872
+    },
+    {
+      "key": "reports",
+      "language": "en",
+      "file": "reports-en.jpg",
+      "caption": "Reports · five report types and saved revisions",
+      "sha256": "77ee4d637ebe6531587388bb9188eea77f4a8a3a04b59298aefab65ec1e5dea4",
+      "bytes": 156716
+    },
+    {
+      "key": "reports",
+      "language": "ja",
+      "file": "reports-jp.jpg",
+      "caption": "Reports・5種類の報告書と保存済み版",
+      "sha256": "a137a1dc32a695b26afc6093d3c41efc94c2bd2b77b1167d94bfe1651c912cc9",
+      "bytes": 143386
+    },
+    {
+      "key": "resources",
+      "language": "th",
+      "file": "resources-th.jpg",
+      "caption": "Resource Plan · Tasks และทางไปตรวจภาระงาน",
+      "sha256": "141f106ec40df132bd85eb8d324181d0fc6dd56438f38ab4bfd34af1af9f3491",
+      "bytes": 102154
+    },
+    {
+      "key": "resources",
+      "language": "en",
+      "file": "resources-en.jpg",
+      "caption": "Resource Plan · tasks and workload navigation",
+      "sha256": "6c8916a7d75b56368d72fa3a67f50512a4c889ac638b35e27797334c89d8506f",
+      "bytes": 115325
+    },
+    {
+      "key": "resources",
+      "language": "ja",
+      "file": "resources-jp.jpg",
+      "caption": "Resource Plan・Taskと負荷確認への移動",
+      "sha256": "5aaac2d4abf0ae0fbaa5e0ce0ecac79015c9d2988d70963bd04e432244b28745",
+      "bytes": 104540
+    },
+    {
+      "key": "schedule",
+      "language": "th",
+      "file": "schedule-th.jpg",
+      "caption": "Project Schedule · งาน ผู้รับผิดชอบ และวันที่ในแผน",
+      "sha256": "2c4648e17dbb317051020bcffb26c3532c6935622a90dd588cb507603c41aa54",
+      "bytes": 146351
+    },
+    {
+      "key": "schedule",
+      "language": "en",
+      "file": "schedule-en.jpg",
+      "caption": "Project Schedule · tasks, owners and planned dates",
+      "sha256": "235be4378b940b201159fe7fb2944fcf3d91a30152b37be8b806a265195e29d9",
+      "bytes": 150542
+    },
+    {
+      "key": "schedule",
+      "language": "ja",
+      "file": "schedule-jp.jpg",
+      "caption": "Project Schedule・業務、担当者、計画日",
+      "sha256": "cdbee6a261b25176c16584a50adc615037294fb17d1ef88ca399cc4462a19ff4",
+      "bytes": 148321
+    },
+    {
+      "key": "settings",
+      "language": "th",
+      "file": "settings-th.jpg",
+      "caption": "Settings · สถานะบัญชี การเชื่อมต่อ และสิทธิ์แบบอ่านอย่างเดียว",
+      "sha256": "8ae1535568fba1baecf7122d4c324c4a948c2713a3bb43c82037d2291fab7448",
+      "bytes": 130544
+    },
+    {
+      "key": "settings",
+      "language": "en",
+      "file": "settings-en.jpg",
+      "caption": "Settings · read-only identity, connections and permissions",
+      "sha256": "61f9ac36eb2ccf70ae5d29e2d40b7eba58b251d70b4c4512cbb9a00f44db3303",
+      "bytes": 140996
+    },
+    {
+      "key": "settings",
+      "language": "ja",
+      "file": "settings-jp.jpg",
+      "caption": "Settings・アカウント、接続、権限の閲覧専用情報",
+      "sha256": "1cc284c851e17af37e76dad421cf3a4d9370f8679c7b508f7312caff95a9452e",
+      "bytes": 130511
+    },
+    {
+      "key": "signing",
+      "language": "th",
+      "file": "signing-th.jpg",
+      "caption": "Sign Inbox · งานถึงขั้นลงนาม งานถูกส่งกลับ และงานรอผู้อื่น",
+      "sha256": "c117a98be58beaf7ab523e046ce98eb4889bd99425c244628375be4c7fc936c5",
+      "bytes": 94915
+    },
+    {
+      "key": "signing",
+      "language": "en",
+      "file": "signing-en.jpg",
+      "caption": "Sign Inbox · your signing steps, returned work and pending others",
+      "sha256": "98cf99f1b813cef8207b18356848c02601a6fb0fa8d82d82dbbc6a814b25dacc",
+      "bytes": 101375
+    },
+    {
+      "key": "signing",
+      "language": "ja",
+      "file": "signing-jp.jpg",
+      "caption": "Sign Inbox・自分の署名工程、差し戻し、他者待ち",
+      "sha256": "f1e7bc066dd5fe8a4427763a57ae658ef4926bebb957899429c780a99f3321dc",
+      "bytes": 95257
+    },
+    {
+      "key": "site-visits",
+      "language": "th",
+      "file": "site-visits-th.jpg",
+      "caption": "Site Visit · คำขอ นัดหมาย และขั้นตอนเข้าหน้างาน",
+      "sha256": "0381d5f84ddbb5ca93e9dfc69674137faa3dbc0733cc392f3c5382f9a4d0ed73",
+      "bytes": 132179
+    },
+    {
+      "key": "site-visits",
+      "language": "en",
+      "file": "site-visits-en.jpg",
+      "caption": "Site Visit · requests, appointments and visit stages",
+      "sha256": "8ea931968d405a8f477651173e7de6c30f542d4d9aec35693f63fae4561717cc",
+      "bytes": 140737
+    },
+    {
+      "key": "site-visits",
+      "language": "ja",
+      "file": "site-visits-jp.jpg",
+      "caption": "Site Visit・申請、日程、現地業務の工程",
+      "sha256": "ed08e4297336966bc4f3f4ccbf5fd4e5fb4cd92f81cb0099e67834b5287e818e",
+      "bytes": 132625
+    },
+    {
+      "key": "stamps",
+      "language": "th",
+      "file": "stamps-th.jpg",
+      "caption": "Company Stamps · พื้นที่ทะเบียนตราและ Signature flows ตามสิทธิ์",
+      "sha256": "eaa2f80535a191ed14cd39aa32341df5010538cdcc7976f68c45a98b230f73b0",
+      "bytes": 66215
+    },
+    {
+      "key": "stamps",
+      "language": "en",
+      "file": "stamps-en.jpg",
+      "caption": "Company Stamps · stamp register and signature-flow access",
+      "sha256": "0aaa70bb784750065995d5c6696742f67efa99e9714b909c2f55e6ebe32b154b",
+      "bytes": 73708
+    },
+    {
+      "key": "stamps",
+      "language": "ja",
+      "file": "stamps-jp.jpg",
+      "caption": "Company Stamps・社印台帳と署名フローへのアクセス",
+      "sha256": "6721c461d65ffdfc8dfc0471395bcf5d8bdaf74bd1a0d735054ab889b195fe63",
+      "bytes": 63379
+    },
+    {
+      "key": "support",
+      "language": "th",
+      "file": "support-th.jpg",
+      "caption": "Support Center · ติดตามเรื่องที่แจ้งใน My tickets",
+      "sha256": "80275703a848aff73228ce3a93b4b5a6466e8849a46fca659b675cb0071f0b21",
+      "bytes": 68160
+    },
+    {
+      "key": "support",
+      "language": "en",
+      "file": "support-en.jpg",
+      "caption": "Support Center · follow your reports in My tickets",
+      "sha256": "c3a73c21f5157b6f421e9068232691f5d7872025aa6d8fcdd146c0802c8a3d05",
+      "bytes": 76649
+    },
+    {
+      "key": "support",
+      "language": "ja",
+      "file": "support-jp.jpg",
+      "caption": "Support Center・My ticketsで報告を追跡",
+      "sha256": "7f6d6bffe083d40183d67bf205412640271bc86d2eada7161ba763132b9122cf",
+      "bytes": 68357
+    },
+    {
+      "key": "support-create",
+      "language": "th",
+      "file": "support-create-th.jpg",
+      "caption": "Report a problem · ฟอร์มแจ้งปัญหาจากหน้าที่ใช้งาน โดยยังไม่ได้ส่งเรื่อง",
+      "sha256": "05ee9f3de83cc20fdd7efa15074424f45d0aaa7f2776d1164226c0c8d7a056a0",
+      "bytes": 73679
+    },
+    {
+      "key": "support-create",
+      "language": "en",
+      "file": "support-create-en.jpg",
+      "caption": "Report a problem · actual unsent form opened from the working screen",
+      "sha256": "a2ec070f6e210e516ceef9468d7274df1052d90343aa184ae1c3d1ef24b12ebd",
+      "bytes": 82852
+    },
+    {
+      "key": "support-create",
+      "language": "ja",
+      "file": "support-create-jp.jpg",
+      "caption": "Report a problem・作業画面から開いた未送信の実フォーム",
+      "sha256": "cce70967a79eda8830366e657c05c2cb92746365970fff827bee3c229792bd65",
+      "bytes": 75151
+    },
+    {
+      "key": "timeline",
+      "language": "th",
+      "file": "timeline-th.jpg",
+      "caption": "Project Timeline · ดูช่วงแผนและความคืบหน้าข้ามโครงการ",
+      "sha256": "664696a5a036538018271d5794bc08f8adf03d3e2229eed1dbd461ee3ea51241",
+      "bytes": 96217
+    },
+    {
+      "key": "timeline",
+      "language": "en",
+      "file": "timeline-en.jpg",
+      "caption": "Project Timeline · schedules and progress across projects",
+      "sha256": "6f8a93a5813068f7cc9e08d8c59f758ca0947ec67d9dc09f92ada6276ed5d298",
+      "bytes": 158608
+    },
+    {
+      "key": "timeline",
+      "language": "ja",
+      "file": "timeline-jp.jpg",
+      "caption": "Project Timeline・複数プロジェクトの期間と進捗",
+      "sha256": "e2ce22d2165091e72ec15f2ee69441f909dfa55590dbb75dfba6db4fc44479a3",
+      "bytes": 100049
+    },
+    {
+      "key": "visit-master",
+      "language": "th",
+      "file": "visit-master-th.jpg",
+      "caption": "Visit Master Data · ประเภทงานและการตั้งค่ากลางของการเข้าหน้างาน",
+      "sha256": "9c269efb6cd582e5118744f9e60917fceddc867187aaf137bb8ef89a0a92773e",
+      "bytes": 147060
+    },
+    {
+      "key": "visit-master",
+      "language": "en",
+      "file": "visit-master-en.jpg",
+      "caption": "Visit Master Data · visit types and shared site-work settings",
+      "sha256": "6f506c2feb828d2e4433af11117a46a69e20a345568a3b5159dc051271104ae6",
+      "bytes": 151146
+    },
+    {
+      "key": "visit-master",
+      "language": "ja",
+      "file": "visit-master-jp.jpg",
+      "caption": "Visit Master Data・訪問種類と現地業務の共通設定",
+      "sha256": "b5f923eefbae3e2493880b582097bdd1293038fbb849077db87cfee385c3a6e8",
+      "bytes": 142994
+    },
+    {
+      "key": "waiting-price",
+      "language": "th",
+      "file": "waiting-price-th.jpg",
+      "caption": "Waiting Supplier Price · ติดตามราคาที่ต้องตรวจต้นทาง",
+      "sha256": "221f98223b13062b124c96a965bbbdffd0eb1efd43b891c6ee187da402bbd140",
+      "bytes": 161749
+    },
+    {
+      "key": "waiting-price",
+      "language": "en",
+      "file": "waiting-price-en.jpg",
+      "caption": "Waiting Supplier Price · source prices requiring follow-up",
+      "sha256": "688f229c537036681ec8599e0d6d776a89e5f4c899166ac5afe92f99d76c3bb6",
+      "bytes": 170098
+    },
+    {
+      "key": "waiting-price",
+      "language": "ja",
+      "file": "waiting-price-jp.jpg",
+      "caption": "Waiting Supplier Price・確認が必要な元価格",
+      "sha256": "2cfaae41bed0e0c91474f2e2ec74372ca5e3f5f10d143bb9283739c70957effd",
+      "bytes": 162141
+    }
+  ]
+}
