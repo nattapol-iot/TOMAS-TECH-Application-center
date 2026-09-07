@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Transaction } from "mssql";
 import { ApiError } from "./errors.js";
 import { demandAssignedLeaf, readProject, readTask } from "./schedule-service.js";

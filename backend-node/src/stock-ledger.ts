@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 
 export async function appendStockLedger(transaction: TransactionType, eventKey: string, transactionType: string, itemId: number,

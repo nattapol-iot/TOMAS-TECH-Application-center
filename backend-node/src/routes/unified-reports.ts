@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import sql from 'mssql/msnodesqlv8.js';
+import sql from 'mssql';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppConfig } from '../config.js';
 import type { Transaction } from 'mssql';

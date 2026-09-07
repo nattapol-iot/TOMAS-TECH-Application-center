@@ -1,15 +1,32 @@
 services:
   api:
+    # backend-node replaced the ASP.NET Core API (see backend-node/README.md); the .NET project
+    # stops at schema version 28 and lacks every route added by migrations 014-036.
     build:
-      context: ./backend/IoTTeamCenter.Api
+      context: ./backend-node
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      NODE_ENV: development
+      Authentication__Mode: Development
       ConnectionStrings__IoTTeamCenter: ${DEV_SQL_CONNECTION_STRING:?set this in .env, copied from .env.dev.example}
+      DocumentStorage__RootPath: /app/App_Data/project-documents
+      # backend-node validates CORS origins in every environment and accepts plain http only
+      # for localhost, so a hostname origin here has to be https (see docker-compose.tls.yml).
+      Cors__AllowedOrigins__0: ${DEV_SITE_ORIGIN:-http://localhost:3000}
+      AllowedHosts: ${DEV_API_ALLOWED_HOSTS:-localhost;127.0.0.1}
     volumes:
       - api-dev-documents:/app/App_Data/project-documents
     ports:
-      - "5105:8080"
+      - "5105:5106"
     restart: unless-stopped
+    # Caps exist because this stack also runs on a shared host (a Mac mini whose colima VM
+    # hosts other teams' containers and has no swap): with no limit the Linux OOM killer
+    # picks the largest process VM-wide, which is somebody else's database, not us.
+    mem_limit: 1g
+    logging: &dev-logging
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   frontend:
     image: node:24-slim
@@ -24,12 +41,13 @@ services:
     environment:
       NEXT_PUBLIC_APP_MODE: development
       NEXT_PUBLIC_AUTH_MODE: entra
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:5105
+      NEXT_PUBLIC_API_BASE_URL: ${DEV_API_BASE_URL:-http://localhost:5105}
       NEXT_PUBLIC_ENTRA_TENANT_ID: ${DEV_ENTRA_TENANT_ID:-}
       NEXT_PUBLIC_ENTRA_CLIENT_ID: ${DEV_ENTRA_CLIENT_ID:-}
       NEXT_PUBLIC_ENTRA_API_SCOPE: ${DEV_ENTRA_API_SCOPE:-}
       NEXT_PUBLIC_BUSINESS_TIME_ZONE: Asia/Bangkok
-      SITE_ORIGIN: http://localhost:3000
+      SITE_ORIGIN: ${DEV_SITE_ORIGIN:-http://localhost:3000}
+      DEV_ALLOWED_HOSTS: ${DEV_ALLOWED_HOSTS:-}
     volumes:
       - .:/app
       - frontend-dev-node-modules:/app/node_modules
@@ -37,6 +55,9 @@ services:
       - "3000:3000"
     depends_on:
       - api
+    # 'npm ci' plus the vite dev server spike well past the API's needs.
+    mem_limit: 3g
+    logging: *dev-logging
 
 volumes:
   api-dev-documents:

@@ -1,4 +1,4 @@
-import sql from 'mssql/msnodesqlv8.js';
+import sql from 'mssql';
 import type { Transaction } from 'mssql';
 
 /** Called inside the same business transaction: rollback cannot earn credit. */

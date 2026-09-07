@@ -11,6 +11,13 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
+// Vite answers any unrecognised Host header with a 403, so a dev server reached by name
+// (a tailnet or LAN hostname rather than localhost) has to list that name explicitly.
+const devAllowedHosts = (process.env.DEV_ALLOWED_HOSTS ?? "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
@@ -58,9 +65,12 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: {
+      ...(isCodexSeatbeltSandbox && {
+        watch: { useFsEvents: false, usePolling: true },
+      }),
+      ...(devAllowedHosts.length > 0 && { allowedHosts: devAllowedHosts }),
+    },
     plugins: [
       vinext(),
       sites(),

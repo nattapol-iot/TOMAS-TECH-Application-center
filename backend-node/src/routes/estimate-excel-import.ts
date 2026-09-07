@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import type { CurrentUserService } from "../users.js";

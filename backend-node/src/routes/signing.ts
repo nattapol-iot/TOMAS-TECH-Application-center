@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import { readFile } from "node:fs/promises";
 import { loadSigningPdf, parsePlacement, validatePage, paintMarks, appendPdfCertificate, type MarkPlacement, type PdfMark } from "../signing-pdf.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";

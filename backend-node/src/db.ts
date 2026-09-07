@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type {
   ConnectionPool as ConnectionPoolType,
   Request as RequestType,
@@ -21,10 +21,6 @@ function createRequest(executor: Executor): RequestType {
   return executor instanceof Transaction ? new Request(executor) : new Request(executor);
 }
 
-function odbcValue(value: string): string {
-  return `{${value.replaceAll("}", "}}")}}`;
-}
-
 export class Database {
   private sharedPool: ConnectionPoolType | null = null;
   private sharedConnect: Promise<ConnectionPoolType> | null = null;
@@ -32,37 +28,21 @@ export class Database {
   constructor(private readonly config: AppConfig["database"]) {}
 
   private connectionConfig(): SqlConfig {
+    // The stored secret is an ADO.NET connection string; tedious speaks TDS directly, so the
+    // only translation is the option flags. Windows authentication is rejected up front because
+    // tedious cannot do it on Linux and a silent fallback to SQL auth would be misleading.
+    if (/(?:^|;)\s*(?:integrated\s+security|trusted_connection)\s*=\s*(?:true|yes|sspi)\s*(?:;|$)/i
+      .test(this.config.connectionString)) {
+      throw new Error("ConnectionStrings__IoTTeamCenter must use a SQL login; Windows authentication is not supported by this API.");
+    }
     const parsed = ConnectionPool.parseConnectionString(this.config.connectionString);
-    const usesWindowsAuthentication = /(?:^|;)\s*(?:integrated\s+security|trusted_connection)\s*=\s*(?:true|yes|sspi)\s*(?:;|$)/i
-      .test(this.config.connectionString);
-    const instanceName = parsed.options?.instanceName;
-    const server = instanceName
-      ? `${parsed.server}\\${instanceName}`
-      : parsed.port && parsed.port !== 1433
-        ? `${parsed.server},${parsed.port}`
-        : parsed.server;
-    const odbcConnection = [
-      "Driver={ODBC Driver 18 for SQL Server}",
-      `Server=${odbcValue(server)}`,
-      ...(parsed.database ? [`Database=${odbcValue(parsed.database)}`] : []),
-      ...(usesWindowsAuthentication
-        ? ["Trusted_Connection=Yes"]
-        : [`UID=${odbcValue(parsed.user ?? "")}`, `PWD=${odbcValue(parsed.password ?? "")}`]),
-      "Encrypt=Yes",
-      `TrustServerCertificate=${this.config.trustServerCertificate ? "Yes" : "No"}`,
-      "APP={IoTTeamCenter.NodeApi}",
-    ].join(";");
     parsed.options = {
       ...parsed.options,
       encrypt: true,
       trustServerCertificate: this.config.trustServerCertificate,
-      trustedConnection: usesWindowsAuthentication,
       useUTC: true,
       appName: "IoTTeamCenter.NodeApi",
     } as NonNullable<SqlConfig["options"]>;
-    // The stored secret is an ADO.NET connection string. Convert it without
-    // logging credentials; braced ODBC values also preserve punctuation safely.
-    (parsed as SqlConfig & { connectionString: string }).connectionString = odbcConnection;
     parsed.pool = { max: this.config.applicationRoleName ? 1 : 10, min: 0, idleTimeoutMillis: 30_000 };
     parsed.requestTimeout = 30_000;
     parsed.connectionTimeout = 15_000;

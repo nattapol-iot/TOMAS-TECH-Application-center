@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyInstance } from "fastify";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { ConnectionError, RequestError } from "mssql";
 
 export class ApiError extends Error {

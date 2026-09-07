@@ -1,0 +1,47 @@
+# Overlay for docker-compose.dev.yml that puts Caddy in front of both services with real
+# certificates, so the app can be reached as https://$PUBLIC_HOST:$TLS_FRONTEND_PORT (and the
+# API on $TLS_API_PORT) without exposing the plain-http ports beyond the host itself:
+#
+#   docker compose -f docker-compose.dev.yml -f docker-compose.tls.yml up -d
+#
+# The browser calls the API directly, so both origins need TLS; DEV_API_BASE_URL and
+# DEV_SITE_ORIGIN in .env must then be the https URLs, and DEV_ALLOWED_HOSTS must include
+# PUBLIC_HOST.
+services:
+  api:
+    ports: !override
+      - "127.0.0.1:5105:5106"
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    # Same build the rest of this host already runs; the stock caddy image has no DNS plugin.
+    image: ghcr.io/caddybuilds/caddy-cloudflare:latest
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?public hostname whose A record points at this host}
+      TLS_FRONTEND_PORT: ${TLS_FRONTEND_PORT:-8444}
+      TLS_API_PORT: ${TLS_API_PORT:-8445}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Cloudflare token with Zone.DNS edit on the PUBLIC_HOST zone}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "${TLS_FRONTEND_PORT:-8444}:${TLS_FRONTEND_PORT:-8444}"
+      - "${TLS_API_PORT:-8445}:${TLS_API_PORT:-8445}"
+    depends_on:
+      - api
+      - frontend
+    restart: unless-stopped
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  caddy-data:
+  caddy-config:
