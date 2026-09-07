@@ -165,6 +165,18 @@ else
 fi
 docker compose version >/dev/null 2>&1 || die "Docker installed but the 'docker compose' plugin is missing -- check docker-compose-plugin."
 
+# A host bootstrapped before the move to Docker may still have the old bare-metal
+# systemd units running (ExecStart=dotnet .../IoTTeamCenter.Api.dll directly on the
+# host) -- left running, they bind the exact same host ports the API/frontend
+# containers need, so 'docker compose up' fails with "address already in use".
+for legacy_unit in iot-team-center-api.service iot-team-center-frontend.service; do
+  if systemctl list-unit-files "$legacy_unit" >/dev/null 2>&1 && systemctl list-unit-files "$legacy_unit" | grep -q "$legacy_unit"; then
+    log "Stopping and disabling legacy bare-metal unit $legacy_unit (superseded by Docker Compose)"
+    systemctl stop "$legacy_unit" 2>/dev/null || true
+    systemctl disable "$legacy_unit" 2>/dev/null || true
+  fi
+done
+
 log "Installing nginx and ufw"
 apt-get install -y nginx ufw
 
