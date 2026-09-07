@@ -84,6 +84,20 @@ For Sales roles:
 
 The response includes a framework code, source counts, coverage confidence, transparent KPI-area summaries and traceable source identifiers. These are decision-support signals only. Targets, margin, complexity and customer context remain human inputs. The employee or manager can copy a summary into the review, while the manager still selects and calibrates the final integer rating.
 
+## My Performance Pulse
+
+`KPI & Growth > My KPI` includes an employee-only Performance Pulse above the detailed KPI cards. It turns the same cycle-scoped Work Evidence into no more than three concise cards: one supported strength, one attention/context item when evidence exists, and one practical next action. It is read-only and does not write KPI ratings, Activity scores, review text or Growth focus.
+
+- Engineering signals cover actual-before-target delivery, on-time due work, neutral overdue review prompts, assigned Issue handling/workload and completed technical work.
+- Sales signals cover distinct Inquiry follow-up coverage, Estimate coverage, approved-opportunity handover and forecast context.
+- Assigned Issues are described only as handling or workload. Assignment does not prove defect cause or workmanship.
+- Sales follow-up uses distinct Inquiry coverage rather than rewarding raw meeting volume.
+- LOW-confidence or unrecognized evidence shows an insufficient-data explanation and never becomes praise, blame or a “no problems” conclusion.
+- Every supported card shows the selected period and confidence. Source-backed actions open Project, Inquiry or My Work; otherwise the card links to the detailed Work Evidence section.
+- Copy is deterministic and localized in Thai, English and Japanese. No external AI model is used to generate employee feedback.
+
+The evidence response now includes an additive `insights` array containing `reasonCode`, `kind`, `areaCode`, `confidence`, `priority`, structured `facts` and an optional authorized source. The Node evidence engine owns eligibility, minimum samples, thresholds, deduplication and stable selection. The browser owns only localized presentation and the derived next-step wording. This addition requires no database migration.
+
 Read-only Team Test verification is available in `scripts/Test-KpiWorkEvidenceLive.ps1`; the existing `scripts/Test-KpiLiveSmoke.ps1` also verifies that the served frontend bundles include the Work Evidence contract.
 
 ## Sales KPI completion release (2026-09-06)
