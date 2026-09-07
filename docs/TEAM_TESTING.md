@@ -2,6 +2,8 @@
 
 Team Test Mode lets registered team members perform UAT without Microsoft Entra. It is intentionally limited to an ASP.NET Core `Staging` environment and a Vercel Preview deployment. Production rejects this mode at startup/build time.
 
+> **The local Windows-host workflow this doc used to document (`Install-TeamTestHost.ps1`, `Start-TeamTestHost.ps1`, `Add-TeamTestUser.ps1`, `New-TeamTestAccessCode.ps1`, the LAN-firewall scripts, etc.) has been retired.** For local development and demos, use `docker compose -f docker-compose.dev.yml up` instead (see `.env.dev.example`) -- it runs the API in `Authentication:Mode=Development`, which accepts every request as an authenticated dev user with no signing key or access codes at all. The `Staging` + `TeamTest` authentication mode itself is still real backend code (the SQL integration test in CI depends on it), and the "managed staging host" path below still applies if you need to stand up a real non-Entra UAT deployment -- only the retired local-Windows-host scripts are gone.
+
 ## Security boundary
 
 - Use a dedicated staging/UAT database. Do not point Team Test Mode at the production database.
@@ -35,85 +37,6 @@ The script creates a visibly non-production `team-test:` identity. The productio
 
 ## 2. Configure the staging API
 
-### Run the temporary API on a Windows test machine
-
-For a small UAT, the API can run on a Windows machine that also reaches the dedicated test SQL database. The installer publishes the API under `%LOCALAPPDATA%\IoTTeamCenter\TeamTest`, protects runtime secrets with Windows DPAPI, restricts that directory to the current Windows user and `SYSTEM`, and binds Kestrel only to `127.0.0.1`.
-
-```powershell
-.\scripts\Install-TeamTestHost.ps1 `
-  -SqlServer "localhost" `
-  -DatabaseName "<DEDICATED_UAT_DATABASE>" `
-  -AllowedHosts "localhost;127.0.0.1;<TAILSCALE_DNS_NAME>" `
-  -TrustServerCertificateForTeamTest
-```
-
-On a Windows-authentication-only SQL Server, the installer keeps Windows authentication and activates a least-privileged SQL application role on every API connection. It disables connection pooling for those sessions and does not enable Mixed Mode. On a Mixed Mode server, it creates/rotates a dedicated SQL login and applies the same object-level role grants.
-
-Start and stop only the installed API process with the recorded, command-line-validated PID:
-
-```powershell
-.\scripts\Start-TeamTestHost.ps1
-.\scripts\Stop-TeamTestHost.ps1
-```
-
-For a short-lived test on a trusted company LAN, use the installer's explicit LAN switch and an RFC1918 address assigned to the host. This exception is accepted only by `Staging + TeamTest`; Production and Vercel builds remain HTTPS-only.
-
-```powershell
-.\scripts\Install-TeamTestHost.ps1 `
-  -SqlServer "localhost" `
-  -DatabaseName "<DEDICATED_UAT_DATABASE>" `
-  -FrontendOrigin "http://<LAN_IPV4>:3000" `
-  -PrivateLanAddress "<LAN_IPV4>" `
-  -AllowPrivateLanHttp `
-  -TrustServerCertificateForTeamTest
-
-.\scripts\Start-TeamTestHost.ps1
-.\scripts\Start-TeamTestLanFrontend.ps1
-```
-
-The frontend binds to that exact LAN address, not `0.0.0.0`, and keeps all public build values in the child process rather than writing them to an environment file. From an elevated PowerShell window, configure the managed firewall rules:
-
-```powershell
-.\scripts\Configure-TeamTestLanFirewall.ps1
-```
-
-The firewall script preserves the current Wi-Fi profile, disables only matching broad local Node.js inbound rules, and replaces them with rules scoped to the installed host address, Wi-Fi adapter, the adapter's current RFC1918 subnet, executable, and TCP ports 3000/5105. It records enough state to restore those prior rules later. From a second device on the same Wi-Fi, open the configured frontend origin or verify both ports at the configured host address:
-
-```powershell
-Test-NetConnection <LAN_IPV4> -Port 3000
-Test-NetConnection <LAN_IPV4> -Port 5105
-```
-
-If both checks fail while the local health checks pass, check Wi-Fi client/AP isolation or a company-managed firewall policy. Team Test codes travel over LAN HTTP without TLS, so use disposable UAT identities/codes only and rotate the signing key afterward.
-
-When the LAN test ends, stop only the recorded processes and remove the managed firewall rules from an elevated PowerShell window:
-
-```powershell
-.\scripts\Stop-TeamTestLanFrontend.ps1
-.\scripts\Stop-TeamTestHost.ps1
-.\scripts\Remove-TeamTestLanFirewall.ps1
-```
-
-Provision a tester and generate that tester's personal code from the locally protected signing key:
-
-```powershell
-.\scripts\Add-TeamTestUser.ps1 `
-  -Email "<TEAM_EMAIL>" `
-  -DisplayName "<DISPLAY_NAME>" `
-  -Initials "<INITIALS>" `
-  -RoleCode "<ROLE_CODE>"
-```
-
-Do not copy `%LOCALAPPDATA%\IoTTeamCenter\TeamTest\secrets.json` to another account or machine. DPAPI binds it to the Windows account that installed the host.
-
-After the machine is connected to the company Tailscale tailnet, expose only the loopback API through private HTTPS:
-
-```powershell
-tailscale serve --bg --yes http://127.0.0.1:5105
-```
-
-Only testers allowed by the company tailnet ACL can reach this URL, and their test devices must be connected to Tailscale. The host machine must remain powered on, awake, connected to SQL Server, and connected to Tailscale throughout the test. Use `tailscale serve reset` when UAT ends.
-
 ### Run on a managed staging host
 
 Publish the API to an HTTPS staging host and inject these values through the host's secret/configuration system:
@@ -134,13 +57,7 @@ If the isolated UAT SQL Server still uses a certificate chain that the staging A
 
 Verify that `/health/live` and `/health/ready` succeed over HTTPS before deploying the frontend.
 
-Generate each tester's personal code from a trusted operator machine. The script prompts for the same signing key with hidden input and never writes it to the command line:
-
-```powershell
-.\scripts\New-TeamTestAccessCode.ps1 -Email "<TEAM_EMAIL>"
-```
-
-Send only that tester's generated access code through the company's approved private channel. Never send the backend signing key.
+Each tester's personal access code is an HMAC-SHA256 signature over their email, keyed by `Authentication__TeamTestSigningKey` (see `TeamTestAuthenticationHandler` in the backend) -- generate one from a trusted operator machine (the code-generation script that used to wrap this, `New-TeamTestAccessCode.ps1`, was retired along with the rest of the local Windows-host tooling; a replacement one-off script would need to be written before this path is usable again). Send only that tester's generated access code through the company's approved private channel. Never send the backend signing key.
 
 ## 3. Configure the Vercel Preview
 

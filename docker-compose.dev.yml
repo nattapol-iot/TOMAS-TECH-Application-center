@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: ./backend/IoTTeamCenter.Api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__IoTTeamCenter: ${DEV_SQL_CONNECTION_STRING:?set this in .env, copied from .env.dev.example}
+    volumes:
+      - api-dev-documents:/app/App_Data/project-documents
+    ports:
+      - "5105:8080"
+    restart: unless-stopped
+
+  frontend:
+    image: node:24-slim
+    working_dir: /app
+    # Bind-mounts the repo source for hot reload; 'npm run dev' never runs
+    # scripts/validate-production-env.mjs, so no HTTPS/Entra values are required to start
+    # (login itself still needs a real Entra SPA client id -- see .env.dev.example).
+    # 'vinext dev' only reads CLI flags (no PORT/HOST env fallback, unlike 'start'), and
+    # its hostname flag is '--hostname'/'-H', not '--host' -- it defaults to binding only
+    # 'localhost', which Docker's port mapping cannot reach from outside the container.
+    command: sh -c "npm ci && npm run dev -- --hostname 0.0.0.0 --port 3000"
+    environment:
+      NEXT_PUBLIC_APP_MODE: development
+      NEXT_PUBLIC_AUTH_MODE: entra
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:5105
+      NEXT_PUBLIC_ENTRA_TENANT_ID: ${DEV_ENTRA_TENANT_ID:-}
+      NEXT_PUBLIC_ENTRA_CLIENT_ID: ${DEV_ENTRA_CLIENT_ID:-}
+      NEXT_PUBLIC_ENTRA_API_SCOPE: ${DEV_ENTRA_API_SCOPE:-}
+      NEXT_PUBLIC_BUSINESS_TIME_ZONE: Asia/Bangkok
+      SITE_ORIGIN: http://localhost:3000
+    volumes:
+      - .:/app
+      - frontend-dev-node-modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  api-dev-documents:
+  frontend-dev-node-modules:

@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 # One-time (re-runnable) bootstrap of a bare Ubuntu server for the IoT Team Center API
-# and, optionally, the self-hosted frontend on the same box.
+# and, optionally, the self-hosted frontend on the same box -- both run as Docker
+# containers (deploy.sh builds and starts them via docker-compose.prod.yml). This script
+# never touches SQL Server and never creates or handles Microsoft Entra app
+# registrations -- those remain manual/DBA-owned per docs/PRODUCTION_DEPLOYMENT_LINUX.md.
 #
-# Installs the .NET ASP.NET Core runtime, Node.js, nginx, and (optionally) a CIFS mount
-# of the company NAS share; creates dedicated low-privilege service accounts and (if
-# requested) a restricted CI deploy account; and writes (but does not start) the systemd
-# units and nginx sites. deploy-release.sh / deploy-frontend-release.sh publish and start
-# the actual applications afterwards.
-#
-# This script never touches SQL Server and never creates or handles Microsoft Entra
-# app registrations -- those remain manual/DBA-owned per docs/PRODUCTION_DEPLOYMENT_LINUX.md.
+# Installs Docker Engine + the Compose plugin, nginx, and (optionally) a CIFS mount of
+# the company NAS share; creates a dedicated low-privilege account that owns the NAS
+# mount point (its UID/GID are passed into the API container so it can write there) and,
+# if requested, a restricted CI deploy account; and writes the nginx sites. deploy.sh
+# builds and starts the actual containers afterwards.
 #
 # Usage (with a real domain for both hostnames):
 #   sudo ./install-production-host.sh --api-host iot-api.example.tomastc.com \
 #     --frontend-host iot-team-center.example.tomastc.com \
 #     --nas-unc "//100.98.152.4/ShareName/AppRoot" \
 #     --nas-credentials-file /root/secure/iot-team-center-nas.cifs-credentials \
-#     --deploy-user iot-deploy --deploy-ssh-public-key-file /root/secure/iot-deploy.pub
+#     --deploy-user iot-deploy
+#
+# --deploy-ssh-public-key-file is optional and only for a human operator's own manual SSH
+# access as --deploy-user; CI/CD (docs/CI_CD_SETUP.md) reaches this account by running a
+# self-hosted GitHub Actions runner as --deploy-user directly on this host instead --
+# needed whenever the host has no public IP for a GitHub-hosted runner to SSH into. That
+# runner reaches Docker the same way it reaches everything else deploy.sh/rollback.sh do
+# -- through the NOPASSWD sudo entry below, not direct 'docker' group membership.
 #
 # Usage (no domain yet -- point both hosts at the server's own IP and use a self-signed
 # cert; Production's CORS check requires an HTTPS origin even without a real domain):
@@ -26,7 +33,7 @@
 #
 # Re-run safely after changing flags (e.g. to move from --self-signed-tls to a real
 # --enable-tls once DNS/certs are ready) -- steps are idempotent and do not restart a
-# running service.
+# running container (deploy.sh does that).
 
 set -euo pipefail
 
@@ -37,7 +44,6 @@ FRONTEND_HOST=""
 FRONTEND_PORT="3000"
 FRONTEND_EXTERNAL_PORT=""
 SERVICE_USER="iotapi"
-FRONTEND_SERVICE_USER="iotfrontend"
 APP_ROOT="/opt/iot-team-center"
 SRC_DIR=""
 CONFIG_DIR="/etc/iot-team-center"
@@ -83,13 +89,10 @@ generate_self_signed_cert() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --api-host) API_HOST="$2"; shift 2 ;;
-    --api-port) API_PORT="$2"; shift 2 ;;
     --api-external-port) API_EXTERNAL_PORT="$2"; shift 2 ;;
     --frontend-host) FRONTEND_HOST="$2"; shift 2 ;;
-    --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --frontend-external-port) FRONTEND_EXTERNAL_PORT="$2"; shift 2 ;;
     --service-user) SERVICE_USER="$2"; shift 2 ;;
-    --frontend-service-user) FRONTEND_SERVICE_USER="$2"; shift 2 ;;
     --app-root) APP_ROOT="$2"; shift 2 ;;
     --src-dir) SRC_DIR="$2"; shift 2 ;;
     --config-dir) CONFIG_DIR="$2"; shift 2 ;;
@@ -133,8 +136,7 @@ fi
 if [[ -n "$FRONTEND_HOST" && "$API_HOST" == "$FRONTEND_HOST" && "$API_EXTERNAL_PORT" == "$FRONTEND_EXTERNAL_PORT" ]]; then
   die "--api-host and --frontend-host are the same value ($API_HOST) but would listen on the same external port ($API_EXTERNAL_PORT). Without separate DNS names to route by, nginx needs different ports -- pass --api-external-port/--frontend-external-port (with --self-signed-tls these already default to 8443/443)."
 fi
-if [[ -n "$DEPLOY_USER" ]]; then
-  [[ -n "$DEPLOY_SSH_PUBLIC_KEY_FILE" ]] || die "--deploy-user requires --deploy-ssh-public-key-file."
+if [[ -n "$DEPLOY_USER" && -n "$DEPLOY_SSH_PUBLIC_KEY_FILE" ]]; then
   [[ -f "$DEPLOY_SSH_PUBLIC_KEY_FILE" ]] || die "--deploy-ssh-public-key-file '$DEPLOY_SSH_PUBLIC_KEY_FILE' does not exist."
 fi
 
@@ -142,35 +144,23 @@ log "Updating package index"
 apt-get update -y
 
 log "Installing base prerequisites"
-apt-get install -y ca-certificates curl gnupg apt-transport-https software-properties-common rsync
+apt-get install -y ca-certificates curl gnupg apt-transport-https software-properties-common
 
-if ! command -v dotnet >/dev/null 2>&1 || ! dotnet --list-runtimes 2>/dev/null | grep -q '^Microsoft.AspNetCore.App 10\.'; then
-  log "Installing Microsoft package repository and the .NET 10 ASP.NET Core runtime"
-  UBUNTU_CODENAME="$(. /etc/os-release && echo "$VERSION_ID")"
-  TMP_DEB="$(mktemp --suffix=.deb)"
-  curl -fsSL "https://packages.microsoft.com/config/ubuntu/${UBUNTU_CODENAME}/packages-microsoft-prod.deb" -o "$TMP_DEB"
-  dpkg -i "$TMP_DEB"
-  rm -f "$TMP_DEB"
+if ! command -v docker >/dev/null 2>&1; then
+  log "Installing Docker Engine + Compose plugin (official Docker apt repository)"
+  install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  UBUNTU_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME} stable" \
+    > /etc/apt/sources.list.d/docker.list
   apt-get update -y
-  apt-get install -y aspnetcore-runtime-10.0
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  systemctl enable --now docker
 else
-  log ".NET 10 ASP.NET Core runtime already present, skipping"
+  log "Docker already present, skipping"
 fi
-
-if [[ -n "$FRONTEND_HOST" ]]; then
-  if ! command -v node >/dev/null 2>&1 || [[ "$(node -e 'console.log(process.versions.node.split(".")[0])')" -lt 22 ]]; then
-    log "Installing Node.js 22.x (required by package.json: >=22.13.0)"
-    curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh
-    bash /tmp/nodesource_setup.sh
-    rm -f /tmp/nodesource_setup.sh
-    apt-get install -y nodejs
-  else
-    log "Node.js >=22 already present, skipping"
-  fi
-fi
-
-log "Installing globalization/timezone support (required: InvariantGlobalization=false, Windows-style Business:TimeZoneId)"
-apt-get install -y libicu-dev tzdata
+docker compose version >/dev/null 2>&1 || die "Docker installed but the 'docker compose' plugin is missing -- check docker-compose-plugin."
 
 log "Installing nginx and ufw"
 apt-get install -y nginx ufw
@@ -181,38 +171,23 @@ if [[ -n "$NAS_UNC" ]]; then
 fi
 
 if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
-  log "Creating dedicated service account '$SERVICE_USER' (no login, no home)"
+  log "Creating dedicated service account '$SERVICE_USER' (no login, no home) -- owns the NAS mount point; its UID/GID are passed into the API container so it can write there"
   adduser --system --group --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
 else
   log "Service account '$SERVICE_USER' already exists, skipping"
 fi
-if [[ -n "$FRONTEND_HOST" ]] && ! id -u "$FRONTEND_SERVICE_USER" >/dev/null 2>&1; then
-  log "Creating dedicated service account '$FRONTEND_SERVICE_USER' (no login, no home)"
-  adduser --system --group --no-create-home --shell /usr/sbin/nologin "$FRONTEND_SERVICE_USER"
-elif [[ -n "$FRONTEND_HOST" ]]; then
-  log "Service account '$FRONTEND_SERVICE_USER' already exists, skipping"
-fi
-
-if [[ -n "$FRONTEND_HOST" ]]; then
-  if ! getent group iot-team-center-config >/dev/null 2>&1; then
-    groupadd --system iot-team-center-config
-  fi
-  usermod -aG iot-team-center-config "$SERVICE_USER"
-  usermod -aG iot-team-center-config "$FRONTEND_SERVICE_USER"
-  CONFIG_GROUP="iot-team-center-config"
-else
-  CONFIG_GROUP="$SERVICE_USER"
-fi
 
 log "Creating application directories"
 install -d -o root -g root -m 0755 "$APP_ROOT"
-install -d -o root -g root -m 0755 "$APP_ROOT/releases"
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0700 "$APP_ROOT/tmp"
-install -d -o root -g "$CONFIG_GROUP" -m 0750 "$CONFIG_DIR"
-if [[ -n "$FRONTEND_HOST" ]]; then
-  install -d -o root -g root -m 0755 "$APP_ROOT/frontend"
-  install -d -o root -g root -m 0755 "$APP_ROOT/frontend/releases"
-fi
+install -d -o root -g root -m 0750 "$CONFIG_DIR"
+
+log "Recording $SERVICE_USER's UID/GID and the NAS mount path for docker-compose.prod.yml"
+cat > "$CONFIG_DIR/docker.env" <<DOCKERENV
+IOTAPI_UID=$(id -u "$SERVICE_USER")
+IOTAPI_GID=$(id -g "$SERVICE_USER")
+NAS_MOUNT_PATH=${NAS_MOUNT_PATH}
+DOCKERENV
+chmod 0644 "$CONFIG_DIR/docker.env"
 
 if [[ -n "$DEPLOY_USER" ]]; then
   if ! id -u "$DEPLOY_USER" >/dev/null 2>&1; then
@@ -221,18 +196,22 @@ if [[ -n "$DEPLOY_USER" ]]; then
   else
     log "Deploy account '$DEPLOY_USER' already exists, skipping creation"
   fi
-  install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 0700 "/home/$DEPLOY_USER/.ssh"
-  cat "$DEPLOY_SSH_PUBLIC_KEY_FILE" > "/home/$DEPLOY_USER/.ssh/authorized_keys"
-  chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
-  chmod 0600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
+  if [[ -n "$DEPLOY_SSH_PUBLIC_KEY_FILE" ]]; then
+    install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 0700 "/home/$DEPLOY_USER/.ssh"
+    cat "$DEPLOY_SSH_PUBLIC_KEY_FILE" > "/home/$DEPLOY_USER/.ssh/authorized_keys"
+    chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
+    chmod 0600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
+  else
+    log "No --deploy-ssh-public-key-file given: skipping manual-SSH setup for '$DEPLOY_USER' (fine if you'll only reach it via 'sudo -u $DEPLOY_USER -i' as root, e.g. to register the self-hosted CI runner -- see docs/CI_CD_SETUP.md)."
+  fi
 
   install -d -o root -g root -m 0755 "$SRC_DIR"
   chown "$DEPLOY_USER:$DEPLOY_USER" "$SRC_DIR"
 
-  log "Writing restricted sudoers entry for '$DEPLOY_USER' (deploy scripts only, no blanket sudo)"
+  log "Writing restricted sudoers entry for '$DEPLOY_USER' (deploy/rollback scripts only, no blanket sudo)"
   SUDOERS_FILE="/etc/sudoers.d/iot-team-center-deploy"
   cat > "$SUDOERS_FILE" <<SUDOERS
-Cmnd_Alias IOT_DEPLOY = ${SRC_DIR}/scripts/linux/deploy-release.sh *, ${SRC_DIR}/scripts/linux/deploy-frontend-release.sh *, ${SRC_DIR}/scripts/linux/rollback.sh *
+Cmnd_Alias IOT_DEPLOY = ${SRC_DIR}/scripts/linux/deploy.sh *, ${SRC_DIR}/scripts/linux/rollback.sh *
 ${DEPLOY_USER} ALL=(root) NOPASSWD: IOT_DEPLOY
 SUDOERS
   chmod 0440 "$SUDOERS_FILE"
@@ -249,10 +228,22 @@ if [[ -n "$NAS_UNC" ]]; then
   SERVICE_UID="$(id -u "$SERVICE_USER")"
   SERVICE_GID="$(id -g "$SERVICE_USER")"
   FSTAB_MARKER="# iot-team-center NAS mount (managed by install-production-host.sh)"
-  FSTAB_LINE="${NAS_UNC} ${NAS_MOUNT_PATH} cifs credentials=${CONFIG_DIR}/nas-credentials,uid=${SERVICE_UID},gid=${SERVICE_GID},file_mode=0640,dir_mode=0750,iocharset=utf8,vers=3.0,_netdev,nofail 0 0"
-  if grep -qF "$FSTAB_MARKER" /etc/fstab 2>/dev/null; then
-    log "fstab entry for the NAS mount already present, leaving it as-is"
+  # fstab fields are whitespace-delimited -- a share/path containing a literal space
+  # (e.g. //host/IoT Department) must escape it as \040 or it breaks field parsing.
+  NAS_UNC_FSTAB="${NAS_UNC// /\\040}"
+  FSTAB_LINE="${NAS_UNC_FSTAB} ${NAS_MOUNT_PATH} cifs credentials=${CONFIG_DIR}/nas-credentials,uid=${SERVICE_UID},gid=${SERVICE_GID},file_mode=0640,dir_mode=0750,iocharset=utf8,vers=3.0,_netdev,nofail 0 0"
+  if grep -qF "$FSTAB_LINE" /etc/fstab 2>/dev/null; then
+    log "fstab entry for the NAS mount already present and up to date, leaving it as-is"
   else
+    if grep -qF "$FSTAB_MARKER" /etc/fstab 2>/dev/null; then
+      log "Existing fstab entry for the NAS mount is stale/incorrect -- replacing it"
+      awk -v marker="$FSTAB_MARKER" '
+        $0 == marker { skip=1; next }
+        skip > 0 { skip--; next }
+        { print }
+      ' /etc/fstab > /etc/fstab.iot-team-center.tmp
+      mv /etc/fstab.iot-team-center.tmp /etc/fstab
+    fi
     log "Adding fstab entry for the NAS mount"
     { echo "$FSTAB_MARKER"; echo "$FSTAB_LINE"; } >> /etc/fstab
   fi
@@ -263,66 +254,6 @@ if [[ -n "$NAS_UNC" ]]; then
   log "NAS mounted successfully at $NAS_MOUNT_PATH"
 else
   log "No --nas-unc given: skipping NAS mount. DocumentStorage__RootPath must still point at a real durable network location before go-live."
-fi
-
-log "Writing systemd unit iot-team-center-api.service"
-cat > /etc/systemd/system/iot-team-center-api.service <<UNIT
-[Unit]
-Description=IoT Team Center API
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=${SERVICE_USER}
-Group=${SERVICE_USER}
-WorkingDirectory=${APP_ROOT}/current
-ExecStart=/usr/bin/dotnet ${APP_ROOT}/current/IoTTeamCenter.Api.dll
-EnvironmentFile=${CONFIG_DIR}/api.env
-Environment=ASPNETCORE_TEMP=${APP_ROOT}/tmp
-Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-ReadWritePaths=${APP_ROOT}/tmp
-$( [[ -n "$NAS_UNC" ]] && echo "ReadWritePaths=${NAS_MOUNT_PATH}" )
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-systemctl daemon-reload
-log "Systemd unit written (not started -- run deploy-release.sh to publish and start the API)"
-
-if [[ -n "$FRONTEND_HOST" ]]; then
-  log "Writing systemd unit iot-team-center-frontend.service"
-  cat > /etc/systemd/system/iot-team-center-frontend.service <<UNIT
-[Unit]
-Description=IoT Team Center Frontend
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=${FRONTEND_SERVICE_USER}
-Group=${FRONTEND_SERVICE_USER}
-WorkingDirectory=${APP_ROOT}/frontend/current
-ExecStart=/usr/bin/node ${APP_ROOT}/frontend/current/node_modules/vinext/dist/cli.js start --hostname 127.0.0.1 --port ${FRONTEND_PORT}
-EnvironmentFile=${CONFIG_DIR}/frontend.env
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-  systemctl daemon-reload
-  log "Systemd unit written (not started -- run deploy-frontend-release.sh to publish and start the frontend)"
 fi
 
 write_nginx_site() {
@@ -415,21 +346,27 @@ TLS_SUMMARY="not yet enabled"
 cat <<SUMMARY
 
 ==================== Host bootstrap complete ====================
-API service account:      ${SERVICE_USER}
-Frontend service account: $( [[ -n "$FRONTEND_HOST" ]] && echo "${FRONTEND_SERVICE_USER}" || echo "not configured" )
+NAS-mount-owning account: ${SERVICE_USER} (uid $(id -u "$SERVICE_USER" 2>/dev/null || echo '?'), gid $(id -g "$SERVICE_USER" 2>/dev/null || echo '?'))
 App root:                 ${APP_ROOT}
-Source checkout path:     ${SRC_DIR} (rsync target for CI deploys)
+Source checkout path:     ${SRC_DIR} (Docker build context; deploy.sh builds from here)
 Config dir:                ${CONFIG_DIR}
 NAS mount:                 $( [[ -n "$NAS_UNC" ]] && echo "${NAS_MOUNT_PATH} (${NAS_UNC})" || echo "not configured" )
 API nginx site:            ${API_HOST}:${API_EXTERNAL_PORT} -> 127.0.0.1:${API_PORT}
 Frontend nginx site:       $( [[ -n "$FRONTEND_HOST" ]] && echo "${FRONTEND_HOST}:${FRONTEND_EXTERNAL_PORT} -> 127.0.0.1:${FRONTEND_PORT}" || echo "not configured" )
 TLS:                       ${TLS_SUMMARY}
-CI deploy account:         $( [[ -n "$DEPLOY_USER" ]] && echo "${DEPLOY_USER} (sudo restricted to deploy scripts under ${SRC_DIR})" || echo "not configured" )
+CI deploy account:         $( [[ -n "$DEPLOY_USER" ]] && echo "${DEPLOY_USER} (sudo restricted to deploy.sh/rollback.sh, which run as root and so reach Docker without needing 'docker' group membership; run a self-hosted GitHub Actions runner as this user for CI -- docs/CI_CD_SETUP.md)" || echo "not configured" )
 
 Next steps:
-1. rsync a checkout of this repository to ${SRC_DIR} (CI does this automatically once configured).
-2. Fill in scripts/linux/api.env.template and scripts/linux/frontend.env.template outside the
-   repository, then run deploy-release.sh / deploy-frontend-release.sh --env-file <path>.
+1. Get a checkout of this repository onto ${SRC_DIR}. A self-hosted CI runner registered
+   as --deploy-user does this itself on every deploy (a local copy, since it runs on this
+   same host -- see docs/CI_CD_SETUP.md; needed whenever this host has no public IP for a
+   GitHub-hosted runner to reach). For a manual first copy from an operator's own machine
+   before CI is wired up: 'rsync -az --delete ./ user@host:${SRC_DIR}/' from Linux/macOS,
+   or 'scp -r .\* user@host:${SRC_DIR}/' from Windows (PowerShell's built-in OpenSSH client
+   ships scp; no rsync/WSL install needed).
+2. Fill in scripts/linux/api.env.template and scripts/linux/frontend.env.template outside
+   the repository (at /etc/iot-team-center/api.env.input and frontend.env.input), then
+   run deploy.sh.
 See docs/PRODUCTION_DEPLOYMENT_LINUX.md and docs/CI_CD_SETUP.md.
 ===================================================================
 SUMMARY

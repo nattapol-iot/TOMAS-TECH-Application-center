@@ -44,12 +44,15 @@ sudo ./scripts/linux/install-production-host.sh \
   --deploy-user iot-deploy --deploy-ssh-public-key-file /root/secure/iot-deploy.pub
 ```
 
-`--deploy-user`/`--deploy-ssh-public-key-file` create the restricted account CI connects
-as (authorized only to run `deploy-release.sh`/`deploy-frontend-release.sh`/`rollback.sh`
-via a narrowly-scoped `sudoers.d` entry -- not blanket sudo). Generate that keypair
-yourself first (`ssh-keygen -t ed25519 -f iot-deploy -C iot-team-center-ci`); the private
-half becomes the `PRODUCTION_SSH_KEY` secret below, the public half is what
-`--deploy-ssh-public-key-file` authorizes on the server.
+`--deploy-user` creates a dedicated account (`iot-deploy`) authorized only to run
+`deploy.sh`/`rollback.sh` via a narrowly-scoped `sudoers.d` entry -- not blanket sudo
+(running as root through that entry is also what gives these two scripts' `docker
+compose`/`docker build` commands access to the Docker daemon, so `iot-deploy` never
+needs `docker` group membership). This is the account the self-hosted CI runner
+(step 2b below) runs as, and it's also useful for a human operator's own manual SSH
+deploys, which is what `--deploy-ssh-public-key-file` is for
+(`ssh-keygen -t ed25519 -f iot-deploy -C you@yourmachine` to generate a keypair for
+yourself first) -- optional if you'll never SSH in by hand.
 
 Then fill in the two env-file templates with real values and save them **on the server
 only**, at the exact paths the workflow references:
@@ -63,28 +66,67 @@ chmod 600 /etc/iot-team-center/api.env.input /etc/iot-team-center/frontend.env.i
 ```
 
 These two files hold the real SQL connection string and (once registered) Entra values.
-They never touch GitHub, git history, or CI logs -- `deploy-release.sh` /
-`deploy-frontend-release.sh` read them directly on the server and refuse to run while any
-`<PLACEHOLDER>` remains.
+They never touch GitHub, git history, or CI logs -- `deploy.sh` reads them directly on
+the server (the frontend one also supplies the Docker build ARGs baked into the client
+bundle) and refuses to run while any `<PLACEHOLDER>` remains.
 
-## 3. Add repo secrets for SSH access
+## 2b. Register a self-hosted runner on the production server
 
-**Settings -> Secrets and variables -> Actions -> New repository secret**:
+The production host has no public IP (it's a VM with no route in from the internet), so
+a GitHub-hosted cloud runner can never reach it directly -- there is nothing to `ssh` or
+`rsync` into from outside. The fix is to flip the connection direction: install GitHub's
+runner agent **on the production host itself**, running as the `iot-deploy` account from
+step 2. The agent makes an outbound-only HTTPS connection to GitHub to pick up jobs, so
+no inbound port, port-forward, or VPN is needed on the router at all.
 
-| Secret | Value |
-| --- | --- |
-| `PRODUCTION_SSH_HOST` | The server's hostname or IP |
-| `PRODUCTION_SSH_USER` | The `--deploy-user` name from step 2 (e.g. `iot-deploy`) |
-| `PRODUCTION_SSH_KEY` | The private half of the keypair generated in step 2 |
-| `PRODUCTION_SSH_KNOWN_HOSTS` | Output of `ssh-keyscan -t ed25519 <PRODUCTION_SSH_HOST>`, run **once from a trusted machine** after the server exists |
+Register it **at the repository level** (not organization-level), so only this repo's
+workflows can ever dispatch jobs to it:
 
-Pin `PRODUCTION_SSH_KNOWN_HOSTS` to the real host key rather than disabling host-key
-checking -- the workflow will fail closed (refuse to connect) if the server's key ever
-changes unexpectedly, which is the point.
+1. In the repo: **Settings -> Actions -> Runners -> New self-hosted runner**, choose
+   Linux/x64. GitHub shows a `./config.sh --url ... --token ...` command with a
+   short-lived registration token -- copy it.
+2. On the production server, as the `iot-deploy` user:
 
-No SQL password, Entra secret, or NAS credential is ever stored in GitHub -- only SSH
-access. That matches the security posture already established for the manual deployment
-path in `docs/PRODUCTION_DEPLOYMENT_LINUX.md`.
+   ```bash
+   sudo -u iot-deploy -i
+   mkdir ~/actions-runner && cd ~/actions-runner
+   # paste the download + ./config.sh command GitHub showed you
+   ./config.sh --url https://github.com/<org>/<repo> --token <TOKEN> \
+     --name iot-team-center-production --labels iot-team-center-production \
+     --unattended
+   exit
+   ```
+
+   The `--labels iot-team-center-production` value must match `runs-on:` in
+   `.github/workflows/ci-cd.yml`'s `deploy` job exactly -- that label is what scopes
+   deploys to this specific runner instead of any other self-hosted runner you might add
+   later for something else.
+3. Install it as a systemd service so it survives reboots and doesn't depend on a login
+   session:
+
+   ```bash
+   cd /home/iot-deploy/actions-runner
+   sudo ./svc.sh install iot-deploy
+   sudo ./svc.sh start
+   sudo ./svc.sh status   # confirm it's running
+   ```
+
+4. Back in **Settings -> Actions -> Runners**, confirm it shows as **Idle** (green).
+
+A self-hosted runner executes whatever a workflow run tells it to, using the `iot-deploy`
+account's own permissions -- which is deliberately capped by the sudoers entry from step
+2 to exactly those two deploy scripts, so even a compromised workflow run can't do
+arbitrary root actions on the box. `checks` and `sql-integration` keep running on GitHub's
+own shared cloud runners as before (`runs-on: ubuntu-24.04`); only `deploy` targets this
+runner, and only after the `production` Environment approval from step 1.
+
+## 3. No SSH secrets needed
+
+Because `deploy` now runs directly on the production host instead of connecting to it
+over the network, there is nothing to add under **Settings -> Secrets and variables ->
+Actions** for this job -- no host, user, private key, or known_hosts. No SQL password,
+Entra secret, or NAS credential is ever stored in GitHub either; those live only in the
+two `*.env.input` files from step 2, read directly off local disk by the deploy scripts.
 
 ## 4. (Optional) Require `checks` to pass before merging
 
@@ -99,5 +141,10 @@ Until the server, DNS/certs, real Entra registrations, and the two `*.env.input`
 all exist, `checks` and `sql-integration` will still pass on every push (they don't touch
 production), but `deploy` will fail at whichever step depends on the missing piece --
 that's expected, not a bug in the pipeline. Re-run the `deploy` job (it's re-runnable;
-`deploy-release.sh`/`deploy-frontend-release.sh` are idempotent) once each prerequisite is
-in place.
+`deploy.sh` is idempotent) once each prerequisite is in place.
+
+If the self-hosted runner from step 2b isn't registered yet (or its service isn't
+running), an approved `deploy` run won't fail -- it will sit **queued** indefinitely in
+the Actions tab, since there's no matching `iot-team-center-production` runner to pick it
+up. Check `sudo ./svc.sh status` on the server and the Runners page in Settings if a run
+seems stuck rather than failed.

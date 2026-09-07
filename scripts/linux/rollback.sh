@@ -1,34 +1,33 @@
 #!/usr/bin/env bash
-# Points 'current' back at a previous release and restarts the service. Mirrors the
-# "API-only rollback" procedure in docs/PRODUCTION_DEPLOYMENT.md for the Windows/IIS path.
-# Works for either the backend API or the self-hosted frontend by pointing --app-root and
-# --service at the matching pair.
+# Re-points Docker Compose at the ':previous'-tagged image(s) and restarts the affected
+# container(s) -- no rebuild. Mirrors the "API-only rollback" procedure in
+# docs/PRODUCTION_DEPLOYMENT.md for the Windows/IIS path, adapted for Docker Compose.
+# Only goes back one deploy -- deploy.sh only keeps a ':current'/':previous' pair, not a
+# full release history.
 #
 # Usage:
-#   sudo ./rollback.sh --app-root /opt/iot-team-center                              # backend, one release back
-#   sudo ./rollback.sh --app-root /opt/iot-team-center --release-id <id>            # backend, specific release
-#   sudo ./rollback.sh --app-root /opt/iot-team-center/frontend \
-#     --service iot-team-center-frontend --port 3000 --health-path /                # frontend
+#   sudo ./rollback.sh --repo /opt/iot-team-center/src                    # both services
+#   sudo ./rollback.sh --repo /opt/iot-team-center/src --service api      # API only
+#   sudo ./rollback.sh --repo /opt/iot-team-center/src --service frontend # frontend only
 
 set -euo pipefail
 
-APP_ROOT="/opt/iot-team-center"
-RELEASE_ID=""
-SERVICE="iot-team-center-api"
-PORT="5105"
-HEALTH_PATH="/health/live"
+REPO_ROOT=""
+SERVICE=""
+API_PORT="5105"
+FRONTEND_PORT="3000"
+DOCKER_ENV_FILE="/etc/iot-team-center/docker.env"
 
 log() { printf '==> %s\n' "$1"; }
 die() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --app-root) APP_ROOT="$2"; shift 2 ;;
-    --release-id) RELEASE_ID="$2"; shift 2 ;;
+    --repo) REPO_ROOT="$2"; shift 2 ;;
     --service) SERVICE="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --api-port) PORT="$2"; shift 2 ;; # backward-compatible alias
-    --health-path) HEALTH_PATH="$2"; shift 2 ;;
+    --api-port) API_PORT="$2"; shift 2 ;;
+    --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
+    --docker-env-file) DOCKER_ENV_FILE="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
@@ -37,36 +36,51 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ $EUID -eq 0 ]] || die "Run as root (sudo)."
-[[ -d "$APP_ROOT/releases" ]] || die "$APP_ROOT/releases does not exist."
+[[ -n "$REPO_ROOT" ]] || die "--repo is required."
+[[ -f "$REPO_ROOT/docker-compose.prod.yml" ]] || die "Could not find $REPO_ROOT/docker-compose.prod.yml -- is --repo the repository root?"
+[[ -f "$DOCKER_ENV_FILE" ]] || die "--docker-env-file '$DOCKER_ENV_FILE' does not exist -- run install-production-host.sh first."
+cd "$REPO_ROOT"
 
-CURRENT_RELEASE="$(readlink -f "$APP_ROOT/current" 2>/dev/null || true)"
-[[ -n "$CURRENT_RELEASE" ]] || die "$APP_ROOT/current is not set; nothing to roll back from."
+# docker-compose.prod.yml's 'api' service pins 'user:' to these -- Compose interpolates
+# the whole file for any command (including 'up --no-build'), so this must be set even
+# though rollback never rebuilds anything.
+set -a
+# shellcheck disable=SC1090
+source "$DOCKER_ENV_FILE"
+set +a
 
-if [[ -n "$RELEASE_ID" ]]; then
-  TARGET="$APP_ROOT/releases/$RELEASE_ID"
-  [[ -d "$TARGET" ]] || die "Release $RELEASE_ID not found under $APP_ROOT/releases."
-else
-  TARGET="$(ls -1dt "$APP_ROOT"/releases/*/ 2>/dev/null | grep -vF "$CURRENT_RELEASE/" | head -n1 || true)"
-  TARGET="${TARGET%/}"
-  [[ -n "$TARGET" ]] || die "No older release available to roll back to."
-fi
+case "$SERVICE" in
+  "") images=(iot-team-center-api iot-team-center-frontend); services=(api frontend) ;;
+  api) images=(iot-team-center-api); services=(api) ;;
+  frontend) images=(iot-team-center-frontend); services=(frontend) ;;
+  *) die "Unknown --service '$SERVICE' (expected 'api' or 'frontend')." ;;
+esac
 
-[[ "$(readlink -f "$TARGET")" != "$CURRENT_RELEASE" ]] || die "Target release is already 'current'."
-
-log "Rolling back 'current' from $CURRENT_RELEASE to $TARGET"
-ln -sfn "$TARGET" "$APP_ROOT/current"
-
-log "Restarting ${SERVICE}.service"
-systemctl restart "${SERVICE}.service"
-
-log "Waiting for http://127.0.0.1:${PORT}${HEALTH_PATH}"
-deadline=$(( $(date +%s) + 60 ))
-until curl -fsS "http://127.0.0.1:${PORT}${HEALTH_PATH}" >/dev/null 2>&1; do
-  if [[ $(date +%s) -ge $deadline ]]; then
-    systemctl status "${SERVICE}.service" --no-pager || true
-    die "Health check did not pass after rollback. Investigate immediately -- both the old and new release may be unhealthy."
-  fi
-  sleep 2
+for image in "${images[@]}"; do
+  docker image inspect "${image}:previous" >/dev/null 2>&1 || die "No ':previous' image found for $image -- nothing to roll back to (rollback only goes back one deploy)."
 done
 
-log "Rollback complete. 'current' now points at $TARGET and the health check passed."
+log "Rolling back: ${images[*]} -> their ':previous' tag"
+for image in "${images[@]}"; do
+  docker tag "${image}:previous" "${image}:current"
+done
+
+docker compose -f docker-compose.prod.yml up -d --no-build "${services[@]}"
+
+for service in "${services[@]}"; do
+  case "$service" in
+    api) port="$API_PORT"; path="/health/live" ;;
+    frontend) port="$FRONTEND_PORT"; path="/" ;;
+  esac
+  log "Waiting for http://127.0.0.1:${port}${path}"
+  deadline=$(( $(date +%s) + 60 ))
+  until curl -fsS -o /dev/null "http://127.0.0.1:${port}${path}" 2>/dev/null; do
+    if [[ $(date +%s) -ge $deadline ]]; then
+      docker compose -f docker-compose.prod.yml logs --tail=50 "$service" || true
+      die "Health check for $service did not pass after rollback. Investigate immediately -- both the old and new image may be unhealthy."
+    fi
+    sleep 2
+  done
+done
+
+log "Rollback complete."

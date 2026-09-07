@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: ./backend/IoTTeamCenter.Api
+    image: iot-team-center-api:current
+    # Matches the host account install-production-host.sh created to own the NAS mount
+    # point (its UID/GID are written to /etc/iot-team-center/docker.env, which deploy.sh
+    # sources before calling 'docker compose'), so the container can read/write the
+    # bind-mounted share without running as root.
+    user: "${IOTAPI_UID:?set via /etc/iot-team-center/docker.env, written by install-production-host.sh}:${IOTAPI_GID:?set via /etc/iot-team-center/docker.env}"
+    env_file:
+      - /etc/iot-team-center/api.env.input
+    volumes:
+      - ${NAS_MOUNT_PATH:-/mnt/iot-team-center-documents}:${NAS_MOUNT_PATH:-/mnt/iot-team-center-documents}
+    ports:
+      - "127.0.0.1:5105:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      # Soft defaults (not ':?required') so that 'docker compose ps'/'logs'/'up --no-build'
+      # (rollback.sh, or an operator poking around) can parse this file without having
+      # sourced frontend.env.input first -- these args are only ever consumed by an actual
+      # 'docker compose build', which deploy.sh always runs right after sourcing the real
+      # values. Building with these empty placeholders directly (bypassing deploy.sh)
+      # still fails loudly, just inside the build at scripts/validate-production-env.mjs
+      # instead of at compose-parse time.
+      args:
+        NEXT_PUBLIC_APP_MODE: production
+        NEXT_PUBLIC_AUTH_MODE: entra
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        NEXT_PUBLIC_ENTRA_TENANT_ID: ${NEXT_PUBLIC_ENTRA_TENANT_ID:-}
+        NEXT_PUBLIC_ENTRA_CLIENT_ID: ${NEXT_PUBLIC_ENTRA_CLIENT_ID:-}
+        NEXT_PUBLIC_ENTRA_API_SCOPE: ${NEXT_PUBLIC_ENTRA_API_SCOPE:-}
+        NEXT_PUBLIC_BUSINESS_TIME_ZONE: ${NEXT_PUBLIC_BUSINESS_TIME_ZONE:-Asia/Bangkok}
+        SITE_ORIGIN: ${SITE_ORIGIN:-}
+    image: iot-team-center-frontend:current
+    env_file:
+      - /etc/iot-team-center/frontend.env.input
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.next/
+.vinext/
+.vercel/
+.wrangler/
+.output/
+.tmp/
+.git/
+backend/
+database/
+docs/
+*.tsbuildinfo
