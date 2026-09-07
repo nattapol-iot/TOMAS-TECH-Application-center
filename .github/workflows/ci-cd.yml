@@ -173,4 +173,4 @@ jobs:
       - name: Build and deploy (colima iot profile)
         # Runs as the runner's login user, which owns the colima socket; deploy.sh syncs this
         # checkout into the deploy dir that carries the untracked .env and rebuilds there.
-        run: scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"
+        run: bash scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"
