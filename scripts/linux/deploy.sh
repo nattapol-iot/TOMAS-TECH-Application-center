@@ -108,9 +108,17 @@ docker compose -f docker-compose.prod.yml build
 log "Starting containers (docker compose up -d)"
 docker compose -f docker-compose.prod.yml up -d
 
+# ASP.NET Core's automatic host-filtering middleware (driven by the AllowedHosts config
+# key) rejects any request whose Host header doesn't match with a 400 -- which includes
+# our own health-check curls against 127.0.0.1 unless we send the real configured Host
+# explicitly. Without this, curl -f treats the 400 as a plain failure and this loop just
+# spins until the timeout, even though the app came up fine.
+API_ALLOWED_HOST="$(grep -E '^AllowedHosts=' "$API_ENV_FILE" | head -1 | cut -d= -f2-)"
+[[ -n "$API_ALLOWED_HOST" ]] || die "$API_ENV_FILE's AllowedHosts is empty -- cannot health-check the API."
+
 log "Waiting for API /health/live (up to ${HEALTH_TIMEOUT_SECONDS}s)"
 deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
-until curl -fsS "http://127.0.0.1:${API_PORT}/health/live" >/dev/null 2>&1; do
+until curl -fsS -H "Host: ${API_ALLOWED_HOST}" "http://127.0.0.1:${API_PORT}/health/live" >/dev/null 2>&1; do
   if [[ $(date +%s) -ge $deadline ]]; then
     docker compose -f docker-compose.prod.yml logs --tail=50 api || true
     die "/health/live did not return healthy within ${HEALTH_TIMEOUT_SECONDS}s. Check 'docker compose -f docker-compose.prod.yml logs api' and roll back with rollback.sh if needed."
@@ -119,7 +127,7 @@ until curl -fsS "http://127.0.0.1:${API_PORT}/health/live" >/dev/null 2>&1; do
 done
 log "/health/live is healthy"
 
-READY_BODY="$(curl -fsS "http://127.0.0.1:${API_PORT}/health/ready" 2>/dev/null || true)"
+READY_BODY="$(curl -fsS -H "Host: ${API_ALLOWED_HOST}" "http://127.0.0.1:${API_PORT}/health/ready" 2>/dev/null || true)"
 if [[ -n "$READY_BODY" ]]; then
   log "/health/ready responded: $READY_BODY"
 else

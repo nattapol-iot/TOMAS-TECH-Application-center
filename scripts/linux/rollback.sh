@@ -17,6 +17,7 @@ SERVICE=""
 API_PORT="5105"
 FRONTEND_PORT="3000"
 DOCKER_ENV_FILE="/etc/iot-team-center/docker.env"
+API_ENV_FILE="/etc/iot-team-center/api.env.input"
 
 log() { printf '==> %s\n' "$1"; }
 die() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --api-port) API_PORT="$2"; shift 2 ;;
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --docker-env-file) DOCKER_ENV_FILE="$2"; shift 2 ;;
+    --api-env-file) API_ENV_FILE="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
@@ -39,6 +41,7 @@ done
 [[ -n "$REPO_ROOT" ]] || die "--repo is required."
 [[ -f "$REPO_ROOT/docker-compose.prod.yml" ]] || die "Could not find $REPO_ROOT/docker-compose.prod.yml -- is --repo the repository root?"
 [[ -f "$DOCKER_ENV_FILE" ]] || die "--docker-env-file '$DOCKER_ENV_FILE' does not exist -- run install-production-host.sh first."
+[[ -f "$API_ENV_FILE" ]] || die "--api-env-file '$API_ENV_FILE' does not exist."
 cd "$REPO_ROOT"
 
 # docker-compose.prod.yml's 'api' service pins 'user:' to these -- Compose interpolates
@@ -67,14 +70,22 @@ done
 
 docker compose -f docker-compose.prod.yml up -d --no-build "${services[@]}"
 
+# ASP.NET Core's automatic host-filtering middleware rejects any request whose Host
+# header doesn't match AllowedHosts with a 400 -- our own health-check curls against
+# 127.0.0.1 need the real configured Host explicitly, or this just spins until timeout.
+API_ALLOWED_HOST="$(grep -E '^AllowedHosts=' "$API_ENV_FILE" | head -1 | cut -d= -f2-)"
+
 for service in "${services[@]}"; do
+  host_header=()
   case "$service" in
-    api) port="$API_PORT"; path="/health/live" ;;
+    api)
+      [[ -n "$API_ALLOWED_HOST" ]] || die "$API_ENV_FILE's AllowedHosts is empty -- cannot health-check the API."
+      port="$API_PORT"; path="/health/live"; host_header=(-H "Host: ${API_ALLOWED_HOST}") ;;
     frontend) port="$FRONTEND_PORT"; path="/" ;;
   esac
   log "Waiting for http://127.0.0.1:${port}${path}"
   deadline=$(( $(date +%s) + 60 ))
-  until curl -fsS -o /dev/null "http://127.0.0.1:${port}${path}" 2>/dev/null; do
+  until curl -fsS "${host_header[@]}" -o /dev/null "http://127.0.0.1:${port}${path}" 2>/dev/null; do
     if [[ $(date +%s) -ge $deadline ]]; then
       docker compose -f docker-compose.prod.yml logs --tail=50 "$service" || true
       die "Health check for $service did not pass after rollback. Investigate immediately -- both the old and new image may be unhealthy."
