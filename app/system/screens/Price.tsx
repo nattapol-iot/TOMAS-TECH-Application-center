@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useMemo, useState } from "react";
 import { BRANDS, MISSING_PRICES, PRICE_LIBRARY, QUOTATIONS, SUPPLIERS } from "../data";
 import { daysBetween, formatDate, money, moneyShort, priceAge, userName } from "../calc";
@@ -14,6 +16,7 @@ import type { ScreenProps } from "../routes";
    ========================================================================== */
 
 export function PriceLibrary({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("All brands");
   const [supplier, setSupplier] = useState("All suppliers");
@@ -44,18 +47,18 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="REFERENCE DATA"
-        title="Price Library"
+        title={uiText("Price Library")}
         subtitle="Every price used on an estimate is stored here with its source, so engineers never search old Excel files again."
         actions={
           <>
-            <button className="btn default" type="button" onClick={() => go({ name: "quotations" })}><Icon name="quote" />Supplier quotations</button>
-            <button className="btn primary" type="button" onClick={() => notify("New price record form opened")}><Icon name="plus" />Add price record</button>
+            <button className="btn default" type="button" onClick={() => go({ name: "quotations" })}><Icon name="quote" /><LocalizedText text={"Supplier quotations"} /></button>
+            <button className="btn primary" type="button" onClick={() => notify("New price record form opened")}><Icon name="plus" /><LocalizedText text={"Add price record"} /></button>
           </>
         }
       />
 
       <section className="kpi-grid">
-        <div className="kpi blue"><span className="kpi-icon"><Icon name="book" /></span><span className="kpi-body"><span className="kpi-label">Price records</span><strong className="kpi-value">{PRICE_LIBRARY.length}</strong><span className="kpi-note">Across every project</span></span></div>
+        <div className="kpi blue"><span className="kpi-icon"><Icon name="book" /></span><span className="kpi-body"><span className="kpi-label">Price records</span><strong className="kpi-value">{PRICE_LIBRARY.length}</strong><span className="kpi-note"><LocalizedText text={"Across every project"} /></span></span></div>
         <div className="kpi green"><span className="kpi-icon"><Icon name="checkCircle" /></span><span className="kpi-body"><span className="kpi-label">Current (0–90 days)</span><strong className="kpi-value">{fresh}</strong><span className="kpi-note">Safe to reuse</span></span></div>
         <div className="kpi amber"><span className="kpi-icon"><Icon name="clock" /></span><span className="kpi-body"><span className="kpi-label">Aging (91–180 days)</span><strong className="kpi-value">{aging}</strong><span className="kpi-note">Confirm before approval</span></span></div>
         <div className="kpi red"><span className="kpi-icon"><Icon name="alertTriangle" /></span><span className="kpi-body"><span className="kpi-label">Older than 180 days</span><strong className="kpi-value">{stale}</strong><span className="kpi-note">Request a new price</span></span></div>
@@ -75,9 +78,9 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
             <table>
               <thead>
                 <tr>
-                  <th>Item Code</th><th>Description</th><th>Brand</th><th>Model</th><th>Category</th>
-                  <th>Supplier</th><th className="num">Price (THB)</th><th>Price Date</th><th>Price Age</th>
-                  <th>Source</th><th>Reference</th><th>Previous Project</th><th>Trend</th><th>Last Used</th><th aria-label="Actions" />
+                  <th><LocalizedText text={"Item Code"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Model"} /></th><th><LocalizedText text={"Category"} /></th>
+                  <th><LocalizedText text={"Supplier"} /></th><th className="num">Price (THB)</th><th><LocalizedText text={"Price Date"} /></th><th><LocalizedText text={"Price Age"} /></th>
+                  <th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Reference"} /></th><th><LocalizedText text={"Previous Project"} /></th><th>Trend</th><th>Last Used</th><th aria-label={uiText("Actions")} />
                 </tr>
               </thead>
               <tbody>
@@ -93,7 +96,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
                       <td>{record.supplier}</td>
                       <td className="num"><strong>{moneyShort(record.price)}</strong></td>
                       <td>{formatDate(record.priceDate)}</td>
-                      <td><span className={`age ${recordAge.tone}`}><i />{recordAge.days} days</span></td>
+                      <td><span className={`age ${recordAge.tone}`}><i />{recordAge.days} <LocalizedText text={"days"} /></span></td>
                       <td><Badge tone="slate">{record.source}</Badge></td>
                       <td className="mono">{record.reference}</td>
                       <td>{record.project}</td>
@@ -101,7 +104,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
                       <td className="muted">{formatDate(record.lastUsed)}</td>
                       <td>
                         <div className="row tight">
-                          <button className="btn sm default" type="button" onClick={() => notify(`${record.model || record.itemCode} price copied to clipboard for the open estimate`)}>Use Price</button>
+                          <button className="btn sm default" type="button" onClick={() => notify(`${record.model || record.itemCode} price copied to clipboard for the open estimate`)}><LocalizedText text={"Use Price"} /></button>
                           <button className="btn sm ghost" type="button" onClick={() => go({ name: "price-history", id: record.id })}>Price History</button>
                           <button className="row-action" type="button" title="View source" onClick={() => go({ name: "quotations" })}><Icon name="eye" /></button>
                         </div>
@@ -121,7 +124,7 @@ export function PriceLibrary({ go, notify }: ScreenProps) {
       <Panel title="Price sources in use" subtitle="Every cost should ideally carry a reference">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Price source</th><th>Meaning</th><th className="num">Records</th></tr></thead>
+            <thead><tr><th><LocalizedText text={"Price source"} /></th><th>Meaning</th><th className="num">Records</th></tr></thead>
             <tbody>
               {[
                 ["Supplier Quotation", "A quotation document is attached and linked to the cost item"],
@@ -158,7 +161,7 @@ export function PriceHistory({ id, go }: ScreenProps & { id: string }) {
 
   return (
     <>
-      <button className="back-link" type="button" onClick={() => go({ name: "price" })}><Icon name="arrowLeft" />Price Library</button>
+      <button className="back-link" type="button" onClick={() => go({ name: "price" })}><Icon name="arrowLeft" /><LocalizedText text={"Price Library"} /></button>
       <PageHeader
         eyebrow={record.brand}
         title={`${record.model || record.itemCode}`}
@@ -166,8 +169,8 @@ export function PriceHistory({ id, go }: ScreenProps & { id: string }) {
         meta={
           <>
             <div><span>Latest price</span><strong>{money(record.price)}</strong></div>
-            <div><span>Price date</span><strong>{formatDate(record.priceDate)}</strong></div>
-            <div><span>Price age</span><strong><span className={`age ${priceAge(record.priceDate).tone}`}><i />{priceAge(record.priceDate).days} days</span></strong></div>
+            <div><span><LocalizedText text={"Price date"} /></span><strong>{formatDate(record.priceDate)}</strong></div>
+            <div><span><LocalizedText text={"Price age"} /></span><strong><span className={`age ${priceAge(record.priceDate).tone}`}><i />{priceAge(record.priceDate).days} <LocalizedText text={"days"} /></span></strong></div>
             <div><span>Change since {formatDate(first.date)}</span><strong className={change >= 0 ? "red-text" : "green-text"}>{change >= 0 ? "+" : ""}{change.toFixed(1)}%</strong></div>
           </>
         }
@@ -182,7 +185,7 @@ export function PriceHistory({ id, go }: ScreenProps & { id: string }) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Price Date</th><th>Supplier</th><th className="num">Price (THB)</th><th className="num">Change</th><th>Quotation Reference</th><th>Project Used</th><th>Uploaded By</th></tr>
+              <tr><th><LocalizedText text={"Price Date"} /></th><th><LocalizedText text={"Supplier"} /></th><th className="num">Price (THB)</th><th className="num"><LocalizedText text={"Change"} /></th><th>Quotation Reference</th><th>Project Used</th><th><LocalizedText text={"Uploaded By"} /></th></tr>
             </thead>
             <tbody>
               {record.history.map((point, index) => {
@@ -213,7 +216,7 @@ export function PriceHistory({ id, go }: ScreenProps & { id: string }) {
                 <Icon name="checkCircle" />
                 <div>
                   <strong>{point.project || "—"}</strong>
-                  <p>{formatDate(point.date)} · {money(point.price)} · {point.reference}</p>
+                  <p>{formatDate(point.date)} <LocalizedText text={"·"} /> {money(point.price)} <LocalizedText text={"·"} /> {point.reference}</p>
                 </div>
               </li>
             ))}
@@ -221,13 +224,13 @@ export function PriceHistory({ id, go }: ScreenProps & { id: string }) {
         </Panel>
         <Panel title="Item information">
           <dl className="def-list">
-            <div><dt>Item code</dt><dd className="mono">{record.itemCode}</dd></div>
-            <div><dt>Category</dt><dd>{record.category}</dd></div>
-            <div><dt>Brand</dt><dd>{record.brand}</dd></div>
-            <div><dt>Model</dt><dd className="mono">{record.model}</dd></div>
-            <div><dt>Unit</dt><dd>{record.unit}</dd></div>
+            <div><dt><LocalizedText text={"Item code"} /></dt><dd className="mono">{record.itemCode}</dd></div>
+            <div><dt><LocalizedText text={"Category"} /></dt><dd>{record.category}</dd></div>
+            <div><dt><LocalizedText text={"Brand"} /></dt><dd>{record.brand}</dd></div>
+            <div><dt><LocalizedText text={"Model"} /></dt><dd className="mono">{record.model}</dd></div>
+            <div><dt><LocalizedText text={"Unit"} /></dt><dd>{record.unit}</dd></div>
             <div><dt>Current source</dt><dd>{record.source}</dd></div>
-            <div><dt>Reference</dt><dd className="mono">{record.reference}</dd></div>
+            <div><dt><LocalizedText text={"Reference"} /></dt><dd className="mono">{record.reference}</dd></div>
             <div><dt>Last used</dt><dd>{formatDate(record.lastUsed)}</dd></div>
           </dl>
         </Panel>
@@ -241,6 +244,7 @@ export function PriceHistory({ id, go }: ScreenProps & { id: string }) {
    ========================================================================== */
 
 export function Quotations({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const [search, setSearch] = useState("");
   const [supplier, setSupplier] = useState("All suppliers");
   const [status, setStatus] = useState("All status");
@@ -266,8 +270,8 @@ export function Quotations({ go, notify }: ScreenProps) {
         subtitle="Quotation documents are linked to cost items, so any price on an estimate can be traced to its source."
         actions={
           <>
-            <button className="btn default" type="button" onClick={() => go({ name: "missing" })}><Icon name="clock" />Waiting supplier price</button>
-            <button className="btn primary" type="button" onClick={() => setUpload(true)}><Icon name="upload" />Upload quotation</button>
+            <button className="btn default" type="button" onClick={() => go({ name: "missing" })}><Icon name="clock" /><LocalizedText text={"Waiting supplier price"} /></button>
+            <button className="btn primary" type="button" onClick={() => setUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button>
           </>
         }
       />
@@ -284,9 +288,9 @@ export function Quotations({ go, notify }: ScreenProps) {
           <table>
             <thead>
               <tr>
-                <th>Supplier Quotation No.</th><th>Supplier</th><th>Received</th><th>Valid Until</th>
-                <th>Inquiry</th><th>Project</th><th>Currency</th><th className="num">Amount</th>
-                <th>Uploaded By</th><th>Status</th><th>Attachment</th><th aria-label="Actions" />
+                <th>Supplier Quotation No.</th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Valid Until"} /></th>
+                <th><LocalizedText text={"Inquiry"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Currency"} /></th><th className="num"><LocalizedText text={"Amount"} /></th>
+                <th><LocalizedText text={"Uploaded By"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Attachment"} /></th><th aria-label={uiText("Actions")} />
               </tr>
             </thead>
             <tbody>
@@ -315,9 +319,9 @@ export function Quotations({ go, notify }: ScreenProps) {
                     </td>
                     <td>
                       <div className="row tight">
-                        <button className="row-action" type="button" title="Preview" onClick={() => notify(`${quotation.file} opened in the document viewer`)}><Icon name="eye" /></button>
+                        <button className="row-action" type="button" title={uiText("Preview")} onClick={() => notify(`${quotation.file} opened in the document viewer`)}><Icon name="eye" /></button>
                         <button className="row-action" type="button" title="Link to cost item" onClick={() => notify(`${quotation.no} linked to a cost item`)}><Icon name="paperclip" /></button>
-                        <button className="row-action" type="button" title="Download"><Icon name="download" /></button>
+                        <button className="row-action" type="button" title={uiText("Download")}><Icon name="download" /></button>
                       </div>
                     </td>
                   </tr>
@@ -337,8 +341,8 @@ export function Quotations({ go, notify }: ScreenProps) {
           footer={
             <>
               <span className="spacer" />
-              <button className="btn default" type="button" onClick={() => setUpload(false)}>Cancel</button>
-              <button className="btn primary" type="button" onClick={() => { setUpload(false); notify("SQ-2608-0036 uploaded and linked"); }}><Icon name="upload" />Upload</button>
+              <button className="btn default" type="button" onClick={() => setUpload(false)}><LocalizedText text={"Cancel"} /></button>
+              <button className="btn primary" type="button" onClick={() => { setUpload(false); notify("SQ-2608-0036 uploaded and linked"); }}><Icon name="upload" /><LocalizedText text={"Upload"} /></button>
             </>
           }
         >
@@ -369,6 +373,7 @@ export function Quotations({ go, notify }: ScreenProps) {
    ========================================================================== */
 
 export function MissingPrices({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const [rows, setRows] = useState(MISSING_PRICES);
   const open = rows.filter((row) => row.status !== "Price Updated").length;
   const late = rows.filter((row) => daysBetween(row.requiredDate) > 0 && row.status !== "Price Updated").length;
@@ -377,18 +382,18 @@ export function MissingPrices({ go, notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="ESTIMATE BLOCKERS"
-        title="Waiting Supplier Price"
+        title={uiText("Waiting Supplier Price")}
         subtitle="Every cost item that has no price yet — this is where estimate delays become visible to the manager."
         actions={
           <>
-            <button className="btn default" type="button" onClick={() => go({ name: "quotations" })}><Icon name="quote" />Supplier quotations</button>
+            <button className="btn default" type="button" onClick={() => go({ name: "quotations" })}><Icon name="quote" /><LocalizedText text={"Supplier quotations"} /></button>
             <button className="btn primary" type="button" onClick={() => notify("Price request email drafted for 3 suppliers")}><Icon name="send" />Request prices</button>
           </>
         }
       />
 
       <section className="kpi-grid">
-        <div className="kpi amber"><span className="kpi-icon"><Icon name="clock" /></span><span className="kpi-body"><span className="kpi-label">Open items</span><strong className="kpi-value">{open}</strong><span className="kpi-note">Blocking an estimate</span></span></div>
+        <div className="kpi amber"><span className="kpi-icon"><Icon name="clock" /></span><span className="kpi-body"><span className="kpi-label"><LocalizedText text={"Open items"} /></span><strong className="kpi-value">{open}</strong><span className="kpi-note">Blocking an estimate</span></span></div>
         <div className="kpi red"><span className="kpi-icon"><Icon name="alertTriangle" /></span><span className="kpi-body"><span className="kpi-label">Past required date</span><strong className="kpi-value">{late}</strong><span className="kpi-note">Escalate to the supplier</span></span></div>
         <div className="kpi slate"><span className="kpi-icon"><Icon name="send" /></span><span className="kpi-body"><span className="kpi-label">Not requested yet</span><strong className="kpi-value">{rows.filter((r) => r.status === "Not Requested").length}</strong><span className="kpi-note">Engineer action</span></span></div>
         <div className="kpi green"><span className="kpi-icon"><Icon name="checkCircle" /></span><span className="kpi-body"><span className="kpi-label">Price updated</span><strong className="kpi-value">{rows.filter((r) => r.status === "Price Updated").length}</strong><span className="kpi-note">Estimate unblocked</span></span></div>
@@ -399,8 +404,8 @@ export function MissingPrices({ go, notify }: ScreenProps) {
           <table>
             <thead>
               <tr>
-                <th>Inquiry</th><th>Project</th><th>Item</th><th>Brand</th><th>Model</th><th>Supplier</th>
-                <th>Requested By</th><th>Request Date</th><th>Required Date</th><th>Status</th><th>Owner</th><th aria-label="Action" />
+                <th><LocalizedText text={"Inquiry"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Model"} /></th><th><LocalizedText text={"Supplier"} /></th>
+                <th><LocalizedText text={"Requested By"} /></th><th><LocalizedText text={"Request Date"} /></th><th><LocalizedText text={"Required Date"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Owner"} /></th><th aria-label={uiText("Action")} />
               </tr>
             </thead>
             <tbody>
@@ -429,8 +434,8 @@ export function MissingPrices({ go, notify }: ScreenProps) {
                     <td><Person initials={userName(row.ownerId).split(" ").map((p) => p[0]).join("")} name={userName(row.ownerId)} /></td>
                     <td>
                       <div className="row tight">
-                        <button className="btn sm default" type="button" onClick={() => notify(`Price request sent to ${row.supplier}`)}>Request</button>
-                        <button className="btn sm ghost" type="button" onClick={() => go({ name: "quotations" })}>Upload</button>
+                        <button className="btn sm default" type="button" onClick={() => notify(`Price request sent to ${row.supplier}`)}><LocalizedText text={"Request"} /></button>
+                        <button className="btn sm ghost" type="button" onClick={() => go({ name: "quotations" })}><LocalizedText text={"Upload"} /></button>
                       </div>
                     </td>
                   </tr>

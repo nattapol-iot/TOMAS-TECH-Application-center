@@ -128,9 +128,12 @@ public static class PurchaseRequisitionEndpoints
             SELECT l.id, l.bom_line_id, l.item_id, l.item_code, l.part_no, l.description,
                    l.supplier_id, s.name, l.qty, l.unit, l.unit_price, l.est_qty, l.est_unit_cost,
                    l.price_source, l.stock_snapshot, l.is_unplanned, l.buy_despite_stock, l.remark,
-                   l.line_total, l.estimate_total, l.row_version, COALESCE(vb.available, 0)
+                   l.line_total, l.estimate_total, l.row_version, COALESCE(vb.available, 0),
+                   bl.section_code, bl.estimate_line_id, ci.item_code, ci.module
             FROM dbo.mat_pr_lines l
             INNER JOIN dbo.suppliers s ON s.id = l.supplier_id
+            INNER JOIN dbo.bom_lines bl ON bl.id = l.bom_line_id
+            LEFT JOIN dbo.cost_items ci ON ci.id = bl.estimate_line_id AND ci.deleted_at IS NULL
             LEFT JOIN dbo.v_item_balances vb ON vb.item_id = l.item_id
             WHERE l.pr_id = @id
             ORDER BY l.id;
@@ -163,6 +166,10 @@ public static class PurchaseRequisitionEndpoints
                     lineTotal = reader.GetDecimal(18), estimateTotal = reader.GetDecimal(19),
                     rowVersion = reader.RowVersionString(20),
                     availableNow = reader.GetDecimal(21),
+                    sectionCode = reader.GetString(22),
+                    estimateLineId = reader.IsDBNull(23) ? (long?)null : reader.GetInt64(23),
+                    estimateItemCode = reader.IsDBNull(24) ? null : reader.GetString(24),
+                    estimateModule = reader.IsDBNull(25) ? null : reader.GetString(25),
                     variancePercent = estimatedUnitCost > 0
                         ? Math.Round((unitPrice - estimatedUnitCost) / estimatedUnitCost * 100m, 2)
                         : 0m

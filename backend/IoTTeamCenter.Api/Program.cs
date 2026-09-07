@@ -92,6 +92,7 @@ builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddSingleton(new BusinessClock(TimeProvider.System, businessTimeZone));
 builder.Services.AddSingleton(documentStorageOptions);
 builder.Services.AddSingleton<ProjectDocumentStorage>();
+builder.Services.AddSingleton<IDocumentMalwareScanner, DisabledDocumentMalwareScanner>();
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = checked(documentStorageOptions.MaxFileSizeBytes + 1_048_576);
@@ -253,6 +254,8 @@ app.MapInquiryEndpoints();
 app.MapEstimateEndpoints();
 app.MapEstimateCostEndpoints();
 app.MapEstimateWorkspaceEndpoints();
+app.MapSupplierPriceHistoryEndpoints();
+app.MapSupplierQuotationEndpoints();
 app.MapProjectEndpoints();
 app.MapProjectDocumentEndpoints();
 app.MapScheduleEndpoints();
@@ -264,7 +267,12 @@ app.MapMaterialIssueEndpoints();
 app.MapStockControlEndpoints();
 app.MapMasterDataEndpoints();
 app.MapReportEndpoints();
+app.MapPerformanceEndpoints();
 app.MapAdminReadEndpoints();
+app.MapKnowledgeEndpoints();
+app.MapSalesIntakeEndpoints();
+app.MapSiteVisitEndpoints();
+app.MapSiteVisitMasterEndpoints();
 
 app.Run();
 

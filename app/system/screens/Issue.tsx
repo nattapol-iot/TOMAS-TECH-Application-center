@@ -1,5 +1,7 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
+import { useT as useUiText } from "../i18n";
 import { useState } from "react";
 import { BOMS, PROJECTS, type Mir } from "../data";
 import { formatDate, matPermission, stockBalance, userName, userOf } from "../calc";
@@ -20,6 +22,7 @@ const mirTone = (status: Mir["status"]) =>
    ========================================================================== */
 
 export function MirList({ go }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   const store = useMatStore();
 
@@ -38,7 +41,7 @@ export function MirList({ go }: ScreenProps) {
                 <th>{t("Issue No.")}</th><th>{t("Project")}</th><th>{t("BOM")}</th><th>{t("Requested By")}</th>
                 <th>{t("Required")}</th><th className="num">{t("Lines")}</th><th className="num">{t("Requested Qty")}</th>
                 <th className="num">{t("Issued Qty")}</th><th className="num">{t("Returned")}</th>
-                <th>{t("Received By")}</th><th>{t("Status")}</th><th aria-label="Open" />
+                <th>{t("Received By")}</th><th>{t("Status")}</th><th aria-label={uiText("Open")} />
               </tr>
             </thead>
             <tbody>
@@ -233,7 +236,7 @@ export function MirDetail({ id, go, notify }: ScreenProps & { id: string }) {
                 <tr><td>{t("Picked By")}</td><td>{mir.pickedBy ? <Person initials={userOf(mir.pickedBy)?.initials ?? "—"} name={userName(mir.pickedBy)} /> : "—"}</td><td className="muted" /></tr>
                 <tr><td>{t("Issued By")}</td><td>{mir.issuedBy ? <Person initials={userOf(mir.issuedBy)?.initials ?? "—"} name={userName(mir.issuedBy)} /> : "—"}</td><td className="muted">{mir.issuedAt}</td></tr>
                 <tr><td>{t("Received By")}</td><td>{mir.receivedBy ? <Person initials={userOf(mir.receivedBy)?.initials ?? "—"} name={userName(mir.receivedBy)} /> : "—"}</td><td className="muted">{mir.receivedAt}</td></tr>
-                <tr><td>{t("Used For")}</td><td colSpan={2}>{mir.purpose} · {mir.workArea} · {project.no}</td></tr>
+                <tr><td>{t("Used For")}</td><td colSpan={2}>{mir.purpose} <LocalizedText text={"·"} /> {mir.workArea} <LocalizedText text={"·"} /> {project.no}</td></tr>
               </tbody>
             </table>
           </div>
@@ -247,7 +250,7 @@ export function MirDetail({ id, go, notify }: ScreenProps & { id: string }) {
                 {mir.lines.filter((line) => line.issueQty - line.returnedQty > 0).map((line) => (
                   <div className="file-row" key={line.id}>
                     <span className="file-icon"><Icon name="refresh" /></span>
-                    <div style={{ flex: 1 }}><strong>{line.partNo}</strong><small>{t("issued")} {line.issueQty} · {t("returned")} {line.returnedQty}</small></div>
+                    <div style={{ flex: 1 }}><strong>{line.partNo}</strong><small>{t("issued")} {line.issueQty} <LocalizedText text={"·"} /> {t("returned")} {line.returnedQty}</small></div>
                     <button className="btn default sm" type="button" onClick={() => setReturnFor(line.id)}>{t("Return Material")}</button>
                   </div>
                 ))}

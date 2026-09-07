@@ -6,6 +6,11 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "prepare:ocr": "node scripts/prepare-ocr-assets.mjs",
+    "predev": "npm run prepare:ocr",
+    "prebuild": "npm run prepare:ocr",
+    "prebuild:local": "npm run prepare:ocr",
+    "prebuild:vercel": "npm run prepare:ocr",
     "dev": "vinext dev",
     "build": "node scripts/validate-production-env.mjs && vinext build",
     "build:local": "vinext build",
@@ -17,8 +22,14 @@
   },
   "dependencies": {
     "@azure/msal-browser": "5.20.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/jpn": "1.0.0",
+    "@tesseract.js-data/tha": "1.0.0",
+    "fflate": "^0.7.4",
+    "pdfjs-dist": "6.3.289",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

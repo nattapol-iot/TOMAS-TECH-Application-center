@@ -39,6 +39,26 @@ public sealed class ProjectDocumentStorage(
             $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}");
     }
 
+    public string CreateSupplierQuotationStorageKey(string extension)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return string.Join('/',
+            "supplier-quotations",
+            now.ToString("yyyy", CultureInfo.InvariantCulture),
+            now.ToString("MM", CultureInfo.InvariantCulture),
+            $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}");
+    }
+
+    public string CreateKnowledgeStorageKey(string extension)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return string.Join('/',
+            "knowledge",
+            now.ToString("yyyy", CultureInfo.InvariantCulture),
+            now.ToString("MM", CultureInfo.InvariantCulture),
+            $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}");
+    }
+
     public async Task<DocumentWriteResult> WriteAsync(string storageKey, Stream source, CancellationToken cancellationToken)
     {
         var destinationPath = ResolvePath(storageKey);

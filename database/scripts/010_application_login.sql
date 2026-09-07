@@ -91,8 +91,12 @@ IF EXISTS (
 -- elevated implementation is exposed only through the reviewed app role.
 REVOKE EXECUTE ON OBJECT::dbo.issue_document_number FROM [public];
 REVOKE EXECUTE ON OBJECT::dbo.answer_schedule_day_request FROM [public];
+REVOKE EXECUTE ON OBJECT::dbo.issue_knowledge_document_number FROM [public];
+REVOKE EXECUTE ON OBJECT::dbo.sync_employee_directory_user FROM [public];
 GRANT EXECUTE ON OBJECT::dbo.issue_document_number TO [iot_team_app_role];
 GRANT EXECUTE ON OBJECT::dbo.answer_schedule_day_request TO [iot_team_app_role];
+GRANT EXECUTE ON OBJECT::dbo.issue_knowledge_document_number TO [iot_team_app_role];
+GRANT EXECUTE ON OBJECT::dbo.sync_employee_directory_user TO [iot_team_app_role];
 
 -- Reads are limited to objects used by the currently mapped production API.
 GRANT SELECT ON OBJECT::dbo.schema_versions TO [iot_team_app_role];
@@ -103,6 +107,9 @@ GRANT SELECT ON OBJECT::dbo.permissions TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.customers TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.suppliers TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.engineering_rates TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.employees TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.supplier_price_history TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.supplier_quotations TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.audit_log TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.inquiries TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.inquiry_attachments TO [iot_team_app_role];
@@ -142,11 +149,49 @@ GRANT SELECT ON OBJECT::dbo.mat_audit TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.v_estimate_totals TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.v_item_balances TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.fn_estimate_validation TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_categories TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_number_sequences TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_files TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_documents TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_versions TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_articles TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_relations TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_permissions TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_approvals TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_comments TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_document_acknowledgements TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.knowledge_audit_events TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.company_stamps TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.stamp_authorities TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.signature_specimens TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.sign_flow_templates TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.sign_flow_steps TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.signable_documents TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.document_files TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.sign_requests TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.sign_steps TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.signature_marks TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.signed_documents TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.sign_events TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_capacity TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_effort TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_tasks TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.resource_task_sources TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.module_templates TO [iot_team_app_role];
+-- Role assignments are read-only to the API; no self-service escalation.
+IF OBJECT_ID(N'dbo.user_business_roles',N'U') IS NOT NULL
+ GRANT SELECT ON dbo.user_business_roles TO iot_team_app_role;
+IF OBJECT_ID(N'dbo.user_signing_permissions',N'V') IS NOT NULL
+ GRANT SELECT ON dbo.user_signing_permissions TO iot_team_app_role;
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.module_template_lines TO [iot_team_app_role];
 
 -- Normalize prior runs before applying the minimal write set below.
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.customers FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.suppliers FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.engineering_rates FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.employees FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.supplier_price_history FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.supplier_quotations FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiries FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.estimates FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.estimate_revisions FROM [iot_team_app_role];
@@ -178,13 +223,26 @@ REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.mir_lines FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.stock_adjustments FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.stock_txns FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.mat_audit FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_categories FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_number_sequences FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_files FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_documents FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_versions FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_articles FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_relations FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_permissions FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_approvals FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_comments FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_acknowledgements FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_audit_events FROM [iot_team_app_role];
 
 -- Business writes are explicit so a compromised application credential cannot
 -- modify RBAC, user identity, document numbering, migration metadata, or features
 -- that do not yet have a reviewed production API.
-GRANT INSERT ON OBJECT::dbo.customers TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.customers TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.suppliers TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.engineering_rates TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.employees TO [iot_team_app_role];
 GRANT INSERT, UPDATE ON OBJECT::dbo.inquiries TO [iot_team_app_role];
 GRANT INSERT, UPDATE ON OBJECT::dbo.estimates TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.estimate_revisions TO [iot_team_app_role];
@@ -194,10 +252,13 @@ GRANT INSERT, UPDATE ON OBJECT::dbo.manhour_lines TO [iot_team_app_role];
 GRANT INSERT, UPDATE ON OBJECT::dbo.expense_lines TO [iot_team_app_role];
 GRANT INSERT, UPDATE ON OBJECT::dbo.other_cost_lines TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.projects TO [iot_team_app_role];
+-- End user editing does not grant changes to commercial/project control fields.
+GRANT UPDATE (end_user_customer_id,updated_by,updated_at) ON OBJECT::dbo.projects TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_members TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_folders TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_docs TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.audit_log TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.supplier_quotations TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.mat_items TO [iot_team_app_role];
 
 -- Material workflows use an explicit, object-level write matrix. Stock and
@@ -218,6 +279,19 @@ GRANT INSERT, UPDATE ON OBJECT::dbo.mir_lines TO [iot_team_app_role];
 GRANT INSERT, UPDATE ON OBJECT::dbo.stock_adjustments TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.stock_txns TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.mat_audit TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_categories TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_number_sequences TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.knowledge_document_files TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_documents TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_document_versions TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_articles TO [iot_team_app_role];
+GRANT INSERT, DELETE ON OBJECT::dbo.knowledge_document_relations TO [iot_team_app_role];
+GRANT INSERT, DELETE ON OBJECT::dbo.knowledge_document_permissions TO [iot_team_app_role];
+-- The API deletes only still-pending routing rows when a revised workflow is resubmitted.
+GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo.knowledge_document_approvals TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_document_comments TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.knowledge_document_acknowledgements TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.knowledge_audit_events TO [iot_team_app_role];
 
 -- Schedule planning is an explicitly reviewed module. Plan rows use
 -- rowversion, progress writes are append-audited, and the update feed and
@@ -234,15 +308,109 @@ GRANT INSERT ON OBJECT::dbo.schedule_updates TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.schedule_baselines TO [iot_team_app_role];
 
 -- Remove legacy grants for modules that are intentionally outside this release.
--- (The Inquiry workspace's write endpoints -- assign, create meeting, upload/download
--- attachment -- were never implemented and are not registered; read-only access via the
--- SELECT grants above is all that's used.)
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.holidays FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiry_attachments FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiry_meetings FROM [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.inquiry_attachments TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.inquiry_meetings TO [iot_team_app_role];
+-- Sales intake and site visit (migration 016). Reviews, status history,
+-- reschedule history and links are insert-only by design; the triggers refuse
+-- the rest and these grants say the same thing a second time.
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.sales_intake_reviews FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.site_visit_status_history FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.site_visit_schedule_history FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.site_visit_confirmations FROM [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.customer_sites TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.customer_site_contacts TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.visit_types TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.visit_skills TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.engineer_skills TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.engineer_availability TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.visit_checklist_templates TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.visit_checklist_items TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.visit_sla_policies TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.sales_intakes TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.sales_intake_purposes TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.sales_intake_skills TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.sales_intake_windows TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.sales_intake_attachments TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.sales_intake_reviews TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visits TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_assignments TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.site_visit_confirmations TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.site_visit_schedule_history TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_checklist_responses TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_findings TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_attachments TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_reports TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_report_revisions TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_action_items TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.site_visit_status_history TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.site_visit_links TO [iot_team_app_role];
+GRANT EXECUTE ON OBJECT::dbo.assert_engineer_available TO [iot_team_app_role];
+
+-- In-app notification delivery entered the release with migration 016.
+-- INSERT creates one, UPDATE marks it read. Deleting one is never allowed.
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.notifications FROM [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.notifications TO [iot_team_app_role];
+
+-- Document signing (migration 018). A signature points at one exact file, so the
+-- file record, the marks, the output and the event chain are INSERT-only here;
+-- migration 018 enforces the same with INSTEAD OF UPDATE/DELETE triggers.
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.document_files FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.signature_marks FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.signed_documents FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.sign_events FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.company_stamps FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.stamp_authorities FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.signature_specimens FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.sign_flow_templates FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.signable_documents FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.sign_requests FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.sign_steps FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.sign_flow_steps FROM [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.company_stamps TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.stamp_authorities TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.signature_specimens TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.sign_flow_templates TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.signable_documents TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.sign_requests TO [iot_team_app_role];
+GRANT INSERT, UPDATE ON OBJECT::dbo.sign_steps TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.document_files TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.signature_marks TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.signed_documents TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.sign_events TO [iot_team_app_role];
+GRANT INSERT ON OBJECT::dbo.sign_flow_steps TO [iot_team_app_role];
 
 DENY ALTER, TAKE OWNERSHIP ON SCHEMA::dbo TO [iot_team_app_role];
+IF OBJECT_ID(N'dbo.historical_pr_imports') IS NOT NULL
+BEGIN
+    GRANT SELECT,INSERT ON dbo.historical_pr_imports TO [iot_team_app_role];
+    GRANT UPDATE(project_id,is_current,links,updated_by,updated_at) ON dbo.historical_pr_imports TO [iot_team_app_role];
+END;
+GRANT SELECT, INSERT, UPDATE ON dbo.unified_reports TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.kpi_review_cycles TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.kpi_assessments TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.kpi_assessment_scores TO [iot_team_app_role];
+REVOKE DELETE ON dbo.kpi_review_cycles FROM [iot_team_app_role];
+REVOKE DELETE ON dbo.kpi_assessments FROM [iot_team_app_role];
+REVOKE DELETE ON dbo.kpi_assessment_scores FROM [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.report_templates TO [iot_team_app_role];
+GRANT SELECT ON dbo.support_categories TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.support_members TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.support_tickets TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.support_events TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.support_attachments TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.support_recognition TO [iot_team_app_role];
+REVOKE DELETE ON dbo.report_templates FROM [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.unified_report_revisions TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.unified_report_customer_links TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.unified_report_acknowledgments TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.unified_report_signatures TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.unified_report_evidence_files TO [iot_team_app_role];
+REVOKE UPDATE, DELETE ON dbo.unified_report_acknowledgments FROM [iot_team_app_role];
+REVOKE UPDATE, DELETE ON dbo.unified_report_signatures FROM [iot_team_app_role];
+REVOKE UPDATE, DELETE ON dbo.unified_report_evidence_files FROM [iot_team_app_role];
 
 IF EXISTS (
     SELECT 1
@@ -261,4 +429,17 @@ IF (SELECT COUNT_BIG(*)
       AND class = 3 AND major_id = SCHEMA_ID(N'dbo') AND state = 'D'
       AND permission_name IN (N'ALTER', N'TAKE OWNERSHIP')) <> 2
     THROW 51045, 'The dbo schema ownership guardrails were not applied.', 1;
+GO
+
+
+-- Team Activity object-scoped grants.
+GRANT SELECT ON dbo.activity_settings TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.activity_sessions TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.activity_rules TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_events TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_exceptions TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_cycle_policies TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON dbo.activity_quality TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_snapshots TO [iot_team_app_role];
+GRANT SELECT, INSERT ON dbo.activity_clarifications TO [iot_team_app_role];
 GO

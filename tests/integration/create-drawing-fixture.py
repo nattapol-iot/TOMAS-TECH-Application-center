@@ -1,0 +1,35 @@
+from pathlib import Path
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, landscape
+from PIL import Image, ImageDraw
+
+out = Path('output/pdf')
+out.mkdir(parents=True, exist_ok=True)
+c = canvas.Canvas(str(out / 'test-only-drawing.pdf'), pagesize=landscape(A4))
+c.setTitle('TEST ONLY - Control panel drawing')
+c.setFont('Helvetica-Bold', 20)
+c.drawString(40, 548, 'TEST ONLY - CONTROL PANEL DESIGN')
+c.setFont('Helvetica', 11)
+c.drawString(40, 526, 'Synthetic approval fixture. NOT FOR MANUFACTURE. No real employee signatures.')
+c.rect(80, 150, 280, 330)
+c.rect(105, 365, 230, 85)
+c.drawString(120, 400, 'Operator interface - sample')
+for y in [320, 260, 200]:
+    c.line(105,y,335,y)
+    for x in [120,180,240,300]: c.rect(x,y+5,20,25)
+c.drawString(410, 450, 'Example enclosure: W500 x H600 x D350')
+c.drawString(410, 422, 'Prepared by: TEST Member')
+c.drawString(410, 394, 'Checked by: TEST Leader')
+c.drawString(410, 366, 'Approved by: TEST Manager')
+c.drawString(410, 338, 'Revision: R00')
+c.setFont('Helvetica-Bold', 14)
+c.drawString(410, 245, 'Approval must be completed in the application.')
+c.setFont('Helvetica', 11)
+c.drawString(410, 220, 'This source PDF is unsigned; its SHA-256 is frozen on import.')
+c.drawString(40, 65, 'TEST-PROJ / Design control panel | Training and software validation only')
+c.save()
+im=Image.new('RGBA',(420,150),'white')
+d=ImageDraw.Draw(im)
+d.rectangle((4,4,415,145),outline='blue',width=5)
+d.text((45,62),'TEST ONLY - NOT A COMPANY SEAL',fill='blue',font_size=20)
+im.save(out/'test-only-stamp.png')

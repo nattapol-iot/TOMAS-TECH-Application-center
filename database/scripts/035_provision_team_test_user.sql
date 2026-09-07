@@ -33,14 +33,18 @@ IF @role_id IS NULL
 
 DECLARE @test_object_id nvarchar(64) = N'team-test:'
     + LEFT(CONVERT(nvarchar(64), HASHBYTES('SHA2_256', CONVERT(varbinary(512), @email)), 2), 54);
-DECLARE @existing_object_id nvarchar(64) = (
-    SELECT entra_object_id FROM dbo.users WITH (UPDLOCK, HOLDLOCK) WHERE email = @email
-);
+DECLARE @existing_user_id bigint;
+DECLARE @existing_object_id nvarchar(64);
+SELECT
+    @existing_user_id = id,
+    @existing_object_id = entra_object_id
+FROM dbo.users WITH (UPDLOCK, HOLDLOCK)
+WHERE email = @email;
 
 IF @existing_object_id IS NOT NULL AND @existing_object_id NOT LIKE N'team-test:%'
     THROW 51064, 'Email is already assigned to a real Entra identity; do not downgrade it to TeamTest.', 1;
 
-IF @existing_object_id IS NULL
+IF @existing_user_id IS NULL
 BEGIN
     INSERT INTO dbo.users(entra_object_id, email, name, initials, role_id, department, level)
     VALUES (@test_object_id, @email, @name, @initials, @role_id, @department, @level);
@@ -48,7 +52,8 @@ END
 ELSE
 BEGIN
     UPDATE dbo.users
-    SET name = @name,
+    SET entra_object_id = COALESCE(entra_object_id, @test_object_id),
+        name = @name,
         initials = @initials,
         role_id = @role_id,
         department = @department,
@@ -56,7 +61,7 @@ BEGIN
         is_active = 1,
         deleted_at = NULL,
         updated_at = SYSUTCDATETIME()
-    WHERE email = @email AND entra_object_id = @existing_object_id;
+    WHERE id = @existing_user_id;
 END;
 
 COMMIT TRANSACTION;

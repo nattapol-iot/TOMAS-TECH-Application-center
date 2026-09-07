@@ -1,5 +1,7 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
+import { useT as useUiText } from "../i18n";
 import { useState } from "react";
 import { BOM_LINES, BOMS, MAT_ITEMS, PROJECTS, type MatItem } from "../data";
 import {
@@ -15,6 +17,7 @@ import { useT } from "../i18n";
 import type { ScreenProps } from "../routes";
 
 export default function Inventory({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   const session = useSession();
   const store = useMatStore();
@@ -73,9 +76,9 @@ export default function Inventory({ go, notify }: ScreenProps) {
                 <div className="request-row" key={adjustment.id}>
                   <div className="request-head">
                     <strong className="mono">{adjustment.no}</strong>
-                    <span>{item.itemCode} · {item.partNo}</span>
+                    <span>{item.itemCode} <LocalizedText text={"·"} /> {item.partNo}</span>
                     <Pill tone={adjustment.qtyChange < 0 ? "red" : "green"}>{adjustment.qtyChange > 0 ? "+" : ""}{adjustment.qtyChange}</Pill>
-                    <span className="muted">{t("by")} {userName(adjustment.requestedBy)} · {adjustment.requestedAt}</span>
+                    <span className="muted">{t("by")} {userName(adjustment.requestedBy)} <LocalizedText text={"·"} /> {adjustment.requestedAt}</span>
                   </div>
                   <p className="muted">{adjustment.reason}</p>
                   {perm.canApproveAdjustment ? (
@@ -153,7 +156,7 @@ export default function Inventory({ go, notify }: ScreenProps) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>{t("Item")}</th><th>{t("Project")}</th><th>{t("BOM")}</th><th className="num">{t("Reserved Qty")}</th><th>{t("Required")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th aria-label="Actions" /></tr>
+              <tr><th>{t("Item")}</th><th>{t("Project")}</th><th>{t("BOM")}</th><th className="num">{t("Reserved Qty")}</th><th>{t("Required")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th aria-label={uiText("Actions")} /></tr>
             </thead>
             <tbody>
               {activeReservations.map((rsv) => {
@@ -161,7 +164,7 @@ export default function Inventory({ go, notify }: ScreenProps) {
                 const project = PROJECTS.find((entry) => entry.id === rsv.projectId);
                 return (
                   <tr key={rsv.id}>
-                    <td><strong className="mono">{item.itemCode}</strong> · {item.partNo}</td>
+                    <td><strong className="mono">{item.itemCode}</strong> <LocalizedText text={"·"} /> {item.partNo}</td>
                     <td>
                       <button className="link-btn" type="button" onClick={() => go({ name: "project", id: rsv.projectId })}>{project?.no}</button>
                       <span className="muted"> {project?.name}</span>

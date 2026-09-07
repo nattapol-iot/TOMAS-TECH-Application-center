@@ -1,0 +1,19 @@
+.sign-preview{min-width:0}
+.sign-preview-tools{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:12px 0}
+.sign-preview-tools label{display:grid;gap:4px;font-size:12px}
+.sign-preview-tools input{width:78px}
+.sign-preview-scroll{max-height:58vh;overflow:auto;background:#e6ebf2;padding:14px;margin:12px 0;border:1px solid #cbd5e1}
+.sign-page{position:relative;width:100%;background:white;line-height:0;box-shadow:0 2px 8px #0f172a26}
+.sign-page canvas{display:block;width:100%;height:auto}
+.sign-mark{position:absolute;outline:1px dashed #64748b;box-sizing:border-box;line-height:normal}
+.sign-mark.selected{outline:2px solid #1675d1;background:#1675d110}
+.sign-mark img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+.sign-drag{position:absolute;inset:0;width:100%;height:100%;background:transparent;border:0;cursor:move;touch-action:none}
+.sign-drag:focus-visible{outline:3px solid #f59e0b}
+.sign-resize{position:absolute;right:-8px;bottom:-8px;width:24px;height:24px;border:1px solid white;background:#1675d1;color:white;cursor:nwse-resize;touch-action:none}
+.sign-confirm{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid #cbd5e1;border-radius:6px}
+.sign-confirm input{width:auto}
+.sign-certificate-frame{width:100%;height:62vh;border:1px solid #cbd5e1;background:white}
+
+.sign-preview label select, .sign-preview-tools input { min-height:32px; border:1px solid #cbd5e1; border-radius:4px; padding:4px 8px; background:white; color:#183153; font:inherit; }
+.sign-preview .sign-preview-tools .btn { border:1px solid #cbd5e1; padding:7px 10px; }

@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   COST_STRUCTURE, CUSTOMERS, ENGINEERING_ACTIVITIES, ENGINEER_LEVELS, DEPARTMENTS,
@@ -395,7 +397,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
   return (
     <>
       <div className="breadcrumb">
-        <button type="button" onClick={() => go({ name: "estimates" })}>Estimate Cost</button>
+        <button type="button" onClick={() => go({ name: "estimates" })}><LocalizedText text={"Estimate Cost"} /></button>
         <Icon name="chevronRight" />
         <button type="button" onClick={() => inquiry && go({ name: "inquiry", id: inquiry.id })}>{base.inquiryNo}</button>
         <Icon name="chevronRight" />
@@ -408,41 +410,37 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
         subtitle={`${customer?.name} · Inquiry ${base.inquiryNo}`}
         meta={
           <>
-            <div><span>Estimate owner</span><strong>{userName(base.ownerId)}</strong></div>
-            <div><span>Estimate due</span><strong>{formatDate(base.dueDate)}</strong></div>
-            <div><span>Status</span><strong><Badge tone={toneOf(status)}>{status}</Badge></strong></div>
-            <div><span>Progress</span><strong style={{ minWidth: 120 }}><ProgressCell value={base.progress} /></strong></div>
-            {locked ? <div><span>Lock</span><strong className="green-text"><Icon name="lock" /> Approved revision locked</strong></div> : null}
+            <div><span><LocalizedText text={"Estimate owner"} /></span><strong>{userName(base.ownerId)}</strong></div>
+            <div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(base.dueDate)}</strong></div>
+            <div><span><LocalizedText text={"Status"} /></span><strong><Badge tone={toneOf(status)}>{status}</Badge></strong></div>
+            <div><span><LocalizedText text={"Progress"} /></span><strong style={{ minWidth: 120 }}><ProgressCell value={base.progress} /></strong></div>
+            {locked ? <div><span><LocalizedText text={"Lock"} /></span><strong className="green-text"><Icon name="lock" /> Approved revision locked</strong></div> : null}
           </>
         }
       />
 
       <div className="workspace-bar">
         <button className="btn primary" type="button" onClick={save} disabled={locked || !dirty}>
-          <Icon name="check" />{dirty ? "Save" : "Saved"}
+          <Icon name="check" />{dirty ? <LocalizedText text={"Save"} /> : <LocalizedText text={"Saved"} />}
         </button>
         <button className="btn default" type="button" onClick={() => { setTab("validation"); setValidationOpen(true); }}>
-          <Icon name="shield" />Validate
-          {errors ? <span className="badge red">{errors}</span> : warnings ? <span className="badge amber">{warnings}</span> : <span className="badge green">OK</span>}
+          <Icon name="shield" /><LocalizedText text={"Validate"} /> {errors ? <span className="badge red">{errors}</span> : warnings ? <span className="badge amber">{warnings}</span> : <span className="badge green"><LocalizedText text={"OK"} /></span>}
         </button>
-        <button className="btn default" type="button" onClick={() => setRevisionOpen(true)}><Icon name="gitBranch" />Create Revision</button>
-        <button className="btn default" type="button" onClick={() => setTab("compare")}><Icon name="compare" />Compare Revision</button>
+        <button className="btn default" type="button" onClick={() => setRevisionOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button>
+        <button className="btn default" type="button" onClick={() => setTab("compare")}><Icon name="compare" /><LocalizedText text={"Compare Revision"} /></button>
         <span className="spacer" />
         {status === "Engineering Review" ? (
           <>
             <button className="btn warn" type="button" onClick={() => { setStatus("Revision Required"); notify("Revision requested — estimate owner notified"); }}>
-              <Icon name="refresh" />Request Revision
-            </button>
+              <Icon name="refresh" /><LocalizedText text={"Request Revision"} /> </button>
             <button className="btn success" type="button" onClick={() => { setStatus("Approved"); notify(`${base.no} ${base.revision} approved and locked`); }} disabled={errors > 0}>
-              <Icon name="checkCircle" />Approve
-            </button>
+              <Icon name="checkCircle" /><LocalizedText text={"Approve"} /> </button>
           </>
         ) : (
           <button className="btn primary" type="button" disabled={locked || errors > 0} onClick={() => { setStatus("Engineering Review"); notify("Submitted for engineering review"); }}>
-            <Icon name="send" />Submit Review
-          </button>
+            <Icon name="send" /><LocalizedText text={"Submit Review"} /> </button>
         )}
-        <button className="btn default" type="button" onClick={exportExcel}><Icon name="download" />Export Excel</button>
+        <button className="btn default" type="button" onClick={exportExcel}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
         <Menu
           label="More"
           items={[
@@ -461,7 +459,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
           <Icon name="alertTriangle" />
           <span><strong>{errors} critical error(s)</strong> must be resolved before this estimate can be approved.</span>
           <span className="spacer" />
-          <button className="link-btn" type="button" onClick={() => setTab("validation")}>Open validation<Icon name="arrowRight" /></button>
+          <button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text={"Open validation"} /><Icon name="arrowRight" /></button>
         </div>
       ) : null}
 
@@ -631,7 +629,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
           footer={
             <>
               <span className="spacer" />
-              <button className="btn default" type="button" onClick={() => setDeletePackage(null)}>Cancel</button>
+              <button className="btn default" type="button" onClick={() => setDeletePackage(null)}><LocalizedText text={"Cancel"} /></button>
               <button className="btn danger" type="button" onClick={() => removePackage(deletePackage)}>
                 <Icon name="trash" />Delete work package
               </button>
@@ -662,7 +660,7 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
           footer={
             <>
               <span className="spacer" />
-              <button className="btn default" type="button" onClick={() => setDeleteModule(null)}>Cancel</button>
+              <button className="btn default" type="button" onClick={() => setDeleteModule(null)}><LocalizedText text={"Cancel"} /></button>
               <button className="btn danger" type="button" onClick={() => removeModule(deleteModule.categoryCode, deleteModule.module)}>
                 <Icon name="trash" />Delete module
               </button>
@@ -728,10 +726,8 @@ export default function Workspace({ estimateId, initialTab, go, notify }: Screen
                 {errors ? "Critical errors must be resolved before approval." : "No critical error — this estimate can be submitted."}
               </span>
               <span className="spacer" />
-              <button className="btn default" type="button" onClick={() => setValidationOpen(false)}>Close</button>
-              <button className="btn primary" type="button" disabled={errors > 0} onClick={() => { setValidationOpen(false); setStatus("Engineering Review"); notify("Submitted for engineering review"); }}>
-                Submit for review
-              </button>
+              <button className="btn default" type="button" onClick={() => setValidationOpen(false)}><LocalizedText text={"Close"} /></button>
+              <button className="btn primary" type="button" disabled={errors > 0} onClick={() => { setValidationOpen(false); setStatus("Engineering Review"); notify("Submitted for engineering review"); }}><LocalizedText text={"Submit for review"} /> </button>
             </>
           }
         >
@@ -769,6 +765,7 @@ function CostItemsTab({
   onCopy: () => void;
   totals: ReturnType<typeof estimateTotals>;
 }) {
+  const uiText = useUiText();
   const countOf = (code: string) => items.filter((item) => item.categoryCode === code).length;
   const modulesOf = (code: string) => modulesInCategory(items, modules, code);
 
@@ -788,26 +785,24 @@ function CostItemsTab({
       subtitle="Discipline → main module → items · Enter opens a new line in the same module · Total Cost is calculated as Qty × Unit Cost and cannot be typed over"
       actions={
         <>
-          <button className="btn default sm" type="button" onClick={() => onSearch(undefined)}><Icon name="search" />Search Price Library</button>
-          <button className="btn default sm" type="button" onClick={onImport}><Icon name="upload" />Import Excel</button>
-          <button className="btn default sm" type="button" onClick={onCopy}><Icon name="copy" />Copy Previous Estimate</button>
-          <button className="btn default sm" type="button" onClick={onAdd} disabled={locked}><Icon name="edit" />Add with details</button>
+          <button className="btn default sm" type="button" onClick={() => onSearch(undefined)}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
+          <button className="btn default sm" type="button" onClick={onImport}><Icon name="upload" /><LocalizedText text={"Import Excel"} /></button>
+          <button className="btn default sm" type="button" onClick={onCopy}><Icon name="copy" /><LocalizedText text={"Copy Previous Estimate"} /></button>
+          <button className="btn default sm" type="button" onClick={onAdd} disabled={locked}><Icon name="edit" /><LocalizedText text={"Add with details"} /></button>
           <button
             className="btn primary sm"
             type="button"
             disabled={locked}
             onClick={() => onModuleForm({ mode: "new", categoryCode: targetCategory, name: "" })}
           >
-            <Icon name="layers" />New Main Module
-          </button>
+            <Icon name="layers" /><LocalizedText text={"New Main Module"} /> </button>
         </>
       }
       flush
     >
       <div className="subtabs" role="tablist" aria-label="Cost discipline">
         <button type="button" role="tab" aria-selected={activeCategory === "all"}
-          className={activeCategory === "all" ? "subtab active" : "subtab"} onClick={() => onCategory("all")}>
-          All disciplines<em>{items.length}</em>
+          className={activeCategory === "all" ? "subtab active" : "subtab"} onClick={() => onCategory("all")}><LocalizedText text={"All disciplines"} /><em>{items.length}</em>
         </button>
         {COST_STRUCTURE.map((category) => {
           const count = countOf(category.code);
@@ -835,29 +830,29 @@ function CostItemsTab({
         <table className="sheet" style={{ minWidth: 2956 }}>
           <thead>
             <tr>
-              <th style={{ width: 44 }}>No.</th>
-              <th style={{ width: 120 }}>Cost Category</th>
-              <th style={{ width: 170 }}>Main Module</th>
-              <th style={{ width: 130 }}>Subcategory</th>
-              <th style={{ width: 110 }}>Item Code</th>
-              <th style={{ width: 250 }}>Description</th>
-              <th style={{ width: 110 }}>Brand</th>
-              <th style={{ width: 140 }}>Model</th>
-              <th style={{ width: 200 }}>Specification</th>
-              <th style={{ width: 190 }}>Supplier</th>
-              <th className="num" style={{ width: 70 }}>Qty</th>
-              <th style={{ width: 80 }}>Unit</th>
-              <th className="num" style={{ width: 110 }}>Unit Cost</th>
-              <th className="num" style={{ width: 120 }}>Total Cost</th>
-              <th style={{ width: 150 }}>Price Source</th>
-              <th style={{ width: 120 }}>Reference No.</th>
-              <th style={{ width: 150 }}>Reference Project</th>
-              <th style={{ width: 110 }}>Price Date</th>
-              <th style={{ width: 96 }}>Price Age</th>
-              <th style={{ width: 160 }}>Remark</th>
-              <th style={{ width: 130 }}>Owner</th>
-              <th style={{ width: 130 }}>Status</th>
-              <th style={{ width: 66 }} aria-label="Action" />
+              <th style={{ width: 44 }}><LocalizedText text={"No."} /></th>
+              <th style={{ width: 120 }}><LocalizedText text={"Cost Category"} /></th>
+              <th style={{ width: 170 }}><LocalizedText text={"Main Module"} /></th>
+              <th style={{ width: 130 }}><LocalizedText text={"Subcategory"} /></th>
+              <th style={{ width: 110 }}><LocalizedText text={"Item Code"} /></th>
+              <th style={{ width: 250 }}><LocalizedText text={"Description"} /></th>
+              <th style={{ width: 110 }}><LocalizedText text={"Brand"} /></th>
+              <th style={{ width: 140 }}><LocalizedText text={"Model"} /></th>
+              <th style={{ width: 200 }}><LocalizedText text={"Specification"} /></th>
+              <th style={{ width: 190 }}><LocalizedText text={"Supplier"} /></th>
+              <th className="num" style={{ width: 70 }}><LocalizedText text={"Qty"} /></th>
+              <th style={{ width: 80 }}><LocalizedText text={"Unit"} /></th>
+              <th className="num" style={{ width: 110 }}><LocalizedText text={"Unit Cost"} /></th>
+              <th className="num" style={{ width: 120 }}><LocalizedText text={"Total Cost"} /></th>
+              <th style={{ width: 150 }}><LocalizedText text={"Price Source"} /></th>
+              <th style={{ width: 120 }}><LocalizedText text={"Reference No."} /></th>
+              <th style={{ width: 150 }}><LocalizedText text={"Reference Project"} /></th>
+              <th style={{ width: 110 }}><LocalizedText text={"Price Date"} /></th>
+              <th style={{ width: 96 }}><LocalizedText text={"Price Age"} /></th>
+              <th style={{ width: 160 }}><LocalizedText text={"Remark"} /></th>
+              <th style={{ width: 130 }}><LocalizedText text={"Owner"} /></th>
+              <th style={{ width: 130 }}><LocalizedText text={"Status"} /></th>
+              <th style={{ width: 66 }} aria-label={uiText("Action")} />
             </tr>
           </thead>
           <tbody>
@@ -873,7 +868,7 @@ function CostItemsTab({
                     <div className="row band">
                       <Pill>{category.code}</Pill>
                       <strong>{category.name}</strong>
-                      <span style={{ opacity: 0.7 }}>{moduleGroups.filter((g) => g.module).length} modules · {categoryItems.length} items</span>
+                      <span style={{ opacity: 0.7 }}>{moduleGroups.filter((g) => g.module).length} modules · {categoryItems.length} <LocalizedText text={"items"} /></span>
                       <strong>{money(subtotal)}</strong>
                       <button type="button" className="group-action" disabled={locked}
                         onClick={() => onModuleForm({ mode: "new", categoryCode: category.code, name: "" })}>
@@ -888,22 +883,19 @@ function CostItemsTab({
                       <div className="row band">
                         <span className="module-bullet"><Icon name="package" /></span>
                         <strong>{group.module || "Unassigned items"}</strong>
-                        <span className="muted">{group.items.length} item{group.items.length === 1 ? "" : "s"}</span>
+                        <span className="muted">{group.items.length} <LocalizedText text={"item"} />{group.items.length === 1 ? "" : "s"}</span>
                         <strong className="num">{money(moduleTotal(group.items))}</strong>
                         <button type="button" className="group-action" disabled={locked}
                           onClick={() => onAddRow(category.code, group.module)} title="Add an item to this module">
-                          <Icon name="plus" />Add item
-                        </button>
+                          <Icon name="plus" /><LocalizedText text={"Add item"} /> </button>
                         {group.module ? (
                           <>
                             <button type="button" className="group-action" disabled={locked}
                               onClick={() => onModuleForm({ mode: "rename", categoryCode: category.code, name: group.module })} title="Rename module">
-                              <Icon name="edit" />Rename
-                            </button>
+                              <Icon name="edit" /><LocalizedText text={"Rename"} /> </button>
                             <button type="button" className="group-action danger" disabled={locked}
                               onClick={() => onDeleteModule(category.code, group.module)} title="Delete module and its items">
-                              <Icon name="trash" />Delete
-                            </button>
+                              <Icon name="trash" /><LocalizedText text={"Delete"} /> </button>
                           </>
                         ) : null}
                       </div>
@@ -1008,7 +1000,7 @@ function CostItemsTab({
                   <tr className="add-row" key={`a-${category.code}-${group.module || "none"}`}>
                     <td colSpan={23}>
                       <button type="button" className="add-row-btn" onClick={() => onAddRow(category.code, group.module)} disabled={locked}>
-                        <span><Icon name="plus" />Add item to {group.module || `${category.code} ${category.name}`}</span>
+                        <span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module || `${category.code} ${category.name}`}</span>
                       </button>
                     </td>
                   </tr>,
@@ -1021,7 +1013,7 @@ function CostItemsTab({
                   ]),
                 ]),
                 <tr className="subtotal-row" key={`s-${category.code}`}>
-                  <td colSpan={13}>{category.code} {category.name} subtotal</td>
+                  <td colSpan={13}>{category.code} {category.name} <LocalizedText text={"subtotal"} /></td>
                   <td className="num">{moneyShort(subtotal)}</td>
                   <td colSpan={9} />
                 </tr>,
@@ -1037,8 +1029,7 @@ function CostItemsTab({
                     action={
                       <button className="btn primary" type="button" disabled={locked}
                         onClick={() => onModuleForm({ mode: "new", categoryCode: targetCategory, name: "" })}>
-                        <Icon name="layers" />New Main Module
-                      </button>
+                        <Icon name="layers" /><LocalizedText text={"New Main Module"} /> </button>
                     }
                   />
                 </td>
@@ -1067,11 +1058,11 @@ function CostItemsTab({
           ))}
         <div className="foot-total">
           <span>{activeCategory === "all" ? "Material + all cost items" : `${activeCategory} subtotal`}</span>
-          <strong>{moneyShort(moduleTotal(visibleItems))} THB</strong>
+          <strong>{moneyShort(moduleTotal(visibleItems))} <LocalizedText text={"THB"} /></strong>
         </div>
         <div className="foot-total">
-          <span>Total estimated cost</span>
-          <strong>{moneyShort(totals.total)} THB</strong>
+          <span><LocalizedText text={"Total estimated cost"} /></span>
+          <strong>{moneyShort(totals.total)} <LocalizedText text={"THB"} /></strong>
         </div>
       </div>
     </Panel>
@@ -1116,7 +1107,7 @@ function SummaryTab({ estimate, overrides, onOverride, onAddLine, locked, onExpo
               <span className="summary-block-icon"><Icon name={BLOCK_ICON[block.key]} /></span>
               <span className="summary-block-label">{block.label}</span>
             </div>
-            <strong>{moneyShort(block.total)}<em>THB</em></strong>
+            <strong>{moneyShort(block.total)}<em><LocalizedText text={"THB"} /></em></strong>
             <Progress value={share(block.total)} tone={BLOCK_TONE[block.key]} />
             <div className="summary-block-foot">
               <span>{share(block.total)}% of estimate</span>
@@ -1131,13 +1122,13 @@ function SummaryTab({ estimate, overrides, onOverride, onAddLine, locked, onExpo
         <Panel
           title="Estimate cost summary"
           subtitle="Four main blocks, plus everything that belongs to none of them"
-          actions={<button className="btn default sm" type="button" onClick={onExport}><Icon name="download" />Export summary</button>}
+          actions={<button className="btn default sm" type="button" onClick={onExport}><Icon name="download" /><LocalizedText text={"Export summary"} /></button>}
           flush
         >
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Cost block</th><th>What it collects</th><th className="num">Share</th><th className="num">Amount (THB)</th></tr>
+                <tr><th><LocalizedText text={"Cost block"} /></th><th>What it collects</th><th className="num"><LocalizedText text={"Share"} /></th><th className="num"><LocalizedText text={"Amount (THB)"} /></th></tr>
               </thead>
               <tbody>
                 {summary.blocks.map((block) => (
@@ -1173,10 +1164,10 @@ function SummaryTab({ estimate, overrides, onOverride, onAddLine, locked, onExpo
             <div className="foot-item"><span>Hardware</span><strong>{moneyShort(summary.blocks[0].total)}</strong></div>
             <div className="foot-item"><span>Software</span><strong>{moneyShort(summary.blocks[1].total)}</strong></div>
             <div className="foot-item"><span>Engineering / Service</span><strong>{moneyShort(summary.blocks[2].total)}</strong></div>
-            <div className="foot-item"><span>Installation</span><strong>{moneyShort(summary.blocks[3].total)}</strong></div>
+            <div className="foot-item"><span><LocalizedText text={"Installation"} /></span><strong>{moneyShort(summary.blocks[3].total)}</strong></div>
             <div className="foot-total">
-              <span>Total estimated cost</span>
-              <strong>{moneyShort(summary.grandTotal)} THB</strong>
+              <span><LocalizedText text={"Total estimated cost"} /></span>
+              <strong>{moneyShort(summary.grandTotal)} <LocalizedText text={"THB"} /></strong>
             </div>
           </div>
         </Panel>
@@ -1220,13 +1211,13 @@ function SummaryTab({ estimate, overrides, onOverride, onAddLine, locked, onExpo
                 <table className="sheet" style={{ minWidth: 780 }}>
                   <thead>
                     <tr>
-                      <th style={{ width: 210 }}>{block.key === "hardware" || block.key === "software" ? "Main module" : block.key === "engineering" ? "Department" : "Work package"}</th>
+                      <th style={{ width: 210 }}>{block.key === "hardware" || block.key === "software" ? "Main module" : block.key === "engineering" ? <LocalizedText text={"Department"} /> : "Work package"}</th>
                       <th style={{ width: 180 }}>{block.key === "hardware" || block.key === "software" ? "Cost category" : "Content"}</th>
                       <th className="num" style={{ width: 120 }}>Cost / unit</th>
-                      <th className="num" style={{ width: 74 }}>Qty</th>
-                      <th style={{ width: 92 }}>Unit</th>
+                      <th className="num" style={{ width: 74 }}><LocalizedText text={"Qty"} /></th>
+                      <th style={{ width: 92 }}><LocalizedText text={"Unit"} /></th>
                       <th className="num" style={{ width: 130 }}>Total (THB)</th>
-                      <th style={{ width: 170 }}>Remark</th>
+                      <th style={{ width: 170 }}><LocalizedText text={"Remark"} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1264,8 +1255,7 @@ function SummaryTab({ estimate, overrides, onOverride, onAddLine, locked, onExpo
                     </tr>
                     <tr className="subtotal-row">
                       <td colSpan={5}>
-                        {block.label} total
-                        {block.total !== block.rolledUp ? ` · rolled up ${moneyShort(block.rolledUp)}, re-counted here` : ""}
+                        {block.label} <LocalizedText text={"total"} /> {block.total !== block.rolledUp ? ` · rolled up ${moneyShort(block.rolledUp)}, re-counted here` : ""}
                       </td>
                       <td className="num">{moneyShort(block.total)}</td>
                       <td />
@@ -1309,6 +1299,7 @@ function ManhourTab({
   onPackageForm: (form: PackageForm) => void;
   onDeletePackage: (name: string) => void;
 }) {
+  const uiText = useUiText();
   const effort = departmentEffort(estimate);
   const totals = estimateTotals(estimate);
   const byCostType = costTypeEffort(estimate);
@@ -1342,12 +1333,10 @@ function ManhourTab({
           <>
             <button className="btn default sm" type="button" disabled={locked}
               onClick={() => onAddActivity(visible[0]?.name ?? "", (visible[0]?.costType ?? "Engineering") as CostType)}>
-              <Icon name="plus" />Add activity
-            </button>
+              <Icon name="plus" /><LocalizedText text={"Add activity"} /> </button>
             <button className="btn primary sm" type="button" disabled={locked}
               onClick={() => onPackageForm({ mode: "new", name: "", costType: activeCostType === "Installation" ? "Installation" : "Engineering" })}>
-              <Icon name="layers" />New Work Package
-            </button>
+              <Icon name="layers" /><LocalizedText text={"New Work Package"} /> </button>
           </>
         }
         flush
@@ -1365,33 +1354,31 @@ function ManhourTab({
             </button>
           ))}
           <span className="spacer" />
-          <span className="muted" style={{ fontSize: "var(--fs-2xs)" }}>
-            Engineering {moneyShort(totals.effortEngineering)} · Installation &amp; service {moneyShort(totals.effortInstallation)} · Supplier {moneyShort(totals.supplierManhour)} · Expense {moneyShort(totals.siteExpense)} THB
-          </span>
+          <span className="muted" style={{ fontSize: "var(--fs-2xs)" }}><LocalizedText text={"Engineering"} /> {moneyShort(totals.effortEngineering)} · Installation &amp; service {moneyShort(totals.effortInstallation)} <LocalizedText text={"· Supplier"} /> {moneyShort(totals.supplierManhour)} <LocalizedText text={"· Expense"} /> {moneyShort(totals.siteExpense)} <LocalizedText text={"THB"} /> </span>
         </div>
 
         <div className="table-wrap tall">
           <table className="sheet" style={{ minWidth: 2360 }}>
             <thead>
               <tr>
-                <th style={{ width: 44 }}>No.</th>
-                <th style={{ width: 130 }}>Type</th>
-                <th style={{ width: 250 }}>Activity / Description</th>
-                <th style={{ width: 130 }}>Department</th>
-                <th style={{ width: 150 }}>Engineer Level</th>
-                <th style={{ width: 140 }}>Cost Type</th>
-                <th style={{ width: 190 }}>Supplier</th>
-                <th style={{ width: 150 }}>Quotation No.</th>
-                <th className="num" style={{ width: 80 }}>Qty</th>
-                <th style={{ width: 110 }}>Unit</th>
-                <th className="num" style={{ width: 90 }}>Man-days</th>
-                <th className="num" style={{ width: 95 }}>Hours / Day</th>
-                <th className="num" style={{ width: 120 }}>Rate</th>
-                <th className="num" style={{ width: 100 }}>Man-hours</th>
-                <th className="num" style={{ width: 130 }}>Cost</th>
-                <th style={{ width: 150 }}>Owner</th>
-                <th style={{ width: 180 }}>Remark</th>
-                <th style={{ width: 52 }} aria-label="Action" />
+                <th style={{ width: 44 }}><LocalizedText text={"No."} /></th>
+                <th style={{ width: 130 }}><LocalizedText text={"Type"} /></th>
+                <th style={{ width: 250 }}><LocalizedText text={"Activity / Description"} /></th>
+                <th style={{ width: 130 }}><LocalizedText text={"Department"} /></th>
+                <th style={{ width: 150 }}><LocalizedText text={"Engineer Level"} /></th>
+                <th style={{ width: 140 }}><LocalizedText text={"Cost Type"} /></th>
+                <th style={{ width: 190 }}><LocalizedText text={"Supplier"} /></th>
+                <th style={{ width: 150 }}><LocalizedText text={"Quotation No."} /></th>
+                <th className="num" style={{ width: 80 }}><LocalizedText text={"Qty"} /></th>
+                <th style={{ width: 110 }}><LocalizedText text={"Unit"} /></th>
+                <th className="num" style={{ width: 90 }}><LocalizedText text={"Man-days"} /></th>
+                <th className="num" style={{ width: 95 }}><LocalizedText text={"Hours / Day"} /></th>
+                <th className="num" style={{ width: 120 }}><LocalizedText text={"Rate"} /></th>
+                <th className="num" style={{ width: 100 }}><LocalizedText text={"Man-hours"} /></th>
+                <th className="num" style={{ width: 130 }}><LocalizedText text={"Cost"} /></th>
+                <th style={{ width: 150 }}><LocalizedText text={"Owner"} /></th>
+                <th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th>
+                <th style={{ width: 52 }} aria-label={uiText("Action")} />
               </tr>
             </thead>
             <tbody>
@@ -1403,32 +1390,26 @@ function ManhourTab({
                       <strong>{group.name || "Unassigned effort"}</strong>
                       <Badge tone={group.costType === "Installation" ? "amber" : "blue"}>{COST_TYPE_SHORT[group.costType]}</Badge>
                       <span className="muted">
-                        {group.manhours.reduce((sum, line) => sum + lineManDays(line), 0)} MD
-                        {group.expenses.length ? ` · ${group.expenses.length} expense` : ""}
+                        {group.manhours.reduce((sum, line) => sum + lineManDays(line), 0)} <LocalizedText text={"MD"} /> {group.expenses.length ? ` · ${group.expenses.length} expense` : ""}
                       </span>
                       <strong className="num">{money(packageTotal(group))}</strong>
                       <button type="button" className="group-action" disabled={locked}
                         onClick={() => onAddActivity(group.name, group.costType)}>
-                        <Icon name="plus" />Add activity
-                      </button>
+                        <Icon name="plus" /><LocalizedText text={"Add activity"} /> </button>
                       <button type="button" className="group-action" disabled={locked}
                         onClick={() => onAddActivity(group.name, group.costType, "Supplier")}>
-                        <Icon name="quote" />Supplier man-hour
-                      </button>
+                        <Icon name="quote" /><LocalizedText text={"Supplier man-hour"} /> </button>
                       <button type="button" className="group-action" disabled={locked}
                         onClick={() => onAddExpense(group.name, group.costType)}>
-                        <Icon name="truck" />Add expense
-                      </button>
+                        <Icon name="truck" /><LocalizedText text={"Add expense"} /> </button>
                       {group.name ? (
                         <>
                           <button type="button" className="group-action" disabled={locked}
                             onClick={() => onPackageForm({ mode: "rename", name: group.name, costType: group.costType })}>
-                            <Icon name="edit" />Rename
-                          </button>
+                            <Icon name="edit" /><LocalizedText text={"Rename"} /> </button>
                           <button type="button" className="group-action danger" disabled={locked}
                             onClick={() => onDeletePackage(group.name)}>
-                            <Icon name="trash" />Delete
-                          </button>
+                            <Icon name="trash" /><LocalizedText text={"Delete"} /> </button>
                         </>
                       ) : null}
                     </div>
@@ -1450,7 +1431,7 @@ function ManhourTab({
                       <td><span className="cell-text muted">{orderedIds.indexOf(line.id) + 1}</span></td>
                       <td>
                         <select value={line.provider} disabled={locked} onChange={(e) => onPatch(line.id, { provider: e.target.value as ManhourProvider })}>
-                          <option value="Internal">Own engineer</option>
+                          <option value="Internal"><LocalizedText text={"Own engineer"} /></option>
                           <option value="Supplier">Supplier MH</option>
                         </select>
                       </td>
@@ -1512,7 +1493,7 @@ function ManhourTab({
                         ) : <span className="cell-text muted">—</span>}
                       </td>
                       <td><input {...enterAddsRow} className="num" type="number" min="1" value={line.engineers} disabled={locked} onChange={(e) => onPatch(line.id, { engineers: Number(e.target.value) })} /></td>
-                      <td><span className="cell-text muted">{line.provider === "Supplier" ? "Man" : "Engineer"}</span></td>
+                      <td><span className="cell-text muted">{line.provider === "Supplier" ? "Man" : <LocalizedText text={"Engineer"} />}</span></td>
                       <td><input {...enterAddsRow} className="num" type="number" min="0" step="0.5" value={line.manDays} disabled={locked} onChange={(e) => onPatch(line.id, { manDays: Number(e.target.value) })} /></td>
                       <td><input {...enterAddsRow} className="num" type="number" min="1" max="12" value={line.hoursPerDay} disabled={locked} onChange={(e) => onPatch(line.id, { hoursPerDay: Number(e.target.value) })} /></td>
                       {line.provider === "Supplier" ? (
@@ -1525,7 +1506,7 @@ function ManhourTab({
                           {offRate ? <span className="red-text">{moneyShort(line.dailyRate)}</span> : moneyShort(line.dailyRate)}
                         </td>
                       )}
-                      <td className="computed">{lineHours(line)} HR</td>
+                      <td className="computed">{lineHours(line)} <LocalizedText text={"HR"} /></td>
                       <td className="computed">{moneyShort(lineManhourCost(line))}</td>
                       <td>
                         <select value={line.owner} disabled={locked} onChange={(e) => onPatch(line.id, { owner: e.target.value })}>
@@ -1614,14 +1595,14 @@ function ManhourTab({
                 <tr className="add-row" key={`a-${group.name}`}>
                   <td colSpan={18}>
                     <button type="button" className="add-row-btn" onClick={() => onAddActivity(group.name, group.costType)} disabled={locked}>
-                      <span><Icon name="plus" />Add activity to {group.name || "this package"}</span>
+                      <span><Icon name="plus" /><LocalizedText text={"Add activity to"} /> {group.name || "this package"}</span>
                     </button>
                   </td>
                 </tr>,
                 <tr className="add-row" key={`ax-${group.name}`}>
                   <td colSpan={18}>
                     <button type="button" className="add-row-btn expense" onClick={() => onAddExpense(group.name, group.costType)} disabled={locked}>
-                      <span><Icon name="truck" />Add travel, accommodation or other expense to {group.name || "this package"}</span>
+                      <span><Icon name="truck" /><LocalizedText text={"Add travel, accommodation or other expense to"} /> {group.name || "this package"}</span>
                     </button>
                   </td>
                 </tr>,
@@ -1631,7 +1612,7 @@ function ManhourTab({
                   </tr>,
                 ]),
                 <tr className="subtotal-row" key={`s-${group.name}`}>
-                  <td colSpan={14}>{group.name || "Unassigned effort"} subtotal</td>
+                  <td colSpan={14}>{group.name || "Unassigned effort"} <LocalizedText text={"subtotal"} /></td>
                   <td className="num">{moneyShort(packageTotal(group))}</td>
                   <td colSpan={3} />
                 </tr>,
@@ -1646,8 +1627,7 @@ function ManhourTab({
                       action={
                         <button className="btn primary" type="button" disabled={locked}
                           onClick={() => onPackageForm({ mode: "new", name: "", costType: "Engineering" })}>
-                          <Icon name="layers" />New Work Package
-                        </button>
+                          <Icon name="layers" /><LocalizedText text={"New Work Package"} /> </button>
                       }
                     />
                   </td>
@@ -1658,24 +1638,24 @@ function ManhourTab({
         </div>
 
         <datalist id="quotation-list">
-          {QUOTATIONS.map((quotation) => <option key={quotation.id} value={quotation.no}>{quotation.supplier} · {moneyShort(quotation.amount)} THB</option>)}
+          {QUOTATIONS.map((quotation) => <option key={quotation.id} value={quotation.no}>{quotation.supplier} <LocalizedText text={"·"} /> {moneyShort(quotation.amount)} <LocalizedText text={"THB"} /></option>)}
         </datalist>
         <datalist id="supplier-list-mh">{SUPPLIERS.map((supplier) => <option key={supplier.id} value={supplier.name} />)}</datalist>
 
         <div className="sticky-foot">
-          <div className="foot-item"><span>Engineering cost</span><strong>{moneyShort(totals.effortEngineering)}</strong></div>
-          <div className="foot-item"><span>Installation &amp; service</span><strong>{moneyShort(totals.effortInstallation)}</strong></div>
-          <div className="foot-item"><span>Supplier man-hour</span><strong>{moneyShort(totals.supplierManhour)}</strong></div>
-          <div className="foot-item"><span>Travel / hotel / per diem</span><strong>{moneyShort(totals.siteExpense)}</strong></div>
-          <div className="foot-item"><span>Man-days</span><strong>{totals.manDays} MD</strong></div>
-          <div className="foot-item"><span>Man-hours</span><strong>{totals.manHours} HR</strong></div>
+          <div className="foot-item"><span><LocalizedText text={"Engineering cost"} /></span><strong>{moneyShort(totals.effortEngineering)}</strong></div>
+          <div className="foot-item"><span><LocalizedText text={"Installation & service"} /></span><strong>{moneyShort(totals.effortInstallation)}</strong></div>
+          <div className="foot-item"><span><LocalizedText text={"Supplier man-hour"} /></span><strong>{moneyShort(totals.supplierManhour)}</strong></div>
+          <div className="foot-item"><span><LocalizedText text={"Travel / hotel / per diem"} /></span><strong>{moneyShort(totals.siteExpense)}</strong></div>
+          <div className="foot-item"><span><LocalizedText text={"Man-days"} /></span><strong>{totals.manDays} <LocalizedText text={"MD"} /></strong></div>
+          <div className="foot-item"><span><LocalizedText text={"Man-hours"} /></span><strong>{totals.manHours} <LocalizedText text={"HR"} /></strong></div>
           <div className="foot-total">
-            <span>{activeCostType === "all" ? "Shown" : activeCostType} subtotal</span>
-            <strong>{moneyShort(visibleCost)} THB</strong>
+            <span>{activeCostType === "all" ? "Shown" : activeCostType} <LocalizedText text={"subtotal"} /></span>
+            <strong>{moneyShort(visibleCost)} <LocalizedText text={"THB"} /></strong>
           </div>
           <div className="foot-total">
             <span>Engineering + site expense</span>
-            <strong>{moneyShort(totals.engineering + totals.siteExpense)} THB</strong>
+            <strong>{moneyShort(totals.engineering + totals.siteExpense)} <LocalizedText text={"THB"} /></strong>
           </div>
         </div>
       </Panel>
@@ -1688,7 +1668,7 @@ function ManhourTab({
             <table>
               <thead>
                 <tr>
-                  <th>Cost type</th><th className="num">Man-days</th><th className="num">Man-hours</th>
+                  <th><LocalizedText text={"Cost type"} /></th><th className="num"><LocalizedText text={"Man-days"} /></th><th className="num"><LocalizedText text={"Man-hours"} /></th>
                   <th className="num">Effort cost</th><th className="num">of which supplier</th><th className="num">Expense</th>
                 </tr>
               </thead>
@@ -1696,17 +1676,17 @@ function ManhourTab({
                 {byCostType.map((row) => (
                   <tr key={row.costType}>
                     <td><Badge tone={row.costType === "Installation" ? "amber" : "blue"}>{COST_TYPE_LABEL[row.costType]}</Badge></td>
-                    <td className="num">{row.manDays} MD</td>
-                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{row.manDays} <LocalizedText text={"MD"} /></td>
+                    <td className="num">{row.manHours} <LocalizedText text={"HR"} /></td>
                     <td className="num">{moneyShort(row.cost)}</td>
                     <td className="num">{row.supplier ? moneyShort(row.supplier) : "—"}</td>
                     <td className="num">{row.expense ? moneyShort(row.expense) : "—"}</td>
                   </tr>
                 ))}
                 <tr className="subtotal-row">
-                  <td>Total</td>
-                  <td className="num">{totals.manDays} MD</td>
-                  <td className="num">{totals.manHours} HR</td>
+                  <td><LocalizedText text={"Total"} /></td>
+                  <td className="num">{totals.manDays} <LocalizedText text={"MD"} /></td>
+                  <td className="num">{totals.manHours} <LocalizedText text={"HR"} /></td>
                   <td className="num">{moneyShort(totals.engineering)}</td>
                   <td className="num">{moneyShort(totals.supplierManhour)}</td>
                   <td className="num">{moneyShort(totals.siteExpense)}</td>
@@ -1714,7 +1694,7 @@ function ManhourTab({
                 {providerEffort(estimate).map((row) => (
                   <tr key={row.provider}>
                     <td><Badge tone={row.provider === "Supplier" ? "violet" : "slate"}>{row.provider === "Supplier" ? "Supplier man-hour" : "Own engineers"}</Badge></td>
-                    <td className="num">{row.manDays} MD</td>
+                    <td className="num">{row.manDays} <LocalizedText text={"MD"} /></td>
                     <td className="num">—</td>
                     <td className="num">{moneyShort(row.cost)}</td>
                     <td className="num">—</td>
@@ -1730,21 +1710,21 @@ function ManhourTab({
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Department</th><th className="num">Man-days</th><th className="num">Man-hours</th><th className="num">Estimated Cost</th></tr>
+                <tr><th><LocalizedText text={"Department"} /></th><th className="num"><LocalizedText text={"Man-days"} /></th><th className="num"><LocalizedText text={"Man-hours"} /></th><th className="num"><LocalizedText text={"Estimated Cost"} /></th></tr>
               </thead>
               <tbody>
                 {effort.map((row) => (
                   <tr key={row.department}>
                     <td><strong>{row.department}</strong></td>
-                    <td className="num">{row.manDays} MD</td>
-                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{row.manDays} <LocalizedText text={"MD"} /></td>
+                    <td className="num">{row.manHours} <LocalizedText text={"HR"} /></td>
                     <td className="num">{moneyShort(row.cost)}</td>
                   </tr>
                 ))}
                 <tr className="subtotal-row">
-                  <td>Total</td>
-                  <td className="num">{totals.manDays} MD</td>
-                  <td className="num">{totals.manHours} HR</td>
+                  <td><LocalizedText text={"Total"} /></td>
+                  <td className="num">{totals.manDays} <LocalizedText text={"MD"} /></td>
+                  <td className="num">{totals.manHours} <LocalizedText text={"HR"} /></td>
                   <td className="num">{money(totals.engineering)}</td>
                 </tr>
               </tbody>
@@ -1774,6 +1754,7 @@ function OtherCostTab({ others, contingency, totals, locked, onContingency, onPa
   onPatch: (id: string, patch: Partial<Estimate["others"][number]>) => void;
   onAdd: () => void; onRemove: (id: string) => void;
 }) {
+  const uiText = useUiText();
   return (
     <section className="grid-main">
       <Panel
@@ -1786,14 +1767,14 @@ function OtherCostTab({ others, contingency, totals, locked, onContingency, onPa
           <table className="sheet">
             <thead>
               <tr>
-                <th style={{ width: 160 }}>Category</th>
-                <th style={{ width: 300 }}>Description</th>
-                <th className="num" style={{ width: 80 }}>Qty</th>
-                <th style={{ width: 90 }}>Unit</th>
-                <th className="num" style={{ width: 120 }}>Unit Cost</th>
-                <th className="num" style={{ width: 130 }}>Total Cost</th>
-                <th style={{ width: 200 }}>Remark</th>
-                <th style={{ width: 50 }} aria-label="Action" />
+                <th style={{ width: 160 }}><LocalizedText text={"Category"} /></th>
+                <th style={{ width: 300 }}><LocalizedText text={"Description"} /></th>
+                <th className="num" style={{ width: 80 }}><LocalizedText text={"Qty"} /></th>
+                <th style={{ width: 90 }}><LocalizedText text={"Unit"} /></th>
+                <th className="num" style={{ width: 120 }}><LocalizedText text={"Unit Cost"} /></th>
+                <th className="num" style={{ width: 130 }}><LocalizedText text={"Total Cost"} /></th>
+                <th style={{ width: 200 }}><LocalizedText text={"Remark"} /></th>
+                <th style={{ width: 50 }} aria-label={uiText("Action")} />
               </tr>
             </thead>
             <tbody>
@@ -1824,7 +1805,7 @@ function OtherCostTab({ others, contingency, totals, locked, onContingency, onPa
       </Panel>
 
       <div className="stack">
-        <Panel title="Contingency" subtitle="Applied to the whole cost base">
+        <Panel title={uiText("Contingency")} subtitle="Applied to the whole cost base">
           <Field label={`Contingency rate — ${contingency}%`} hint="Engineering judgement for unknown scope, approved by the Engineering Manager">
             <input type="range" min="0" max="15" step="1" value={contingency} disabled={locked} onChange={(e) => onContingency(Number(e.target.value))} />
           </Field>
@@ -1836,14 +1817,14 @@ function OtherCostTab({ others, contingency, totals, locked, onContingency, onPa
         </Panel>
         <Panel title="Cost base" subtitle="What the contingency is applied to">
           <dl className="def-list one">
-            <div><dt>Material</dt><dd>{money(totals.material)}</dd></div>
-            <div><dt>Engineering</dt><dd>{money(totals.engineering)}</dd></div>
-            <div><dt>Outsource</dt><dd>{money(totals.outsource)}</dd></div>
-            <div><dt>Transportation</dt><dd>{money(totals.transportation)}</dd></div>
-            <div><dt>Accommodation</dt><dd>{money(totals.accommodation)}</dd></div>
-            <div><dt>Other cost</dt><dd>{money(totals.other)}</dd></div>
-            <div><dt>Contingency</dt><dd>{money(totals.contingency)}</dd></div>
-            <div><dt>Total estimated cost</dt><dd><strong>{money(totals.total)}</strong></dd></div>
+            <div><dt><LocalizedText text={"Material"} /></dt><dd>{money(totals.material)}</dd></div>
+            <div><dt><LocalizedText text={"Engineering"} /></dt><dd>{money(totals.engineering)}</dd></div>
+            <div><dt><LocalizedText text={"Outsource"} /></dt><dd>{money(totals.outsource)}</dd></div>
+            <div><dt><LocalizedText text={"Transportation"} /></dt><dd>{money(totals.transportation)}</dd></div>
+            <div><dt><LocalizedText text={"Accommodation"} /></dt><dd>{money(totals.accommodation)}</dd></div>
+            <div><dt><LocalizedText text={"Other cost"} /></dt><dd>{money(totals.other)}</dd></div>
+            <div><dt><LocalizedText text={"Contingency"} /></dt><dd>{money(totals.contingency)}</dd></div>
+            <div><dt><LocalizedText text={"Total estimated cost"} /></dt><dd><strong>{money(totals.total)}</strong></dd></div>
           </dl>
         </Panel>
       </div>
@@ -1874,13 +1855,13 @@ function AssignmentTab({ assignments, onPatch, notify }: {
           <table className="sheet">
             <thead>
               <tr>
-                <th style={{ width: 150 }}>Section</th>
-                <th style={{ width: 170 }}>Responsible Engineer</th>
-                <th style={{ width: 170 }}>Support Engineer</th>
-                <th style={{ width: 130 }}>Due Date</th>
-                <th style={{ width: 160 }}>Status</th>
-                <th style={{ width: 140 }}>Progress</th>
-                <th style={{ width: 260 }}>Comment</th>
+                <th style={{ width: 150 }}><LocalizedText text={"Section"} /></th>
+                <th style={{ width: 170 }}><LocalizedText text={"Responsible Engineer"} /></th>
+                <th style={{ width: 170 }}><LocalizedText text={"Support Engineer"} /></th>
+                <th style={{ width: 130 }}><LocalizedText text={"Due Date"} /></th>
+                <th style={{ width: 160 }}><LocalizedText text={"Status"} /></th>
+                <th style={{ width: 140 }}><LocalizedText text={"Progress"} /></th>
+                <th style={{ width: 260 }}><LocalizedText text={"Comment"} /></th>
               </tr>
             </thead>
             <tbody>
@@ -1916,7 +1897,7 @@ function AssignmentTab({ assignments, onPatch, notify }: {
       <div className="stack">
         <Panel title="Estimate completion" subtitle="What the manager sees">
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
-            <span className="muted">Overall</span>
+            <span className="muted"><LocalizedText text={"Overall"} /></span>
             <strong style={{ fontSize: "var(--fs-xl)" }}>{overall}%</strong>
           </div>
           <Progress value={overall} />
@@ -1927,7 +1908,7 @@ function AssignmentTab({ assignments, onPatch, notify }: {
                   className={assignment.progress === 100 ? "green-text" : assignment.status === "Waiting Supplier" ? "amber-text" : "blue-text"} />
                 <div style={{ flex: 1 }}>
                   <strong>{assignment.section} — {assignment.progress}%</strong>
-                  <p>{userName(assignment.ownerId)} · {assignment.status}</p>
+                  <p>{userName(assignment.ownerId)} <LocalizedText text={"·"} /> {assignment.status}</p>
                   <Progress value={assignment.progress} />
                 </div>
               </li>
@@ -1942,7 +1923,7 @@ function AssignmentTab({ assignments, onPatch, notify }: {
                 <span className="avatar md">{owner?.initials}</span>
                 <div style={{ flex: 1 }}>
                   <strong>{owner?.name}</strong>
-                  <small>{owner?.department} · {owner?.level}</small>
+                  <small>{owner?.department} <LocalizedText text={"·"} /> {owner?.level}</small>
                 </div>
                 <Badge tone={toneOf(assignment.status)}>{assignment.status}</Badge>
               </div>
@@ -2011,17 +1992,18 @@ function ValidationTab({ results, onFix }: { results: ReturnType<typeof validate
    ========================================================================== */
 
 function RevisionTab({ estimate, totals, onCreate }: { estimate: Estimate; totals: number; onCreate: () => void }) {
+  const uiText = useUiText();
   return (
     <Panel
       title="Revision Control"
       subtitle="An approved revision is locked. Editing it requires a new revision."
-      actions={<button className="btn primary sm" type="button" onClick={onCreate}><Icon name="gitBranch" />Create Revision</button>}
+      actions={<button className="btn primary sm" type="button" onClick={onCreate}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button>}
       flush
     >
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Revision</th><th>Reason</th><th>Change Description</th><th>Created By</th><th>Created Date</th><th>Reviewed By</th><th className="num">Total Cost</th><th>Status</th><th aria-label="Action" /></tr>
+            <tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th>Change Description</th><th><LocalizedText text={"Created By"} /></th><th>Created Date</th><th><LocalizedText text={"Reviewed By"} /></th><th className="num"><LocalizedText text={"Total Cost"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr>
           </thead>
           <tbody>
             {estimate.revisions.map((revision, index) => {
@@ -2039,7 +2021,7 @@ function RevisionTab({ estimate, totals, onCreate }: { estimate: Estimate; total
                     <Badge tone={toneOf(revision.status)}>{revision.status}</Badge>
                     {revision.status === "Locked" ? <span className="muted" style={{ marginLeft: 6 }}><Icon name="lock" /></span> : null}
                   </td>
-                  <td><button className="link-btn" type="button">View</button></td>
+                  <td><button className="link-btn" type="button"><LocalizedText text={"View"} /></button></td>
                 </tr>
               );
             })}
@@ -2051,6 +2033,7 @@ function RevisionTab({ estimate, totals, onCreate }: { estimate: Estimate; total
 }
 
 function CompareTab({ estimate }: { estimate: Estimate }) {
+  const uiText = useUiText();
   const codes = estimate.revisions.map((revision) => revision.code);
   const [from, setFrom] = useState(codes[Math.max(0, codes.length - 2)]);
   const [to, setTo] = useState(codes[codes.length - 1]);
@@ -2074,8 +2057,8 @@ function CompareTab({ estimate }: { estimate: Estimate }) {
           </Field>
           <span className="spacer" />
           <div className="row">
-            <Badge tone="green">{rows.filter((r) => r.change === "Added").length} added</Badge>
-            <Badge tone="red">{rows.filter((r) => r.change === "Removed").length} removed</Badge>
+            <Badge tone="green">{rows.filter((r) => r.change === "Added").length} <LocalizedText text={"added"} /></Badge>
+            <Badge tone="red">{rows.filter((r) => r.change === "Removed").length} <LocalizedText text={"removed"} /></Badge>
             <Badge tone="amber">{rows.filter((r) => r.change === "Changed").length} changed</Badge>
             <Badge tone="slate">{unchanged.length} unchanged</Badge>
           </div>
@@ -2093,9 +2076,9 @@ function CompareTab({ estimate }: { estimate: Estimate }) {
           </strong>
           <p className="muted">{((difference / (fromTotal || 1)) * 100).toFixed(1)}% versus {from}</p>
         </Panel>
-        <Panel title="Change summary">
+        <Panel title={uiText("Change summary")}>
           <ul className="check-list">
-            <li className="check-item pass"><Icon name="plus" /><div><strong>Material cost difference</strong><p className="green-text">{moneyShort(difference)} THB</p></div></li>
+            <li className="check-item pass"><Icon name="plus" /><div><strong>Material cost difference</strong><p className="green-text">{moneyShort(difference)} <LocalizedText text={"THB"} /></p></div></li>
             <li className="check-item"><Icon name="minus" /><div><strong>Engineering / outsource</strong><p className="muted">No change in this revision</p></div></li>
           </ul>
         </Panel>
@@ -2108,10 +2091,10 @@ function CompareTab({ estimate }: { estimate: Estimate }) {
           <table>
             <thead>
               <tr>
-                <th>Cost Item</th><th>Category</th>
-                <th className="num">{from} Qty</th><th className="num">{to} Qty</th><th className="num">Qty Diff.</th>
-                <th className="num">{from} Cost</th><th className="num">{to} Cost</th><th className="num">Cost Diff.</th>
-                <th>Change Type</th>
+                <th><LocalizedText text={"Cost Item"} /></th><th><LocalizedText text={"Category"} /></th>
+                <th className="num">{from} <LocalizedText text={"Qty"} /></th><th className="num">{to} <LocalizedText text={"Qty"} /></th><th className="num">Qty Diff.</th>
+                <th className="num">{from} <LocalizedText text={"Cost"} /></th><th className="num">{to} <LocalizedText text={"Cost"} /></th><th className="num">Cost Diff.</th>
+                <th><LocalizedText text={"Change Type"} /></th>
               </tr>
             </thead>
             <tbody>
@@ -2156,6 +2139,7 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
   validation: ReturnType<typeof validateEstimate>;
   onApprove: () => void; onRequest: () => void; onReject: () => void; disabled: boolean;
 }) {
+  const uiText = useUiText();
   const [comment, setComment] = useState("");
   const customer = CUSTOMERS.find((c) => c.id === estimate.customerId);
   const inquiry = INQUIRIES.find((i) => i.no === estimate.inquiryNo);
@@ -2164,19 +2148,19 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
   return (
     <section className="grid-main">
       <div className="stack">
-        <Panel title="Project information">
+        <Panel title={uiText("Project information")}>
           <dl className="def-list">
-            <div><dt>Estimate</dt><dd className="mono">{estimate.no} · {estimate.revision}</dd></div>
-            <div><dt>Inquiry</dt><dd className="mono">{estimate.inquiryNo}</dd></div>
-            <div><dt>Customer</dt><dd>{customer?.name}</dd></div>
-            <div><dt>Project</dt><dd>{estimate.projectName}</dd></div>
-            <div><dt>Project type</dt><dd>{estimate.projectType}</dd></div>
-            <div><dt>Estimate owner</dt><dd>{userName(estimate.ownerId)}</dd></div>
-            <div><dt>Target delivery</dt><dd>{formatDate(inquiry?.targetDelivery ?? "")}</dd></div>
-            <div><dt>Site location</dt><dd>{inquiry?.siteLocation ?? "—"}</dd></div>
+            <div><dt><LocalizedText text={"Estimate"} /></dt><dd className="mono">{estimate.no} <LocalizedText text={"·"} /> {estimate.revision}</dd></div>
+            <div><dt><LocalizedText text={"Inquiry"} /></dt><dd className="mono">{estimate.inquiryNo}</dd></div>
+            <div><dt><LocalizedText text={"Customer"} /></dt><dd>{customer?.name}</dd></div>
+            <div><dt><LocalizedText text={"Project"} /></dt><dd>{estimate.projectName}</dd></div>
+            <div><dt><LocalizedText text={"Project type"} /></dt><dd>{estimate.projectType}</dd></div>
+            <div><dt><LocalizedText text={"Estimate owner"} /></dt><dd>{userName(estimate.ownerId)}</dd></div>
+            <div><dt><LocalizedText text={"Target delivery"} /></dt><dd>{formatDate(inquiry?.targetDelivery ?? "")}</dd></div>
+            <div><dt><LocalizedText text={"Site location"} /></dt><dd>{inquiry?.siteLocation ?? "—"}</dd></div>
           </dl>
           <div className="form-section">
-            <div className="form-section-title"><h3>Scope summary</h3><span /></div>
+            <div className="form-section-title"><h3><LocalizedText text={"Scope summary"} /></h3><span /></div>
             <p>{inquiry?.scopeSummary}</p>
           </div>
         </Panel>
@@ -2184,7 +2168,7 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
         <Panel title="Cost summary" subtitle="Approval covers technical scope, cost accuracy, engineering effort and completeness — no margin approval exists here" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Cost block</th><th className="num">Amount (THB)</th><th className="num">Share</th></tr></thead>
+              <thead><tr><th><LocalizedText text={"Cost block"} /></th><th className="num"><LocalizedText text={"Amount (THB)"} /></th><th className="num"><LocalizedText text={"Share"} /></th></tr></thead>
               <tbody>
                 {[
                   ["Material cost", totals.material],
@@ -2202,7 +2186,7 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
                   </tr>
                 ))}
                 <tr className="subtotal-row">
-                  <td>Total estimated cost</td>
+                  <td><LocalizedText text={"Total estimated cost"} /></td>
                   <td className="num">{moneyShort(totals.total)}</td>
                   <td className="num">100%</td>
                 </tr>
@@ -2223,7 +2207,7 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
           <Panel title="Top 10 highest cost items" flush>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Item</th><th>Supplier</th><th className="num">Total</th></tr></thead>
+                <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Supplier"} /></th><th className="num"><LocalizedText text={"Total"} /></th></tr></thead>
                 <tbody>
                   {topCostItems(estimate).map((item) => (
                     <tr key={item.id}>
@@ -2241,24 +2225,24 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
         <Panel title="Engineering man-hour" subtitle="By department, and by where the work is done" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Department</th><th className="num">Man-days</th><th className="num">Man-hours</th><th className="num">Cost</th></tr></thead>
+              <thead><tr><th><LocalizedText text={"Department"} /></th><th className="num"><LocalizedText text={"Man-days"} /></th><th className="num"><LocalizedText text={"Man-hours"} /></th><th className="num"><LocalizedText text={"Cost"} /></th></tr></thead>
               <tbody>
                 {departmentEffort(estimate).map((row) => (
                   <tr key={row.department}>
                     <td><strong>{row.department}</strong></td>
-                    <td className="num">{row.manDays} MD</td>
-                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{row.manDays} <LocalizedText text={"MD"} /></td>
+                    <td className="num">{row.manHours} <LocalizedText text={"HR"} /></td>
                     <td className="num">{moneyShort(row.cost)}</td>
                   </tr>
                 ))}
                 <tr className="subtotal-row">
-                  <td>Total</td><td className="num">{totals.manDays} MD</td><td className="num">{totals.manHours} HR</td><td className="num">{moneyShort(totals.engineering)}</td>
+                  <td><LocalizedText text={"Total"} /></td><td className="num">{totals.manDays} <LocalizedText text={"MD"} /></td><td className="num">{totals.manHours} <LocalizedText text={"HR"} /></td><td className="num">{moneyShort(totals.engineering)}</td>
                 </tr>
                 {costTypeEffort(estimate).map((row) => (
                   <tr key={row.costType}>
                     <td><Badge tone={row.costType === "Installation" ? "amber" : "blue"}>{COST_TYPE_SHORT[row.costType]}</Badge></td>
-                    <td className="num">{row.manDays} MD</td>
-                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{row.manDays} <LocalizedText text={"MD"} /></td>
+                    <td className="num">{row.manHours} <LocalizedText text={"HR"} /></td>
                     <td className="num">{moneyShort(row.cost)}{row.expense ? <span className="muted"> + {moneyShort(row.expense)} expense</span> : null}</td>
                   </tr>
                 ))}
@@ -2274,9 +2258,9 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Scope, cost accuracy, engineering effort, completeness…" />
           </Field>
           <div className="stack" style={{ gap: 8, marginTop: 10 }}>
-            <button className="btn success block" type="button" onClick={onApprove} disabled={disabled}><Icon name="checkCircle" />Approve Estimate Cost</button>
-            <button className="btn warn block" type="button" onClick={onRequest}><Icon name="refresh" />Request Revision</button>
-            <button className="btn danger block" type="button" onClick={onReject}><Icon name="x" />Reject</button>
+            <button className="btn success block" type="button" onClick={onApprove} disabled={disabled}><Icon name="checkCircle" /><LocalizedText text={"Approve Estimate Cost"} /></button>
+            <button className="btn warn block" type="button" onClick={onRequest}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button>
+            <button className="btn danger block" type="button" onClick={onReject}><Icon name="x" /><LocalizedText text={"Reject"} /></button>
           </div>
           {disabled ? <div className="info-strip red" style={{ marginTop: 10 }}><Icon name="alertTriangle" />Critical validation errors block approval.</div> : null}
         </Panel>
@@ -2300,10 +2284,10 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
           </div>
         </Panel>
 
-        <Panel title="Revision history" flush>
+        <Panel title={uiText("Revision history")} flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Rev.</th><th>Reason</th><th>By</th><th>Status</th></tr></thead>
+              <thead><tr><th><LocalizedText text={"Rev."} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"By"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
               <tbody>
                 {estimate.revisions.map((revision) => (
                   <tr key={revision.id}>
@@ -2318,11 +2302,11 @@ function ReviewTab({ estimate, totals, validation, onApprove, onRequest, onRejec
           </div>
         </Panel>
 
-        <Panel title="Attachments">
+        <Panel title={uiText("Attachments")}>
           {(inquiry?.attachments ?? []).map((file) => (
             <div className="file-row" key={file.id}>
               <span className="file-icon"><Icon name="paperclip" /></span>
-              <div style={{ flex: 1 }}><strong>{file.name}</strong><small>{file.category} · {file.size}</small></div>
+              <div style={{ flex: 1 }}><strong>{file.name}</strong><small>{file.category} <LocalizedText text={"·"} /> {file.size}</small></div>
             </div>
           ))}
         </Panel>
@@ -2353,7 +2337,7 @@ function ModuleModal({ form, onClose, onSave }: { form: ModuleForm; onClose: () 
       footer={
         <>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" disabled={!name.trim()} onClick={() => onSave(name)}>
             <Icon name="check" />{form.mode === "new" ? "Create module" : "Save name"}
           </button>
@@ -2400,6 +2384,7 @@ function QuotationPickerModal({ onClose, onUse }: {
   onClose: () => void;
   onUse: (quotation: (typeof QUOTATIONS)[number]) => void;
 }) {
+  const uiText = useUiText();
   const [query, setQuery] = useState("");
   const rows = QUOTATIONS.filter((quotation) =>
     `${quotation.no} ${quotation.supplier} ${quotation.project} ${quotation.inquiryNo}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -2414,7 +2399,7 @@ function QuotationPickerModal({ onClose, onUse }: {
         <>
           <span className="muted">{rows.length} quotation(s) · upload a new one from the Supplier Quotation screen</span>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
         </>
       }
     >
@@ -2423,8 +2408,8 @@ function QuotationPickerModal({ onClose, onUse }: {
         <table>
           <thead>
             <tr>
-              <th>Quotation No.</th><th>Supplier</th><th>Project</th><th>Received</th>
-              <th>Valid Until</th><th className="num">Amount</th><th>Status</th><th>File</th><th aria-label="Action" />
+              <th><LocalizedText text={"Quotation No."} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Received"} /></th>
+              <th><LocalizedText text={"Valid Until"} /></th><th className="num"><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"File"} /></th><th aria-label={uiText("Action")} />
             </tr>
           </thead>
           <tbody>
@@ -2438,7 +2423,7 @@ function QuotationPickerModal({ onClose, onUse }: {
                 <td className="num">{moneyShort(quotation.amount)}</td>
                 <td><Badge tone={toneOf(quotation.status)}>{quotation.status}</Badge></td>
                 <td><span className="row"><Pill tone={quotation.fileType === "PDF" ? "red" : quotation.fileType === "Excel" ? "green" : "blue"}>{quotation.fileType}</Pill></span></td>
-                <td><button className="btn sm default" type="button" onClick={(event) => { event.stopPropagation(); onUse(quotation); }}>Use</button></td>
+                <td><button className="btn sm default" type="button" onClick={(event) => { event.stopPropagation(); onUse(quotation); }}><LocalizedText text={"Use"} /></button></td>
               </tr>
             ))}
           </tbody>
@@ -2474,7 +2459,7 @@ function PackageModal({ form, onClose, onSave }: {
       footer={
         <>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" disabled={!name.trim()} onClick={() => onSave(name, costType)}>
             <Icon name="check" />{form.mode === "new" ? "Create package" : "Save package"}
           </button>
@@ -2542,15 +2527,15 @@ function AddCostItemDrawer({ items, modules, onClose, onSave, onSearchPrice }: {
       width={560}
       footer={
         <>
-          <button className="btn default" type="button" onClick={onSearchPrice}><Icon name="search" />Search Price Library</button>
+          <button className="btn default" type="button" onClick={onSearchPrice}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
           <span className="spacer" />
           <button className="btn default" type="button" onClick={() => onSave(item, true)}>Save &amp; Add Another</button>
-          <button className="btn primary" type="button" onClick={() => onSave(item, false)}><Icon name="check" />Save</button>
+          <button className="btn primary" type="button" onClick={() => onSave(item, false)}><Icon name="check" /><LocalizedText text={"Save"} /></button>
         </>
       }
     >
       <div className="row" style={{ marginBottom: 12 }}>
-        <button className="btn default sm" type="button" onClick={onSearchPrice}><Icon name="book" />Search Price Library</button>
+        <button className="btn default sm" type="button" onClick={onSearchPrice}><Icon name="book" /><LocalizedText text={"Search Price Library"} /></button>
         <button className="btn default sm" type="button" onClick={() => setItem((prev) => ({ ...prev, unitCost: 76000, supplier: "Keyence (Thailand) Co., Ltd.", brand: "KEYENCE", model: "KV-8000", source: "Supplier Quotation", referenceNo: "SQ-2608-0012", priceDate: "2026-08-12" }))}>
           <Icon name="clock" />Use Last Price
         </button>
@@ -2623,7 +2608,7 @@ function AddCostItemDrawer({ items, modules, onClose, onSave, onSearchPrice }: {
       <div className="calc-strip" style={{ marginTop: 14 }}>
         <Icon name="cpu" />
         <span>{item.qty} {item.unit} × {moneyShort(item.unitCost)} THB =</span>
-        <strong>{moneyShort(lineTotal(item))} THB</strong>
+        <strong>{moneyShort(lineTotal(item))} <LocalizedText text={"THB"} /></strong>
       </div>
     </Drawer>
   );
@@ -2642,7 +2627,7 @@ function CreateRevisionModal({ estimate, onClose, onCreate }: { estimate: Estima
       footer={
         <>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" onClick={() => onCreate(reason)}><Icon name="gitBranch" />Create {next}</button>
         </>
       }
@@ -2694,7 +2679,7 @@ function ImportExcelModal({ onClose, onImport }: { onClose: () => void; onImport
         <>
           <span className="muted">1 row has a missing unit cost and 1 row has zero quantity — both are flagged, not silently imported.</span>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" onClick={() => onImport(preview.length)}><Icon name="upload" />Import 5 rows</button>
         </>
       }
@@ -2723,7 +2708,7 @@ function ImportExcelModal({ onClose, onImport }: { onClose: () => void; onImport
         <div className="form-section-title"><h3>Validation preview</h3><span /></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Excel row</th><th>Description</th><th className="num">Qty</th><th>Unit</th><th className="num">Unit Cost</th><th className="num">Total</th><th>Check</th></tr></thead>
+            <thead><tr><th>Excel row</th><th><LocalizedText text={"Description"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"Unit Cost"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th>Check</th></tr></thead>
             <tbody>
               {preview.map((row) => (
                 <tr key={row.row}>
@@ -2761,9 +2746,9 @@ function CopyPreviousModal({ onClose, onCopy }: { onClose: () => void; onCopy: (
       footer={
         <>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" onClick={() => onCopy(sections)} disabled={!sections.length}>
-            <Icon name="copy" />Copy {sections.length} section(s)
+            <Icon name="copy" /><LocalizedText text={"Copy"} /> {sections.length} section(s)
           </button>
         </>
       }

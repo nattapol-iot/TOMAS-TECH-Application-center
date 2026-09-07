@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useMemo, useState } from "react";
 import { CUSTOMERS, DEPARTMENTS, ESTIMATES, PROJECT_TYPES, USERS } from "../data";
 import { estimateTotals, formatDate, moneyShort, TODAY, userName, userOf } from "../calc";
@@ -11,6 +13,7 @@ import { useT } from "../i18n";
 import type { ScreenProps } from "../routes";
 
 export default function EstimateList({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const [search, setSearch] = useState("");
   const [customer, setCustomer] = useState("All customers");
   const [type, setType] = useState("All project types");
@@ -47,11 +50,9 @@ export default function EstimateList({ go, notify }: ScreenProps) {
         actions={
           <>
             <button className="btn default" type="button" onClick={() => notify("Excel import wizard opens inside the estimate workspace")}>
-              <Icon name="upload" />Import Excel
-            </button>
+              <Icon name="upload" /><LocalizedText text={"Import Excel"} /> </button>
             <button className="btn primary" type="button" onClick={() => go({ name: "inquiries" })}>
-              <Icon name="plus" />New estimate from inquiry
-            </button>
+              <Icon name="plus" /><LocalizedText text={"New estimate from inquiry"} /> </button>
           </>
         }
       />
@@ -67,18 +68,20 @@ export default function EstimateList({ go, notify }: ScreenProps) {
       </Toolbar>
 
       <StatusLegend items={[
-        { label: "Draft", kind: "wait" },
-        { label: "Engineering input", kind: "new" },
-        { label: "Waiting price", kind: "revised" },
-        { label: "Engineering review", kind: "approved" },
-        { label: "Approved", kind: "confirmed" },
-        { label: "Overdue", kind: "canceled" },
+        { label: "Draft" },
+        { label: "Engineering Input" },
+        { label: "Waiting Supplier Price" },
+        { label: "Estimate Completed" },
+        { label: "Engineering Review" },
+        { label: "Revision Required" },
+        { label: "Approved" },
+        { label: "Locked" },
       ]} />
 
       <Panel
         title={`${rows.length} estimates`}
         subtitle={`Combined estimated cost ${moneyShort(totalOfRows)} THB — internal engineering cost only`}
-        actions={<button className="btn default sm" type="button" onClick={() => notify("Estimate list exported to Excel")}><Icon name="download" />Export</button>}
+        actions={<button className="btn default sm" type="button" onClick={() => notify("Estimate list exported to Excel")}><Icon name="download" /><LocalizedText text={"Export"} /></button>}
         flush
       >
         <GridControls pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
@@ -103,7 +106,7 @@ export default function EstimateList({ go, notify }: ScreenProps) {
                   <th>{t("Progress")}</th>
                   <th>{t("Status")}</th>
                   <th>{t("Last Updated")}</th>
-                  <th aria-label="Action" />
+                  <th aria-label={uiText("Action")} />
                 </tr>
               </thead>
               <tbody>
@@ -131,7 +134,7 @@ export default function EstimateList({ go, notify }: ScreenProps) {
                       <td>{formatDate(estimate.createdDate)}</td>
                       <td className={late ? "red-text" : undefined}>
                         {formatDate(estimate.dueDate)}
-                        {late ? <span className="badge red" style={{ marginLeft: 6 }}>Overdue</span> : null}
+                        {late ? <span className="badge red" style={{ marginLeft: 6 }}><LocalizedText text={"Overdue"} /></span> : null}
                       </td>
                       <td className="num">{moneyShort(totals.material)}</td>
                       <td className="num">{moneyShort(totals.engineering)}</td>

@@ -1,10 +1,12 @@
 "use client";
 
+import { LocalizedText } from "../LocalizedText";
+import { useT as useUiText } from "../i18n";
 import { useState } from "react";
 import {
   BOMS, CUSTOMERS, ESTIMATES, MAT_PRS, PROJECT_DOCS, PROJECT_FOLDERS,
   PROJECT_MILESTONES, PROJECT_STATUSES, PROJECT_TASKS, PROJECT_TYPES, PROJECTS,
-  TASK_STATUSES, USERS, type DocType, type Priority, type Project, type ProjectStatus,
+  TASK_STATUSES, USERS, type DocType, type Priority, type Project,
   type TaskStatus,
 } from "../data";
 import {
@@ -16,20 +18,17 @@ import { useSession } from "../session";
 import {
   Badge, EmptyState, Field, GridControls, Icon, Modal, Pagination, Panel, PageHeader,
   Person, Pill, Progress, ProgressCell, SearchInput, Select, StatusLegend, Tabs, Toolbar,
-  usePaged, type IconName, type Tone,
+  toneOf, usePaged, type IconName, type Tone,
 } from "../ui";
 import { useT } from "../i18n";
 import type { ScreenProps } from "../routes";
 
-const STATUS_TONE: Record<ProjectStatus, Tone> = {
-  Planning: "slate", Design: "blue", Development: "blue", Installation: "amber",
-  Commissioning: "violet", Handover: "green", Closed: "green", "On Hold": "red",
-};
-
-const TASK_TONE: Record<TaskStatus, Tone> = {
-  Open: "slate", "In Progress": "blue", Blocked: "red", Done: "green",
-};
-
+// Project and task status colours now come from toneOf() in ui.tsx, so the
+// legend above the grid and the badges inside it cannot disagree. The private
+// maps that used to live here said Installation=amber, Closed=green and
+// On Hold=red, none of which matched the rest of the product.
+//
+// Priority is a genuinely different axis from status, so it keeps its own map.
 const PRIORITY_TONE: Record<Priority, Tone> = {
   Urgent: "red", High: "amber", Normal: "blue", Low: "slate",
 };
@@ -49,6 +48,7 @@ const foldersFilled = (projectId: string) => new Set(docsOf(projectId).map((doc)
    ========================================================================== */
 
 export function ProjectList({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
@@ -110,12 +110,16 @@ export function ProjectList({ go, notify }: ScreenProps) {
       </Toolbar>
 
       <StatusLegend items={[
-        { label: t("Planning"), kind: "wait" },
-        { label: t("Design"), kind: "new" },
-        { label: t("Development"), kind: "approved" },
-        { label: t("Installation"), kind: "revised" },
-        { label: t("Handover"), kind: "confirmed" },
-        { label: t("On Hold"), kind: "canceled" },
+        // Raw English labels: Badge translates them and resolves the tone. A
+        // pre-translated label would not match the tone table and would render slate.
+        { label: "Planning" },
+        { label: "Design" },
+        { label: "Development" },
+        { label: "Installation" },
+        { label: "Commissioning" },
+        { label: "Handover" },
+        { label: "Closed" },
+        { label: "On Hold" },
       ]} />
 
       <Panel
@@ -140,7 +144,7 @@ export function ProjectList({ go, notify }: ScreenProps) {
                   <th>{t("Documents")}</th>
                   <th className="num">{t("Open tasks")}</th>
                   <th>{t("Status")}</th>
-                  <th aria-label="Action" />
+                  <th aria-label={uiText("Action")} />
                 </tr>
               </thead>
               <tbody>
@@ -169,11 +173,11 @@ export function ProjectList({ go, notify }: ScreenProps) {
                       <td style={{ minWidth: 120 }}><ProgressCell value={project.progress} /></td>
                       <td>
                         <span className="doc-chip">
-                          <Icon name="folder" />{filled}/{PROJECT_FOLDERS.length}
+                          <Icon name="folder" />{filled}<LocalizedText text={"of"} />{PROJECT_FOLDERS.length}
                         </span>
                       </td>
                       <td className="num">{open || "—"}</td>
-                      <td><Badge tone={STATUS_TONE[project.status]}>{t(project.status)}</Badge></td>
+                      <td><Badge tone={toneOf(project.status)}>{t(project.status)}</Badge></td>
                       <td><span className="row-action"><Icon name="chevronRight" /></span></td>
                     </tr>
                   );
@@ -226,7 +230,7 @@ export function ProjectDetail({ id, go, notify }: ScreenProps & { id: string }) 
         subtitle={`${customer?.name} · ${project.site}`}
         meta={
           <>
-            <div><span>{t("Status")}</span><strong><Badge tone={STATUS_TONE[project.status]}>{t(project.status)}</Badge></strong></div>
+            <div><span>{t("Status")}</span><strong><Badge tone={toneOf(project.status)}>{t(project.status)}</Badge></strong></div>
             <div><span>{t("Lead engineer")}</span><strong>{userName(project.leadEngineerId)}</strong></div>
             <div><span>{t("Project manager")}</span><strong>{userName(project.managerId)}</strong></div>
             <div><span>{t("Target delivery")}</span><strong className={late ? "red-text" : undefined}>{formatDate(project.targetDelivery)}</strong></div>
@@ -255,7 +259,7 @@ export function ProjectDetail({ id, go, notify }: ScreenProps & { id: string }) 
         <span>{project.folderPath}</span>
         <span className="spacer" />
         <button className="link-btn" type="button" onClick={() => { setTab("documents"); }}>
-          {docs.length} {t("files")} · {foldersFilled(project.id)}/{PROJECT_FOLDERS.length} {t("folders in use")}
+          {docs.length} {t("files")} <LocalizedText text={"·"} /> {foldersFilled(project.id)}<LocalizedText text={"of"} />{PROJECT_FOLDERS.length} {t("folders in use")}
           <Icon name="arrowRight" />
         </button>
       </div>
@@ -324,7 +328,7 @@ export function ProjectDetail({ id, go, notify }: ScreenProps & { id: string }) 
                       <Icon name={task.status === "Blocked" ? "alertTriangle" : "checkCircle"} />
                       <div>
                         <strong>{task.title}</strong>
-                        <p>{userName(task.ownerId)} · {formatDate(task.due)} · <Badge tone={TASK_TONE[task.status]}>{task.status}</Badge> <Badge tone={PRIORITY_TONE[task.priority]}>{task.priority}</Badge></p>
+                        <p>{userName(task.ownerId)} <LocalizedText text={"·"} /> {formatDate(task.due)} <LocalizedText text={"·"} /> <Badge tone={toneOf(task.status)}>{task.status}</Badge> <Badge tone={PRIORITY_TONE[task.priority]}>{task.priority}</Badge></p>
                       </div>
                     </li>
                   ))}
@@ -342,7 +346,7 @@ export function ProjectDetail({ id, go, notify }: ScreenProps & { id: string }) 
                     <span className="file-icon"><Icon name={DOC_ICON[doc.type]} /></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong>{doc.name}</strong>
-                      <small>{doc.folder}. {PROJECT_FOLDERS.find((entry) => entry.code === doc.folder)?.name} · {doc.uploadedBy} · {formatDate(doc.uploadedAt)}</small>
+                      <small>{doc.folder}. {PROJECT_FOLDERS.find((entry) => entry.code === doc.folder)?.name} <LocalizedText text={"·"} /> {doc.uploadedBy} <LocalizedText text={"·"} /> {formatDate(doc.uploadedAt)}</small>
                     </div>
                     <Pill>{doc.type}</Pill>
                   </div>
@@ -435,6 +439,7 @@ function DocumentsTab({ project, folder, onFolder, notify, onOpenTasks }: {
   notify: (message: string) => void;
   onOpenTasks: () => void;
 }) {
+  const uiText = useUiText();
   const t = useT();
   const [search, setSearch] = useState("");
   const docs = docsOf(project.id);
@@ -478,7 +483,7 @@ function DocumentsTab({ project, folder, onFolder, notify, onOpenTasks }: {
         flush
       >
         <div className="grid-controls">
-          <span className="muted">{project.folderPath} / {active.code}. {active.name}</span>
+          <span className="muted">{project.folderPath} <LocalizedText text={"of"} /> {active.code}. {active.name}</span>
           <span className="spacer" />
           <SearchInput value={search} onChange={setSearch} placeholder={t("Search in this folder…")} />
         </div>
@@ -487,7 +492,7 @@ function DocumentsTab({ project, folder, onFolder, notify, onOpenTasks }: {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>{t("File")}</th><th>{t("Type")}</th><th className="num">{t("Size")}</th><th>{t("Uploaded by")}</th><th>{t("Date")}</th><th aria-label="Actions" /></tr>
+                <tr><th>{t("File")}</th><th>{t("Type")}</th><th className="num">{t("Size")}</th><th>{t("Uploaded by")}</th><th>{t("Date")}</th><th aria-label={uiText("Actions")} /></tr>
               </thead>
               <tbody>
                 {files.map((doc) => (
@@ -542,6 +547,7 @@ function TasksTab({ tasks, onPatch, onAdd, onRemove }: {
   onAdd: () => void;
   onRemove: (id: string) => void;
 }) {
+  const uiText = useUiText();
   const t = useT();
   const done = tasks.filter((task) => task.status === "Done").length;
 
@@ -563,7 +569,7 @@ function TasksTab({ tasks, onPatch, onAdd, onRemove }: {
               <th style={{ width: 120 }}>{t("Priority")}</th>
               <th style={{ width: 170 }}>{t("Folder")}</th>
               <th style={{ width: 180 }}>{t("Remark")}</th>
-              <th style={{ width: 50 }} aria-label="Action" />
+              <th style={{ width: 50 }} aria-label={uiText("Action")} />
             </tr>
           </thead>
           <tbody>
@@ -615,7 +621,7 @@ function TasksTab({ tasks, onPatch, onAdd, onRemove }: {
         <div className="foot-item"><span>{t("Blocked")}</span><strong>{tasks.filter((task) => task.status === "Blocked").length}</strong></div>
         <div className="foot-total">
           <span>{t("Done")}</span>
-          <strong>{done} / {tasks.length}</strong>
+          <strong>{done} <LocalizedText text={"of"} /> {tasks.length}</strong>
         </div>
       </div>
     </Panel>
@@ -665,8 +671,7 @@ function ScheduleTab({ project, go }: { project: Project; go: ScreenProps["go"] 
         <>
           {mine ? (
             <button className="btn default sm" type="button" onClick={() => go({ name: "my-work" })}>
-              <Icon name="user" />{t("My tasks")} ({mine})
-            </button>
+              <Icon name="user" />{t("My tasks")} ({mine}<LocalizedText text={")"} /> </button>
           ) : null}
           <button className="btn primary sm" type="button" onClick={() => go({ name: "schedule", id: project.id })}>
             <Icon name="calendar" />{t("Open schedule workspace")}
@@ -696,7 +701,7 @@ function ScheduleTab({ project, go }: { project: Project; go: ScreenProps["go"] 
                   <span className="folder-badge">{phase.wbs}</span>
                   <div>
                     <strong>{phase.name}</strong>
-                    <small>{formatDate(phase.start)} → {formatDate(phase.end)} · {phase.doneLeaves}/{phase.totalLeaves} {t("done")}</small>
+                    <small>{formatDate(phase.start)} → {formatDate(phase.end)} <LocalizedText text={"·"} /> {phase.doneLeaves}<LocalizedText text={"of"} />{phase.totalLeaves} {t("done")}</small>
                   </div>
                   <Badge tone={scheduleTone(phase)}>{phase.percentDone}%</Badge>
                 </div>
@@ -761,7 +766,7 @@ function CostTab({ project, go }: { project: Project; go: ScreenProps["go"] }) {
                 <dl className="def-list one">
                   <div><dt>{t("Estimate No.")}</dt><dd className="mono">{estimate.no} {estimate.revision}</dd></div>
                   <div><dt>{t("Status")}</dt><dd>{estimate.status}</dd></div>
-                  <div><dt>{t("Total Cost")}</dt><dd><strong>{totals ? moneyShort(totals.total) : "—"} THB</strong></dd></div>
+                  <div><dt>{t("Total Cost")}</dt><dd><strong>{totals ? moneyShort(totals.total) : "—"} <LocalizedText text={"THB"} /></strong></dd></div>
                 </dl>
                 <button className="btn default block" type="button" style={{ marginTop: 10 }} onClick={() => go({ name: "estimate", id: estimate.id })}>
                   {t("Open estimate workspace")}<Icon name="arrowRight" />
@@ -783,7 +788,7 @@ function CostTab({ project, go }: { project: Project; go: ScreenProps["go"] }) {
                 <span className="file-icon"><Icon name="package" /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <strong>{pr.no}</strong>
-                  <small>{pr.lines.length} {t("lines")} · {moneyShort(matPrAmount(pr))} THB · {formatDate(pr.requiredDate)}</small>
+                  <small>{pr.lines.length} {t("lines")} <LocalizedText text={"·"} /> {moneyShort(matPrAmount(pr))} THB · {formatDate(pr.requiredDate)}</small>
                 </div>
                 <Badge tone={pr.status === "Approved" || pr.status === "Converted to PO" ? "green" : pr.status === "Rejected" ? "red" : "blue"}>{t(pr.status)}</Badge>
               </div>
@@ -832,7 +837,7 @@ function CreateProjectModal({ onClose, onCreate }: { onClose: () => void; onCrea
         <Field label={t("From estimate")} span={3}>
           <select value={estimateId} onChange={(event) => { setEstimateId(event.target.value); setName(""); }}>
             {ESTIMATES.map((entry) => (
-              <option key={entry.id} value={entry.id}>{entry.no} {entry.revision} — {entry.projectName} ({entry.status})</option>
+              <option key={entry.id} value={entry.id}>{entry.no} {entry.revision} — {entry.projectName} ({entry.status}<LocalizedText text={")"} /></option>
             ))}
           </select>
         </Field>

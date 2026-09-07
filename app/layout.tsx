@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PRODUCT } from "./system/product";
 import { isTrustedWebProtocol } from "./system/network-origin";
@@ -10,6 +10,12 @@ import { isTrustedWebProtocol } from "./system/network-origin";
 // Inter covers Latin; Noto Sans Thai covers the Thai glyphs Inter lacks.
 const GOOGLE_FONTS =
   "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export function generateMetadata(): Metadata {
   const configuredOrigin = process.env.SITE_ORIGIN ?? "http://localhost:3000";

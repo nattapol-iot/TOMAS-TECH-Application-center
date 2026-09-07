@@ -88,20 +88,6 @@ Temporary UAT without Entra must use the isolated Staging-only workflow in `docs
 
 Create two single-tenant app registrations. Do not reuse one registration for both responsibilities.
 
-`scripts/New-EntraAppRegistrations.ps1` automates both registrations below via Azure CLI +
-Microsoft Graph (`az login` first, as an account permitted to create app registrations):
-
-```powershell
-./scripts/New-EntraAppRegistrations.ps1 -FrontendOrigin https://<FRONTEND_ORIGIN> [-GrantAdminConsent]
-```
-
-It prints the exact `Authentication__TenantId` / `Authentication__ClientId` /
-`Authentication__Audience` / `NEXT_PUBLIC_ENTRA_*` values to paste into your env files, and
-is safe to re-run (reuses the existing registrations by display name instead of
-duplicating them). The manual portal steps below are the reference for what it does and
-the fallback if you'd rather click through the Entra portal yourself, or need to grant
-consent by hand because your account lacks Global/Privileged Role Administrator rights.
-
 ### API app registration
 
 1. Create the API registration and record `<TENANT_ID>` and `<API_CLIENT_ID>`.

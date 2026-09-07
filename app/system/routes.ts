@@ -31,9 +31,15 @@ export type Route =
   | { name: "schedule"; id: string; view?: string }
   | { name: "my-work" }
   | { name: "reports" }
+  | { name: "performance" }
   | { name: "master" }
   | { name: "rates" }
   | { name: "audit" }
+  | { name: "knowledge" }
+  | { name: "sales-intake" }
+  | { name: "site-visits" }
+  | { name: "my-assignments" }
+  | { name: "visit-master" }
   | { name: "settings" };
 
 export type ScreenProps = {

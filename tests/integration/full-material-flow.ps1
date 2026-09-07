@@ -18,11 +18,7 @@ $backendRoot = Join-Path $repoRoot 'backend\IoTTeamCenter.Api'
 $databaseName = 'IoTTeamCenter_CI_{0}_{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddHHmmss')), ([Guid]::NewGuid().ToString('N'))
 if ($databaseName -notmatch '^IoTTeamCenter_CI_[A-Za-z0-9_]+$') { throw 'Generated CI database name is outside the cleanup boundary.' }
 $appRoleName = 'iot_ci_app_role'
-# Guid.ToString('N') is lowercase hex only (digits + a-f) -- concatenating two never
-# satisfies SQL Server's "3 of 4 character classes" password policy on its own, so
-# CREATE APPLICATION ROLE always failed with Msg 33064. Append a fixed uppercase letter
-# and symbol to guarantee all four classes while keeping the bulk of it random.
-$appRolePassword = '{0}{1}Aa1!' -f ([Guid]::NewGuid().ToString('N')), ([Guid]::NewGuid().ToString('N'))
+$appRolePassword = '{0}{1}' -f ([Guid]::NewGuid().ToString('N')), ([Guid]::NewGuid().ToString('N'))
 
 $sqlcmdBase = @('-S', $SqlServer, '-b', '-r1', '-C', '-I')
 $oldSqlcmdPassword = $env:SQLCMDPASSWORD
@@ -267,9 +263,15 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
     $inquiry = Invoke-Api POST '/api/v1/inquiries' 'dev-user' ([ordered]@{
         customerId = $customer.id; contact = ''; projectName = 'CI Full Material Flow'; projectType = 'Integration';
         rfqNo = 'CI-RFQ'; salesOwner = 'CI'; estimateOwnerId = $dev.id; dueDate = $future; priority = 'Normal';
+        projectProbability = 60; customerInterestGrade = 'B'; qualificationNote = 'CI initial qualification';
         requirement = 'Automated material flow'; background = $null; scopeSummary = 'Integration'; technical = $null;
         targetDelivery = $delivery; siteLocation = 'CI'; standard = $null; special = $null; remark = $null
     })
+    $qualification = Invoke-Api PUT "/api/v1/inquiries/$($inquiry.id)/qualification" 'dev-user' ([ordered]@{
+        projectProbability = 80; customerInterestGrade = 'A'; qualificationNote = 'CI confirmed budget and timeline'; rowVersion = $inquiry.rowVersion
+    })
+    Assert-Equal $qualification.projectProbability 80 'Inquiry project probability'
+    Assert-Equal $qualification.customerInterestGrade 'A' 'Inquiry customer interest grade'
     $estimate = Invoke-Api POST '/api/v1/estimates' 'dev-user' ([ordered]@{
         inquiryId = $inquiry.id; ownerId = $dev.id; dueDate = $future; contingencyRate = 0
     })
@@ -949,6 +951,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.manhour_lines WHERE id = $($manhourLine.id) AND
 IF NOT EXISTS (SELECT 1 FROM dbo.expense_lines WHERE id = $($expenseLine.id) AND estimate_id = $($estimate.id) AND deleted_at IS NULL AND qty = 1 AND unit_cost = 100 AND line_total = 100) THROW 51119, 'Estimate expense persistence mismatch.', 1;
 IF NOT EXISTS (SELECT 1 FROM dbo.other_cost_lines WHERE id = $($otherCostLine.id) AND estimate_id = $($estimate.id) AND deleted_at IS NULL AND qty = 1 AND unit_cost = 200 AND line_total = 200) THROW 51120, 'Estimate other-cost persistence mismatch.', 1;
 IF NOT EXISTS (SELECT 1 FROM dbo.estimates WHERE id = $($estimate.id) AND status = N'Approved' AND contingency_rate = 5) THROW 51121, 'Estimate approval or contingency persistence mismatch.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.inquiries WHERE id = $($inquiry.id) AND project_probability = 80 AND customer_interest_grade = 'A' AND qualification_note = N'CI confirmed budget and timeline') THROW 51124, 'Inquiry qualification persistence mismatch.', 1;
 IF EXISTS (SELECT 1 FROM dbo.reservations WHERE project_id = $($project.id) AND status = N'Active') THROW 51073, 'Active reservation remained.', 1;
 IF COALESCE((SELECT status FROM dbo.mat_prs WHERE id = $($pr.id)), N'') <> N'Converted to PO' THROW 51063, 'PR status mismatch.', 1;
 IF COALESCE((SELECT status FROM dbo.mat_pos WHERE id = $($po.id)), N'') <> N'Received' THROW 51064, 'PO status mismatch.', 1;

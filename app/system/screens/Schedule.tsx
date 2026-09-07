@@ -1,5 +1,7 @@
 "use client";
 
+import { LocalizedText } from "../LocalizedText";
+import { useT as useUiText } from "../i18n";
 import { useMemo, useState } from "react";
 import {
   CUSTOMERS, PROJECTS, SCHEDULE_STATUSES, SCHEDULE_TEMPLATES, USERS,
@@ -99,7 +101,7 @@ export default function ProjectSchedule({ id, initialView, go, notify }: ScreenP
           <>
             <div><span>{t("Plan window")}</span><strong>{formatDate(summary.start)} → {formatDate(summary.end)}</strong></div>
             <div><span>{t("Work days")}</span><strong>{summary.workDays}</strong></div>
-            <div><span>{t("Progress")}</span><strong>{summary.percent}% · {summary.doneCount}/{summary.taskCount} {t("done")}</strong></div>
+            <div><span>{t("Progress")}</span><strong>{summary.percent}% · {summary.doneCount}<LocalizedText text={"of"} />{summary.taskCount} {t("done")}</strong></div>
             <div><span>{t("Baseline")}</span><strong>{baseline ? `${baseline.label} · ${formatDate(baseline.takenAt)}` : t("Not frozen yet")}</strong></div>
             <div><span>{t("vs baseline")}</span><strong className={late ? "red-text" : summary.varianceDays < 0 ? "green-text" : undefined}>
               {baseline ? `${summary.varianceDays > 0 ? "+" : ""}${summary.varianceDays} ${t("work days")}` : "—"}
@@ -279,6 +281,7 @@ function ScheduleSheet({ rows, project, audience, collapsed, onToggle, onRequest
   onRequest: (row: ScheduleRow) => void;
   notify: (message: string) => void;
 }) {
+  const uiText = useUiText();
   const t = useT();
   const session = useSession();
   const store = useScheduleStore();
@@ -359,7 +362,7 @@ function ScheduleSheet({ rows, project, audience, collapsed, onToggle, onRequest
           <tr>
             <th style={{ width: 58 }}>WBS</th>
             <th style={{ width: 300 }}>{t("Task")}</th>
-            <th style={{ width: 140 }}>PIC</th>
+            <th style={{ width: 140 }}><LocalizedText text={"PIC"} /></th>
             {!customerView ? <th style={{ width: 72 }}>{t("Pred.")}</th> : null}
             <th style={{ width: 112 }}>{t("Start")}</th>
             <th style={{ width: 112 }}>{t("End")}</th>
@@ -373,7 +376,7 @@ function ScheduleSheet({ rows, project, audience, collapsed, onToggle, onRequest
                 <th style={{ width: 112 }}>{t("Actual end")}</th>
                 <th style={{ width: 112 }}>{t("Forecast")}</th>
                 <th style={{ width: 96 }}>{t("Updated")}</th>
-                <th style={{ width: 68 }} aria-label="Actions" />
+                <th style={{ width: 68 }} aria-label={uiText("Actions")} />
               </>
             ) : (
               <th style={{ width: 70 }} className="num">% {t("done")}</th>
@@ -774,7 +777,7 @@ function UpdatesTab({ project, updates, rows, canAnswer, notify }: {
                   <span className="file-icon"><Icon name="clock" /></span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <strong>{row.wbs} {row.name}</strong>
-                    <small>{row.picIds.map((picId) => userName(picId)).join(", ") || row.picExternal} · {t("last update")} {formatDate(row.updatedAt)}</small>
+                    <small>{row.picIds.map((picId) => userName(picId)).join(", ") || row.picExternal} <LocalizedText text={"·"} /> {t("last update")} {formatDate(row.updatedAt)}</small>
                   </div>
                   <Badge tone="amber">{row.percentDone}%</Badge>
                 </div>
@@ -868,7 +871,7 @@ function BaselineTab({ rows, baselines, canBaseline, onFreeze }: {
               <span className="file-icon"><Icon name="lock" /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <strong>{entry.label}</strong>
-                <small>{t("frozen")} {formatDate(entry.takenAt)} · {userName(entry.takenBy)} · {t("promised finish")} {formatDate(entry.promisedFinish)}{entry.reason ? ` · ${entry.reason}` : ""}</small>
+                <small>{t("frozen")} {formatDate(entry.takenAt)} <LocalizedText text={"·"} /> {userName(entry.takenBy)} <LocalizedText text={"·"} /> {t("promised finish")} {formatDate(entry.promisedFinish)}{entry.reason ? ` · ${entry.reason}` : ""}</small>
               </div>
             </div>
           ))}
