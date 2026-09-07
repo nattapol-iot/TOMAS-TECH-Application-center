@@ -146,7 +146,7 @@ State on 2026-09-07 evening. Everything below is live and was verified with real
 - TMT ID (Keycloak, realm `internal`) confidential client `iot-team-center`: redirect URIs
   `https://iot-team-center.tomastc.com:8444/api/auth/callback` and the `:8445` twin, PKCE S256,
   post-logout redirects to both origins. `OIDC_*`, `PUBLIC_BASE_URL`, `SESSION_SECRET` are in the
-  host `.env`; the application code for `Authentication__Mode=TmtId` is a separate pull request.
+  host `.env`; the application code shipped in PR #5 and is live (see "TMT ID sign-in").
 - The SQL login in `.env` is still `sa`. The deployment docs require the least-privileged
   `iot_team_app` login (`database/scripts/010_application_login.sql`). Fix this before anyone
   outside the team can reach the host.
@@ -248,6 +248,44 @@ internal-only test data.
 
 Staging TeamTest is not an alternative here: `IsPrivateLanIpv4` accepts only 10/172.16/192.168,
 and the tailnet uses the 100.64.x CGNAT range.
+
+## TMT ID sign-in
+
+Live since 2026-09-07 evening. `Authentication__Mode=TmtId` on the API and
+`NEXT_PUBLIC_AUTH_MODE=tmt-id` on the frontend, both driven from the host `.env`
+(`DEV_API_AUTH_MODE`, `DEV_FRONTEND_AUTH_MODE`). Flow: the frontend calls `GET /api/me` once;
+a 401 sends the browser to `/api/auth/login`, Keycloak (`https://auth.tomastc.com/realms/internal`,
+client `iot-team-center`, PKCE S256) authenticates through LINE WORKS or Microsoft, the callback
+sets a sealed httpOnly session cookie (8 hours), `/api/auth/logout` does RP-initiated logout.
+
+Single origin: Caddy serves `/api/*` and `/health/*` on `https://iot-team-center.tomastc.com:8444`,
+so `DEV_API_BASE_URL` and `PUBLIC_BASE_URL` are both that origin and no CORS is involved. The
+`:8445` site still exposes the API directly for operators and for `deploy.sh`'s health check.
+
+First-login provisioning: `TMT_ID_DEFAULT_ROLE_CODE=Admin` in `.env` makes the callback create
+the `dbo.users` row for anyone TMT ID authenticates (owner's decision: everyone who signs in gets
+in, all as Admin for now). Keycloak `sub` lands in `entra_object_id`, the same key
+`CurrentUserService` joins on. Change the role code, or unset it to go back to manual
+provisioning with `database/scripts/030_provision_user.sql`. Profile enrichment from master-data
+is dormant (`MASTER_DATA_URL` / `MASTER_DATA_API_KEY` unset), so names come from the token.
+
+Keycloak admin: `https://100.64.0.4:2083/admin`, realm `internal`, bootstrap admin credentials
+are with the owner. Rotating the client secret means updating `OIDC_CLIENT_SECRET` in `.env`
+and `deploy.sh` (or `compose up -d api`).
+
+### More traps that cost time
+
+- Writing secrets into `.env` through nested shells (Windows bash -> WSL -> ssh -> python)
+  silently produced empty values once, because `$VAR` expanded on the wrong side. Write `.env`
+  with a script executed on the host, and verify with `awk -F= '{print length($2)}'`, never with
+  a masking `sed`.
+- Shell scripts checked out on Windows arrived as CRLF and `set -o pipefail` became
+  `pipefail\r`. `.gitattributes` now forces LF on `*.sh`; the CI runner was never affected.
+- A single-file bind mount of the Caddyfile kept serving the old inode after rsync replaced the
+  file, so `caddy reload` reloaded stale config. The overlay mounts the `deploy/caddy` directory
+  and `deploy.sh` reloads Caddy after every `up`.
+- The interactive Keycloak login has not been exercised by a human yet; everything up to the
+  redirect to `auth.tomastc.com` (correct client id, PKCE, callback URI) and the 401 gate has.
 
 ## Automatic deploys
 
