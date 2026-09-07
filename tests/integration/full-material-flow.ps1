@@ -18,7 +18,11 @@ $backendRoot = Join-Path $repoRoot 'backend\IoTTeamCenter.Api'
 $databaseName = 'IoTTeamCenter_CI_{0}_{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddHHmmss')), ([Guid]::NewGuid().ToString('N'))
 if ($databaseName -notmatch '^IoTTeamCenter_CI_[A-Za-z0-9_]+$') { throw 'Generated CI database name is outside the cleanup boundary.' }
 $appRoleName = 'iot_ci_app_role'
-$appRolePassword = '{0}{1}' -f ([Guid]::NewGuid().ToString('N')), ([Guid]::NewGuid().ToString('N'))
+# Guid.ToString('N') is lowercase hex only (digits + a-f) -- concatenating two never
+# satisfies SQL Server's "3 of 4 character classes" password policy on its own, so
+# CREATE APPLICATION ROLE always failed with Msg 33064. Append a fixed uppercase letter
+# and symbol to guarantee all four classes while keeping the bulk of it random.
+$appRolePassword = '{0}{1}Aa1!' -f ([Guid]::NewGuid().ToString('N')), ([Guid]::NewGuid().ToString('N'))
 
 $sqlcmdBase = @('-S', $SqlServer, '-b', '-r1', '-C', '-I')
 $oldSqlcmdPassword = $env:SQLCMDPASSWORD
