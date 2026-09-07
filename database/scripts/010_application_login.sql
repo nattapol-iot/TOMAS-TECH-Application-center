@@ -234,9 +234,12 @@ GRANT INSERT ON OBJECT::dbo.schedule_updates TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.schedule_baselines TO [iot_team_app_role];
 
 -- Remove legacy grants for modules that are intentionally outside this release.
+-- (The Inquiry workspace's write endpoints -- assign, create meeting, upload/download
+-- attachment -- were never implemented and are not registered; read-only access via the
+-- SELECT grants above is all that's used.)
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.holidays FROM [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.inquiry_attachments TO [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.inquiry_meetings TO [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiry_attachments FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.inquiry_meetings FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.notifications FROM [iot_team_app_role];
 
 DENY ALTER, TAKE OWNERSHIP ON SCHEMA::dbo TO [iot_team_app_role];
