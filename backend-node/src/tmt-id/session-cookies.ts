@@ -67,7 +67,8 @@ export class TmtIdCookies {
       // Dropping the id_token keeps the person signed in; logout then ends the
       // provider session without id_token_hint instead of failing outright.
       this.onOversizedSession?.(sealed.length);
-      const { idToken: _idToken, ...withoutIdToken } = session;
+      const withoutIdToken: TmtIdSession = { ...session };
+      delete withoutIdToken.idToken;
       sealed = await this.sessionCodec.seal({ ...withoutIdToken }, SESSION_TTL_SECONDS);
     }
     void reply.setCookie(SESSION_COOKIE_NAME, sealed, sessionCookieAttributes(this.secure));

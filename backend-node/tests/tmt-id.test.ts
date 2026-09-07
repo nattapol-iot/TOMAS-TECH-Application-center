@@ -105,11 +105,12 @@ test("session and transient login cookies carry the required attributes", () => 
 });
 
 test("Authentication__Mode=TmtId fails closed when a required setting is missing", () => {
-  const { SESSION_SECRET: _secret, ...withoutSecret } = TMT_ID_ENV;
-  assert.throws(() => loadConfig(withoutSecret), /SESSION_SECRET is required/);
-  const { OIDC_CLIENT_SECRET: _clientSecret, ...withoutClientSecret } = TMT_ID_ENV;
   assert.throws(
-    () => loadConfig(withoutClientSecret),
+    () => loadConfig({ ...TMT_ID_ENV, SESSION_SECRET: undefined }),
+    /SESSION_SECRET is required/,
+  );
+  assert.throws(
+    () => loadConfig({ ...TMT_ID_ENV, OIDC_CLIENT_SECRET: undefined }),
     /OIDC_CLIENT_SECRET is required/,
   );
   assert.throws(
