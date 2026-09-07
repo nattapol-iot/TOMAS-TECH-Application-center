@@ -99,6 +99,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "SQL Server API": { th: "API ฐานข้อมูล SQL Server", jp: "SQL Server API" },
 
   /* Login */
+  "Restoring your session…": { th: "กำลังเตรียมพร้อมใช้งาน…", jp: "セッションを復元しています…" },
   "Sign in": { th: "เข้าสู่ระบบ", jp: "サインイン" },
   "Use your company account to open the estimate workspace.":
     { th: "ใช้บัญชีบริษัทเพื่อเข้าใช้งานพื้นที่ทำประมาณการ", jp: "会社アカウントで見積ワークスペースを開きます。" },

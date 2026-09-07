@@ -2459,6 +2459,8 @@ button.dashboard-summary-card:hover { border-color: var(--blue-line); box-shadow
 .dashboard-task-due { display: flex; align-items: center; justify-content: flex-end; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .dashboard-task-due.late { color: var(--red-text); }
 .dashboard-task-due .icon { width: 14px; height: 14px; }
+.session-loading { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--muted); font-size: 16px; }
+.session-loading p { margin: 0; }
 .dashboard-loading { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 80px; color: var(--muted); font-size: 13px; }
 
 .dashboard-attention-panel { height: 100%; }
