@@ -106,9 +106,9 @@ function ImportModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   </Modal>;
 }
 
-function LinesTable({ workbook }: { workbook: HistoricalWorkbook }) {
+function LinesTable({ workbook, expanded = false }: { workbook: HistoricalWorkbook; expanded?: boolean }) {
   const t = useT();
-  return <div className="table-wrap tall"><table><thead><tr><th>{t("Rev. / แถว")}</th><th>{t("Item / รายละเอียด")}</th><th>{t("จำนวน")}</th><th>{t("Supplier / QT")}</th><th>{t("ราคา/หน่วย")}</th><th>{t("Total price")}</th><th>{t("Actual cost เดิม")}</th><th>{t("PO / สถานะ")}</th></tr></thead><tbody>
+  return <div className={`table-wrap tall historical-pr-lines${expanded ? " expanded" : ""}`}><table><thead><tr><th>{t("Rev. / แถว")}</th><th>{t("Item / รายละเอียด")}</th><th>{t("จำนวน")}</th><th>{t("Supplier / QT")}</th><th>{t("ราคา/หน่วย")}</th><th>{t("Total price")}</th><th>{t("Actual cost เดิม")}</th><th>{t("PO / สถานะ")}</th></tr></thead><tbody>
     {workbook.lines.map(l => <tr key={l.key}><td>{l.revision}<small className="muted">{l.key}<br />{l.issuedBy} {t("·")}{" "}{l.issuedDate || t("ไม่ระบุวันที่")}</small></td><td><strong>{l.partNumber}</strong><small style={{ whiteSpace: "pre-wrap" }} className="muted">{l.description}</small>{l.prIssued ? <small>{t("ออก PR แล้ว")}</small> : null}</td><td className="num">{l.quantity} {l.unit}</td><td>{l.supplier}<small className="muted">{l.quotation}</small></td><td className="num">{cash(l.unitPrice)}</td><td className="num">{cash(l.totalPrice)}</td><td className="num">{l.actualCost === null ? l.actualCostText || t("ไม่ระบุ") : cash(l.actualCost)}</td><td>{l.poNumber || t("ยังไม่มีเลข PO")}<small><Badge tone={l.status === "Approved" ? "green" : l.status === "Cancelled" ? "violet" : "amber"}>{l.poStatus || t("ไม่ทราบสถานะ")}</Badge></small>{l.status === "Cancelled" ? <small>{t("Item ยังใช้งาน · รอเชื่อม PO ทดแทน")}</small> : null}</td></tr>)}
   </tbody></table></div>;
 }
@@ -156,30 +156,36 @@ function HistoryDetail({ id, canEdit, onSelect, onClose, notify }: { id: number;
   const close = () => { if (!busy && discardChanges()) onClose(); };
   const staleKeys = detail?.workbook.lines.filter(line => links[line.key]?.estimateLineId && !detail.estimateLines.some(candidate => candidate.id === links[line.key]?.estimateLineId)).map(line => line.key) ?? [];
   const editable = canEdit && detail?.isCurrent && !busy && !loading;
-  return <Modal title={detail?.documentReference ?? t("PR ย้อนหลัง")} subtitle={t("Historical PR · เก็บรายละเอียดต้นฉบับและประวัติ PO")} size="xl" onClose={close} footer={<>
+  return <Modal title={detail?.documentReference ?? t("PR ย้อนหลัง")} subtitle={t("Historical PR · เก็บรายละเอียดต้นฉบับและประวัติ PO")} size="wide" onClose={close} footer={<>
     <button className="btn ghost" type="button" disabled={busy} onClick={close}>{t("ปิด")}</button>
     <button className="btn ghost" type="button" disabled={busy || loading || !detail} onClick={() => void download()}><Icon name="download" />{t("ไฟล์ต้นฉบับ")}</button>
     {canEdit && detail?.isCurrent ? <button className="btn primary" type="button" disabled={!editable || !dirty || staleKeys.length > 0} onClick={() => void save()}>{t("บันทึกการจับคู่")}</button> : null}
   </>}>
     <ErrorMessage message={error} />{error ? <button className="btn ghost" type="button" onClick={() => { if (discardChanges()) void load(); }}>{t("ลองโหลดใหม่")}</button> : null}
-    {loading ? <p role="status">{t("กำลังโหลด…")}</p> : detail ? <>
-      <Field label={t("ประวัติไฟล์นำเข้า")}><select disabled={busy} value={id} onChange={e => { if (discardChanges()) onSelect(Number(e.target.value)); }}>{detail.versions.map(v => <option key={v.id} value={v.id}>{t("รุ่น")}{" "}{v.revision}{v.isCurrent ? t(" (ล่าสุด)") : t(" (ประวัติ)")} {t("·")}{" "}{date(v.createdAt)}</option>)}</select></Field>
-      <p>{detail.workbook.projectNumber} {t("·")}{" "}{detail.workbook.projectName} {t("·")}{" "}{detail.workbook.lines.length} {t("รายการ")}</p>
+    {loading ? <p role="status">{t("กำลังโหลด…")}</p> : detail ? <div className="historical-pr-detail">
+      <div className="historical-pr-context">
+        <Field label={t("ประวัติไฟล์นำเข้า")}><select disabled={busy} value={id} onChange={e => { if (discardChanges()) onSelect(Number(e.target.value)); }}>{detail.versions.map(v => <option key={v.id} value={v.id}>{t("รุ่น")}{" "}{v.revision}{v.isCurrent ? t(" (ล่าสุด)") : t(" (ประวัติ)")} {t("·")}{" "}{date(v.createdAt)}</option>)}</select></Field>
+        <div className="historical-pr-project-summary">
+          <span>{t("Project")}</span>
+          <strong>{detail.workbook.projectNumber}</strong>
+          <small>{detail.workbook.projectName} {t("·")}{" "}{detail.workbook.lines.length} {t("รายการ")}</small>
+        </div>
+      </div>
       {detail.projectId === null ? <div className="callout"><span>{t("รอเชื่อม Project")}{" "}{detail.workbook.projectNumber} {t("· เมื่อสร้างโครงการด้วยเลขนี้แล้ว กดเชื่อมเพื่อจับคู่ Estimate")}</span>{canEdit && detail.isCurrent ? <button className="btn ghost" type="button" disabled={busy || dirty} onClick={() => void linkProject()}>{t("เชื่อม Project")}</button> : null}</div> : null}
       <Totals totals={detail.workbook.totals} />
-      <LinesTable workbook={detail.workbook} />
+      <LinesTable workbook={detail.workbook} expanded />
       <h3>{t("จับคู่ Estimate / Module และ PO ทดแทน")}</h3>
       {dirty ? <p role="status">{t("มีการจับคู่ที่ยังไม่ได้บันทึก")}</p> : null}
       {staleKeys.length ? <div className="callout danger" role="alert">{t("Estimate เปลี่ยน revision แล้ว มี")}{" "}{staleKeys.length} {t("รายการที่ต้องจับคู่ใหม่ หรือเลือก “ยังไม่จับคู่” ก่อนบันทึก")}</div> : null}
       <p>{t("เลือก Estimate line ให้ตรงรายการ และเลือก Item จาก PO ใหม่สำหรับ PO ที่ยกเลิก สถานะรับของและ Stock ต้องตรวจจากข้อมูลรับของแยกต่างหาก")}</p>
       {!detail.estimateLines.length ? <p>{t("Project นี้ยังไม่มีรายการใน Estimate revision ปัจจุบัน สามารถกลับมาจับคู่ภายหลังได้")}</p> : null}
-      <div className="table-wrap"><table><thead><tr><th>{t("Item เดิม")}</th><th>{t("Estimate / Module")}</th><th>{t("Item จาก PO ทดแทน")}</th></tr></thead><tbody>{detail.workbook.lines.map(l => <tr key={l.key}><td>{l.partNumber}<small className="muted">{l.key} {t("·")}{" "}{l.poNumber}</small></td><td><select aria-label={`Estimate ${l.key}`} disabled={!editable} value={links[l.key]?.estimateLineId ?? ""} onChange={e => update(l.key, { estimateLineId: e.target.value ? Number(e.target.value) : null })}><option value="">{t("ยังไม่จับคู่")}</option>{staleKeys.includes(l.key) ? <option value={links[l.key]?.estimateLineId ?? ""}>{t("รายการ Estimate เดิมไม่อยู่ใน revision ปัจจุบัน")}</option> : null}{detail.estimateLines.map(c => <option key={c.id} value={c.id}>{c.estimateNumber} {t("R")}{" "}{c.revision} {t("·")}{" "}{c.module} {t("·")}{" "}{c.itemCode} {t("·")}{" "}{c.description}</option>)}</select></td><td>{l.status === "Cancelled" ? <select aria-label={`${t("Item จาก PO ทดแทน")} ${l.key}`} disabled={!editable} value={links[l.key]?.replacementKey ?? ""} onChange={e => update(l.key, { replacementKey: e.target.value || null })}><option value="">{t("ยังไม่ระบุ / PO ใหม่อยู่นอกไฟล์นี้")}</option>{detail.workbook.lines.filter(t => ["Approved", "Pending"].includes(t.status) && t.poNumber && t.poNumber !== l.poNumber).map(candidate => <option key={candidate.key} value={candidate.key}>{candidate.poNumber} · {candidate.partNumber} · {candidate.description}</option>)}</select> : "—"}</td></tr>)}</tbody></table></div>
+      <div className="table-wrap historical-pr-mapping"><table><thead><tr><th>{t("Item เดิม")}</th><th>{t("Estimate / Module")}</th><th>{t("Item จาก PO ทดแทน")}</th></tr></thead><tbody>{detail.workbook.lines.map(l => <tr key={l.key}><td>{l.partNumber}<small className="muted">{l.key} {t("·")}{" "}{l.poNumber}</small></td><td><select aria-label={`Estimate ${l.key}`} disabled={!editable} value={links[l.key]?.estimateLineId ?? ""} onChange={e => update(l.key, { estimateLineId: e.target.value ? Number(e.target.value) : null })}><option value="">{t("ยังไม่จับคู่")}</option>{staleKeys.includes(l.key) ? <option value={links[l.key]?.estimateLineId ?? ""}>{t("รายการ Estimate เดิมไม่อยู่ใน revision ปัจจุบัน")}</option> : null}{detail.estimateLines.map(c => <option key={c.id} value={c.id}>{c.estimateNumber} {t("R")}{" "}{c.revision} {t("·")}{" "}{c.module} {t("·")}{" "}{c.itemCode} {t("·")}{" "}{c.description}</option>)}</select></td><td>{l.status === "Cancelled" ? <select aria-label={`${t("Item จาก PO ทดแทน")} ${l.key}`} disabled={!editable} value={links[l.key]?.replacementKey ?? ""} onChange={e => update(l.key, { replacementKey: e.target.value || null })}><option value="">{t("ยังไม่ระบุ / PO ใหม่อยู่นอกไฟล์นี้")}</option>{detail.workbook.lines.filter(t => ["Approved", "Pending"].includes(t.status) && t.poNumber && t.poNumber !== l.poNumber).map(candidate => <option key={candidate.key} value={candidate.key}>{candidate.poNumber} · {candidate.partNumber} · {candidate.description}</option>)}</select> : "—"}</td></tr>)}</tbody></table></div>
       <h3>{t("เทียบงบเฉพาะรายการที่จับคู่ในไฟล์นี้")}</h3>
       <p>{t("ยอดด้านล่างไม่รวม PO ที่ยกเลิกและไม่รวม PR จากเอกสารอื่น จึงยังไม่ใช่ต้นทุนรวมทั้ง Project")}</p>
       <div className="table-wrap"><table><thead><tr><th>{t("Estimate / Module")}</th><th>{t("งบ Estimate line")}</th><th>{t("PO อนุมัติ + รออนุมัติที่จับคู่")}</th><th>{t("ส่วนต่างจากงบ")}</th></tr></thead><tbody>{detail.estimateLines.filter(c => detail.workbook.lines.some(l => links[l.key]?.estimateLineId === c.id)).map(c => {
         const { amount, budget, variance, quotedRows } = historicalPrComparison(detail.workbook.lines, links, c);
         return <tr key={c.id}><td>{c.module} {t("·")}{" "}{c.itemCode}</td><td className="num">{cash(budget)}</td><td className="num">{cash(amount)}{quotedRows ? <small className="muted">{t("ใช้ราคาอ้างอิง")}{" "}{quotedRows} {t("รายการที่ยังไม่มี Actual cost")}</small> : null}</td><td className="num">{variance === null ? t("ยังไม่มีงบสำหรับเปรียบเทียบ") : cash(variance)}</td></tr>;
       })}</tbody></table></div>
-    </> : null}
+    </div> : null}
   </Modal>;
 }

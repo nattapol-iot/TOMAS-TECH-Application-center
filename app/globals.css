@@ -1259,6 +1259,40 @@ button.kpi:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); tra
 }
 .table-wrap.tall { max-height: 560px; }
 
+/* Historical PR detail uses the wide workspace as a review surface, not a compact form. */
+.historical-pr-detail { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
+.historical-pr-context { display: grid; grid-template-columns: minmax(320px, 1.35fr) minmax(280px, 1fr); gap: 16px; align-items: end; }
+.historical-pr-context .field { margin: 0; }
+.historical-pr-project-summary { display: flex; min-height: 64px; flex-direction: column; justify-content: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-25); }
+.historical-pr-project-summary span { color: var(--muted); font-size: var(--fs-2xs); font-weight: 600; }
+.historical-pr-project-summary strong { margin-top: 2px; font-size: var(--fs-md); }
+.historical-pr-project-summary small { margin-top: 2px; color: var(--muted); }
+.historical-pr-lines { border: 1px solid var(--line); border-radius: var(--r-md); }
+.historical-pr-lines.expanded { max-height: none; overflow-x: auto; overflow-y: visible; }
+.historical-pr-lines table { min-width: 1380px; }
+.historical-pr-lines th,
+.historical-pr-lines td { vertical-align: top; }
+.historical-pr-lines th:nth-child(1) { width: 140px; }
+.historical-pr-lines th:nth-child(2) { width: 390px; }
+.historical-pr-lines th:nth-child(3) { width: 100px; }
+.historical-pr-lines th:nth-child(4) { width: 180px; }
+.historical-pr-lines th:nth-child(5),
+.historical-pr-lines th:nth-child(6),
+.historical-pr-lines th:nth-child(7) { width: 135px; }
+.historical-pr-lines th:nth-child(8) { width: 170px; }
+.historical-pr-lines tbody tr:hover,
+.historical-pr-mapping tbody tr:hover { background: var(--n-25); }
+.historical-pr-mapping { border: 1px solid var(--line); border-radius: var(--r-md); }
+.historical-pr-mapping table { min-width: 1120px; }
+.historical-pr-mapping th:first-child { width: 260px; }
+.historical-pr-mapping th:nth-child(2) { width: 48%; }
+.historical-pr-mapping select { width: 100%; min-width: 280px; }
+
+@media (max-width: 760px) {
+  .historical-pr-context { grid-template-columns: minmax(0, 1fr); }
+  .historical-pr-lines table { min-width: 1180px; }
+}
+
 table {
   width: 100%;
   border-collapse: separate;
