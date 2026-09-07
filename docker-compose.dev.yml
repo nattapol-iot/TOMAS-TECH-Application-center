@@ -6,7 +6,18 @@ services:
       context: ./backend-node
     environment:
       NODE_ENV: development
-      Authentication__Mode: Development
+      Authentication__Mode: ${DEV_API_AUTH_MODE:-Development}
+      # Read only in TmtId mode; harmless when empty elsewhere.
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-}
+      TMT_ID_DEFAULT_ROLE_CODE: ${TMT_ID_DEFAULT_ROLE_CODE:-}
+      MASTER_DATA_URL: ${MASTER_DATA_URL:-}
+      MASTER_DATA_API_KEY: ${MASTER_DATA_API_KEY:-}
       ConnectionStrings__IoTTeamCenter: ${DEV_SQL_CONNECTION_STRING:?set this in .env, copied from .env.dev.example}
       DocumentStorage__RootPath: /app/App_Data/project-documents
       # backend-node validates CORS origins in every environment and accepts plain http only
@@ -40,7 +51,7 @@ services:
     command: sh -c "npm ci && npm run dev -- --hostname 0.0.0.0 --port 3000"
     environment:
       NEXT_PUBLIC_APP_MODE: development
-      NEXT_PUBLIC_AUTH_MODE: entra
+      NEXT_PUBLIC_AUTH_MODE: ${DEV_FRONTEND_AUTH_MODE:-entra}
       NEXT_PUBLIC_API_BASE_URL: ${DEV_API_BASE_URL:-http://localhost:5105}
       NEXT_PUBLIC_ENTRA_TENANT_ID: ${DEV_ENTRA_TENANT_ID:-}
       NEXT_PUBLIC_ENTRA_CLIENT_ID: ${DEV_ENTRA_CLIENT_ID:-}

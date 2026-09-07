@@ -9,6 +9,11 @@ import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
 import { clearTeamTestSession, getTeamTestSession, IS_TEAM_TEST_MODE, saveTeamTestSession } from "./team-test-client";
+import { IS_TMT_ID_MODE } from "./tmt-id.constants";
+import { currentAppPath, loadTmtIdSession, redirectToTmtIdLogin, redirectToTmtIdLogout } from "./tmt-id-client";
+import { SIGN_IN_MODE } from "./sign-in-mode.constants";
+import { PRODUCTION_LOGIN_COPY } from "./production/production-login-copy";
+import type { ProductionLoginProps } from "./production/ProductionLogin.types";
 import { PRODUCT } from "./product";
 import { Icon, Tabs, Toast, type IconName } from "./ui";
 import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
@@ -151,7 +156,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   ] },
 ];
 
-const IS_AUTH_CONFIGURED = (IS_TEAM_TEST_MODE || IS_ENTRA_CONFIGURED) && IS_API_CONFIGURED;
+const IS_AUTH_CONFIGURED = (IS_TMT_ID_MODE || IS_TEAM_TEST_MODE || IS_ENTRA_CONFIGURED) && IS_API_CONFIGURED;
 const WORKSPACE_LABEL = IS_TEAM_TEST_MODE ? "TEAM TEST" : "PRODUCTION";
 const LANGUAGE_STORAGE_KEY = "tomas-tech-language";
 const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups";
@@ -301,15 +306,29 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const restore = async () => {
       setBusy(true);
       try {
+        if (IS_TMT_ID_MODE) {
+          const session = await loadTmtIdSession();
+          if (session.status === "signed-out") {
+            // The spinner stays up through the navigation so the sign-in screen
+            // never flashes on the way to the identity provider.
+            redirectToTmtIdLogin(currentAppPath());
+            return;
+          }
+          const data = await loadBootstrap();
+          if (!cancelled) { setBootstrap(data); setBusy(false); }
+          return;
+        }
         const hasSession = IS_TEAM_TEST_MODE ? Boolean(getTeamTestSession()) : Boolean(await restoreAccount());
         if (hasSession && !cancelled) {
           const data = await loadBootstrap();
           if (!cancelled) setBootstrap(data);
         }
-      } catch (error) {
-        if (!cancelled) setAuthError(error instanceof Error ? error.message : "Unable to restore the Microsoft session.");
-      } finally {
         if (!cancelled) setBusy(false);
+      } catch (error) {
+        if (!cancelled) {
+          setAuthError(error instanceof Error ? error.message : "Unable to restore the sign-in session.");
+          setBusy(false);
+        }
       }
     };
     void restore();
@@ -382,6 +401,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {
     setBusy(true); setAuthError(""); setMyWorkUrgentCount(0);
     try {
+      if (IS_TMT_ID_MODE) {
+        // Navigates away to TMT ID; the callback lands back on the app origin
+        // with the session cookie already set, and restore() picks it up.
+        redirectToTmtIdLogin(currentAppPath());
+        return;
+      }
       if (IS_TEAM_TEST_MODE) {
         saveTeamTestSession(teamTestEmail ?? "", teamTestAccessCode ?? "");
         setBootstrap(await loadBootstrap());
@@ -402,6 +427,13 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (!confirmReportNavigation()) return;
     setBusy(true); setAuthError("");
     try {
+      if (IS_TMT_ID_MODE) {
+        // Clearing local state is not a sign-out while the provider still holds
+        // an SSO session, so the API drives the end-session redirect.
+        reportDirty.current = false;
+        redirectToTmtIdLogout();
+        return;
+      }
       if (IS_TEAM_TEST_MODE) clearTeamTestSession();
       else await signOutMicrosoft();
       reportDirty.current = false;
@@ -456,7 +488,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <ProductionLogin
           busy={busy}
           error={authError}
-          teamTestMode={IS_TEAM_TEST_MODE}
+          mode={SIGN_IN_MODE}
           entraConfigured={IS_ENTRA_CONFIGURED}
           apiConfigured={IS_API_CONFIGURED}
           language={language}
@@ -613,28 +645,24 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 function ProductionLogin({
   busy,
   error,
-  teamTestMode,
+  mode,
   entraConfigured,
   apiConfigured,
   language,
   onLanguageChange,
   onSignIn,
-}: {
-  busy: boolean;
-  error: string;
-  teamTestMode: boolean;
-  entraConfigured: boolean;
-  apiConfigured: boolean;
-  language: Lang;
-  onLanguageChange: (language: Lang) => void;
-  onSignIn: (teamTestEmail?: string, teamTestAccessCode?: string) => Promise<void>;
-}) {
+}: ProductionLoginProps) {
   const [teamTestEmail, setTeamTestEmail] = useState("");
   const [teamTestAccessCode, setTeamTestAccessCode] = useState("");
-  const configured = (teamTestMode || entraConfigured) && apiConfigured;
+  const copy = PRODUCTION_LOGIN_COPY[mode];
+  const teamTestMode = mode === "team-test";
+  // TMT ID needs nothing configured in the browser: the confidential client and
+  // the redirect live on the API, so only the API origin has to be trusted.
+  const identityConfigured = mode === "entra" ? entraConfigured : true;
+  const configured = identityConfigured && apiConfigured;
   const missing = [
-    !teamTestMode && !entraConfigured ? "Microsoft Entra (Tenant ID, Client ID และ API scope)" : "",
-    !apiConfigured ? "HTTPS API origin" : "",
+    identityConfigured ? "" : "Microsoft Entra (Tenant ID, Client ID และ API scope)",
+    apiConfigured ? "" : "HTTPS API origin",
   ].filter(Boolean).join(" และ ");
 
   const t = (text: string) => translate(text, language);
@@ -642,22 +670,22 @@ function ProductionLogin({
   return <div className="login">
     <aside className="login-aside">
       <div className="login-brand"><BrandLockup tone="dark" height={44} /><span>{PRODUCT.name}</span></div>
-      <div><h2>{PRODUCT.name}</h2><p className="login-strap">{t("Engineering Estimate Cost Management System")}</p><p>{t("IoT team workspace for inquiries, estimates, projects and materials with controlled access and an audit trail.")}</p><ul className="login-points"><li><Icon name="check" />{t(teamTestMode ? "Temporary team-test access" : "Microsoft company account")}</li><li><Icon name="check" />{t("SQL Server is the single source of record.")}</li><li><Icon name="check" />{t("Role-based access and safe concurrent editing.")}</li><li><Icon name="check" />{t("Unique document numbers with a traceable history.")}</li></ul></div>
-      <div className="login-stats"><div><strong>{teamTestMode ? "TEST" : "Entra"}</strong><span>{t("Identity")}</span></div><div><strong>RBAC</strong><span>{t("Access")}</span></div><div><strong>SQL</strong><span>{t("System of record")}</span></div></div>
+      <div><h2>{PRODUCT.name}</h2><p className="login-strap">{t("Engineering Estimate Cost Management System")}</p><p>{t("IoT team workspace for inquiries, estimates, projects and materials with controlled access and an audit trail.")}</p><ul className="login-points"><li><Icon name="check" />{t(copy.identityPoint)}</li><li><Icon name="check" />{t("SQL Server is the single source of record.")}</li><li><Icon name="check" />{t("Role-based access and safe concurrent editing.")}</li><li><Icon name="check" />{t("Unique document numbers with a traceable history.")}</li></ul></div>
+      <div className="login-stats"><div><strong>{copy.identityBadge}</strong><span>{t("Identity")}</span></div><div><strong>RBAC</strong><span>{t("Access")}</span></div><div><strong>SQL</strong><span>{t("System of record")}</span></div></div>
     </aside>
     <div className="login-form-wrap">
       <form className="login-form" onSubmit={(event) => { event.preventDefault(); if (configured) void onSignIn(teamTestEmail, teamTestAccessCode); }}>
         <div className="lang-switch" role="group" aria-label={t("Language")}>
           {LANGUAGES.map((code) => <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => onLanguageChange(code)}>{code}</button>)}
         </div>
-        <h1>{t(teamTestMode ? "Team test sign in" : "Sign in")}</h1>
-        <p>{t(teamTestMode ? "Use your registered email and temporary test access code." : "Use your Microsoft company account to enter the Production workspace.")}</p>
+        <h1>{t(copy.heading)}</h1>
+        <p>{t(copy.intro)}</p>
         {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
         {teamTestMode && apiConfigured ? <><label className="field"><span>{t("Registered email")}</span><input required type="email" maxLength={256} autoComplete="email" value={teamTestEmail} onChange={(event) => setTeamTestEmail(event.target.value)} /></label><label className="field"><span>{t("Personal test access code")}</span><input required type="password" maxLength={256} autoComplete="current-password" value={teamTestAccessCode} onChange={(event) => setTeamTestAccessCode(event.target.value)} /></label></> : null}
         {configured
-          ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{t(busy ? "Connecting…" : teamTestMode ? "Enter team test" : "Continue with Microsoft")}</button>
-          : <div className="callout warning" role="status"><Icon name="alertTriangle" /><span>{t(teamTestMode ? "Team Test is not ready" : "Production is locked")} {t("until these settings are configured:")} {missing}</span></div>}
-        <div className="login-role-hint"><strong>{t(teamTestMode ? "Temporary test access" : "Production access")}</strong>{t(teamTestMode ? "For temporary UAT use. The access code stays only in this browser session, and Production does not enable this mode." : "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your Microsoft password.")}</div>
+          ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{t(busy ? "Connecting…" : copy.submitLabel)}</button>
+          : <div className="callout warning" role="status"><Icon name="alertTriangle" /><span>{t(copy.lockedTitle)} {t("until these settings are configured:")} {missing}</span></div>}
+        <div className="login-role-hint"><strong>{t(copy.accessTitle)}</strong>{t(copy.accessBody)}</div>
       </form>
     </div>
   </div>;

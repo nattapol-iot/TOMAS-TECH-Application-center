@@ -1,9 +1,13 @@
-export type AuthenticationMode = "Development" | "TeamTest" | "Entra";
+export type AuthenticationMode = "Development" | "TeamTest" | "Entra" | "TmtId";
 
 export type Identity = {
   mode: AuthenticationMode;
   value: string;
   email?: string;
+  name?: string;
+  // TMT ID preferred_username. Distinct from the subject id because this, not
+  // sub, is the join key into the org master-data directory.
+  preferredUsername?: string;
   objectId?: string;
   partitionKey: string;
   /**
