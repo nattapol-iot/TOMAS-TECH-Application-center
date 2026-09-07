@@ -25,6 +25,35 @@ function Test-TeamTestPrivateLanIpv4([string] $Address) {
         -or ($octets[0] -eq 192 -and $octets[1] -eq 168)
 }
 
+function Get-TeamTestApiRuntimeConfiguration(
+    [string] $ReleasePath,
+    [string] $NodeProgramPath,
+    [string] $DotnetProgramPath
+) {
+    if ([string]::IsNullOrWhiteSpace($ReleasePath)) {
+        throw 'Saved ReleasePath is required.'
+    }
+
+    $normalizedReleasePath = [IO.Path]::GetFullPath($ReleasePath)
+    $nodeEntrypoint = Join-Path $normalizedReleasePath 'dist\src\server.js'
+    $legacyEntrypoint = Join-Path $normalizedReleasePath 'IoTTeamCenter.Api.dll'
+    if (Test-Path -LiteralPath $nodeEntrypoint -PathType Leaf) {
+        return [pscustomobject]@{
+            Kind = 'Node'
+            ProgramPath = $NodeProgramPath
+            Entrypoint = $nodeEntrypoint
+        }
+    }
+    if (Test-Path -LiteralPath $legacyEntrypoint -PathType Leaf) {
+        return [pscustomobject]@{
+            Kind = 'LegacyDotNet'
+            ProgramPath = $DotnetProgramPath
+            Entrypoint = $legacyEntrypoint
+        }
+    }
+    throw 'The saved API release contains neither the Node server nor a recoverable legacy release.'
+}
+
 function Get-TeamTestValidatedListenerConfiguration($Settings, [string[]] $AssignedAddresses = $null) {
     $apiPort = 0
     if (![int]::TryParse([string]$Settings.ApiPort, [ref]$apiPort) -or $apiPort -lt 1024 -or $apiPort -gt 65535) {

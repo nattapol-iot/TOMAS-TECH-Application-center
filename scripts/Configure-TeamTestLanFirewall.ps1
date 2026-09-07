@@ -8,6 +8,7 @@ $frontendPort = 3000
 $frontendRuleName = 'IoTTeamCenter-TeamTest-LAN-Frontend'
 $apiRuleName = 'IoTTeamCenter-TeamTest-LAN-API'
 $stateFileName = 'lan-firewall-state.json'
+. (Join-Path $PSScriptRoot 'TeamTestLanValidation.ps1')
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -287,6 +288,8 @@ $nodePath = Get-CanonicalPath ((Get-Command node.exe -ErrorAction Stop).Source)
 $dotnetPath = Get-CanonicalPath ((Get-Command dotnet.exe -ErrorAction Stop).Source)
 if (!$nodePath -or !(Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw 'node.exe was not found.' }
 if (!$dotnetPath -or !(Test-Path -LiteralPath $dotnetPath -PathType Leaf)) { throw 'dotnet.exe was not found.' }
+$apiRuntime = Get-TeamTestApiRuntimeConfiguration ([string]$settings.ReleasePath) $nodePath $dotnetPath
+$apiProgramPath = [string]$apiRuntime.ProgramPath
 
 foreach ($managedRuleName in @($frontendRuleName, $apiRuleName)) {
     if (Get-NetFirewallRule -PolicyStore ActiveStore -Name $managedRuleName -ErrorAction SilentlyContinue) {
@@ -318,7 +321,7 @@ $otherRelevantRules = @($activeInboundAllowRules | Where-Object {
     $ruleName -notin $managedRuleNames `
         -and $ruleName -notin $handledBroadRuntimeRuleNames `
         -and ((Test-RuleCanAdmitTarget $_ $nodePath $frontendPort $lanAddress $interfaceAlias $firewallProfile) `
-            -or (Test-RuleCanAdmitTarget $_ $dotnetPath $apiPort $lanAddress $interfaceAlias $firewallProfile))
+            -or (Test-RuleCanAdmitTarget $_ $apiProgramPath $apiPort $lanAddress $interfaceAlias $firewallProfile))
 })
 if ($otherRelevantRules.Count -ne 0) {
     $conflictingRuleNames = @($otherRelevantRules | ForEach-Object { [string]$_.Name } | Sort-Object -Unique)
@@ -369,7 +372,7 @@ try {
         -LocalAddress $lanAddress `
         -RemoteAddress $remoteSubnet `
         -LocalPort $apiPort `
-        -Program $dotnetPath `
+        -Program $apiProgramPath `
         -EdgeTraversalPolicy Block | Out-Null
 
     $state = @{
@@ -379,6 +382,9 @@ try {
         DisabledBroadRuntimeRuleNames = @($disabledRuleNames)
         NodePath = $nodePath
         DotnetPath = $dotnetPath
+        ApiRuntime = [string]$apiRuntime.Kind
+        ApiProgramPath = $apiProgramPath
+        ApiEntrypoint = [string]$apiRuntime.Entrypoint
         InterfaceAlias = $interfaceAlias
         InterfaceIndex = [int]$addressEntry.InterfaceIndex
         LocalAddress = $lanAddress
