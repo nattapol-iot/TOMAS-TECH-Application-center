@@ -50,6 +50,8 @@ log "Building images"
 compose build
 log "Starting containers"
 compose up -d
+# The Caddyfile is a bind mount, so an edited file does not recreate the container; reload it.
+compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || log "Caddy reload skipped (container not running yet)"
 
 PUBLIC_HOST="$(grep -E '^PUBLIC_HOST=' .env | cut -d= -f2- || true)"
 PUBLIC_HOST="${PUBLIC_HOST:-$PUBLIC_HOST_DEFAULT}"

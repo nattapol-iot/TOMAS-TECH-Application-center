@@ -11,7 +11,18 @@
 
 {$PUBLIC_HOST}:{$TLS_FRONTEND_PORT} {
 	import cloudflare_tls
-	reverse_proxy frontend:3000
+	# Every backend route lives under /api or /health and the frontend owns none of them, so the
+	# API is served on the app origin: the BFF session cookie is first-party and no CORS preflight
+	# is involved. The :{$TLS_API_PORT} site below keeps direct API access for operators.
+	handle /api/* {
+		reverse_proxy api:5106
+	}
+	handle /health/* {
+		reverse_proxy api:5106
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
 }
 
 {$PUBLIC_HOST}:{$TLS_API_PORT} {

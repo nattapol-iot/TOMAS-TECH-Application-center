@@ -17,6 +17,7 @@ import type { AppConfig } from "./config.js";
 import { registerAuthentication } from "./auth.js";
 import { createTmtIdRuntime } from "./tmt-id/runtime.js";
 import { registerTmtIdAuthRoutes } from "./routes/auth-tmt-id.js";
+import { createUserProvisioning } from "./tmt-id/user-provisioning.js";
 import { Database } from "./db.js";
 import { EmailService } from "./email.js";
 import { registerErrorHandler } from "./errors.js";
@@ -131,7 +132,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   });
 
   registerAuthentication(app, config, tmtId);
-  if (tmtId) registerTmtIdAuthRoutes(app, tmtId);
+  if (tmtId) registerTmtIdAuthRoutes(app, tmtId, createUserProvisioning(database, tmtId.settings.defaultRoleCode));
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
   registerBootstrapRoutes(app, database, users);

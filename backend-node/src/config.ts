@@ -12,6 +12,7 @@ export type TmtIdConfig = {
   sessionCookieSecure: boolean;
   masterDataUrl?: string;
   masterDataApiKey?: string;
+  defaultRoleCode?: string;
 };
 
 export type AppConfig = {
@@ -195,6 +196,9 @@ function loadTmtIdConfig(
       "MASTER_DATA_URL and MASTER_DATA_API_KEY are required together.",
     );
   if (masterDataUrl) validateOrigin(masterDataUrl, allowPrivateLanHttp);
+  const defaultRoleCode = optional(env, "TMT_ID_DEFAULT_ROLE_CODE");
+  if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode))
+    throw new Error("TMT_ID_DEFAULT_ROLE_CODE must be an existing dbo.roles code (1-50 characters).");
 
   return {
     issuer,
@@ -206,6 +210,7 @@ function loadTmtIdConfig(
     sessionCookieSecure,
     ...(masterDataUrl ? { masterDataUrl } : {}),
     ...(masterDataApiKey ? { masterDataApiKey } : {}),
+    ...(defaultRoleCode ? { defaultRoleCode } : {}),
   };
 }
 

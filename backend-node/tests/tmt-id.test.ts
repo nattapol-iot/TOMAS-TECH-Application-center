@@ -11,6 +11,8 @@ import {
 } from "../src/tmt-id/constants.js";
 import { createMasterDataDirectory } from "../src/tmt-id/master-data.js";
 import { sanitizeNextPath } from "../src/tmt-id/next-path.js";
+import { PROVISIONED_EMAIL_FALLBACK_DOMAIN } from "../src/tmt-id/constants.js";
+import { createUserProvisioning, deriveProvisionedUser } from "../src/tmt-id/user-provisioning.js";
 import { SealedCookieCodec } from "../src/tmt-id/sealed-cookie.js";
 import {
   loginCookieAttributes,
@@ -223,4 +225,33 @@ test("the master-data adapter stays dormant until both settings are present", as
   assert.equal(calls, 1);
   assert.equal(await directory.profile(""), null);
   assert.equal(calls, 1);
+});
+test("first-login provisioning derives a stable user from the token", () => {
+  const user = deriveProvisionedUser({
+    sub: "9f1c2b3a-0000-4000-8000-000000000001",
+    preferredUsername: "somchai.p",
+    email: "Somchai.P@By-Works.net",
+    name: "Somchai Prasert Na Ayutthaya",
+  });
+  assert.equal(user.objectId, "9f1c2b3a-0000-4000-8000-000000000001");
+  assert.equal(user.email, "somchai.p@by-works.net");
+  assert.equal(user.name, "Somchai Prasert Na Ayutthaya");
+  assert.equal(user.initials, "SPNA");
+
+  const fallback = deriveProvisionedUser({ sub: "sub-2", preferredUsername: "nok.k" });
+  assert.equal(fallback.email, `nok.k@${PROVISIONED_EMAIL_FALLBACK_DOMAIN}`);
+  assert.equal(fallback.name, "nok.k");
+  assert.equal(fallback.initials, "N");
+});
+
+test("provisioning stays dormant without TMT_ID_DEFAULT_ROLE_CODE", () => {
+  const database = { query: async () => { throw new Error("must not be called"); } };
+  assert.equal(createUserProvisioning(database, undefined), null);
+  assert.notEqual(createUserProvisioning(database, "Admin"), null);
+});
+
+test("TMT_ID_DEFAULT_ROLE_CODE is validated as a role code", () => {
+  assert.equal(loadConfig({ ...TMT_ID_ENV, TMT_ID_DEFAULT_ROLE_CODE: "Admin" }).tmtId?.defaultRoleCode, "Admin");
+  assert.equal(loadConfig(TMT_ID_ENV).tmtId?.defaultRoleCode, undefined);
+  assert.throws(() => loadConfig({ ...TMT_ID_ENV, TMT_ID_DEFAULT_ROLE_CODE: "1; DROP TABLE" }), /TMT_ID_DEFAULT_ROLE_CODE/);
 });

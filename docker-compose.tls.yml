@@ -25,7 +25,9 @@ services:
       TLS_API_PORT: ${TLS_API_PORT:-8445}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Cloudflare token with Zone.DNS edit on the PUBLIC_HOST zone}
     volumes:
-      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Directory, not file: rsync replaces files by rename and a single-file bind mount would
+      # keep serving the old inode, so reloads would never see an updated Caddyfile.
+      - ./deploy/caddy:/etc/caddy:ro
       - caddy-data:/data
       - caddy-config:/config
     ports:

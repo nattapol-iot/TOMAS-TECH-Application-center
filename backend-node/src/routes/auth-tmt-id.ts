@@ -18,6 +18,7 @@ import {
 } from "../tmt-id/constants.js";
 import { sanitizeNextPath } from "../tmt-id/next-path.js";
 import type { TmtIdRuntime } from "../tmt-id/runtime.js";
+import type { UserProvisioning } from "../tmt-id/user-provisioning.js";
 import type { MeResponse, TmtIdSession } from "../tmt-id/types.js";
 
 type LoginQuery = { next?: string; retry?: string };
@@ -36,6 +37,7 @@ function claimText(claim: unknown): string | undefined {
 export function registerTmtIdAuthRoutes(
   app: FastifyInstance,
   runtime: TmtIdRuntime,
+  provisioning: UserProvisioning | null,
 ): void {
   const { cookies, provider, directory, redirectUri, settings } = runtime;
   const appHome = `${settings.appBaseUrl}/`;
@@ -116,6 +118,7 @@ export function registerTmtIdAuthRoutes(
         ...(authTime === undefined ? {} : { authTime }),
         ...(issuedAt === undefined ? {} : { issuedAt }),
       };
+      await provisioning?.ensure(session);
       await cookies.writeSession(reply, session);
       return reply.redirect(`${settings.appBaseUrl}${action.login.next}`, 302);
     },

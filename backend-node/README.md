@@ -99,8 +99,12 @@ the app origin, list it in `Cors__AllowedOrigins__0`, and the API answers with
 `Access-Control-Allow-Credentials` while the frontend sends
 `credentials: "include"`.
 
-## Release rule
 
-Run type checking, tests, build, health/readiness checks, and at least one
-authenticated read/write/upload workflow against the release database before
-pointing the LAN frontend at a new build.
+### First-login provisioning
+
+`TMT_ID_DEFAULT_ROLE_CODE` (a `dbo.roles.code`, for example `Admin`) makes the callback create the
+`dbo.users` row for anyone TMT ID authenticates, keyed by the Keycloak `sub` in `entra_object_id`
+so `CurrentUserService` keeps its single join. A row already known by email is promoted to that
+object id instead of duplicated, mirroring `database/scripts/030_provision_user.sql`. Leave the
+variable unset to require manual provisioning; then `/api/me` succeeds but bootstrap answers
+`403 user_not_registered` until an operator provisions the person.

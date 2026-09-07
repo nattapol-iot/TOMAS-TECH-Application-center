@@ -46,3 +46,10 @@ export type MeResponse = {
   department: string | null;
   employeeNo: number | null;
 };
+
+export type ProvisionedUser = {
+  objectId: string;
+  email: string;
+  name: string;
+  initials: string;
+};
