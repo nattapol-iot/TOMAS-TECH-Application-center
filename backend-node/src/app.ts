@@ -1,3 +1,4 @@
+import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import { registerExecutiveDashboardRoutes } from "./routes/executive-dashboard.js";
 import { registerActivityRoutes } from "./routes/activity.js";
@@ -14,6 +15,8 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AppConfig } from "./config.js";
 import { registerAuthentication } from "./auth.js";
+import { createTmtIdRuntime } from "./tmt-id/runtime.js";
+import { registerTmtIdAuthRoutes } from "./routes/auth-tmt-id.js";
 import { Database } from "./db.js";
 import { EmailService } from "./email.js";
 import { registerErrorHandler } from "./errors.js";
@@ -81,9 +84,14 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     },
     throwFileSizeLimit: true,
   });
+  const tmtId = createTmtIdRuntime(config, app.log);
+  if (tmtId) await app.register(cookie);
   await app.register(cors, {
     origin: (origin, callback) =>
       callback(null, !origin || config.corsOrigins.includes(origin)),
+    // A split-origin deployment sends the session cookie cross-origin, which
+    // the browser only does when the API also allows credentials.
+    credentials: config.auth.mode === "TmtId",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Authorization",
@@ -122,7 +130,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     return payload;
   });
 
-  registerAuthentication(app, config);
+  registerAuthentication(app, config, tmtId);
+  if (tmtId) registerTmtIdAuthRoutes(app, tmtId);
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
   registerBootstrapRoutes(app, database, users);

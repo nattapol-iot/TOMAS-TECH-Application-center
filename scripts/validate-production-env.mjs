@@ -1,9 +1,15 @@
+const authMode = process.env.NEXT_PUBLIC_AUTH_MODE?.trim();
+// TMT ID is a confidential client owned by the API, so a tmt-id build ships no
+// identity provider settings of its own and the Entra values must not be
+// required for it.
+const isTmtId = authMode === "tmt-id";
+
 const required = [
   "NEXT_PUBLIC_AUTH_MODE",
   "NEXT_PUBLIC_API_BASE_URL",
-  "NEXT_PUBLIC_ENTRA_TENANT_ID",
-  "NEXT_PUBLIC_ENTRA_CLIENT_ID",
-  "NEXT_PUBLIC_ENTRA_API_SCOPE",
+  ...(isTmtId
+    ? []
+    : ["NEXT_PUBLIC_ENTRA_TENANT_ID", "NEXT_PUBLIC_ENTRA_CLIENT_ID", "NEXT_PUBLIC_ENTRA_API_SCOPE"]),
   "NEXT_PUBLIC_BUSINESS_TIME_ZONE",
   "SITE_ORIGIN",
 ];
@@ -12,8 +18,8 @@ const errors = [];
 if (process.env.NEXT_PUBLIC_APP_MODE !== "production") {
   errors.push("NEXT_PUBLIC_APP_MODE must be exactly 'production'.");
 }
-if (process.env.NEXT_PUBLIC_AUTH_MODE !== "entra") {
-  errors.push("NEXT_PUBLIC_AUTH_MODE must be exactly 'entra' in Production; Team Test is forbidden.");
+if (authMode !== "entra" && !isTmtId) {
+  errors.push("NEXT_PUBLIC_AUTH_MODE must be exactly 'entra' or 'tmt-id' in Production; Team Test is forbidden.");
 }
 for (const name of required) {
   if (!process.env[name]?.trim()) errors.push(`${name} is required.`);
@@ -38,14 +44,14 @@ for (const name of ["NEXT_PUBLIC_API_BASE_URL", "SITE_ORIGIN"]) {
 }
 
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-for (const name of ["NEXT_PUBLIC_ENTRA_TENANT_ID", "NEXT_PUBLIC_ENTRA_CLIENT_ID"]) {
+for (const name of isTmtId ? [] : ["NEXT_PUBLIC_ENTRA_TENANT_ID", "NEXT_PUBLIC_ENTRA_CLIENT_ID"]) {
   const value = process.env[name]?.trim();
   if (value && (!guidPattern.test(value) || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(value))) {
     errors.push(`${name} must be a real Microsoft Entra GUID, not a placeholder.`);
   }
 }
 
-const apiScope = process.env.NEXT_PUBLIC_ENTRA_API_SCOPE?.trim();
+const apiScope = isTmtId ? undefined : process.env.NEXT_PUBLIC_ENTRA_API_SCOPE?.trim();
 const apiScopeMatch = apiScope?.match(/^api:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([^/\s]+)$/i);
 if (apiScope && (!apiScopeMatch || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(apiScopeMatch[1]))) {
   errors.push("NEXT_PUBLIC_ENTRA_API_SCOPE must be a real exposed API scope in api://<application-id>/<scope> format.");

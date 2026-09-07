@@ -1,14 +1,14 @@
 "use client";
 
+import { API_BASE_URL } from "./api-origin";
 import { acquireApiToken } from "./auth-client";
 import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
+import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { isTrustedWebProtocol } from "./network-origin";
-
-const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export const IS_API_CONFIGURED = (() => {
   try {
-    const url = new URL(apiBaseUrl);
+    const url = new URL(API_BASE_URL);
     const trustedProtocol = isTrustedWebProtocol(url, IS_TEAM_TEST_MODE);
     const placeholderHost = url.hostname.endsWith(".invalid")
       || url.hostname === "example.tomastc.com"
@@ -890,17 +890,20 @@ async function authorizedFetch(path: string, init?: RequestInit, timeoutMs = 30_
     if (!session) throw new Error("Team test session is missing. Please sign in again.");
     headers.set("X-Team-Test-Email", session.email);
     headers.set("X-Team-Test-Code", session.accessCode);
-  } else {
+  } else if (!IS_TMT_ID_MODE) {
     const token = await acquireApiToken();
     headers.set("Authorization", `Bearer ${token}`);
   }
   if (typeof init?.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const timeout = AbortSignal.timeout(timeoutMs);
   const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-  const response = await fetch(`${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`, {
+  const response = await fetch(`${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`, {
     ...init,
     headers,
     signal,
+    // TMT ID keeps the session in a cookie the API origin owns; a split-origin
+    // deployment only sends it when the request opts into credentials.
+    credentials: IS_TMT_ID_MODE ? "include" : "same-origin",
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ code: "http_error", message: response.statusText })) as { code?: string; message?: string };
