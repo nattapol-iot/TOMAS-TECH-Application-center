@@ -117,59 +117,44 @@ rsync -az --delete --exclude node_modules --exclude .git --exclude dist --exclud
 ```
 
 ## Already done
+State on 2026-09-07 evening. Everything below is live and was verified with real requests.
 
-- Repo synced to `/Users/tomastc/iot-team-center/src` (rsync, no `.git`), at `main` abbb233.
-- `node:24-slim`, `mcr.microsoft.com/dotnet/sdk:10.0`, `mcr.microsoft.com/dotnet/aspnet:10.0`
-  pulled inside the `iot` VM, all arm64 native.
-- `.env` written with `DEV_SQL_CONNECTION_STRING` plus the three hostname values below.
-- Both services are up in Development mode. `src-api-1` answers `/health/live` with 200 and
-  reaches SQL; `src-frontend-1` serves 200 on `http://tmt-eq-0056.tmtvpn.internal:3000`.
-- `/health/ready` returns 200 with `schemaVersion: 36` against `IoTTeamCenterDev`, a database
-  created fresh on 2026-09-07 with `database/scripts/020_deploy_fresh_database.sql`. The
-  connection string originally pointed at `IoTTeamCenterTeamTest`, which turned out to be a
-  partial deployment from 2026-09-04: 46 tables (roughly migrations 001-010) but an empty
-  `dbo.schema_versions`, so every later migration's predecessor guard would throw. That
-  database was left untouched; only `.env` was repointed (a timestamped `.env.bak.*` sits
-  next to it).
-- The SQL login in `.env` is `sa`. The repo's own deployment docs require the least-privileged
-  `iot_team_app` login instead (`database/scripts/010_application_login.sql`). Combined with
-  Development auth trusting every caller, `sa` behind an API on 0.0.0.0 is the single most
-  important thing to fix before anyone outside the team can reach this host.
-- `~/iot-team-center/sqlcmd.sh` runs `sqlcmd` (amd64 `mcr.microsoft.com/mssql-tools` under
-  the iot VM's qemu binfmt) against whatever `.env` points at, with `/src` mounted read-only as
-  the working directory so the runner's `:r` includes resolve. Override the database with
-  `SQLCMD_DATABASE=<name>`; feed SQL on stdin or with `-i /src/...`. The legacy sqlcmd in that
-  image rejects `-v`, so pass variables with `:setvar` on stdin instead.
-
-### Reaching the app by hostname
-
-`NEXT_PUBLIC_API_BASE_URL` is compiled into the browser bundle, the API filters CORS origins,
-and Vite refuses unrecognised Host headers, so three values have to agree. They are derived
-from two keys in `.env` (defaults keep plain `localhost` working for anyone developing on
-their own machine):
-
-```
-DEV_API_BASE_URL=http://tmt-eq-0056.tmtvpn.internal:5105
-DEV_SITE_ORIGIN=http://tmt-eq-0056.tmtvpn.internal:3000
-DEV_ALLOWED_HOSTS=tmt-eq-0056.tmtvpn.internal,100.64.0.3,localhost
-```
-
-`DEV_SITE_ORIGIN` feeds both the frontend's `SITE_ORIGIN` and the API's
-`Cors__AllowedOrigins__0`, which overrides the localhost-only origin in
-`appsettings.Development.json`. `DEV_ALLOWED_HOSTS` reaches Vite through
-`server.allowedHosts` in `vite.config.ts`.
-
-### Two traps that cost time here
-
-`npm ci` failed on the pushed `main` because `package-lock.json` was out of sync with
-`package.json`: `@rolldown/binding-wasm32-wasi` pins `@emnapi/core` and `@emnapi/runtime` at
-1.10.0 and the lock had no entries for them. `npm install --package-lock-only` regenerates it.
-Watch for this after any dependency bump, because `npm ci` refuses rather than resolving.
-
-`vinext dev` writes `.vinext/dev/lock.json` into the project directory, which is bind-mounted
-from the host, so the lock outlives the container. After a `compose up` that replaces the
-frontend container, the new one finds a lock naming a PID from the dead container and exits
-with `Another vinext dev server is already running`. Remove `.vinext` and start it again.
+- Repo deploy copy at `/Users/tomastc/iot-team-center/src`, synced from the CI checkout by
+  `scripts/macos/deploy.sh` (rsync; `.env` and `.env.bak.*` preserved; no `.git`).
+- Three containers in the `iot` VM, compose project `src`: `src-api-1` (backend-node, arm64,
+  tedious driver), `src-frontend-1` (vinext dev server), `src-caddy-1` (Caddy with Cloudflare
+  DNS-01, Let's Encrypt certificate for `iot-team-center.tomastc.com`, renews itself).
+- URLs: frontend `https://iot-team-center.tomastc.com:8444/`, API
+  `https://iot-team-center.tomastc.com:8445/` (`/health/ready` returns 200, `schemaVersion: 36`).
+  DNS is `iot-team-center.tomastc.com A 100.64.0.3`, DNS-only, so it resolves everywhere but only
+  answers inside the tailnet. Plain ports 3000 and 5105 are bound to 127.0.0.1 on the host.
+- Database: `IoTTeamCenterDev` on the team SQL Server, created fresh on 2026-09-07 with
+  `database/scripts/020_deploy_fresh_database.sql` (all 36 migrations). The connection string
+  originally pointed at `IoTTeamCenterTeamTest`, a partial deployment from 2026-09-04 (46 tables,
+  roughly migrations 001-010, zero rows in every table, empty `dbo.schema_versions`, so every
+  later migration's predecessor guard throws). It was left untouched; dropping and recreating it
+  under that name is still an open decision.
+- The API is `backend-node/`, not `backend/IoTTeamCenter.Api`. The .NET project stops at schema
+  version 28 and lacks every route added by migrations 014-036; `backend-node/README.md` calls
+  itself the replacement. It now uses the `mssql` default driver (tedious) instead of
+  `msnodesqlv8`: that native binding hung on connect in Linux containers on both arm64 and amd64
+  while `isql` with the same ODBC driver succeeded, and tedious connected on the first try.
+  Windows authentication in the connection string is rejected at startup on purpose.
+- GitHub Actions self-hosted runner `macmini-1` (label `iot-team-center-macmini`) at
+  `/Users/tomastc/actions-runner`, launchd service
+  `actions.runner.pattana1902-IoT-Team-Center.macmini-1`. See "Automatic deploys".
+- TMT ID (Keycloak, realm `internal`) confidential client `iot-team-center`: redirect URIs
+  `https://iot-team-center.tomastc.com:8444/api/auth/callback` and the `:8445` twin, PKCE S256,
+  post-logout redirects to both origins. `OIDC_*`, `PUBLIC_BASE_URL`, `SESSION_SECRET` are in the
+  host `.env`; the application code for `Authentication__Mode=TmtId` is a separate pull request.
+- The SQL login in `.env` is still `sa`. The deployment docs require the least-privileged
+  `iot_team_app` login (`database/scripts/010_application_login.sql`). Fix this before anyone
+  outside the team can reach the host.
+- `~/iot-team-center/sqlcmd.sh` runs `sqlcmd` (amd64 `mcr.microsoft.com/mssql-tools` under the
+  iot VM's qemu binfmt) against whatever `.env` points at, with `/src` mounted read-only as the
+  working directory so the runner's `:r` includes resolve. `SQLCMD_DATABASE=<name>` overrides the
+  database; feed SQL on stdin or with `-i /src/...`; that legacy sqlcmd rejects `-v`, so use
+  `:setvar` on stdin.
 
 ## Constraints that shape everything
 
@@ -214,46 +199,74 @@ first is authoritative; the failing duplicate is worth removing to avoid confusi
 starts the VM.
 
 ## Bringing this repo up (Development mode)
+Development mode is the running configuration: `backend-node/src/config.ts` relaxes
+`AllowedHosts` outside production, the dev auth handler accepts every request as an
+authenticated dev user, and document storage is `Local`, so no NAS and no Entra registration are
+needed. backend-node still validates CORS origins in every environment and accepts plain http
+only for localhost, which is why the stack runs behind TLS.
 
-Development mode is the chosen path because `Program.cs` skips the `AllowedHosts` and CORS
-trust checks outside Production, the dev auth handler accepts every request as an
-authenticated dev user, and `appsettings.Development.json` uses `DocumentStorage:Mode=Local`,
-so no NAS and no Entra registration are needed.
+One command does everything, and it is the same command the CI runner executes:
 
-1. Put `DEV_SQL_CONNECTION_STRING` in `/Users/tomastc/iot-team-center/src/.env`
-   (see `.env.dev.example`). Decide first whether it points at the shared team SQL Server or
-   at a separate database; see the warning below.
-2. If anyone other than the host user will open the app, change the origins away from
-   `localhost`, because `NEXT_PUBLIC_*` is compiled into the browser bundle at build time and
-   cannot be corrected later without a rebuild:
+```
+~/iot-team-center/src/scripts/macos/deploy.sh --source /path/to/checkout
+```
 
-   ```
-   NEXT_PUBLIC_API_BASE_URL   http://tmt-eq-0056.tmtvpn.internal:5105
-   SITE_ORIGIN                http://tmt-eq-0056.tmtvpn.internal:3000
-   Cors__AllowedOrigins__0    http://tmt-eq-0056.tmtvpn.internal:3000
-   ```
+It syncs the checkout into the deploy dir, clears the stale vinext lock, builds, starts
+`docker-compose.dev.yml` plus `docker-compose.tls.yml` in the `colima-iot` context, waits for
+`/health/ready` and the frontend, then prunes dangling layers. It needs `.env` in the deploy dir
+with:
 
-3. From `/Users/tomastc/iot-team-center/src`:
+```
+DEV_SQL_CONNECTION_STRING   ADO.NET string with a SQL login (Windows auth is rejected)
+DEV_API_BASE_URL            https://iot-team-center.tomastc.com:8445
+DEV_SITE_ORIGIN             https://iot-team-center.tomastc.com:8444
+DEV_ALLOWED_HOSTS           iot-team-center.tomastc.com,tmt-eq-0056.tmtvpn.internal,100.64.0.3,localhost
+DEV_API_ALLOWED_HOSTS       iot-team-center.tomastc.com;iot-team-center.tomastc.com:8445;localhost;127.0.0.1
+PUBLIC_HOST                 iot-team-center.tomastc.com
+CLOUDFLARE_API_TOKEN        Zone.DNS edit on tomastc.com (the token cms-caddy already uses)
+OIDC_ISSUER / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / PUBLIC_BASE_URL / SESSION_SECRET / SESSION_COOKIE_SECURE
+```
 
-   ```
-   docker --context colima-iot compose -f docker-compose.dev.yml up -d
-   ```
+`DEV_SITE_ORIGIN` feeds both the frontend's `SITE_ORIGIN` and the API's
+`Cors__AllowedOrigins__0`; `DEV_ALLOWED_HOSTS` reaches Vite through `server.allowedHosts` in
+`vite.config.ts`; `DEV_API_ALLOWED_HOSTS` is backend-node's `AllowedHosts`. `NEXT_PUBLIC_*` is
+compiled into the browser bundle, so a hostname change needs a frontend restart.
 
-4. If the 4GiB VM turns out to be tight, build one service at a time. Compose v2 builds
-   services in parallel by default, which stacks `dotnet publish` and the vite build at the
-   same peak.
+Dropping `:8444` from the URL is not possible without touching another tenant: Tailscale Serve
+hands host port 443 to `cms-caddy-1` (`127.0.0.1:8443`), so a portless hostname needs a site
+block in `/Users/tomastc/centralizemailsummary/deploy/Caddyfile`. A Cloudflare Origin Rule
+cannot do it because the origin is a tailnet address the Cloudflare edge cannot reach. Parked
+deliberately.
 
 ### Exposure warning
 
-`docker-compose.dev.yml` publishes 3000 and 5105 on 0.0.0.0, unlike the prod file which binds
-127.0.0.1, and Development auth trusts every caller. On a tailnet-connected host that means
-any tailnet member gets full authenticated API access with no sign-in. If the connection
-string points at the shared team SQL Server, that is production data. Either point at a
-separate database, or bind 127.0.0.1 and publish through `tailscale serve` so tailnet identity
-is enforced.
+`docker-compose.tls.yml` pins the plain http ports to 127.0.0.1, so the only way in is through
+Caddy on 8444/8445, and Development auth still trusts every caller. Any tailnet member therefore
+has full authenticated API access, and the connection string carries `sa`. Until
+`Authentication__Mode=TmtId` lands and the login moves to `iot_team_app`, treat this instance as
+internal-only test data.
 
-Staging TeamTest is not an alternative here: `IsPrivateLanIpv4` in `Program.cs` accepts only
-10/172.16/192.168, and the tailnet uses the 100.64.x CGNAT range.
+Staging TeamTest is not an alternative here: `IsPrivateLanIpv4` accepts only 10/172.16/192.168,
+and the tailnet uses the 100.64.x CGNAT range.
+
+## Automatic deploys
+
+Every push to `main` runs `.github/workflows/ci-cd.yml`. The `deploy-macmini` job waits for
+`checks` (lint, typecheck, unit tests) and then runs `scripts/macos/deploy.sh` on the
+self-hosted runner labelled `iot-team-center-macmini`. It deliberately does not wait for
+`sql-integration` (a throwaway SQL 2022 service container that has been flaky) and has no
+approval environment: merging a PR is the approval.
+
+Runner facts: `/Users/tomastc/actions-runner`, launchd service
+`actions.runner.pattana1902-IoT-Team-Center.macmini-1`, runs as `tomastc` and so can reach both
+colima VMs; the deploy script only ever addresses `colima-iot`. Manage it with
+`cd ~/actions-runner && ./svc.sh status|stop|start`. Re-registering (new token from
+Settings -> Actions -> Runners) is `./config.sh remove`, then `./config.sh --url ... --token ...
+--name macmini-1 --labels iot-team-center-macmini --replace`, then `./svc.sh install && ./svc.sh start`.
+
+If a deploy fails, the job log ends with `compose ps` and the last 40 log lines. The previous
+containers keep running until `compose up -d` replaces them, so a failed build leaves the old
+version serving.
 
 ## Letting other people deploy here
 
@@ -271,34 +284,29 @@ Three layers, meant to be used together rather than chosen between:
    protects the host from us rather than from other people, so it applies either way.
 
 ## What the host owner has to prepare
-
 Nothing in this list can be done by the person arriving; all of it belongs to whoever owns
 `tomastc` on the host.
 
-Required before they can do anything:
+Already in place: SSH key `iot-guest_ed25519` installed in `authorized_keys` (the private half is
+in the handoff bundle, see "Getting in"); `.env` with the SQL connection string, TLS, and TMT ID
+values; the self-hosted runner; DNS and certificate.
 
-1. **Access.** Append their public key to `/Users/tomastc/.ssh/authorized_keys`, or enable
-   Tailscale SSH (`tailscale set --ssh` plus a tailnet ACL rule) if per-person audit trails
-   matter more than setup time. Confirm System Settings keeps Remote Login on.
-2. **The connection string.** Create `/Users/tomastc/iot-team-center/src/.env` with
-   `DEV_SQL_CONNECTION_STRING` (shape in `.env.dev.example`). Compose refuses to even parse
-   `docker-compose.dev.yml` without it, so this is the hard gate. Decide first whether it
-   points at the shared team SQL Server or at a separate database, because Development auth
-   trusts every caller.
-3. **The exposure decision.** Leave the dev ports on 0.0.0.0 and accept that any tailnet
-   member has full API access, or bind them to 127.0.0.1 and publish through
-   `tailscale serve`. Whoever arrives cannot make this call for you.
+Still the owner's call:
 
-Worth doing, not blocking:
-
-4. **A separate macOS user** for them, with their own colima profile. This is what stops them
-   from reaching the `cms` VM at all rather than merely not needing to. Requires sudo.
-5. **An autostart agent for the `iot` profile**, modelled on the existing
-   `com.tomastc.colima` LaunchAgent. Without it the app does not come back after a host
-   reboot.
-6. **A hostname**, if the app needs one. That means a site block in
-   `/Users/tomastc/centralizemailsummary/deploy/Caddyfile`, which belongs to the `cms`
-   project, so it is the owner's edit rather than theirs.
+1. **`sa` in the connection string.** Run `database/scripts/010_application_login.sql` against
+   `IoTTeamCenterDev`, then swap `DEV_SQL_CONNECTION_STRING` to `iot_team_app` and redeploy.
+   Nobody outside the team should reach this host before that.
+2. **`IoTTeamCenterTeamTest`.** Drop the partial database and recreate it under that name with
+   `020_deploy_fresh_database.sql` (then repoint `.env` and drop `IoTTeamCenterDev`), or keep
+   using `IoTTeamCenterDev`. Either is fine; what is not fine is leaving two half-truths around.
+3. **A separate macOS user** for guests, with their own colima profile, if permission isolation
+   matters and not just blast radius. Needs sudo.
+4. **Autostart for the `iot` profile.** It has no LaunchAgent; the app does not come back after a
+   host reboot until one is added (model it on `com.tomastc.colima`). The runner service does
+   come back on its own.
+5. **Portless hostname.** Only through a site block in the cms Caddyfile; see the bring-up section.
+6. **Master-data directory access** for TMT ID profile enrichment (`MASTER_DATA_URL`,
+   `MASTER_DATA_API_KEY`); without it the app shows the token's `preferred_username` and email.
 
 Also tell them, because it is not discoverable: the `iot` VM is theirs to restart freely, and
 they should never have a reason to touch the `default` profile.
