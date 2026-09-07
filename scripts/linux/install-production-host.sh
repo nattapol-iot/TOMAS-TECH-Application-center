@@ -206,7 +206,12 @@ if [[ -n "$DEPLOY_USER" ]]; then
   fi
 
   install -d -o root -g root -m 0755 "$SRC_DIR"
-  chown "$DEPLOY_USER:$DEPLOY_USER" "$SRC_DIR"
+  # Recursive: a manual first copy (e.g. by an operator's own SSH login, per
+  # docs/PRODUCTION_DEPLOYMENT_LINUX.md) leaves pre-existing files/dirs under $SRC_DIR
+  # owned by that other account -- a non-recursive chown here would only fix the
+  # directory entry itself, leaving the CI runner (running as $DEPLOY_USER) unable to
+  # write/chgrp anything already inside it on its first rsync.
+  chown -R "$DEPLOY_USER:$DEPLOY_USER" "$SRC_DIR"
 
   log "Writing restricted sudoers entry for '$DEPLOY_USER' (deploy/rollback scripts only, no blanket sudo)"
   SUDOERS_FILE="/etc/sudoers.d/iot-team-center-deploy"
