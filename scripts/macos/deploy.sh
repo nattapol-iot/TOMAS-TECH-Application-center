@@ -49,7 +49,13 @@ rm -rf .vinext
 log "Building images"
 compose build
 log "Starting containers"
-compose up -d
+# --force-recreate matters here: 'frontend' has no 'build:' (bind-mounted source, persistent
+# 'npm run dev' process), so its image/env/command never change between deploys and plain
+# 'up -d' sees no diff and leaves the old container -- and old in-memory dev server -- running.
+# rsync updates the bind-mounted files on disk, but the already-running process never re-reads
+# them (file-watch events routinely don't propagate through colima's virtiofs mount either), so
+# a deploy could report success while the site keeps serving the previous commit indefinitely.
+compose up -d --force-recreate
 # The Caddyfile is a bind mount, so an edited file does not recreate the container; reload it.
 compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || log "Caddy reload skipped (container not running yet)"
 

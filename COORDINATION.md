@@ -198,6 +198,8 @@ Add a row before you start. Remove it — or set Status to `done` — when you f
 
 | 2026-09-07 | Claude | User-requested re-verification of the Docker/CI-CD deploy pipeline (docker-compose.dev.yml/prod.yml, both Dockerfiles, scripts/linux/deploy.sh+rollback.sh, .github/workflows/ci-cd.yml) after PR #1 merged. Owns those Docker/CI files, root package.json/package-lock.json, tsconfig.json, .gitignore, and backend/IoTTeamCenter.Api/Infrastructure/DocumentStorageOptions.cs only. No database/migration or Codex-owned endpoint/screen changes. | released — see Discussion 2026-09-07 for what broke and what was fixed; dotnet build, npm test (lint+typecheck+194 node tests, SQL integration skipped locally), and real `docker build`+`docker run` for both images passed — Claude, 2026-09-07 17:00 |
 
+| 2026-09-07 | Claude | User-reported: macmini deploy job reports success but the site never reflects new commits. Diagnosing/fixing `scripts/macos/deploy.sh` only; read `docs/MACMINI_HANDOFF.md`, `docker-compose.dev.yml`, `docker-compose.tls.yml` but did not edit them. No colima/host access from this session — reasoning from the compose files and deploy script only. | released — see Discussion 2026-09-07 (2) for the root cause and fix; `bash -n` clean, could not run against the real colima host — Claude, 2026-09-07 |
+
 ---
 
 ## Needs a human decision
@@ -2119,3 +2121,41 @@ Nattapol asked me to re-check the Docker/CI-CD deploy pipeline after PR #1 ("P'B
 7. **Not something I can fix myself:** there is a full second clone of this exact repo (own `.git`, same `origin`, same `HEAD` — checked, working tree clean, nothing uncommitted inside it) sitting at `IoT-Team-Center/` inside this worktree's root, created today. It's harmless for CI (untracked, a fresh checkout won't have it) but it pollutes local `npm run typecheck`/`npm test` with `backend-node`-shaped errors under an `IoT-Team-Center/` prefix. My sandbox permissions blocked `rm -rf` on it. Whoever's on this machine next: safe to delete, verified clean.
 
 Rebuilt and re-verified everything in scope after the fixes above: `dotnet build` (Release) clean, `npm run lint`/`npm run typecheck` clean, `npm test` 194/194 (SQL integration test correctly self-skips without a local SQL Server matching CI's `IOT_RUN_SQL_INTEGRATION`/`sa` setup), real `docker build` of both the API and frontend images from this repo state succeeded, and I ran both containers directly (not just health-checked) — frontend served `/` and the OCR static assets (`worker.min.js`, `eng.traineddata`) at HTTP 200, API got past `DocumentStorage` startup validation with a real bind-mounted directory. Did not touch `backend-node/`, `backend-php/`, any database migration, or any Codex-owned endpoint/screen file. Pushing these fixes and watching the GitHub Actions run next (`checks` → `sql-integration` → `deploy`) per Nattapol's standing auto-commit-and-check-CI authorization.
+
+**Claude — 2026-09-07 (2)**
+
+Nattapol reported the `deploy-macmini` job reports success but the live site never picks up new
+commits. I have no shell access to `macmini-1` this session (no SSH key here), so this is a
+static read of `docker-compose.dev.yml` + `docker-compose.tls.yml` + `scripts/macos/deploy.sh`,
+not a live repro — flagging that limit up front.
+
+**Root cause, I'm fairly confident:** `frontend` in `docker-compose.dev.yml` has no `build:` —
+it's the bare `node:24-slim` image, the repo bind-mounted in (`- .:/app`), and a persistent
+`command: sh -c "npm ci && npm run dev ..."`. `api`, by contrast, has `build: context:
+./backend-node`, so a source change gives it a new image ID and `compose up -d` recreates it
+automatically. `frontend`'s image/env/command never change between deploys, so `compose up -d`
+sees no diff and leaves the *existing* container — and its already-running `npm run dev`
+process — untouched. `rsync` does update the files on disk (that part of `deploy.sh` is fine),
+but nothing tells that already-running dev-server process to pick them up, and colima's virtiofs
+mount is exactly the kind of filesystem where inotify-based watchers (which is what Vite's dev
+server, hence `vinext dev`, uses under the hood) are known to miss change events. Net effect:
+`deploy.sh`'s health checks pass (something is answering on both origins — it's just the
+*previous* commit's process), `compose ps` shows both containers up, the job goes green, and the
+site is stale until someone manually force-recreates or restarts the frontend container by hand.
+
+**Fix applied:** `scripts/macos/deploy.sh` now runs `compose up -d --force-recreate` instead of
+plain `compose up -d`, with a comment explaining why, right at the call site. This guarantees a
+fresh `frontend` container — and fresh `npm ci` — every deploy regardless of whether Compose
+thinks anything changed, at the cost of a few seconds of downtime per deploy on this dev-mode
+instance (already the documented trade-off: "every merge to main ships", no approval gate).
+`bash -n` is clean; I could not exercise this against the real colima host from this session, so
+**please verify the next `deploy-macmini` run actually serves new content** (e.g. bump something
+visible, watch it appear at `https://iot-team-center.tomastc.com:8444/` after the job goes
+green) before assuming this is fully closed. If `--force-recreate` alone doesn't do it, the next
+suspect is the virtiofs point directly: `docker --context colima-iot compose exec frontend cat
+/app/<some file>` right after a deploy would show whether the bind mount itself is even current
+inside the container.
+
+Scope check: touched only `scripts/macos/deploy.sh`. Did not touch `docker-compose.dev.yml`,
+`docker-compose.tls.yml`, `docs/MACMINI_HANDOFF.md`, or anything under `backend-node/` — read
+them for context only.
