@@ -194,15 +194,23 @@ test("the Thai-authored resource workspace has no bare Thai JSX copy", () => {
 
 test("the production login has complete TH and JP copy instead of a mixed-language footer", () => {
   const source = readFileSync("app/system/ProductionApp.tsx", "utf8");
+  const { PRODUCTION_LOGIN_COPY } = load("app/system/production/production-login-copy.ts");
   const phrases = [
     "IoT team workspace for inquiries, estimates, projects and materials with controlled access and an audit trail.",
-    "Temporary test access",
-    "For temporary UAT use. The access code stays only in this browser session, and Production does not enable this mode.",
+    ...Object.values(PRODUCTION_LOGIN_COPY).flatMap((copy) => [
+      copy.identityPoint,
+      copy.heading,
+      copy.intro,
+      copy.submitLabel,
+      copy.lockedTitle,
+      copy.accessTitle,
+      copy.accessBody,
+    ]),
   ];
   for (const phrase of phrases) {
-    assert.notEqual(translate(phrase, "TH"), phrase);
-    assert.notEqual(translate(phrase, "JP"), phrase);
+    assert.notEqual(translate(phrase, "TH"), phrase, `${phrase} has no Thai entry`);
+    assert.notEqual(translate(phrase, "JP"), phrase, `${phrase} has no Japanese entry`);
   }
-  assert.match(source, /t\(teamTestMode \? "Temporary test access" : "Production access"\)/);
+  assert.match(source, /t\(copy\.accessTitle\)/);
   assert.doesNotMatch(source, /ใช้สำหรับ UAT ชั่วคราวเท่านั้น รหัสจะเก็บเฉพาะ session/);
 });

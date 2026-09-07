@@ -135,6 +135,12 @@ export const DICTIONARY: Record<string, Entry> = {
     { th: "ใช้สำหรับ UAT ชั่วคราวเท่านั้น รหัสจะเก็บเฉพาะในเซสชันของเบราว์เซอร์นี้ และระบบใช้งานจริงจะไม่เปิดโหมดนี้", jp: "一時的な UAT 専用です。アクセスコードはこのブラウザーセッション内だけに保持され、本番環境ではこのモードを有効にしません。" },
   "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your Microsoft password.":
     { th: "บทบาทและสิทธิ์ดูแลโดยผู้ดูแล IoT Team Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน Microsoft ของคุณ", jp: "ロールと権限は IoT Team Center 管理者が管理します。このシステムは Microsoft のパスワードを受信・保存しません。" },
+  "TMT ID company single sign-on": { th: "ระบบล็อกอินรวมด้วยบัญชี TMT ID ของบริษัท", jp: "会社の TMT ID によるシングルサインオン" },
+  "Use your TMT ID company account to enter the Production workspace.":
+    { th: "ใช้บัญชี TMT ID ของบริษัทเพื่อเข้าสู่พื้นที่ใช้งานจริง", jp: "会社の TMT ID アカウントで本番ワークスペースにサインインしてください。" },
+  "Continue with TMT ID": { th: "ดำเนินการต่อด้วย TMT ID", jp: "TMT ID で続行" },
+  "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your TMT ID password.":
+    { th: "บทบาทและสิทธิ์ดูแลโดยผู้ดูแล IoT Team Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน TMT ID ของคุณ", jp: "ロールと権限は IoT Team Center 管理者が管理します。このシステムは TMT ID のパスワードを受信・保存しません。" },
 
   /* Common actions */
   "Save": { th: "บันทึก", jp: "保存" },
