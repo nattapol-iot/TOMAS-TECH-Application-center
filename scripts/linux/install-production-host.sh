@@ -146,6 +146,9 @@ apt-get update -y
 log "Installing base prerequisites"
 apt-get install -y ca-certificates curl gnupg apt-transport-https software-properties-common
 
+if command -v docker >/dev/null 2>&1 && [[ "$(readlink -f "$(command -v docker)")" == /snap/* ]]; then
+  die "Docker is installed as a strictly-confined snap ('$(command -v docker)' -> $(readlink -f "$(command -v docker)")). Snap's confinement blocks bind-mounting arbitrary host paths (e.g. ${SRC_DIR}), which docker-compose.prod.yml depends on -- it will fail later with errors like 'open /var/lib/snapd/void/...: no such file or directory'. Remove it first: 'sudo snap remove docker', then re-run this script so the real Docker Engine gets installed from apt instead."
+fi
 if ! command -v docker >/dev/null 2>&1; then
   log "Installing Docker Engine + Compose plugin (official Docker apt repository)"
   install -d -m 0755 /etc/apt/keyrings
