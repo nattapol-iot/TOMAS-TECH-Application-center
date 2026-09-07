@@ -154,9 +154,14 @@ export default function ProductionApp() {
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {
     setBusy(true); setAuthError(""); setMyWorkUrgentCount(0);
     try {
-      if (IS_TEAM_TEST_MODE) saveTeamTestSession(teamTestEmail ?? "", teamTestAccessCode ?? "");
-      else await signInWithMicrosoft();
-      setBootstrap(await loadBootstrap());
+      if (IS_TEAM_TEST_MODE) {
+        saveTeamTestSession(teamTestEmail ?? "", teamTestAccessCode ?? "");
+        setBootstrap(await loadBootstrap());
+      } else {
+        // Navigates away to Microsoft's login page -- restoreAccount() picks the
+        // session back up (and loads bootstrap data) once the redirect returns.
+        await signInWithMicrosoft();
+      }
     }
     catch (error) {
       if (IS_TEAM_TEST_MODE) clearTeamTestSession();

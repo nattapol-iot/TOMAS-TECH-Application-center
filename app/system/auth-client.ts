@@ -59,12 +59,13 @@ export async function restoreAccount(): Promise<AccountInfo | null> {
   return account;
 }
 
-export async function signInWithMicrosoft(): Promise<AccountInfo> {
+export async function signInWithMicrosoft(): Promise<void> {
+  // Redirect, not popup: popups fail unpredictably behind third-party storage
+  // partitioning, popup blockers, and embedded/iframe previews (block_nested_popups,
+  // no_token_request_cache_error). The page navigates away here; restoreAccount()'s
+  // handleRedirectPromise() picks up the result after Microsoft redirects back.
   const client = await getInstance();
-  const result = await client.loginPopup({ scopes: ["openid", "profile", "email", apiScope], prompt: "select_account" });
-  if (!result.account) throw new Error("Microsoft sign-in did not return an account.");
-  client.setActiveAccount(result.account);
-  return result.account;
+  await client.loginRedirect({ scopes: ["openid", "profile", "email", apiScope], prompt: "select_account" });
 }
 
 export async function acquireApiToken(): Promise<string> {
@@ -81,5 +82,5 @@ export async function acquireApiToken(): Promise<string> {
 
 export async function signOutMicrosoft() {
   const client = await getInstance();
-  await client.logoutPopup({ account: client.getActiveAccount() ?? undefined, mainWindowRedirectUri: window.location.origin });
+  await client.logoutRedirect({ account: client.getActiveAccount() ?? undefined });
 }
