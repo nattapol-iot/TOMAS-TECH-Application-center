@@ -130,6 +130,16 @@ export type PerformanceOverview = {
   assessments: PerformanceAssessment[];
 };
 
+export type PerformanceInsight = {
+  reasonCode: string;
+  kind: "STRENGTH" | "ATTENTION" | "NEXT" | "CONTEXT";
+  areaCode: string;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  priority: number;
+  facts: Record<string, number | string | boolean | null>;
+  source: { type: "PROJECT" | "INQUIRY" | "TASK"; id: number; label: string } | null;
+};
+
 export type PerformanceEvidence = {
   frameworkCode: "ENGINEERING" | "SALES";
   employeeId: number;
@@ -141,6 +151,7 @@ export type PerformanceEvidence = {
   asOf: string;
   confidence: "LOW" | "MEDIUM" | "HIGH";
   methodology: string;
+  insights: PerformanceInsight[];
   sources: Array<{ key: "PROJECT" | "INQUIRY" | "TASK" | "MEETING" | "ESTIMATE"; label: string; count: number; connected: boolean }>;
   metrics: {
     projectCount: number;

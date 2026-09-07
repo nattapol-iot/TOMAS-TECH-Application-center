@@ -105,3 +105,26 @@ test("Sales KPI uses a role-specific framework, scoped management and additive s
   assert.match(screen, /canManage \|\| isSalesRole\(role\)/);
   assert.match(client, /frameworkCode: "ENGINEERING" \| "SALES"/);
 });
+
+test("employee Performance Pulse is structured, private, responsive and never writes a KPI score", async () => {
+  const [screen, pulse, copy, client, engine, styles] = await Promise.all([
+    source("app/system/production/PerformanceScreen.tsx"),
+    source("app/system/production/PerformancePulse.tsx"),
+    source("app/system/production/performance-pulse.ts"),
+    source("app/system/api-client.ts"),
+    source("backend-node/src/performance-insights.ts"),
+    source("app/globals.css"),
+  ]);
+  assert.match(screen, /<PerformancePulse evidence=\{evidence\}/);
+  assert.match(screen, /<ActivityKpiSummary activity=\{selectedReview\.activity\}/);
+  assert.doesNotMatch(screen, /selectedReview[^\n]+<PerformancePulse/);
+  assert.match(pulse, /evidence\.confidence === "LOW" \|\| cards\.length === 0/);
+  assert.match(pulse, /Decision support only/);
+  assert.match(pulse, /performance-work-evidence/);
+  assert.match(copy, /ISSUE workload|Issue workload|Issue.*handling|assigned Issues/is);
+  assert.doesNotMatch(copy, /งานไม่มีปัญหา/);
+  assert.match(client, /insights: PerformanceInsight\[\]/);
+  assert.match(engine, /confidence === "LOW" \? "CONTEXT"/);
+  assert.match(styles, /\.performance-pulse-grid[^}]+repeat\(3/);
+  assert.match(styles, /@media \(max-width: 620px\)[\s\S]+\.performance-pulse-grid/);
+});
