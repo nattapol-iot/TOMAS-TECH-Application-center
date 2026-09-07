@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import { ApiError } from "./errors.js";
 import { issueDocumentNumber } from "./document-number.js";

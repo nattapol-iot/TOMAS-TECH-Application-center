@@ -155,3 +155,22 @@ jobs:
         # to the Docker daemon, so the runner's own account never needs 'docker' group
         # membership.
         run: sudo /opt/iot-team-center/src/scripts/linux/deploy.sh --repo /opt/iot-team-center/src --api-env-file /etc/iot-team-center/api.env.input --frontend-env-file /etc/iot-team-center/frontend.env.input
+
+  deploy-macmini:
+    needs: [checks]
+    # Development-mode team instance on the shared Mac mini (docs/MACMINI_HANDOFF.md). Gated on
+    # checks only: sql-integration exercises a throwaway SQL 2022 service container and has
+    # been flaky, and a red integration run must not block a dev deploy the way it blocks
+    # production above. Every merge to main ships; there is no approval environment here.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, iot-team-center-macmini]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build and deploy (colima iot profile)
+        # Runs as the runner's login user, which owns the colima socket; deploy.sh syncs this
+        # checkout into the deploy dir that carries the untracked .env and rebuilds there.
+        run: scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"

@@ -1,4 +1,4 @@
-import sql from 'mssql/msnodesqlv8.js';
+import sql from 'mssql';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Transaction } from 'mssql';
 import type { Database } from '../db.js';

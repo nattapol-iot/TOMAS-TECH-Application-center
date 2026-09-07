@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import { activityCycleScore, freezeActivityScore, activityScope, activityRoster, fullMember } from "../activity-service.js";
 import { combineActivityKpi } from "../activity-rules.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";

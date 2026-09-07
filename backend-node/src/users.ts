@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Database } from "./db.js";
 import { ApiError } from "./errors.js";
 import type { CurrentUser } from "./types.js";

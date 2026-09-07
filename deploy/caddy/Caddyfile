@@ -1,0 +1,20 @@
+# TLS terminator for docker-compose.tls.yml. Certificates come from Cloudflare DNS-01, so the
+# host never has to expose 80/443 for ACME and the same hostname can sit on non-standard
+# ports when 443 is already taken by another tenant.
+
+(cloudflare_tls) {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+}
+
+{$PUBLIC_HOST}:{$TLS_FRONTEND_PORT} {
+	import cloudflare_tls
+	reverse_proxy frontend:3000
+}
+
+{$PUBLIC_HOST}:{$TLS_API_PORT} {
+	import cloudflare_tls
+	reverse_proxy api:5106
+}

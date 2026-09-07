@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Transaction } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";

@@ -120,6 +120,7 @@ Never publish development settings or development seed data.
 
 - [Production deployment guide](docs/PRODUCTION_DEPLOYMENT.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Mac mini host handoff (colima)](docs/MACMINI_HANDOFF.md)
 - [Frontend environment template](.env.example)
 - [API configuration template](backend/IoTTeamCenter.Api/appsettings.json)
 

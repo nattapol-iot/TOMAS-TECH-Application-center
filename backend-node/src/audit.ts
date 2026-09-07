@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import { recordNativeActivity } from "./activity-recorder.js";
 

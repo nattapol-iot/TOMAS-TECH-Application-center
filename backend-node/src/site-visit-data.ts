@@ -1,4 +1,4 @@
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Database } from "./db.js";
 import { dateOnly } from "./http.js";
 import {
