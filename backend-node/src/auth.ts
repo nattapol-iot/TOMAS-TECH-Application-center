@@ -3,6 +3,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "./config.js";
 import { ApiError } from "./errors.js";
+import type { TmtIdRuntime } from "./tmt-id/runtime.js";
+import type { TmtIdSession } from "./tmt-id/types.js";
 import type { Identity } from "./types.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,7 +40,25 @@ function teamTestIdentity(request: FastifyRequest, signingKey: string): Identity
   return { mode: "TeamTest", value: email, email, objectId: `team-test:${identityHash}`, partitionKey: `team-test:${identityHash}` };
 }
 
-export function registerAuthentication(app: FastifyInstance, config: AppConfig): void {
+function tmtIdIdentity(session: TmtIdSession): Identity {
+  return {
+    mode: "TmtId",
+    value: session.sub,
+    objectId: session.sub,
+    partitionKey: session.sub,
+    preferredUsername: session.preferredUsername,
+    ...(session.email ? { email: session.email } : {}),
+    ...(session.name ? { name: session.name } : {}),
+    ...(session.authTime === undefined ? {} : { authTime: session.authTime }),
+    ...(session.issuedAt === undefined ? {} : { issuedAt: session.issuedAt }),
+  };
+}
+
+export function registerAuthentication(
+  app: FastifyInstance,
+  config: AppConfig,
+  tmtId: TmtIdRuntime | null = null,
+): void {
   const entra = config.auth.mode === "Entra"
     ? {
         issuer: `https://login.microsoftonline.com/${config.auth.tenantId!}/v2.0`,
@@ -56,6 +76,13 @@ export function registerAuthentication(app: FastifyInstance, config: AppConfig):
     }
     if (config.auth.mode === "TeamTest") {
       request.identity = teamTestIdentity(request, config.auth.teamTestSigningKey!);
+      return;
+    }
+    if (config.auth.mode === "TmtId") {
+      if (!tmtId) throw new ApiError(500, "tmt_id_unavailable", "TMT ID authentication is not initialized.");
+      const session = await tmtId.cookies.readSession(request);
+      if (!session) throw new ApiError(401, "unauthenticated", "Authentication is required.");
+      request.identity = tmtIdIdentity(session);
       return;
     }
 
