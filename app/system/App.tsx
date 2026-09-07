@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   CURRENT_USER, ESTIMATES, INQUIRIES, MISSING_PRICES, NOTIFICATIONS,
   MAT_PRS, MIRS, PRICE_LIBRARY, PRODUCT, PROJECT_DOCS, PROJECT_FOLDERS, PROJECTS,
@@ -9,7 +9,7 @@ import {
 import { money } from "./calc";
 import { Badge, Icon, Toast, type IconName } from "./ui";
 import { BrandLockup, BrandMark } from "./Brand";
-import { LANGUAGES, LanguageContext, translate, type Lang } from "./i18n";
+import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
 import { SessionContext, sessionForRole, sessionFromApiUser, type Session } from "./session";
 import { restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { loadBootstrap, type BootstrapData } from "./api-client";
@@ -32,8 +32,13 @@ import { ProjectDetail, ProjectList } from "./screens/Project";
 import ProjectSchedule from "./screens/Schedule";
 import MyWork, { myRows } from "./screens/MyWork";
 import { AuditLogScreen, Customers, MasterData, RateMaster, Reports, Settings } from "./screens/Admin";
+import KnowledgeHub from "./screens/Knowledge";
+import Performance from "./production/PerformanceScreen";
+import { MyAssignmentsDemo, SalesIntakeDemo, SiteVisitDemo, VisitMasterDataDemo } from "./screens/SiteVisit";
 
 const IS_PRODUCTION_MODE = process.env.NEXT_PUBLIC_APP_MODE === "production";
+const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups";
+const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
 
 const NAV: { group?: string; items: { route: Route; label: string; icon: IconName; badge?: number; hot?: boolean }[] }[] = [
   {
@@ -43,6 +48,15 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
       { route: { name: "inquiries" }, label: "Inquiry", icon: "inbox", badge: INQUIRIES.length },
       { route: { name: "estimates" }, label: "Estimate Cost", icon: "file", badge: ESTIMATES.length },
       { route: { name: "projects" }, label: "Projects", icon: "folder", badge: PROJECTS.filter((project) => project.status !== "Closed").length },
+      { route: { name: "knowledge" }, label: "Knowledge Hub", icon: "book" },
+    ],
+  },
+  {
+    group: "SALES & SITE VISIT",
+    items: [
+      { route: { name: "sales-intake" }, label: "Sales Intake", icon: "inbox" },
+      { route: { name: "site-visits" }, label: "Site Visit", icon: "truck" },
+      { route: { name: "my-assignments" }, label: "My Assignments", icon: "play" },
     ],
   },
   {
@@ -76,6 +90,7 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
     group: "ORGANISATION",
     items: [
       { route: { name: "customers" }, label: "Customers", icon: "users" },
+      { route: { name: "performance" }, label: "KPI & Growth", icon: "trendingUp" },
       { route: { name: "reports" }, label: "Reports", icon: "chart" },
     ],
   },
@@ -85,6 +100,7 @@ const NAV: { group?: string; items: { route: Route; label: string; icon: IconNam
       { route: { name: "master" }, label: "Master Data", icon: "database" },
       { route: { name: "rates" }, label: "Engineering Rate", icon: "table" },
       { route: { name: "audit" }, label: "Audit Log", icon: "shield" },
+      { route: { name: "visit-master" }, label: "Visit Master Data", icon: "layers" },
       { route: { name: "settings" }, label: "Settings", icon: "settings" },
     ],
   },
@@ -99,11 +115,16 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
   const [authError, setAuthError] = useState("");
   const [route, setRoute] = useState<Route>({ name: "dashboard" });
   const [toast, setToast] = useState("");
-  const [language, setLanguage] = useState<Lang>("EN");
+  const [language, setLanguageState] = useState<Lang>("EN");
+  const setLanguage = useCallback((next: Lang) => { applyDocumentLanguage(next); setLanguageState(next); }, []);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState<string[]>([]);
+  const [navGroupsReady, setNavGroupsReady] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarReady, setSidebarReady] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -182,6 +203,37 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(NAV_GROUP_STORAGE_KEY) ?? "[]");
+        if (Array.isArray(saved)) setCollapsedNavGroups(saved.filter((group): group is string => typeof group === "string"));
+      } catch {
+        window.localStorage.removeItem(NAV_GROUP_STORAGE_KEY);
+      }
+      setNavGroupsReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!navGroupsReady) return;
+    window.localStorage.setItem(NAV_GROUP_STORAGE_KEY, JSON.stringify(collapsedNavGroups));
+  }, [collapsedNavGroups, navGroupsReady]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
+      setSidebarReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarReady) return;
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed, sidebarReady]);
+
   const results = useGlobalSearch(query);
   const unread = NOTIFICATIONS.filter((entry) => entry.unread).length;
   const schedule = useScheduleStore();
@@ -191,9 +243,14 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
   }, [schedule.version, session.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const language$ = useMemo(
     () => ({ lang: language, setLang: setLanguage, t: (text: string) => translate(text, language) }),
-    [language],
+    [language, setLanguage],
   );
   const t = language$.t;
+  const toggleNavGroup = (group: string) => {
+    setCollapsedNavGroups((current) => current.includes(group)
+      ? current.filter((value) => value !== group)
+      : [...current, group]);
+  };
 
   if (!signedIn) {
     return (
@@ -212,7 +269,7 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
   return (
     <LanguageContext.Provider value={language$}>
     <SessionContext.Provider value={session}>
-    <div className="app">
+    <div className={sidebarCollapsed ? "app sidebar-collapsed" : "app"}>
       <aside className="sidebar">
         <div className="brand">
           <BrandMark size={34} tone="dark" />
@@ -223,29 +280,39 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
         </div>
 
         <nav className="nav" aria-label={t("Main navigation")}>
-          {NAV.map((section, index) => (
-            <div key={section.group ?? index}>
-              {section.group ? <p className="nav-label">{t(section.group)}</p> : null}
-              {section.items.map((item) => {
-                const active = isActive(route, item.route);
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    className={active ? "nav-item active" : "nav-item"}
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => go(item.route)}
-                  >
-                    <Icon name={item.icon} />
-                    <span>{t(item.label)}</span>
-                    {item.route.name === "my-work" && myUrgent
-                      ? <em className="hot">{myUrgent}</em>
-                      : badgeForRoute(item.route, item.badge, bootstrap) ? <em className={item.hot ? "hot" : undefined}>{badgeForRoute(item.route, item.badge, bootstrap)}</em> : null}
+          {NAV.map((section, index) => {
+            const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group));
+            return (
+              <div className="nav-group" key={section.group ?? index}>
+                {section.group ? (
+                  <button className="nav-label nav-group-toggle" type="button" aria-expanded={!collapsed} onClick={() => toggleNavGroup(section.group!)}>
+                    <span>{t(section.group)}</span><Icon name="chevronDown" />
                   </button>
-                );
-              })}
-            </div>
-          ))}
+                ) : null}
+                <div className="nav-group-items" hidden={collapsed}>
+                  {section.items.map((item) => {
+                    const active = isActive(route, item.route);
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        className={active ? "nav-item active" : "nav-item"}
+                        aria-current={active ? "page" : undefined}
+                        title={sidebarCollapsed ? t(item.label) : undefined}
+                        onClick={() => go(item.route)}
+                      >
+                        <Icon name={item.icon} />
+                        <span>{t(item.label)}</span>
+                        {item.route.name === "my-work" && myUrgent
+                          ? <em className="hot">{myUrgent}</em>
+                          : badgeForRoute(item.route, item.badge, bootstrap) ? <em className={item.hot ? "hot" : undefined}>{badgeForRoute(item.route, item.badge, bootstrap)}</em> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="sidebar-user">
@@ -260,6 +327,16 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
 
       <div className="main">
         <header className="topbar">
+          <button
+            className="sidebar-toggle"
+            type="button"
+            aria-label={t(sidebarCollapsed ? "Expand navigation" : "Collapse navigation")}
+            aria-expanded={!sidebarCollapsed}
+            title={t(sidebarCollapsed ? "Expand navigation" : "Collapse navigation")}
+            onClick={() => setSidebarCollapsed((value) => !value)}
+          >
+            <Icon name={sidebarCollapsed ? "chevronRight" : "chevronLeft"} />
+          </button>
           <div className="global-search" ref={searchRef}>
             <Icon name="search" />
             <input
@@ -379,11 +456,17 @@ export default function App({ forceDemo = false }: { forceDemo?: boolean }) {
           {route.name === "mir" ? <MirDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
           {route.name === "mat-approvals" ? <MatApprovals go={go} notify={notify} /> : null}
           {route.name === "customers" ? <Customers go={go} notify={notify} /> : null}
+          {route.name === "knowledge" ? <KnowledgeHub go={go} notify={notify} /> : null}
+          {route.name === "sales-intake" ? <SalesIntakeDemo go={go} notify={notify} /> : null}
+          {route.name === "site-visits" ? <SiteVisitDemo go={go} notify={notify} /> : null}
+          {route.name === "my-assignments" ? <MyAssignmentsDemo go={go} notify={notify} /> : null}
+          {route.name === "visit-master" ? <VisitMasterDataDemo /> : null}
           {route.name === "projects" ? <ProjectList go={go} notify={notify} /> : null}
           {route.name === "project" ? <ProjectDetail key={route.id} id={route.id} go={go} notify={notify} /> : null}
           {route.name === "schedule" ? <ProjectSchedule key={route.id} id={route.id} initialView={route.view} go={go} notify={notify} /> : null}
           {route.name === "my-work" ? <MyWork go={go} notify={notify} /> : null}
           {route.name === "reports" ? <Reports go={go} notify={notify} /> : null}
+          {route.name === "performance" ? <Performance team={USERS} currentUser={session.user} notify={notify} /> : null}
           {route.name === "master" ? <MasterData go={go} notify={notify} /> : null}
           {route.name === "rates" ? <RateMaster go={go} notify={notify} /> : null}
           {route.name === "audit" ? <AuditLogScreen go={go} notify={notify} /> : null}

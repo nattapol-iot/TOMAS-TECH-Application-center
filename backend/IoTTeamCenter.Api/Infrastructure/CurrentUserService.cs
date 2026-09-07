@@ -32,6 +32,8 @@ public sealed class CurrentUserService(
         else if (useTeamTestAuthentication)
         {
             identityValue = principal.FindFirstValue(ClaimTypes.Email)
+                ?? principal.FindFirstValue("email")
+                ?? httpContextAccessor.HttpContext?.Request.Headers[TeamTestAuthenticationHandler.EmailHeader].FirstOrDefault()
                 ?? throw new ApiException(StatusCodes.Status401Unauthorized, "missing_test_email", "The team-test session does not contain an email address.");
             identityPredicate = "u.email = @identity";
         }
@@ -60,7 +62,7 @@ public sealed class CurrentUserService(
         }
 
         _cached = new CurrentUser(
-            reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetInt64(0), reader.IsDBNull(1) ? string.Empty : reader.GetString(1), reader.GetString(2), reader.GetString(3),
             reader.GetString(4), reader.GetString(5), reader.GetBoolean(6));
         if (!_cached.IsActive)
         {

@@ -579,6 +579,34 @@ public static class GoodsReceiptEndpoints
                 cancellationToken,
                 quantity: movements.Sum(movement => movement.Accepted + movement.Held),
                 projectId: projectId, reason: request.Comment?.Trim());
+
+            var recipients = new List<long>();
+            await using (var stakeholders = new SqlCommand("""
+                SELECT DISTINCT recipient_id
+                FROM (
+                    SELECT p.manager_id AS recipient_id FROM dbo.projects p WHERE p.id = @project_id
+                    UNION SELECT p.lead_engineer_id FROM dbo.projects p WHERE p.id = @project_id
+                    UNION SELECT pm.user_id FROM dbo.project_members pm WHERE pm.project_id = @project_id
+                    UNION SELECT pr.requested_by
+                          FROM dbo.mat_pos po INNER JOIN dbo.mat_prs pr ON pr.id = po.pr_id
+                          WHERE po.id = @po_id
+                ) recipients
+                WHERE recipient_id IS NOT NULL AND recipient_id <> @actor;
+                """, connection, transaction))
+            {
+                stakeholders.Parameters.AddParameter("@project_id", SqlDbType.BigInt, projectId);
+                stakeholders.Parameters.AddParameter("@po_id", SqlDbType.BigInt, poId);
+                stakeholders.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                await using var reader = await stakeholders.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken)) recipients.Add(reader.GetInt64(0));
+            }
+            var acceptedQuantity = movements.Sum(movement => movement.Accepted);
+            var heldQuantity = movements.Sum(movement => movement.Held);
+            await SiteVisitCore.NotifyAsync(
+                connection, transaction, recipients, "MATERIAL_RECEIVED",
+                $"ของมาถึงแล้ว · {grnNumber}",
+                $"รับของแล้ว {acceptedQuantity:N4} หน่วยจาก PO; กักตรวจสอบ {heldQuantity:N4} หน่วย กรุณาตรวจสอบและวางแผนเบิกของสำหรับโครงการ",
+                "GoodsReceipt", id, $"goods-receipt:{id}:confirmed", cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return Results.Ok(new
             {

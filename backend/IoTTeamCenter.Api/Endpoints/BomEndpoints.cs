@@ -6,7 +6,7 @@ using Microsoft.Data.SqlClient;
 namespace IoTTeamCenter.Api.Endpoints;
 
 /// <summary>
-/// BOM is the bridge between the approved estimate and everything the team
+/// BOM is the bridge between the finalized estimate and everything the team
 /// buys, reserves and issues. Generation copies the estimate's material lines
 /// once; after release the lines are read-only and a change needs a revision.
 /// </summary>
@@ -197,7 +197,7 @@ public static class BomEndpoints
     }
 
     /// <summary>
-    /// Generate the first BOM revision from an approved estimate. Only the
+    /// Generate the first BOM revision from an approved or locked estimate. Only the
     /// material categories become stock lines; software and service lines are
     /// carried as non-stock so the budget still reconciles.
     /// </summary>
@@ -235,8 +235,10 @@ public static class BomEndpoints
                 estimateRevision = reader.GetInt32(1);
                 estimateNumber = reader.GetString(2);
                 var status = reader.GetString(3);
-                if (!string.Equals(status, "Approved", StringComparison.OrdinalIgnoreCase))
-                    throw new ApiException(StatusCodes.Status409Conflict, "estimate_not_approved", $"A BOM can only be generated from an approved estimate; this one is '{status}'.");
+                var isFinalEstimate = string.Equals(status, "Approved", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(status, "Locked", StringComparison.OrdinalIgnoreCase);
+                if (!isFinalEstimate)
+                    throw new ApiException(StatusCodes.Status409Conflict, "estimate_not_approved", $"A BOM can only be generated from an approved or locked estimate; this one is '{status}'.");
             }
 
             await using (var existing = new SqlCommand(
@@ -305,7 +307,7 @@ public static class BomEndpoints
                 lineCount = await copy.ExecuteNonQueryAsync(cancellationToken);
             }
             if (lineCount == 0)
-                throw new ApiException(StatusCodes.Status409Conflict, "estimate_has_no_lines", "The approved estimate revision has no cost lines to generate a BOM from.");
+                throw new ApiException(StatusCodes.Status409Conflict, "estimate_has_no_lines", "The finalized estimate revision has no cost lines to generate a BOM from.");
 
             await MaterialAudit.WriteAsync(
                 connection, transaction, actor, "Generated BOM from estimate", "BOM", bomId, bomNumber,

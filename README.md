@@ -116,22 +116,9 @@ For local API development only, `appsettings.Development.json` enables the expli
 development authentication handler. This handler is unavailable in Production.
 Never publish development settings or development seed data.
 
-### Docker Compose (containerized dev environment)
-
-`docker compose -f docker-compose.dev.yml up` runs the API and frontend as containers
-instead of installing the .NET SDK/Node.js locally, connecting to the existing shared team
-SQL Server (not containerized). Copy `.env.dev.example` to `.env` first and fill in
-`DEV_SQL_CONNECTION_STRING`. The API runs with `Authentication:Mode=Development` (accepts
-every request as an authenticated dev user, no Entra sign-in required); the frontend still
-needs a real Entra SPA client ID for its login button to render -- see the comments in
-`.env.dev.example`. This replaces the old Team Test Mode PowerShell scripts (retired) as
-the local dev/demo path.
-
 ## Deployment
 
-- [Production deployment guide](docs/PRODUCTION_DEPLOYMENT.md) (Windows Server/IIS)
-- [Production deployment on Ubuntu](docs/PRODUCTION_DEPLOYMENT_LINUX.md) (self-hosted API + frontend, nginx + Docker Compose, `scripts/linux/`)
-- [CI/CD setup](docs/CI_CD_SETUP.md) (`.github/workflows/ci-cd.yml`: automated tests on every push, manually-approved production deploy)
+- [Production deployment guide](docs/PRODUCTION_DEPLOYMENT.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
 - [Frontend environment template](.env.example)
 - [API configuration template](backend/IoTTeamCenter.Api/appsettings.json)

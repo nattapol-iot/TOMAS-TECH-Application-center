@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import {
   CUSTOMERS, DEPARTMENT_MANHOURS, ESTIMATES, INQUIRIES, MISSING_PRICES,
   MONTHLY_COST, PROJECT_TYPES,
@@ -18,6 +20,7 @@ const isOverdue = (dueDate: string, status: string) =>
   status !== "Approved" && status !== "Locked" && new Date(dueDate) < TODAY;
 
 export default function Dashboard({ go }: ScreenProps) {
+  const uiText = useUiText();
   const openInquiry = INQUIRIES.filter((i) => i.status !== "Approved" && i.status !== "Cancelled").length;
   const inProgress = ESTIMATES.filter((e) => e.status === "Engineering Input" || e.status === "Draft" || e.status === "Estimate Completed").length;
   const waitingSupplier = MISSING_PRICES.filter((m) => m.status !== "Price Updated" && m.status !== "Received").length;
@@ -56,28 +59,28 @@ export default function Dashboard({ go }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="ENGINEERING"
-        title="Engineering Estimate Dashboard"
+        title={uiText("Engineering Estimate Dashboard")}
         subtitle="Monitor inquiry workload, estimate progress, due dates, missing costs, and engineering resources."
         actions={
           <>
             <button className="btn default" type="button" onClick={() => go({ name: "missing" })}>
-              <Icon name="truck" />Waiting supplier price
+              <Icon name="truck" />{uiText("Waiting supplier price")}
             </button>
             <button className="btn primary" type="button" onClick={() => go({ name: "inquiry-new" })}>
-              <Icon name="plus" />New inquiry
+              <Icon name="plus" />{uiText("New inquiry")}
             </button>
           </>
         }
       />
 
       <section className="kpi-grid eight">
-        <KpiCard label="Open Inquiry" value={18} note={`${openInquiry} tracked here`} tone="blue" icon="inbox" onClick={() => go({ name: "inquiries" })} />
-        <KpiCard label="Estimate In Progress" value={11} note={`${inProgress} in this workspace`} tone="blue" icon="file" onClick={() => go({ name: "estimates" })} />
-        <KpiCard label="Waiting Supplier Price" value={4} note={`${waitingSupplier} items open`} tone="amber" icon="truck" onClick={() => go({ name: "missing" })} />
-        <KpiCard label="Waiting Engineer Input" value={6} note={`${waitingEngineer} sections open`} tone="amber" icon="user" />
-        <KpiCard label="Waiting Review" value={3} note={`${waitingReview} submitted`} tone="violet" icon="checkCircle" onClick={() => go({ name: "estimates" })} />
-        <KpiCard label="Due This Week" value={6} note={`${dueThisWeek} in this list`} tone="amber" icon="calendar" />
-        <KpiCard label="Overdue Estimate" value={2} note={`${overdue} past due date`} tone="red" icon="alertTriangle" />
+        <KpiCard label="Open Inquiry" value={18} note={`${openInquiry} ${uiText("tracked here")}`} tone="blue" icon="inbox" onClick={() => go({ name: "inquiries" })} />
+        <KpiCard label="Estimate In Progress" value={11} note={`${inProgress} ${uiText("in this workspace")}`} tone="blue" icon="file" onClick={() => go({ name: "estimates" })} />
+        <KpiCard label="Waiting Supplier Price" value={4} note={`${waitingSupplier} ${uiText("items open")}`} tone="amber" icon="truck" onClick={() => go({ name: "missing" })} />
+        <KpiCard label="Waiting Engineer Input" value={6} note={`${waitingEngineer} ${uiText("sections open")}`} tone="amber" icon="user" />
+        <KpiCard label="Waiting Review" value={3} note={`${waitingReview} ${uiText("submitted")}`} tone="violet" icon="checkCircle" onClick={() => go({ name: "estimates" })} />
+        <KpiCard label="Due This Week" value={6} note={`${dueThisWeek} ${uiText("in this list")}`} tone="amber" icon="calendar" />
+        <KpiCard label="Overdue Estimate" value={2} note={`${overdue} ${uiText("past due date")}`} tone="red" icon="alertTriangle" />
         <KpiCard label="Completed This Month" value={completedThisMonth} note="Approved in August" tone="green" icon="check" />
       </section>
 
@@ -110,28 +113,28 @@ export default function Dashboard({ go }: ScreenProps) {
       </section>
 
       <Panel
-        title="Recent Estimate Cost"
+        title={uiText("Recent Estimate Cost")}
         subtitle="Latest activity across the engineering team"
-        actions={<button className="link-btn" type="button" onClick={() => go({ name: "estimates" })}>View all estimates<Icon name="arrowRight" /></button>}
+        actions={<button className="link-btn" type="button" onClick={() => go({ name: "estimates" })}>{uiText("View all estimates")}<Icon name="arrowRight" /></button>}
         flush
       >
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Inquiry No.</th>
-                <th>Estimate No.</th>
-                <th>Customer</th>
-                <th>Project Name</th>
-                <th>Project Type</th>
-                <th>Estimate Owner</th>
-                <th>Rev.</th>
-                <th>Due Date</th>
-                <th className="num">Total Estimated Cost</th>
-                <th>Progress</th>
-                <th>Status</th>
-                <th>Last Updated</th>
-                <th aria-label="Action" />
+                <th><LocalizedText text={"Inquiry No."} /></th>
+                <th><LocalizedText text={"Estimate No."} /></th>
+                <th><LocalizedText text={"Customer"} /></th>
+                <th><LocalizedText text={"Project Name"} /></th>
+                <th><LocalizedText text={"Project Type"} /></th>
+                <th><LocalizedText text={"Estimate Owner"} /></th>
+                <th><LocalizedText text={"Rev."} /></th>
+                <th><LocalizedText text={"Due Date"} /></th>
+                <th className="num"><LocalizedText text="Total Estimated Cost" /></th>
+                <th><LocalizedText text={"Progress"} /></th>
+                <th><LocalizedText text={"Status"} /></th>
+                <th><LocalizedText text={"Last Updated"} /></th>
+                <th aria-label={uiText("Action")} />
               </tr>
             </thead>
             <tbody>
@@ -174,33 +177,33 @@ export default function Dashboard({ go }: ScreenProps) {
               <div className="assignment-card" key={assignment.id}>
                 <div>
                   <strong>{assignment.section}</strong>
-                  <small>{assignment.comment || "No open comment"}</small>
+                  <small>{assignment.comment || uiText("No open comment")}</small>
                 </div>
                 <div>
-                  <small>Responsible</small>
+                  <small>{uiText("Responsible")}</small>
                   <strong>{userName(assignment.ownerId)}</strong>
                 </div>
                 <div>
-                  <small>Due</small>
+                  <small><LocalizedText text={"Due"} /></small>
                   <strong>{formatDate(assignment.dueDate)}</strong>
                 </div>
                 <div>
                   <Progress value={assignment.progress} />
-                  <small>{assignment.progress}% complete</small>
+                  <small>{assignment.progress}% {uiText("complete")}</small>
                 </div>
                 <Badge tone={toneOf(assignment.status)}>{assignment.status}</Badge>
               </div>
             ))}
           </div>
         </Panel>
-        <Panel title="Needs attention" subtitle="Deadlines, missing prices and reviews">
+        <Panel title={uiText("Needs attention")} subtitle="Deadlines, missing prices and reviews">
           <ul className="check-list">
             {ESTIMATES.filter((e) => isOverdue(e.dueDate, e.status)).map((estimate) => (
               <li className="check-item error" key={estimate.id}>
                 <Icon name="alertTriangle" />
                 <div>
-                  <strong>{estimate.no} is overdue</strong>
-                  <p>{estimate.projectName} — due {formatDate(estimate.dueDate)}</p>
+                  <strong>{estimate.no} {uiText("is overdue")}</strong>
+                  <p>{estimate.projectName} — {uiText("due")} {formatDate(estimate.dueDate)}</p>
                 </div>
               </li>
             ))}
@@ -208,21 +211,21 @@ export default function Dashboard({ go }: ScreenProps) {
               <li className="check-item warning" key={missing.id}>
                 <Icon name="clock" />
                 <div>
-                  <strong>{missing.status === "Not Requested" ? "Supplier price not requested" : "Waiting supplier price"}</strong>
-                  <p>{missing.item} — required {formatDate(missing.requiredDate)}</p>
+                  <strong>{uiText(missing.status === "Not Requested" ? "Supplier price not requested" : "Waiting supplier price")}</strong>
+                  <p>{missing.item} — {uiText("required")} {formatDate(missing.requiredDate)}</p>
                 </div>
               </li>
             ))}
             <li className="check-item warning">
               <Icon name="alertCircle" />
               <div>
-                <strong>Supplier quotation expired</strong>
-                <p>SQ-2606-0028 HIKROBOT — expired 18-Aug-2026</p>
+                <strong>{uiText("Supplier quotation expired")}</strong>
+                <p>SQ-2606-0028 HIKROBOT — {uiText("expired")} 18-Aug-2026</p>
               </div>
             </li>
           </ul>
           <button className="btn default block" type="button" onClick={() => go({ name: "missing" })} style={{ marginTop: 12 }}>
-            Open waiting supplier price
+            {uiText("Open waiting supplier price")}
           </button>
         </Panel>
       </section>
@@ -233,25 +236,25 @@ export default function Dashboard({ go }: ScreenProps) {
             <table>
               <thead>
                 <tr>
-                  <th>Department</th>
-                  <th className="num">Man-days</th>
-                  <th className="num">Man-hours</th>
-                  <th className="num">Estimated Cost</th>
+                  <th><LocalizedText text={"Department"} /></th>
+                  <th className="num"><LocalizedText text={"Man-days"} /></th>
+                  <th className="num"><LocalizedText text={"Man-hours"} /></th>
+                  <th className="num"><LocalizedText text="Estimated Cost" /></th>
                 </tr>
               </thead>
               <tbody>
                 {departmentEffort(ESTIMATES[0]).map((row) => (
                   <tr key={row.department}>
                     <td><strong>{row.department}</strong></td>
-                    <td className="num">{row.manDays} MD</td>
-                    <td className="num">{row.manHours} HR</td>
+                    <td className="num">{row.manDays} <LocalizedText text={"MD"} /></td>
+                    <td className="num">{row.manHours} <LocalizedText text={"HR"} /></td>
                     <td className="num">{moneyShort(row.cost)}</td>
                   </tr>
                 ))}
                 <tr className="subtotal-row">
-                  <td>Total</td>
-                  <td className="num">{estimateTotals(ESTIMATES[0]).manDays} MD</td>
-                  <td className="num">{estimateTotals(ESTIMATES[0]).manHours} HR</td>
+                  <td><LocalizedText text={"Total"} /></td>
+                  <td className="num">{estimateTotals(ESTIMATES[0]).manDays} <LocalizedText text={"MD"} /></td>
+                  <td className="num">{estimateTotals(ESTIMATES[0]).manHours} <LocalizedText text={"HR"} /></td>
                   <td className="num">{money(estimateTotals(ESTIMATES[0]).engineering)}</td>
                 </tr>
               </tbody>

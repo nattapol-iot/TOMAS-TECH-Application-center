@@ -1,4 +1,5 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
 import { useEffect, useRef, useState } from "react";
 import { PROJECTS, type ScheduleStatus } from "../data";
@@ -319,7 +320,7 @@ function MyTaskRow({ row, all, session, notify, onRequest }: {
         <strong>{row.name}</strong>
         {row.origin === "Member" ? <Pill tone="blue">{t("own")}</Pill> : null}
         {row.milestone ? <Pill tone="violet">◆ {t("Milestone")}</Pill> : null}
-        <span className="muted">{formatDate(row.planStart)} → {formatDate(row.planEndDate)} · {networkDays(row.planStart, row.planEndDate)} {t("work days")}</span>
+        <span className="muted">{formatDate(row.planStart)} → {formatDate(row.planEndDate)} <LocalizedText text={"·"} /> {networkDays(row.planStart, row.planEndDate)} {t("work days")}</span>
         {row.openRequests ? <Pill tone="amber">{t("Requested more days")}</Pill> : null}
       </div>
 

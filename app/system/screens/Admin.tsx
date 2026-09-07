@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useState } from "react";
 import {
   AUDIT_LOG, BRANDS, COST_STRUCTURE, CUSTOMERS, DEPARTMENTS, ENGINEERING_ACTIVITIES,
@@ -18,6 +20,7 @@ import type { ScreenProps } from "../routes";
    ========================================================================== */
 
 export function Customers({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const [search, setSearch] = useState("");
   const rows = CUSTOMERS.filter((c) => `${c.code} ${c.name} ${c.industry}`.toLowerCase().includes(search.toLowerCase()));
 
@@ -25,16 +28,16 @@ export function Customers({ go, notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="MASTER DATA"
-        title="Customers"
+        title={uiText("Customers")}
         subtitle="Customer master shared by inquiry, estimate and reporting."
-        actions={<button className="btn primary" type="button" onClick={() => notify("Customer form opened")}><Icon name="plus" />Add customer</button>}
+        actions={<button className="btn primary" type="button" onClick={() => notify("Customer form opened")}><Icon name="plus" /><LocalizedText text={"Add customer"} /></button>}
       />
       <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search customer code, name or industry…" /></Toolbar>
-      <Panel title={`${rows.length} customers`} flush>
+      <Panel title={`${rows.length} ${uiText("customers")}`} flush>
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Code</th><th>Customer</th><th>Industry</th><th>Main contact</th><th>Email</th><th>Phone</th><th>Site</th><th className="num">Inquiries</th><th className="num">Open estimates</th><th aria-label="Action" /></tr>
+              <tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Industry"} /></th><th><LocalizedText text={"Main contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th><th><LocalizedText text={"Site"} /></th><th className="num"><LocalizedText text={"Inquiries"} /></th><th className="num"><LocalizedText text={"Open estimates"} /></th><th aria-label={uiText("Action")} /></tr>
             </thead>
             <tbody>
               {rows.map((customer) => {
@@ -83,6 +86,7 @@ const REPORTS = [
 ];
 
 export function Reports({ notify }: ScreenProps) {
+  const uiText = useUiText();
   const [active, setActive] = useState("r1");
 
   const costByCustomer = CUSTOMERS.map((customer) => ({
@@ -107,12 +111,12 @@ export function Reports({ notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="ANALYSIS"
-        title="Reports"
+        title={uiText("Reports")}
         subtitle="Engineering estimate reporting — cost, effort, lead time and workload. No commercial figures."
         actions={
           <>
-            <button className="btn default" type="button" onClick={() => notify("Report exported to Excel")}><Icon name="download" />Export Excel</button>
-            <button className="btn default" type="button" onClick={() => notify("Report exported to PDF")}><Icon name="file" />Export PDF</button>
+            <button className="btn default" type="button" onClick={() => notify("Report exported to Excel")}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
+            <button className="btn default" type="button" onClick={() => notify("Report exported to PDF")}><Icon name="file" /><LocalizedText text={"Export PDF"} /></button>
           </>
         }
       />
@@ -140,7 +144,7 @@ export function Reports({ notify }: ScreenProps) {
             {active === "r8" ? (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Project</th><th className="num">Estimated</th><th className="num">Executed</th><th className="num">Variance</th><th>Result</th></tr></thead>
+                  <thead><tr><th><LocalizedText text={"Project"} /></th><th className="num"><LocalizedText text={"Estimated"} /></th><th className="num">Executed</th><th className="num"><LocalizedText text={"Variance"} /></th><th><LocalizedText text={"Result"} /></th></tr></thead>
                   <tbody>
                     {[
                       ["FTS Traceability 2026", 2380000, 2455000],
@@ -166,7 +170,7 @@ export function Reports({ notify }: ScreenProps) {
             {active === "r9" ? (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Item</th><th>Brand</th><th>Supplier</th><th className="num">First price</th><th className="num">Latest price</th><th className="num">Change</th></tr></thead>
+                  <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Supplier"} /></th><th className="num">First price</th><th className="num">Latest price</th><th className="num"><LocalizedText text={"Change"} /></th></tr></thead>
                   <tbody>
                     {PRICE_LIBRARY.map((record) => {
                       const first = record.history[0].price;
@@ -198,7 +202,7 @@ export function Reports({ notify }: ScreenProps) {
             {active === "r11" ? (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Estimate</th><th>Project</th><th>Owner</th><th>Due</th><th className="num">Days late</th><th>Status</th></tr></thead>
+                  <thead><tr><th><LocalizedText text={"Estimate"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Due"} /></th><th className="num">Days late</th><th><LocalizedText text={"Status"} /></th></tr></thead>
                   <tbody>
                     {ESTIMATES.filter((e) => new Date(e.dueDate) < new Date("2026-08-29") && e.status !== "Approved").map((estimate) => (
                       <tr key={estimate.id}>
@@ -220,7 +224,7 @@ export function Reports({ notify }: ScreenProps) {
             {active === "r13" ? (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Engineer</th><th>Department</th><th className="num">Estimates</th><th className="num">On time</th><th className="num">Revisions</th><th className="num">Avg. lead time</th></tr></thead>
+                  <thead><tr><th><LocalizedText text={"Engineer"} /></th><th><LocalizedText text={"Department"} /></th><th className="num"><LocalizedText text={"Estimates"} /></th><th className="num"><LocalizedText text={"On time"} /></th><th className="num"><LocalizedText text={"Revisions"} /></th><th className="num">Avg. lead time</th></tr></thead>
                   <tbody>
                     {USERS.filter((user) => user.role === "Engineer").map((user, index) => (
                       <tr key={user.id}>
@@ -229,7 +233,7 @@ export function Reports({ notify }: ScreenProps) {
                         <td className="num">{6 + index}</td>
                         <td className="num green-text">{85 + index * 2}%</td>
                         <td className="num">{1 + (index % 3)}</td>
-                        <td className="num">{7 + index} days</td>
+                        <td className="num">{7 + index} <LocalizedText text={"days"} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -273,19 +277,20 @@ type MasterTab =
   | "subcategory" | "brand" | "item" | "unit" | "activity" | "rate" | "document" | "standard";
 
 export function MasterData({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const [tab, setTab] = useState<MasterTab>("customer");
 
   const simple = (title: string, values: string[], columns: string[] = ["Name"]) => (
-    <Panel title={title} subtitle={`${values.length} records`} actions={<button className="btn primary sm" type="button" onClick={() => notify(`${title} record added`)}><Icon name="plus" />Add</button>} flush>
+    <Panel title={title} subtitle={`${values.length} records`} actions={<button className="btn primary sm" type="button" onClick={() => notify(`${title} record added`)}><Icon name="plus" /><LocalizedText text={"Add"} /></button>} flush>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Code</th>{columns.map((column) => <th key={column}>{column}</th>)}<th>Status</th><th aria-label="Action" /></tr></thead>
+          <thead><tr><th><LocalizedText text={"Code"} /></th>{columns.map((column) => <th key={column}>{column}</th>)}<th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead>
           <tbody>
             {values.map((value, index) => (
               <tr key={value}>
                 <td className="mono">{String(index + 1).padStart(3, "0")}</td>
                 <td><strong>{value}</strong></td>
-                <td><Badge tone="green">Active</Badge></td>
+                <td><Badge tone="green">{"Active"}</Badge></td>
                 <td><button className="row-action" type="button" aria-label={`Edit ${value}`}><Icon name="edit" /></button></td>
               </tr>
             ))}
@@ -299,9 +304,9 @@ export function MasterData({ go, notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="ADMINISTRATION"
-        title="Master Data"
+        title={uiText("Master Data")}
         subtitle="One controlled vocabulary for every estimate — so different engineers cannot use different calculation methods."
-        actions={<button className="btn default" type="button" onClick={() => go({ name: "rates" })}><Icon name="book" />Engineering rate master</button>}
+        actions={<button className="btn default" type="button" onClick={() => go({ name: "rates" })}><Icon name="book" /><LocalizedText text={"Engineering rate master"} /></button>}
       />
 
       <Tabs
@@ -329,7 +334,7 @@ export function MasterData({ go, notify }: ScreenProps) {
         <Panel title="Customer Master" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Code</th><th>Customer</th><th>Industry</th><th>Contact</th><th>Email</th><th>Site</th><th aria-label="Action" /></tr></thead>
+              <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Industry"} /></th><th><LocalizedText text={"Contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Site"} /></th><th aria-label={uiText("Action")} /></tr></thead>
               <tbody>
                 {CUSTOMERS.map((customer) => (
                   <tr key={customer.id}>
@@ -339,7 +344,7 @@ export function MasterData({ go, notify }: ScreenProps) {
                     <td>{customer.contact}</td>
                     <td className="muted">{customer.email}</td>
                     <td>{customer.site}</td>
-                    <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                    <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -352,7 +357,7 @@ export function MasterData({ go, notify }: ScreenProps) {
         <Panel title="Supplier Master" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Code</th><th>Supplier</th><th>Category</th><th>Brands</th><th>Contact</th><th>Email</th><th>Phone</th><th>Status</th><th aria-label="Action" /></tr></thead>
+              <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Category"} /></th><th><LocalizedText text={"Brands"} /></th><th><LocalizedText text={"Contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead>
               <tbody>
                 {SUPPLIERS.map((supplier) => (
                   <tr key={supplier.id}>
@@ -364,7 +369,7 @@ export function MasterData({ go, notify }: ScreenProps) {
                     <td className="muted">{supplier.email}</td>
                     <td className="mono">{supplier.phone}</td>
                     <td><Badge tone={supplier.status === "Active" ? "green" : "amber"}>{supplier.status}</Badge></td>
-                    <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                    <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -377,7 +382,7 @@ export function MasterData({ go, notify }: ScreenProps) {
         <Panel title="Employee Master" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Employee</th><th>Email</th><th>Department</th><th>Level</th><th>Role</th><th className="num">Daily rate</th><th aria-label="Action" /></tr></thead>
+              <thead><tr><th><LocalizedText text={"Employee"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th><th><LocalizedText text={"Role"} /></th><th className="num"><LocalizedText text={"Daily rate"} /></th><th aria-label={uiText("Action")} /></tr></thead>
               <tbody>
                 {USERS.map((user) => {
                   const rate = RATES.find((r) => r.level === user.level && r.department === user.department);
@@ -389,7 +394,7 @@ export function MasterData({ go, notify }: ScreenProps) {
                       <td>{user.level}</td>
                       <td><Badge tone="slate">{user.role}</Badge></td>
                       <td className="num">{rate ? moneyShort(rate.engineeringDaily) : "—"}</td>
-                      <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                      <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                     </tr>
                   );
                 })}
@@ -405,7 +410,7 @@ export function MasterData({ go, notify }: ScreenProps) {
         <Panel title="Cost Category / Cost Breakdown Structure" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Code</th><th>Cost category</th><th className="num">Subcategories</th><th>Subcategory list</th><th aria-label="Action" /></tr></thead>
+              <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Cost category"} /></th><th className="num">Subcategories</th><th>Subcategory list</th><th aria-label={uiText("Action")} /></tr></thead>
               <tbody>
                 {COST_STRUCTURE.map((category) => (
                   <tr key={category.code}>
@@ -413,7 +418,7 @@ export function MasterData({ go, notify }: ScreenProps) {
                     <td><strong>{category.name}</strong></td>
                     <td className="num">{category.subs.length}</td>
                     <td className="muted">{category.subs.map((sub) => sub.name).join(" · ")}</td>
-                    <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                    <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -425,14 +430,14 @@ export function MasterData({ go, notify }: ScreenProps) {
         <Panel title="Cost Subcategory Master" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Code</th><th>Subcategory</th><th>Parent category</th><th aria-label="Action" /></tr></thead>
+              <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Subcategory"} /></th><th><LocalizedText text={"Parent category"} /></th><th aria-label={uiText("Action")} /></tr></thead>
               <tbody>
                 {COST_STRUCTURE.flatMap((category) => category.subs.map((sub) => ({ ...sub, parent: `${category.code} ${category.name}` }))).map((sub) => (
                   <tr key={sub.code}>
                     <td className="mono">{sub.code}</td>
                     <td><strong>{sub.name}</strong></td>
                     <td>{sub.parent}</td>
-                    <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                    <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -445,7 +450,7 @@ export function MasterData({ go, notify }: ScreenProps) {
         <Panel title="Item Master" flush>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Item code</th><th>Description</th><th>Brand</th><th>Model</th><th>Category</th><th>Unit</th><th className="num">Latest price</th><th aria-label="Action" /></tr></thead>
+              <thead><tr><th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Model"} /></th><th><LocalizedText text={"Category"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num">Latest price</th><th aria-label={uiText("Action")} /></tr></thead>
               <tbody>
                 {PRICE_LIBRARY.map((record) => (
                   <tr key={record.id}>
@@ -456,7 +461,7 @@ export function MasterData({ go, notify }: ScreenProps) {
                     <td>{record.category}</td>
                     <td>{record.unit}</td>
                     <td className="num">{moneyShort(record.price)}</td>
-                    <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                    <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -478,6 +483,7 @@ export function MasterData({ go, notify }: ScreenProps) {
    ========================================================================== */
 
 function RateTable({ notify }: { notify: (message: string) => void }) {
+  const uiText = useUiText();
   return (
     <Panel
       title="Engineering Rate Master"
@@ -489,11 +495,11 @@ function RateTable({ notify }: { notify: (message: string) => void }) {
         <table>
           <thead>
             <tr>
-              <th>Employee Level</th><th>Department</th>
-              <th className="num">Engineering Hourly</th><th className="num">Engineering Daily</th>
+              <th>Employee Level</th><th><LocalizedText text={"Department"} /></th>
+              <th className="num"><LocalizedText text={"Engineering Hourly"} /></th><th className="num"><LocalizedText text={"Engineering Daily"} /></th>
               <th className="num">Install. &amp; Service Hourly</th><th className="num">Install. &amp; Service Daily</th>
               <th className="num">Service uplift</th>
-              <th>Effective from</th><th>Status</th><th aria-label="Action" />
+              <th><LocalizedText text={"Effective from"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} />
             </tr>
           </thead>
           <tbody>
@@ -507,8 +513,8 @@ function RateTable({ notify }: { notify: (message: string) => void }) {
                 <td className="num"><strong className="amber-text">{moneyShort(rate.installationDaily)}</strong></td>
                 <td className="num muted">+{Math.round(((rate.installationDaily - rate.engineeringDaily) / rate.engineeringDaily) * 100)}%</td>
                 <td>{formatDate(rate.effective)}</td>
-                <td><Badge tone="green">Active</Badge></td>
-                <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                <td><Badge tone="green">{"Active"}</Badge></td>
+                <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
               </tr>
             ))}
           </tbody>
@@ -546,6 +552,7 @@ export function RateMaster({ notify }: ScreenProps) {
    ========================================================================== */
 
 export function AuditLogScreen({ notify }: ScreenProps) {
+  const uiText = useUiText();
   const [search, setSearch] = useState("");
   const [module, setModule] = useState("All modules");
   const [pageSize, setPageSize] = useState(25);
@@ -565,9 +572,9 @@ export function AuditLogScreen({ notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="TRACEABILITY"
-        title="Audit Log"
+        title={uiText("Audit Log")}
         subtitle="Every cost, scope and workflow change with its previous value, new value and reason. Normal users cannot delete entries."
-        actions={<button className="btn default" type="button" onClick={() => notify("Audit log exported to Excel")}><Icon name="download" />Export</button>}
+        actions={<button className="btn default" type="button" onClick={() => notify("Audit log exported to Excel")}><Icon name="download" /><LocalizedText text={"Export"} /></button>}
       />
       <Toolbar>
         <SearchInput value={search} onChange={setSearch} placeholder="Search user, estimate, action or reason…" />
@@ -580,7 +587,7 @@ export function AuditLogScreen({ notify }: ScreenProps) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Date / Time</th><th>User</th><th>Estimate</th><th>Rev.</th><th>Module</th><th>Action</th><th>Previous Value</th><th>New Value</th><th>Reason</th></tr>
+              <tr><th><LocalizedText text={"Date / Time"} /></th><th><LocalizedText text={"User"} /></th><th><LocalizedText text={"Estimate"} /></th><th><LocalizedText text={"Rev."} /></th><th><LocalizedText text={"Module"} /></th><th><LocalizedText text={"Action"} /></th><th>Previous Value</th><th>New Value</th><th><LocalizedText text={"Reason"} /></th></tr>
             </thead>
             <tbody>
               {paged.pageRows.map((entry) => (
@@ -633,6 +640,7 @@ const NOTIFICATION_RULES = [
 ];
 
 export function Settings({ notify }: ScreenProps) {
+  const uiText = useUiText();
   const [tab, setTab] = useState<"roles" | "notification" | "numbering" | "storage" | "general">("roles");
   const [enabled, setEnabled] = useState<string[]>(NOTIFICATION_RULES.slice(0, 8));
   const [invite, setInvite] = useState(false);
@@ -641,9 +649,9 @@ export function Settings({ notify }: ScreenProps) {
     <>
       <PageHeader
         eyebrow="ADMINISTRATION"
-        title="Settings"
+        title={uiText("Settings")}
         subtitle="Roles, notifications, numbering standard and document storage."
-        actions={<button className="btn primary" type="button" onClick={() => setInvite(true)}><Icon name="plus" />Add user</button>}
+        actions={<button className="btn primary" type="button" onClick={() => setInvite(true)}><Icon name="plus" /><LocalizedText text={"Add user"} /></button>}
       />
 
       <Tabs
@@ -660,10 +668,10 @@ export function Settings({ notify }: ScreenProps) {
 
       {tab === "roles" ? (
         <section className="grid-main">
-          <Panel title="Users" subtitle={`${USERS.length} accounts`} flush>
+          <Panel title="Users" subtitle={`${USERS.length} ${uiText("accounts")}`} flush>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>User</th><th>Email</th><th>Department</th><th>Role</th><th>Level</th><th>Status</th><th aria-label="Action" /></tr></thead>
+                <thead><tr><th><LocalizedText text={"User"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Level"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead>
                 <tbody>
                   {USERS.map((user) => (
                     <tr key={user.id}>
@@ -672,8 +680,8 @@ export function Settings({ notify }: ScreenProps) {
                       <td>{user.department}</td>
                       <td><Badge tone={user.role === "Admin" ? "violet" : user.role === "Engineering Manager" ? "blue" : "slate"}>{user.role}</Badge></td>
                       <td>{user.level}</td>
-                      <td><Badge tone="green">Active</Badge></td>
-                      <td><button className="row-action" type="button" aria-label="Edit"><Icon name="edit" /></button></td>
+                      <td><Badge tone="green">{"Active"}</Badge></td>
+                      <td><button className="row-action" type="button" aria-label={uiText("Edit")}><Icon name="edit" /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -723,13 +731,13 @@ export function Settings({ notify }: ScreenProps) {
           <Panel title="Numbering standard" subtitle="Generated by the system — users never type a number">
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Document</th><th>Pattern</th><th>Example</th><th>Next</th></tr></thead>
+                <thead><tr><th><LocalizedText text={"Document"} /></th><th>Pattern</th><th>Example</th><th><LocalizedText text={"Next"} /></th></tr></thead>
                 <tbody>
-                  <tr><td>Inquiry</td><td className="mono">INQ-YYMM-XXXX</td><td className="mono">INQ-2608-0001</td><td className="mono">INQ-2608-0015</td></tr>
-                  <tr><td>Estimate Cost</td><td className="mono">EST-YYMM-XXXX</td><td className="mono">EST-2608-0001</td><td className="mono">EST-2608-0007</td></tr>
-                  <tr><td>Revision</td><td className="mono">R00, R01, R02…</td><td className="mono">R02</td><td className="mono">R03</td></tr>
-                  <tr><td>Supplier Quotation</td><td className="mono">SQ-YYMM-XXXX</td><td className="mono">SQ-2608-0001</td><td className="mono">SQ-2608-0036</td></tr>
-                  <tr><td>Purchase Requisition</td><td className="mono">PR-YYMM-XXXX</td><td className="mono">PR-2608-0001</td><td className="mono">PR-2609-0004</td></tr>
+                  <tr><td><LocalizedText text={"Inquiry"} /></td><td className="mono">INQ-YYMM-XXXX</td><td className="mono">INQ-2608-0001</td><td className="mono">INQ-2608-0015</td></tr>
+                  <tr><td><LocalizedText text={"Estimate Cost"} /></td><td className="mono">EST-YYMM-XXXX</td><td className="mono">EST-2608-0001</td><td className="mono">EST-2608-0007</td></tr>
+                  <tr><td><LocalizedText text={"Revision"} /></td><td className="mono">R00, R01, R02…</td><td className="mono">R02</td><td className="mono">R03</td></tr>
+                  <tr><td><LocalizedText text={"Supplier Quotation"} /></td><td className="mono">SQ-YYMM-XXXX</td><td className="mono">SQ-2608-0001</td><td className="mono">SQ-2608-0036</td></tr>
+                  <tr><td><LocalizedText text={"Purchase Requisition"} /></td><td className="mono">PR-YYMM-XXXX</td><td className="mono">PR-2608-0001</td><td className="mono">PR-2609-0004</td></tr>
                 </tbody>
               </table>
             </div>
@@ -802,7 +810,7 @@ export function Settings({ notify }: ScreenProps) {
         <Modal
           title="Add user"
           onClose={() => setInvite(false)}
-          footer={<><span className="spacer" /><button className="btn default" type="button" onClick={() => setInvite(false)}>Cancel</button><button className="btn primary" type="button" onClick={() => { setInvite(false); notify("Invitation sent"); }}>Send invitation</button></>}
+          footer={<><span className="spacer" /><button className="btn default" type="button" onClick={() => setInvite(false)}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" onClick={() => { setInvite(false); notify("Invitation sent"); }}>Send invitation</button></>}
         >
           <div className="form-grid two">
             <Field label="Full name"><input placeholder="e.g. Somchai Rattana" /></Field>

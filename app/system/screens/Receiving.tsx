@@ -1,5 +1,7 @@
 "use client";
+import { LocalizedText } from "../LocalizedText";
 
+import { useT as useUiText } from "../i18n";
 import { PROJECTS } from "../data";
 import { formatDate, matPermission, moneyShort, poFacts, poLineReceived, userName, userOf } from "../calc";
 import { confirmGrn, useMatStore } from "../matstore";
@@ -73,6 +75,7 @@ export function PoList({ go }: ScreenProps) {
    ========================================================================== */
 
 export function GrnList({ go, notify }: ScreenProps) {
+  const uiText = useUiText();
   const t = useT();
   const session = useSession();
   const store = useMatStore();
@@ -104,7 +107,7 @@ export function GrnList({ go, notify }: ScreenProps) {
                   <tr key={line.id} className={overdue ? "row-late" : undefined}>
                     <td className="mono">{po.no}</td>
                     <td>{po.supplier}</td>
-                    <td><strong className="mono">{line.itemCode}</strong> · {line.partNo}</td>
+                    <td><strong className="mono">{line.itemCode}</strong> <LocalizedText text={"·"} /> {line.partNo}</td>
                     <td className="num">{line.qty}</td>
                     <td className="num">{received}</td>
                     <td className="num"><strong>{line.qty - received}</strong></td>
@@ -122,7 +125,7 @@ export function GrnList({ go, notify }: ScreenProps) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>{t("GRN No.")}</th><th>{t("PO No.")}</th><th>{t("PR No.")}</th><th>{t("Supplier")}</th><th>{t("Received By")}</th><th>{t("Date")}</th><th className="num">{t("Received")}</th><th className="num">{t("Accepted")}</th><th className="num">{t("Damaged")}</th><th>{t("Delivery")}</th><th>{t("Status")}</th><th aria-label="Open" /></tr>
+              <tr><th>{t("GRN No.")}</th><th>{t("PO No.")}</th><th>{t("PR No.")}</th><th>{t("Supplier")}</th><th>{t("Received By")}</th><th>{t("Date")}</th><th className="num">{t("Received")}</th><th className="num">{t("Accepted")}</th><th className="num">{t("Damaged")}</th><th>{t("Delivery")}</th><th>{t("Status")}</th><th aria-label={uiText("Open")} /></tr>
             </thead>
             <tbody>
               {store.grns.map((grn) => {
@@ -264,7 +267,7 @@ export function GrnDetail({ id, go, notify }: ScreenProps & { id: string }) {
           <div className="panel-body">
             <div className="file-row"><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{grn.deliveryNote}.pdf</strong><small>{t("Delivery Note")}</small></div><Pill>PDF</Pill></div>
             <div className="file-row"><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{grn.invoiceRef}.pdf</strong><small>{t("Invoice Reference")}</small></div><Pill>PDF</Pill></div>
-            {grn.damageReport ? <div className="file-row"><span className="file-icon"><Icon name="alertTriangle" /></span><div style={{ flex: 1 }}><strong>DR-2608-0002.pdf</strong><small>{t("Damage Report")} · 3 {t("photos")}</small></div><Pill tone="red">QC</Pill></div> : null}
+            {grn.damageReport ? <div className="file-row"><span className="file-icon"><Icon name="alertTriangle" /></span><div style={{ flex: 1 }}><strong>DR-2608-0002.pdf</strong><small>{t("Damage Report")} · 3 {t("photos")}</small></div><Pill tone="red"><LocalizedText text={"QC"} /></Pill></div> : null}
           </div>
         </Panel>
       </section>

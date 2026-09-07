@@ -7,12 +7,24 @@ GO
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 35) THROW 51350, 'Team Activity migration 035 is required.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
 
-IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 9)
-    THROW 51070, 'Required schema version 9 is not installed.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 34)
+   OR OBJECT_ID(N'dbo.support_tickets', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.support_recognition', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.tr_support_events_immutable', N'TR') IS NULL
+    THROW 51342, 'Support Center migration 034 is required.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 25)
+   OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 26)
+   OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 27)
+   OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 28)
+   OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 29)
+   OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 30)
+    THROW 51070, 'Required Reports, KPI, End user and multilingual customer schema versions 25 through 30 are not installed.', 1;
 
 IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.answer_schedule_day_request', N'P') IS NULL
@@ -20,6 +32,12 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
        SELECT 1
        FROM sys.sql_modules
        WHERE object_id = OBJECT_ID(N'dbo.answer_schedule_day_request')
+         AND execute_as_principal_id = -2)
+   OR OBJECT_ID(N'dbo.sync_employee_directory_user', N'P') IS NULL
+   OR NOT EXISTS (
+       SELECT 1
+       FROM sys.sql_modules
+       WHERE object_id = OBJECT_ID(N'dbo.sync_employee_directory_user')
          AND execute_as_principal_id = -2)
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
    OR OBJECT_ID(N'dbo.v_estimate_totals', N'V') IS NULL
@@ -32,7 +50,29 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.trg_stock_txns_append_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_mat_audit_append_only', N'TR') IS NULL
    OR COL_LENGTH(N'dbo.grn_lines', N'allow_over_receipt') IS NULL
+   OR COL_LENGTH(N'dbo.inquiries', N'project_probability') IS NULL
+   OR COL_LENGTH(N'dbo.inquiries', N'customer_interest_grade') IS NULL
+   OR COL_LENGTH(N'dbo.inquiries', N'qualification_note') IS NULL
+   OR OBJECT_ID(N'dbo.employees', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.supplier_price_history', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.supplier_quotations', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.knowledge_documents', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.knowledge_document_versions', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.knowledge_articles', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.knowledge_audit_events', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.issue_knowledge_document_number', N'P') IS NULL
+   OR OBJECT_ID(N'dbo.trg_knowledge_audit_events_append_only', N'TR') IS NULL
+   OR OBJECT_ID(N'dbo.trg_knowledge_document_versions_immutable', N'TR') IS NULL
+   OR OBJECT_ID(N'dbo.kpi_review_cycles', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.kpi_assessments', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.kpi_assessment_scores', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.tr_kpi_completed_assessment_frozen', N'TR') IS NULL
+   OR OBJECT_ID(N'dbo.tr_kpi_completed_scores_frozen', N'TR') IS NULL
     THROW 51071, 'A required production procedure, function, or view is missing.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.permissions WHERE code=N'performance.read')
+   OR NOT EXISTS (SELECT 1 FROM dbo.permissions WHERE code=N'performance.manage')
+    THROW 51294, 'Required KPI permissions are missing.', 1;
 
 IF EXISTS (
     SELECT 1
@@ -171,6 +211,7 @@ DECLARE @required_material_permissions TABLE (
 
 INSERT INTO @required_material_permissions (object_name, permission_name)
 VALUES
+    (N'customers', N'SELECT'), (N'customers', N'INSERT'), (N'customers', N'UPDATE'),
     (N'estimates', N'SELECT'), (N'estimates', N'INSERT'), (N'estimates', N'UPDATE'),
     (N'estimate_revisions', N'SELECT'), (N'estimate_revisions', N'INSERT'),
     (N'estimate_assignments', N'SELECT'), (N'estimate_assignments', N'INSERT'), (N'estimate_assignments', N'UPDATE'),
@@ -179,6 +220,21 @@ VALUES
     (N'expense_lines', N'SELECT'), (N'expense_lines', N'INSERT'), (N'expense_lines', N'UPDATE'),
     (N'other_cost_lines', N'SELECT'), (N'other_cost_lines', N'INSERT'), (N'other_cost_lines', N'UPDATE'),
     (N'v_estimate_totals', N'SELECT'), (N'fn_estimate_validation', N'SELECT'),
+    (N'employees', N'SELECT'), (N'employees', N'INSERT'), (N'employees', N'UPDATE'),
+    (N'supplier_price_history', N'SELECT'),
+    (N'supplier_quotations', N'SELECT'), (N'supplier_quotations', N'INSERT'),
+    (N'knowledge_categories', N'SELECT'), (N'knowledge_categories', N'INSERT'), (N'knowledge_categories', N'UPDATE'),
+    (N'knowledge_number_sequences', N'SELECT'), (N'knowledge_number_sequences', N'INSERT'), (N'knowledge_number_sequences', N'UPDATE'),
+    (N'knowledge_document_files', N'SELECT'), (N'knowledge_document_files', N'INSERT'),
+    (N'knowledge_documents', N'SELECT'), (N'knowledge_documents', N'INSERT'), (N'knowledge_documents', N'UPDATE'),
+    (N'knowledge_document_versions', N'SELECT'), (N'knowledge_document_versions', N'INSERT'), (N'knowledge_document_versions', N'UPDATE'),
+    (N'knowledge_articles', N'SELECT'), (N'knowledge_articles', N'INSERT'), (N'knowledge_articles', N'UPDATE'),
+    (N'knowledge_document_relations', N'SELECT'), (N'knowledge_document_relations', N'INSERT'), (N'knowledge_document_relations', N'DELETE'),
+    (N'knowledge_document_permissions', N'SELECT'), (N'knowledge_document_permissions', N'INSERT'), (N'knowledge_document_permissions', N'DELETE'),
+    (N'knowledge_document_approvals', N'SELECT'), (N'knowledge_document_approvals', N'INSERT'), (N'knowledge_document_approvals', N'UPDATE'), (N'knowledge_document_approvals', N'DELETE'),
+    (N'knowledge_document_comments', N'SELECT'), (N'knowledge_document_comments', N'INSERT'), (N'knowledge_document_comments', N'UPDATE'),
+    (N'knowledge_document_acknowledgements', N'SELECT'), (N'knowledge_document_acknowledgements', N'INSERT'), (N'knowledge_document_acknowledgements', N'UPDATE'),
+    (N'knowledge_audit_events', N'SELECT'), (N'knowledge_audit_events', N'INSERT'),
     (N'mat_items', N'SELECT'),
     (N'boms', N'SELECT'), (N'boms', N'INSERT'), (N'boms', N'UPDATE'),
     (N'bom_lines', N'SELECT'), (N'bom_lines', N'INSERT'),
@@ -201,7 +257,10 @@ VALUES
     (N'schedule_tasks', N'SELECT'), (N'schedule_tasks', N'INSERT'), (N'schedule_tasks', N'UPDATE'),
     (N'schedule_task_pics', N'SELECT'), (N'schedule_task_pics', N'INSERT'), (N'schedule_task_pics', N'DELETE'),
     (N'schedule_updates', N'SELECT'), (N'schedule_updates', N'INSERT'),
-    (N'schedule_baselines', N'SELECT'), (N'schedule_baselines', N'INSERT');
+    (N'schedule_baselines', N'SELECT'), (N'schedule_baselines', N'INSERT'),
+    (N'kpi_review_cycles', N'SELECT'), (N'kpi_review_cycles', N'INSERT'), (N'kpi_review_cycles', N'UPDATE'),
+    (N'kpi_assessments', N'SELECT'), (N'kpi_assessments', N'INSERT'), (N'kpi_assessments', N'UPDATE'),
+    (N'kpi_assessment_scores', N'SELECT'), (N'kpi_assessment_scores', N'INSERT'), (N'kpi_assessment_scores', N'UPDATE');
 
 DECLARE @has_forbidden_effective_permission bit;
 IF @app_user_type = 'A'
@@ -231,6 +290,12 @@ BEGIN
                 OR (object_item.name IN (N'estimates', N'estimate_assignments', N'cost_items', N'manhour_lines', N'expense_lines', N'other_cost_lines')
                     AND permission.permission_name = N'DELETE')
                 OR (object_item.name = N'users' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'employees' AND permission.permission_name = N'DELETE')
+                OR (object_item.name = N'supplier_price_history' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'supplier_quotations' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'knowledge_document_files' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'knowledge_audit_events' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name IN (N'kpi_review_cycles', N'kpi_assessments', N'kpi_assessment_scores') AND permission.permission_name = N'DELETE')
             ))
           )
     ) THEN 1 ELSE 0 END;
@@ -294,6 +359,16 @@ BEGIN
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'INSERT'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'UPDATE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.employees', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'INSERT'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_document_files', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_document_files', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_audit_events', N'OBJECT', N'UPDATE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_audit_events', N'OBJECT', N'DELETE'), 0) = 1
         THEN 1 ELSE 0 END;
     UPDATE required
     SET is_effective = CONVERT(bit, COALESCE(HAS_PERMS_BY_NAME(N'dbo.' + object_name, N'OBJECT', permission_name), 0))
@@ -335,13 +410,29 @@ IF NOT EXISTS (
       AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
     THROW 51096, 'The schedule day-request answer procedure EXECUTE grant is missing.', 1;
 
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.issue_knowledge_document_number')
+      AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
+    THROW 51179, 'The knowledge document-number procedure EXECUTE grant is missing.', 1;
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.sync_employee_directory_user')
+      AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
+    THROW 51180, 'The employee directory sync procedure EXECUTE grant is missing.', 1;
+
 IF EXISTS (
     SELECT 1
     FROM sys.database_permissions
     WHERE class = 1
       AND major_id IN (
           OBJECT_ID(N'dbo.issue_document_number'),
-          OBJECT_ID(N'dbo.answer_schedule_day_request'))
+          OBJECT_ID(N'dbo.answer_schedule_day_request'),
+          OBJECT_ID(N'dbo.issue_knowledge_document_number'),
+          OBJECT_ID(N'dbo.sync_employee_directory_user'))
       AND permission_name = N'EXECUTE'
       AND state IN ('G', 'W')
       AND grantee_principal_id <> @app_role_id)
@@ -389,6 +480,28 @@ IF EXISTS (
       AND permission_name IN (N'UPDATE', N'DELETE') AND state IN ('G', 'W'))
     THROW 51085, 'Project document metadata must not be updateable or deletable by the application role.', 1;
 
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.inquiry_attachments')
+      AND permission_name = N'INSERT' AND state IN ('G', 'W'))
+    THROW 51122, 'The inquiry attachment INSERT grant is missing.', 1;
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.inquiry_meetings')
+      AND permission_name = N'INSERT' AND state IN ('G', 'W'))
+    THROW 51123, 'The inquiry meeting INSERT grant is missing.', 1;
+
+IF EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1
+      AND major_id IN (OBJECT_ID(N'dbo.inquiry_attachments'), OBJECT_ID(N'dbo.inquiry_meetings'))
+      AND permission_name IN (N'UPDATE', N'DELETE') AND state IN ('G', 'W'))
+    THROW 51124, 'Inquiry attachments and meeting records must remain append-only.', 1;
+
 IF EXISTS (
     SELECT 1
     FROM @required_material_permissions required
@@ -432,16 +545,55 @@ IF EXISTS (
       AND permission.class = 1
       AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE')
       AND permission.state IN ('G', 'W')
-      AND object_item.name COLLATE DATABASE_DEFAULT IN (
-          N'holidays', N'inquiry_attachments', N'inquiry_meetings', N'notifications'))
+      -- dbo.notifications left this list with migration 016: in-app
+      -- notification delivery is part of the site visit release, and the
+      -- application role now needs INSERT (create) and UPDATE (mark read).
+      -- DELETE is still refused, and is checked separately below.
+      AND object_item.name COLLATE DATABASE_DEFAULT IN (N'holidays'))
     THROW 51083, 'The application role has write access to a module outside this release.', 1;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    INNER JOIN sys.objects object_item ON object_item.object_id = permission.major_id
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.permission_name = N'DELETE'
+      AND permission.state IN ('G', 'W')
+      AND object_item.name COLLATE DATABASE_DEFAULT IN (
+          N'notifications', N'audit_log', N'site_visit_status_history',
+          N'site_visit_schedule_history', N'site_visit_confirmations', N'sales_intake_reviews'))
+    THROW 51084, 'The application role can delete from an append-only ledger.', 1;
+
+-- Site visit module (migration 016): the objects the workflow cannot run without.
+IF OBJECT_ID(N'dbo.assert_engineer_available', N'P') IS NULL
+    THROW 51085, 'dbo.assert_engineer_available is missing; engineer double-booking is unguarded.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM sys.triggers WHERE name = N'trg_site_visit_status_history_append_only')
+    OR NOT EXISTS (SELECT 1 FROM sys.triggers WHERE name = N'trg_site_visit_report_revisions_immutable')
+    THROW 51086, 'A site visit integrity trigger is missing.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_notifications_dedupe')
+    OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_site_visit_report_revisions_one_approved')
+    OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_site_visit_assignments_active')
+    THROW 51087, 'A site visit uniqueness guarantee is missing.', 1;
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1
+      AND major_id = OBJECT_ID(N'dbo.notifications')
+      AND permission_name = N'SELECT'
+      AND state IN ('G', 'W'))
+    THROW 51091, 'The application role cannot perform notification de-duplication.', 1;
 
 IF EXISTS (
     SELECT 1
     FROM dbo.users
     WHERE is_active = 1 AND deleted_at IS NULL
-      AND (TRY_CONVERT(uniqueidentifier, entra_object_id) IS NULL
-           OR TRY_CONVERT(uniqueidentifier, entra_object_id) = '00000000-0000-0000-0000-000000000000'
+      AND ((entra_object_id IS NOT NULL AND
+            (TRY_CONVERT(uniqueidentifier, entra_object_id) IS NULL
+             OR TRY_CONVERT(uniqueidentifier, entra_object_id) = '00000000-0000-0000-0000-000000000000'))
            OR email LIKE N'%@%.local' OR email LIKE N'%@example.%'))
     THROW 51077, 'An active user has a development/placeholder identity.', 1;
 

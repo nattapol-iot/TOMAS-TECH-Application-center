@@ -32,6 +32,7 @@ const PATHS = {
   chevronLeft: <polyline points="15 18 9 12 15 6" />,
   arrowRight: <><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></>,
   arrowLeft: <><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></>,
+  externalLink: <><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>,
   plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
   minus: <line x1="5" y1="12" x2="19" y2="12" />,
   download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></>,
@@ -82,21 +83,79 @@ export function Icon({ name, className }: { name: IconName; className?: string }
 
 export type Tone = "green" | "amber" | "red" | "blue" | "slate" | "violet";
 
+/**
+ * One status, one colour, everywhere — grids, legends, drawers and dashboards
+ * all resolve through toneOf(), so a status cannot look like one thing on one
+ * screen and something else on another.
+ *
+ * The scheme reads as: slate = not started or frozen · blue = someone is
+ * working on it · violet = under review · amber = waiting on somebody else ·
+ * green = accepted · red = needs action or has failed.
+ *
+ * Green is reserved for a single meaning: this was accepted. "Estimate
+ * Completed" is mid-workflow (the engineer is done, review has not happened) so
+ * it is blue, and "Locked" is a frozen end state rather than an approval, so it
+ * is slate. Three greens in one legend told the reader nothing.
+ */
 const TONE_BY_STATUS: Record<string, Tone> = {
-  Approved: "green", Locked: "green", Completed: "green", Reviewed: "green", Valid: "green",
-  "Estimate Completed": "green", "Price Updated": "green", Received: "green", Active: "blue",
-  "Engineering Review": "violet", "Engineering Input": "blue", Estimating: "blue", "In Progress": "blue",
-  Draft: "slate", New: "slate", "Not Started": "slate", "Not Requested": "slate", Superseded: "slate",
+  Approved: "green", Completed: "green", Reviewed: "green", Valid: "green",
+  "Price Updated": "green", Received: "green",
+  "Estimate Completed": "blue", Active: "blue", "Engineering Input": "blue",
+  Estimating: "blue", "In Progress": "blue",
+  "Engineering Review": "violet",
+  Draft: "slate", New: "slate", "Not Started": "slate", "Not Requested": "slate",
+  Superseded: "slate", Locked: "slate",
   "Waiting Supplier Price": "amber", "Waiting Supplier": "amber", "Waiting Information": "amber",
   Requested: "amber", Expiring: "amber", Hold: "amber",
   "Revision Required": "red", Overdue: "red", Expired: "red", Cancelled: "red", Rejected: "red",
+
+  // Project lifecycle.
+  Planning: "slate", Closed: "slate",
+  Design: "blue", Development: "blue", Installation: "blue",
+  Commissioning: "violet",
+  Handover: "green",
+  "On Hold": "amber",
+
+  // Task and schedule.
+  Open: "slate", Blocked: "red", Done: "green",
+
+  // Knowledge Hub documents. Draft is deliberately the same slate as every other
+  // Draft in the product; it was violet here only because this module carried a
+  // private colour map.
+  "In Review": "violet", "Pending Approval": "violet",
+  "Request Changes": "red",
+  Published: "green", Final: "green",
+  "Review Due": "amber",
+  Shared: "blue", Editing: "blue",
+  Archived: "slate",
+
+  // Sales intake and site visit. The same scheme as everywhere else: slate =
+  // not started or frozen · blue = somebody is working on it · violet = under
+  // review · amber = waiting on somebody else · green = accepted · red = needs
+  // action or has failed. "Confirmed" is green because both parties accepted
+  // the appointment; "Tentative" is slate because nobody has yet.
+  "Pending Technical Review": "violet",
+  "More Information Required": "red",
+  "Ready to Schedule": "blue", Scheduled: "blue",
+  Tentative: "slate",
+  "Pending Engineer Confirmation": "amber", "Pending Customer Confirmation": "amber",
+  Confirmed: "green",
+  "Report Pending": "amber", "Report Under Review": "violet",
+  "Reschedule Requested": "amber", "Customer No-show": "red",
+  // Assignment responses.
+  Proposed: "slate", Accepted: "green", Declined: "red",
+  "Information Requested": "amber", "New Time Proposed": "amber", Withdrawn: "slate",
+  // Site visit report.
+  Submitted: "violet", "Revision Requested": "red", Acknowledged: "green",
 };
 
 export const toneOf = (status: string): Tone => TONE_BY_STATUS[status] ?? "slate";
 
 export function Badge({ children, tone, dot }: { children: React.ReactNode; tone?: Tone; dot?: boolean }) {
+  const t = useT();
   const resolved = tone ?? toneOf(String(children));
-  return <span className={`badge ${resolved}`}>{dot ? <i className="badge-dot" /> : null}{children}</span>;
+  const label = typeof children === "string" ? t(children) : children;
+  return <span className={`badge ${resolved}`}>{dot ? <i className="badge-dot" /> : null}{label}</span>;
 }
 
 export function Pill({ children, tone = "slate" }: { children: React.ReactNode; tone?: Tone }) {
@@ -119,12 +178,13 @@ export function PageHeader({ eyebrow, title, subtitle, actions, meta }: {
   eyebrow?: string; title: string; subtitle?: string;
   actions?: React.ReactNode; meta?: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <header className="page-header">
       <div className="page-header-text">
-        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-        <h1>{title}</h1>
-        {subtitle ? <p className="page-sub">{subtitle}</p> : null}
+        {eyebrow ? <p className="eyebrow">{t(eyebrow)}</p> : null}
+        <h1>{t(title)}</h1>
+        {subtitle ? <p className="page-sub">{t(subtitle)}</p> : null}
         {meta ? <div className="page-meta">{meta}</div> : null}
       </div>
       {actions ? <div className="page-actions">{actions}</div> : null}
@@ -136,13 +196,14 @@ export function Panel({ title, subtitle, actions, children, flush, className }: 
   title?: string; subtitle?: string; actions?: React.ReactNode;
   children: React.ReactNode; flush?: boolean; className?: string;
 }) {
+  const t = useT();
   return (
     <section className={`panel${className ? ` ${className}` : ""}`}>
       {title ? (
         <div className="panel-head">
           <div>
-            <h2>{title}</h2>
-            {subtitle ? <p>{subtitle}</p> : null}
+            <h2>{t(title)}</h2>
+            {subtitle ? <p>{t(subtitle)}</p> : null}
           </div>
           {actions ? <div className="panel-actions">{actions}</div> : null}
         </div>
@@ -155,25 +216,27 @@ export function Panel({ title, subtitle, actions, children, flush, className }: 
 export function KpiCard({ label, value, note, tone = "slate", icon, onClick }: {
   label: string; value: string | number; note?: string; tone?: Tone; icon: IconName; onClick?: () => void;
 }) {
+  const t = useT();
   const Tag = onClick ? "button" : "div";
   return (
     <Tag className={`kpi ${tone}`} onClick={onClick} type={onClick ? "button" : undefined}>
       <span className="kpi-icon"><Icon name={icon} /></span>
       <span className="kpi-body">
-        <span className="kpi-label">{label}</span>
+        <span className="kpi-label">{t(label)}</span>
         <strong className="kpi-value">{value}</strong>
-        {note ? <span className="kpi-note">{note}</span> : null}
+        {note ? <span className="kpi-note">{t(note)}</span> : null}
       </span>
     </Tag>
   );
 }
 
 export function SummaryTile({ label, value, note, strong, tone }: { label: string; value: string; note?: string; strong?: boolean; tone?: Tone }) {
+  const t = useT();
   return (
     <div className={`summary-tile${strong ? " strong" : ""}${tone ? ` ${tone}` : ""}`}>
-      <span>{label}</span>
+      <span>{t(label)}</span>
       <strong>{value}</strong>
-      {note ? <em>{note}</em> : null}
+      {note ? <em>{t(note)}</em> : null}
     </div>
   );
 }
@@ -199,12 +262,13 @@ export function ProgressCell({ value }: { value: number }) {
 export function Tabs<T extends string>({ tabs, active, onChange }: {
   tabs: { id: T; label: string; count?: number }[]; active: T; onChange: (id: T) => void;
 }) {
+  const t = useT();
   return (
     <div className="tabs" role="tablist">
       {tabs.map((tab) => (
         <button key={tab.id} role="tab" type="button" aria-selected={active === tab.id}
           className={active === tab.id ? "tab active" : "tab"} onClick={() => onChange(tab.id)}>
-          {tab.label}
+          {t(tab.label)}
           {tab.count !== undefined ? <em>{tab.count}</em> : null}
         </button>
       ))}
@@ -217,11 +281,12 @@ export function Toolbar({ children }: { children: React.ReactNode }) {
 }
 
 export function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const t = useT();
   return (
     <label className="search-field">
       <Icon name="search" />
-      <input value={value} maxLength={200} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      {value ? <button type="button" onClick={() => onChange("")} aria-label="Clear search"><Icon name="x" /></button> : null}
+      <input value={value} maxLength={200} onChange={(e) => onChange(e.target.value)} placeholder={t(placeholder)} />
+      {value ? <button type="button" onClick={() => onChange("")} aria-label={t("Clear search")}><Icon name="x" /></button> : null}
     </label>
   );
 }
@@ -242,21 +307,23 @@ export function Select({ label, value, options, onChange, width }: {
 }
 
 export function Field({ label, children, hint, span }: { label: string; children: React.ReactNode; hint?: string; span?: 2 | 3 | 4 }) {
+  const t = useT();
   return (
     <div className={`field${span ? ` span-${span}` : ""}`}>
-      <label>{label}</label>
+      <label>{t(label)}</label>
       {children}
-      {hint ? <small>{hint}</small> : null}
+      {hint ? <small>{t(hint)}</small> : null}
     </div>
   );
 }
 
 export function EmptyState({ icon, title, message, action }: { icon: IconName; title: string; message: string; action?: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="empty">
       <span className="empty-icon"><Icon name={icon} /></span>
-      <strong>{title}</strong>
-      <p>{message}</p>
+      <strong>{t(title)}</strong>
+      <p>{t(message)}</p>
       {action}
     </div>
   );
@@ -276,20 +343,21 @@ function useEscape(onClose: () => void) {
 
 export function Modal({ title, subtitle, onClose, children, footer, size = "md" }: {
   title: string; subtitle?: string; onClose: () => void;
-  children: React.ReactNode; footer?: React.ReactNode; size?: "sm" | "md" | "lg" | "xl";
+  children: React.ReactNode; footer?: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" | "wide" | "full";
 }) {
+  const t = useT();
   useEscape(onClose);
   const labelId = useId();
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby={labelId}>
-      <button type="button" className="overlay-backdrop" aria-label="Close dialog" onClick={onClose} />
+      <button type="button" className="overlay-backdrop" aria-label={t("Close dialog")} onClick={onClose} />
       <div className={`modal ${size}`}>
         <header className="overlay-head">
           <div>
-            <h2 id={labelId}>{title}</h2>
-            {subtitle ? <p>{subtitle}</p> : null}
+            <h2 id={labelId}>{t(title)}</h2>
+            {subtitle ? <p>{t(subtitle)}</p> : null}
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}><Icon name="x" /></button>
         </header>
         <div className="overlay-body">{children}</div>
         {footer ? <footer className="overlay-foot">{footer}</footer> : null}
@@ -302,18 +370,19 @@ export function Drawer({ title, subtitle, onClose, children, footer, width = 520
   title: string; subtitle?: string; onClose: () => void;
   children: React.ReactNode; footer?: React.ReactNode; width?: number;
 }) {
+  const t = useT();
   useEscape(onClose);
   const labelId = useId();
   return (
     <div className="overlay drawer-overlay" role="dialog" aria-modal="true" aria-labelledby={labelId}>
-      <button type="button" className="overlay-backdrop" aria-label="Close drawer" onClick={onClose} />
+      <button type="button" className="overlay-backdrop" aria-label={t("Close drawer")} onClick={onClose} />
       <aside className="drawer" style={{ width }}>
         <header className="overlay-head">
           <div>
-            <h2 id={labelId}>{title}</h2>
-            {subtitle ? <p>{subtitle}</p> : null}
+            <h2 id={labelId}>{t(title)}</h2>
+            {subtitle ? <p>{t(subtitle)}</p> : null}
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}><Icon name="x" /></button>
         </header>
         <div className="overlay-body">{children}</div>
         {footer ? <footer className="overlay-foot">{footer}</footer> : null}
@@ -323,6 +392,7 @@ export function Drawer({ title, subtitle, onClose, children, footer, width = 520
 }
 
 export function Menu({ label, items }: { label: string; items: { label: string; icon?: IconName; onClick?: () => void }[] }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -334,13 +404,13 @@ export function Menu({ label, items }: { label: string; items: { label: string; 
   return (
     <div className="menu-wrap" ref={ref}>
       <button type="button" className="btn ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu">
-        {label}<Icon name="chevronDown" />
+        {t(label)}<Icon name="chevronDown" />
       </button>
       {open ? (
         <div className="menu" role="menu">
           {items.map((item) => (
             <button key={item.label} role="menuitem" type="button" onClick={() => { setOpen(false); item.onClick?.(); }}>
-              {item.icon ? <Icon name={item.icon} /> : null}{item.label}
+              {item.icon ? <Icon name={item.icon} /> : null}{t(item.label)}
             </button>
           ))}
         </div>
@@ -356,16 +426,17 @@ export function Menu({ label, items }: { label: string; items: { label: string; 
 const SERIES = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--c7)", "var(--c8)"];
 
 export function BarChart({ data, unit = "", height = 168 }: { data: { label: string; value: number }[]; unit?: string; height?: number }) {
+  const t = useT();
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div className="bar-chart" style={{ height }}>
       {data.map((d, index) => (
-        <div className="bar-col" key={d.label} title={`${d.label}: ${d.value}${unit}`}>
+        <div className="bar-col" key={d.label} title={`${t(d.label)}: ${d.value}${unit}`}>
           <span className="bar-value">{d.value}{unit}</span>
           <div className="bar-track">
             <b style={{ height: `${(d.value / max) * 100}%`, background: SERIES[index % SERIES.length] }} />
           </div>
-          <span className="bar-label">{d.label}</span>
+          <span className="bar-label">{t(d.label)}</span>
         </div>
       ))}
     </div>
@@ -373,6 +444,7 @@ export function BarChart({ data, unit = "", height = 168 }: { data: { label: str
 }
 
 export function HBarList({ data, format }: { data: { label: string; value: number; note?: string }[]; format?: (value: number) => string }) {
+  const t = useT();
   // Bars are drawn as a share of the total so the bar width and the printed
   // percentage always tell the same story.
   const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
@@ -381,11 +453,11 @@ export function HBarList({ data, format }: { data: { label: string; value: numbe
       {data.map((d, index) => (
         <li key={d.label}>
           <div className="hbar-top">
-            <span>{d.label}</span>
+            <span>{t(d.label)}</span>
             <strong>{format ? format(d.value) : d.value}<em>{Math.round((d.value / total) * 100)}%</em></strong>
           </div>
           <div className="hbar-track"><b style={{ width: `${(d.value / total) * 100}%`, background: SERIES[index % SERIES.length] }} /></div>
-          {d.note ? <small>{d.note}</small> : null}
+          {d.note ? <small>{t(d.note)}</small> : null}
         </li>
       ))}
     </ul>
@@ -395,6 +467,7 @@ export function HBarList({ data, format }: { data: { label: string; value: numbe
 export function Donut({ data, centerLabel, centerValue, format }: {
   data: { label: string; value: number }[]; centerLabel: string; centerValue: string; format?: (v: number) => string;
 }) {
+  const t = useT();
   const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
@@ -402,7 +475,7 @@ export function Donut({ data, centerLabel, centerValue, format }: {
   const offsets = dashes.map((_, index) => dashes.slice(0, index).reduce((sum, dash) => sum + dash, 0));
   return (
     <div className="donut">
-      <svg viewBox="0 0 140 140" role="img" aria-label={`${centerLabel} ${centerValue}`}>
+      <svg viewBox="0 0 140 140" role="img" aria-label={`${t(centerLabel)} ${centerValue}`}>
         <g transform="translate(70,70) rotate(-90)">
           {data.map((d, index) => (
             <circle key={d.label} r={radius} fill="none" strokeWidth="18"
@@ -412,13 +485,13 @@ export function Donut({ data, centerLabel, centerValue, format }: {
           ))}
         </g>
         <text x="70" y="64" textAnchor="middle" className="donut-value">{centerValue}</text>
-        <text x="70" y="82" textAnchor="middle" className="donut-label">{centerLabel}</text>
+        <text x="70" y="82" textAnchor="middle" className="donut-label">{t(centerLabel)}</text>
       </svg>
       <ul className="donut-legend">
         {data.map((d, index) => (
           <li key={d.label}>
             <i style={{ background: SERIES[index % SERIES.length] }} />
-            <span>{d.label}</span>
+            <span>{t(d.label)}</span>
             <strong>{format ? format(d.value) : d.value}</strong>
             <em>{Math.round((d.value / total) * 100)}%</em>
           </li>
@@ -429,6 +502,7 @@ export function Donut({ data, centerLabel, centerValue, format }: {
 }
 
 export function LineChart({ points, format }: { points: { label: string; value: number }[]; format?: (v: number) => string }) {
+  const t = useT();
   const width = 1000;
   const height = 240;
   const padding = { top: 24, right: 48, bottom: 30, left: 56 };
@@ -444,7 +518,7 @@ export function LineChart({ points, format }: { points: { label: string; value: 
   const area = `${path} L${x(points.length - 1).toFixed(1)},${padding.top + innerH} L${x(0).toFixed(1)},${padding.top + innerH} Z`;
 
   return (
-    <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Price trend">
+    <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Price trend")}>
       {[0, 0.5, 1].map((ratio) => (
         <line key={ratio} x1={padding.left} x2={width - padding.right}
           y1={padding.top + innerH * ratio} y2={padding.top + innerH * ratio} className="grid-line" />
@@ -459,7 +533,7 @@ export function LineChart({ points, format }: { points: { label: string; value: 
           <g key={p.label}>
             <circle cx={x(i)} cy={y(p.value)} r="4.5" className="line-dot" />
             <text x={x(i)} y={y(p.value) - 12} textAnchor={anchor} className="line-value">{format ? format(p.value) : p.value}</text>
-            <text x={x(i)} y={height - 8} textAnchor={anchor} className="line-label">{p.label}</text>
+            <text x={x(i)} y={height - 8} textAnchor={anchor} className="line-label">{t(p.label)}</text>
           </g>
         );
       })}
@@ -489,30 +563,46 @@ export function Sparkline({ values }: { values: number[] }) {
    -------------------------------------------------------------------------- */
 
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  const t = useT();
   useEffect(() => {
     const timer = setTimeout(onDone, 3200);
     return () => clearTimeout(timer);
   }, [message, onDone]);
-  return <div className="toast" role="status"><Icon name="checkCircle" />{message}</div>;
+  return <div className="toast" role="status"><Icon name="checkCircle" />{t(message)}</div>;
 }
 
-/** Status colour legend, as the house template shows above its grids. */
-export function StatusLegend({ items }: { items: { label: string; kind: string }[] }) {
+/**
+ * Status colour legend, shown above a grid.
+ *
+ * The legend renders the very same <Badge> the grid rows render, so its colours
+ * are derived from toneOf() rather than declared separately. They previously
+ * were: the legend carried its own `kind` vocabulary with its own hex values,
+ * and four of six colours disagreed with the badges they were explaining —
+ * Draft was even a different colour on two screens. A legend that can disagree
+ * with the thing it describes is worse than no legend, so the only way to keep
+ * them honest is to give them one source.
+ *
+ * `kind` is accepted and ignored, so existing callers keep working. Pass the
+ * raw English status: Badge translates it and looks up its tone.
+ */
+export function StatusLegend({ items }: { items: { label: string; kind?: string }[] }) {
+  const t = useT();
   return (
     <div className="status-legend">
-      <strong>INFO Status Color:</strong>
-      {items.map((item) => <span key={item.label} className={item.kind}>{item.label}</span>)}
+      <strong>{t("INFO Status Color:")}</strong>
+      {items.map((item) => <Badge key={item.label}>{item.label}</Badge>)}
     </div>
   );
 }
 
 /** "Show N entries" plus a grid search box, the template grid header. */
-export function GridControls({ pageSize, onPageSize, search, onSearch, right }: {
+export function GridControls({ pageSize, onPageSize, search, onSearch, right, hideSearch = false }: {
   pageSize: number;
   onPageSize: (value: number) => void;
   search: string;
   onSearch: (value: string) => void;
   right?: React.ReactNode;
+  hideSearch?: boolean;
 }) {
   const t = useT();
   return (
@@ -524,7 +614,24 @@ export function GridControls({ pageSize, onPageSize, search, onSearch, right }: 
       <span>{t("entries")}</span>
       {right}
       <span className="spacer" />
-      <SearchInput value={search} onChange={onSearch} placeholder={t("Search in this grid…")} />
+      {!hideSearch && <SearchInput value={search} onChange={onSearch} placeholder={t("Search in this grid…")} />}
+    </div>
+  );
+}
+
+/** Standard table-size selector used above every paginated data grid. */
+export function TablePageSize({ value, onChange }: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="grid-controls table-page-size">
+      <span>{t("Show")}</span>
+      <select value={value} onChange={(event) => onChange(Number(event.target.value))} aria-label={t("Rows per page")}>
+        {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+      </select>
+      <span>{t("entries")}</span>
     </div>
   );
 }

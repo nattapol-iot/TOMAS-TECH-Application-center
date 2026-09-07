@@ -68,20 +68,28 @@ test("demo dependency closure stays isolated from production", async () => {
   }
 });
 
-test("production workspace exposes every Demo menu through API-backed renderers", async () => {
+test("production workspace exposes API-backed menus with Inquiry as the intake entry", async () => {
   const productionApp = await readFile(new URL("app/system/ProductionApp.tsx", root), "utf8");
   const navSource = productionApp.slice(productionApp.indexOf("const NAV"), productionApp.indexOf("const IS_AUTH_CONFIGURED"));
   const menuLabels = [
-    "Dashboard", "My Work", "Inquiry", "Estimate Cost", "Projects",
-    "Price Library", "Supplier Quotation", "Waiting Supplier Price", "Resource Plan",
+    "Dashboard", "My Work", "Inquiry", "Estimate Cost", "Projects", "Knowledge Hub",
+    "Site Visit", "My Assignments",
+    "Price Library", "Supplier Quotation", "Waiting Supplier Price", "Project Timeline", "Resource Plan",
     "Procurement Dashboard", "BOM", "Purchase Requisition", "Purchase Orders", "Inventory",
-    "Goods Receiving", "Material Issues", "Approvals", "Customers", "Reports", "Master Data",
-    "Engineering Rate", "Audit Log", "Settings",
+    "Goods Receiving", "Material Issues", "Approvals",
+    // Document signing (DSN-TC-005). "My signature" is deliberately not here:
+    // a specimen is a preference, reached from the user menu, because putting it
+    // in the sidebar would imply the image is what authorises.
+    "Sign Inbox", "Signed Documents",
+    "Team Activity", "KPI & Growth", "Reports", "Support Center", "Employee Manual", "Master Data", "Module Templates",
+    "Company Stamps", "Audit Log", "Visit Master Data", "Settings",
   ];
   for (const label of menuLabels) {
     assert.match(navSource, new RegExp(`label: ["']${label}["']`));
   }
   assert.equal((navSource.match(/label:\s*["'][^"']+["']/g) ?? []).length, menuLabels.length);
+  assert.doesNotMatch(navSource, /label: ["']Sales Intake["']/);
+  assert.match(productionApp, /openVisit=\{openSiteVisit\}/);
   for (const banned of ["data", "calc", "store", "matstore", "session"]) {
     assert.doesNotMatch(productionApp, new RegExp(`from ["'][^"']*\\/${banned}["']`));
   }
@@ -96,6 +104,8 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
     "Needs update", "Late", "Blocked", "Due this week", "Awaiting the PM",
     "My tasks", "My updates", "Needs your update", "Start today", "Finish today",
     "Forecast", "Request more days", "Add my task", "Whole plan",
+    "Search project, WBS or task", "All projects", "Priority first", "Update details",
+    "Quick update", "No tasks match these filters", "Clear filters",
   ]) {
     assert.match(screen, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -109,9 +119,58 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /item\.isOwnDetail/);
   assert.match(screen, /item\.canAddDetail/);
   assert.match(screen, /item\.canDeleteDetail/);
+  assert.match(screen, /const visibleTasks = useMemo/);
+  assert.match(screen, /taskFilter === "attention"/);
+  assert.match(screen, /workUserNote/, "import provenance must not be presented as the employee note");
+  assert.doesNotMatch(screen, /\{needsUpdate\.map\(/, "urgent tasks must not be rendered twice");
   assert.doesNotMatch(screen, /from ["'][^"']*(?:data|calc|store|session)["']/);
   assert.match(shell, /openProjectSchedule/);
   assert.match(shell, /myWorkUrgentCount/);
+});
+
+test("production Projects table defaults to 10 rows and supports page-size selection", async () => {
+  const screen = await readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8");
+  const projects = screen.slice(
+    screen.indexOf("export function ProductionProjects"),
+    screen.indexOf("function ProjectDocumentsModal"),
+  );
+
+  assert.match(projects, /const \[pageSize, setPageSize\] = useState\(10\)/);
+  assert.match(projects, /listProjects\(\{ page, pageSize, search/);
+  assert.match(projects, /<TablePageSize value=\{pageSize\}/);
+  assert.match(projects, /setPageSize\(value\); setPage\(1\)/);
+});
+
+test("inquiry qualification persists probability and customer interest with audited concurrency", async () => {
+  const [screen, client, endpoint, models, migration, shell] = await Promise.all([
+    readFile(new URL("app/system/production/InquiryScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/InquiryEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Models/ApiModels.cs", root), "utf8"),
+    readFile(new URL("database/migrations/010_inquiry_qualification.sql", root), "utf8"),
+    readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+  ]);
+  assert.match(migration, /project_probability tinyint NOT NULL/);
+  assert.match(migration, /customer_interest_grade char\(1\) NOT NULL/);
+  assert.match(migration, /CHECK \(project_probability BETWEEN 0 AND 100\)/);
+  assert.match(migration, /CHECK \(customer_interest_grade IN \(''A'', ''B'', ''C'', ''D''\)\)/);
+  assert.match(migration, /VALUES \(10, N'Inquiry project probability and customer interest qualification'\)/);
+  assert.match(models, /InquiryQualificationRequest/);
+  assert.match(endpoint, /MapPut\("\/\{id:long\}\/qualification", UpdateQualificationAsync\)/);
+  assert.match(endpoint, /FROM dbo\.inquiries WITH \(UPDLOCK, HOLDLOCK\)/);
+  assert.match(endpoint, /row_version = @row_version/);
+  assert.match(endpoint, /"Qualification updated"/);
+  assert.match(client, /updateInquiryQualification/);
+  assert.match(client, /interestGrade\?: string/);
+  assert.match(client, /probabilityFrom\?: number/);
+  assert.match(screen, /Project Probability/);
+  assert.match(screen, /Customer Interest Grade/);
+  assert.match(screen, /QualificationDrawer/);
+  assert.match(screen, /openEstimate\?\.\(detail\.estimate!\.id\)/);
+  assert.match(screen, /openEstimate\?\.\(estimate\.id\)/);
+  assert.match(shell, /initialEstimateId=\{preferredEstimateId\}/);
+  assert.match(shell, /key=\{preferredEstimateId \?\? "estimate-list"\}/);
+  for (const grade of ["A", "B", "C", "D"]) assert.match(screen, new RegExp(`value: "${grade}"`));
 });
 
 test("legacy unauthenticated D1 routes and binding are absent", async () => {
@@ -166,11 +225,6 @@ test("production API requires the delegated Entra scope", async () => {
 });
 
 test("team-test authentication is staging-only, secret-backed, and database-scoped", async () => {
-  // The local Windows-host Team Test Mode tooling (Install-TeamTestHost.ps1 and its
-  // start/stop/LAN-firewall/access-code siblings) was retired in favor of
-  // docker-compose.dev.yml -- this test used to also assert on those scripts' content,
-  // but they no longer exist. The backend TeamTest authentication mode itself is still
-  // real (the sql-integration CI job depends on it), so those assertions remain.
   const [
     program,
     handler,
@@ -180,8 +234,18 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     previewValidator,
     provisioning,
     stagingSettings,
+    installer,
+    starter,
+    stopper,
+    addUser,
     loginGrants,
     networkOrigin,
+    lanFrontendStarter,
+    lanFrontendStopper,
+    lanFrontendProcess,
+    lanValidation,
+    lanFirewallConfigurator,
+    lanFirewallRemover,
   ] = await Promise.all([
     readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/TeamTestAuthenticationHandler.cs", root), "utf8"),
@@ -191,8 +255,18 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     readFile(new URL("scripts/validate-team-test-env.mjs", root), "utf8"),
     readFile(new URL("database/scripts/035_provision_team_test_user.sql", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/appsettings.Staging.json", root), "utf8"),
+    readFile(new URL("scripts/Install-TeamTestHost.ps1", root), "utf8"),
+    readFile(new URL("scripts/Start-TeamTestHost.ps1", root), "utf8"),
+    readFile(new URL("scripts/Stop-TeamTestHost.ps1", root), "utf8"),
+    readFile(new URL("scripts/Add-TeamTestUser.ps1", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("app/system/network-origin.ts", root), "utf8"),
+    readFile(new URL("scripts/Start-TeamTestLanFrontend.ps1", root), "utf8"),
+    readFile(new URL("scripts/Stop-TeamTestLanFrontend.ps1", root), "utf8"),
+    readFile(new URL("scripts/TeamTestLanFrontendProcess.ps1", root), "utf8"),
+    readFile(new URL("scripts/TeamTestLanValidation.ps1", root), "utf8"),
+    readFile(new URL("scripts/Configure-TeamTestLanFirewall.ps1", root), "utf8"),
+    readFile(new URL("scripts/Remove-TeamTestLanFirewall.ps1", root), "utf8"),
   ]);
   assert.match(program, /IsStaging\(\).*TeamTestAuthenticationHandler\.SchemeName/s);
   assert.match(program, /TeamTest authentication is allowed only in the Staging environment/);
@@ -220,8 +294,74 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
   assert.match(sql, /sp_setapprole/);
   assert.match(sql, /ApplicationRolePasswordPattern/);
   assert.match(loginGrants, /APPLICATION_ROLE/);
+  assert.match(installer, /ConvertFrom-SecureString/);
+  assert.match(installer, /Integrated Security/);
+  assert.match(installer, /CREATE APPLICATION ROLE/);
+  assert.match(installer, /RuntimeRoot must stay within/);
+  assert.match(installer, /non-application-role database principal/);
+  assert.match(installer, /PrivateLanAddress is not assigned to this machine/);
+  assert.match(installer, /AllowPrivateLanHttp/);
+  assert.match(installer, /Get-TeamTestCanonicalOrigin/);
+  assert.match(lanValidation, /GetLeftPart\(\[UriPartial\]::Authority\)/);
+  assert.match(lanValidation, /canonical origin without credentials, a trailing slash/);
+  assert.doesNotMatch(installer, /contained database authentication/i);
+  assert.match(starter, /Get-TeamTestValidatedListenerConfiguration/);
+  assert.match(lanValidation, /Saved ListenUrls must contain exactly/);
+  assert.match(lanValidation, /Wildcard, hostname, and extra listeners are forbidden/);
+  assert.match(starter, /Test-ExactApiListeners/);
+  assert.match(starter, /Test-TeamTestApiHealth/);
+  assert.match(starter, /ASPNETCORE_URLS = \$listenerConfiguration\.ListenUrls/);
+  assert.match(starter, /http:\/\/127\.0\.0\.1:/);
+  assert.match(starter, /Database__ApplicationRolePassword/);
+  assert.match(starter, /-WindowStyle Hidden/);
+  assert.match(stopper, /CommandLine -notlike/);
+  assert.match(stopper, /refusing to stop it/);
+  assert.match(addUser, /035_provision_team_test_user\.sql/);
+  assert.match(addUser, /TeamTestSigningKey/);
+  assert.match(addUser, /iot-team-test-provision-/);
+  assert.match(addUser, /:setvar DisplayName/);
+  assert.match(addUser, /Remove-Item.*\$sqlcmdInputPath/s);
+  assert.doesNotMatch(addUser, /sqlcmd[^\n]*\s-v(?:\s|`)/);
+  assert.doesNotMatch(addUser, /TeamTestSigningKey\s*=\s*["'][^"']+["']/);
   assert.match(networkOrigin, /isPrivateLanIpv4Host/);
   assert.match(networkOrigin, /allowPrivateLanHttp/);
+  assert.match(lanFrontendStarter, /--hostname/);
+  assert.match(lanFrontendStarter, /NEXT_PUBLIC_API_BASE_URL/);
+  assert.match(lanFrontendStarter, /savedStateMatches/);
+  assert.match(lanFrontendStarter, /Test-TeamTestLanFrontendHealth/);
+  assert.doesNotMatch(lanFrontendStarter, /0\.0\.0\.0/);
+  assert.match(lanFrontendStopper, /Test-TeamTestLanFrontendCommandLine/);
+  assert.match(lanFrontendStopper, /Test-TeamTestLanFrontendListener/);
+  assert.match(lanFrontendStopper, /refusing to stop it/);
+  assert.match(lanFrontendProcess, /RuntimeCommand/);
+  assert.match(lanFrontendStarter, /run build:local/);
+  assert.match(lanFrontendStarter, /'start'/);
+  assert.match(lanFrontendProcess, /--hostname/);
+  assert.match(lanFrontendProcess, /--port/);
+  assert.match(lanFrontendProcess, /Get-NetTCPConnection/);
+  assert.match(lanFrontendProcess, /OwningProcess/);
+  assert.match(lanFirewallConfigurator, /Assert-Administrator/);
+  assert.match(lanFirewallConfigurator, /Test-BroadProgramAllowRule/);
+  assert.match(lanFirewallConfigurator, /Test-RuleCanAdmitTarget/);
+  assert.match(lanFirewallConfigurator, /Get-PrivateLanSubnetCidr/);
+  assert.match(lanFirewallConfigurator, /PrefixLength = \$prefixLength/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallPortFilter/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallApplicationFilter/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallAddressFilter/);
+  assert.match(lanFirewallConfigurator, /Get-NetFirewallInterfaceFilter/);
+  assert.match(lanFirewallConfigurator, /Existing inbound Allow firewall rules could also admit/);
+  assert.match(lanFirewallConfigurator, /\$ruleName -notin \$managedRuleNames/);
+  assert.match(lanFirewallConfigurator, /\$ruleName -notin \$handledBroadRuntimeRuleNames/);
+  assert.match(lanFirewallConfigurator, /PolicyStoreSourceType.*Local/s);
+  assert.match(lanFirewallConfigurator, /-InterfaceAlias\s+\$interfaceAlias/);
+  assert.match(lanFirewallConfigurator, /-LocalAddress\s+\$lanAddress/);
+  assert.match(lanFirewallConfigurator, /-RemoteAddress\s+\$remoteSubnet/);
+  assert.match(lanFirewallConfigurator, /-Profile\s+\$firewallProfile/);
+  assert.match(lanFirewallConfigurator, /-EdgeTraversalPolicy\s+Block/);
+  assert.doesNotMatch(lanFirewallConfigurator, /-RemoteAddress\s+['"]?(?:Any|\*)/i);
+  assert.match(lanFirewallRemover, /DisabledBroadRuntimeRuleNames/);
+  assert.match(lanFirewallRemover, /IoTTeamCenter-TeamTest-LAN-Frontend/);
+  assert.match(lanFirewallRemover, /IoTTeamCenter-TeamTest-LAN-API/);
 });
 
 test("SQL application login stays least-privileged and secret template fails closed", async () => {
@@ -279,7 +419,8 @@ test("SQL parameter helper preserves MAX fields and validates row versions", asy
 
 test("production baseline verifier checks schema, app role, and real identities", async () => {
   const verifier = await readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8");
-  assert.match(verifier, /schema_versions WHERE version = 9/);
+  assert.match(verifier, /schema_versions WHERE version = 25/);
+  assert.match(verifier, /schema_versions WHERE version = 27/);
   assert.match(verifier, /Schema-wide EXECUTE is forbidden/);
   assert.match(verifier, /Schema-wide SELECT is forbidden/);
   assert.match(verifier, /active production administrator/);
@@ -343,6 +484,30 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /capabilities\.canEditManhour/);
   assert.match(estimateScreen, /capabilities\.canEditExpenses/);
   assert.match(estimateScreen, /capabilities\.canEditOtherCosts/);
+  assert.match(estimateScreen, /const \[pageSize, setPageSize\] = useState\(50\)/);
+  assert.match(estimateScreen, /<TablePageSize value=\{pageSize\}/);
+  assert.match(estimateScreen, /<StatusLegend items=/);
+  for (const tab of ["Summary", "Cost Items", "Engineering Man-hour", "Other Project Cost", "Assignment", "Validation", "Revision History", "Compare Revision", "Engineering Review"]) {
+    assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add expense", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add with details", "New Main Module"]) {
+    assert.match(estimateScreen, new RegExp(action));
+  }
+  assert.match(estimateScreen, /loadPriceLibraryRecords/);
+  assert.match(estimateScreen, /readSpreadsheet/);
+  assert.match(estimateScreen, /createCostItem\(estimateId, \{ \.\.\.seed, estimateRowVersion: rowVersion \}/);
+  assert.match(estimateScreen, /Price selected from live Price Library/);
+  assert.match(estimateScreen, /written to SQL Server/);
+  assert.match(estimateScreen, /className="inline-draft-row"/);
+  assert.match(estimateScreen, /event\.key === "Enter"/);
+  assert.match(estimateScreen, /saveQuickRow\(true\)/);
+  assert.match(estimateScreen, /Activity created · press Enter to continue adding rows/);
+  assert.match(estimateScreen, /className="cost-inline-sheet cost-sheet"/);
+  assert.match(estimateScreen, /Cost item created · press Enter to continue adding rows/);
+  assert.match(estimateScreen, /aria-label=\{uiText\("Item code"\)\}/);
+  assert.match(estimateScreen, /workspace\.expenseLines\.map\(\(line\) => `\$\{line\.costType\}\\u0000\$\{line\.package\}`\)/);
+  assert.match(estimateScreen, /setManhourSeed\(seed\)/);
+  assert.match(estimateScreen, /setExpenseSeed\(seed\)/);
   assert.match(estimateScreen, /EXPENSE_SECTION_BY_TYPE\[expenseType\]/);
   assert.match(estimateScreen, /issue\.severity\.trim\(\)\.toLowerCase\(\) === "error"/);
   assert.match(estimateScreen, /warning\(s\) are advisory and do not block workflow/);
@@ -378,8 +543,19 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(workspaceMigration, /VALUES \(8, N'Production estimate workspace integrity and validation'\)/);
   assert.doesNotMatch(workspaceMigration, /\bseverity\b/i);
   assert.match(deployment, /008_estimate_workspace_integrity\.sql/);
-  assert.match(deployment, /version IN \(1, 2, 3, 4, 5, 6, 7, 8, 9\)\) <> 9/);
-  assert.match(seed, /schema_versions WHERE version = 8/);
+  assert.match(deployment, /009_inquiry_workspace\.sql/);
+  assert.match(deployment, /010_inquiry_qualification\.sql/);
+  assert.match(deployment, /011_employee_master\.sql/);
+  assert.match(deployment, /012_supplier_price_history\.sql/);
+  assert.match(deployment, /013_supplier_quotations\.sql/);
+  assert.match(deployment, /014_knowledge_hub\.sql/);
+  assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
+  assert.match(deployment, /027_report_templates\.sql/);
+  assert.match(deployment, /026_performance_reviews\.sql/);
+  // Migration 017 extended the list. The assertion still pins an exact count,
+  // so a migration added to the runner but never applied still fails the build.
+  assert.match(deployment, /version IN \(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36\)\) <> 36/);
+  assert.match(seed, /schema_versions WHERE version = 15/);
 
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
   // trigger. Migration 008 puts triggers on all four estimate line tables, so
@@ -466,7 +642,148 @@ test("inventory decisions revalidate live quantities under database locks", asyn
   assert.match(migration, /ADD allow_over_receipt bit NOT NULL/);
   assert.match(migration, /schema_versions\(version, name\)[\s\S]*VALUES \(6,/);
   assert.match(deployment, /006_inventory_concurrency\.sql/);
-  assert.match(health, /RequiredSchemaVersion = 9/);
+  assert.match(health, /RequiredSchemaVersion = 28/);
+});
+
+test("audited supplier purchase history is read-only to the application and reusable by Estimate Cost", async () => {
+  const [migration, importer, endpoint, program, client, estimateScreen, pricingScreen, grants, verifier] = await Promise.all([
+    readFile(new URL("database/migrations/012_supplier_price_history.sql", root), "utf8"),
+    readFile(new URL("scripts/Import-SupplierPriceHistory.ps1", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/SupplierPriceHistoryEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
+  ]);
+  assert.match(migration, /CREATE TABLE dbo\.supplier_price_history/);
+  assert.match(migration, /UQ_supplier_price_history_source_key/);
+  assert.match(migration, /VALUES \(12, N'Audited supplier quotation and historical purchase price ledger'\)/);
+  assert.match(importer, /Expected 76 audited PR lines/);
+  assert.match(importer, /304084\.29/);
+  assert.match(importer, /WHERE NOT EXISTS \(SELECT 1 FROM dbo\.supplier_price_history target WHERE target\.source_key = source\.source_key\)/);
+  assert.doesNotMatch(importer, /INSERT INTO dbo\.(?:mat_prs|mat_pos|stock_txns)/);
+  assert.match(endpoint, /DemandPermissionAsync\("estimate\.read"/);
+  assert.match(endpoint, /FROM dbo\.supplier_price_history/);
+  assert.match(program, /MapSupplierPriceHistoryEndpoints/);
+  assert.match(client, /listSupplierPriceHistory/);
+  assert.match(estimateScreen, /Historical Purchase/);
+  assert.match(estimateScreen, /Purchase Price/);
+  assert.match(pricingScreen, /loadAllSupplierPriceHistory/);
+  assert.match(pricingScreen, /record\.sourceKind === "Estimate"/);
+  const priceLibrarySource = pricingScreen.slice(
+    pricingScreen.indexOf("export function ProductionPriceLibrary"),
+    pricingScreen.indexOf("const supplierQuotationCurrency"),
+  );
+  assert.match(priceLibrarySource, /useState\(50\)/);
+  assert.match(priceLibrarySource, /<TablePageSize value=\{pageSize\}/);
+  assert.match(priceLibrarySource, /<Pagination page=\{currentPage\}/);
+  assert.match(priceLibrarySource, /table style=\{\{ minWidth: 1580 \}\}/);
+  assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.supplier_price_history/);
+  assert.match(grants, /REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo\.supplier_price_history/);
+  assert.match(verifier, /\(N'supplier_price_history', N'SELECT'\)/);
+});
+
+test("supplier quotations are uploaded to secure storage and listed in the standard production grid", async () => {
+  const [migration, endpoint, storage, program, client, screen, grants, verifier] = await Promise.all([
+    readFile(new URL("database/migrations/013_supplier_quotations.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/SupplierQuotationEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectDocumentStorage.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
+  ]);
+  assert.match(migration, /CREATE TABLE dbo\.supplier_quotations/);
+  assert.match(migration, /UQ_supplier_quotations_no/);
+  assert.match(migration, /VALUES \(13, N'Supplier quotation document registry and secure attachments'\)/);
+  assert.match(endpoint, /MapPost\("\/", CreateAsync\)/);
+  assert.match(endpoint, /DemandPermissionAsync\("estimate\.write"/);
+  assert.match(endpoint, /CreateSupplierQuotationStorageKey/);
+  assert.match(endpoint, /AddParameter\("@sha256"/);
+  assert.match(endpoint, /VerifyIntegrityAndRewindAsync/);
+  assert.match(storage, /supplier-quotations/);
+  assert.match(program, /MapSupplierQuotationEndpoints/);
+  assert.match(client, /createSupplierQuotation/);
+  assert.match(client, /downloadSupplierQuotation/);
+  assert.match(screen, /function SupplierQuotationUploadModal/);
+  assert.match(screen, /<TablePageSize value=\{pageSize\}/);
+  assert.match(screen, /<Pagination page=\{page\}/);
+  assert.match(screen, /useState\(50\)/);
+  assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.supplier_quotations/);
+  assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.supplier_quotations/);
+  assert.match(verifier, /\(N'supplier_quotations', N'SELECT'\), \(N'supplier_quotations', N'INSERT'\)/);
+});
+
+test("employee master backs assignment identities without granting login access", async () => {
+  const [migration, directoryMigration, endpoints, nodeEndpoints, bootstrap, nodeBootstrap, models, client, screen, grants] = await Promise.all([
+    readFile(new URL("database/migrations/011_employee_master.sql", root), "utf8"),
+    readFile(new URL("database/migrations/022_employee_directory_assignments.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/MasterDataEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/master.ts", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/BootstrapEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/bootstrap.ts", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Models/ApiModels.cs", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+  ]);
+  assert.match(migration, /CREATE TABLE dbo\.employees/);
+  assert.match(migration, /user_id bigint NULL/);
+  assert.match(migration, /FK_employees_user/);
+  assert.match(directoryMigration, /ALTER COLUMN entra_object_id nvarchar\(64\) NULL/);
+  assert.match(directoryMigration, /CREATE UNIQUE INDEX UX_users_entra_object_id[\s\S]*WHERE entra_object_id IS NOT NULL/);
+  assert.match(directoryMigration, /PROCEDURE dbo\.sync_employee_directory_user/);
+  assert.match(directoryMigration, /WITH EXECUTE AS OWNER/);
+  assert.match(directoryMigration, /EXEC dbo\.sync_employee_directory_user @employee_id/);
+  assert.match(endpoints, /MapGet\("\/employees", ListEmployeesAsync\)/);
+  assert.match(endpoints, /MapPost\("\/employees", CreateEmployeeAsync\)/);
+  assert.match(endpoints, /MapPut\("\/employees\/\{id:long\}", UpdateEmployeeAsync\)/);
+  assert.match(endpoints, /DemandPermissionAsync\("master\.write"/);
+  assert.match(endpoints, /row_version=@row_version/);
+  assert.match(endpoints, /"Employee"[\s\S]*?"Updated"/);
+  assert.match(endpoints, /SyncEmployeeDirectoryUserAsync/);
+  assert.match(nodeEndpoints, /syncEmployeeDirectoryUser/);
+  assert.match(bootstrap, /FROM dbo\.employees employee/);
+  assert.match(bootstrap, /INNER JOIN dbo\.users app_user ON app_user\.id = employee\.user_id/);
+  assert.match(bootstrap, /employee\.employee_no/);
+  assert.match(nodeBootstrap, /FROM dbo\.employees employee/);
+  assert.match(nodeBootstrap, /INNER JOIN dbo\.users app_user ON app_user\.id = employee\.user_id/);
+  assert.match(nodeBootstrap, /employee\.employee_no/);
+  assert.match(models, /record CreateEmployeeRequest/);
+  assert.match(client, /api\/v1\/master\/employees/);
+  assert.match(screen, /function EmployeeMasterTab/);
+  assert.match(screen, /Creating an employee does not create a login account/);
+  assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.employees/);
+  assert.match(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.employees/);
+  assert.match(grants, /GRANT EXECUTE ON OBJECT::dbo\.sync_employee_directory_user/);
+});
+
+test("customer master editing is audited, concurrent, and narrowly permissioned", async () => {
+  const [screen, ui, endpoint, models, bootstrap, grants, verifier] = await Promise.all([
+    readFile(new URL("app/system/production/AdminAnalyticsScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/ui.tsx", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/MasterDataEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Models/ApiModels.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/BootstrapEndpoints.cs", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
+  ]);
+  assert.match(endpoint, /MapPut\("\/customers\/\{id:long\}", UpdateCustomerAsync\)/);
+  assert.match(endpoint, /FROM dbo\.customers WITH \(UPDLOCK, HOLDLOCK\)/);
+  assert.match(endpoint, /row_version=@row_version/);
+  assert.match(endpoint, /"Customer"[\s\S]*?"Updated"/);
+  assert.match(models, /record UpdateCustomerRequest/);
+  assert.match(bootstrap, /c\.row_version/);
+  assert.match(screen, /title=\{customer \? "Edit customer" : "New customer"\}/);
+  assert.match(screen, /method: customer \? "PUT" : "POST"/);
+  assert.match(screen, /<TablePageSize value=\{pageSize\}/);
+  assert.match(ui, /export function TablePageSize/);
+  assert.match(ui, /\[10, 25, 50, 100\]/);
+  assert.match(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.customers/);
+  assert.match(verifier, /\(N'customers', N'SELECT'\), \(N'customers', N'INSERT'\), \(N'customers', N'UPDATE'\)/);
 });
 
 test("schedule day-request answers are atomic and narrowly permissioned", async () => {
@@ -590,4 +907,268 @@ test("project documents use fail-closed NAS storage, scoped access, and append-o
   assert.match(deployment, /does \*\*not\*\*\s+provide a malware scanner or quarantine workflow/);
   assert.match(gitignore, /^\*\*\/App_Data\/$/m);
   assert.match(gitignore, /^\/\.tmp\/$/m);
+});
+
+test("Knowledge Hub is permission-filtered, revision-safe, and included in production deployment", async () => {
+  const [migration, hardening, endpoint, screen, client, program, deployment, grants, verifier, health, seed] = await Promise.all([
+    readFile(new URL("database/migrations/014_knowledge_hub.sql", root), "utf8"),
+    readFile(new URL("database/migrations/015_knowledge_hub_workflow_hardening.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/KnowledgeEndpoints.cs", root), "utf8"),
+    readFile(new URL("app/system/production/KnowledgeScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
+    readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/HealthEndpoints.cs", root), "utf8"),
+    readFile(new URL("database/scripts/910_knowledge_hub_seed.sql", root), "utf8"),
+  ]);
+  assert.match(migration, /UX_knowledge_document_versions_one_published/);
+  assert.match(migration, /trg_knowledge_document_versions_immutable/);
+  assert.match(migration, /trg_knowledge_audit_events_append_only/);
+  assert.match(migration, /UPDLOCK, HOLDLOCK/);
+  assert.match(migration, /knowledge\.manage_permissions/);
+  assert.match(hardening, /Approved.*Published/s);
+  assert.match(hardening, /extracted_text/);
+  assert.match(endpoint, /VisibilityPredicate/);
+  assert.match(endpoint, /DemandPermissionAsync\("knowledge\.publish"/);
+  assert.match(endpoint, /self_approval_forbidden/);
+  assert.match(endpoint, /IsolationLevel\.Serializable/);
+  assert.match(endpoint, /CreateKnowledgeStorageKey/);
+  assert.match(screen, /Standards Register/);
+  assert.match(screen, /Presentation Library/);
+  assert.match(screen, /My Acknowledgements/);
+  assert.match(screen, /useState\(50\)/);
+  assert.match(client, /listKnowledgeDocuments/);
+  assert.match(program, /MapKnowledgeEndpoints/);
+  assert.match(deployment, /014_knowledge_hub\.sql/);
+  assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
+  assert.match(deployment, /14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36\)\) <> 36/);
+  assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.knowledge_audit_events/);
+  assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.knowledge_document_approvals/);
+  assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);
+  assert.match(verifier, /issue_knowledge_document_number/);
+  assert.match(verifier, /knowledge_audit_events/);
+  assert.match(health, /RequiredSchemaVersion = 28/);
+  assert.match(seed, /Migration 015/);
+  assert.match(seed, /highest_number > s\.last_number/);
+});
+
+test("Node backend keeps the per-route document upload and download limits", async () => {
+  const [storage, inquiryAttachments, projectDocuments, app] = await Promise.all([
+    readFile(new URL("backend-node/src/document-storage.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/inquiry-attachments.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/project-documents.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/app.ts", root), "utf8"),
+  ]);
+
+  // The C#-to-Node cutover kept the global 300/minute ceiling but dropped the
+  // two narrower policies. These routes move whole files across the NAS link
+  // and each download re-hashes the file to verify it, so the global ceiling is
+  // far too generous for them.
+  assert.match(app, /max: 300/);
+  assert.match(storage, /DOCUMENT_UPLOAD_RATE_LIMIT = \{ max: 6, timeWindow: "1 minute" \}/);
+  assert.match(storage, /DOCUMENT_DOWNLOAD_RATE_LIMIT = \{ max: 12, timeWindow: "1 minute" \}/);
+
+  for (const [name, source] of [
+    ["inquiry-attachments", inquiryAttachments],
+    ["project-documents", projectDocuments],
+  ]) {
+    assert.match(source, /rateLimit: DOCUMENT_UPLOAD_RATE_LIMIT/, `${name} upload must carry the upload limit`);
+    assert.match(source, /rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT/, `${name} download must carry the download limit`);
+  }
+});
+
+test("document signing keeps files immutable, marks append-only, and the seal accountable", async () => {
+  const [migration, grants, deployment, core, routes, master, certificate, app, screens, shell] = await Promise.all([
+    readFile(new URL("database/migrations/018_document_signing.sql", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
+    readFile(new URL("backend-node/src/signing-core.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/signing.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/signature-master.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/signing-certificate.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/app.ts", root), "utf8"),
+    readFile(new URL("app/system/production/SigningScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+  ]);
+
+  assert.match(deployment, /018_document_signing\.sql/);
+
+  // A signature points at one exact byte sequence, so the file row cannot change
+  // and the marks, the output and the chain cannot be rewritten.
+  for (const trigger of [
+    "trg_document_files_immutable",
+    "trg_signature_marks_append_only",
+    "trg_signed_documents_append_only",
+    "trg_sign_events_append_only",
+  ]) {
+    assert.ok(migration.includes(`CREATE OR ALTER TRIGGER dbo.${trigger}`), `${trigger} must exist`);
+    assert.match(migration.slice(migration.indexOf(trigger)).slice(0, 400), /INSTEAD OF UPDATE, DELETE/,
+      `${trigger} must refuse update and delete`);
+  }
+
+  // A frozen revision points at the stored bytes instead of copying them, so two
+  // revisions may legitimately share a storage key. Uniqueness belongs to
+  // (document, revision) and nowhere else on this table.
+  assert.match(migration, /CONSTRAINT UQ_document_files_revision UNIQUE \(document_id, revision_label\)/);
+  assert.doesNotMatch(migration, /UQ_document_files_storage_hash/);
+
+  // The worst available failure is a mark that outlives the file it was placed on.
+  assert.match(routes, /UPDATE dbo\.sign_steps SET state = N'VOIDED'/);
+  assert.match(routes, /REQUEST_SUPERSEDED/);
+  assert.match(routes, /unsigned steps voided; signed marks stay on the superseded file/);
+
+  // A second signature only means something if a second person made it.
+  assert.match(migration, /does not allow one person to fill two steps/);
+  assert.match(migration, /requires the company stamp; a signature alone does not close it/);
+  assert.match(migration, /An ordered signature flow requires earlier steps to close first/);
+  assert.match(migration, /complete only when every mandatory step is signed/);
+
+  // Admin configures the system; the business signs. Enforced twice.
+  assert.match(migration, /trg_stamp_authorities_exclude_admin/);
+  assert.match(migration, /The Admin role cannot hold company stamp authority/);
+  assert.match(master, /admin_cannot_hold_stamp/);
+  const adminGrant = migration.slice(migration.indexOf("SELECT N'Admin', code FROM dbo.permissions"), migration.indexOf("SELECT N'Admin', code FROM dbo.permissions") + 200);
+  assert.match(adminGrant, /N'signing\.read', N'signing\.master'/);
+  assert.doesNotMatch(adminGrant, /signing\.sign/);
+
+  // Every stamp application names the person and the grant that permitted it.
+  assert.match(migration, /CK_signature_marks_stamp/);
+  assert.match(core, /resolveStampAuthority/);
+  assert.match(routes, /stamp_authority_missing/);
+  assert.match(routes, /STAMP_APPLIED/);
+
+  // The mark is for the reader; the chain is for the audit. This application
+  // holds no password, so assurance is a fresh interactive sign-in whose
+  // evidence label is written into the chain rather than assumed.
+  assert.match(core, /reauthentication_required/);
+  assert.match(core, /entra-auth_time/);
+  assert.match(core, /holds no password/);
+  assert.doesNotMatch(core, /PasswordHash|verifyPassword/);
+  assert.match(routes, /const assurance = evaluateSigningAssurance\(request\);/);
+  assert.match(core, /chainHash/);
+  assert.match(core, /verifyChain/);
+  // datetimeoffset(0) drops milliseconds, so the hashed timestamp has to be the
+  // one the column will actually hold or the chain fails its own check.
+  assert.match(core, /truncateToSecond/);
+
+  // A downloadable seal or specimen is a forgery kit: no route serves either,
+  // and the only image route returns the caller's own specimen.
+  assert.match(master, /There is deliberately no route that takes a user id/);
+  assert.match(master, /Only PNG images are accepted/);
+  assert.doesNotMatch(master, /company-stamps\/:stampId\/image".*get/i);
+
+  // Signing is not approving, and the estimate is deliberately not signable.
+  assert.match(migration, /Signing is not approving/);
+  const classes = core.slice(core.indexOf("DOCUMENT_CLASSES = ["), core.indexOf("DOCUMENT_CLASSES = [") + 200);
+  assert.doesNotMatch(classes, /"ESTIMATE"/);
+
+  // The application role can append to the ledgers but never rewrite them.
+  for (const table of ["document_files", "signature_marks", "signed_documents", "sign_events"]) {
+    assert.ok(grants.includes(`GRANT INSERT ON OBJECT::dbo.${table} TO [iot_team_app_role];`),
+      `${table} must be append-only for the application role`);
+    assert.ok(!grants.includes(`GRANT INSERT, UPDATE ON OBJECT::dbo.${table} TO`), `${table} must not receive UPDATE`);
+    assert.ok(!grants.includes(`GRANT DELETE ON OBJECT::dbo.${table} TO`), `${table} must not receive DELETE`);
+  }
+
+  // SQL Server refuses OUTPUT without INTO on a table carrying a trigger, and
+  // four of these tables carry one.
+  for (const source of [routes, master]) {
+    for (const match of source.matchAll(/INSERT INTO dbo\.(document_files|sign_requests|signature_specimens|stamp_authorities)[\s\S]{0,400}?OUTPUT inserted\.id( INTO)?/g)) {
+      assert.ok(match[2], `${match[1]} insert must capture OUTPUT INTO a table variable`);
+    }
+  }
+
+  // Wiring and the surfaces the feature needs to exist at all.
+  assert.match(app, /registerSigningRoutes/);
+  assert.match(app, /registerSignatureMasterRoutes/);
+  assert.match(shell, /ProductionSignInbox/);
+  assert.match(shell, /ProductionSignedDocuments/);
+  assert.match(shell, /ProductionCompanyStamps/);
+  assert.match(shell, /ProductionMySignature/);
+  assert.match(screens, /prepareSigningSession/);
+  assert.match(screens, /attachPaperSignature/);
+  assert.match(screens, /Return to owner/);
+  assert.doesNotMatch(screens, /from ["'][^"']*\/(?:data|calc|store|matstore|session)["']/);
+
+  // Loading a project, its stored files, and the assigned Design task are
+  // separate requests. A transient API restart must not turn an endpoint
+  // failure into a fake form field or leave the user without a retry action.
+  const createModal = screens.slice(
+    screens.indexOf("export function CreateSignableDocumentModal"),
+    screens.indexOf("function FreezeRevisionModal"),
+  );
+  assert.match(createModal, /size="lg"/);
+  assert.match(createModal, /className="form-grid two"/);
+  for (const endpoint of ["projects", "attachments", "tasks"]) {
+    assert.match(createModal, new RegExp(`${endpoint}\\.error \\? <LoadError[^>]+retry=\\{${endpoint}\\.reload\\}`));
+  }
+  assert.doesNotMatch(createModal, /<ActionError message=\{tasks\.error\}/);
+
+  // The certificate states what it is and what it is not.
+  assert.match(certificate, /not a certificate issued by one/);
+  assert.match(certificate, /RDL-039/);
+});
+
+test("the verification code on a certificate resolves to a real, authenticated page", async () => {
+  const [page, entry, routes, screens, shell] = await Promise.all([
+    readFile(new URL("app/verify/page.tsx", root), "utf8"),
+    readFile(new URL("app/system/VerifyEntry.tsx", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/signing.ts", root), "utf8"),
+    readFile(new URL("app/system/production/SigningScreens.tsx", root), "utf8"),
+    readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+  ]);
+
+  // The printed link and QR have to land somewhere that exists. The code goes in
+  // the query string because that is what the page reads.
+  assert.ok(routes.includes("verifyUrl: `${verifyBaseUrl}?code=${verifyCode}`"),
+    "the certificate link must carry the code in the query string the page reads");
+  assert.ok(page.includes('import("../system/VerifyEntry")'), "the verify route must load the entry component");
+  assert.match(page, /ssr: false/);
+  assert.match(entry, /searchParams|URLSearchParams/);
+
+  // It renders the production workspace, so the visitor signs in first. v1 of
+  // signing is internal-only (RDL-008) and external reachability is RDL-036.
+  assert.match(entry, /ProductionApp/);
+  assert.match(entry, /RDL-036/);
+  assert.match(shell, /initialVerifyCode/);
+  assert.match(screens, /initialVerifyCode/);
+});
+
+test("a signature specimen is every signed-in user own preference, by design", async () => {
+  const [master, shell, migration] = await Promise.all([
+    readFile(new URL("backend-node/src/routes/signature-master.ts", root), "utf8"),
+    readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+    readFile(new URL("database/migrations/018_document_signing.sql", root), "utf8"),
+  ]);
+
+  // DSN-TC-005 s8 gives every role "Maintain own signature specimen: Yes", so
+  // the three /me/signature routes check authentication and nothing else. This
+  // is deliberate, not an oversight: a person own signature is theirs, and
+  // gating it behind a permission would imply it is an organisational asset.
+  assert.match(migration, /CREATE TABLE dbo\.signature_specimens/);
+  assert.match(migration, /UNIQUE \(user_id, version\)/);
+  const meRoutes = master.slice(master.indexOf("/api/v1/me/signature"), master.indexOf("/api/v1/master/company-stamps"));
+  assert.ok(!meRoutes.includes('demandPermission(request, "signing.'),
+    "the specimen routes must not gain a signing permission without changing DSN-TC-005 s8");
+  assert.ok(meRoutes.includes("users.required(request)"));
+
+  // Which is why "My signature" sits in the user menu beside Permissions rather
+  // than in the permission-filtered navigation.
+  const navSource = shell.slice(shell.indexOf("const NAV"), shell.indexOf("const IS_AUTH_CONFIGURED"));
+  assert.doesNotMatch(navSource, /My signature/);
+  assert.ok(shell.includes('setView("signature")'));
+});
+
+test("Master Data Customers table defaults to 10 rows and supports page-size selection", async () => {
+  const screen = await readFile(new URL("app/system/production/AdminAnalyticsScreens.tsx", root), "utf8");
+  const customers = screen.slice(
+    screen.indexOf("export function ProductionCustomers"),
+    screen.indexOf("function LocalizedNameStack"),
+  );
+
+  assert.match(customers, /const \[pageSize, setPageSize\] = useState\(10\)/);
+  assert.match(customers, /<TablePageSize value=\{pageSize\}/);
+  assert.match(customers, /setPageSize\(value\); setPage\(1\)/);
 });

@@ -86,37 +86,21 @@ public sealed class DocumentStorageOptions
 
     private static string ValidateAndNormalizeUncRoot(string configuredRoot)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            if (!configuredRoot.StartsWith(@"\\", StringComparison.Ordinal))
-                throw new InvalidOperationException("DocumentStorage:RootPath must be a UNC path containing a server and share, for example \\\\server\\share.");
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException("NAS document storage requires a Windows host with UNC path support.");
+        if (!configuredRoot.StartsWith(@"\\", StringComparison.Ordinal))
+            throw new InvalidOperationException("DocumentStorage:RootPath must be a UNC path containing a server and share, for example \\\\server\\share.");
 
-            var segments = configuredRoot[2..].Split(
-                ['\\', '/'],
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var invalidUncCharacters = new HashSet<char>(['<', '>', ':', '"', '|', '?', '*']);
-            if (segments.Length < 2
-                || segments.Any(segment => segment is "." or ".." || segment.Any(invalidUncCharacters.Contains))
-                || string.IsNullOrWhiteSpace(segments[0])
-                || string.IsNullOrWhiteSpace(segments[1]))
-                throw new InvalidOperationException("DocumentStorage:RootPath must contain a valid UNC server and share.");
+        var segments = configuredRoot[2..].Split(
+            ['\\', '/'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var invalidUncCharacters = new HashSet<char>(['<', '>', ':', '"', '|', '?', '*']);
+        if (segments.Length < 2
+            || segments.Any(segment => segment is "." or ".." || segment.Any(invalidUncCharacters.Contains))
+            || string.IsNullOrWhiteSpace(segments[0])
+            || string.IsNullOrWhiteSpace(segments[1]))
+            throw new InvalidOperationException("DocumentStorage:RootPath must contain a valid UNC server and share.");
 
-            return Path.GetFullPath(configuredRoot);
-        }
-
-        // Non-Windows Production hosts (e.g. Ubuntu, see scripts/linux/install-production-host.sh)
-        // have no UNC path support, so they mount the real NAS share at the OS level (cifs-utils)
-        // and configure this path as that mount point. Requiring RootPath to currently BE a
-        // mount point -- not merely an ordinary directory -- preserves the same guarantee the
-        // Windows UNC check provides: Production cannot silently fall back to plain, ephemeral
-        // local disk just because a directory happens to exist at the configured path.
-        if (!Path.IsPathFullyQualified(configuredRoot))
-            throw new InvalidOperationException("DocumentStorage:RootPath must be an absolute path to a mounted network share.");
-        var normalizedRoot = Path.GetFullPath(configuredRoot).TrimEnd('/');
-        var isMountPoint = DriveInfo.GetDrives()
-            .Any(drive => drive.Name.TrimEnd('/') == normalizedRoot);
-        if (!isMountPoint)
-            throw new InvalidOperationException("DocumentStorage:RootPath must be an existing mount point (e.g. a CIFS-mounted NAS share); it is not currently mounted.");
-        return normalizedRoot;
+        return Path.GetFullPath(configuredRoot);
     }
 }

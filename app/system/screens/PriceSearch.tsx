@@ -1,5 +1,7 @@
 "use client";
 
+import { useT as useUiText } from "../i18n";
+import { LocalizedText } from "../LocalizedText";
 import { useMemo, useState } from "react";
 import { PRICE_LIBRARY, type PriceRecord } from "../data";
 import { formatDate, money, priceAge } from "../calc";
@@ -16,6 +18,7 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
   onUse: (record: PriceRecord) => void;
   onHistory: (record: PriceRecord) => void;
 }) {
+  const uiText = useUiText();
   const [query, setQuery] = useState(initialQuery);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -31,7 +34,7 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
 
   return (
     <Modal
-      title="Search Price Library"
+      title={uiText("Search Price Library")}
       subtitle="Item, brand, model, supplier, previous project or price — no Excel file needed"
       size="xl"
       onClose={onClose}
@@ -39,10 +42,9 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
         <>
           <span className="muted">{results.length} matching item(s) · prices older than 180 days are flagged in red</span>
           <span className="spacer" />
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" disabled={!active} onClick={() => active && onUse(active)}>
-            <Icon name="check" />Use price
-          </button>
+            <Icon name="check" /><LocalizedText text={"Use price"} /> </button>
         </>
       }
     >
@@ -54,19 +56,19 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
             <thead>
               <tr>
                 <th aria-label="Selected" style={{ width: 30 }} />
-                <th>Item Code</th>
-                <th>Description</th>
-                <th>Brand</th>
-                <th>Model</th>
-                <th>Supplier</th>
-                <th className="num">Price</th>
-                <th>Price Date</th>
+                <th><LocalizedText text={"Item Code"} /></th>
+                <th><LocalizedText text={"Description"} /></th>
+                <th><LocalizedText text={"Brand"} /></th>
+                <th><LocalizedText text={"Model"} /></th>
+                <th><LocalizedText text={"Supplier"} /></th>
+                <th className="num"><LocalizedText text={"Price"} /></th>
+                <th><LocalizedText text={"Price Date"} /></th>
                 <th>Age</th>
-                <th>Source / Reference</th>
-                <th>Previous Project</th>
+                <th><LocalizedText text={"Source / Reference"} /></th>
+                <th><LocalizedText text={"Previous Project"} /></th>
                 <th>Trend</th>
                 <th>Last Used</th>
-                <th aria-label="Actions" />
+                <th aria-label={uiText("Actions")} />
               </tr>
             </thead>
             <tbody>
@@ -83,7 +85,7 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
                     <td>{record.supplier}</td>
                     <td className="num"><strong>{money(record.price)}</strong></td>
                     <td>{formatDate(record.priceDate)}</td>
-                    <td><span className={`age ${age.tone}`}><i />{age.days} days</span></td>
+                    <td><span className={`age ${age.tone}`}><i />{age.days} <LocalizedText text={"days"} /></span></td>
                     <td>
                       <div className="cell-primary">
                         <strong>{record.source}</strong>
@@ -95,8 +97,8 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
                     <td className="muted">{formatDate(record.lastUsed)}</td>
                     <td>
                       <div className="row tight">
-                        <button className="btn sm default" type="button" onClick={(e) => { e.stopPropagation(); onUse(record); }}>Use Price</button>
-                        <button className="btn sm ghost" type="button" onClick={(e) => { e.stopPropagation(); onHistory(record); }}>History</button>
+                        <button className="btn sm default" type="button" onClick={(e) => { e.stopPropagation(); onUse(record); }}><LocalizedText text={"Use Price"} /></button>
+                        <button className="btn sm ghost" type="button" onClick={(e) => { e.stopPropagation(); onHistory(record); }}><LocalizedText text={"History"} /></button>
                       </div>
                     </td>
                   </tr>
@@ -113,7 +115,7 @@ export function PriceSearchModal({ initialQuery = "", onClose, onUse, onHistory 
         <div className="info-strip" style={{ marginTop: 12 }}>
           <Icon name="alertCircle" />
           <span>
-            <strong>{active.model || active.itemCode}</strong> — {money(active.price)} from {active.supplier}, priced {formatDate(active.priceDate)} on {active.reference}.
+            <strong>{active.model || active.itemCode}</strong> — {money(active.price)} <LocalizedText text={"from"} /> {active.supplier}, priced {formatDate(active.priceDate)} <LocalizedText text={"on"} /> {active.reference}.
             {priceAge(active.priceDate).days > 180 ? " This price is older than 180 days — confirm with the supplier before approval." : ""}
           </span>
           <span className="spacer" />

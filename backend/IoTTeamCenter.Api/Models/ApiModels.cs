@@ -23,10 +23,13 @@ public sealed record InquirySummary(
     string CustomerName,
     string ProjectName,
     string ProjectType,
+    string? SalesOwner,
     long EstimateOwnerId,
     string EstimateOwnerName,
     DateOnly DueDate,
     string Priority,
+    int ProjectProbability,
+    string CustomerInterestGrade,
     string Status,
     decimal Progress,
     int Revision,
@@ -44,6 +47,9 @@ public sealed record CreateInquiryRequest(
     long EstimateOwnerId,
     DateOnly DueDate,
     string Priority,
+    int ProjectProbability,
+    string CustomerInterestGrade,
+    string? QualificationNote,
     string? Requirement,
     string? Background,
     string? ScopeSummary,
@@ -55,6 +61,12 @@ public sealed record CreateInquiryRequest(
     string? Remark);
 
 public sealed record InquiryAssignmentRequest(long EstimateOwnerId, string RowVersion);
+
+public sealed record InquiryQualificationRequest(
+    int ProjectProbability,
+    string CustomerInterestGrade,
+    string? QualificationNote,
+    string RowVersion);
 
 public sealed record CreateInquiryMeetingRequest(
     DateOnly MeetingDate,
@@ -142,9 +154,13 @@ public sealed record InquiryDetail(
     string EstimateOwnerName,
     DateOnly DueDate,
     string Priority,
+    int ProjectProbability,
+    string CustomerInterestGrade,
+    string QualificationNote,
     string Status,
     decimal Progress,
     int Revision,
+    long? EstimateId,
     string Requirement,
     string Background,
     string ScopeSummary,
@@ -343,6 +359,16 @@ public sealed record CreateCustomerRequest(
     string? Industry,
     string? Site);
 
+public sealed record UpdateCustomerRequest(
+    string RowVersion,
+    string Code,
+    string Name,
+    string? Contact,
+    string? Email,
+    string? Phone,
+    string? Industry,
+    string? Site);
+
 public sealed record CreateSupplierRequest(
     string Code,
     string Name,
@@ -373,6 +399,41 @@ public sealed record CreateEngineeringRateRequest(
     decimal InstallationDaily,
     DateOnly EffectiveFrom,
     DateOnly? EffectiveTo);
+
+public sealed record CreateEmployeeRequest(
+    int EmployeeNo,
+    string NameEn,
+    string? NameTh,
+    string Department,
+    string JobTitle,
+    string? Mobile,
+    string Email,
+    string? Nickname,
+    DateOnly? BirthDate,
+    string? UniformSize,
+    string? ShoeSize,
+    DateOnly StartWorkDate,
+    DateOnly? EndWorkDate,
+    string Position,
+    bool IsActive);
+
+public sealed record UpdateEmployeeRequest(
+    string RowVersion,
+    int EmployeeNo,
+    string NameEn,
+    string? NameTh,
+    string Department,
+    string JobTitle,
+    string? Mobile,
+    string Email,
+    string? Nickname,
+    DateOnly? BirthDate,
+    string? UniformSize,
+    string? ShoeSize,
+    DateOnly StartWorkDate,
+    DateOnly? EndWorkDate,
+    string Position,
+    bool IsActive);
 
 public sealed record ApiError(string Code, string Message, object? Details = null);
 

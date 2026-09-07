@@ -40,6 +40,7 @@ public sealed class TeamTestAuthenticationHandler(
         {
             new Claim(ClaimTypes.NameIdentifier, suppliedEmail),
             new Claim(ClaimTypes.Email, suppliedEmail),
+            new Claim("email", suppliedEmail),
             new Claim("oid", $"team-test:{identityHash}"),
             new Claim("auth_mode", "team-test"),
         };

@@ -35,13 +35,62 @@ public static class BootstrapEndpoints
                          ELSE CONVERT(bigint, 0) END AS active_project_count,
                     CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'estimate.approve')
                          THEN (SELECT COUNT_BIG(*) FROM dbo.estimates WHERE deleted_at IS NULL AND status = N'Engineering Review')
-                    ELSE CONVERT(bigint, 0) END AS approval_count;
+                    ELSE CONVERT(bigint, 0) END AS approval_count,
+                    employee.id AS employee_id,
+                    employee.employee_no,
+                    employee.nickname AS employee_nickname,
+                    employee.position AS employee_level,
+                    employee.start_work_date AS employee_start_work_date
+                FROM (VALUES (1)) singleton(value)
+                OUTER APPLY (
+                    SELECT TOP (1) id, employee_no, nickname, position, start_work_date
+                    FROM dbo.employees
+                    WHERE user_id = @user_id AND deleted_at IS NULL
+                    ORDER BY is_active DESC, id DESC
+                ) employee;
 
-                SELECT id, code, name FROM dbo.customers WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name;
+                SELECT
+                    c.id,
+                    c.code,
+                    c.name,
+                    c.industry,
+                    c.contact,
+                    c.email,
+                    c.phone,
+                    c.site,
+                    (SELECT COUNT_BIG(*)
+                     FROM dbo.inquiries i
+                     WHERE i.customer_id = c.id AND i.deleted_at IS NULL) AS inquiry_count,
+                    (SELECT COUNT_BIG(*)
+                     FROM dbo.estimates e
+                     WHERE e.customer_id = c.id
+                       AND e.deleted_at IS NULL
+                       AND e.status NOT IN (N'Approved', N'Locked')) AS open_estimate_count,
+                    c.row_version
+                FROM dbo.customers c
+                WHERE c.is_active = 1 AND c.deleted_at IS NULL
+                ORDER BY c.name;
                 SELECT id, code, name, category FROM dbo.suppliers WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name;
-                SELECT u.id, u.name, u.email, r.code AS role, u.department, u.level
-                FROM dbo.users u INNER JOIN dbo.roles r ON r.id = u.role_id
-                WHERE u.is_active = 1 AND u.deleted_at IS NULL ORDER BY u.name;
+                SELECT
+                    app_user.id,
+                    employee.name_en,
+                    employee.email,
+                    role.code AS role,
+                    employee.department,
+                    employee.position,
+                    employee.id AS employee_id,
+                    employee.employee_no,
+                    employee.nickname,
+                    employee.start_work_date,
+                    CONVERT(bit, CASE WHEN app_user.entra_object_id IS NULL THEN 0 ELSE 1 END) AS can_sign_in
+                FROM dbo.employees employee
+                INNER JOIN dbo.users app_user ON app_user.id = employee.user_id
+                INNER JOIN dbo.roles role ON role.id = app_user.role_id
+                WHERE employee.is_active = 1
+                  AND employee.deleted_at IS NULL
+                  AND app_user.is_active = 1
+                  AND app_user.deleted_at IS NULL
+                ORDER BY employee.employee_no;
 
                 SELECT p.code
                 FROM dbo.role_permissions rp
@@ -61,11 +110,34 @@ public static class BootstrapEndpoints
                 activeProjects = reader.GetInt64(2),
                 approvals = reader.GetInt64(3)
             };
+            object? employment = reader.IsDBNull(4) || reader.IsDBNull(8)
+                ? null
+                : new
+                {
+                    employeeId = reader.GetInt64(4),
+                    employeeNo = reader.GetInt32(5),
+                    nickname = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                    level = reader.IsDBNull(7) ? "" : reader.GetString(7),
+                    startWorkDate = DateOnly.FromDateTime(reader.GetDateTime(8))
+                };
 
             var customers = new List<object>();
             await reader.NextResultAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
-                customers.Add(new { id = reader.GetInt64(0), code = reader.GetString(1), name = reader.GetString(2) });
+                customers.Add(new
+                {
+                    id = reader.GetInt64(0),
+                    code = reader.GetString(1),
+                    name = reader.GetString(2),
+                    industry = reader.GetString(3),
+                    contact = reader.GetString(4),
+                    email = reader.GetString(5),
+                    phone = reader.GetString(6),
+                    site = reader.GetString(7),
+                    inquiries = reader.GetInt64(8),
+                    openEstimates = reader.GetInt64(9),
+                    rowVersion = Convert.ToBase64String((byte[])reader.GetValue(10))
+                });
 
             var suppliers = new List<object>();
             await reader.NextResultAsync(cancellationToken);
@@ -75,14 +147,27 @@ public static class BootstrapEndpoints
             var team = new List<object>();
             await reader.NextResultAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
-                team.Add(new { id = reader.GetInt64(0), name = reader.GetString(1), email = reader.GetString(2), role = reader.GetString(3), department = reader.GetString(4), level = reader.GetString(5) });
+                team.Add(new
+                {
+                    id = reader.GetInt64(0),
+                    name = reader.GetString(1),
+                    email = reader.GetString(2),
+                    role = reader.GetString(3),
+                    department = reader.GetString(4),
+                    level = reader.GetString(5),
+                    employeeId = reader.GetInt64(6),
+                    employeeNo = reader.GetInt32(7),
+                    nickname = reader.GetString(8),
+                    startWorkDate = DateOnly.FromDateTime(reader.GetDateTime(9)),
+                    canSignIn = reader.GetBoolean(10)
+                });
 
             var permissions = new List<string>();
             await reader.NextResultAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
                 permissions.Add(reader.GetString(0));
 
-            return Results.Ok(new { user, counts, customers, suppliers, team, permissions });
+            return Results.Ok(new { user, employment, counts, customers, suppliers, team, permissions });
         }).RequireAuthorization();
     }
 }
