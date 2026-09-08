@@ -100,6 +100,8 @@ so we never merge-conflict.
 
 ## Active claims
 
+| 2026-09-08 | Claude | Editable rows: editing InspectionReportScreens.tsx and inspection-report-pptx.ts only — Operation/Electrical/Power rows user-addable/removable/renamable. | active — Claude, 2026-09-08 |
+
 | 2026-09-07 | Claude | Inspection Report auto-fill: editing `app/system/production/InspectionReportScreens.tsx` only — customer picker in GeneralTab, team picker in SignOffTab, pre-fill inspector from bootstrap.user on new report. No backend, migration, or other files. | released — typecheck passes; customer dropdown auto-fills 4 fields, team picker auto-fills inspector/checker name+title, new report pre-fills inspector from logged-in user — Claude, 2026-09-07 |
 
 | 2026-09-07 12:09 | Codex Manual Integration | User-requested in-app employee manual. Owns additive `EmployeeManualScreen.tsx`/CSS, `ProductionApp.tsx` wiring, public handbook copy, handbook builder/query-language support, focused tests/docs. No API, database or business data writes. | implementation complete — typecheck, scoped lint, focused tests, production build and Chrome public-asset QA pass; shared frontend activation pending explicit user approval — Codex, 2026-09-07 12:20 |

@@ -19,6 +19,8 @@ export type TransformerMeasurement = {
   secondaryJudgement: PassFail; secondaryRank: Rank; secondaryRemarks: string;
 };
 
+export type PowerSection = { title: string } & TransformerMeasurement;
+
 export type OperationTest = {
   name: string; status: PassFail; rank: Rank; remarks: string;
 };
@@ -35,8 +37,7 @@ export type InspectionUnit = {
   mainBreakerAmp: string; mainBreakerModel: string;
   utility: PowerMeasurement;
   plcStatus: PassFail; plcRank: Rank; plcRemarks: string;
-  transformer: TransformerMeasurement;
-  smps: TransformerMeasurement;
+  powerSections: PowerSection[];
   operationTests: OperationTest[];
   electricalItems: ElectricalItem[];
   summaryItems: string[];
@@ -363,9 +364,10 @@ function powerSlide(unit: InspectionUnit, pageNum: number): string {
   y += cm(0.65) * 4 + cm(0.4);
   shapes.push(tbl(MARGIN, y, plcColW, plcRows));
   y += cm(0.65) * 3 + cm(0.4);
-  shapes.push(tbl(MARGIN, y, xfColW, xfRows(unit.transformer, 'Transformer')));
-  y += cm(0.65) * 6 + cm(0.4);
-  shapes.push(tbl(MARGIN, y, xfColW, xfRows(unit.smps, 'Switching Power Supply')));
+  for (const sec of unit.powerSections) {
+    shapes.push(tbl(MARGIN, y, xfColW, xfRows(sec, sec.title)));
+    y += cm(0.65) * 6 + cm(0.4);
+  }
   return slide(shapes);
 }
 
@@ -490,12 +492,8 @@ export function generatePptx(report: InspectionReport): Uint8Array {
     slides.push(coverSlide(report, unit, pageNum++));
     slides.push(projectInfoSlide(report, unit, pageNum++));
     slides.push(powerSlide(unit, pageNum++));
-    slides.push(operationSlide(unit, pageNum++, unit.operationTests.slice(0, 2)));
-    slides.push(operationSlide(unit, pageNum++, unit.operationTests.slice(2, 4)));
-    slides.push(operationSlide(unit, pageNum++, unit.operationTests.slice(4)));
-    slides.push(electricalSlide(unit, pageNum++, unit.electricalItems.slice(0, 5)));
-    slides.push(electricalSlide(unit, pageNum++, unit.electricalItems.slice(5, 9)));
-    slides.push(electricalSlide(unit, pageNum++, unit.electricalItems.slice(9)));
+    slides.push(operationSlide(unit, pageNum++, unit.operationTests));
+    slides.push(electricalSlide(unit, pageNum++, unit.electricalItems));
     slides.push(summarySlide(unit, pageNum++));
     slides.push(signOffSlide(report, pageNum++));
   }

@@ -12,6 +12,7 @@ import type {
   OperationTest,
   PassFail,
   PowerMeasurement,
+  PowerSection,
   Rank,
   TransformerMeasurement,
 } from "./inspection-report-pptx";
@@ -23,31 +24,6 @@ export type { InspectionReport, InspectionUnit };
 // ── Constants ─────────────────────────────────────────────────
 const STORAGE_KEY = "tomas-inspection-reports";
 
-const DEFAULT_OPERATION_TESTS: OperationTest[] = [
-  { name: "Lifter Up_No Load [Manual Operation]", status: "", rank: "", remarks: "" },
-  { name: "Lifter Down_No Load [Manual Operation]", status: "", rank: "", remarks: "" },
-  { name: "Lifter Up_Have Load 80kg. [Manual Operation]", status: "", rank: "", remarks: "" },
-  { name: "Lifter Down_Have Load 80kg. [Manual Operation]", status: "", rank: "", remarks: "" },
-  { name: "Cage Conveyor_No Load [Manual Operation]", status: "", rank: "", remarks: "" },
-  { name: "Cage Conveyor_Have Load 80kg. [Manual Operation]", status: "", rank: "", remarks: "" },
-];
-
-const ELECTRICAL_ITEMS = [
-  "Control Panel",
-  "Circuit Breaker/ Circuit Protector",
-  "Relay / Magnetic Contactor",
-  "Cooling Fan / Finger Guard / Filter",
-  "Lighting / Receptacle Outlet",
-  "Terminal Block / Cover",
-  "Pilot Light / 7-Segment",
-  "Pushbutton / EMG. / Selector Switch",
-  "Main Cable / Power Cable / Control Cable",
-  "Motor Cable / Signal Cable",
-  "Operation Box",
-  "Wire Way / Wire Duct",
-  "Sensor [Proximity, Photo, Limit Switch]",
-];
-
 function defaultPower(): PowerMeasurement {
   return {
     specRS: "220", specRT: "220", specST: "220",
@@ -56,7 +32,7 @@ function defaultPower(): PowerMeasurement {
   };
 }
 
-function defaultTransformer(): TransformerMeasurement {
+function defaultXfMeasurement(): TransformerMeasurement {
   return {
     model: "NESB-A 50/60Hz. 750VA.",
     primaryV: "220", primaryA: "",
@@ -66,13 +42,23 @@ function defaultTransformer(): TransformerMeasurement {
   };
 }
 
-function defaultSmps(): TransformerMeasurement {
+function defaultSmpsMeasurement(): TransformerMeasurement {
   return {
     model: "S82J-10024D",
     primaryV: "100", primaryA: "2.5",
     primaryJudgement: "", primaryRank: "", primaryRemarks: "",
     secondaryV: "24", secondaryA: "4.5",
     secondaryJudgement: "", secondaryRank: "", secondaryRemarks: "",
+  };
+}
+
+function emptyPowerSection(): PowerSection {
+  return {
+    title: "New Section", model: "",
+    primaryV: "", primaryA: "",
+    primaryJudgement: "" as PassFail, primaryRank: "" as Rank, primaryRemarks: "",
+    secondaryV: "", secondaryA: "",
+    secondaryJudgement: "" as PassFail, secondaryRank: "" as Rank, secondaryRemarks: "",
   };
 }
 
@@ -85,10 +71,18 @@ function newUnit(name = "Unit 1"): InspectionUnit {
     mainBreakerAmp: "50", mainBreakerModel: "",
     utility: defaultPower(),
     plcStatus: "", plcRank: "", plcRemarks: "",
-    transformer: defaultTransformer(),
-    smps: defaultSmps(),
-    operationTests: DEFAULT_OPERATION_TESTS.map(t => ({ ...t })),
-    electricalItems: ELECTRICAL_ITEMS.map(n => ({ name: n, condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" })),
+    powerSections: [
+      { title: "Transformer", ...defaultXfMeasurement() },
+      { title: "Switching Power Supply (SMPS)", ...defaultSmpsMeasurement() },
+    ],
+    operationTests: [
+      { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "" },
+      { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "" },
+    ],
+    electricalItems: [
+      { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" },
+      { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" },
+    ],
     summaryItems: [""],
   };
 }
@@ -196,9 +190,9 @@ ${ph()}<div style="padding:15mm 20mm;font-family:Calibri,Arial,sans-serif;font-s
 <tr>${th("Status")}${th("OK")}${th("NG")}${th("A")}${th("B")}${th("C")}${th("D")}${th("Remarks")}</tr>
 <tr>${td("PLC")}${td(chk(unit.plcStatus,"OK"),true)}${td(chk(unit.plcStatus,"NG"),true)}${td(chk(unit.plcRank,"A"),true)}${td(chk(unit.plcRank,"B"),true)}${td(chk(unit.plcRank,"C"),true)}${td(chk(unit.plcRank,"D"),true)}${td(unit.plcRemarks)}</tr>
 </table>
-${["transformer","smps"].map(k => {
-  const m = unit[k as "transformer" | "smps"];
-  const title = k === "transformer" ? "Transformer" : "Switching Power Supply";
+${unit.powerSections.map(sec => {
+  const m = sec;
+  const title = sec.title;
   return `<p style="font-weight:700;color:#1b3a6b;margin:10pt 0 4pt">${title} : ${m.model}</p>
 <table style="width:100%;border-collapse:collapse;font-size:8pt;margin-bottom:8pt">
 <tr>${th("")}${th("V")}${th("A")}${th("OK")}${th("NG")}${th("A")}${th("B")}${th("C")}${th("D")}${th("Remarks")}</tr>
@@ -580,44 +574,15 @@ function PowerTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Part
   const u = unit.utility;
   const setU = (patch: Partial<PowerMeasurement>) => onChange({ utility: { ...u, ...patch } });
 
-  function XfTab({ m, title, field }: { m: TransformerMeasurement; title: string; field: "transformer" | "smps" }) {
-    const set = (patch: Partial<TransformerMeasurement>) => onChange({ [field]: { ...m, ...patch } });
-    return (
-      <>
-        <div className="ir-section-title">{title}</div>
-        <div style={{ marginBottom: 8 }}>
-          <Field label="Model"><input type="text" value={m.model} onChange={e => set({ model: e.target.value })} /></Field>
-        </div>
-        <div className="ir-table-wrap">
-          <table className="ir-table">
-            <thead><tr><th>Side</th><th>V (Spec)</th><th>A (Spec)</th><th>V (Actual)</th><th>A (Actual)</th><th>Judgement</th><th>Rank</th><th>Remarks</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>Primary</td>
-                <td><input type="text" value={m.primaryV} onChange={e => set({ primaryV: e.target.value })} /></td>
-                <td><input type="text" value={m.primaryA} onChange={e => set({ primaryA: e.target.value })} /></td>
-                <td><input type="text" value={m.primaryV} readOnly style={{ background: "#f5f7fa" }} /></td>
-                <td><input type="text" value={m.primaryA} onChange={e => set({ primaryA: e.target.value })} /></td>
-                <td className="center"><JudgeSelect value={m.primaryJudgement} onChange={v => set({ primaryJudgement: v })} /></td>
-                <td className="center"><RankSelect value={m.primaryRank} onChange={v => set({ primaryRank: v })} /></td>
-                <td><input type="text" value={m.primaryRemarks} onChange={e => set({ primaryRemarks: e.target.value })} /></td>
-              </tr>
-              <tr>
-                <td>Secondary</td>
-                <td><input type="text" value={m.secondaryV} onChange={e => set({ secondaryV: e.target.value })} /></td>
-                <td><input type="text" value={m.secondaryA} onChange={e => set({ secondaryA: e.target.value })} /></td>
-                <td><input type="text" value={m.secondaryV} readOnly style={{ background: "#f5f7fa" }} /></td>
-                <td><input type="text" value={m.secondaryA} onChange={e => set({ secondaryA: e.target.value })} /></td>
-                <td className="center"><JudgeSelect value={m.secondaryJudgement} onChange={v => set({ secondaryJudgement: v })} /></td>
-                <td className="center"><RankSelect value={m.secondaryRank} onChange={v => set({ secondaryRank: v })} /></td>
-                <td><input type="text" value={m.secondaryRemarks} onChange={e => set({ secondaryRemarks: e.target.value })} /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </>
-    );
-  }
+  const setSection = (i: number, patch: Partial<PowerSection>) => {
+    const next = unit.powerSections.map((s, idx) => idx === i ? { ...s, ...patch } : s);
+    onChange({ powerSections: next });
+  };
+  const addSection = () => onChange({ powerSections: [...unit.powerSections, emptyPowerSection()] });
+  const removeSection = (i: number) => {
+    if (unit.powerSections.length <= 1) return;
+    onChange({ powerSections: unit.powerSections.filter((_, idx) => idx !== i) });
+  };
 
   return (
     <div>
@@ -655,8 +620,55 @@ function PowerTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Part
         <div style={{ flex: 1, minWidth: 200 }}><Field label="Remarks"><input type="text" value={unit.plcRemarks} onChange={e => onChange({ plcRemarks: e.target.value })} /></Field></div>
       </div>
 
-      <XfTab m={unit.transformer} title="Transformer" field="transformer" />
-      <XfTab m={unit.smps} title="Switching Power Supply (SMPS)" field="smps" />
+      {unit.powerSections.map((sec, i) => (
+        <div key={i}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 8px" }}>
+            <input
+              className="ir-section-title-input"
+              type="text"
+              value={sec.title}
+              placeholder="Section title…"
+              onChange={e => setSection(i, { title: e.target.value })}
+            />
+            {unit.powerSections.length > 1 && (
+              <button className="btn ghost sm" type="button" onClick={() => removeSection(i)}><Icon name="trash" /></button>
+            )}
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <Field label="Model"><input type="text" value={sec.model} onChange={e => setSection(i, { model: e.target.value })} /></Field>
+          </div>
+          <div className="ir-table-wrap">
+            <table className="ir-table">
+              <thead><tr><th>Side</th><th>V (Spec)</th><th>A (Spec)</th><th>V (Actual)</th><th>A (Actual)</th><th>Judgement</th><th>Rank</th><th>Remarks</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Primary</td>
+                  <td><input type="text" value={sec.primaryV} onChange={e => setSection(i, { primaryV: e.target.value })} /></td>
+                  <td><input type="text" value={sec.primaryA} onChange={e => setSection(i, { primaryA: e.target.value })} /></td>
+                  <td><input type="text" value={sec.primaryV} readOnly style={{ background: "#f5f7fa" }} /></td>
+                  <td><input type="text" value={sec.primaryA} onChange={e => setSection(i, { primaryA: e.target.value })} /></td>
+                  <td className="center"><JudgeSelect value={sec.primaryJudgement} onChange={v => setSection(i, { primaryJudgement: v })} /></td>
+                  <td className="center"><RankSelect value={sec.primaryRank} onChange={v => setSection(i, { primaryRank: v })} /></td>
+                  <td><input type="text" value={sec.primaryRemarks} onChange={e => setSection(i, { primaryRemarks: e.target.value })} /></td>
+                </tr>
+                <tr>
+                  <td>Secondary</td>
+                  <td><input type="text" value={sec.secondaryV} onChange={e => setSection(i, { secondaryV: e.target.value })} /></td>
+                  <td><input type="text" value={sec.secondaryA} onChange={e => setSection(i, { secondaryA: e.target.value })} /></td>
+                  <td><input type="text" value={sec.secondaryV} readOnly style={{ background: "#f5f7fa" }} /></td>
+                  <td><input type="text" value={sec.secondaryA} onChange={e => setSection(i, { secondaryA: e.target.value })} /></td>
+                  <td className="center"><JudgeSelect value={sec.secondaryJudgement} onChange={v => setSection(i, { secondaryJudgement: v })} /></td>
+                  <td className="center"><RankSelect value={sec.secondaryRank} onChange={v => setSection(i, { secondaryRank: v })} /></td>
+                  <td><input type="text" value={sec.secondaryRemarks} onChange={e => setSection(i, { secondaryRemarks: e.target.value })} /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      <button className="btn default" type="button" style={{ marginTop: 12 }} onClick={addSection}>
+        <Icon name="plus" /> Add Section
+      </button>
     </div>
   );
 }
@@ -667,23 +679,34 @@ function OperationTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: 
     const next = unit.operationTests.map((t, idx) => idx === i ? { ...t, ...patch } : t);
     onChange({ operationTests: next });
   };
+  const addTest = () => onChange({ operationTests: [...unit.operationTests, { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "" }] });
+  const removeTest = (i: number) => onChange({ operationTests: unit.operationTests.filter((_, idx) => idx !== i) });
+
   return (
-    <div className="ir-table-wrap">
-      <table className="ir-table">
-        <thead>
-          <tr><th>Test Name</th><th>Judgement</th><th>Rank</th><th>Remarks</th></tr>
-        </thead>
-        <tbody>
-          {unit.operationTests.map((t, i) => (
-            <tr key={i}>
-              <td>{t.name}</td>
-              <td className="center"><JudgeSelect value={t.status} onChange={v => setTest(i, { status: v })} /></td>
-              <td className="center"><RankSelect value={t.rank} onChange={v => setTest(i, { rank: v })} /></td>
-              <td><input type="text" value={t.remarks} onChange={e => setTest(i, { remarks: e.target.value })} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <div className="ir-table-wrap">
+        <table className="ir-table">
+          <thead>
+            <tr><th>Test Name</th><th>Judgement</th><th>Rank</th><th>Remarks</th><th></th></tr>
+          </thead>
+          <tbody>
+            {unit.operationTests.map((t, i) => (
+              <tr key={i}>
+                <td><input type="text" value={t.name} placeholder="Test name…" onChange={e => setTest(i, { name: e.target.value })} /></td>
+                <td className="center"><JudgeSelect value={t.status} onChange={v => setTest(i, { status: v })} /></td>
+                <td className="center"><RankSelect value={t.rank} onChange={v => setTest(i, { rank: v })} /></td>
+                <td><input type="text" value={t.remarks} onChange={e => setTest(i, { remarks: e.target.value })} /></td>
+                <td className="center">
+                  <button className="btn ghost sm" type="button" onClick={() => removeTest(i)}><Icon name="minus" /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button className="btn default" type="button" style={{ marginTop: 10 }} onClick={addTest}>
+        <Icon name="plus" /> Add Row
+      </button>
     </div>
   );
 }
@@ -694,34 +717,46 @@ function ElectricalTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p:
     const next = unit.electricalItems.map((item, idx) => idx === i ? { ...item, ...patch } : item);
     onChange({ electricalItems: next });
   };
+  const addItem = () => onChange({ electricalItems: [...unit.electricalItems, { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" }] });
+  const removeItem = (i: number) => onChange({ electricalItems: unit.electricalItems.filter((_, idx) => idx !== i) });
+
   return (
-    <div className="ir-table-wrap">
-      <table className="ir-table">
-        <thead>
-          <tr>
-            <th>Component</th>
-            <th>Condition</th>
-            <th>Judgement</th>
-            <th>Rank</th>
-            <th>Remarks</th>
-          </tr>
-        </thead>
-        <tbody>
-          {unit.electricalItems.map((item, i) => (
-            <tr key={i}>
-              <td>{item.name}</td>
-              <td className="center">
-                <select value={item.condition} onChange={e => setItem(i, { condition: e.target.value as NormalAbnormal })}>
-                  {["", "Normal", "Abnormal"].map(v => <option key={v} value={v}>{v || "—"}</option>)}
-                </select>
-              </td>
-              <td className="center"><JudgeSelect value={item.judgement} onChange={v => setItem(i, { judgement: v })} /></td>
-              <td className="center"><RankSelect value={item.rank} onChange={v => setItem(i, { rank: v })} /></td>
-              <td><input type="text" value={item.remarks} onChange={e => setItem(i, { remarks: e.target.value })} /></td>
+    <div>
+      <div className="ir-table-wrap">
+        <table className="ir-table">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Condition</th>
+              <th>Judgement</th>
+              <th>Rank</th>
+              <th>Remarks</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {unit.electricalItems.map((item, i) => (
+              <tr key={i}>
+                <td><input type="text" value={item.name} placeholder="Component name…" onChange={e => setItem(i, { name: e.target.value })} /></td>
+                <td className="center">
+                  <select value={item.condition} onChange={e => setItem(i, { condition: e.target.value as NormalAbnormal })}>
+                    {["", "Normal", "Abnormal"].map(v => <option key={v} value={v}>{v || "—"}</option>)}
+                  </select>
+                </td>
+                <td className="center"><JudgeSelect value={item.judgement} onChange={v => setItem(i, { judgement: v })} /></td>
+                <td className="center"><RankSelect value={item.rank} onChange={v => setItem(i, { rank: v })} /></td>
+                <td><input type="text" value={item.remarks} onChange={e => setItem(i, { remarks: e.target.value })} /></td>
+                <td className="center">
+                  <button className="btn ghost sm" type="button" onClick={() => removeItem(i)}><Icon name="minus" /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button className="btn default" type="button" style={{ marginTop: 10 }} onClick={addItem}>
+        <Icon name="plus" /> Add Row
+      </button>
     </div>
   );
 }
