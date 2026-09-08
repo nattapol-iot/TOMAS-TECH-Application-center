@@ -93,21 +93,23 @@ function newUnit(name = "Unit 1"): InspectionUnit {
   };
 }
 
-function newReport(): InspectionReport {
+function newReport(bootstrap?: BootstrapData): InspectionReport {
   const today = new Date().toISOString().slice(0, 10);
   return {
     id: crypto.randomUUID(),
     title: "Inspection Lifter & Cage Conveyor",
     projectName: "Inspection Motor Lifter",
     projectNo: "",
-    customerName: "Mitsubishi Electric Consumer Products (Thailand) Co., Ltd.",
-    contactPerson: "", department: "Maintenance", tel: "",
+    customerName: "",
+    contactPerson: "", department: "", tel: "",
     reportDate: today,
     version: new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }),
     units: [newUnit("Unit 1")],
     customerSignName: "", customerTitle: "", customerDate: "",
-    inspectorName: "Mr. Taweesak Suriyon", inspectorTitle: "IoT Engineer", inspectorDate: today,
-    checkerName: "Mr. Nattapol Poeam", checkerTitle: "IoT Manager", checkerDate: today,
+    inspectorName: bootstrap?.user.name ?? "",
+    inspectorTitle: bootstrap?.user.role ?? "",
+    inspectorDate: today,
+    checkerName: "", checkerTitle: "", checkerDate: today,
   };
 }
 
@@ -300,7 +302,7 @@ export function InspectionReportScreen({ bootstrap, notify }: { bootstrap: Boots
   }, [editId, persistReports]);
 
   const createNew = () => {
-    const r = newReport();
+    const r = newReport(bootstrap);
     const next = [r, ...reports];
     setReports(next);
     saveReports(next);
@@ -322,6 +324,7 @@ export function InspectionReportScreen({ bootstrap, notify }: { bootstrap: Boots
       onBack={() => setEditId(null)}
       onDelete={() => deleteReport(editId)}
       notify={notify}
+      bootstrap={bootstrap}
     />;
   }
 
@@ -380,13 +383,14 @@ export function InspectionReportScreen({ bootstrap, notify }: { bootstrap: Boots
 
 // ── Report editor ─────────────────────────────────────────────
 function ReportEditor({
-  report, onChange, onBack, onDelete, notify,
+  report, onChange, onBack, onDelete, notify, bootstrap,
 }: {
   report: InspectionReport;
   onChange: (patch: Partial<InspectionReport>) => void;
   onBack: () => void;
   onDelete: () => void;
   notify: (msg: string) => void;
+  bootstrap: BootstrapData;
 }) {
   const [tab, setTab] = useState(0);
   const [unitIdx, setUnitIdx] = useState(0);
@@ -396,7 +400,7 @@ function ReportEditor({
   const pptxExport = () => {
     try {
       const bytes = generatePptx(report);
-      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+      const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -447,7 +451,7 @@ function ReportEditor({
       />
 
       <div style={{ marginTop: 16 }}>
-        {tab === 0 && <GeneralTab report={report} onChange={onChange} />}
+        {tab === 0 && <GeneralTab report={report} onChange={onChange} bootstrap={bootstrap} />}
         {tab === 1 && <UnitsTab report={report} onChange={onChange} onAdd={addUnit} onRemove={removeUnit} />}
         {(tab === 2 || tab === 3 || tab === 4 || tab === 5) && (
           <>
@@ -463,16 +467,41 @@ function ReportEditor({
             {tab === 5 && <SummaryTab unit={unit} onChange={updateUnit} />}
           </>
         )}
-        {tab === 6 && <SignOffTab report={report} onChange={onChange} />}
+        {tab === 6 && <SignOffTab report={report} onChange={onChange} bootstrap={bootstrap} />}
       </div>
     </div>
   );
 }
 
 // ── Tab: General ──────────────────────────────────────────────
-function GeneralTab({ report, onChange }: { report: InspectionReport; onChange: (p: Partial<InspectionReport>) => void }) {
+function GeneralTab({ report, onChange, bootstrap }: {
+  report: InspectionReport;
+  onChange: (p: Partial<InspectionReport>) => void;
+  bootstrap: BootstrapData;
+}) {
+  const handleCustomerPick = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const cust = bootstrap.customers.find(c => String(c.id) === e.target.value);
+    if (!cust) return;
+    onChange({
+      customerName: cust.nameEn || cust.name,
+      contactPerson: cust.contactNameEn || cust.contact,
+      department: cust.department ?? "",
+      tel: cust.phone,
+    });
+  };
+
   return (
     <Panel>
+      <div style={{ marginBottom: 16, maxWidth: 400 }}>
+        <Field label="Pick Customer (auto-fill)" hint="Selects customer info from your master list">
+          <select defaultValue="" onChange={handleCustomerPick}>
+            <option value="">— select to auto-fill —</option>
+            {bootstrap.customers.map(c => (
+              <option key={c.id} value={c.id}>{c.nameEn || c.name}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
         <Field label="Report Title"><input type="text" value={report.title} onChange={e => onChange({ title: e.target.value })} /></Field>
         <Field label="Project Name"><input type="text" value={report.projectName} onChange={e => onChange({ projectName: e.target.value })} /></Field>
@@ -623,7 +652,7 @@ function PowerTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Part
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Field label="Judgement"><JudgeSelect value={unit.plcStatus} onChange={v => onChange({ plcStatus: v })} /></Field>
         <Field label="Rank"><RankSelect value={unit.plcRank} onChange={v => onChange({ plcRank: v })} /></Field>
-        <Field label="Remarks" style={{ flex: 1, minWidth: 200 }}><input type="text" value={unit.plcRemarks} onChange={e => onChange({ plcRemarks: e.target.value })} /></Field>
+        <div style={{ flex: 1, minWidth: 200 }}><Field label="Remarks"><input type="text" value={unit.plcRemarks} onChange={e => onChange({ plcRemarks: e.target.value })} /></Field></div>
       </div>
 
       <XfTab m={unit.transformer} title="Transformer" field="transformer" />
@@ -737,7 +766,22 @@ function SummaryTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Pa
 }
 
 // ── Tab: Sign off ─────────────────────────────────────────────
-function SignOffTab({ report, onChange }: { report: InspectionReport; onChange: (p: Partial<InspectionReport>) => void }) {
+function SignOffTab({ report, onChange, bootstrap }: {
+  report: InspectionReport;
+  onChange: (p: Partial<InspectionReport>) => void;
+  bootstrap: BootstrapData;
+}) {
+  const pickInspector = (memberId: string) => {
+    const m = bootstrap.team.find(t => String(t.id) === memberId);
+    if (!m) return;
+    onChange({ inspectorName: m.name, inspectorTitle: m.role });
+  };
+  const pickChecker = (memberId: string) => {
+    const m = bootstrap.team.find(t => String(t.id) === memberId);
+    if (!m) return;
+    onChange({ checkerName: m.name, checkerTitle: m.role });
+  };
+
   return (
     <div className="ir-signoff-grid">
       <div className="ir-signoff-block">
@@ -748,12 +792,24 @@ function SignOffTab({ report, onChange }: { report: InspectionReport; onChange: 
       </div>
       <div className="ir-signoff-block">
         <h4>Prepare / Inspector</h4>
+        <Field label="Pick from team">
+          <select defaultValue="" onChange={e => pickInspector(e.target.value)}>
+            <option value="">— select —</option>
+            {bootstrap.team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
         <Field label="Name"><input type="text" value={report.inspectorName} onChange={e => onChange({ inspectorName: e.target.value })} /></Field>
         <Field label="Title"><input type="text" value={report.inspectorTitle} onChange={e => onChange({ inspectorTitle: e.target.value })} /></Field>
         <Field label="Date"><input type="date" value={report.inspectorDate} onChange={e => onChange({ inspectorDate: e.target.value })} /></Field>
       </div>
       <div className="ir-signoff-block">
         <h4>Checked By</h4>
+        <Field label="Pick from team">
+          <select defaultValue="" onChange={e => pickChecker(e.target.value)}>
+            <option value="">— select —</option>
+            {bootstrap.team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
         <Field label="Name"><input type="text" value={report.checkerName} onChange={e => onChange({ checkerName: e.target.value })} /></Field>
         <Field label="Title"><input type="text" value={report.checkerTitle} onChange={e => onChange({ checkerTitle: e.target.value })} /></Field>
         <Field label="Date"><input type="date" value={report.checkerDate} onChange={e => onChange({ checkerDate: e.target.value })} /></Field>

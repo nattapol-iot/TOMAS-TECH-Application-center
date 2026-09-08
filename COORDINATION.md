@@ -100,6 +100,8 @@ so we never merge-conflict.
 
 ## Active claims
 
+| 2026-09-07 | Claude | Inspection Report auto-fill: editing `app/system/production/InspectionReportScreens.tsx` only — customer picker in GeneralTab, team picker in SignOffTab, pre-fill inspector from bootstrap.user on new report. No backend, migration, or other files. | released — typecheck passes; customer dropdown auto-fills 4 fields, team picker auto-fills inspector/checker name+title, new report pre-fills inspector from logged-in user — Claude, 2026-09-07 |
+
 | 2026-09-07 12:09 | Codex Manual Integration | User-requested in-app employee manual. Owns additive `EmployeeManualScreen.tsx`/CSS, `ProductionApp.tsx` wiring, public handbook copy, handbook builder/query-language support, focused tests/docs. No API, database or business data writes. | implementation complete — typecheck, scoped lint, focused tests, production build and Chrome public-asset QA pass; shared frontend activation pending explicit user approval — Codex, 2026-09-07 12:20 |
 
 | 2026-09-07 | Codex Audit Planner | User requests planning every system workflow before execution. Owns new `docs/full-system-flow-audit-plan.md`; read-only inventory of navigation/routes/docs. No tests, fixes, migrations or runtime changes this turn. | released — 22 flow groups, exhaustive inventory method, test dimensions, 9 E2E journeys, team/waves/evidence and acceptance gates documented; awaiting user instruction to begin execution — Codex, 2026-09-07 |
