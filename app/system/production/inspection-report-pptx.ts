@@ -66,7 +66,7 @@ export type InspectionReport = {
 const W = 7560000;
 const H = 10692000;
 const MARGIN = 406400;
-const DARK_BLUE = "1F3864";
+const DARK_BLUE = "1B3A6B";
 const LIGHT_BLUE = "D6E4F7";
 const GRAY_BG = "F2F2F2";
 const BLACK = "000000";
@@ -310,8 +310,6 @@ function projectInfoSlide(
   pageNum: number,
 ): { xml: string; rels: string } {
   resetIds();
-  const INNER_W = 6747200;
-  const colW2 = [cm(4.5), cm(14)];
   function infoRow(label: string, val: string): RowDef {
     return { cells: [{ text: label, bold: true, bg: GRAY_BG }, { text: val }], h: cm(0.7) };
   }
@@ -333,7 +331,8 @@ function projectInfoSlide(
     infoRow('Location', unit.location),
   ];
 
-  const rankColW = [cm(2), cm(16.5)];
+  // Rank legend col widths matching OLE total (6105525) with 2-col ratio ~4.5:14.5
+  const rankColW = [720000, 5385525];
   const rankRows: RowDef[] = [
     { cells: [{ text: 'Rank', bold: true, bg: DARK_BLUE }, { text: 'Description', bold: true, bg: DARK_BLUE }], h: cm(0.65) },
     { cells: [{ text: 'A', bold: true }, { text: 'Can use / Need to detail check or more information.' }] },
@@ -342,13 +341,16 @@ function projectInfoSlide(
     { cells: [{ text: 'D', bold: true, bg: 'FFCCCC' }, { text: 'NG / Must repair ASAP.', bg: 'FFCCCC' }] },
   ];
 
-  let y = 479503 + 263447 + cm(0.3);
+  // Scale info colW to match OLE total width (6105525): ratio 4.5:14 → ~1484:4622
+  const colW2 = [1484000, 4621525];
+
+  let y = OLE_Y;
   const shapes: string[] = [
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    buildTable(MARGIN, y, colW2, infoRows),
+    buildTable(OLE_X, y, colW2, infoRows),
   ];
   y += infoRows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.4);
-  shapes.push(buildTable(MARGIN, y, rankColW, rankRows));
+  shapes.push(buildTable(OLE_X, y, rankColW, rankRows));
 
   return makeSlide(shapes);
 }
@@ -358,8 +360,8 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
   resetIds();
   const u = unit.utility;
 
-  // Utility Power Supply table — 11 columns
-  const utilColW = [cm(1.8), cm(1.3), cm(1.3), cm(1.3), cm(1), cm(1), cm(0.8), cm(0.8), cm(0.8), cm(0.8), cm(3.1)];
+  // Utility Power Supply table — 11 cols summing to OLE cx=6105525
+  const utilColW = [720000, 522000, 522000, 522000, 396000, 396000, 324000, 324000, 324000, 324000, 1731525];
   function chk(v: boolean) { return v ? '✓' : ''; }
 
   const utilRows: RowDef[] = [
@@ -394,8 +396,8 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
     ] },
   ];
 
-  // PLC Status — 8 columns
-  const plcColW = [cm(4), cm(1), cm(1), cm(0.8), cm(0.8), cm(0.8), cm(0.8), cm(3)];
+  // PLC Status — 8 cols summing to OLE cx=6105525
+  const plcColW = [1440000, 432000, 432000, 360000, 360000, 360000, 360000, 2361525];
   const plcRows: RowDef[] = [
     { cells: [{ text: 'PLC Status', bold: true, bg: DARK_BLUE, span: 8 }], h: cm(0.65) },
     { cells: [
@@ -414,8 +416,8 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
     ] },
   ];
 
-  // Power section (transformer/SMPS) — 10 columns
-  const xfColW = [cm(2.2), cm(1.3), cm(1.3), cm(1), cm(1), cm(0.8), cm(0.8), cm(0.8), cm(0.8), cm(3.2)];
+  // Transformer/SMPS — 10 cols summing to OLE cx=6105525
+  const xfColW = [792000, 468000, 468000, 396000, 396000, 324000, 324000, 324000, 324000, 2289525];
   function xfRows(m: TransformerMeasurement, title: string): RowDef[] {
     return [
       { cells: [{ text: `${title} : ${m.model}`, bold: true, bg: DARK_BLUE, span: 10 }], h: cm(0.65) },
@@ -457,18 +459,18 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
     ];
   }
 
-  let y = 479503 + 263447 + cm(0.3);
+  let y = OLE_Y;
   const shapes: string[] = [
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    buildTable(MARGIN, y, utilColW, utilRows),
+    buildTable(OLE_X, y, utilColW, utilRows),
   ];
   y += utilRows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
-  shapes.push(buildTable(MARGIN, y, plcColW, plcRows));
+  shapes.push(buildTable(OLE_X, y, plcColW, plcRows));
   y += plcRows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
 
   for (const sec of unit.powerSections) {
     const rows = xfRows(sec, sec.title);
-    shapes.push(buildTable(MARGIN, y, xfColW, rows));
+    shapes.push(buildTable(OLE_X, y, xfColW, rows));
     y += rows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
   }
 
@@ -582,12 +584,17 @@ function elecPhotoSlide(
   return makeSlide(shapes, extraRels);
 }
 
+// OLE table origin — from original ppt/slides/slide9.xml graphicFrame
+const OLE_X = 414338;
+const OLE_Y = 762000;  // = header_bottom (742950) + 19050 EMU gap
+
 // ── Operation Check Table slide ───────────────────────────────
 function opTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels: string } {
   resetIds();
 
-  // EXACTLY 8 columns: TestName | OK | NG | A | B | C | D | Remarks
-  const colW = [cm(6.5), cm(1.1), cm(0.9), cm(0.85), cm(0.85), cm(0.85), cm(0.85), cm(2.9)];
+  // 8 columns summing to OLE cx=6105525 EMU
+  // TestName(7.5) | OK(1.3) | NG(1.05) | A(1.0) | B(1.0) | C(1.0) | D(1.0) | Remarks(3.11)
+  const colW = [2700000, 468000, 378000, 360000, 360000, 360000, 360000, 1119525];
   function chk(v: boolean) { return v ? '✓' : ''; }
 
   const rows: RowDef[] = [
@@ -625,10 +632,9 @@ function opTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; rel
     })),
   ];
 
-  const y = 479503 + 263447 + cm(0.3);
   return makeSlide([
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    buildTable(MARGIN, y, colW, rows),
+    buildTable(OLE_X, OLE_Y, colW, rows),
   ]);
 }
 
@@ -636,8 +642,9 @@ function opTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; rel
 function elecTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels: string } {
   resetIds();
 
-  // EXACTLY 10 columns — no gridSpan in header
-  const colW = [cm(5), cm(1.1), cm(1.1), cm(1.1), cm(0.9), cm(0.85), cm(0.85), cm(0.85), cm(0.85), cm(2.5)];
+  // 10 columns summing to OLE cx=6105525 EMU
+  // Component(5.3) | Normal(1.2) | Abnormal(1.2) | OK(1.2) | NG(1.0) | A(0.95) | B(0.95) | C(0.95) | D(0.95) | Remarks(3.26)
+  const colW = [1908000, 432000, 432000, 432000, 360000, 342000, 342000, 342000, 342000, 1173525];
   function chk(v: boolean) { return v ? '✓' : ''; }
 
   const hdrCells: CellDef[] = [
@@ -672,10 +679,9 @@ function elecTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; r
     })),
   ];
 
-  const y = 479503 + 263447 + cm(0.3);
   return makeSlide([
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    buildTable(MARGIN, y, colW, rows),
+    buildTable(OLE_X, OLE_Y, colW, rows),
   ]);
 }
 
@@ -683,20 +689,21 @@ function elecTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; r
 function signOffSlide(report: InspectionReport, pageNum: number): { xml: string; rels: string } {
   resetIds();
 
-  // Sign-off header has border (unlike other slides)
+  // Header: dark fill + white text, matches Tomas Tech document style
+  const HDR_H = cm(0.9);
   const hdrShapes = [
-    textBox(406400, 479503, 6117063, 345687,
-      txPara('Sign Off', { sz: 14, bold: true, color: BLACK }),
-      BLACK, undefined, 'ctr'),
+    textBox(OLE_X, 479503, 6105525, HDR_H,
+      txPara('Sign Off', { sz: 14, bold: true, color: 'FFFFFF', align: 'ctr' }),
+      undefined, DARK_BLUE, 'ctr'),
     textBox(6093618, 9181401, 435769, 527403,
       txPara(String(pageNum), { sz: 8, color: BLACK, align: 'r' })),
   ];
 
   const intro = 'With all these documents, this is part of the installation report and it is all the information of the project.';
-  const startY = 479503 + 345687 + cm(0.3);
+  const startY = 479503 + HDR_H + cm(0.3);
 
-  // Sign-off table helper
-  const sigColW = [cm(5.5), cm(7)];
+  // Sig block: label col (1.9cm) + value col (rest) = 6105525 total
+  const sigColW = [684000, 5421525];
   function sigBlock(name: string, title: string, date: string): RowDef[] {
     return [
       { cells: [{ text: 'Sign :', bold: true, bg: GRAY_BG }, { text: '' }], h: cm(1.5) },
@@ -706,29 +713,34 @@ function signOffSlide(report: InspectionReport, pageNum: number): { xml: string;
     ];
   }
 
+  // Side-by-side Inspector + Checker: each half ~3 cm wide (2 col each, total 6105525/2)
+  const halfW = Math.floor(6105525 / 2);
+  const halfSigColW = [684000, halfW - 684000];
+
+  const sigBlockH = cm(1.5) + cm(0.7) * 3;
+  const custY = startY + cm(1.1);
+  const tomasY = custY + sigBlockH + cm(0.5);
+  const inspY = tomasY + cm(0.8);
+  const checkX = OLE_X + halfW + cm(0.2);
+
   const shapes: string[] = [
     ...hdrShapes,
-    textBox(MARGIN, startY, 6117063, cm(1),
+    textBox(OLE_X, startY, 6105525, cm(1),
       txPara(intro, { sz: 9, color: BLACK })),
-    // Customer
-    textBox(MARGIN, startY + cm(1.1), 6117063, cm(0.7),
+    // Customer section
+    textBox(OLE_X, custY, 6105525, cm(0.7),
       txPara(report.customerName, { bold: true, sz: 10, color: DARK_BLUE })),
-    buildTable(MARGIN, startY + cm(1.9), sigColW, sigBlock(report.customerSignName, report.customerTitle, report.customerDate)),
-    // Tomas Tech heading
-    textBox(MARGIN, startY + cm(1.9) + cm(0.7 * 3 + 1.5) + cm(0.4), 6117063, cm(0.7),
+    buildTable(OLE_X, custY + cm(0.75), sigColW, sigBlock(report.customerSignName, report.customerTitle, report.customerDate)),
+    // TOMAS TECH section heading
+    textBox(OLE_X, tomasY, 6105525, cm(0.7),
       txPara('TOMAS TECH CO., LTD.', { bold: true, sz: 10, color: DARK_BLUE })),
+    // Inspector (left) + Checker (right)
+    buildTable(OLE_X, inspY, halfSigColW, sigBlock(report.inspectorName, report.inspectorTitle, report.inspectorDate)),
+    buildTable(checkX, inspY, halfSigColW, sigBlock(report.checkerName, report.checkerTitle, report.checkerDate)),
+    // Footer
+    textBox(OLE_X, 9048866, 6105525, cm(0.8),
+      txPara('## END OF BLUEPRINT ##', { bold: true, sz: 10, color: DARK_BLUE, align: 'ctr' })),
   ];
-
-  // Inspector + Checker side by side
-  const twoColW = [cm(5.5), cm(7)];
-  const inspY = startY + cm(1.9) + cm(0.7 * 3 + 1.5) + cm(0.4) + cm(0.8);
-  const checkX = MARGIN + cm(6.7);
-  shapes.push(buildTable(MARGIN, inspY, twoColW, sigBlock(report.inspectorName, report.inspectorTitle, report.inspectorDate)));
-  shapes.push(buildTable(checkX, inspY, twoColW, sigBlock(report.checkerName, report.checkerTitle, report.checkerDate)));
-
-  // End text
-  shapes.push(textBox(MARGIN, 9048866, 6117063, cm(0.8),
-    txPara('## END OF BLUEPRINT ##', { bold: true, sz: 10, color: DARK_BLUE, align: 'ctr' })));
 
   return makeSlide(shapes);
 }
@@ -893,7 +905,6 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.${LOGO_EXT}"/>
 </Relationships>`);
 
   files['ppt/slideLayouts/slideLayout1.xml'] = enc(SLIDE_LAYOUT_BLANK_XML);
