@@ -118,8 +118,32 @@ function loadReports(): InspectionReport[] {
   }
 }
 
+function resizeToJpeg(file: File, maxW = 1024, maxH = 768, quality = 0.75): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxW / img.width, maxH / img.height);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 function saveReports(reports: InspectionReport[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+  } catch {
+    alert("Storage full — please remove old photos or reports before saving.");
+  }
 }
 
 // ── PDF export (print window) ─────────────────────────────────
@@ -581,14 +605,8 @@ function PhotoUpload({ photos, onChange, max = 3 }: {
     const files = Array.from(e.target.files ?? []);
     const toAdd = files.slice(0, max - photos.length);
     if (!toAdd.length) return;
-    Promise.all(
-      toAdd.map(f => new Promise<string>((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result as string);
-        r.onerror = rej;
-        r.readAsDataURL(f);
-      }))
-    ).then(newPhotos => onChange([...photos, ...newPhotos]));
+    Promise.all(toAdd.map(f => resizeToJpeg(f)))
+      .then(newPhotos => onChange([...photos, ...newPhotos]));
     e.target.value = "";
   };
   const remove = (i: number) => onChange(photos.filter((_, idx) => idx !== i));
@@ -788,7 +806,7 @@ function ElectricalTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p:
                 <td className="center"><JudgeSelect value={item.judgement} onChange={v => setItem(i, { judgement: v })} /></td>
                 <td className="center"><RankSelect value={item.rank} onChange={v => setItem(i, { rank: v })} /></td>
                 <td><input type="text" value={item.remarks} onChange={e => setItem(i, { remarks: e.target.value })} /></td>
-                <td><PhotoUpload photos={item.photos ?? []} onChange={p => setItem(i, { photos: p })} max={3} /></td>
+                <td><PhotoUpload photos={item.photos ?? []} onChange={p => setItem(i, { photos: p })} max={1} /></td>
                 <td className="center">
                   <button className="btn ghost sm" type="button" onClick={() => removeItem(i)}><Icon name="minus" /></button>
                 </td>
