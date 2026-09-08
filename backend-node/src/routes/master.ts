@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Request as SqlRequestType, Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";

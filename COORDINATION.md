@@ -196,6 +196,10 @@ Add a row before you start. Remove it — or set Status to `done` — when you f
 | 2026-09-06 | Codex | My Work → Project schedule tasks usability redesign: `PlanningPricingScreens.tsx`, My Work scoped CSS in `globals.css`, and guardrail coverage only. Preserve live schedule APIs and mutations; no database/API changes. | done — single non-duplicated task list, search/project/status filters, priority sorting, compact cards, modal/optional quick edit; live visual smoke passed, frontend PID 22864 |
 | 2026-09-06 | Codex | Projects production grid page-size selector: `CoreScreens.tsx` and focused guardrail only; default 10 rows, no API/database changes. | done — default 10 and 10/25/50/100 selector verified live; build clean; HTTP 200; frontend PID 54536; asset `ProductionApp-CW7yoe9o.js` |
 
+| 2026-09-07 | Claude | User-requested re-verification of the Docker/CI-CD deploy pipeline (docker-compose.dev.yml/prod.yml, both Dockerfiles, scripts/linux/deploy.sh+rollback.sh, .github/workflows/ci-cd.yml) after PR #1 merged. Owns those Docker/CI files, root package.json/package-lock.json, tsconfig.json, .gitignore, and backend/IoTTeamCenter.Api/Infrastructure/DocumentStorageOptions.cs only. No database/migration or Codex-owned endpoint/screen changes. | released — see Discussion 2026-09-07 for what broke and what was fixed; dotnet build, npm test (lint+typecheck+194 node tests, SQL integration skipped locally), and real `docker build`+`docker run` for both images passed — Claude, 2026-09-07 17:00 |
+
+| 2026-09-07 | Claude | User-reported: macmini deploy job reports success but the site never reflects new commits. Diagnosing/fixing `scripts/macos/deploy.sh` only; read `docs/MACMINI_HANDOFF.md`, `docker-compose.dev.yml`, `docker-compose.tls.yml` but did not edit them. No colima/host access from this session — reasoning from the compose files and deploy script only. | released — see Discussion 2026-09-07 (2) for the root cause and fix; `bash -n` clean, could not run against the real colima host — Claude, 2026-09-07 |
+
 ---
 
 ## Needs a human decision
@@ -2103,3 +2107,55 @@ Recovery after Codex crash/permission-mode change: normal PowerShell could not s
 — Codex Team Activity RELEASED 2026-09-07: API20260906-173538-team-activity installed after verified COPY_ONLY/CHECKSUM SQL backup, schema35 ready, all333 artifacts match exact stage. Frontend14296 serves managed LAN application with all12 page assets byte-verified. Source and exact-stage SQL/API63/63 each, backend86/86, focused UI/performance/i18n22/22 and production/site-visit41/41 pass; typechecks/scoped lint/builds pass. Live browser verified corrected TH labels, eight-column table, staff own-only history/calendar and trial score. Full global lint remains blocked by existing generated/backup errors; unrelated .NET inventory assertion5 versus6.0000 remains recorded in docs/team-activity.md. No real reporting rules/quality/policies seeded; current KPI remains TRIAL. Managed application intentionally stays running; isolated test databases cleaned. Runtime/source claim released.
 
 — Codex Team Activity testing team RELEASED 2026-09-07: user explicitly authorized three review agents and commit. Fixed LAN HTTP UUID/busy failure, project-only exception reason leak, hidden-score inference, all-missing ACTIVE KPI completion, cross-task/dropped drafts and oversized date500. Source/exact API stage/exact selected commit SQL integration80/80 each, backend86/86, working UI+guardrails68/68 and commit-snapshot applicable58/58 pass; working/snapshot typechecks and scoped lint/builds pass. API20260906-175927-team-activity after verified SQL backup,333 artifacts match; frontend15628/12 assets verified; browser own-only trial view checked. No ActivityCI databases remain; temporary commit snapshot removed, original staged i18n test preserved. Prior lint/inventory limitations and external design-document snapshot exclusion recorded docs/team-activity-qa.md. Runtime intentionally stays available; all three reviewers finished, source/runtime claims released.
+
+**Claude — 2026-09-07 17:00**
+
+Nattapol asked me to re-check the Docker/CI-CD deploy pipeline after PR #1 ("P'Boy deploy new version") merged into `main`. Found and fixed, in the files I claimed above only:
+
+1. **Root `package-lock.json` out of sync with `package.json` again** (`npm ci` → `EUSAGE`, missing `@emnapi/core`/`@emnapi/runtime@1.10.0`) — same class of bug as before, reintroduced by the merge's lockfile. Regenerated with `npm install`.
+2. **Root `tsconfig.json` no longer excluded `backend-node/`/`backend-php/`** — both have their own `tsconfig.json`/`package.json` and are meant to typecheck independently (see the 2026-09-04/05 entries above: "`tsc` with `backend-node` excluded gives 0 errors"), but the exclude list on the PR branch never had them. Added both back to `exclude`.
+3. Three frontend files (`ProductionApp.tsx`, `HistoricalPrPanel.tsx`, `ReportScreens.tsx`/`ReportTemplateLibrary.tsx`, `executive-metrics.ts`, `ExecutiveDashboard.tsx`) import types from `backend-node/src/*` directly, and two of those modules (`historical-pr.ts` → `errors.ts`) transitively import `fastify`/`mssql`/`fast-xml-parser`, which aren't root dependencies — `tsc` still has to resolve them even for `import type`, exclude or not. Added `fastify`, `mssql`, `@types/mssql`, `fast-xml-parser`, `pdf-lib` as root **devDependencies**, pinned to the same versions `backend-node/package.json` already uses, purely so the root program resolves. This is exactly the state the PR branch's own root `package.json`/`tsconfig.json` was already in (checked commit `0d64ed8` directly) — `npm run typecheck` would have failed there too if run fresh, so this wasn't caught before merging. **Flagging for whoever owns `backend-node/` next: the type-only modules the frontend reaches into (`historical-pr.ts`, anything under `executive-dashboard-model.ts`) probably shouldn't import server-only modules like `errors.ts` at their top level if they're meant to be shared with the frontend — worth a `historical-pr-types.ts` split at some point, not urgent.**
+4. **`.gitignore` had the exact duplicate-`.env*`-line bug fixed earlier in this project this session, back again** — `!.env.dev.example` missing and a second unconditional `.env*` at the end re-ignoring `.env.example` too. Fixed the same way as before.
+5. **`backend/IoTTeamCenter.Api/Infrastructure/DocumentStorageOptions.cs` — real production blocker.** The merge replaced the non-Windows (CIFS-mount) branch of `ValidateAndNormalizeUncRoot` with an unconditional `throw ... "NAS document storage requires a Windows host with UNC path support."` `DocumentStorageOptions.FromConfiguration` runs eagerly in `Program.cs` before `builder.Build()`, and Production requires `DocumentStorage:Mode=Nas` — so **the API would have crashed immediately on startup in the Linux Docker container**, every time, in Production. Restored the Linux CIFS-mount-point branch (same code this session already wrote and the plan doc flagged as "needs empirical verification"). Verified for real this time: `docker build` the API image, ran it with `DocumentStorage:Mode=Nas` + `RootPath=/mnt/fake-nas` bind-mounted from the host — passed cleanly past the storage check (next thing it hit was an unrelated Cors/Entra config check from my dummy test env, confirming the storage check itself is no longer the blocker). I don't know why this reverted — if it was intentional (e.g. production is going back to Windows Server/IIS), someone needs to say so, because it directly contradicts continuing the Ubuntu/Docker deploy path Nattapol just asked me to finish.
+6. **`README.md`'s Deployment section lost the Docker Compose dev-environment writeup and the "Production deployment on Ubuntu (`docs/PRODUCTION_DEPLOYMENT_LINUX.md`)" link** in the same merge (checked: present on my last commit `deb8882`, gone by `abbb233`). I have **not** touched `README.md` — it's Codex's file per the division-of-work table above and I don't want to fight a doc conflict — but flagging it here since it reads as "Ubuntu/Docker was undone," same as #5. Nattapol/Codex: please confirm whether Ubuntu+Docker is still the target — if yes, `README.md`'s Deployment section needs those two pieces back.
+7. **Not something I can fix myself:** there is a full second clone of this exact repo (own `.git`, same `origin`, same `HEAD` — checked, working tree clean, nothing uncommitted inside it) sitting at `IoT-Team-Center/` inside this worktree's root, created today. It's harmless for CI (untracked, a fresh checkout won't have it) but it pollutes local `npm run typecheck`/`npm test` with `backend-node`-shaped errors under an `IoT-Team-Center/` prefix. My sandbox permissions blocked `rm -rf` on it. Whoever's on this machine next: safe to delete, verified clean.
+
+Rebuilt and re-verified everything in scope after the fixes above: `dotnet build` (Release) clean, `npm run lint`/`npm run typecheck` clean, `npm test` 194/194 (SQL integration test correctly self-skips without a local SQL Server matching CI's `IOT_RUN_SQL_INTEGRATION`/`sa` setup), real `docker build` of both the API and frontend images from this repo state succeeded, and I ran both containers directly (not just health-checked) — frontend served `/` and the OCR static assets (`worker.min.js`, `eng.traineddata`) at HTTP 200, API got past `DocumentStorage` startup validation with a real bind-mounted directory. Did not touch `backend-node/`, `backend-php/`, any database migration, or any Codex-owned endpoint/screen file. Pushing these fixes and watching the GitHub Actions run next (`checks` → `sql-integration` → `deploy`) per Nattapol's standing auto-commit-and-check-CI authorization.
+
+**Claude — 2026-09-07 (2)**
+
+Nattapol reported the `deploy-macmini` job reports success but the live site never picks up new
+commits. I have no shell access to `macmini-1` this session (no SSH key here), so this is a
+static read of `docker-compose.dev.yml` + `docker-compose.tls.yml` + `scripts/macos/deploy.sh`,
+not a live repro — flagging that limit up front.
+
+**Root cause, I'm fairly confident:** `frontend` in `docker-compose.dev.yml` has no `build:` —
+it's the bare `node:24-slim` image, the repo bind-mounted in (`- .:/app`), and a persistent
+`command: sh -c "npm ci && npm run dev ..."`. `api`, by contrast, has `build: context:
+./backend-node`, so a source change gives it a new image ID and `compose up -d` recreates it
+automatically. `frontend`'s image/env/command never change between deploys, so `compose up -d`
+sees no diff and leaves the *existing* container — and its already-running `npm run dev`
+process — untouched. `rsync` does update the files on disk (that part of `deploy.sh` is fine),
+but nothing tells that already-running dev-server process to pick them up, and colima's virtiofs
+mount is exactly the kind of filesystem where inotify-based watchers (which is what Vite's dev
+server, hence `vinext dev`, uses under the hood) are known to miss change events. Net effect:
+`deploy.sh`'s health checks pass (something is answering on both origins — it's just the
+*previous* commit's process), `compose ps` shows both containers up, the job goes green, and the
+site is stale until someone manually force-recreates or restarts the frontend container by hand.
+
+**Fix applied:** `scripts/macos/deploy.sh` now runs `compose up -d --force-recreate` instead of
+plain `compose up -d`, with a comment explaining why, right at the call site. This guarantees a
+fresh `frontend` container — and fresh `npm ci` — every deploy regardless of whether Compose
+thinks anything changed, at the cost of a few seconds of downtime per deploy on this dev-mode
+instance (already the documented trade-off: "every merge to main ships", no approval gate).
+`bash -n` is clean; I could not exercise this against the real colima host from this session, so
+**please verify the next `deploy-macmini` run actually serves new content** (e.g. bump something
+visible, watch it appear at `https://iot-team-center.tomastc.com:8444/` after the job goes
+green) before assuming this is fully closed. If `--force-recreate` alone doesn't do it, the next
+suspect is the virtiofs point directly: `docker --context colima-iot compose exec frontend cat
+/app/<some file>` right after a deploy would show whether the bind mount itself is even current
+inside the container.
+
+Scope check: touched only `scripts/macos/deploy.sh`. Did not touch `docker-compose.dev.yml`,
+`docker-compose.tls.yml`, `docs/MACMINI_HANDOFF.md`, or anything under `backend-node/` — read
+them for context only.

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { booleanQuery, clampedInteger, dateOnly, optionalText } from "../http.js";

@@ -106,7 +106,16 @@ log "Building images (docker compose build)"
 docker compose -f docker-compose.prod.yml build
 
 log "Starting containers (docker compose up -d)"
-docker compose -f docker-compose.prod.yml up -d
+if ! docker compose -f docker-compose.prod.yml up -d; then
+  # "address already in use" here has repeatedly turned out to be a leftover
+  # non-Docker process (e.g. an old bare-metal systemd unit) holding the port, which
+  # otherwise requires an interactive SSH session to track down. Diagnose it straight
+  # into the CI log instead of just failing.
+  log "docker compose up -d failed -- checking what's bound to ports ${API_PORT}/${FRONTEND_PORT}:"
+  ss -ltnp 2>/dev/null | grep -E ":(${API_PORT}|${FRONTEND_PORT})\b" \
+    || echo "(nothing reported listening on these ports -- the conflict may be transient, or ss/iproute2 is unavailable)"
+  die "docker compose up -d failed -- see the port diagnostic above. If a non-Docker process is listed, stop it (e.g. 'sudo systemctl stop <unit>' or 'sudo kill <pid>') and re-run deploy."
+fi
 
 # ASP.NET Core's automatic host-filtering middleware (driven by the AllowedHosts config
 # key) rejects any request whose Host header doesn't match with a 400 -- which includes

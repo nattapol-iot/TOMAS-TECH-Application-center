@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";

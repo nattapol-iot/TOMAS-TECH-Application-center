@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import sql from "mssql/msnodesqlv8.js";
+import sql from "mssql";
 import type { FastifyRequest } from "fastify";
 import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "./db.js";

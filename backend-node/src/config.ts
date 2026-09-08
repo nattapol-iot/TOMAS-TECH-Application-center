@@ -2,6 +2,19 @@ import { isIP } from "node:net";
 import { resolve } from "node:path";
 import type { AuthenticationMode } from "./types.js";
 
+export type TmtIdConfig = {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+  publicBaseUrl: string;
+  appBaseUrl: string;
+  sessionSecret: string;
+  sessionCookieSecure: boolean;
+  masterDataUrl?: string;
+  masterDataApiKey?: string;
+  defaultRoleCode?: string;
+};
+
 export type AppConfig = {
   environment: "development" | "staging" | "production";
   host: string;
@@ -17,6 +30,7 @@ export type AppConfig = {
     audience?: string;
     requiredScope?: string;
   };
+  tmtId?: TmtIdConfig;
   database: {
     connectionString: string;
     trustServerCertificate: boolean;
@@ -135,6 +149,71 @@ function validateGuid(name: string, value: string): void {
   }
 }
 
+function loadTmtIdConfig(
+  env: NodeJS.ProcessEnv,
+  environment: AppConfig["environment"],
+  allowPrivateLanHttp: boolean,
+): TmtIdConfig {
+  const issuer = required(env, "OIDC_ISSUER");
+  const issuerUrl = new URL(issuer);
+  if (issuerUrl.protocol !== "https:")
+    throw new Error("OIDC_ISSUER must use HTTPS.");
+  if (issuerUrl.search || issuerUrl.hash)
+    throw new Error("OIDC_ISSUER must not contain a query or fragment.");
+
+  const publicBaseUrl = required(env, "PUBLIC_BASE_URL");
+  validateOrigin(publicBaseUrl, allowPrivateLanHttp);
+  // A split-origin deployment serves the app and the API from different ports,
+  // so the post-login return has to target the app rather than the API origin
+  // that owns the registered callback. A single-origin deployment leaves this
+  // unset and both are the same value.
+  const appBaseUrl = optional(env, "APP_BASE_URL") ?? publicBaseUrl;
+  validateOrigin(appBaseUrl, allowPrivateLanHttp);
+
+  const sessionSecret = required(env, "SESSION_SECRET");
+  if (sessionSecret.length < 32 || sessionSecret.length > 512)
+    throw new Error("SESSION_SECRET must contain 32-512 characters.");
+
+  const sessionCookieSecureRaw = optional(
+    env,
+    "SESSION_COOKIE_SECURE",
+  )?.toLowerCase();
+  if (
+    sessionCookieSecureRaw &&
+    sessionCookieSecureRaw !== "true" &&
+    sessionCookieSecureRaw !== "false"
+  ) {
+    throw new Error("SESSION_COOKIE_SECURE must be true or false.");
+  }
+  const sessionCookieSecure = sessionCookieSecureRaw !== "false";
+  if (!sessionCookieSecure && environment !== "development")
+    throw new Error("SESSION_COOKIE_SECURE may be false only in development.");
+
+  const masterDataUrl = optional(env, "MASTER_DATA_URL");
+  const masterDataApiKey = optional(env, "MASTER_DATA_API_KEY");
+  if (Boolean(masterDataUrl) !== Boolean(masterDataApiKey))
+    throw new Error(
+      "MASTER_DATA_URL and MASTER_DATA_API_KEY are required together.",
+    );
+  if (masterDataUrl) validateOrigin(masterDataUrl, allowPrivateLanHttp);
+  const defaultRoleCode = optional(env, "TMT_ID_DEFAULT_ROLE_CODE");
+  if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode))
+    throw new Error("TMT_ID_DEFAULT_ROLE_CODE must be an existing dbo.roles code (1-50 characters).");
+
+  return {
+    issuer,
+    clientId: required(env, "OIDC_CLIENT_ID"),
+    clientSecret: required(env, "OIDC_CLIENT_SECRET"),
+    publicBaseUrl,
+    appBaseUrl,
+    sessionSecret,
+    sessionCookieSecure,
+    ...(masterDataUrl ? { masterDataUrl } : {}),
+    ...(masterDataApiKey ? { masterDataApiKey } : {}),
+    ...(defaultRoleCode ? { defaultRoleCode } : {}),
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const environment = (
     optional(env, "NODE_ENV") ?? "development"
@@ -149,8 +228,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const mode = (optional(env, "Authentication__Mode") ??
     "Entra") as AuthenticationMode;
-  if (mode !== "Development" && mode !== "TeamTest" && mode !== "Entra")
+  if (
+    mode !== "Development" &&
+    mode !== "TeamTest" &&
+    mode !== "Entra" &&
+    mode !== "TmtId"
+  ) {
     throw new Error("Authentication__Mode is invalid.");
+  }
   if (mode === "Development" && environment !== "development")
     throw new Error(
       "Development authentication is allowed only in development.",
@@ -213,6 +298,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       "At least one CORS origin is required outside development.",
     );
   corsOrigins.forEach((origin) => validateOrigin(origin, allowPrivateLanHttp));
+
+  const tmtId =
+    mode === "TmtId"
+      ? loadTmtIdConfig(env, environment, allowPrivateLanHttp)
+      : undefined;
 
   const roleName = optional(env, "Database__ApplicationRoleName");
   const rolePassword = optional(env, "Database__ApplicationRolePassword");
@@ -305,6 +395,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ...(audience ? { audience } : {}),
       ...(requiredScope ? { requiredScope } : {}),
     },
+    ...(tmtId ? { tmtId } : {}),
     database: {
       connectionString: required(env, "ConnectionStrings__IoTTeamCenter"),
       trustServerCertificate:

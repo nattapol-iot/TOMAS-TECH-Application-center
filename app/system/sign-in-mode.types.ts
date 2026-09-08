@@ -1,0 +1,1 @@
+export type SignInMode = "tmt-id" | "team-test" | "entra";
