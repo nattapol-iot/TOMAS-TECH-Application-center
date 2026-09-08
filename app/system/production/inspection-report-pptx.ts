@@ -1,4 +1,11 @@
 import { zipSync } from "fflate";
+import {
+  THEME_XML,
+  SLIDE_MASTER_XML,
+  SLIDE_LAYOUT_BLANK_XML,
+  LOGO_BASE64,
+  LOGO_EXT,
+} from "./inspection-report-template";
 
 // ── Types (mirrored from InspectionReportScreens) ─────────────
 export type Rank = "A" | "B" | "C" | "D" | "";
@@ -509,6 +516,7 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="${LOGO_EXT}" ContentType="image/${(LOGO_EXT as string) === 'jpg' ? 'jpeg' : LOGO_EXT}"/>
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
   <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -542,65 +550,27 @@ export function generatePptx(report: InspectionReport): Uint8Array {
   ${slideRelEntries}
 </Relationships>`);
 
-  files['ppt/theme/theme1.xml'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme ${NSA} name="Tomas">
-  <a:themeElements>
-    <a:clrScheme name="Tomas">
-      <a:dk1><a:sysClr lastClr="000000" val="windowText"/></a:dk1>
-      <a:lt1><a:sysClr lastClr="FFFFFF" val="window"/></a:lt1>
-      <a:dk2><a:srgbClr val="1B3A6B"/></a:dk2>
-      <a:lt2><a:srgbClr val="EEECE1"/></a:lt2>
-      <a:accent1><a:srgbClr val="2E5FA3"/></a:accent1>
-      <a:accent2><a:srgbClr val="1B3A6B"/></a:accent2>
-      <a:accent3><a:srgbClr val="4BACC6"/></a:accent3>
-      <a:accent4><a:srgbClr val="F79646"/></a:accent4>
-      <a:accent5><a:srgbClr val="4F81BD"/></a:accent5>
-      <a:accent6><a:srgbClr val="C0504D"/></a:accent6>
-      <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
-      <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
-    </a:clrScheme>
-    <a:fontScheme name="Tomas">
-      <a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>
-      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>
-    </a:fontScheme>
-    <a:fmtScheme name="Tomas">
-      <a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>
-      <a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst>
-      <a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>
-      <a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst>
-    </a:fmtScheme>
-  </a:themeElements>
-</a:theme>`);
+  files['ppt/theme/theme1.xml'] = enc(THEME_XML);
 
-  files['ppt/slideMasters/slideMaster1.xml'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sldMaster ${NSP} ${NSA} ${NSR}>
-  <p:cSld><p:spTree>
-    <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-    <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
-  </p:spTree></p:cSld>
-  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
-  <p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>
-</p:sldMaster>`);
+  files['ppt/slideMasters/slideMaster1.xml'] = enc(SLIDE_MASTER_XML);
 
   files['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.${LOGO_EXT}"/>
 </Relationships>`);
 
-  files['ppt/slideLayouts/slideLayout1.xml'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sldLayout ${NSP} ${NSA} ${NSR} type="blank">
-  <p:cSld><p:spTree>
-    <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-    <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
-  </p:spTree></p:cSld>
-  <p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>
-</p:sldLayout>`);
+  files['ppt/slideLayouts/slideLayout1.xml'] = enc(SLIDE_LAYOUT_BLANK_XML);
 
   files['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
 </Relationships>`);
+
+  // Embed Tomas Tech logo PNG (decoded from base64 constant in inspection-report-template.ts)
+  const logoBytes = Uint8Array.from(atob(LOGO_BASE64), (c) => c.charCodeAt(0));
+  files[`ppt/media/logo.${LOGO_EXT}`] = logoBytes;
 
   const slideRel = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
