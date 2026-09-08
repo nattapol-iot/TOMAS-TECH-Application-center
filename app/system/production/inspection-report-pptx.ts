@@ -3,6 +3,7 @@ import {
   THEME_XML,
   SLIDE_MASTER_XML,
   SLIDE_LAYOUT_BLANK_XML,
+  SLIDE_LAYOUTS,
   LOGO_BASE64,
   LOGO_EXT,
 } from "./inspection-report-template";
@@ -63,8 +64,8 @@ export type InspectionReport = {
 };
 
 // ── Layout constants (A4 Portrait, EMU) ──────────────────────
-const W = 7560000;
-const H = 10692000;
+const W = 6858000;
+const H = 9906000;
 const MARGIN = 406400;
 const DARK_BLUE = "1B3A6B";
 const LIGHT_BLUE = "D6E4F7";
@@ -174,7 +175,7 @@ ${shapes.join('\n')}
 
   const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${extraRels}
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout7.xml"/>${extraRels}
 </Relationships>`;
 
   return { xml, rels };
@@ -310,47 +311,53 @@ function projectInfoSlide(
   pageNum: number,
 ): { xml: string; rels: string } {
   resetIds();
-  function infoRow(label: string, val: string): RowDef {
-    return { cells: [{ text: label, bold: true, bg: GRAY_BG }, { text: val }], h: cm(0.7) };
-  }
-  const infoRows: RowDef[] = [
-    infoRow('Customer', report.customerName),
-    infoRow('Contact Person', report.contactPerson),
-    infoRow('Department', report.department),
-    infoRow('Tel. / Fax', report.tel),
-    infoRow('Project Name', report.projectName),
-    infoRow('Project No.', report.projectNo),
-    infoRow('Report Date', report.reportDate),
-    infoRow('HMI Model', unit.hmiModel),
-    infoRow('Communication', unit.communication),
-    infoRow('PLC Model', unit.plcModel),
-    infoRow('Power Supply', `${unit.powerPhase} / ${unit.voltage} V`),
-    infoRow('Main Breaker', `${unit.mainBreakerAmp} A.`),
-    infoRow('Main Breaker Model', unit.mainBreakerModel),
-    infoRow('Control Panel Name', unit.controlPanelName),
-    infoRow('Location', unit.location),
-  ];
 
-  // Rank legend col widths matching OLE total (6105525) with 2-col ratio ~4.5:14.5
-  const rankColW = [720000, 5385525];
-  const rankRows: RowDef[] = [
-    { cells: [{ text: 'Rank', bold: true, bg: DARK_BLUE }, { text: 'Description', bold: true, bg: DARK_BLUE }], h: cm(0.65) },
-    { cells: [{ text: 'A', bold: true }, { text: 'Can use / Need to detail check or more information.' }] },
-    { cells: [{ text: 'B', bold: true }, { text: 'Still can use, but need to buy some of spare parts.' }] },
-    { cells: [{ text: 'C', bold: true }, { text: 'Need to repair / Replace within 6 months.' }] },
-    { cells: [{ text: 'D', bold: true, bg: 'FFCCCC' }, { text: 'NG / Must repair ASAP.', bg: 'FFCCCC' }] },
-  ];
+  const b12 = (text: string) => txPara(text, { sz: 12, color: BLUE_LABEL });
+  const b11 = (text: string) => txPara(text, { sz: 11, color: BLUE_LABEL });
 
-  // Scale info colW to match OLE total width (6105525): ratio 4.5:14 → ~1484:4622
-  const colW2 = [1484000, 4621525];
-
-  let y = OLE_Y;
   const shapes: string[] = [
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    buildTable(OLE_X, y, colW2, infoRows),
+    // Outer border box (no fill, no text, black border 0.25pt)
+    borderRect(406399, 742950, 6117062, 8591553, BLACK, pt(0.25)),
+    // Customer
+    textBox(406398, 752476, 6117061, 263447, b12(`Customer : ${report.customerName}`)),
+    // Location
+    textBox(1223963, 1007288, 5299495, 263447, b12(`Location : ${unit.location}`)),
+    // Contact Person
+    textBox(406389, 1278993, 6117061, 263447, b12(`Contact Person : ${report.contactPerson}`)),
+    // Department (left)
+    textBox(406389, 1542439, 3022603, 263447, b12(`Department : ${report.department}`)),
+    // Tel (right)
+    textBox(3428992, 1542438, 3094458, 263447, b12(`Tel. / Fax : ${report.tel}`)),
+    // Project Name
+    textBox(406386, 1805884, 6117061, 263447, b12(`Project Name : ${report.projectName}`)),
+    // Project No.
+    textBox(406386, 2069328, 6117061, 263447, b12(`Project No. : ${report.projectNo}`)),
+    // Report Date
+    textBox(406386, 2332775, 6117061, 263447, b12(`Report Date : ${report.reportDate}`)),
+    // Control Panel Name
+    textBox(406389, 6989117, 3327411, 171453, b11(`Control Panel Name : ${unit.controlPanelName}`)),
+    // Main Breaker Model
+    textBox(406389, 7160571, 3124211, 171453, b11(`Main Breaker Model : ${unit.mainBreakerModel}`)),
+    // Main Breaker A
+    textBox(413816, 7338127, 1724547, 171453, b11(`Main Breaker : ${unit.mainBreakerAmp} A.`)),
+    // Power Supply Volt
+    textBox(413816, 7509785, 1724547, 171453, b11(`Power Supply : ${unit.voltage} Volt`)),
+    // Power Supply Phase
+    textBox(413816, 7684415, 1948382, 171453, b11(`Power Supply : ${unit.powerPhase}`)),
+    // Rank legend text box
+    textBox(3291203, 7344614, 3190878, 563519,
+      txPara('Rank A : Can use / Need to detail check or more information.', { sz: 8.5, color: BLACK }) +
+      txPara('Rank B : Still can use, but need to buy some of spare parts.', { sz: 8.5, color: BLACK }) +
+      txPara('Rank C : Need to repair / Replace within 6 months.', { sz: 8.5, color: BLACK }) +
+      txPara('Rank D : NG / Must repair ASAP.', { sz: 8.5, color: BLACK })),
+    // PLC Model
+    textBox(406389, 8782127, 2939246, 171453, b11(`PLC Model : ${unit.plcModel}`)),
+    // Communication
+    textBox(406392, 8959847, 2939244, 171453, b11(`Communication : ${unit.communication}`)),
+    // HMI Model
+    textBox(406394, 9131300, 2939242, 171453, b11(`HMI Model : ${unit.hmiModel}`)),
   ];
-  y += infoRows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.4);
-  shapes.push(buildTable(OLE_X, y, rankColW, rankRows));
 
   return makeSlide(shapes);
 }
@@ -360,8 +367,13 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
   resetIds();
   const u = unit.utility;
 
-  // Utility Power Supply table — 11 cols summing to OLE cx=6105525
-  const utilColW = [720000, 522000, 522000, 522000, 396000, 396000, 324000, 324000, 324000, 324000, 1731525];
+  // Frame positions from original PPTX slide3.xml
+  const FRAME1_X = 563563, FRAME1_Y = 1347788, FRAME1_CX = 5934075;
+  const FRAME2_X = 563563, FRAME2_Y = 2617788, FRAME2_CX = 5934075;
+  const FRAME3_X = 431800, FRAME3_Y = 4073525, FRAME3_CX = 6065838;
+
+  // Utility Power Supply table — 11 cols scaled to FRAME1_CX=5934075
+  const utilColW = [699000, 507000, 507000, 507000, 385000, 385000, 315000, 315000, 315000, 315000, 1679075];
   function chk(v: boolean) { return v ? '✓' : ''; }
 
   const utilRows: RowDef[] = [
@@ -396,8 +408,8 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
     ] },
   ];
 
-  // PLC Status — 8 cols summing to OLE cx=6105525
-  const plcColW = [1440000, 432000, 432000, 360000, 360000, 360000, 360000, 2361525];
+  // PLC Status — 8 cols scaled to FRAME2_CX=5934075
+  const plcColW = [1399000, 420000, 420000, 350000, 350000, 350000, 350000, 2295075];
   const plcRows: RowDef[] = [
     { cells: [{ text: 'PLC Status', bold: true, bg: DARK_BLUE, span: 8 }], h: cm(0.65) },
     { cells: [
@@ -416,8 +428,8 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
     ] },
   ];
 
-  // Transformer/SMPS — 10 cols summing to OLE cx=6105525
-  const xfColW = [792000, 468000, 468000, 396000, 396000, 324000, 324000, 324000, 324000, 2289525];
+  // Transformer/SMPS — 10 cols scaled to FRAME3_CX=6065838
+  const xfColW = [810000, 479000, 479000, 406000, 406000, 332000, 332000, 332000, 332000, 2157838];
   function xfRows(m: TransformerMeasurement, title: string): RowDef[] {
     return [
       { cells: [{ text: `${title} : ${m.model}`, bold: true, bg: DARK_BLUE, span: 10 }], h: cm(0.65) },
@@ -459,19 +471,28 @@ function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels:
     ];
   }
 
-  let y = OLE_Y;
   const shapes: string[] = [
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    buildTable(OLE_X, y, utilColW, utilRows),
+    // Outer border box
+    borderRect(406399, 742950, 6117062, 8591553, BLACK, pt(0.25)),
+    // Rank legend
+    textBox(3298506, 765020, 3190878, 563519,
+      txPara('Rank A : Can use / Need to detail check or more information.', { sz: 8.5, color: BLACK }) +
+      txPara('Rank B : Still can use, but need to buy some of spare parts.', { sz: 8.5, color: BLACK }) +
+      txPara('Rank C : Need to repair / Replace within 6 months.', { sz: 8.5, color: BLACK }) +
+      txPara('Rank D : NG / Must repair ASAP.', { sz: 8.5, color: BLACK })),
+    // Frame 1: Utility Power Supply table
+    buildTable(FRAME1_X, FRAME1_Y, utilColW, utilRows),
+    // Frame 2: PLC Status table
+    buildTable(FRAME2_X, FRAME2_Y, plcColW, plcRows),
   ];
-  y += utilRows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
-  shapes.push(buildTable(OLE_X, y, plcColW, plcRows));
-  y += plcRows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
 
+  // Frame 3: Transformer/SMPS tables stacked
+  let y3 = FRAME3_Y;
   for (const sec of unit.powerSections) {
     const rows = xfRows(sec, sec.title);
-    shapes.push(buildTable(OLE_X, y, xfColW, rows));
-    y += rows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
+    shapes.push(buildTable(FRAME3_X, y3, xfColW, rows));
+    y3 += rows.reduce((a, r) => a + (r.h ?? cm(0.65)), 0) + cm(0.3);
   }
 
   return makeSlide(shapes);
@@ -487,7 +508,6 @@ function opPhotoSlide(
   resetIds();
 
   // Exact coordinates from original PPTX slide4.xml
-  const OUTER_X = 406399, OUTER_Y = 742950, OUTER_CX = 6117062, OUTER_CY = 8591553;
   const LBL1_X = 406398, LBL1_Y = 752476, LBL_CX = 6117061, LBL_CY = 263447;
   const PH1_X = 457200, PH1_Y = 1025449, PH_CX = 5943600, PH_CY = 3773837;
   const LBL2_X = 370469, LBL2_Y = 4965312;
@@ -495,8 +515,6 @@ function opPhotoSlide(
 
   const shapes: string[] = [
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
-    // Outer border box
-    borderRect(OUTER_X, OUTER_Y, OUTER_CX, OUTER_CY, BLACK, pt(0.25)),
     // Photo 1 label
     textBox(LBL1_X, LBL1_Y, LBL_CX, LBL_CY,
       txPara(test1?.name ?? '', { sz: 12, color: BLUE_LABEL })),
@@ -689,57 +707,65 @@ function elecTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; r
 function signOffSlide(report: InspectionReport, pageNum: number): { xml: string; rels: string } {
   resetIds();
 
-  // Header: dark fill + white text, matches Tomas Tech document style
-  const HDR_H = cm(0.9);
-  const hdrShapes = [
-    textBox(OLE_X, 479503, 6105525, HDR_H,
-      txPara('Sign Off', { sz: 14, bold: true, color: 'FFFFFF', align: 'ctr' }),
-      undefined, DARK_BLUE, 'ctr'),
-    textBox(6093618, 9181401, 435769, 527403,
-      txPara(String(pageNum), { sz: 8, color: BLACK, align: 'r' })),
-  ];
-
-  const intro = 'With all these documents, this is part of the installation report and it is all the information of the project.';
-  const startY = 479503 + HDR_H + cm(0.3);
-
-  // Sig block: label col (1.9cm) + value col (rest) = 6105525 total
-  const sigColW = [684000, 5421525];
-  function sigBlock(name: string, title: string, date: string): RowDef[] {
-    return [
-      { cells: [{ text: 'Sign :', bold: true, bg: GRAY_BG }, { text: '' }], h: cm(1.5) },
-      { cells: [{ text: 'Name :', bold: true, bg: GRAY_BG }, { text: name }], h: cm(0.7) },
-      { cells: [{ text: 'Title :', bold: true, bg: GRAY_BG }, { text: title }], h: cm(0.7) },
-      { cells: [{ text: 'Date :', bold: true, bg: GRAY_BG }, { text: date }], h: cm(0.7) },
-    ];
-  }
-
-  // Side-by-side Inspector + Checker: each half ~3 cm wide (2 col each, total 6105525/2)
-  const halfW = Math.floor(6105525 / 2);
-  const halfSigColW = [684000, halfW - 684000];
-
-  const sigBlockH = cm(1.5) + cm(0.7) * 3;
-  const custY = startY + cm(1.1);
-  const tomasY = custY + sigBlockH + cm(0.5);
-  const inspY = tomasY + cm(0.8);
-  const checkX = OLE_X + halfW + cm(0.2);
+  const {
+    customerName, customerSignName, customerTitle, customerDate,
+    inspectorName, inspectorTitle, inspectorDate,
+    checkerName, checkerTitle, checkerDate,
+  } = report;
 
   const shapes: string[] = [
-    ...hdrShapes,
-    textBox(OLE_X, startY, 6105525, cm(1),
-      txPara(intro, { sz: 9, color: BLACK })),
-    // Customer section
-    textBox(OLE_X, custY, 6105525, cm(0.7),
-      txPara(report.customerName, { bold: true, sz: 10, color: DARK_BLUE })),
-    buildTable(OLE_X, custY + cm(0.75), sigColW, sigBlock(report.customerSignName, report.customerTitle, report.customerDate)),
-    // TOMAS TECH section heading
-    textBox(OLE_X, tomasY, 6105525, cm(0.7),
-      txPara('TOMAS TECH CO., LTD.', { bold: true, sz: 10, color: DARK_BLUE })),
-    // Inspector (left) + Checker (right)
-    buildTable(OLE_X, inspY, halfSigColW, sigBlock(report.inspectorName, report.inspectorTitle, report.inspectorDate)),
-    buildTable(checkX, inspY, halfSigColW, sigBlock(report.checkerName, report.checkerTitle, report.checkerDate)),
-    // Footer
-    textBox(OLE_X, 9048866, 6105525, cm(0.8),
-      txPara('## END OF BLUEPRINT ##', { bold: true, sz: 10, color: DARK_BLUE, align: 'ctr' })),
+    // 1. Header: black border, black text
+    textBox(406400, 479503, 6117063, 345687,
+      txPara('Sign Off', { sz: 14, bold: true, color: BLACK, align: 'ctr' }),
+      BLACK, undefined, 'ctr'),
+    // 2. Intro text box (no border, no fill)
+    textBox(406400, 1025912, 6117062, 1785104,
+      txPara('With all these documents, this is part of the installation report and it is all the information of the project.', { sz: 11, color: BLACK }) +
+      txPara('', { sz: 11, color: BLACK }) +
+      txPara(`Customer : ${customerName}`, { sz: 11, bold: true, color: BLACK }) +
+      txPara('Sign :  ___________________________', { sz: 11, color: BLACK })),
+    // 3. Customer Name
+    textBox(406399, 2803528, 3946525, 261610,
+      txPara(`Name :  ${customerSignName}`, { sz: 11, color: BLUE_LABEL })),
+    // 4. Customer Title
+    textBox(406400, 3372967, 3139688, 261610,
+      txPara(`Title :  ${customerTitle}`, { sz: 11, color: BLUE_LABEL })),
+    // 5. Customer Date
+    textBox(406400, 3948405, 1651000, 261610,
+      txPara(`Date : ${customerDate}`, { sz: 11, color: BLUE_LABEL })),
+    // 6. TOMAS/Inspector block
+    textBox(370469, 4632238, 3139688, 1107996,
+      txPara('TOMAS TECH CO., LTD.', { sz: 11, bold: true, color: BLACK }) +
+      txPara('Prepare / Inspector', { sz: 11, bold: true, color: BLACK }) +
+      txPara('Sign :  ___________________________', { sz: 11, color: BLACK })),
+    // 7. Inspector Name
+    textBox(370469, 5786758, 3139688, 261610,
+      txPara(`Name : ${inspectorName}`, { sz: 11, color: BLUE_LABEL })),
+    // 8. Inspector Title
+    textBox(370469, 6356197, 3139688, 261610,
+      txPara(`Title : ${inspectorTitle}`, { sz: 11, color: BLUE_LABEL })),
+    // 9. Inspector Date
+    textBox(370469, 6931634, 3139688, 261610,
+      txPara(`Date : ${inspectorDate}`, { sz: 11, color: BLUE_LABEL })),
+    // 10. Checker block
+    textBox(3383774, 4803439, 3139688, 938719,
+      txPara('Checked', { sz: 11, bold: true, color: BLACK }) +
+      txPara('Sign :  ___________________________', { sz: 11, color: BLACK })),
+    // 11. Checker Name
+    textBox(3383774, 5786758, 3139688, 261610,
+      txPara(`Name : ${checkerName}`, { sz: 11, color: BLUE_LABEL })),
+    // 12. Checker Title
+    textBox(3383774, 6356197, 3139688, 261610,
+      txPara(`Title : ${checkerTitle}`, { sz: 11, color: BLUE_LABEL })),
+    // 13. Checker Date
+    textBox(3383774, 6931634, 3139688, 261610,
+      txPara(`Date : ${checkerDate}`, { sz: 11, color: BLUE_LABEL })),
+    // 14. End text
+    textBox(471487, 9050592, 6117062, 261610,
+      txPara('## END OF BLUEPRINT ##', { sz: 11, bold: true, color: BLACK, align: 'ctr' })),
+    // 15. Page number (different position for sign-off slide)
+    textBox(6210299, 9181401, 328613, 527403,
+      txPara(String(pageNum), { sz: 8, color: BLACK, align: 'r' })),
   ];
 
   return makeSlide(shapes);
@@ -854,6 +880,10 @@ export function generatePptx(report: InspectionReport): Uint8Array {
     `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
   ).join('\n  ');
 
+  const layoutOverrides = Array.from({length: 11}, (_, i) =>
+    `<Override PartName="/ppt/slideLayouts/slideLayout${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>`
+  ).join('\n  ');
+
   files['[Content_Types].xml'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -862,7 +892,7 @@ export function generatePptx(report: InspectionReport): Uint8Array {
   ${photoTypeDefaults}
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
-  <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+  ${layoutOverrides}
   <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
   ${slideOverrides}
 </Types>`);
@@ -884,7 +914,7 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 <p:presentation ${NSP2} ${NSA2} ${NSR2} saveSubsetFonts="1">
   <p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>
   <p:sldIdLst>${slideRefs}</p:sldIdLst>
-  <p:sldSz cx="${W}" cy="${H}"/>
+  <p:sldSz cx="${W}" cy="${H}" type="A4"/>
   <p:notesSz cx="${W}" cy="${H}"/>
 </p:presentation>`);
 
@@ -901,17 +931,29 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 
   files['ppt/theme/theme1.xml'] = enc(THEME_XML);
   files['ppt/slideMasters/slideMaster1.xml'] = enc(SLIDE_MASTER_XML);
+  const LAYOUT_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
+  const THEME_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+  const layoutRels = Array.from({length: 11}, (_, i) =>
+    `<Relationship Id="rId${i+1}" Type="${LAYOUT_NS}" Target="../slideLayouts/slideLayout${i+1}.xml"/>`
+  ).join('\n  ');
   files['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+  ${layoutRels}
+  <Relationship Id="rId12" Type="${THEME_NS}" Target="../theme/theme1.xml"/>
 </Relationships>`);
 
-  files['ppt/slideLayouts/slideLayout1.xml'] = enc(SLIDE_LAYOUT_BLANK_XML);
-  files['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  // Include all 11 original layouts in the ZIP (layout7 is the blank layout used by slides)
+  for (let i = 0; i < SLIDE_LAYOUTS.length; i++) {
+    files[`ppt/slideLayouts/slideLayout${i + 1}.xml`] = enc(SLIDE_LAYOUTS[i]);
+  }
+  // Keep SLIDE_LAYOUT_BLANK_XML usage via SLIDE_LAYOUTS[6] (layout7, index 6)
+  void SLIDE_LAYOUT_BLANK_XML; // retained export, used as reference for layout7
+  for (let i = 1; i <= 11; i++) {
+    files[`ppt/slideLayouts/_rels/slideLayout${i}.xml.rels`] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
 </Relationships>`);
+  }
 
   slideData.forEach(({ xml, rels }, i) => {
     files[`ppt/slides/slide${i + 1}.xml`] = enc(xml);

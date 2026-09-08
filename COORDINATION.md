@@ -100,6 +100,8 @@ so we never merge-conflict.
 
 ## Active claims
 
+| 2026-09-08 | Claude-CoordFix | Fix slide dims W=6858000/H=9906000, slide2 textboxes, slide11 signoff, remove opPhoto border | released — typecheck clean — Claude, 2026-09-08 |
+
 | 2026-09-08 | Claude-PptxFix | Fix PPTX visual fidelity: remove logo from slide master (was on every slide), fix DARK_BLUE to 1B3A6B, remove broken rId3 image rel from master rels. Editing inspection-report-pptx.ts + inspection-report-template.ts only. | released — typecheck clean — Claude, 2026-09-08 |
 
 | 2026-09-08 | Claude-FullRewrite | Rewriting inspection-report-pptx.ts (11 slides) + photo storage fix in InspectionReportScreens.tsx | released — 11-slide structure, dynamic photos, correct table columns, canvas resize for localStorage — Claude, 2026-09-08 |
