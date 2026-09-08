@@ -154,6 +154,7 @@ Add a row before you start. Remove it — or set Status to `done` — when you f
 
 | Since | Who | Files / area | Status |
 | --- | --- | --- | --- |
+| 2026-09-07 | Claude | `app/system/production/InspectionReportScreens.tsx`, `inspection-report-pptx.ts`, `inspection-report.css`, `app/system/routes.ts`, `app/system/ProductionApp.tsx` — Inspection Report feature: form UI (7 tabs), PPTX export (fflate), PDF print-window export, nav wiring. No backend/DB changes. | done — Claude, 2026-09-07 |
 | 2026-09-06 | Codex | Business-card OCR for customer/contact entry: new client-side OCR/parser/scanner files, Inquiry/Customer Master integration, OCR runtime/data dependency/assets, focused tests/docs and coordinated frontend release. No API/schema or customer writes during scanning. | done — Thai/English on-device OCR live in Team Test; full suite 116 pass/2 environment skips, actual OCR smoke 91%, production build and live asset checks passed; frontend PID 22436 |
 | 2026-09-02 | Codex | `database/`, `scripts/`, `lib/`, `dist/` — touched today, exact scope unknown to Claude | please confirm |
 | 2026-09-02 | Codex | `app/system/production/CoreScreens.tsx` — i18n retrofit, 31 calls in place | please confirm |

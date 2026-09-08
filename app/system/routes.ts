@@ -40,7 +40,9 @@ export type Route =
   | { name: "site-visits" }
   | { name: "my-assignments" }
   | { name: "visit-master" }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "inspection-reports" }
+  | { name: "inspection-report"; id: string };
 
 export type ScreenProps = {
   go: (route: Route) => void;

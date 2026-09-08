@@ -72,6 +72,7 @@ import {
   ProductionSiteVisits,
   ProductionVisitMasterData,
 } from "./production/SiteVisitScreens";
+import { InspectionReportScreen } from "./production/InspectionReportScreens";
 
 type View =
   | "dashboard" | "my-work" | "inquiries" | "estimates" | "projects" | "knowledge"
@@ -79,7 +80,8 @@ type View =
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support"
+  | "inspection-reports";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
 type MyWorkUrgencyItem = {
@@ -136,6 +138,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   { group: "DOCUMENTS & SIGNING", items: [
     { view: "signing", label: "Sign Inbox", icon: "edit", permission: "signing.read" },
     { view: "documents", label: "Signed Documents", icon: "shield", permission: "signing.read" },
+    { view: "inspection-reports", label: "Inspection Report", icon: "table", permission: "report.write" },
   ] },
   { group: "ORGANISATION", items: [
     { view: "activity", label: "Team Activity", icon: "chart", permission: "activity.read" },
@@ -652,6 +655,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
           {view === "manual" ? <EmployeeManualScreen /> : null}
           {view === "support" ? <SupportCenter externalRevision={supportRevision} ticketId={supportTicketId} onSelect={openSupport} onCreate={() => setSupportCreate(true)} notify={setToast} onDirtyChange={onSupportDirtyChange} /> : null}
+          {view === "inspection-reports" ? <InspectionReportScreen bootstrap={bootstrap} notify={setToast} /> : null}
         </main>
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>
