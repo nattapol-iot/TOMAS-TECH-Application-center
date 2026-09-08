@@ -142,6 +142,15 @@ function borderRect(x: number, y: number, cx: number, cy: number, borderColor: s
 </p:sp>`;
 }
 
+function filledRect(x: number, y: number, cx: number, cy: number, fillColor: string): string {
+  return `<p:sp>
+<p:nvSpPr><p:cNvPr id="${nextId()}" name="bg"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+<p:spPr>${spXfrm(x, y, cx, cy)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+<a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>
+<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>
+</p:sp>`;
+}
+
 function imgShape(x: number, y: number, cx: number, cy: number, rId: string): string {
   return `<p:pic>
 <p:nvPicPr><p:cNvPr id="${nextId()}" name="img"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>
@@ -263,6 +272,7 @@ function mimeExt(dataUrl: string): string {
 // ══════════════════════════════════════════════════════════════
 
 // ── Slide 1: Cover ────────────────────────────────────────────
+// Layout matches exportPdf() cover: full dark-navy background, white text.
 function coverSlide(
   report: InspectionReport,
   unit: InspectionUnit,
@@ -270,34 +280,44 @@ function coverSlide(
   logoRId: string,
 ): { xml: string; rels: string } {
   resetIds();
+  const PAD = cm(3); // 30 mm padding (matches PDF `padding:30mm`)
+  const WHITE = 'FFFFFF';
+  const contentW = W - PAD * 2; // usable width inside padding
+
   const shapes: string[] = [
-    // Version box — noFill, red border
-    textBox(406400, 479502, 1555750, 283687,
-      txPara(`Version : ${report.version}`, { sz: 12, color: 'FF0000', align: 'ctr' }),
-      'FF0000'),
-    // Confidential box — noFill, red border
-    textBox(5262563, 479502, 1123950, 283687,
-      txPara('Confidential', { sz: 12, color: 'FF0000', align: 'ctr' }),
-      'FF0000'),
-    // Main title — right-aligned, large
-    textBox(724584, 4624787, 5301516, 1200329,
-      txPara(report.title || 'Inspection Lifter & Cage Conveyor', { sz: 22, bold: true, color: BLACK, align: 'r' }) +
-      txPara(unit.name, { sz: 16, color: DARK_BLUE, align: 'r' })),
-    // Project / customer / date info
-    textBox(MARGIN, 5900000, 6117063, cm(2),
-      txPara(`Project : ${report.projectName}  ${report.projectNo}`, { sz: 12, color: BLACK }) +
-      txPara(`Customer : ${report.customerName}`, { sz: 12, color: BLACK }) +
-      txPara(`Date : ${report.reportDate}`, { sz: 12, color: BLACK })),
-    // Logo image
-    imgShape(1917699, 7636804, 3022600, 720006, logoRId),
-    // Address
-    textBox(952199, 8356810, 4953600, 646331,
-      txPara('No.1 MD Tower 16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd,', { sz: 12, color: BLACK }) +
-      txPara('Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.', { sz: 12, color: BLACK }) +
-      txPara('Tel : +66-98-271-9741     E-mail : info@tomastc.com', { sz: 12, color: BLACK })),
+    // Full-bleed dark navy background
+    filledRect(0, 0, W, H, DARK_BLUE),
+
+    // Tomas logo — positioned at left within padding, near top
+    imgShape(PAD, cm(2.5), cm(6.5), cm(2), logoRId),
+
+    // Main title (h1 equivalent — 22pt bold white)
+    textBox(PAD, cm(11), contentW, cm(4),
+      txPara(report.title || 'Inspection Report', { sz: 22, bold: true, color: WHITE }),
+      undefined, undefined, 'ctr'),
+
+    // Unit / subtitle (h2 equivalent — 16pt white)
+    textBox(PAD, cm(15.5), contentW, cm(3),
+      txPara(`${unit.name} Inspection Report for MCP`, { sz: 16, color: WHITE }),
+      undefined, undefined, 'ctr'),
+
+    // Project info block
+    textBox(PAD, cm(20), contentW, cm(5),
+      txPara(`Made for : ${report.customerName}`, { sz: 11, color: WHITE }) +
+      txPara(`By : Tomas Tech Co., Ltd.`, { sz: 11, color: WHITE }) +
+      txPara(`Version : ${report.version}`, { sz: 11, color: WHITE }),
+      undefined, undefined, 'ctr'),
+
+    // Confidential footer (bottom, semi-muted with 9pt)
+    textBox(PAD, H - cm(2.5), contentW, cm(2),
+      txPara(
+        'Confidential  ·  No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.',
+        { sz: 9, color: 'B0C4DE' }
+      )),
+
     // Page number
     textBox(6093618, 9181401, 435769, 527403,
-      txPara(String(pageNum), { sz: 8, color: BLACK, align: 'r' })),
+      txPara(String(pageNum), { sz: 8, color: WHITE, align: 'r' })),
   ];
 
   const extraRels = `\n<Relationship Id="${logoRId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.${LOGO_EXT}"/>`;
