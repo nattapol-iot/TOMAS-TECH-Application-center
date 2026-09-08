@@ -3,6 +3,7 @@ import {
   THEME_XML,
   SLIDE_MASTER_XML,
   SLIDE_LAYOUT_BLANK_XML,
+  SLIDE_LAYOUTS,
   LOGO_BASE64,
   LOGO_EXT,
 } from "./inspection-report-template";
@@ -174,7 +175,7 @@ ${shapes.join('\n')}
 
   const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${extraRels}
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout7.xml"/>${extraRels}
 </Relationships>`;
 
   return { xml, rels };
@@ -879,6 +880,10 @@ export function generatePptx(report: InspectionReport): Uint8Array {
     `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
   ).join('\n  ');
 
+  const layoutOverrides = Array.from({length: 11}, (_, i) =>
+    `<Override PartName="/ppt/slideLayouts/slideLayout${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>`
+  ).join('\n  ');
+
   files['[Content_Types].xml'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -887,7 +892,7 @@ export function generatePptx(report: InspectionReport): Uint8Array {
   ${photoTypeDefaults}
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
-  <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+  ${layoutOverrides}
   <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
   ${slideOverrides}
 </Types>`);
@@ -926,17 +931,29 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 
   files['ppt/theme/theme1.xml'] = enc(THEME_XML);
   files['ppt/slideMasters/slideMaster1.xml'] = enc(SLIDE_MASTER_XML);
+  const LAYOUT_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
+  const THEME_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+  const layoutRels = Array.from({length: 11}, (_, i) =>
+    `<Relationship Id="rId${i+1}" Type="${LAYOUT_NS}" Target="../slideLayouts/slideLayout${i+1}.xml"/>`
+  ).join('\n  ');
   files['ppt/slideMasters/_rels/slideMaster1.xml.rels'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+  ${layoutRels}
+  <Relationship Id="rId12" Type="${THEME_NS}" Target="../theme/theme1.xml"/>
 </Relationships>`);
 
-  files['ppt/slideLayouts/slideLayout1.xml'] = enc(SLIDE_LAYOUT_BLANK_XML);
-  files['ppt/slideLayouts/_rels/slideLayout1.xml.rels'] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  // Include all 11 original layouts in the ZIP (layout7 is the blank layout used by slides)
+  for (let i = 0; i < SLIDE_LAYOUTS.length; i++) {
+    files[`ppt/slideLayouts/slideLayout${i + 1}.xml`] = enc(SLIDE_LAYOUTS[i]);
+  }
+  // Keep SLIDE_LAYOUT_BLANK_XML usage via SLIDE_LAYOUTS[6] (layout7, index 6)
+  void SLIDE_LAYOUT_BLANK_XML; // retained export, used as reference for layout7
+  for (let i = 1; i <= 11; i++) {
+    files[`ppt/slideLayouts/_rels/slideLayout${i}.xml.rels`] = enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
 </Relationships>`);
+  }
 
   slideData.forEach(({ xml, rels }, i) => {
     files[`ppt/slides/slide${i + 1}.xml`] = enc(xml);
