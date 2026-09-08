@@ -1,10 +1,12 @@
 name: Deploy
 
-# Production deployment — only triggered by a push to main (i.e. after a
-# PR is merged). The job waits for manual approval in the GitHub "production"
-# Environment before it is dispatched to the self-hosted runner. The runner
-# lives on the production LAN and makes an outbound-only connection to GitHub,
-# so no public IP or VPN is required. See docs/CI_CD_SETUP.md for setup steps.
+# Production deployment to the Mac mini (macmini-1 / tmt-eq-0056).
+# Triggered by a push to main after a PR is merged.
+# The job waits for manual approval in the GitHub "production" Environment
+# before being dispatched to the self-hosted runner registered on the Mac mini.
+# The runner (label: iot-team-center-macmini) makes an outbound-only connection
+# to GitHub — no inbound port, no public IP, no VPN needed.
+# See docs/MACMINI_HANDOFF.md for host layout and constraints.
 
 on:
   push:
@@ -17,8 +19,10 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy to production
-    runs-on: [self-hosted, iot-team-center-production]
+    name: Deploy to Mac mini (colima-iot)
+    # Runner registered on macmini-1 at /Users/tomastc/actions-runner
+    # launchd service: actions.runner.pattana1902-IoT-Team-Center.macmini-1
+    runs-on: [self-hosted, iot-team-center-macmini]
     timeout-minutes: 20
     # Requires a "production" Environment in repo Settings with at least one
     # required reviewer. Approval in the Actions tab is the deploy gate.
@@ -26,23 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Sync checkout into the deploy path
-        # Same machine — local copy, not a network transfer. No SSH keys needed.
-        # Runs as the runner's service account, which install-production-host.sh
-        # already owns this path for (via --deploy-user).
-        run: |
-          rsync -a --delete \
-            --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
-            --exclude '.vinext' --exclude '.next' --exclude '.wrangler' --exclude '.vercel' \
-            --exclude 'backend/IoTTeamCenter.Api/bin' --exclude 'backend/IoTTeamCenter.Api/obj' \
-            --exclude 'backend/IoTTeamCenter.Api.Tests/bin' --exclude 'backend/IoTTeamCenter.Api.Tests/obj' \
-            ./ /opt/iot-team-center/src/
-
-      - name: Build and deploy (Docker Compose)
-        # Permitted without a password by the narrowly-scoped sudoers entry that
-        # install-production-host.sh writes for --deploy-user (deploy.sh/rollback.sh
-        # under /opt/iot-team-center/src only).
-        run: sudo /opt/iot-team-center/src/scripts/linux/deploy.sh \
-          --repo /opt/iot-team-center/src \
-          --api-env-file /etc/iot-team-center/api.env.input \
-          --frontend-env-file /etc/iot-team-center/frontend.env.input
+      - name: Deploy via macOS script
+        # scripts/macos/deploy.sh handles rsync, colima-iot Docker context,
+        # --force-recreate, Caddy reload, and health checks itself.
+        # It reads .env from ~/iot-team-center/src (preserved across deploys by
+        # rsync --exclude .env in the script). No sudo needed: the colima socket
+        # lives under the tomastc home directory.
+        # See docs/MACMINI_HANDOFF.md § "Bringing this repo up".
+        run: scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"
