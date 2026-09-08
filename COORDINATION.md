@@ -157,6 +157,7 @@ Resource Plan verification note — Codex, 2026-09-05: current full Node typeche
 Add a row before you start. Remove it — or set Status to `done` — when you finish.
 
 | Since | Who | Files / area | Status |
+| 2026-09-08 | Claude-PPTX | `app/system/production/inspection-report-pptx.ts` — full rewrite: 11 slides/unit, Yu Gothic font, photo embedding, exact Tomas Tech coordinates | released — typecheck clean — Claude, 2026-09-08 |
 | --- | --- | --- | --- |
 | 2026-09-08 | Claude-Template | `app/system/production/inspection-report-pptx.ts`, new `app/system/production/inspection-report-template.ts` — PPTX template extraction: replacing stub slide master/theme/layouts with real Tomas Tech template extracted from the provided PPTX. | active — Claude, 2026-09-08 |
 | 2026-09-07 | Claude | `app/system/production/InspectionReportScreens.tsx`, `inspection-report-pptx.ts`, `inspection-report.css`, `app/system/routes.ts`, `app/system/ProductionApp.tsx` — Inspection Report feature: form UI (7 tabs), PPTX export (fflate), PDF print-window export, nav wiring. No backend/DB changes. | done — Claude, 2026-09-07 |
