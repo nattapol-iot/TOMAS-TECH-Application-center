@@ -76,12 +76,12 @@ function newUnit(name = "Unit 1"): InspectionUnit {
       { title: "Switching Power Supply (SMPS)", ...defaultSmpsMeasurement() },
     ],
     operationTests: [
-      { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "" },
-      { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "" },
+      { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "", photos: [] },
+      { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "", photos: [] },
     ],
     electricalItems: [
-      { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" },
-      { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" },
+      { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "", photos: [] },
+      { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "", photos: [] },
     ],
     summaryItems: [""],
   };
@@ -570,6 +570,46 @@ function JudgeSelect({ value, onChange }: { value: PassFail; onChange: (v: PassF
   );
 }
 
+// ── Photo upload ──────────────────────────────────────────────
+function PhotoUpload({ photos, onChange, max = 3 }: {
+  photos: string[];
+  onChange: (p: string[]) => void;
+  max?: number;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const toAdd = files.slice(0, max - photos.length);
+    if (!toAdd.length) return;
+    Promise.all(
+      toAdd.map(f => new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.onerror = rej;
+        r.readAsDataURL(f);
+      }))
+    ).then(newPhotos => onChange([...photos, ...newPhotos]));
+    e.target.value = "";
+  };
+  const remove = (i: number) => onChange(photos.filter((_, idx) => idx !== i));
+  return (
+    <div className="ir-photo-upload">
+      <div className="ir-photo-thumbs">
+        {photos.map((src, i) => (
+          <div key={i} className="ir-photo-thumb">
+            <img src={src} alt="" />
+            <button type="button" className="ir-photo-remove" onClick={() => remove(i)}>×</button>
+          </div>
+        ))}
+        {photos.length < max && (
+          <button type="button" className="ir-photo-add" onClick={() => inputRef.current?.click()}>+</button>
+        )}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFiles} />
+    </div>
+  );
+}
+
 function PowerTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Partial<InspectionUnit>) => void }) {
   const u = unit.utility;
   const setU = (patch: Partial<PowerMeasurement>) => onChange({ utility: { ...u, ...patch } });
@@ -679,7 +719,7 @@ function OperationTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: 
     const next = unit.operationTests.map((t, idx) => idx === i ? { ...t, ...patch } : t);
     onChange({ operationTests: next });
   };
-  const addTest = () => onChange({ operationTests: [...unit.operationTests, { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "" }] });
+  const addTest = () => onChange({ operationTests: [...unit.operationTests, { name: "", status: "" as PassFail, rank: "" as Rank, remarks: "", photos: [] }] });
   const removeTest = (i: number) => onChange({ operationTests: unit.operationTests.filter((_, idx) => idx !== i) });
 
   return (
@@ -687,7 +727,7 @@ function OperationTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: 
       <div className="ir-table-wrap">
         <table className="ir-table">
           <thead>
-            <tr><th>Test Name</th><th>Judgement</th><th>Rank</th><th>Remarks</th><th></th></tr>
+            <tr><th>Test Name</th><th>Judgement</th><th>Rank</th><th>Remarks</th><th>Photo</th><th></th></tr>
           </thead>
           <tbody>
             {unit.operationTests.map((t, i) => (
@@ -696,6 +736,7 @@ function OperationTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: 
                 <td className="center"><JudgeSelect value={t.status} onChange={v => setTest(i, { status: v })} /></td>
                 <td className="center"><RankSelect value={t.rank} onChange={v => setTest(i, { rank: v })} /></td>
                 <td><input type="text" value={t.remarks} onChange={e => setTest(i, { remarks: e.target.value })} /></td>
+                <td><PhotoUpload photos={t.photos ?? []} onChange={p => setTest(i, { photos: p })} max={1} /></td>
                 <td className="center">
                   <button className="btn ghost sm" type="button" onClick={() => removeTest(i)}><Icon name="minus" /></button>
                 </td>
@@ -717,7 +758,7 @@ function ElectricalTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p:
     const next = unit.electricalItems.map((item, idx) => idx === i ? { ...item, ...patch } : item);
     onChange({ electricalItems: next });
   };
-  const addItem = () => onChange({ electricalItems: [...unit.electricalItems, { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "" }] });
+  const addItem = () => onChange({ electricalItems: [...unit.electricalItems, { name: "", condition: "" as NormalAbnormal, judgement: "" as PassFail, rank: "" as Rank, remarks: "", photos: [] }] });
   const removeItem = (i: number) => onChange({ electricalItems: unit.electricalItems.filter((_, idx) => idx !== i) });
 
   return (
@@ -731,6 +772,7 @@ function ElectricalTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p:
               <th>Judgement</th>
               <th>Rank</th>
               <th>Remarks</th>
+              <th>Photos</th>
               <th></th>
             </tr>
           </thead>
@@ -746,6 +788,7 @@ function ElectricalTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p:
                 <td className="center"><JudgeSelect value={item.judgement} onChange={v => setItem(i, { judgement: v })} /></td>
                 <td className="center"><RankSelect value={item.rank} onChange={v => setItem(i, { rank: v })} /></td>
                 <td><input type="text" value={item.remarks} onChange={e => setItem(i, { remarks: e.target.value })} /></td>
+                <td><PhotoUpload photos={item.photos ?? []} onChange={p => setItem(i, { photos: p })} max={3} /></td>
                 <td className="center">
                   <button className="btn ghost sm" type="button" onClick={() => removeItem(i)}><Icon name="minus" /></button>
                 </td>

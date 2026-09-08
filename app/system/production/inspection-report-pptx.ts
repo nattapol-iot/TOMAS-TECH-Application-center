@@ -29,11 +29,11 @@ export type TransformerMeasurement = {
 export type PowerSection = { title: string } & TransformerMeasurement;
 
 export type OperationTest = {
-  name: string; status: PassFail; rank: Rank; remarks: string;
+  name: string; status: PassFail; rank: Rank; remarks: string; photos?: string[];
 };
 
 export type ElectricalItem = {
-  name: string; condition: NormalAbnormal; judgement: PassFail; rank: Rank; remarks: string;
+  name: string; condition: NormalAbnormal; judgement: PassFail; rank: Rank; remarks: string; photos?: string[];
 };
 
 export type InspectionUnit = {
