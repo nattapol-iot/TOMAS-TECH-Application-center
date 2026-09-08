@@ -100,6 +100,10 @@ so we never merge-conflict.
 
 ## Active claims
 
+| 2026-09-08 | Claude-PptxFix | Fix PPTX visual fidelity: remove logo from slide master (was on every slide), fix DARK_BLUE to 1B3A6B, remove broken rId3 image rel from master rels. Editing inspection-report-pptx.ts + inspection-report-template.ts only. | released — typecheck clean — Claude, 2026-09-08 |
+
+| 2026-09-08 | Claude-FullRewrite | Rewriting inspection-report-pptx.ts (11 slides) + photo storage fix in InspectionReportScreens.tsx | released — 11-slide structure, dynamic photos, correct table columns, canvas resize for localStorage — Claude, 2026-09-08 |
+
 | 2026-09-08 | Claude | Editable rows: editing InspectionReportScreens.tsx and inspection-report-pptx.ts only — Operation/Electrical/Power rows user-addable/removable/renamable. | released — typecheck clean; commit 0e39d53 — Claude, 2026-09-08 |
 
 | 2026-09-07 | Claude | Inspection Report auto-fill: editing `app/system/production/InspectionReportScreens.tsx` only — customer picker in GeneralTab, team picker in SignOffTab, pre-fill inspector from bootstrap.user on new report. No backend, migration, or other files. | released — typecheck passes; customer dropdown auto-fills 4 fields, team picker auto-fills inspector/checker name+title, new report pre-fills inspector from logged-in user — Claude, 2026-09-07 |

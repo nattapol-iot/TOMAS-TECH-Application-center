@@ -66,7 +66,7 @@ export type InspectionReport = {
 const W = 7560000;
 const H = 10692000;
 const MARGIN = 406400;
-const DARK_BLUE = "1F3864";
+const DARK_BLUE = "1B3A6B";
 const LIGHT_BLUE = "D6E4F7";
 const GRAY_BG = "F2F2F2";
 const BLACK = "000000";
@@ -893,7 +893,6 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.${LOGO_EXT}"/>
 </Relationships>`);
 
   files['ppt/slideLayouts/slideLayout1.xml'] = enc(SLIDE_LAYOUT_BLANK_XML);
