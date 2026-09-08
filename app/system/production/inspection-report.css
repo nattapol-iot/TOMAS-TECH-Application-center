@@ -65,6 +65,16 @@
   color: #1b3a6b; margin: 16px 0 8px; letter-spacing: 0.04em;
 }
 
+.ir-section-title-input {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  color: #1b3a6b; letter-spacing: 0.04em; flex: 1;
+  border: 1px solid transparent; border-radius: 4px; padding: 2px 6px;
+  background: transparent;
+}
+.ir-section-title-input:hover, .ir-section-title-input:focus {
+  border-color: var(--border); background: var(--surface); outline: none;
+}
+
 .ir-summary-list { display: flex; flex-direction: column; gap: 6px; }
 .ir-summary-row { display: flex; align-items: flex-start; gap: 8px; }
 .ir-summary-row span { color: var(--text-muted); font-size: 13px; flex-shrink: 0; margin-top: 8px; }
