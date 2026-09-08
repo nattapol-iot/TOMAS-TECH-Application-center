@@ -1,0 +1,51 @@
+name: CI
+
+# Fast checks on every PR and on pushes to integration branches.
+# These run in parallel and must complete before any merge is allowed.
+# Heavy jobs (Docker builds, SQL integration) live in integration.yml
+# and only run when targeting main or develop.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - "feature/**"
+      - "hotfix/**"
+      - "release/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-typecheck-test:
+    name: Lint / typecheck / unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint, typecheck, and unit tests
+        run: npm test
+
+  backend-compile:
+    name: Backend compile check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build backend API
+        run: dotnet build backend/IoTTeamCenter.Api/IoTTeamCenter.Api.csproj -c Release

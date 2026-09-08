@@ -1,0 +1,48 @@
+name: Deploy
+
+# Production deployment — only triggered by a push to main (i.e. after a
+# PR is merged). The job waits for manual approval in the GitHub "production"
+# Environment before it is dispatched to the self-hosted runner. The runner
+# lives on the production LAN and makes an outbound-only connection to GitHub,
+# so no public IP or VPN is required. See docs/CI_CD_SETUP.md for setup steps.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: [self-hosted, iot-team-center-production]
+    timeout-minutes: 20
+    # Requires a "production" Environment in repo Settings with at least one
+    # required reviewer. Approval in the Actions tab is the deploy gate.
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Sync checkout into the deploy path
+        # Same machine — local copy, not a network transfer. No SSH keys needed.
+        # Runs as the runner's service account, which install-production-host.sh
+        # already owns this path for (via --deploy-user).
+        run: |
+          rsync -a --delete \
+            --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
+            --exclude '.vinext' --exclude '.next' --exclude '.wrangler' --exclude '.vercel' \
+            --exclude 'backend/IoTTeamCenter.Api/bin' --exclude 'backend/IoTTeamCenter.Api/obj' \
+            --exclude 'backend/IoTTeamCenter.Api.Tests/bin' --exclude 'backend/IoTTeamCenter.Api.Tests/obj' \
+            ./ /opt/iot-team-center/src/
+
+      - name: Build and deploy (Docker Compose)
+        # Permitted without a password by the narrowly-scoped sudoers entry that
+        # install-production-host.sh writes for --deploy-user (deploy.sh/rollback.sh
+        # under /opt/iot-team-center/src only).
+        run: sudo /opt/iot-team-center/src/scripts/linux/deploy.sh \
+          --repo /opt/iot-team-center/src \
+          --api-env-file /etc/iot-team-center/api.env.input \
+          --frontend-env-file /etc/iot-team-center/frontend.env.input
