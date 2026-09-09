@@ -92,6 +92,7 @@ function newReport(bootstrap?: BootstrapData): InspectionReport {
   return {
     id: crypto.randomUUID(),
     title: "",
+    reportSubtitle: "",
     projectName: "",
     projectNo: "",
     customerName: "",
@@ -175,7 +176,7 @@ function exportPdf(report: InspectionReport) {
   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 12mm">
     <hr style="border:none;border-top:0.75pt solid #000;margin:0 0 10pt" />
     <h1 style="font-size:22pt;margin:0 0 8pt;text-align:right">${report.title}</h1>
-    <h2 style="font-size:16pt;margin:0 0 10pt;font-weight:400;text-align:right">${unit.name} Inspection Report for MCP</h2>
+    <h2 style="font-size:16pt;margin:0 0 10pt;font-weight:400;text-align:right">${unit.name} Inspection Report${report.reportSubtitle ? ` for ${report.reportSubtitle}` : ''}</h2>
     <hr style="border:none;border-top:0.75pt solid #000;margin:0 0 10pt" />
     <p style="margin:4pt 0">Made for : ${report.customerName}</p>
     <p style="margin:4pt 0">By : Tomas Tech Co., Ltd.</p>
@@ -359,7 +360,7 @@ export function InspectionReportScreen({ bootstrap, notify }: { bootstrap: Boots
       <PageHeader
         eyebrow="INSPECTION"
         title="Inspection Reports"
-        subtitle="Machine inspection checklist for Lifter & Cage Conveyor systems"
+        subtitle="Machine inspection checklist — customizable for any equipment type"
         actions={
           <button className="btn primary" type="button" onClick={createNew}>
             <Icon name="plus" /> New Report
@@ -530,6 +531,7 @@ function GeneralTab({ report, onChange, bootstrap }: {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
         <Field label="Report Title"><input type="text" value={report.title} onChange={e => onChange({ title: e.target.value })} /></Field>
+        <Field label="Report Subtitle" hint="Shown as &quot;Inspection Report for {this}&quot; on the cover — e.g. a customer abbreviation. Leave blank to omit."><input type="text" value={report.reportSubtitle ?? ""} onChange={e => onChange({ reportSubtitle: e.target.value })} /></Field>
         <Field label="Project Name"><input type="text" value={report.projectName} onChange={e => onChange({ projectName: e.target.value })} /></Field>
         <Field label="Project No."><input type="text" value={report.projectNo} onChange={e => onChange({ projectNo: e.target.value })} /></Field>
         <Field label="Customer Name"><input type="text" value={report.customerName} onChange={e => onChange({ customerName: e.target.value })} /></Field>

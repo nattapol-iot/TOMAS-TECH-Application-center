@@ -54,7 +54,7 @@ export type InspectionUnit = {
 };
 
 export type InspectionReport = {
-  id: string; title: string; projectName: string; projectNo: string;
+  id: string; title: string; reportSubtitle: string; projectName: string; projectNo: string;
   customerName: string; contactPerson: string; department: string; tel: string;
   reportDate: string; version: string;
   units: InspectionUnit[];
@@ -291,7 +291,7 @@ function coverSlide(
     // Title block: two title lines + blank + Made for + By, all right-aligned in one box
     textBox(724584, 4624787, 5301516, 1200329,
       txPara(report.title || 'Inspection Report', { sz: 13.5, color: BLACK, align: 'r' }) +
-      txPara(`${unit.name} Inspection Report for MCP`, { sz: 13.5, color: BLACK, align: 'r' }) +
+      txPara(`${unit.name} Inspection Report${report.reportSubtitle ? ' for ' + report.reportSubtitle : ''}`, { sz: 13.5, color: BLACK, align: 'r' }) +
       txPara('', { sz: 12, color: BLACK, align: 'r' }) +
       txPara(`Made for : ${report.customerName}`, { sz: 12, color: BLACK, align: 'r' }) +
       txPara(`By : Tomas Tech Co., Ltd.`, { sz: 12, color: BLACK, align: 'r' })),
@@ -540,7 +540,7 @@ function opPhotoSlide(
     shapes.push(imgShape(PH1_X, PH1_Y, PH_CX, PH_CY, photoRels[relIdx].rId));
     relIdx++;
   } else {
-    shapes.push(...photoPlaceholder(PH1_X, PH1_Y, PH_CX, PH_CY, test1?.name ?? ''));
+    shapes.push(...photoPlaceholder(PH1_X, PH1_Y, PH_CX, PH_CY, ''));
   }
 
   // Photo 2
@@ -548,7 +548,7 @@ function opPhotoSlide(
     shapes.push(imgShape(PH2_X, PH2_Y, PH_CX, PH_CY + 1, photoRels[relIdx].rId));
     relIdx++;
   } else {
-    shapes.push(...photoPlaceholder(PH2_X, PH2_Y, PH_CX, PH_CY + 1, test2?.name ?? ''));
+    shapes.push(...photoPlaceholder(PH2_X, PH2_Y, PH_CX, PH_CY + 1, ''));
   }
 
   let extraRels = '';
@@ -601,7 +601,7 @@ function elecPhotoSlide(
       shapes.push(imgShape(px, py + LABEL_H, PW, PH, photoRels[relIdx].rId));
       relIdx++;
     } else {
-      shapes.push(...photoPlaceholder(px, py + LABEL_H, PW, PH, item.name));
+      shapes.push(...photoPlaceholder(px, py + LABEL_H, PW, PH, ''));
     }
   }
 
@@ -710,6 +710,25 @@ function elecTableSlide(unit: InspectionUnit, pageNum: number): { xml: string; r
   return makeSlide([
     ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
     buildTable(OLE_X, OLE_Y, colW, rows),
+  ]);
+}
+
+// ── Summary slide ─────────────────────────────────────────────
+function summarySlide(unit: InspectionUnit, pageNum: number): { xml: string; rels: string } {
+  resetIds();
+
+  const items = unit.summaryItems.filter(s => s.trim());
+  const rows: RowDef[] = [
+    { cells: [{ text: 'SUMMARY', bold: true, bg: DARK_BLUE }], h: cm(0.7) },
+    ...(items.length > 0 ? items : ['']).map((s, i) => ({
+      cells: [{ text: items.length > 0 ? `${i + 1}. ${s}` : '' } as CellDef],
+      h: cm(0.65),
+    })),
+  ];
+
+  return makeSlide([
+    ...pageHeaderShapes('MACHINE INSPECTION CHECK LIST', pageNum),
+    buildTable(OLE_X, OLE_Y, [6105525], rows),
   ]);
 }
 
@@ -869,6 +888,9 @@ export function generatePptx(report: InspectionReport): Uint8Array {
 
     // Electrical Check Table
     slideData.push(elecTableSlide(unit, unitPage(0)));
+
+    // Summary
+    slideData.push(summarySlide(unit, unitPage(0)));
 
     // Sign-Off
     slideData.push(signOffSlide(report, unitPage(0)));
