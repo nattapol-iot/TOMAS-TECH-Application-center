@@ -209,6 +209,67 @@ function ReportCoverPage({ report }: { report: ReportRecord }) {
   </div>;
 }
 
+// Print-only info page — mirrors infoSlide() in report-pptx.ts (plain header
+// text, bordered box, generic report metadata). Replaces the on-screen
+// masthead+meta-grid for print so the exported document matches the original.
+function ReportPrintInfoPage({ report }: { report: ReportRecord }) {
+  const t = (value: string) => reportCopy(report.locale, value);
+  const headerTitle = `${t(labels[report.reportType] ?? report.reportType).toUpperCase()} REPORT`;
+  return <div className="report-print-info-page" lang={report.locale} translate="no">
+    <div className="report-print-page-header"><span>{headerTitle}</span></div>
+    <div className="report-print-info-box">
+      <p>{t("Customer")} : {report.customer}</p>
+      <p>{t("Project / Reference")} : {report.sourceReference}</p>
+      <p>{t("Project / Site")} : {report.sourceTitle}</p>
+      <p>{t("Report No.")} : {report.number} · Rev.{report.revision}</p>
+      <p>{t("Report Date")} : {report.reportDate}</p>
+      <p>{t("Status")} : {t(labels[report.status] ?? report.status)}</p>
+      {report.template ? <p>{t("Template")} : {report.template.name} · V{report.template.version}</p> : null}
+    </div>
+  </div>;
+}
+
+// Print-only sign-off page — mirrors signOffSlide() in report-pptx.ts,
+// pulling the same real signature/customer-acknowledgment data as
+// ReportSignatureSummary but styled to match the original document.
+function ReportSignOffPage({ report }: { report: ReportRecord }) {
+  const t = (value: string) => reportCopy(report.locale, value);
+  const stageInfo = (stage: string, person: { id: number; name: string } | null) => {
+    const signature = report.signatures.find(item => item.stage === stage);
+    return { name: signature?.actorName ?? person?.name ?? "", date: signature ? reportTimestamp(report.locale, signature.occurredAt) : "" };
+  };
+  const prepared = stageInfo("PREPARE", report.preparedBy);
+  const approved = stageInfo("APPROVE", report.approver);
+  const ack = report.customerAcknowledgment;
+  return <div className="report-signoff-page" lang={report.locale} translate="no">
+    <h2 className="report-signoff-title">{t("Sign Off")}</h2>
+    <p className="report-signoff-intro">{t("With all these documents, this is part of the report and it is all the information of the project.")}</p>
+    <div className="report-signoff-grid">
+      <div className="report-signoff-block">
+        <strong>{t("Customer")} : {report.customer}</strong>
+        <p>{t("Sign")} :  ___________________________</p>
+        <p>{t("Name")} :  {ack?.name ?? ""}</p>
+        <p>{t("Title")} :  {ack?.title ?? ""}</p>
+        <p>{t("Date")} : {ack?.date ?? ""}</p>
+      </div>
+      <div className="report-signoff-block">
+        <strong>TOMAS TECH CO., LTD.</strong>
+        <p>{t("Prepared by")}</p>
+        <p>{t("Sign")} :  ___________________________</p>
+        <p>{t("Name")} : {prepared.name}</p>
+        <p>{t("Date")} : {prepared.date}</p>
+      </div>
+      <div className="report-signoff-block">
+        <strong>{t("Approved")}</strong>
+        <p>{t("Sign")} :  ___________________________</p>
+        <p>{t("Name")} : {approved.name}</p>
+        <p>{t("Date")} : {approved.date}</p>
+      </div>
+    </div>
+    <p className="report-signoff-end">## END OF BLUEPRINT ##</p>
+  </div>;
+}
+
 function ReportDocumentHeader({ report, title, reportDate, onTitle, onDate }: { report: ReportRecord; title: string; reportDate: string; onTitle?: (value: string) => void; onDate?: (value: string) => void }) {
   const t = (value: string) => reportCopy(report.locale, value);
   return <header className="report-paper-header" lang={report.locale} translate="no">
@@ -312,6 +373,6 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
     </div>
     {templateSeed ? <ReportTemplateEditor onDirtyChange={onDirtyChange} seed={templateSeed} onClose={() => setTemplateSeed(null)} onSaved={() => { setTemplateSeed(null); notify(t("Reusable report template saved")); }} /> : null}<div className="report-actions">{bootstrap.permissions.includes("report.write") && report.revision === report.currentRevision ? <button className="btn default" type="button" disabled={busy || dirty} onClick={() => void saveAsTemplate()}>{t("Save as template")}</button> : null}{editable ? <button className="btn primary" type="button" disabled={busy || !dirty || !draft.title.trim() || !draft.reportDate || !draft.approverId} onClick={() => void changeAction("save")}>{t("Save draft")}</button> : null}{[["submit", "Sign & submit"], ["review", "Review report"], ["approve", "Sign & approve"], ["return", "Request changes"], ["revise", "Create revision"], ["void", "Void report"]].filter(([key]) => allows(report, key!)).map(([key, label]) => <button key={key} type="button" className="btn default" disabled={busy || dirty} onClick={() => { setAction(key!); setNote(""); setConsent(false); }}>{t(label!)}</button>)}</div>
     {action ? <Modal title={t({ submit: "Sign & submit report", review: "Review report", approve: "Sign & approve report", return: "Request changes", revise: "Create a new revision", void: "Void report", "revoke-customer-link": "Revoke customer link" }[action] ?? action)} onClose={() => { if (!busy) setAction(""); }}><p>{report.number}  · R{report.revision} · {report.title}</p>{action === "review" ? <label className="report-consent"><input type="checkbox" checked={reviewSign} disabled={busy || !bootstrap.permissions.includes("signing.sign")} onChange={event => { setReviewSign(event.target.checked); setConsent(false); }} />{t("Apply my signature to the review")}</label> : null}{needsConsent ? <label className="report-consent"><input type="checkbox" checked={consent} disabled={busy} onChange={event => setConsent(event.target.checked)} />{t(TEAM_CONSENT)}</label> : null}{!signingAction || action === "review" ? <Field label={t("Reason / note")}><textarea aria-label={t("Reason / note")} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></Field> : null}{error ? <div className="callout danger" role="alert">{t(error)}</div> : null}<div className="report-actions"><button className="btn ghost" disabled={busy} onClick={() => setAction("")}>{t("Cancel")}</button><button className="btn primary" disabled={busy || needsConsent && !consent || ["return", "revise", "void"].includes(action) && !note.trim()} onClick={() => void changeAction(action)}>{busy ? t("Saving…") : t("Confirm")}</button></div></Modal> : null}
-    <article className="report-print"><ReportCoverPage report={report} /><ReportDocumentHeader report={report} title={report.title} reportDate={report.reportDate} />{report.template ? <p lang={report.locale} translate="no">{reportCopy(report.locale, "Template:")} {report.template.name}  · V{report.template.version}</p> : null}<ReportBodyEditor locale={report.locale} reportType={report.reportType} body={report.body} readOnly evidenceImageSource={evidenceImageSource} /><ReportSignatureSummary report={report} /></article>
+    <article className="report-print"><ReportCoverPage report={report} /><ReportPrintInfoPage report={report} /><ReportBodyEditor locale={report.locale} reportType={report.reportType} body={report.body} readOnly evidenceImageSource={evidenceImageSource} /><ReportSignOffPage report={report} /></article>
   </div>;
 }

@@ -353,7 +353,7 @@ function signOffSlide(report: ReportRecord, pageNum: number): { xml: string; rel
   resetIds();
 
   const ack = report.customerAcknowledgment;
-  const sigFor = (actorId: number | null) => report.signatures.find(s => s.actorId === actorId)?.occurredAt ?? '';
+  const sigFor = (stage: string) => report.signatures.find(s => s.stage === stage)?.occurredAt ?? '';
 
   const shapes: string[] = [
     textBox(406400, 479503, 6117063, 345687,
@@ -377,14 +377,14 @@ function signOffSlide(report: ReportRecord, pageNum: number): { xml: string; rel
     textBox(370469, 5786758, 3139688, 261610,
       txPara(`Name : ${report.preparedBy?.name ?? ''}`, { sz: 11, color: BLUE_LABEL })),
     textBox(370469, 6356197, 3139688, 261610,
-      txPara(`Date : ${sigFor(report.preparedById)}`, { sz: 11, color: BLUE_LABEL })),
+      txPara(`Date : ${sigFor("PREPARE")}`, { sz: 11, color: BLUE_LABEL })),
     textBox(3383774, 4803439, 3139688, 938719,
       txPara('Approved', { sz: 11, bold: true, color: BLACK }) +
       txPara('Sign :  ___________________________', { sz: 11, color: BLACK })),
     textBox(3383774, 5786758, 3139688, 261610,
       txPara(`Name : ${report.approver?.name ?? ''}`, { sz: 11, color: BLUE_LABEL })),
     textBox(3383774, 6356197, 3139688, 261610,
-      txPara(`Date : ${sigFor(report.approverId)}`, { sz: 11, color: BLUE_LABEL })),
+      txPara(`Date : ${sigFor("APPROVE")}`, { sz: 11, color: BLUE_LABEL })),
     textBox(471487, 9050592, 6117062, 261610,
       txPara('## END OF BLUEPRINT ##', { sz: 11, bold: true, color: BLACK, align: 'ctr' })),
     textBox(6210299, 9181401, 328613, 527403,
