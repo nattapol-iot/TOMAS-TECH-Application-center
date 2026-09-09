@@ -9,14 +9,16 @@ import { ReportTemplateEditor, ReportTemplateLibrary, ReportTemplatePicker, REPO
 import { useReportUnsavedChanges } from "./useReportUnsavedChanges";
 import { reportCopy, reportTimestamp } from "./report-locale";
 import { ReportDocumentForm } from "./ReportDocumentForm";
+import { generateReportPptx } from "./report-pptx";
+import { LOGO_BASE64, LOGO_EXT } from "./report-pptx-template";
 import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
 import { useReportUiText as useUiText } from "./report-ui-copy";
+import { REPORT_TYPES, REPORT_STATUSES, labels, reportSections, type ReportType, type ReportBody, type InputField, type Section, type ReportRecord, type Signer } from "./report-types";
 
-export const REPORT_TYPES = ["INSTALLATION", "UAT", "SERVICE", "INSPECTION", "POC"] as const;
-export type ReportType = typeof REPORT_TYPES[number];
-export const REPORT_STATUSES = ["DRAFT", "SUBMITTED", "REVIEWED", "APPROVED", "AWAITING_CUSTOMER", "COMPLETED", "CHANGES_REQUESTED", "VOID"] as const;
-const labels: Record<string, string> = { INSTALLATION: "Installation", UAT: "UAT", SERVICE: "Service", INSPECTION: "Inspection", POC: "POC", DRAFT: "Draft", SUBMITTED: "Team review", REVIEWED: "Awaiting approval", APPROVED: "Approved", AWAITING_CUSTOMER: "Customer signature", COMPLETED: "Complete", CHANGES_REQUESTED: "Changes requested", VOID: "Void" };
+export { REPORT_TYPES, REPORT_STATUSES, labels, reportSections };
+export type { ReportType, ReportBody, InputField, Section, ReportRecord };
+
 const reportForms: { type: ReportType; title: string; subtitle: string; reference: string }[] = [
   { type: "SERVICE", title: "Service report", subtitle: "งานบริการ แก้ไขปัญหา และติดตามผล", reference: "Service Report Rev.00" },
   { type: "UAT", title: "UAT report", subtitle: "รายการทดสอบ ผลการตรวจรับ และ Punchlist", reference: "UAT Report Rev.00" },
@@ -26,46 +28,6 @@ const reportForms: { type: ReportType; title: string; subtitle: string; referenc
 ];
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Unable to load reports.";
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-type ReportBody = Record<string, unknown>;
-type InputField = { key: string; label: string; type?: "date" | "datetime-local" | "number" | "url" | "email" | "tel"; options?: string[] };
-type Section = { key: string; label: string; fields: InputField[]; repeat?: boolean };
-const field = (key: string, label: string, type?: InputField["type"]): InputField => ({ key, label, ...(type ? { type } : {}) });
-const resultField: InputField = { key: "result", label: "Result", options: ["PASS", "FAIL", "PARTIAL"] };
-const hardware: Section = { key: "hardware", label: "Hardware", repeat: true, fields: [field("item", "Item"), field("model", "Model"), field("serial", "Serial number"), field("quantity", "Quantity", "number"), field("action", "Action"), field("status", "Status")] };
-const software: Section = { key: "software", label: "Software", repeat: true, fields: [field("module", "Module"), field("versionBefore", "Version before"), field("versionAfter", "Version after"), field("configurationLicense", "Configuration / license"), field("action", "Action"), field("status", "Status")] };
-const commonSections: Section[] = [
-  { key: "context", label: "Site & work details", fields: [field("site", "Site / location"), field("requestedBy", "Requested by"), field("contact", "Customer contact"), field("contactPhone", "Contact phone", "tel"), field("contactEmail", "Contact email", "email"), field("team", "Team on site"), field("start", "Start date & time", "datetime-local"), field("end", "End date & time", "datetime-local"), field("environment", "Environment"), field("mode", "Operating mode")] },
-  { key: "overview", label: "Objective & summary", fields: [field("objective", "Objective"), field("summary", "Summary")] },
-];
-const finalSections: Section[] = [
-  { key: "evidence", label: "Evidence references", repeat: true, fields: [field("topic", "Report topic"), field("description", "What is shown"), field("purpose", "Evidence purpose"), field("reference", "File / document reference"), field("url", "Evidence URL", "url")] },
-  { key: "issues", label: "Issues & pending actions / Punchlist", repeat: true, fields: [field("issue", "Issue / pending action"), field("owner", "Owner"), field("dueDate", "Due date", "date"), field("status", "Status")] },
-  { key: "deliverables", label: "Deliverables", repeat: true, fields: [field("item", "Deliverable"), field("reference", "Reference / version"), field("status", "Delivery status")] },
-  { key: "closing", label: "Remarks", fields: [field("remarks", "Remarks / follow-up notes")] },
-];
-export function reportSections(type: string): Section[] {
-  const specific: Record<string, Section[]> = {
-    SERVICE: [hardware, software, { key: "service", label: "Service diagnosis & resolution", fields: [field("symptom", "Symptom"), field("impact", "Impact"), field("rootCause", "Root cause"), field("action", "Corrective action"), field("downtime", "Downtime"), field("backup", "Backup"), field("rollback", "Rollback plan / result"), field("verification", "Verification"), field("testResult", "Test result"), field("customerAcceptance", "Customer acceptance"), field("followUp", "Follow-up")] }],
-    INSTALLATION: [hardware, software, { key: "commissioning", label: "Commissioning", repeat: true, fields: [field("checkpoint", "Check / activity"), field("expected", "Expected"), field("observed", "Observed"), resultField, field("remarks", "Remarks")] }],
-    UAT: [{ key: "scenarios", label: "UAT scenarios & test steps", repeat: true, fields: [field("scenario", "Scenario (repeat for each step)"), field("step", "Step"), field("input", "Input"), field("expected", "Expected result"), field("actual", "Actual result"), resultField, field("remark", "Remark"), field("evidence", "Evidence reference")] }, { key: "uatSummary", label: "UAT summary & acceptance", fields: [field("testFrom", "Test from", "date"), field("testTo", "Test to", "date"), { ...resultField, key: "overallResult", label: "Overall result" }, field("issueCount", "Issue count", "number"), field("correctiveCount", "Corrective action count", "number"), field("followUpOwner", "Follow-up owner"), field("acceptance", "Acceptance"), field("revisionEvidence", "Revision evidence")] }],
-    INSPECTION: [
-      { key: "assets", label: "Assets / units under inspection", repeat: true, fields: [field("name", "Asset / unit name"), field("assetType", "Asset type"), field("location", "Location"), field("identifier", "Identifier (panel / serial / hostname)")] },
-      { key: "measurements", label: "Measurements", repeat: true, fields: [field("asset", "Asset / unit"), field("parameter", "Parameter"), field("unit", "Unit of measure"), field("specValue", "Spec value"), field("actualValue", "Actual value"), resultField, field("remarks", "Remarks")] },
-      { key: "checkpoints", label: "Inspection checkpoints", repeat: true, fields: [field("checkpoint", "Checkpoint"), field("expected", "Expected"), field("observed", "Observed"), field("unit", "Unit"), field("category", "Category"), resultField, field("corrective", "Corrective action")] },
-    ],
-    POC: [{ key: "trials", label: "POC hypotheses & trials", repeat: true, fields: [field("hypothesis", "Hypothesis"), field("successCriteria", "Success criteria"), field("baseline", "Baseline"), field("trial", "Trial / method"), field("result", "Result"), field("limitations", "Limitations")] }],
-  };
-  const punchlist: Section = { key: "punchlist", label: "UAT punchlist", repeat: true, fields: [field("scenario", "Scenario"), field("step", "Step"), field("issue", "Issue"), field("owner", "Owner"), field("updatedDate", "Updated date", "date"), field("status", "Status"), field("dueDate", "Due date", "date"), field("correctiveResult", "Corrective result"), { ...resultField, key: "resultStatus", label: "Result status" }] };
-  const topicOptions:Record<string,string[]>={
-    SERVICE:["Work details","Scope & objective","Hardware","Software","Problem & resolution","Verification & handover","Pending actions","Deliverables"],
-    UAT:["Work details","Scope & objective","UAT summary","UAT test scenarios","UAT punchlist","Deliverables"],
-    INSTALLATION:["Work details","Scope & objective","Hardware","Software","Commissioning","Pending actions","Deliverables"],
-    INSPECTION:["Work details","Scope & objective","Assets","Measurements","Inspection checkpoints","Pending actions","Deliverables"],
-    POC:["Work details","Scope & objective","POC trials","Pending actions","Deliverables"],
-  };
-  return [...commonSections, ...(specific[type] ?? []), ...finalSections.map(section => type === "UAT" && section.key === "issues" ? punchlist : section.key === "evidence" ? {...section,fields:section.fields.map(definition=>definition.key==="topic"?{...definition,options:topicOptions[type]??topicOptions.SERVICE}:definition)} : section)];
-}
-
 export function ReportBodyEditor({ locale = "th", reportType, body, onChange, readOnly = false, reusableOnly = false, onUploadEvidence, evidenceImageSource }: { locale?: string; reportType: string; body: ReportBody; onChange?: (value: ReportBody) => void; readOnly?: boolean; reusableOnly?: boolean; onUploadEvidence?: (file:File)=>Promise<ReportEvidenceAttachment>; evidenceImageSource?: (attachmentId:number)=>string|Promise<string> }) {
   const sections = reusableOnly ? reportSections(reportType).filter(section => REPORT_TEMPLATE_SECTIONS_BY_TYPE[reportType]?.includes(section.key)).map(section => ({ ...section, fields: section.fields.filter(definition => REPORT_TEMPLATE_FIELDS[section.key]?.fields.includes(definition.key)) })).filter(section => section.fields.length > 0) : reportSections(reportType);
   return <ReportDocumentForm locale={locale} reportType={reportType} body={body} onChange={onChange} readOnly={readOnly} reusableOnly={reusableOnly} sections={sections} onUploadEvidence={onUploadEvidence} evidenceImageSource={evidenceImageSource} />;
@@ -77,20 +39,7 @@ export function ReportWorkflow({ status, hasReviewer }: { status: string; hasRev
   return <ol className="report-workflow" aria-label={t("Report workflow")}>{["Draft", hasReviewer ? "Team review" : "Review optional", "Approval", "Customer signature", "Complete"].map((label, step) => <li key={label} className={status === "VOID" ? "" : step < index ? "done" : step === index ? "current" : ""} aria-current={status !== "VOID" && step === index ? "step" : undefined}><span>{step + 1}</span>{t(label)}</li>)}</ol>;
 }
 
-export type ReportRecord = {
-  id: number; number: string; reportType: ReportType; sourceKind: "INQUIRY" | "PROJECT"; sourceId: number;
-  sourceReference: string; sourceTitle: string; customer: string; endUserName?: string | null; revision: number; currentRevision: number;
-  title: string; reportDate: string; locale: string; body: ReportBody; status: string; rowVersion: string;
-  preparedById: number; reviewerId: number | null; approverId: number; decisionNote: string;
-  preparedBy: Signer | null; reviewer: Signer | null; approver: Signer | null; customerLink: { expiresAt: string } | null;
-  template?: { id: number; name: string; version: number } | null;
-  updatedAt: string; allowedActions?: string[]; snapshotSha256: string | null;
-  signatures: { stage: string; actorId: number; actorName: string; occurredAt: string }[];
-  customerAcknowledgment: { name: string; title: string; company: string; date: string; mode: string; occurredAt: string; signatureDataUrl?: string | null } | null;
-  revisions: { revision: number; status: string; title: string; createdAt: string }[];
-};
 type ReportSource = { id: number; sourceKind: "INQUIRY" | "PROJECT"; reference: string; title: string };
-type Signer = { id: number; name: string };
 const BASE = "/api/v1/reports/workspace";
 const TEAM_CONSENT = "I have reviewed this exact report revision and authorize use of my own signature specimen for this action.";
 const allows = (report: ReportRecord, action: string) => report.allowedActions?.includes(action) === true;
@@ -236,7 +185,9 @@ function NewReportModal({ bootstrap, initialType = "SERVICE", initialTemplate = 
 function ReportDocumentHeader({ report, title, reportDate, onTitle, onDate }: { report: ReportRecord; title: string; reportDate: string; onTitle?: (value: string) => void; onDate?: (value: string) => void }) {
   const t = (value: string) => reportCopy(report.locale, value);
   return <header className="report-paper-header" lang={report.locale} translate="no">
-    <div className="report-paper-masthead"><strong>TOMAS TECH</strong><div><h2>{t(`${labels[report.reportType].toUpperCase()} REPORT`)}</h2><span>{t(report.reportType === "UAT" ? "ใบรายงานการทดสอบและตรวจรับงาน" : report.reportType === "SERVICE" ? "ใบรายงานการให้บริการ" : report.reportType === "INSPECTION" ? "ใบรายงานผลการตรวจสอบ" : "ใบรายงานผลการดำเนินงาน")}</span></div><small>{t(report.reportType === "UAT" ? "อ้างอิง TT-FRM-UAT-001 · Rev.00" : ["SERVICE", "INSTALLATION"].includes(report.reportType) ? "อ้างอิง TT-FRM-SRV-001 · Rev.00" : "แบบรายงานมาตรฐานทีม")}</small></div>
+    <div className="report-paper-masthead">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img className="report-paper-logo" src={`data:image/${LOGO_EXT};base64,${LOGO_BASE64}`} alt="TOMAS TECH" /><div><h2>{t(`${labels[report.reportType].toUpperCase()} REPORT`)}</h2><span>{t(report.reportType === "UAT" ? "ใบรายงานการทดสอบและตรวจรับงาน" : report.reportType === "SERVICE" ? "ใบรายงานการให้บริการ" : report.reportType === "INSPECTION" ? "ใบรายงานผลการตรวจสอบ" : "ใบรายงานผลการดำเนินงาน")}</span></div><small>{t(report.reportType === "UAT" ? "อ้างอิง TT-FRM-UAT-001 · Rev.00" : ["SERVICE", "INSTALLATION"].includes(report.reportType) ? "อ้างอิง TT-FRM-SRV-001 · Rev.00" : "แบบรายงานมาตรฐานทีม")}</small></div>
     <div className="report-paper-meta"><div><span>{t("REPORT NO. / เลขที่")}</span><strong>{report.number}  · R{report.revision}</strong></div><div><span>{t("REPORT DATE / วันที่")}</span>{onDate ? <input aria-label={t("Report date")} type="date" required value={reportDate} onChange={event => onDate(event.target.value)} /> : <strong>{reportDate}</strong>}</div><div><span>{t("STATUS / สถานะ")}</span><strong>{t(labels[report.status] ?? report.status)}</strong></div><div className="wide"><span>{t("CUSTOMER / บริษัทผู้ว่าจ้าง")}</span><strong>{report.customer}</strong></div><div><span>{t("PROJECT / INQUIRY NO.")}</span><strong>{report.sourceReference}</strong></div>{report.endUserName ? <div className="full"><span>{t("END USER / บริษัทผู้ใช้งานปลายทาง")}</span><strong>{report.endUserName}</strong></div> : null}<div className="full"><span>{t("PROJECT / SITE / โครงการ")}</span><strong>{report.sourceTitle}</strong></div><div className="full"><span>{t("REPORT TITLE / เรื่อง")}</span>{onTitle ? <input aria-label={t("Report title")} required maxLength={500} value={title} onChange={event => onTitle(event.target.value)} /> : <strong>{title}</strong>}</div></div>
   </header>;
 }
@@ -253,6 +204,7 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
   const [preview, setPreview] = useState(false);
   const [report, setReport] = useState<ReportRecord | null>(null), [error, setError] = useState("");
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
+  const [pptxBusy, setPptxBusy] = useState(false);
   const [tab, setTab] = useState<"content" | "team" | "customer" | "history">("content");
   const [draft, setDraft] = useState<{ title: string; reportDate: string; locale: string; reviewerId: number | null; approverId: number; body: ReportBody } | null>(null);
   const [dirty, setDirty] = useState(false), [consent, setConsent] = useState(false), [reviewSign, setReviewSign] = useState(bootstrap.permissions.includes("signing.sign"));
@@ -274,6 +226,19 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
   const patch = (value: Partial<NonNullable<typeof draft>>) => { setDraft(current => current ? { ...current, ...value } : current); setDirty(true); setConsent(false); };
   const uploadEvidence = useCallback((file:File)=>uploadReportEvidence(id,file),[id]);
   const evidenceImageSource = useCallback(async(attachmentId:number)=>URL.createObjectURL(await downloadReportEvidence(id,attachmentId)),[id]);
+  const exportPptx = async () => {
+    if (!report || pptxBusy) return;
+    setPptxBusy(true); setError("");
+    try {
+      const bytes = await generateReportPptx(report, reportSections(report.reportType));
+      const blob = new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${report.number}.pptx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (failure) { setError(errorText(failure)); }
+    finally { setPptxBusy(false); }
+  };
   const changeAction = async (next: string) => {
     if (!report || busy) return;
     setBusy(true); setError("");
@@ -306,7 +271,7 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
   const needsConsent = signingAction && (action !== "review" || reviewSign);
   return <div className="report-workspace">
     <button className="btn ghost" type="button" onClick={onBack}>{t("← Back to reports")}</button>
-    <PageHeader eyebrow={`${report.number} · R${report.revision} · ${t(labels[report.reportType])}`} title={report.title} subtitle={`${report.sourceReference} · ${report.customer} · ${report.reportDate}`} meta={<Badge>{t(labels[report.status] ?? report.status)}</Badge>} actions={<><button className="btn default" type="button" disabled={busy || dirty} onClick={() => window.print()}><Icon name="file" />{t("Print / Save as PDF")}</button><button className="btn ghost" type="button" disabled={busy || loading || dirty} onClick={() => void load()}>{t("Refresh")}</button></>} />
+    <PageHeader eyebrow={`${report.number} · R${report.revision} · ${t(labels[report.reportType])}`} title={report.title} subtitle={`${report.sourceReference} · ${report.customer} · ${report.reportDate}`} meta={<Badge>{t(labels[report.status] ?? report.status)}</Badge>} actions={<><button className="btn default" type="button" disabled={busy || dirty} onClick={() => window.print()}><Icon name="file" />{t("Print / Save as PDF")}</button><button className="btn default" type="button" disabled={busy || pptxBusy || dirty} onClick={() => void exportPptx()}><Icon name="file" />{pptxBusy ? t("Preparing…") : t("Export PPT")}</button><button className="btn ghost" type="button" disabled={busy || loading || dirty} onClick={() => void load()}>{t("Refresh")}</button></>} />
     <ReportWorkflow status={report.status} hasReviewer={report.reviewerId !== null} />{report.template ? <p className="report-template-provenance">{t("From template:")}{report.template.name}  · V{report.template.version}</p> : null}
     {report.decisionNote ? <div className="callout warning">{report.decisionNote}</div> : null}{error ? <div className="callout danger" role="alert">{t(error)}</div> : null}
     {dirty ? <div className="callout info">{t("Unsaved changes. Save the draft before submitting or printing.")}</div> : null}
