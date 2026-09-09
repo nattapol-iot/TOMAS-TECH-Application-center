@@ -272,11 +272,10 @@ function coverSlide(
 ): { xml: string; rels: string } {
   resetIds();
   const RED = 'FF0000';
-  const contentW = W - MARGIN * 2;
 
   const shapes: string[] = [
     // Version box (top-left, red border)
-    textBox(MARGIN, 479502, 1555750, 283687,
+    textBox(406400, 479503, 1555750, 283687,
       txPara(`Version : ${report.version}`, { sz: 12, color: RED, align: 'ctr' }),
       RED),
 
@@ -285,38 +284,29 @@ function coverSlide(
       txPara('Confidential', { sz: 12, color: RED, align: 'ctr' }),
       RED),
 
-    // Horizontal rule above title
-    borderRect(MARGIN, 3700000, contentW, pt(0.75), BLACK),
+    // Decorative corner: thin horizontal rule + vertical black bar (matches original group)
+    textBox(406400, 5819385, 5709200, pt(2.25), txPara('', {}), undefined, BLACK),
+    textBox(6179800, 3687445, 271800, 2531668, txPara('', {}), undefined, BLACK),
 
-    // Main title (22pt bold black, right-aligned)
-    textBox(MARGIN, 3800000, contentW, cm(2),
-      txPara(report.title || 'Inspection Report', { sz: 22, bold: true, color: BLACK, align: 'r' })),
-
-    // Unit / subtitle (16pt black, right-aligned)
-    textBox(MARGIN, cm(11.5), contentW, cm(1.2),
-      txPara(`${unit.name} Inspection Report for MCP`, { sz: 16, color: BLACK, align: 'r' })),
-
-    // Horizontal rule below subtitle
-    borderRect(MARGIN, cm(13), contentW, pt(0.75), BLACK),
-
-    // Project info block
-    textBox(MARGIN, cm(13.5), contentW, cm(3),
-      txPara(`Made for : ${report.customerName}`, { sz: 11, color: BLACK }) +
-      txPara(`By : Tomas Tech Co., Ltd.`, { sz: 11, color: BLACK }) +
-      txPara(`Version : ${report.version}`, { sz: 11, color: BLACK })),
+    // Title block: two title lines + blank + Made for + By, all right-aligned in one box
+    textBox(724584, 4624787, 5301516, 1200329,
+      txPara(report.title || 'Inspection Report', { sz: 13.5, color: BLACK, align: 'r' }) +
+      txPara(`${unit.name} Inspection Report for MCP`, { sz: 13.5, color: BLACK, align: 'r' }) +
+      txPara('', { sz: 12, color: BLACK, align: 'r' }) +
+      txPara(`Made for : ${report.customerName}`, { sz: 12, color: BLACK, align: 'r' }) +
+      txPara(`By : Tomas Tech Co., Ltd.`, { sz: 12, color: BLACK, align: 'r' })),
 
     // Tomas logo
     imgShape(1917699, 7636804, 3022600, 720006, logoRId),
 
-    // Address footer (11pt black)
-    textBox(MARGIN, H - cm(2.5), contentW, cm(2),
-      txPara(
-        'No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.',
-        { sz: 11, color: BLACK }
-      )),
+    // Address + contact footer (12pt black, left-aligned)
+    textBox(952199, 8356810, 4953600, 646331,
+      txPara('No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, ', { sz: 12, color: BLACK }) +
+      txPara('Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.', { sz: 12, color: BLACK }) +
+      txPara('Tel : +66-98-271-9741     E-mail : info@tomastc.com', { sz: 12, color: BLACK })),
 
     // Page number
-    textBox(6093618, 9181401, 435769, 527403,
+    textBox(6087024, 9181401, 498561, 527403,
       txPara(String(pageNum), { sz: 8, color: BLACK, align: 'r' })),
   ];
 
