@@ -182,6 +182,33 @@ function NewReportModal({ bootstrap, initialType = "SERVICE", initialTemplate = 
   </Modal>;
 }
 
+// Print-only branded cover page — matches the TOMAS TECH reference document
+// (white background, red-bordered Version/Confidential boxes, right-aligned
+// title block, logo, address footer) and mirrors coverSlide() in report-pptx.ts.
+function ReportCoverPage({ report }: { report: ReportRecord }) {
+  const t = (value: string) => reportCopy(report.locale, value);
+  const typeLabel = t(labels[report.reportType] ?? report.reportType);
+  return <div className="report-cover-page" lang={report.locale} translate="no">
+    <div className="report-cover-topbar">
+      <span className="report-cover-badge">{t("Rev.")} {report.revision} · {report.reportDate}</span>
+      <span className="report-cover-badge">{t("Confidential")}</span>
+    </div>
+    <div className="report-cover-body">
+      <hr className="report-cover-rule" />
+      <h1>{report.title}</h1>
+      <h2>{typeLabel} {t("Report")}</h2>
+      <p>{t("Made for")} : {report.customer}</p>
+      <p>{t("By")} : Tomas Tech Co., Ltd.</p>
+    </div>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img className="report-cover-logo" src={`data:image/${LOGO_EXT};base64,${LOGO_BASE64}`} alt="TOMAS TECH" />
+    <div className="report-cover-address">
+      <p>No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.</p>
+      <p>Tel : +66-98-271-9741     E-mail : info@tomastc.com</p>
+    </div>
+  </div>;
+}
+
 function ReportDocumentHeader({ report, title, reportDate, onTitle, onDate }: { report: ReportRecord; title: string; reportDate: string; onTitle?: (value: string) => void; onDate?: (value: string) => void }) {
   const t = (value: string) => reportCopy(report.locale, value);
   return <header className="report-paper-header" lang={report.locale} translate="no">
@@ -285,6 +312,6 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
     </div>
     {templateSeed ? <ReportTemplateEditor onDirtyChange={onDirtyChange} seed={templateSeed} onClose={() => setTemplateSeed(null)} onSaved={() => { setTemplateSeed(null); notify(t("Reusable report template saved")); }} /> : null}<div className="report-actions">{bootstrap.permissions.includes("report.write") && report.revision === report.currentRevision ? <button className="btn default" type="button" disabled={busy || dirty} onClick={() => void saveAsTemplate()}>{t("Save as template")}</button> : null}{editable ? <button className="btn primary" type="button" disabled={busy || !dirty || !draft.title.trim() || !draft.reportDate || !draft.approverId} onClick={() => void changeAction("save")}>{t("Save draft")}</button> : null}{[["submit", "Sign & submit"], ["review", "Review report"], ["approve", "Sign & approve"], ["return", "Request changes"], ["revise", "Create revision"], ["void", "Void report"]].filter(([key]) => allows(report, key!)).map(([key, label]) => <button key={key} type="button" className="btn default" disabled={busy || dirty} onClick={() => { setAction(key!); setNote(""); setConsent(false); }}>{t(label!)}</button>)}</div>
     {action ? <Modal title={t({ submit: "Sign & submit report", review: "Review report", approve: "Sign & approve report", return: "Request changes", revise: "Create a new revision", void: "Void report", "revoke-customer-link": "Revoke customer link" }[action] ?? action)} onClose={() => { if (!busy) setAction(""); }}><p>{report.number}  · R{report.revision} · {report.title}</p>{action === "review" ? <label className="report-consent"><input type="checkbox" checked={reviewSign} disabled={busy || !bootstrap.permissions.includes("signing.sign")} onChange={event => { setReviewSign(event.target.checked); setConsent(false); }} />{t("Apply my signature to the review")}</label> : null}{needsConsent ? <label className="report-consent"><input type="checkbox" checked={consent} disabled={busy} onChange={event => setConsent(event.target.checked)} />{t(TEAM_CONSENT)}</label> : null}{!signingAction || action === "review" ? <Field label={t("Reason / note")}><textarea aria-label={t("Reason / note")} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></Field> : null}{error ? <div className="callout danger" role="alert">{t(error)}</div> : null}<div className="report-actions"><button className="btn ghost" disabled={busy} onClick={() => setAction("")}>{t("Cancel")}</button><button className="btn primary" disabled={busy || needsConsent && !consent || ["return", "revise", "void"].includes(action) && !note.trim()} onClick={() => void changeAction(action)}>{busy ? t("Saving…") : t("Confirm")}</button></div></Modal> : null}
-    <article className="report-print"><ReportDocumentHeader report={report} title={report.title} reportDate={report.reportDate} />{report.template ? <p lang={report.locale} translate="no">{reportCopy(report.locale, "Template:")} {report.template.name}  · V{report.template.version}</p> : null}<ReportBodyEditor locale={report.locale} reportType={report.reportType} body={report.body} readOnly evidenceImageSource={evidenceImageSource} /><ReportSignatureSummary report={report} /></article>
+    <article className="report-print"><ReportCoverPage report={report} /><ReportDocumentHeader report={report} title={report.title} reportDate={report.reportDate} />{report.template ? <p lang={report.locale} translate="no">{reportCopy(report.locale, "Template:")} {report.template.name}  · V{report.template.version}</p> : null}<ReportBodyEditor locale={report.locale} reportType={report.reportType} body={report.body} readOnly evidenceImageSource={evidenceImageSource} /><ReportSignatureSummary report={report} /></article>
   </div>;
 }
