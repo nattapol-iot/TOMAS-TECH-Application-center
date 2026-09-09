@@ -4,17 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { Field, Icon, Tabs } from "../ui";
 import { downloadReportEvidence, uploadReportEvidence } from "../api-client";
 import {
-  emptyPowerSection,
+  emptyMeasurementRow,
+  emptyMeasurementSection,
   newInspectionUnit,
   type ChecklistItem,
   type InspectionBody,
   type InspectionUnit,
+  type MeasurementRow,
+  type MeasurementSection,
   type NormalAbnormal,
   type OperationTest,
   type PassFail,
-  type PowerMeasurement,
-  type PowerSection,
   type Rank,
+  type UnitAttribute,
 } from "./inspection-body-types";
 import "./inspection-report.css";
 
@@ -92,7 +94,27 @@ function PhotoGallery({ reportId, photoIds, onChange, readOnly }: {
   );
 }
 
-// ── Tab: Units ────────────────────────────────────────────────
+// ── Tab: Units — generic identifier/location + free-form attributes ─────────
+// No department-specific fields (no PLC/HMI/voltage/etc). Any department adds
+// whatever attributes describe their unit ("Motor Rating", "Server IP", ...).
+function AttributesEditor({ attributes, onChange }: { attributes: UnitAttribute[]; onChange: (attrs: UnitAttribute[]) => void }) {
+  const set = (i: number, patch: Partial<UnitAttribute>) => onChange(attributes.map((a, idx) => idx === i ? { ...a, ...patch } : a));
+  const add = () => onChange([...attributes, { label: "", value: "" }]);
+  const remove = (i: number) => onChange(attributes.filter((_, idx) => idx !== i));
+  return (
+    <div className="ir-attributes">
+      {attributes.map((attr, i) => (
+        <div key={i} className="ir-attribute-row">
+          <input type="text" placeholder="Attribute (e.g. PLC Model, Motor Rating, Server IP)…" value={attr.label} onChange={e => set(i, { label: e.target.value })} />
+          <input type="text" placeholder="Value…" value={attr.value} onChange={e => set(i, { value: e.target.value })} />
+          <button className="btn ghost sm" type="button" onClick={() => remove(i)}><Icon name="minus" /></button>
+        </div>
+      ))}
+      <button className="btn default sm" type="button" onClick={add}><Icon name="plus" /> Add Attribute</button>
+    </div>
+  );
+}
+
 function UnitsTab({ units, onChange, onAdd, onRemove }: {
   units: InspectionUnit[];
   onChange: (i: number, patch: Partial<InspectionUnit>) => void;
@@ -113,24 +135,11 @@ function UnitsTab({ units, onChange, onAdd, onRemove }: {
             </div>
             <div className="ir-unit-fields">
               <Field label="Unit Name"><input type="text" value={unit.name} onChange={e => onChange(i, { name: e.target.value })} /></Field>
-              <Field label="Control Panel Name"><input type="text" value={unit.controlPanelName} onChange={e => onChange(i, { controlPanelName: e.target.value })} /></Field>
+              <Field label="Identifier" hint="Panel name, serial number, asset tag, hostname — whatever identifies this unit"><input type="text" value={unit.identifier} onChange={e => onChange(i, { identifier: e.target.value })} /></Field>
               <Field label="Location"><input type="text" value={unit.location} onChange={e => onChange(i, { location: e.target.value })} /></Field>
             </div>
-            <label className="ir-checkbox-field">
-              <input type="checkbox" checked={unit.includePowerCheck} onChange={e => onChange(i, { includePowerCheck: e.target.checked })} />
-              This unit needs electrical/power measurement checks (PLC, voltage, breaker, transformer, SMPS)
-            </label>
-            {unit.includePowerCheck ? (
-              <div className="ir-unit-fields">
-                <Field label="PLC Model"><input type="text" value={unit.plcModel} onChange={e => onChange(i, { plcModel: e.target.value })} /></Field>
-                <Field label="HMI Model"><input type="text" value={unit.hmiModel} onChange={e => onChange(i, { hmiModel: e.target.value })} /></Field>
-                <Field label="Communication"><input type="text" value={unit.communication} onChange={e => onChange(i, { communication: e.target.value })} /></Field>
-                <Field label="Power Phase"><input type="text" value={unit.powerPhase} onChange={e => onChange(i, { powerPhase: e.target.value })} /></Field>
-                <Field label="Voltage (V)"><input type="text" value={unit.voltage} onChange={e => onChange(i, { voltage: e.target.value })} /></Field>
-                <Field label="Main Breaker (A)"><input type="text" value={unit.mainBreakerAmp} onChange={e => onChange(i, { mainBreakerAmp: e.target.value })} /></Field>
-                <Field label="Main Breaker Model"><input type="text" value={unit.mainBreakerModel} onChange={e => onChange(i, { mainBreakerModel: e.target.value })} /></Field>
-              </div>
-            ) : null}
+            <div className="ir-section-title">Attributes</div>
+            <AttributesEditor attributes={unit.attributes} onChange={attrs => onChange(i, { attributes: attrs })} />
           </div>
         ))}
       </div>
@@ -138,90 +147,60 @@ function UnitsTab({ units, onChange, onAdd, onRemove }: {
   );
 }
 
-// ── Tab: Power measurements ───────────────────────────────────
-function PowerTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Partial<InspectionUnit>) => void }) {
-  const u = unit.utility;
-  const setU = (patch: Partial<PowerMeasurement>) => onChange({ utility: { ...u, ...patch } });
-  const setSection = (i: number, patch: Partial<PowerSection>) => {
-    onChange({ powerSections: unit.powerSections.map((s, idx) => idx === i ? { ...s, ...patch } : s) });
+// ── Tab: Measurements — fully dynamic spec-vs-actual sections, any domain ──
+function MeasurementsTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Partial<InspectionUnit>) => void }) {
+  const setSection = (i: number, patch: Partial<MeasurementSection>) => {
+    onChange({ measurementSections: unit.measurementSections.map((s, idx) => idx === i ? { ...s, ...patch } : s) });
   };
-  const addSection = () => onChange({ powerSections: [...unit.powerSections, emptyPowerSection()] });
-  const removeSection = (i: number) => {
-    if (unit.powerSections.length <= 1) return;
-    onChange({ powerSections: unit.powerSections.filter((_, idx) => idx !== i) });
+  const addSection = () => onChange({ measurementSections: [...unit.measurementSections, emptyMeasurementSection()] });
+  const removeSection = (i: number) => onChange({ measurementSections: unit.measurementSections.filter((_, idx) => idx !== i) });
+  const setRow = (si: number, ri: number, patch: Partial<MeasurementRow>) => {
+    const section = unit.measurementSections[si];
+    setSection(si, { rows: section.rows.map((r, idx) => idx === ri ? { ...r, ...patch } : r) });
   };
+  const addRow = (si: number) => setSection(si, { rows: [...unit.measurementSections[si].rows, emptyMeasurementRow()] });
+  const removeRow = (si: number, ri: number) => setSection(si, { rows: unit.measurementSections[si].rows.filter((_, idx) => idx !== ri) });
 
-  if (!unit.includePowerCheck) {
-    return <p className="ir-empty-note">Not applicable for this unit — enable &quot;electrical/power measurement checks&quot; in the Units tab if needed.</p>;
+  if (unit.measurementSections.length === 0) {
+    return (
+      <div>
+        <p className="ir-empty-note">No measurement sections yet. Add one for any spec-vs-actual measurement your department records — voltage, vibration, response time, pressure, anything.</p>
+        <button className="btn default" type="button" onClick={addSection}><Icon name="plus" /> Add Section</button>
+      </div>
+    );
   }
 
   return (
     <div>
-      <div className="ir-section-title">Utility Power Supply</div>
-      <div className="ir-table-wrap">
-        <table className="ir-table">
-          <thead><tr><th>Row</th><th>R-S (V)</th><th>R-T (V)</th><th>S-T (V)</th><th>Judgement</th><th>Rank</th><th>Remarks</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>Spec</td>
-              <td><input type="text" value={u.specRS} onChange={e => setU({ specRS: e.target.value })} /></td>
-              <td><input type="text" value={u.specRT} onChange={e => setU({ specRT: e.target.value })} /></td>
-              <td><input type="text" value={u.specST} onChange={e => setU({ specST: e.target.value })} /></td>
-              <td className="center">—</td><td className="center">—</td><td>—</td>
-            </tr>
-            <tr>
-              <td>Actual</td>
-              <td><input type="text" value={u.actualRS} onChange={e => setU({ actualRS: e.target.value })} /></td>
-              <td><input type="text" value={u.actualRT} onChange={e => setU({ actualRT: e.target.value })} /></td>
-              <td><input type="text" value={u.actualST} onChange={e => setU({ actualST: e.target.value })} /></td>
-              <td className="center"><JudgeSelect value={u.judgement} onChange={v => setU({ judgement: v })} /></td>
-              <td className="center"><RankSelect value={u.rank} onChange={v => setU({ rank: v })} /></td>
-              <td><input type="text" value={u.remarks} onChange={e => setU({ remarks: e.target.value })} /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="ir-section-title">PLC Status</div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <Field label="Judgement"><JudgeSelect value={unit.plcStatus} onChange={v => onChange({ plcStatus: v })} /></Field>
-        <Field label="Rank"><RankSelect value={unit.plcRank} onChange={v => onChange({ plcRank: v })} /></Field>
-        <div style={{ flex: 1, minWidth: 200 }}><Field label="Remarks"><input type="text" value={unit.plcRemarks} onChange={e => onChange({ plcRemarks: e.target.value })} /></Field></div>
-      </div>
-
-      {unit.powerSections.map((sec, i) => (
-        <div key={i}>
+      {unit.measurementSections.map((sec, si) => (
+        <div key={si}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 8px" }}>
-            <input className="ir-section-title-input" type="text" value={sec.title} placeholder="Section title…" onChange={e => setSection(i, { title: e.target.value })} />
-            {unit.powerSections.length > 1 && <button className="btn ghost sm" type="button" onClick={() => removeSection(i)}><Icon name="trash" /></button>}
+            <input className="ir-section-title-input" type="text" value={sec.title} placeholder="Section title (e.g. Utility Power Supply, Vibration Analysis)…" onChange={e => setSection(si, { title: e.target.value })} />
+            <button className="btn ghost sm" type="button" onClick={() => removeSection(si)}><Icon name="trash" /></button>
           </div>
-          <div style={{ marginBottom: 8 }}><Field label="Model"><input type="text" value={sec.model} onChange={e => setSection(i, { model: e.target.value })} /></Field></div>
           <div className="ir-table-wrap">
             <table className="ir-table">
-              <thead><tr><th>Side</th><th>V (Spec)</th><th>A (Spec)</th><th>Judgement</th><th>Rank</th><th>Remarks</th></tr></thead>
+              <thead><tr><th>Parameter</th><th>Unit</th><th>Spec</th><th>Actual</th><th>Judgement</th><th>Rank</th><th>Remarks</th><th></th></tr></thead>
               <tbody>
-                <tr>
-                  <td>Primary</td>
-                  <td><input type="text" value={sec.primaryV} onChange={e => setSection(i, { primaryV: e.target.value })} /></td>
-                  <td><input type="text" value={sec.primaryA} onChange={e => setSection(i, { primaryA: e.target.value })} /></td>
-                  <td className="center"><JudgeSelect value={sec.primaryJudgement} onChange={v => setSection(i, { primaryJudgement: v })} /></td>
-                  <td className="center"><RankSelect value={sec.primaryRank} onChange={v => setSection(i, { primaryRank: v })} /></td>
-                  <td><input type="text" value={sec.primaryRemarks} onChange={e => setSection(i, { primaryRemarks: e.target.value })} /></td>
-                </tr>
-                <tr>
-                  <td>Secondary</td>
-                  <td><input type="text" value={sec.secondaryV} onChange={e => setSection(i, { secondaryV: e.target.value })} /></td>
-                  <td><input type="text" value={sec.secondaryA} onChange={e => setSection(i, { secondaryA: e.target.value })} /></td>
-                  <td className="center"><JudgeSelect value={sec.secondaryJudgement} onChange={v => setSection(i, { secondaryJudgement: v })} /></td>
-                  <td className="center"><RankSelect value={sec.secondaryRank} onChange={v => setSection(i, { secondaryRank: v })} /></td>
-                  <td><input type="text" value={sec.secondaryRemarks} onChange={e => setSection(i, { secondaryRemarks: e.target.value })} /></td>
-                </tr>
+                {sec.rows.map((row, ri) => (
+                  <tr key={ri}>
+                    <td><input type="text" placeholder="e.g. R-S Voltage, Bearing Vibration…" value={row.parameter} onChange={e => setRow(si, ri, { parameter: e.target.value })} /></td>
+                    <td><input type="text" placeholder="e.g. V, mm/s, ms…" value={row.unit} onChange={e => setRow(si, ri, { unit: e.target.value })} style={{ width: 70 }} /></td>
+                    <td><input type="text" value={row.specValue} onChange={e => setRow(si, ri, { specValue: e.target.value })} style={{ width: 80 }} /></td>
+                    <td><input type="text" value={row.actualValue} onChange={e => setRow(si, ri, { actualValue: e.target.value })} style={{ width: 80 }} /></td>
+                    <td className="center"><JudgeSelect value={row.judgement} onChange={v => setRow(si, ri, { judgement: v })} /></td>
+                    <td className="center"><RankSelect value={row.rank} onChange={v => setRow(si, ri, { rank: v })} /></td>
+                    <td><input type="text" value={row.remarks} onChange={e => setRow(si, ri, { remarks: e.target.value })} /></td>
+                    <td className="center"><button className="btn ghost sm" type="button" onClick={() => removeRow(si, ri)}><Icon name="minus" /></button></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+          <button className="btn default sm" type="button" style={{ marginTop: 8 }} onClick={() => addRow(si)}><Icon name="plus" /> Add Row</button>
         </div>
       ))}
-      <button className="btn default" type="button" style={{ marginTop: 12 }} onClick={addSection}><Icon name="plus" /> Add Section</button>
+      <button className="btn default" type="button" style={{ marginTop: 16 }} onClick={addSection}><Icon name="plus" /> Add Section</button>
     </div>
   );
 }
@@ -321,7 +300,7 @@ export function InspectionReportBody({ reportId, body, onChange, readOnly }: {
   onChange?: (body: InspectionBody) => void;
   readOnly?: boolean;
 }) {
-  const [tab, setTab] = useState<"units" | "power" | "operation" | "checklist" | "summary">("units");
+  const [tab, setTab] = useState<"units" | "measurements" | "operation" | "checklist" | "summary">("units");
   const [selectedUnitIndex, setSelectedUnitIndex] = useState(0);
   const units = body.units.length ? body.units : [newInspectionUnit("Unit 1")];
   const updateUnits = (next: InspectionUnit[]) => onChange?.({ units: next });
@@ -339,7 +318,7 @@ export function InspectionReportBody({ reportId, body, onChange, readOnly }: {
       <Tabs
         tabs={[
           { id: "units", label: "Units" },
-          { id: "power", label: "Power" },
+          { id: "measurements", label: "Measurements" },
           { id: "operation", label: "Operation Tests" },
           { id: "checklist", label: "Checklist" },
           { id: "summary", label: "Summary" },
@@ -357,7 +336,7 @@ export function InspectionReportBody({ reportId, body, onChange, readOnly }: {
         </div>
       ) : null}
       {tab === "units" ? <UnitsTab units={units} onChange={updateUnit} onAdd={addUnit} onRemove={removeUnit} /> : null}
-      {tab === "power" && selectedUnit ? <PowerTab unit={selectedUnit} onChange={p => updateUnit(selectedUnitIndex, p)} /> : null}
+      {tab === "measurements" && selectedUnit ? <MeasurementsTab unit={selectedUnit} onChange={p => updateUnit(selectedUnitIndex, p)} /> : null}
       {tab === "operation" && selectedUnit ? <OperationTab reportId={reportId} unit={selectedUnit} onChange={p => updateUnit(selectedUnitIndex, p)} readOnly={readOnly} /> : null}
       {tab === "checklist" && selectedUnit ? <ChecklistTab reportId={reportId} unit={selectedUnit} onChange={p => updateUnit(selectedUnitIndex, p)} readOnly={readOnly} /> : null}
       {tab === "summary" && selectedUnit ? <SummaryTab unit={selectedUnit} onChange={p => updateUnit(selectedUnitIndex, p)} /> : null}

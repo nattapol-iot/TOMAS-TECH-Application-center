@@ -81,6 +81,9 @@
   border-color: var(--border); background: var(--surface); outline: none;
 }
 
+.ir-attributes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ir-attribute-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+
 .ir-summary-list { display: flex; flex-direction: column; gap: 6px; }
 .ir-summary-row { display: flex; align-items: flex-start; gap: 8px; }
 .ir-summary-row span { color: var(--text-muted); font-size: 13px; flex-shrink: 0; margin-top: 8px; }

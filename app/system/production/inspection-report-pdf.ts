@@ -3,7 +3,7 @@ import { LOGO_BASE64, LOGO_EXT } from "./report-pptx-template";
 import { downloadReportEvidence } from "../api-client";
 import { W as W_EMU, H as H_EMU } from "./report-pptx";
 import type { ReportRecord } from "./report-types";
-import type { InspectionBody, InspectionUnit, PowerSection } from "./inspection-body-types";
+import type { InspectionBody, InspectionUnit } from "./inspection-body-types";
 
 // EMU -> PDF points, same coordinate system already proven correct in the
 // PPTX exporter (inspection-report-pptx.ts / report-pptx.ts), so both
@@ -130,13 +130,8 @@ function drawUnitInfoPage(b: DocBuilder, unit: InspectionUnit) {
   const page = b.addPage();
   pageHeader(b, page, "INSPECTION REPORT");
   b.rect(page, 406399, 742950, 6117062, 8591553, { border: BLACK, lineWidth: 0.5 });
-  const lines = [`Unit : ${unit.name}`, `Control Panel Name : ${unit.controlPanelName}`, `Location : ${unit.location}`];
-  if (unit.includePowerCheck) {
-    lines.push(
-      `PLC Model : ${unit.plcModel}`, `HMI Model : ${unit.hmiModel}`, `Communication : ${unit.communication}`,
-      `Power Phase : ${unit.powerPhase}`, `Voltage : ${unit.voltage} V`, `Main Breaker : ${unit.mainBreakerAmp} A. · ${unit.mainBreakerModel}`,
-    );
-  }
+  const lines = [`Unit : ${unit.name}`, `Identifier : ${unit.identifier}`, `Location : ${unit.location}`];
+  for (const attr of unit.attributes) if (attr.label.trim()) lines.push(`${attr.label} : ${attr.value}`);
   lines.forEach((line, i) => b.text(page, line, 406398, 752476 + i * 263447, 6117061, { size: 12, color: BLUE_LABEL }));
 }
 
@@ -158,29 +153,24 @@ function drawTable(b: DocBuilder, page: PDFPage, xEmu: number, topEmu: number, c
   return y;
 }
 
-function drawPowerPage(b: DocBuilder, unit: InspectionUnit) {
-  const page = b.addPage();
+// Fully dynamic: renders however many measurement sections the department
+// defined, each with its own free-form parameter/unit rows. No hardcoded
+// electrical fields -- paginates automatically if content overflows a page.
+function drawMeasurementPages(b: DocBuilder, unit: InspectionUnit) {
+  let page = b.addPage();
   pageHeader(b, page, "INSPECTION REPORT");
-  const u = unit.utility;
-  b.text(page, "Utility Power Supply", 406400, 742950, 3000000, { size: 11, bold: true });
-  const colW1 = [900000, 850000, 850000, 850000, 850000, 700000, 1105525];
-  let y = drawTable(b, page, 414338, 950000, colW1, [
-    { cells: ["", "R-S (V)", "R-T (V)", "S-T (V)", "Judgement", "Rank", "Remarks"], header: true },
-    { cells: ["Spec", u.specRS, u.specRT, u.specST, "", "", ""] },
-    { cells: ["Actual", u.actualRS, u.actualRT, u.actualST, u.judgement, u.rank, u.remarks] },
-  ]);
-  y += 100000;
-  b.text(page, "PLC Status", 406400, y, 3000000, { size: 11, bold: true }); y += 200000;
-  b.text(page, `Judgement : ${unit.plcStatus}    Rank : ${unit.plcRank}    Remarks : ${unit.plcRemarks}`, 406400, y, 6117061, { size: 10, color: BLUE_LABEL });
-  y += 300000;
-  const colW2 = [900000, 850000, 850000, 850000, 700000, 1855525];
-  for (const sec of unit.powerSections as PowerSection[]) {
-    if (y > H_EMU - 900000) break;
+  let y = 742950;
+  const colW = [1600000, 700000, 850000, 850000, 850000, 700000, 555525];
+  for (const sec of unit.measurementSections) {
+    if (y > H_EMU - 1800000) {
+      page = b.addPage();
+      pageHeader(b, page, "INSPECTION REPORT");
+      y = 742950;
+    }
     b.text(page, sec.title, 406400, y, 3000000, { size: 10, bold: true }); y += 220000;
-    y = drawTable(b, page, 414338, y, colW2, [
-      { cells: ["", "V (Spec)", "A (Spec)", "Judgement", "Rank", "Remarks"], header: true },
-      { cells: ["Primary", sec.primaryV, sec.primaryA, sec.primaryJudgement, sec.primaryRank, sec.primaryRemarks] },
-      { cells: ["Secondary", sec.secondaryV, sec.secondaryA, sec.secondaryJudgement, sec.secondaryRank, sec.secondaryRemarks] },
+    y = drawTable(b, page, 414338, y, colW, [
+      { cells: ["Parameter", "Unit", "Spec", "Actual", "Judgement", "Rank", "Remarks"], header: true },
+      ...sec.rows.map(row => ({ cells: [row.parameter, row.unit, row.specValue, row.actualValue, row.judgement, row.rank, row.remarks] })),
     ]);
     y += 100000;
   }
@@ -287,7 +277,7 @@ export async function generateInspectionPdf(report: ReportRecord, body: Inspecti
 
   for (const unit of body.units) {
     drawUnitInfoPage(b, unit);
-    if (unit.includePowerCheck) drawPowerPage(b, unit);
+    if (unit.measurementSections.length) drawMeasurementPages(b, unit);
 
     const opEntries = unit.operationTests.map(t => ({ name: t.name, photoIds: t.photoIds ?? [] }));
     if (opEntries.length) await drawPhotoPages(b, report.id, "OPERATION TEST PHOTOS", opEntries);

@@ -63,60 +63,54 @@ function infoSlide(report: ReportRecord, pageNum: number): { xml: string; rels: 
 }
 
 // ── Slide: Unit info ─────────────────────────────────────────────
+// Fully generic: identifier/location + any free-form attributes the
+// department defined (no hardcoded electrical fields).
 function unitInfoSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels: string } {
   const b12 = (t: string) => txPara(t, { sz: 12, color: BLUE_LABEL });
   const shapes: string[] = [
     ...pageHeaderShapes("INSPECTION REPORT", pageNum),
     borderRect(406399, CONTENT_START_Y, CONTENT_W, CONTENT_H, BLACK, pt(0.25)),
     textBox(406398, 752476, 6117061, 263447, b12(`Unit : ${unit.name}`)),
-    textBox(406389, 1015922, 6117061, 263447, b12(`Control Panel Name : ${unit.controlPanelName}`)),
+    textBox(406389, 1015922, 6117061, 263447, b12(`Identifier : ${unit.identifier}`)),
     textBox(406386, 1279368, 6117061, 263447, b12(`Location : ${unit.location}`)),
   ];
-  if (unit.includePowerCheck) {
-    shapes.push(
-      textBox(406386, 1806260, 6117061, 263447, b12(`PLC Model : ${unit.plcModel}`)),
-      textBox(406386, 2069706, 6117061, 263447, b12(`HMI Model : ${unit.hmiModel}`)),
-      textBox(406386, 2333152, 6117061, 263447, b12(`Communication : ${unit.communication}`)),
-      textBox(406386, 2596598, 6117061, 263447, b12(`Power Phase : ${unit.powerPhase}`)),
-      textBox(406386, 2860044, 6117061, 263447, b12(`Voltage : ${unit.voltage} V`)),
-      textBox(406386, 3123490, 6117061, 263447, b12(`Main Breaker : ${unit.mainBreakerAmp} A. · ${unit.mainBreakerModel}`)),
-    );
-  }
+  unit.attributes.filter(a => a.label.trim()).forEach((attr, i) => {
+    shapes.push(textBox(406386, 1806260 + i * 263447, 6117061, 263447, b12(`${attr.label} : ${attr.value}`)));
+  });
   return makeSlide(shapes);
 }
 
-// ── Slide: Power (only if includePowerCheck) ────────────────────
-function powerSlide(unit: InspectionUnit, pageNum: number): { xml: string; rels: string } {
-  const u = unit.utility;
-  const utilityRows: RowDef[] = [
-    { cells: [{ text: "", bg: DARK_BLUE }, { text: "R-S (V)", bold: true, bg: DARK_BLUE, align: "ctr" }, { text: "R-T (V)", bold: true, bg: DARK_BLUE, align: "ctr" }, { text: "S-T (V)", bold: true, bg: DARK_BLUE, align: "ctr" }, { text: "Judgement", bold: true, bg: DARK_BLUE, align: "ctr" }, { text: "Rank", bold: true, bg: DARK_BLUE, align: "ctr" }, { text: "Remarks", bold: true, bg: DARK_BLUE }], h: cm(0.65) },
-    { cells: [{ text: "Spec" }, { text: u.specRS, align: "ctr" }, { text: u.specRT, align: "ctr" }, { text: u.specST, align: "ctr" }, { text: "" }, { text: "" }, { text: "" }], h: cm(0.65) },
-    { cells: [{ text: "Actual" }, { text: u.actualRS, align: "ctr" }, { text: u.actualRT, align: "ctr" }, { text: u.actualST, align: "ctr" }, { text: u.judgement, align: "ctr" }, { text: u.rank, align: "ctr" }, { text: u.remarks }], h: cm(0.65) },
-  ];
-  const colW1 = [900000, 850000, 850000, 850000, 850000, 700000, 1105525];
-  const shapes: string[] = [
-    ...pageHeaderShapes("INSPECTION REPORT", pageNum),
-    textBox(406400, CONTENT_START_Y, 3000000, cm(0.6), txPara("Utility Power Supply", { sz: 11, bold: true, color: BLACK })),
-    buildTable(OLE_X, CONTENT_START_Y + cm(0.7), colW1, utilityRows),
-  ];
-  let y = CONTENT_START_Y + cm(0.7) + cm(2.2);
-  shapes.push(
-    textBox(406400, y, 3000000, cm(0.6), txPara("PLC Status", { sz: 11, bold: true, color: BLACK })),
-    textBox(406400, y + cm(0.7), 6117061, cm(0.6), txPara(`Judgement : ${unit.plcStatus}    Rank : ${unit.plcRank}    Remarks : ${unit.plcRemarks}`, { sz: 10, color: BLUE_LABEL })),
-  );
-  y += cm(1.6);
-  for (const sec of unit.powerSections) {
+// ── Slide(s): Measurements — fully dynamic sections, any domain ──
+// Replaces the old fixed Utility/PLC/Transformer/SMPS tables with
+// however many named measurement sections the department defined.
+function measurementSlides(unit: InspectionUnit, pageAt: () => number): Array<{ xml: string; rels: string }> {
+  const slides: Array<{ xml: string; rels: string }> = [];
+  let shapes: string[] = [...pageHeaderShapes("INSPECTION REPORT", pageAt())];
+  let y = CONTENT_START_Y;
+  const colW = [1600000, 700000, 850000, 850000, 850000, 700000, 555525];
+
+  for (const sec of unit.measurementSections) {
     const rows: RowDef[] = [
-      { cells: [{ text: sec.title, bold: true, bg: DARK_BLUE, span: 6 }], h: cm(0.6) },
-      { cells: [{ text: "" }, { text: "V (Spec)", bold: true, align: "ctr" }, { text: "A (Spec)", bold: true, align: "ctr" }, { text: "Judgement", bold: true, align: "ctr" }, { text: "Rank", bold: true, align: "ctr" }, { text: "Remarks", bold: true }], h: cm(0.6) },
-      { cells: [{ text: "Primary" }, { text: sec.primaryV, align: "ctr" }, { text: sec.primaryA, align: "ctr" }, { text: sec.primaryJudgement, align: "ctr" }, { text: sec.primaryRank, align: "ctr" }, { text: sec.primaryRemarks }], h: cm(0.6) },
-      { cells: [{ text: "Secondary" }, { text: sec.secondaryV, align: "ctr" }, { text: sec.secondaryA, align: "ctr" }, { text: sec.secondaryJudgement, align: "ctr" }, { text: sec.secondaryRank, align: "ctr" }, { text: sec.secondaryRemarks }], h: cm(0.6) },
+      { cells: [{ text: sec.title, bold: true, bg: DARK_BLUE, span: 7 }], h: cm(0.6) },
+      { cells: [{ text: "Parameter", bold: true }, { text: "Unit", bold: true, align: "ctr" }, { text: "Spec", bold: true, align: "ctr" }, { text: "Actual", bold: true, align: "ctr" }, { text: "Judgement", bold: true, align: "ctr" }, { text: "Rank", bold: true, align: "ctr" }, { text: "Remarks", bold: true }], h: cm(0.6) },
+      ...sec.rows.map(row => ({
+        cells: [
+          { text: row.parameter }, { text: row.unit, align: "ctr" }, { text: row.specValue, align: "ctr" }, { text: row.actualValue, align: "ctr" },
+          { text: row.judgement, align: "ctr" }, { text: row.rank, align: "ctr" }, { text: row.remarks },
+        ] as CellDef[], h: cm(0.6),
+      })),
     ];
-    if (y > H - cm(3)) break; // avoid overflow past the page bottom
-    shapes.push(buildTable(OLE_X, y, [900000, 850000, 850000, 850000, 700000, 1855525], rows));
-    y += cm(0.6) * 4 + cm(0.3);
+    const sectionH = cm(0.6) * (rows.length) + cm(0.3);
+    if (y + sectionH > H - cm(3)) {
+      slides.push(makeSlide(shapes));
+      shapes = [...pageHeaderShapes("INSPECTION REPORT", pageAt())];
+      y = CONTENT_START_Y;
+    }
+    shapes.push(buildTable(OLE_X, y, colW, rows));
+    y += sectionH;
   }
-  return makeSlide(shapes);
+  slides.push(makeSlide(shapes));
+  return slides;
 }
 
 // ── Photo grid slide (3-column, up to 9 photo entries) ───────────
@@ -300,7 +294,7 @@ export async function generateInspectionPptx(report: ReportRecord, body: Inspect
 
   for (const unit of body.units) {
     slideData.push(unitInfoSlide(unit, page()));
-    if (unit.includePowerCheck) slideData.push(powerSlide(unit, page()));
+    if (unit.measurementSections.length) slideData.push(...measurementSlides(unit, page));
 
     const opEntries: { name: string; photoIds: number[] }[] = unit.operationTests.map((t: OperationTest) => ({ name: t.name, photoIds: t.photoIds ?? [] }));
     if (opEntries.length) await pushPhotoGridSlides("OPERATION TEST PHOTOS", opEntries);
