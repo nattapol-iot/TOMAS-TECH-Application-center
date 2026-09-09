@@ -10,6 +10,11 @@ import { useReportUnsavedChanges } from "./useReportUnsavedChanges";
 import { reportCopy, reportTimestamp } from "./report-locale";
 import { ReportDocumentForm } from "./ReportDocumentForm";
 import { generateReportPptx } from "./report-pptx";
+import { generateInspectionPptx } from "./inspection-report-pptx";
+import { generateInspectionPdf } from "./inspection-report-pdf";
+import { InspectionReportBody } from "./InspectionReportBody";
+import { isInspectionBody, emptyInspectionBody } from "./inspection-body-types";
+import { uploadReportExport } from "../api-client";
 import { LOGO_BASE64, LOGO_EXT } from "./report-pptx-template";
 import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
@@ -293,6 +298,7 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
   const [report, setReport] = useState<ReportRecord | null>(null), [error, setError] = useState("");
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [pptxBusy, setPptxBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [tab, setTab] = useState<"content" | "team" | "customer" | "history">("content");
   const [draft, setDraft] = useState<{ title: string; reportDate: string; locale: string; reviewerId: number | null; approverId: number; body: ReportBody } | null>(null);
   const [dirty, setDirty] = useState(false), [consent, setConsent] = useState(false), [reviewSign, setReviewSign] = useState(bootstrap.permissions.includes("signing.sign"));
@@ -314,18 +320,34 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
   const patch = (value: Partial<NonNullable<typeof draft>>) => { setDraft(current => current ? { ...current, ...value } : current); setDirty(true); setConsent(false); };
   const uploadEvidence = useCallback((file:File)=>uploadReportEvidence(id,file),[id]);
   const evidenceImageSource = useCallback(async(attachmentId:number)=>URL.createObjectURL(await downloadReportEvidence(id,attachmentId)),[id]);
+  const downloadBytes = (bytes: Uint8Array, mime: string, fileName: string) => {
+    const blob = new Blob([bytes as BlobPart], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fileName; a.click();
+    URL.revokeObjectURL(url);
+  };
   const exportPptx = async () => {
     if (!report || pptxBusy) return;
     setPptxBusy(true); setError("");
     try {
-      const bytes = await generateReportPptx(report, reportSections(report.reportType));
-      const blob = new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${report.number}.pptx`; a.click();
-      URL.revokeObjectURL(url);
+      const bytes = report.reportType === "INSPECTION"
+        ? await generateInspectionPptx(report, isInspectionBody(report.body) ? report.body : emptyInspectionBody())
+        : await generateReportPptx(report, reportSections(report.reportType));
+      downloadBytes(bytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation", `${report.number}.pptx`);
+      await uploadReportExport(report.id, "pptx", bytes, `${report.number}.pptx`).catch(() => {});
     } catch (failure) { setError(errorText(failure)); }
     finally { setPptxBusy(false); }
+  };
+  const exportInspectionPdf = async () => {
+    if (!report || pdfBusy) return;
+    setPdfBusy(true); setError("");
+    try {
+      const bytes = await generateInspectionPdf(report, isInspectionBody(report.body) ? report.body : emptyInspectionBody());
+      downloadBytes(bytes, "application/pdf", `${report.number}.pdf`);
+      await uploadReportExport(report.id, "pdf", bytes, `${report.number}.pdf`).catch(() => {});
+    } catch (failure) { setError(errorText(failure)); }
+    finally { setPdfBusy(false); }
   };
   const changeAction = async (next: string) => {
     if (!report || busy) return;
@@ -359,14 +381,14 @@ function ReportDetail({ id, bootstrap, notify, onBack, onDirtyChange }: { onDirt
   const needsConsent = signingAction && (action !== "review" || reviewSign);
   return <div className="report-workspace">
     <button className="btn ghost" type="button" onClick={onBack}>{t("← Back to reports")}</button>
-    <PageHeader eyebrow={`${report.number} · R${report.revision} · ${t(labels[report.reportType])}`} title={report.title} subtitle={`${report.sourceReference} · ${report.customer} · ${report.reportDate}`} meta={<Badge>{t(labels[report.status] ?? report.status)}</Badge>} actions={<><button className="btn default" type="button" disabled={busy || dirty} onClick={() => window.print()}><Icon name="file" />{t("Print / Save as PDF")}</button><button className="btn default" type="button" disabled={busy || pptxBusy || dirty} onClick={() => void exportPptx()}><Icon name="file" />{pptxBusy ? t("Preparing…") : t("Export PPT")}</button><button className="btn ghost" type="button" disabled={busy || loading || dirty} onClick={() => void load()}>{t("Refresh")}</button></>} />
+    <PageHeader eyebrow={`${report.number} · R${report.revision} · ${t(labels[report.reportType])}`} title={report.title} subtitle={`${report.sourceReference} · ${report.customer} · ${report.reportDate}`} meta={<Badge>{t(labels[report.status] ?? report.status)}</Badge>} actions={<><button className="btn default" type="button" disabled={busy || pdfBusy || dirty} onClick={() => report.reportType === "INSPECTION" ? void exportInspectionPdf() : window.print()}><Icon name="file" />{pdfBusy ? t("Preparing…") : t("Print / Save as PDF")}</button><button className="btn default" type="button" disabled={busy || pptxBusy || dirty} onClick={() => void exportPptx()}><Icon name="file" />{pptxBusy ? t("Preparing…") : t("Export PPT")}</button><button className="btn ghost" type="button" disabled={busy || loading || dirty} onClick={() => void load()}>{t("Refresh")}</button></>} />
     <ReportWorkflow status={report.status} hasReviewer={report.reviewerId !== null} />{report.template ? <p className="report-template-provenance">{t("From template:")}{report.template.name}  · V{report.template.version}</p> : null}
     {report.decisionNote ? <div className="callout warning">{report.decisionNote}</div> : null}{error ? <div className="callout danger" role="alert">{t(error)}</div> : null}
     {dirty ? <div className="callout info">{t("Unsaved changes. Save the draft before submitting or printing.")}</div> : null}
     {report.revision !== report.currentRevision ? <div className="callout info">{t("Viewing an earlier revision.")}<button className="btn ghost" onClick={() => void load()}>{t("Open current revision")}</button></div> : null}
     <Tabs tabs={[{ id: "content", label: t("Content") }, { id: "team", label: t("Team & approvals") }, { id: "customer", label: t("Customer signing") }, { id: "history", label: t("History") }]} active={tab} onChange={setTab} />
     <div className="report-tab-content">
-      {tab === "content" ? <><div className="report-document-tools">{editable ? <Field label={t("Report language")}><select aria-label={t("Report language")} disabled={busy} value={draft.locale} onChange={event => patch({ locale: event.target.value })}><option value="th">{t("ไทย")}</option><option value="en">{t("English")}</option><option value="ja">日本語</option></select></Field> : null}<div><strong>{preview || !editable ? t("มุมมองเอกสาร") : t("กรอกในแบบฟอร์ม")}</strong><span>{editable ? t("ช่อง * ต้องกรอกก่อนส่งอนุมัติ · บันทึกฉบับร่างไว้ก่อนได้") : t("รายงานฉบับนี้อ่านได้อย่างเดียว")}</span></div><div>{editable ? <button className="btn default" type="button" onClick={() => setPreview(value => !value)}>{preview ? t("กลับไปกรอก") : t("ดูตัวอย่างเอกสาร")}</button> : null}{editable ? <button className="btn primary" type="button" disabled={busy || !dirty || !draft.title.trim() || !draft.reportDate || !draft.approverId} onClick={() => void changeAction("save")}>{busy ? t("กำลังบันทึก…") : t("บันทึกฉบับร่าง")}</button> : null}</div></div><div className="report-paper"><ReportDocumentHeader report={{ ...report, locale: draft.locale }} title={draft.title} reportDate={draft.reportDate} onTitle={editable && !preview && !busy ? title => patch({ title }) : undefined} onDate={editable && !preview && !busy ? reportDate => patch({ reportDate }) : undefined} /><fieldset className="report-body-fieldset" disabled={busy}><ReportBodyEditor locale={draft.locale} reportType={report.reportType} body={draft.body} readOnly={!editable || preview} onUploadEvidence={editable&&!preview?uploadEvidence:undefined} evidenceImageSource={evidenceImageSource} onChange={body => { if (!busy) patch({ body }); }} /></fieldset><ReportSignatureSummary report={{ ...report, locale: draft.locale }} /></div></> : null}
+      {tab === "content" ? <><div className="report-document-tools">{editable ? <Field label={t("Report language")}><select aria-label={t("Report language")} disabled={busy} value={draft.locale} onChange={event => patch({ locale: event.target.value })}><option value="th">{t("ไทย")}</option><option value="en">{t("English")}</option><option value="ja">日本語</option></select></Field> : null}<div><strong>{preview || !editable ? t("มุมมองเอกสาร") : t("กรอกในแบบฟอร์ม")}</strong><span>{editable ? t("ช่อง * ต้องกรอกก่อนส่งอนุมัติ · บันทึกฉบับร่างไว้ก่อนได้") : t("รายงานฉบับนี้อ่านได้อย่างเดียว")}</span></div><div>{editable ? <button className="btn default" type="button" onClick={() => setPreview(value => !value)}>{preview ? t("กลับไปกรอก") : t("ดูตัวอย่างเอกสาร")}</button> : null}{editable ? <button className="btn primary" type="button" disabled={busy || !dirty || !draft.title.trim() || !draft.reportDate || !draft.approverId} onClick={() => void changeAction("save")}>{busy ? t("กำลังบันทึก…") : t("บันทึกฉบับร่าง")}</button> : null}</div></div><div className="report-paper"><ReportDocumentHeader report={{ ...report, locale: draft.locale }} title={draft.title} reportDate={draft.reportDate} onTitle={editable && !preview && !busy ? title => patch({ title }) : undefined} onDate={editable && !preview && !busy ? reportDate => patch({ reportDate }) : undefined} /><fieldset className="report-body-fieldset" disabled={busy}>{report.reportType === "INSPECTION" ? <InspectionReportBody reportId={report.id} body={isInspectionBody(draft.body) ? draft.body : emptyInspectionBody()} onChange={body => { if (!busy) patch({ body: body as unknown as ReportBody }); }} readOnly={!editable || preview} /> : <ReportBodyEditor locale={draft.locale} reportType={report.reportType} body={draft.body} readOnly={!editable || preview} onUploadEvidence={editable&&!preview?uploadEvidence:undefined} evidenceImageSource={evidenceImageSource} onChange={body => { if (!busy) patch({ body }); }} />}</fieldset><ReportSignatureSummary report={{ ...report, locale: draft.locale }} /></div></> : null}
       {tab === "team" ? <Panel title={t("Team signatures & approval")}><p>{t("Preparation and approval use each person's own signature specimen. Review is optional; when assigned, it must finish before approval.")}</p>{participantRows.map(person => { const signature = report.signatures.find(item => item.stage === person.stage); return <div className="report-team-row" key={person.stage}><div><strong>{t(person.label)}</strong><small className="report-meta">{signature ? signature.actorName : personName(person.id)}</small></div><Badge tone={signature ? "green" : "slate"}>{signature ? `${t("Signed")} · ${new Date(signature.occurredAt).toLocaleString(currentLocale())}` : person.stage === "REVIEW" && ["REVIEWED", "APPROVED", "AWAITING_CUSTOMER", "COMPLETED"].includes(report.status) ? t("Reviewed without signature") : t("Pending")}</Badge></div>; })}{editable ? <><div className="report-fields"><ParticipantFields reviewerId={draft.reviewerId} approverId={draft.approverId} onReviewer={reviewerId => patch({ reviewerId })} onApprover={approverId => patch({ approverId })} reviewers={signers.reviewers} approvers={signers.approvers} authorId={report.preparedById} /></div>{signers.error ? <div className="callout danger">{t(signers.error)}</div> : null}</> : null}</Panel> : null}
       {tab === "customer" ? <Panel title={t("Customer handoff")}><p>{t("The customer opens the exact approved revision and chooses acknowledgment or a drawn signature.")}</p>{report.customerAcknowledgment ? <><Badge tone="green">{t("Customer acknowledgment recorded")}</Badge><CustomerAcknowledgmentView locale={report.locale} acknowledgment={report.customerAcknowledgment} /></> : <p>{t("Status:")}{t(labels[report.status] ?? report.status)}</p>}{link ? <div><p className="report-handoff-url"><a href={link.url} target="_blank" rel="noreferrer">{t("Open customer signing page")}</a></p><input readOnly aria-label={t("Customer signing link")} className="report-link-input" value={link.url} onFocus={event => event.target.select()} /><small>{t("Expires")}{new Date(link.expiresAt).toLocaleString(currentLocale())}</small><div className="report-actions"><button className="btn default" type="button" onClick={() => { void navigator.clipboard.writeText(link.url).then(() => notify(t("Customer link copied"))).catch(() => setError(t("Copy failed. Select the link above and copy it manually."))); }}>{t("Copy link")}</button></div></div> : report.status === "AWAITING_CUSTOMER" ? <p className="muted">{t("A customer link has been issued. Refresh to check its status. To issue a replacement, revoke the current link first.")}</p> : null}{allows(report, "customer-link") ? <><Field label={t("Link valid for (hours)")}><input aria-label={t("Link valid for (hours)")} type="number" min={1} max={168} value={expiresHours} onChange={event => setExpiresHours(Number(event.target.value))} /></Field><button className="btn primary" type="button" disabled={busy || expiresHours < 1 || expiresHours > 168 || !Number.isInteger(expiresHours)} onClick={() => void changeAction("customer-link")}>{t("Create customer link")}</button></> : null}{allows(report, "revoke-customer-link") ? <button className="btn default" type="button" disabled={busy} onClick={() => setAction("revoke-customer-link")}>{t("Revoke customer link")}</button> : null}</Panel> : null}
       {tab === "history" ? <Panel title={t("Revision history")}><div className="table-wrap"><table><thead><tr><th>{t("Revision")}</th><th>{t("Title")}</th><th>{t("Status")}</th><th>{t("Created")}</th><th /></tr></thead><tbody>{report.revisions.map(revision => <tr key={revision.revision}><td>R{revision.revision}</td><td>{revision.title}</td><td>{t(labels[revision.status] ?? revision.status)}</td><td>{new Date(revision.createdAt).toLocaleString(currentLocale())}</td><td><button className="btn ghost" disabled={dirty || busy} onClick={() => void load(revision.revision)}>{t("View")}</button></td></tr>)}</tbody></table></div></Panel> : null}

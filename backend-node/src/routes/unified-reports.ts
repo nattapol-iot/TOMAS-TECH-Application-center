@@ -19,6 +19,7 @@ import { CUSTOMER_CONSENT, TEAM_CONSENT, REPORT_TYPES, REPORT_SELECT, draftInput
 const sections:Record<string,string[]>={INSTALLATION:['hardware','software','commissioning'],UAT:['scenarios','steps','punchlist','summary'],SERVICE:['hardware','software','issues','verification'],INSPECTION:['checkpoints','correctiveActions'],POC:['hypothesis','criteria','baseline','trial','result','limitations']};
 const REPORT_EVIDENCE_MAX_FILE=8*1024*1024;
 const REPORT_IMAGE_EXTENSIONS=new Set(['.jpg','.jpeg','.png']);
+const REPORT_EXPORT_EXTENSIONS=new Set(['.pdf','.pptx']);
 function validateReportEvidenceImage(bytes:Buffer,extension:string) {
  const png=bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
  if(!(extension==='.png'&&png||['.jpg','.jpeg'].includes(extension)&&jpeg))throw new ApiError(415,'report_evidence_type','Use a valid JPEG or PNG image.');
@@ -129,6 +130,36 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,config:AppConfig
   const actor=await actorFor(request),params=request.params as {id:string;attachmentId:string},id=positiveLong(params.id,'Report'),attachmentId=positiveLong(params.attachmentId,'Evidence image');
   const file=await db.transaction(async tx=>{const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor);const value=(await new sql.Request(tx).input('report',sql.BigInt,id).input('file',sql.BigInt,attachmentId).query<{file_name:string;content_type:string;storage_key:string;size_bytes:number;sha256:string}>('SELECT file_name,content_type,storage_key,size_bytes,sha256 FROM dbo.unified_report_evidence_files WHERE report_id=@report AND id=@file')).recordset[0];if(!value)throw new ApiError(404,'report_evidence_missing','The evidence image is unavailable.');return value;});
   return sendStoredFile(request,reply,config.documentStorage,{storageKey:file.storage_key,fileName:file.file_name,contentType:file.content_type,sizeBytes:Number(file.size_bytes),sha256:file.sha256},{inline:true});
+ });
+ app.post('/api/v1/reports/workspace/:id/exports',{config:{rateLimit:DOCUMENT_UPLOAD_RATE_LIMIT}},async(request,reply)=>{
+  const actor=await actorFor(request),id=positiveLong((request.params as {id:string}).id,'Report');
+  await db.transaction(async tx=>{const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor);});
+  const upload=await readMultipartUpload(request,config.documentStorage.maxFileSizeBytes),name=uploadedFileName(upload.file.filename),extension=validateFileExtension(name,REPORT_EXPORT_EXTENSIONS),mime=contentTypeFor(name),format=extension==='.pdf'?'pdf':'pptx';
+  const storage=storageKey(`reports/${id}/exports`,extension),write=await writeStoredFile(config.documentStorage,storage,upload.file.filepath);
+  let keep=false;
+  try {
+   const record=await db.transaction(async tx=>{
+    const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor);
+    const q=new sql.Request(tx).input('report',sql.BigInt,id).input('revision',sql.Int,r.revision).input('format',sql.NVarChar(10),format).input('actor',sql.BigInt,actor.id).input('name',sql.NVarChar(500),name).input('mime',sql.NVarChar(150),mime).input('storage',sql.NVarChar(1000),storage).input('size',sql.BigInt,write.sizeBytes).input('sha',sql.Char(64),write.sha256);
+    const row=(await q.query<{id:number}>(`INSERT dbo.unified_report_exports(report_id,revision,format,generated_by,file_name,content_type,storage_key,size_bytes,sha256) OUTPUT inserted.id VALUES(@report,@revision,@format,@actor,@name,@mime,@storage,@size,@sha)`)).recordset[0]!;
+    await insertAudit(tx,actor.id,'Report',id,r.report_no,'Export archived',null,{exportId:Number(row.id),format,fileName:name,sizeBytes:write.sizeBytes,sha256:write.sha256});
+    return {id:Number(row.id),format,fileName:name,contentType:mime,sizeBytes:write.sizeBytes,sha256:write.sha256,revision:r.revision,createdAt:new Date().toISOString()};
+   });keep=true;return reply.status(201).send(record);
+  }catch(error){if(error instanceof DatabaseCommitOutcomeUnknownError){keep=true;request.log.error({storageKey:storage,reportId:id},'Report export upload commit unknown; retained for reconciliation');}throw error;}
+  finally{if(!keep)await deleteStoredFile(config.documentStorage,storage);}
+ });
+ app.get('/api/v1/reports/workspace/:id/exports',async request=>{
+  const actor=await actorFor(request),id=positiveLong((request.params as {id:string}).id,'Report');
+  return db.transaction(async tx=>{
+   const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor);
+   const rows=(await new sql.Request(tx).input('report',sql.BigInt,id).query<{id:number;revision:number;format:string;file_name:string;content_type:string;size_bytes:number;sha256:string;created_at:Date}>('SELECT id,revision,format,file_name,content_type,size_bytes,sha256,created_at FROM dbo.unified_report_exports WHERE report_id=@report ORDER BY id DESC')).recordset;
+   return {items:rows.map(row=>({id:Number(row.id),revision:row.revision,format:row.format,fileName:row.file_name,contentType:row.content_type,sizeBytes:Number(row.size_bytes),sha256:row.sha256,createdAt:row.created_at}))};
+  });
+ });
+ app.get('/api/v1/reports/workspace/:id/exports/:exportId/content',{config:{rateLimit:DOCUMENT_DOWNLOAD_RATE_LIMIT}},async(request,reply)=>{
+  const actor=await actorFor(request),params=request.params as {id:string;exportId:string},id=positiveLong(params.id,'Report'),exportId=positiveLong(params.exportId,'Export');
+  const file=await db.transaction(async tx=>{const r=await readReport(tx,id);await requireSourcePermission(request,r);await reportAccess(tx,r,actor);const value=(await new sql.Request(tx).input('report',sql.BigInt,id).input('export',sql.BigInt,exportId).query<{file_name:string;content_type:string;storage_key:string;size_bytes:number;sha256:string}>('SELECT file_name,content_type,storage_key,size_bytes,sha256 FROM dbo.unified_report_exports WHERE report_id=@report AND id=@export')).recordset[0];if(!value)throw new ApiError(404,'report_export_missing','The exported document is unavailable.');return value;});
+  return sendStoredFile(request,reply,config.documentStorage,{storageKey:file.storage_key,fileName:file.file_name,contentType:file.content_type,sizeBytes:Number(file.size_bytes),sha256:file.sha256},{inline:false});
  });
  app.post('/api/v1/reports/workspace/:id/:action',async request=>{
   const {id:rawId,action}=request.params as {id:string;action:string},id=positiveLong(rawId,'Report'),b=bodyObject(request.body);

@@ -955,6 +955,27 @@ export async function downloadReportEvidence(reportId: number, attachmentId: num
   return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence/${attachmentId}/content`,{headers:{Accept:"image/*"}},120_000)).blob();
 }
 
+export type ReportExportRecord = {
+  id: number; revision: number; format: "pdf" | "pptx"; fileName: string;
+  contentType: string; sizeBytes: number; sha256: string; createdAt: string;
+};
+
+/** Archive a generated PDF/PPTX export to NAS-backed document storage so every export is retained. */
+export async function uploadReportExport(reportId: number, format: "pdf" | "pptx", bytes: Uint8Array, fileName: string): Promise<ReportExportRecord> {
+  const contentType = format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  const body = new FormData();
+  body.set("file", new File([bytes as BlobPart], fileName, { type: contentType }));
+  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/exports`, { method: "POST", body }, 120_000)).json() as Promise<ReportExportRecord>;
+}
+
+export async function listReportExports(reportId: number): Promise<{ items: ReportExportRecord[] }> {
+  return apiRequest(`/api/v1/reports/workspace/${reportId}/exports`);
+}
+
+export async function downloadReportExport(reportId: number, exportId: number): Promise<Blob> {
+  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/exports/${exportId}/content`, {}, 120_000)).blob();
+}
+
 export const loadBootstrap = () => apiRequest<BootstrapData>("/api/v1/bootstrap");
 
 export async function downloadSupportAttachment(ticketId: number, attachmentId: number) {

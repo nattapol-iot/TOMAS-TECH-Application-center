@@ -10,17 +10,17 @@ import { downloadReportEvidence } from "../api-client";
 import { labels, type InputField, type ReportBody, type ReportRecord, type Section } from "./report-types";
 
 // ── Layout constants (A4 Portrait, EMU) — match the original TOMAS TECH document
-const W = 6858000;
-const H = 9906000;
-const MARGIN = 406400;
-const DARK_BLUE = "1B3A6B";
-const BLACK = "000000";
-const BLUE_LABEL = "2C11F7";
+export const W = 6858000;
+export const H = 9906000;
+export const MARGIN = 406400;
+export const DARK_BLUE = "1B3A6B";
+export const BLACK = "000000";
+export const BLUE_LABEL = "2C11F7";
 
-function cm(c: number): number { return Math.round(c * 360000); }
-function pt(p: number): number { return Math.round(p * 12700); }
+export function cm(c: number): number { return Math.round(c * 360000); }
+export function pt(p: number): number { return Math.round(p * 12700); }
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -30,16 +30,16 @@ function esc(s: string): string {
 
 // ── Shape ID counter — reset per slide ───────────────────────
 let _spId = 2;
-function nextId(): number { return _spId++; }
-function resetIds(): void { _spId = 2; }
+export function nextId(): number { return _spId++; }
+export function resetIds(): void { _spId = 2; }
 
 // ── Yu Gothic font XML ────────────────────────────────────────
-function yuFont(): string {
+export function yuFont(): string {
   return `<a:latin typeface="Yu Gothic" panose="020B0400000000000000" pitchFamily="34" charset="-128"/>` +
     `<a:ea typeface="Yu Gothic" panose="020B0400000000000000" pitchFamily="34" charset="-128"/>`;
 }
 
-function txRun(text: string, opts: { bold?: boolean; sz?: number; color?: string } = {}): string {
+export function txRun(text: string, opts: { bold?: boolean; sz?: number; color?: string } = {}): string {
   const b = opts.bold ? ' b="1"' : '';
   const sz = opts.sz ? ` sz="${opts.sz * 100}"` : ' sz="800"';
   const fill = opts.color
@@ -48,16 +48,16 @@ function txRun(text: string, opts: { bold?: boolean; sz?: number; color?: string
   return `<a:r><a:rPr kumimoji="1" lang="en-US" altLang="ja-JP"${b}${sz} dirty="0">${yuFont()}${fill}</a:rPr><a:t>${esc(text)}</a:t></a:r>`;
 }
 
-function txPara(text: string, opts: { bold?: boolean; sz?: number; color?: string; align?: string } = {}): string {
+export function txPara(text: string, opts: { bold?: boolean; sz?: number; color?: string; align?: string } = {}): string {
   const algn = opts.align ? ` algn="${opts.align}"` : '';
   return `<a:p><a:pPr${algn}/>${txRun(text, opts)}</a:p>`;
 }
 
-function spXfrm(x: number, y: number, cx: number, cy: number): string {
+export function spXfrm(x: number, y: number, cx: number, cy: number): string {
   return `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`;
 }
 
-function textBox(
+export function textBox(
   x: number, y: number, cx: number, cy: number,
   content: string,
   border?: string,
@@ -75,7 +75,7 @@ function textBox(
 </p:sp>`;
 }
 
-function borderRect(x: number, y: number, cx: number, cy: number, borderColor: string, lineW = pt(0.25)): string {
+export function borderRect(x: number, y: number, cx: number, cy: number, borderColor: string, lineW = pt(0.25)): string {
   return `<p:sp>
 <p:nvSpPr><p:cNvPr id="${nextId()}" name="br"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
 <p:spPr>${spXfrm(x, y, cx, cy)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/>
@@ -84,7 +84,7 @@ function borderRect(x: number, y: number, cx: number, cy: number, borderColor: s
 </p:sp>`;
 }
 
-function imgShape(x: number, y: number, cx: number, cy: number, rId: string): string {
+export function imgShape(x: number, y: number, cx: number, cy: number, rId: string): string {
   return `<p:pic>
 <p:nvPicPr><p:cNvPr id="${nextId()}" name="img"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>
 <p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
@@ -92,7 +92,7 @@ function imgShape(x: number, y: number, cx: number, cy: number, rId: string): st
 </p:pic>`;
 }
 
-function photoPlaceholder(x: number, y: number, cx: number, cy: number, label: string): string[] {
+export function photoPlaceholder(x: number, y: number, cx: number, cy: number, label: string): string[] {
   return [
     borderRect(x, y, cx, cy, "CCCCCC"),
     textBox(x, y + Math.floor(cy / 2) - cm(0.4), cx, cm(0.8),
@@ -105,7 +105,7 @@ const NSP = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main
 const NSA = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
 const NSR = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 
-function makeSlide(shapes: string[], extraRels = ''): { xml: string; rels: string } {
+export function makeSlide(shapes: string[], extraRels = ''): { xml: string; rels: string } {
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld ${NSP} ${NSA} ${NSR}>
 <p:cSld><p:spTree>
@@ -124,7 +124,7 @@ ${shapes.join('\n')}
 }
 
 // ── Page header text box (noFill, noLine — matches original) ──
-function pageHeaderShapes(title: string, pageNum: number): string[] {
+export function pageHeaderShapes(title: string, pageNum: number): string[] {
   return [
     textBox(406400, 479503, 6117063, 263447,
       txPara(title, { sz: 12, color: BLACK }),
@@ -135,10 +135,10 @@ function pageHeaderShapes(title: string, pageNum: number): string[] {
 }
 
 // ── PPTX Table builder ────────────────────────────────────────
-type CellDef = { text: string; bold?: boolean; sz?: number; bg?: string; span?: number; align?: string; color?: string };
-type RowDef = { cells: CellDef[]; h?: number };
+export type CellDef = { text: string; bold?: boolean; sz?: number; bg?: string; span?: number; align?: string; color?: string };
+export type RowDef = { cells: CellDef[]; h?: number };
 
-function buildTable(x: number, y: number, colW: number[], rows: RowDef[]): string {
+export function buildTable(x: number, y: number, colW: number[], rows: RowDef[]): string {
   const totalW = colW.reduce((a, b) => a + b, 0);
   const gridCols = colW.map(w => `<a:gridCol w="${w}"/>`).join('');
 
@@ -181,12 +181,12 @@ function buildTable(x: number, y: number, colW: number[], rows: RowDef[]): strin
 }
 
 // OLE table origin — from original ppt/slides/slide9.xml graphicFrame
-const OLE_X = 414338;
-const OLE_Y = 762000; // = header_bottom (742950) + 19050 EMU gap
-const OLE_W = 6105525;
-const CONTENT_START_Y = 742950;
-const CONTENT_W = 6117062;
-const CONTENT_H = 8591553;
+export const OLE_X = 414338;
+export const OLE_Y = 762000; // = header_bottom (742950) + 19050 EMU gap
+export const OLE_W = 6105525;
+export const CONTENT_START_Y = 742950;
+export const CONTENT_W = 6117062;
+export const CONTENT_H = 8591553;
 
 function reportBodyRow(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
