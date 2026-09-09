@@ -26,7 +26,7 @@ const STORAGE_KEY = "tomas-inspection-reports";
 
 function defaultPower(): PowerMeasurement {
   return {
-    specRS: "220", specRT: "220", specST: "220",
+    specRS: "", specRT: "", specST: "",
     actualRS: "", actualRT: "", actualST: "",
     judgement: "", rank: "", remarks: "",
   };
@@ -34,20 +34,20 @@ function defaultPower(): PowerMeasurement {
 
 function defaultXfMeasurement(): TransformerMeasurement {
   return {
-    model: "NESB-A 50/60Hz. 750VA.",
-    primaryV: "220", primaryA: "",
+    model: "",
+    primaryV: "", primaryA: "",
     primaryJudgement: "", primaryRank: "", primaryRemarks: "",
-    secondaryV: "100", secondaryA: "",
+    secondaryV: "", secondaryA: "",
     secondaryJudgement: "", secondaryRank: "", secondaryRemarks: "",
   };
 }
 
 function defaultSmpsMeasurement(): TransformerMeasurement {
   return {
-    model: "S82J-10024D",
-    primaryV: "100", primaryA: "2.5",
+    model: "",
+    primaryV: "", primaryA: "",
     primaryJudgement: "", primaryRank: "", primaryRemarks: "",
-    secondaryV: "24", secondaryA: "4.5",
+    secondaryV: "", secondaryA: "",
     secondaryJudgement: "", secondaryRank: "", secondaryRemarks: "",
   };
 }
@@ -65,10 +65,10 @@ function emptyPowerSection(): PowerSection {
 function newUnit(name = "Unit 1"): InspectionUnit {
   return {
     id: crypto.randomUUID(), name,
-    controlPanelName: "", location: "Site 1, Factory 1",
+    controlPanelName: "", location: "",
     plcModel: "", hmiModel: "", communication: "",
-    powerPhase: "3 Phase 3 Wire + E", voltage: "220",
-    mainBreakerAmp: "50", mainBreakerModel: "",
+    powerPhase: "", voltage: "",
+    mainBreakerAmp: "", mainBreakerModel: "",
     utility: defaultPower(),
     plcStatus: "", plcRank: "", plcRemarks: "",
     powerSections: [
@@ -91,13 +91,13 @@ function newReport(bootstrap?: BootstrapData): InspectionReport {
   const today = new Date().toISOString().slice(0, 10);
   return {
     id: crypto.randomUUID(),
-    title: "Inspection Lifter & Cage Conveyor",
-    projectName: "Inspection Motor Lifter",
+    title: "",
+    projectName: "",
     projectNo: "",
     customerName: "",
     contactPerson: "", department: "", tel: "",
     reportDate: today,
-    version: new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    version: "",
     units: [newUnit("Unit 1")],
     customerSignName: "", customerTitle: "", customerDate: "",
     inspectorName: bootstrap?.user.name ?? "",
@@ -167,13 +167,21 @@ function exportPdf(report: InspectionReport) {
 
   const unitPages = report.units.map((unit, ui) => {
     const cover = `
-<div style="background:#1b3a6b;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:30mm;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-  <h1 style="font-size:22pt;margin:0 0 8pt">${report.title}</h1>
-  <h2 style="font-size:16pt;margin:0 0 24pt;font-weight:400">${unit.name} Inspection Report for MCP</h2>
-  <p style="margin:4pt 0">Made for : ${report.customerName}</p>
-  <p style="margin:4pt 0">By : Tomas Tech Co., Ltd.</p>
-  <p style="margin:4pt 0">Version : ${report.version}</p>
-  <p style="margin-top:auto;font-size:9pt;opacity:0.7">Confidential · No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.</p>
+<div style="background:#fff;color:#000;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <div style="display:flex;justify-content:space-between;padding:8mm 12mm 0">
+    <span style="border:0.75pt solid #ff0000;color:#ff0000;padding:3pt 8pt;font-size:9pt;text-align:center">Version : ${report.version}</span>
+    <span style="border:0.75pt solid #ff0000;color:#ff0000;padding:3pt 8pt;font-size:9pt;text-align:center">Confidential</span>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 12mm">
+    <hr style="border:none;border-top:0.75pt solid #000;margin:0 0 10pt" />
+    <h1 style="font-size:22pt;margin:0 0 8pt;text-align:right">${report.title}</h1>
+    <h2 style="font-size:16pt;margin:0 0 10pt;font-weight:400;text-align:right">${unit.name} Inspection Report for MCP</h2>
+    <hr style="border:none;border-top:0.75pt solid #000;margin:0 0 10pt" />
+    <p style="margin:4pt 0">Made for : ${report.customerName}</p>
+    <p style="margin:4pt 0">By : Tomas Tech Co., Ltd.</p>
+    <p style="margin:4pt 0">Version : ${report.version}</p>
+  </div>
+  <div style="padding:0 12mm 8mm;font-size:9pt">No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.</div>
 </div>`;
 
     const infoTable = `

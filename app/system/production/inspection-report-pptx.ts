@@ -142,15 +142,6 @@ function borderRect(x: number, y: number, cx: number, cy: number, borderColor: s
 </p:sp>`;
 }
 
-function filledRect(x: number, y: number, cx: number, cy: number, fillColor: string): string {
-  return `<p:sp>
-<p:nvSpPr><p:cNvPr id="${nextId()}" name="bg"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-<p:spPr>${spXfrm(x, y, cx, cy)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-<a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>
-<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>
-</p:sp>`;
-}
-
 function imgShape(x: number, y: number, cx: number, cy: number, rId: string): string {
   return `<p:pic>
 <p:nvPicPr><p:cNvPr id="${nextId()}" name="img"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>
@@ -272,7 +263,7 @@ function mimeExt(dataUrl: string): string {
 // ══════════════════════════════════════════════════════════════
 
 // ── Slide 1: Cover ────────────────────────────────────────────
-// Layout matches exportPdf() cover: full dark-navy background, white text.
+// Layout matches original PPTX cover: white background, black/red text.
 function coverSlide(
   report: InspectionReport,
   unit: InspectionUnit,
@@ -280,44 +271,53 @@ function coverSlide(
   logoRId: string,
 ): { xml: string; rels: string } {
   resetIds();
-  const PAD = cm(3); // 30 mm padding (matches PDF `padding:30mm`)
-  const WHITE = 'FFFFFF';
-  const contentW = W - PAD * 2; // usable width inside padding
+  const RED = 'FF0000';
+  const contentW = W - MARGIN * 2;
 
   const shapes: string[] = [
-    // Full-bleed dark navy background
-    filledRect(0, 0, W, H, DARK_BLUE),
+    // Version box (top-left, red border)
+    textBox(MARGIN, 479502, 1555750, 283687,
+      txPara(`Version : ${report.version}`, { sz: 12, color: RED, align: 'ctr' }),
+      RED),
 
-    // Tomas logo — positioned at left within padding, near top
-    imgShape(PAD, cm(2.5), cm(6.5), cm(2), logoRId),
+    // Confidential box (top-right, red border)
+    textBox(5262563, 479502, 1123950, 283687,
+      txPara('Confidential', { sz: 12, color: RED, align: 'ctr' }),
+      RED),
 
-    // Main title (h1 equivalent — 22pt bold white)
-    textBox(PAD, cm(11), contentW, cm(4),
-      txPara(report.title || 'Inspection Report', { sz: 22, bold: true, color: WHITE }),
-      undefined, undefined, 'ctr'),
+    // Horizontal rule above title
+    borderRect(MARGIN, 3700000, contentW, pt(0.75), BLACK),
 
-    // Unit / subtitle (h2 equivalent — 16pt white)
-    textBox(PAD, cm(15.5), contentW, cm(3),
-      txPara(`${unit.name} Inspection Report for MCP`, { sz: 16, color: WHITE }),
-      undefined, undefined, 'ctr'),
+    // Main title (22pt bold black, right-aligned)
+    textBox(MARGIN, 3800000, contentW, cm(2),
+      txPara(report.title || 'Inspection Report', { sz: 22, bold: true, color: BLACK, align: 'r' })),
+
+    // Unit / subtitle (16pt black, right-aligned)
+    textBox(MARGIN, cm(11.5), contentW, cm(1.2),
+      txPara(`${unit.name} Inspection Report for MCP`, { sz: 16, color: BLACK, align: 'r' })),
+
+    // Horizontal rule below subtitle
+    borderRect(MARGIN, cm(13), contentW, pt(0.75), BLACK),
 
     // Project info block
-    textBox(PAD, cm(20), contentW, cm(5),
-      txPara(`Made for : ${report.customerName}`, { sz: 11, color: WHITE }) +
-      txPara(`By : Tomas Tech Co., Ltd.`, { sz: 11, color: WHITE }) +
-      txPara(`Version : ${report.version}`, { sz: 11, color: WHITE }),
-      undefined, undefined, 'ctr'),
+    textBox(MARGIN, cm(13.5), contentW, cm(3),
+      txPara(`Made for : ${report.customerName}`, { sz: 11, color: BLACK }) +
+      txPara(`By : Tomas Tech Co., Ltd.`, { sz: 11, color: BLACK }) +
+      txPara(`Version : ${report.version}`, { sz: 11, color: BLACK })),
 
-    // Confidential footer (bottom, semi-muted with 9pt)
-    textBox(PAD, H - cm(2.5), contentW, cm(2),
+    // Tomas logo
+    imgShape(1917699, 7636804, 3022600, 720006, logoRId),
+
+    // Address footer (11pt black)
+    textBox(MARGIN, H - cm(2.5), contentW, cm(2),
       txPara(
-        'Confidential  ·  No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.',
-        { sz: 9, color: 'B0C4DE' }
+        'No.1 MD Tower16 Fl., Unit C1, Soi Bangna-Trad 25, Debaratna Rd, Khwaeng Bang Na Nuea, Khet Bang Na, Bangkok 10260 Thailand.',
+        { sz: 11, color: BLACK }
       )),
 
     // Page number
     textBox(6093618, 9181401, 435769, 527403,
-      txPara(String(pageNum), { sz: 8, color: WHITE, align: 'r' })),
+      txPara(String(pageNum), { sz: 8, color: BLACK, align: 'r' })),
   ];
 
   const extraRels = `\n<Relationship Id="${logoRId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo.${LOGO_EXT}"/>`;
