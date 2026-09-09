@@ -108,6 +108,8 @@ so we never merge-conflict.
 
 | 2026-09-08 | Claude | Editable rows: editing InspectionReportScreens.tsx and inspection-report-pptx.ts only — Operation/Electrical/Power rows user-addable/removable/renamable. | released — typecheck clean; commit 0e39d53 — Claude, 2026-09-08 |
 
+| 2026-09-09 | Claude | Revert PPTX/PDF cover to white background (was navy) to match original 100%; blank pre-filled default fields (power specs, transformer/SMPS models, title, version, power phase, voltage, breaker amp, location) so users fill them in; audited photo upload (resizeToJpeg -> state -> generatePptx) — no bugs found. Editing InspectionReportScreens.tsx and inspection-report-pptx.ts only. | released — typecheck clean; commit cdf6129 — Claude, 2026-09-09 12:00 |
+
 | 2026-09-07 | Claude | Inspection Report auto-fill: editing `app/system/production/InspectionReportScreens.tsx` only — customer picker in GeneralTab, team picker in SignOffTab, pre-fill inspector from bootstrap.user on new report. No backend, migration, or other files. | released — typecheck passes; customer dropdown auto-fills 4 fields, team picker auto-fills inspector/checker name+title, new report pre-fills inspector from logged-in user — Claude, 2026-09-07 |
 
 | 2026-09-07 12:09 | Codex Manual Integration | User-requested in-app employee manual. Owns additive `EmployeeManualScreen.tsx`/CSS, `ProductionApp.tsx` wiring, public handbook copy, handbook builder/query-language support, focused tests/docs. No API, database or business data writes. | implementation complete — typecheck, scoped lint, focused tests, production build and Chrome public-asset QA pass; shared frontend activation pending explicit user approval — Codex, 2026-09-07 12:20 |
