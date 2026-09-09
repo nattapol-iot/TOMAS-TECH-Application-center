@@ -38,6 +38,8 @@
 }
 .ir-unit-card-head strong { flex: 1; font-size: 14px; }
 .ir-unit-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.ir-checkbox-field { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 13px; }
+.ir-checkbox-field input { width: auto; }
 
 /* Measurement table */
 .ir-table-wrap { overflow-x: auto; margin-bottom: 20px; }

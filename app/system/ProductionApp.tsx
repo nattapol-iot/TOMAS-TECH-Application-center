@@ -80,8 +80,7 @@ type View =
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support"
-  | "inspection-reports";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
 type MyWorkUrgencyItem = {
@@ -138,7 +137,6 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   { group: "DOCUMENTS & SIGNING", items: [
     { view: "signing", label: "Sign Inbox", icon: "edit", permission: "signing.read" },
     { view: "documents", label: "Signed Documents", icon: "shield", permission: "signing.read" },
-    { view: "inspection-reports", label: "Inspection Report", icon: "table", permission: "report.write" },
   ] },
   { group: "ORGANISATION", items: [
     { view: "activity", label: "Team Activity", icon: "chart", permission: "activity.read" },
@@ -181,7 +179,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [projectTab, setProjectTab] = useState<"portfolio" | "schedule" | "punchlist">("portfolio");
   const [myWorkTab, setMyWorkTab] = useState<"inbox" | "schedule">("inbox");
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
-  const [reportTab, setReportTab] = useState<"workspace" | "analytics">("workspace");
+  const [reportTab, setReportTab] = useState<"workspace" | "analytics" | "inspection">("workspace");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
@@ -645,7 +643,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={() => setView("my-work")} onOpenSignature={() => setView("signature")} /> : null}
           {view === "customers" ? <ProductionCustomers {...common} onOpenInquiries={() => setView("inquiries")} /> : null}
-          {view === "reports" ? reportTab === "workspace" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => { if (confirmReportNavigation()) setReportTab("analytics"); }} /> : <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
+          {view === "reports" ? reportTab === "workspace" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => { if (confirmReportNavigation()) setReportTab("analytics"); }} onOpenInspection={bootstrap.permissions.includes("report.write") ? () => { if (confirmReportNavigation()) setReportTab("inspection"); } : undefined} /> : reportTab === "inspection" ? <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><InspectionReportScreen bootstrap={bootstrap} notify={setToast} /></> : <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
           {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={(type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else setView("my-work");}}/> : null}
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "master" ? <ProductionMasterData {...common} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}
@@ -655,7 +653,6 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
           {view === "manual" ? <EmployeeManualScreen /> : null}
           {view === "support" ? <SupportCenter externalRevision={supportRevision} ticketId={supportTicketId} onSelect={openSupport} onCreate={() => setSupportCreate(true)} notify={setToast} onDirtyChange={onSupportDirtyChange} /> : null}
-          {view === "inspection-reports" ? <InspectionReportScreen bootstrap={bootstrap} notify={setToast} /> : null}
         </main>
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>

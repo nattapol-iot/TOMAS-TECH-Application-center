@@ -66,6 +66,7 @@ function newUnit(name = "Unit 1"): InspectionUnit {
   return {
     id: crypto.randomUUID(), name,
     controlPanelName: "", location: "",
+    includePowerCheck: true,
     plcModel: "", hmiModel: "", communication: "",
     powerPhase: "", voltage: "",
     mainBreakerAmp: "", mainBreakerModel: "",
@@ -196,11 +197,13 @@ ${[
   ["Tel. / Fax", report.tel],
   ["Project Name", report.projectName],
   ["Project No.", report.projectNo],
-  ["HMI Model", unit.hmiModel],
-  ["Communication", unit.communication],
-  ["PLC Model", unit.plcModel],
-  ["Power Supply", `${unit.powerPhase} / ${unit.voltage} V`],
-  ["Main Breaker", `${unit.mainBreakerAmp} A.  Model: ${unit.mainBreakerModel}`],
+  ...(unit.includePowerCheck ? [
+    ["HMI Model", unit.hmiModel],
+    ["Communication", unit.communication],
+    ["PLC Model", unit.plcModel],
+    ["Power Supply", `${unit.powerPhase} / ${unit.voltage} V`],
+    ["Main Breaker", `${unit.mainBreakerAmp} A.  Model: ${unit.mainBreakerModel}`],
+  ] : []),
   ["Control Panel", unit.controlPanelName],
   ["Location", unit.location],
 ].map(([l, v]) => `<tr><td style="border:0.5pt solid #000;padding:3pt 6pt;background:#f2f2f2;width:35%;font-weight:600">${l}</td><td style="border:0.5pt solid #000;padding:3pt 6pt">${v}</td></tr>`).join('')}
@@ -209,7 +212,7 @@ ${rankTable}
 </div>`;
 
     const u = unit.utility;
-    const powerPage = `
+    const powerPage = !unit.includePowerCheck ? '' : `
 ${ph()}<div style="padding:15mm 20mm;font-family:Calibri,Arial,sans-serif;font-size:10pt">
 <div style="background:#1b3a6b;color:#fff;padding:6pt 10pt;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">MACHINE INSPECTION CHECK LIST · ${ui * 11 + 3}</div>
 <p style="font-weight:700;color:#1b3a6b;margin:10pt 0 4pt">Utility Power Supply</p>
@@ -306,7 +309,7 @@ ${[
 }
 
 // ── Tab labels ────────────────────────────────────────────────
-const FORM_TABS = ["General", "Units", "Power", "Operation", "Electrical", "Summary", "Sign Off"];
+const FORM_TABS = ["General", "Units", "Power", "Operation", "Component Check", "Summary", "Sign Off"];
 
 // ── Main component ────────────────────────────────────────────
 export function InspectionReportScreen({ bootstrap, notify }: { bootstrap: BootstrapData; notify: (msg: string) => void }) {
@@ -572,14 +575,22 @@ function UnitsTab({ report, onChange, onAdd, onRemove }: {
               <Field label="Unit Name"><input type="text" value={unit.name} onChange={e => updateUnit(i, { name: e.target.value })} /></Field>
               <Field label="Control Panel Name"><input type="text" value={unit.controlPanelName} onChange={e => updateUnit(i, { controlPanelName: e.target.value })} /></Field>
               <Field label="Location"><input type="text" value={unit.location} onChange={e => updateUnit(i, { location: e.target.value })} /></Field>
-              <Field label="PLC Model"><input type="text" value={unit.plcModel} onChange={e => updateUnit(i, { plcModel: e.target.value })} /></Field>
-              <Field label="HMI Model"><input type="text" value={unit.hmiModel} onChange={e => updateUnit(i, { hmiModel: e.target.value })} /></Field>
-              <Field label="Communication"><input type="text" value={unit.communication} onChange={e => updateUnit(i, { communication: e.target.value })} /></Field>
-              <Field label="Power Phase"><input type="text" value={unit.powerPhase} onChange={e => updateUnit(i, { powerPhase: e.target.value })} /></Field>
-              <Field label="Voltage (V)"><input type="text" value={unit.voltage} onChange={e => updateUnit(i, { voltage: e.target.value })} /></Field>
-              <Field label="Main Breaker (A)"><input type="text" value={unit.mainBreakerAmp} onChange={e => updateUnit(i, { mainBreakerAmp: e.target.value })} /></Field>
-              <Field label="Main Breaker Model"><input type="text" value={unit.mainBreakerModel} onChange={e => updateUnit(i, { mainBreakerModel: e.target.value })} /></Field>
             </div>
+            <label className="ir-checkbox-field">
+              <input type="checkbox" checked={unit.includePowerCheck} onChange={e => updateUnit(i, { includePowerCheck: e.target.checked })} />
+              This unit needs electrical/power measurement checks (PLC, voltage, breaker, transformer, SMPS)
+            </label>
+            {unit.includePowerCheck ? (
+              <div className="ir-unit-fields">
+                <Field label="PLC Model"><input type="text" value={unit.plcModel} onChange={e => updateUnit(i, { plcModel: e.target.value })} /></Field>
+                <Field label="HMI Model"><input type="text" value={unit.hmiModel} onChange={e => updateUnit(i, { hmiModel: e.target.value })} /></Field>
+                <Field label="Communication"><input type="text" value={unit.communication} onChange={e => updateUnit(i, { communication: e.target.value })} /></Field>
+                <Field label="Power Phase"><input type="text" value={unit.powerPhase} onChange={e => updateUnit(i, { powerPhase: e.target.value })} /></Field>
+                <Field label="Voltage (V)"><input type="text" value={unit.voltage} onChange={e => updateUnit(i, { voltage: e.target.value })} /></Field>
+                <Field label="Main Breaker (A)"><input type="text" value={unit.mainBreakerAmp} onChange={e => updateUnit(i, { mainBreakerAmp: e.target.value })} /></Field>
+                <Field label="Main Breaker Model"><input type="text" value={unit.mainBreakerModel} onChange={e => updateUnit(i, { mainBreakerModel: e.target.value })} /></Field>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -651,6 +662,10 @@ function PowerTab({ unit, onChange }: { unit: InspectionUnit; onChange: (p: Part
     if (unit.powerSections.length <= 1) return;
     onChange({ powerSections: unit.powerSections.filter((_, idx) => idx !== i) });
   };
+
+  if (!unit.includePowerCheck) {
+    return <EmptyState icon="file" title="Not applicable for this unit" message="Enable &quot;electrical/power measurement checks&quot; in the Units tab if this unit needs PLC, voltage, transformer, or SMPS measurements." />;
+  }
 
   return (
     <div>

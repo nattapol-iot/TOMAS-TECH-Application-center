@@ -42,6 +42,7 @@ export type ElectricalItem = {
 export type InspectionUnit = {
   id: string; name: string;
   controlPanelName: string; location: string;
+  includePowerCheck: boolean;
   plcModel: string; hmiModel: string; communication: string;
   powerPhase: string; voltage: string;
   mainBreakerAmp: string; mainBreakerModel: string;
@@ -347,27 +348,32 @@ function projectInfoSlide(
     textBox(406386, 2332775, 6117061, 263447, b12(`Report Date : ${report.reportDate}`)),
     // Control Panel Name
     textBox(406389, 6989117, 3327411, 171453, b11(`Control Panel Name : ${unit.controlPanelName}`)),
-    // Main Breaker Model
-    textBox(406389, 7160571, 3124211, 171453, b11(`Main Breaker Model : ${unit.mainBreakerModel}`)),
-    // Main Breaker A
-    textBox(413816, 7338127, 1724547, 171453, b11(`Main Breaker : ${unit.mainBreakerAmp} A.`)),
-    // Power Supply Volt
-    textBox(413816, 7509785, 1724547, 171453, b11(`Power Supply : ${unit.voltage} Volt`)),
-    // Power Supply Phase
-    textBox(413816, 7684415, 1948382, 171453, b11(`Power Supply : ${unit.powerPhase}`)),
     // Rank legend text box
     textBox(3291203, 7344614, 3190878, 563519,
       txPara('Rank A : Can use / Need to detail check or more information.', { sz: 8.5, color: BLACK }) +
       txPara('Rank B : Still can use, but need to buy some of spare parts.', { sz: 8.5, color: BLACK }) +
       txPara('Rank C : Need to repair / Replace within 6 months.', { sz: 8.5, color: BLACK }) +
       txPara('Rank D : NG / Must repair ASAP.', { sz: 8.5, color: BLACK })),
-    // PLC Model
-    textBox(406389, 8782127, 2939246, 171453, b11(`PLC Model : ${unit.plcModel}`)),
-    // Communication
-    textBox(406392, 8959847, 2939244, 171453, b11(`Communication : ${unit.communication}`)),
-    // HMI Model
-    textBox(406394, 9131300, 2939242, 171453, b11(`HMI Model : ${unit.hmiModel}`)),
   ];
+
+  if (unit.includePowerCheck) {
+    shapes.push(
+      // Main Breaker Model
+      textBox(406389, 7160571, 3124211, 171453, b11(`Main Breaker Model : ${unit.mainBreakerModel}`)),
+      // Main Breaker A
+      textBox(413816, 7338127, 1724547, 171453, b11(`Main Breaker : ${unit.mainBreakerAmp} A.`)),
+      // Power Supply Volt
+      textBox(413816, 7509785, 1724547, 171453, b11(`Power Supply : ${unit.voltage} Volt`)),
+      // Power Supply Phase
+      textBox(413816, 7684415, 1948382, 171453, b11(`Power Supply : ${unit.powerPhase}`)),
+      // PLC Model
+      textBox(406389, 8782127, 2939246, 171453, b11(`PLC Model : ${unit.plcModel}`)),
+      // Communication
+      textBox(406392, 8959847, 2939244, 171453, b11(`Communication : ${unit.communication}`)),
+      // HMI Model
+      textBox(406394, 9131300, 2939242, 171453, b11(`HMI Model : ${unit.hmiModel}`)),
+    );
+  }
 
   return makeSlide(shapes);
 }
@@ -836,8 +842,10 @@ export function generatePptx(report: InspectionReport): Uint8Array {
     // Slide 2: Project Info
     slideData.push(projectInfoSlide(report, unit, unitPage(0)));
 
-    // Slide 3: Power
-    slideData.push(powerSlide(unit, unitPage(0)));
+    // Slide 3: Power (only for units that need electrical/power measurement checks)
+    if (unit.includePowerCheck) {
+      slideData.push(powerSlide(unit, unitPage(0)));
+    }
 
     // Slides 4+: Operation Photo slides (2 tests per slide)
     if (unit.operationTests.length > 0) {
