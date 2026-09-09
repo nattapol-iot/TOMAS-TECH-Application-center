@@ -48,7 +48,11 @@ export function reportSections(type: string): Section[] {
     SERVICE: [hardware, software, { key: "service", label: "Service diagnosis & resolution", fields: [field("symptom", "Symptom"), field("impact", "Impact"), field("rootCause", "Root cause"), field("action", "Corrective action"), field("downtime", "Downtime"), field("backup", "Backup"), field("rollback", "Rollback plan / result"), field("verification", "Verification"), field("testResult", "Test result"), field("customerAcceptance", "Customer acceptance"), field("followUp", "Follow-up")] }],
     INSTALLATION: [hardware, software, { key: "commissioning", label: "Commissioning", repeat: true, fields: [field("checkpoint", "Check / activity"), field("expected", "Expected"), field("observed", "Observed"), resultField, field("remarks", "Remarks")] }],
     UAT: [{ key: "scenarios", label: "UAT scenarios & test steps", repeat: true, fields: [field("scenario", "Scenario (repeat for each step)"), field("step", "Step"), field("input", "Input"), field("expected", "Expected result"), field("actual", "Actual result"), resultField, field("remark", "Remark"), field("evidence", "Evidence reference")] }, { key: "uatSummary", label: "UAT summary & acceptance", fields: [field("testFrom", "Test from", "date"), field("testTo", "Test to", "date"), { ...resultField, key: "overallResult", label: "Overall result" }, field("issueCount", "Issue count", "number"), field("correctiveCount", "Corrective action count", "number"), field("followUpOwner", "Follow-up owner"), field("acceptance", "Acceptance"), field("revisionEvidence", "Revision evidence")] }],
-    INSPECTION: [{ key: "checkpoints", label: "Inspection checkpoints", repeat: true, fields: [field("checkpoint", "Checkpoint"), field("expected", "Expected"), field("observed", "Observed"), field("unit", "Unit"), resultField, field("corrective", "Corrective action")] }],
+    INSPECTION: [
+      { key: "assets", label: "Assets / units under inspection", repeat: true, fields: [field("name", "Asset / unit name"), field("assetType", "Asset type"), field("location", "Location"), field("identifier", "Identifier (panel / serial / hostname)")] },
+      { key: "measurements", label: "Measurements", repeat: true, fields: [field("asset", "Asset / unit"), field("parameter", "Parameter"), field("unit", "Unit of measure"), field("specValue", "Spec value"), field("actualValue", "Actual value"), resultField, field("remarks", "Remarks")] },
+      { key: "checkpoints", label: "Inspection checkpoints", repeat: true, fields: [field("checkpoint", "Checkpoint"), field("expected", "Expected"), field("observed", "Observed"), field("unit", "Unit"), field("category", "Category"), resultField, field("corrective", "Corrective action")] },
+    ],
     POC: [{ key: "trials", label: "POC hypotheses & trials", repeat: true, fields: [field("hypothesis", "Hypothesis"), field("successCriteria", "Success criteria"), field("baseline", "Baseline"), field("trial", "Trial / method"), field("result", "Result"), field("limitations", "Limitations")] }],
   };
   const punchlist: Section = { key: "punchlist", label: "UAT punchlist", repeat: true, fields: [field("scenario", "Scenario"), field("step", "Step"), field("issue", "Issue"), field("owner", "Owner"), field("updatedDate", "Updated date", "date"), field("status", "Status"), field("dueDate", "Due date", "date"), field("correctiveResult", "Corrective result"), { ...resultField, key: "resultStatus", label: "Result status" }] };
@@ -56,7 +60,7 @@ export function reportSections(type: string): Section[] {
     SERVICE:["Work details","Scope & objective","Hardware","Software","Problem & resolution","Verification & handover","Pending actions","Deliverables"],
     UAT:["Work details","Scope & objective","UAT summary","UAT test scenarios","UAT punchlist","Deliverables"],
     INSTALLATION:["Work details","Scope & objective","Hardware","Software","Commissioning","Pending actions","Deliverables"],
-    INSPECTION:["Work details","Scope & objective","Inspection checkpoints","Pending actions","Deliverables"],
+    INSPECTION:["Work details","Scope & objective","Assets","Measurements","Inspection checkpoints","Pending actions","Deliverables"],
     POC:["Work details","Scope & objective","POC trials","Pending actions","Deliverables"],
   };
   return [...commonSections, ...(specific[type] ?? []), ...finalSections.map(section => type === "UAT" && section.key === "issues" ? punchlist : section.key === "evidence" ? {...section,fields:section.fields.map(definition=>definition.key==="topic"?{...definition,options:topicOptions[type]??topicOptions.SERVICE}:definition)} : section)];
@@ -100,7 +104,7 @@ function CustomerAcknowledgmentView({ acknowledgment, locale = "th" }: { locale?
     <img className="report-customer-signature" src={acknowledgment.signatureDataUrl} alt={`Customer signature of ${acknowledgment.name}`} /> : null}</div>;
 }
 
-export function ReportScreens({ bootstrap, notify, onOpenAnalytics, onOpenInspection, onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void; bootstrap: BootstrapData; notify: (message: string) => void; onOpenAnalytics?: () => void; onOpenInspection?: () => void }) {
+export function ReportScreens({ bootstrap, notify, onOpenAnalytics, onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void; bootstrap: BootstrapData; notify: (message: string) => void; onOpenAnalytics?: () => void }) {
   const t = useUiText();
   const workspaceDirty = useRef(false);
   const reportDirtyChange = useCallback((dirty: boolean) => { workspaceDirty.current = dirty; onDirtyChange?.(dirty); }, [onDirtyChange]);
@@ -131,10 +135,7 @@ export function ReportScreens({ bootstrap, notify, onOpenAnalytics, onOpenInspec
   if (selectedId !== null) return <ReportDetail onDirtyChange={reportDirtyChange} key={selectedId} id={selectedId} bootstrap={bootstrap} notify={notify} onBack={() => { if (confirmWorkspaceNavigation()) { setSelectedId(null); void load(); } }} />;
   const begin = (type: ReportType) => { setNewType(type); setSelectedTemplate(null); setCreating(true); };
   return <div className="report-workspace">
-    <PageHeader eyebrow={t("CUSTOMER REPORTS")} title={t("รายงานลูกค้า")} subtitle={t("เลือกแบบฟอร์ม กรอกผลการทำงาน แล้วส่งตรวจและให้ลูกค้าเซ็น")} actions={<>
-      {onOpenInspection ? <button className="btn ghost" type="button" onClick={onOpenInspection}><Icon name="table" /><LocalizedText text={"Inspection Report"} /></button> : null}
-      {onOpenAnalytics ? <button className="btn ghost" type="button" onClick={onOpenAnalytics}><LocalizedText text={"ดูสถิติรายงาน"} /></button> : null}
-    </>} />
+    <PageHeader eyebrow={t("CUSTOMER REPORTS")} title={t("รายงานลูกค้า")} subtitle={t("เลือกแบบฟอร์ม กรอกผลการทำงาน แล้วส่งตรวจและให้ลูกค้าเซ็น")} actions={onOpenAnalytics ? <button className="btn ghost" type="button" onClick={onOpenAnalytics}><LocalizedText text={"ดูสถิติรายงาน"} /></button> : undefined} />
     <Tabs tabs={[{ id: "reports", label: t("รายงานทั้งหมด") }, { id: "templates", label: t("Template ของทีม") }]} active={workspaceTab} onChange={next => { if (next === workspaceTab || confirmWorkspaceNavigation()) setWorkspaceTab(next); }} />
     {workspaceTab === "templates" ? <ReportTemplateLibrary onDirtyChange={reportDirtyChange} bootstrap={bootstrap} notify={notify} onUse={template => { setNewType(template.reportType); setSelectedTemplate(template); setCreating(true); }} /> : <>
       {bootstrap.permissions.includes("report.write") ? <section className="report-start" aria-label={t("สร้างรายงานจากแบบฟอร์ม")}>
@@ -235,7 +236,7 @@ function NewReportModal({ bootstrap, initialType = "SERVICE", initialTemplate = 
 function ReportDocumentHeader({ report, title, reportDate, onTitle, onDate }: { report: ReportRecord; title: string; reportDate: string; onTitle?: (value: string) => void; onDate?: (value: string) => void }) {
   const t = (value: string) => reportCopy(report.locale, value);
   return <header className="report-paper-header" lang={report.locale} translate="no">
-    <div className="report-paper-masthead"><strong>TOMAS TECH</strong><div><h2>{t(`${labels[report.reportType].toUpperCase()} REPORT`)}</h2><span>{t(report.reportType === "UAT" ? "ใบรายงานการทดสอบและตรวจรับงาน" : report.reportType === "SERVICE" ? "ใบรายงานการให้บริการ" : "ใบรายงานผลการดำเนินงาน")}</span></div><small>{t(report.reportType === "UAT" ? "อ้างอิง TT-FRM-UAT-001 · Rev.00" : ["SERVICE", "INSTALLATION"].includes(report.reportType) ? "อ้างอิง TT-FRM-SRV-001 · Rev.00" : "แบบรายงานมาตรฐานทีม")}</small></div>
+    <div className="report-paper-masthead"><strong>TOMAS TECH</strong><div><h2>{t(`${labels[report.reportType].toUpperCase()} REPORT`)}</h2><span>{t(report.reportType === "UAT" ? "ใบรายงานการทดสอบและตรวจรับงาน" : report.reportType === "SERVICE" ? "ใบรายงานการให้บริการ" : report.reportType === "INSPECTION" ? "ใบรายงานผลการตรวจสอบ" : "ใบรายงานผลการดำเนินงาน")}</span></div><small>{t(report.reportType === "UAT" ? "อ้างอิง TT-FRM-UAT-001 · Rev.00" : ["SERVICE", "INSTALLATION"].includes(report.reportType) ? "อ้างอิง TT-FRM-SRV-001 · Rev.00" : "แบบรายงานมาตรฐานทีม")}</small></div>
     <div className="report-paper-meta"><div><span>{t("REPORT NO. / เลขที่")}</span><strong>{report.number}  · R{report.revision}</strong></div><div><span>{t("REPORT DATE / วันที่")}</span>{onDate ? <input aria-label={t("Report date")} type="date" required value={reportDate} onChange={event => onDate(event.target.value)} /> : <strong>{reportDate}</strong>}</div><div><span>{t("STATUS / สถานะ")}</span><strong>{t(labels[report.status] ?? report.status)}</strong></div><div className="wide"><span>{t("CUSTOMER / บริษัทผู้ว่าจ้าง")}</span><strong>{report.customer}</strong></div><div><span>{t("PROJECT / INQUIRY NO.")}</span><strong>{report.sourceReference}</strong></div>{report.endUserName ? <div className="full"><span>{t("END USER / บริษัทผู้ใช้งานปลายทาง")}</span><strong>{report.endUserName}</strong></div> : null}<div className="full"><span>{t("PROJECT / SITE / โครงการ")}</span><strong>{report.sourceTitle}</strong></div><div className="full"><span>{t("REPORT TITLE / เรื่อง")}</span>{onTitle ? <input aria-label={t("Report title")} required maxLength={500} value={title} onChange={event => onTitle(event.target.value)} /> : <strong>{title}</strong>}</div></div>
   </header>;
 }

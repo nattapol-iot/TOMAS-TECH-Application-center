@@ -72,7 +72,6 @@ import {
   ProductionSiteVisits,
   ProductionVisitMasterData,
 } from "./production/SiteVisitScreens";
-import { InspectionReportScreen } from "./production/InspectionReportScreens";
 
 type View =
   | "dashboard" | "my-work" | "inquiries" | "estimates" | "projects" | "knowledge"
@@ -179,7 +178,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [projectTab, setProjectTab] = useState<"portfolio" | "schedule" | "punchlist">("portfolio");
   const [myWorkTab, setMyWorkTab] = useState<"inbox" | "schedule">("inbox");
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
-  const [reportTab, setReportTab] = useState<"workspace" | "analytics" | "inspection">("workspace");
+  const [reportTab, setReportTab] = useState<"workspace" | "analytics">("workspace");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
@@ -643,7 +642,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={() => setView("my-work")} onOpenSignature={() => setView("signature")} /> : null}
           {view === "customers" ? <ProductionCustomers {...common} onOpenInquiries={() => setView("inquiries")} /> : null}
-          {view === "reports" ? reportTab === "workspace" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => { if (confirmReportNavigation()) setReportTab("analytics"); }} onOpenInspection={bootstrap.permissions.includes("report.write") ? () => { if (confirmReportNavigation()) setReportTab("inspection"); } : undefined} /> : reportTab === "inspection" ? <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><InspectionReportScreen bootstrap={bootstrap} notify={setToast} /></> : <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
+          {view === "reports" ? reportTab === "workspace" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => { if (confirmReportNavigation()) setReportTab("analytics"); }} /> : <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
           {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={(type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else setView("my-work");}}/> : null}
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "master" ? <ProductionMasterData {...common} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}

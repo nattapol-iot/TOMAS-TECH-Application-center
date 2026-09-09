@@ -8,7 +8,9 @@ export const REPORT_TEMPLATE_FIELDS:Record<string,{repeat:boolean;fields:readonl
  software:{repeat:true,fields:['module','action']},
  commissioning:{repeat:true,fields:['checkpoint','expected']},
  scenarios:{repeat:true,fields:['scenario','step','input','expected']},
- checkpoints:{repeat:true,fields:['checkpoint','expected','unit']},
+ assets:{repeat:true,fields:['name','assetType']},
+ measurements:{repeat:true,fields:['parameter','unit','specValue']},
+ checkpoints:{repeat:true,fields:['checkpoint','expected','unit','category']},
  trials:{repeat:true,fields:['hypothesis','successCriteria','trial']},
  deliverables:{repeat:true,fields:['item']},
 };
@@ -16,7 +18,7 @@ export const REPORT_TEMPLATE_SECTIONS_BY_TYPE:Record<string,readonly string[]>={
  INSTALLATION:['overview','hardware','software','commissioning','deliverables'],
  UAT:['overview','scenarios','deliverables'],
  SERVICE:['overview','hardware','software','deliverables'],
- INSPECTION:['overview','checkpoints','deliverables'],
+ INSPECTION:['overview','assets','measurements','checkpoints','deliverables'],
  POC:['overview','trials','deliverables'],
 };
 const object=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
