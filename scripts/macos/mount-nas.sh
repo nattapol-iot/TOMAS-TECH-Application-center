@@ -5,7 +5,7 @@ LEGACY_MOUNT_DIR=/Users/tomastc/iot-team-center/nas
 [[ -n "${DEV_NAS_USERNAME:-}" ]] || { echo 'DEV_NAS_USERNAME is missing.' >&2; exit 1; }
 if /sbin/mount | grep -Fq " on $MOUNT_DIR "; then exit 0; fi
 if /sbin/mount | grep -Fq " on $LEGACY_MOUNT_DIR "; then
-  /sbin/umount "$LEGACY_MOUNT_DIR" || /sbin/umount -f "$LEGACY_MOUNT_DIR"
+  /usr/bin/perl -e 'alarm 20; exec @ARGV' /sbin/umount -f "$LEGACY_MOUNT_DIR"
 fi
 mkdir -p "$MOUNT_DIR"
 /usr/bin/nc -G 8 -z 100.64.0.53 445 || { echo 'NAS SMB port is unreachable from the Mac host.' >&2; exit 1; }
