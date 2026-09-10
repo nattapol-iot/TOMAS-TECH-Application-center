@@ -27,7 +27,7 @@ console.log('INSPECTION_COMPLETE');
 // Bounded discovery only: never print file contents, credentials, or unrelated settings.
 const home='/Users/tomastc';
 const ignored=new Set(['node_modules','.git','.Trash','Library','Pictures','Movies','Music',
- '.ssh','.npm','.cache','.rustup','.cargo','dist','build','vendor','venv','.venv']);
+ '.ssh','.npm','.cache','.rustup','.cargo','.wrangler','.next','.vinext','dist','build','vendor','venv','.venv']);
 const needles=['100.64.0.53','IoT Department','IoT Team Center'];
 let examined=0,bytes=0,limited=false;
 const hits=[];
@@ -51,7 +51,8 @@ function inspectConfig(file){
  }catch(e){if(e.code==='EACCES')console.log('NAS_SEARCH_UNREADABLE '+file);}
 }
 function walk(root,depth){
- if(depth>5 || limited || ++directories>1000 || Date.now()>deadline){limited=true;return;}
+ if(depth>5 || limited)return;
+ if(++directories>4000 || Date.now()>deadline){limited=true;return;}
  let entries;try{entries=fs.readdirSync(root,{withFileTypes:true});}catch{return;}
  for(const e of entries){
   if(e.isSymbolicLink() || ignored.has(e.name))continue;
