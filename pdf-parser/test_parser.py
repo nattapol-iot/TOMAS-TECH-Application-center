@@ -20,6 +20,10 @@ import json
 import sys
 from pathlib import Path
 
+# Force UTF-8 output on Windows so Thai/Japanese chars don't crash
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # Import the parser module directly
 sys.path.insert(0, str(Path(__file__).parent))
 from main import process_pdf  # noqa: E402
@@ -57,7 +61,7 @@ def test_file(path: Path) -> dict:
             )
 
     # ── Raw text preview ───────────────────────────────────────────────────
-    raw_preview = result["rawText"][:600].replace("\n", "↵ ")
+    raw_preview = result["rawText"][:600].replace("\n", "\\n ")
     print(f"\n  RAW TEXT (first 600 chars):\n  {raw_preview}")
 
     return result

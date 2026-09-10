@@ -17,7 +17,7 @@ import logging
 import re
 from typing import Optional
 
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF (pymupdf >= 1.24 exposes the pymupdf namespace)
 import pdfplumber
 import pytesseract
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -122,24 +122,38 @@ def extract_tax_id(text: str) -> str:
 
 
 def extract_quotation_number(text: str) -> str:
-    # Labeled
+    # Labeled — explicit quotation / invoice number fields (highest priority)
     m = re.search(
-        r"(?:quotation\s*(?:no\.?|number:?)|ใบเสนอราคา(?:เลขที่)?|"
-        r"QT(?:NO)?|BT\s*NO|SQ\s*NO)[:\s#]+([A-Z0-9\-\/]+)",
+        r"(?:quotation\s*(?:no\.?|number:?)|invoice\s*no\.?|"
+        r"ใบเสนอราคา(?:เลขที่)?|เลขที่ใบเสนอราคา|"
+        r"QT(?:NO)?|BT\s*NO|SQ\s*NO)[:\s#\/]*([A-Z0-9][A-Z0-9\-\/]{3,})",
         text, re.I,
     )
     if m:
         return m.group(1).strip()
-    # Known prefixes
+    # Known document-number prefixes (NOT phone-number patterns like 02-xxx)
     m = re.search(
-        r"\b(QT\d[\w\-]{4,}|SQ[\d\-]{4,}|BT\d{2}[-\d]{5,}|"
-        r"OTP\d{6,}|TMTS\d{2}-\d+|FA\d+[A-Z]+|QCA\d+|Q\d{6,}|INV\d+)",
+        r"\b(QT[\-\d]{4,}|QT\d{4}[-\d]+|SQ[\d\-]{4,}|BT\d{2}[-\d]{5,}|"
+        r"OTP\d{6,}|TMTS\d{2}-\d+|FA\d+[A-Z]+|QCA\d+|Q\d{6,}|"
+        r"INV\d+|WIV\d+|[A-Z]{2,}\d{4,}[-\w]*)",
         text,
     )
     if m:
-        return m.group(1)
-    m = re.search(r"(?:No\.|NO\.|เลขที่)[:\s]*([A-Z0-9\-\/]{5,20})", text, re.I)
-    return m.group(1).strip() if m else ""
+        # Exclude phone-number patterns (Thai: 0x-xxx-xxxx or 08x-xxx-xxxx)
+        candidate = m.group(1)
+        if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", candidate):
+            return candidate
+    # Generic "No." label — but exclude phone numbers
+    for pat in [
+        r"(?:No\.|NO\.)\s*:\s*([A-Z0-9][A-Z0-9\-\/]{4,19})",
+        r"เลขที่[:\s]*([A-Z0-9\-\/]{5,20})",
+    ]:
+        m = re.search(pat, text, re.I)
+        if m:
+            candidate = m.group(1).strip()
+            if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", candidate):
+                return candidate
+    return ""
 
 
 def extract_supplier_name(lines: list[str]) -> str:
@@ -165,7 +179,11 @@ def extract_total(text: str) -> float:
     for pat in patterns:
         m = re.search(pat, text, re.I)
         if m:
-            v = float(m.group(1).replace(",", ""))
+            raw = m.group(1).replace(",", "").strip()
+            try:
+                v = float(raw) if raw else 0.0
+            except ValueError:
+                continue
             if v > 0:
                 return v
     return 0.0
@@ -173,11 +191,13 @@ def extract_total(text: str) -> float:
 # ── Table cell → line item ─────────────────────────────────────────────────
 
 def is_numeric(s: Optional[str]) -> bool:
-    return bool(s and re.fullmatch(r"[\d,]+\.?\d*", s.strip()))
+    """True if the cell looks like a number, optionally with currency symbol suffix."""
+    return bool(s and re.fullmatch(r"[\d,]+\.?\d*\s*[฿¥€$]?", s.strip()))
 
 
 def clean_num(s: str) -> float:
-    return float(s.replace(",", ""))
+    """Parse a number cell, stripping commas and trailing currency symbols."""
+    return float(re.sub(r"[,฿¥€$\s]", "", s))
 
 
 def row_to_line(row: list[Optional[str]], currency: str, line_no: int) -> Optional[dict]:
@@ -185,8 +205,11 @@ def row_to_line(row: list[Optional[str]], currency: str, line_no: int) -> Option
     Convert a pdfplumber table row to a ParsedLine dict.
     Strategy: find the last two positive numeric cells → unit_price, line_total.
     Everything else: largest non-numeric cell = description, code-looking cell = itemCode.
+    Handles cells with embedded currency symbols (e.g. "66,600.00 ฿") and
+    qty+unit merged cells (e.g. "9 ชิ้น" → qty=9, unit=ชิ้น).
     """
-    cells = [str(c).strip() if c else "" for c in row]
+    # Normalise: strip newlines within cells (e.g. "LEAD\nTIME" → skip)
+    cells = [re.sub(r"\s+", " ", str(c)).strip() if c else "" for c in row]
 
     nums = [(i, clean_num(c)) for i, c in enumerate(cells) if is_numeric(c) and clean_num(c) > 0]
     if len(nums) < 2:
@@ -209,22 +232,34 @@ def row_to_line(row: list[Optional[str]], currency: str, line_no: int) -> Option
     if not description:
         return None
 
-    # Skip header rows
-    if re.search(r"description|item|qty|price|amount|ลำดับ|รายการ|จำนวน|ราคา", description, re.I):
+    # Skip header rows — only when description is short (actual headers rarely span > 50 chars)
+    # Don't check ราคา/price as they appear in product notes too
+    if len(description) < 50 and re.search(
+        r"^(?:description|item\s*(?:no|code)?|qty|quantity|amount|unit\s*price|"
+        r"ลำดับ|รายการ|จำนวน)$",
+        description.strip(), re.I,
+    ):
         return None
 
-    # Item code: looks like a product code
+    # Item code: looks like a product code (must contain at least one letter)
     item_code = ""
     for c in cells:
-        if c and re.fullmatch(r"[A-Z0-9][A-Z0-9\-\/\.]{2,39}", c) and c != description:
+        if (c and re.fullmatch(r"[A-Z0-9][A-Z0-9\-\/\.]{2,39}", c)
+                and re.search(r"[A-Z]", c) and c != description):
             item_code = c
             break
 
-    # Unit
+    # Unit — may appear as standalone cell or merged with qty ("9 ชิ้น")
     unit = "EA"
     for c in cells:
-        if c.lower().rstrip("s") in UNIT_TOKENS:
+        tok = c.lower().rstrip("s")
+        if tok in UNIT_TOKENS:
             unit = c.upper()
+            break
+        # Merged "qty unit" cell: leading digits + space + unit token
+        m_qu = re.match(r"^\d[\d,]*\.?\d*\s+(\S+)", c)
+        if m_qu and m_qu.group(1).lower().rstrip("s") in UNIT_TOKENS:
+            unit = m_qu.group(1).upper()
             break
 
     return {
@@ -295,6 +330,22 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
                     "unitPrice": price, "currency": currency, "remark": "",
                 })
                 line_no += 1
+                continue
+
+        # Single-price format: digit  desc  price  (Thai quotations, no qty column)
+        m = re.match(r"^\s*(\d{1,4})\s+(.{5,80}?)\s+([\d,]+\.?\d{2})\s*$", raw)
+        if m:
+            price = clean_num(m.group(3))
+            desc = m.group(2).strip()
+            # Skip address lines (contain Thai/English road/district words)
+            is_address = re.search(r"ซอย|ถนน|แขวง|เขต|จังหวัด|\bSoi\b|\bRoad\b", desc)
+            if len(desc) >= 5 and price > 0 and not SKIP_PAT.search(desc) and not is_address:
+                results.append({
+                    "lineNo": line_no, "itemCode": "", "description": desc,
+                    "brand": "", "model": "", "qty": 1.0, "unit": "EA",
+                    "unitPrice": price, "currency": currency, "remark": "",
+                })
+                line_no += 1
     return results
 
 # ── Main PDF processing ────────────────────────────────────────────────────
@@ -344,7 +395,8 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         all_text, ["วันที่", "date", "Quotation Date", "Date:", "issued", "ออกเมื่อ"]
     )
     valid_until = find_date(
-        all_text, ["valid until", "valid to", "Valid Until", "หมดอายุ", "expiry", "ใช้ได้ถึง"]
+        all_text, ["valid until", "valid to", "Valid Until", "expiration", "expire",
+                   "หมดอายุ", "expiry", "ใช้ได้ถึง", "หมดอายุ"]
     )
     total_amount = extract_total(all_text)
 
