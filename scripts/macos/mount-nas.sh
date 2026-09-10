@@ -13,7 +13,24 @@ password="$(base64 -d < "$CREDENTIAL_FILE")"
 [[ -n "$password" ]] || { echo 'NAS password is unavailable.' >&2; exit 1; }
 encoded_user="$(DEV_NAS_USERNAME="$DEV_NAS_USERNAME" node -e 'process.stdout.write(encodeURIComponent(process.env.DEV_NAS_USERNAME))')"
 [[ "$password" != *$'\n'* && "$password" != *$'\r'* ]] || { echo 'NAS password contains an unsupported line break.' >&2; exit 1; }
-encrypted_password="$(/usr/bin/smbutil crypt "$password")"
+export NAS_MOUNT_PASSWORD="$password"
+encrypted_password="$(/usr/bin/expect <<'EXPECT'
+log_user 0
+set timeout 10
+spawn /usr/bin/smbutil crypt
+expect {
+  -re {(?i)password.*:} { send -- "$env(NAS_MOUNT_PASSWORD)\r" }
+  timeout { exit 124 }
+  eof { exit 65 }
+}
+expect {
+  -re {(\$\$1[^\r\n]+)} { puts $expect_out(1,string); exit 0 }
+  timeout { exit 124 }
+  eof { exit 65 }
+}
+EXPECT
+)"
+unset NAS_MOUNT_PASSWORD
 [[ "$encrypted_password" == '$$1'* ]] || { echo 'Could not protect the NAS password for nsmb.conf.' >&2; exit 1; }
 unset password
 preferences_dir=/Users/tomastc/Library/Preferences
