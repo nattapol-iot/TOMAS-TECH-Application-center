@@ -56,16 +56,19 @@ cd "$DEPLOY_DIR"
 # PID and exits instead of starting, so clear it before every deploy.
 rm -rf .vinext
 
-log "Pre-pulling base images (Docker Hub can be slow; retrying up to 3 times)"
-pull_with_retry() {
-  local image="$1"
-  for attempt in 1 2 3; do
-    docker --context "$DOCKER_CONTEXT" pull "$image" && return 0 || true
-    [[ $attempt -lt 3 ]] && { log "Pull attempt $attempt for $image failed — retrying in 30s"; sleep 30; }
-  done
-  log "WARNING: could not pull $image after 3 attempts; build will use cached layers if available"
-}
-pull_with_retry python:3.12-slim-bookworm
+log "Pre-pulling pdf-parser base image (90s timeout per attempt, 3 tries)"
+for attempt in 1 2 3; do
+  if timeout 90 docker --context "$DOCKER_CONTEXT" pull python:3.12-slim-bookworm; then
+    log "python:3.12-slim-bookworm cached"
+    break
+  fi
+  if [[ $attempt -lt 3 ]]; then
+    log "Pull attempt $attempt failed — retrying in 20s"
+    sleep 20
+  else
+    log "WARNING: could not pull python:3.12-slim-bookworm — build will use existing cache if present"
+  fi
+done
 
 log "Building images"
 compose build
