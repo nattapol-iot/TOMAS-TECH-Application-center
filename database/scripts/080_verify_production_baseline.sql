@@ -7,7 +7,7 @@ GO
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
-IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 35) THROW 51350, 'Team Activity migration 035 is required.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 37) THROW 51370, 'User role management migration 037 is required.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
@@ -289,7 +289,12 @@ BEGIN
                 OR (object_item.name = N'schedule_baselines' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
                 OR (object_item.name IN (N'estimates', N'estimate_assignments', N'cost_items', N'manhour_lines', N'expense_lines', N'other_cost_lines')
                     AND permission.permission_name = N'DELETE')
-                OR (object_item.name = N'users' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'users' AND (
+                       permission.permission_name IN (N'INSERT', N'DELETE')
+                    OR (permission.permission_name = N'UPDATE'
+                        AND permission.minor_id NOT IN (
+                            COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'role_id', 'ColumnId'),
+                            COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')))))
                 OR (object_item.name = N'employees' AND permission.permission_name = N'DELETE')
                 OR (object_item.name = N'supplier_price_history' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
                 OR (object_item.name = N'supplier_quotations' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
@@ -357,7 +362,6 @@ BEGIN
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.expense_lines', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.other_cost_lines', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'INSERT'), 0) = 1
-        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'UPDATE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.employees', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'INSERT'), 0) = 1
@@ -378,6 +382,37 @@ END;
 
 IF @has_forbidden_effective_permission = 1
     THROW 51091, 'The application principal has an effective permission that bypasses the least-privilege baseline.', 1;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.users')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W')
+      AND permission.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'role_id', 'ColumnId'), COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')))
+    THROW 51371, 'The application role can update an unapproved dbo.users column.', 1;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.users')
+      AND permission.minor_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'role_id', 'ColumnId')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W'))
+   OR NOT EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.users')
+      AND permission.minor_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W'))
+    THROW 51372, 'The application role is missing its column-scoped user role update grant.', 1;
 
 IF EXISTS (SELECT 1 FROM @required_material_permissions WHERE is_effective <> 1 OR is_effective IS NULL)
     THROW 51093, 'The application principal is missing an effective material-workflow permission.', 1;

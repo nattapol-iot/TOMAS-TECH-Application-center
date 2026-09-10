@@ -16,6 +16,7 @@ import {
   estimateWorkflow,
   listEstimates,
   listEmployees,
+  listAccessRoles,
   listInquiries,
   listInventory,
   listProjectDocuments,
@@ -23,10 +24,12 @@ import {
   loadEstimateCostWorkspace,
   removeCostItem,
   updateEmployee,
+  updateUserRole,
   uploadProjectDocument,
   apiRequest,
   loadSignInbox,
   type BootstrapData,
+  type AccessRole,
   type CreateEstimateInput,
   type CreateInquiryInput,
   type CreateInventoryItemInput,
@@ -50,6 +53,7 @@ import "./master-data.css";
 import {
   Badge,
   EmptyState,
+  Field,
   Icon,
   KpiCard,
   Modal,
@@ -993,7 +997,7 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
       {tab === "employees" ? <EmployeeMasterTab canWrite={canWrite} notify={notify} /> : null}
       {tab === "inventory" ? <InventoryItemMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
       {tab === "rates" ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-      {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} /> : null}
+      {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={bootstrap.permissions.includes("admin.manage_roles")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
     </div>
   </>;
 }
@@ -1323,10 +1327,65 @@ function EmployeeModal({ employee, onClose, onSaved }: { employee: EmployeeRecor
   </Modal>;
 }
 
-function TeamReferenceTab({ bootstrap }: Pick<CommonProps, "bootstrap">) {
-  return <Panel title={`${bootstrap.team.length} active user accounts`} subtitle="บัญชีที่เข้าใช้งานระบบและบทบาทสิทธิ์ แยกจากทะเบียนพนักงานในแท็บ Employees" flush>
-    {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><strong>{member.name}</strong></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
-  </Panel>;
+type TeamMember = BootstrapData["team"][number];
+
+function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap }: Pick<CommonProps, "bootstrap" | "notify" | "refreshBootstrap"> & { canManageRoles: boolean }) {
+  const t = useUiText();
+  const [editing, setEditing] = useState<TeamMember | null>(null);
+  return <>
+    <Panel title={`${bootstrap.team.length} ${t("active user accounts")}`} subtitle={t("System accounts and permission roles, separate from the employee register in Employees")} flush>
+      {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th>{canManageRoles ? <th><span className="sr-only">{t("Actions")}</span></th> : null}</tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><div className="user-account-cell"><strong>{member.name}</strong>{member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}</div></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td>{canManageRoles ? <td className="master-row-action"><button className="btn ghost sm" type="button" aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}><Icon name="edit" />{t("Edit role")}</button></td> : null}</tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
+    </Panel>
+    {editing ? <UserRoleModal member={editing} isCurrentAccount={editing.id === bootstrap.user.id} onClose={() => setEditing(null)} onSaved={async (role) => {
+      await refreshBootstrap();
+      notify(t("Application role updated to {role}").replace("{role}", role));
+      setEditing(null);
+    }} /> : null}
+  </>;
+}
+
+function UserRoleModal({ member, isCurrentAccount, onClose, onSaved }: { member: TeamMember; isCurrentAccount: boolean; onClose: () => void; onSaved: (role: string) => Promise<void> }) {
+  const t = useUiText();
+  const [roles, setRoles] = useState<AccessRole[]>([]);
+  const [roleCode, setRoleCode] = useState(member.role);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void listAccessRoles().then((result) => { if (active) { setRoles(result.items); setError(""); } })
+      .catch((requestError) => { if (active) setError(toError(requestError)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const selectedRole = roles.find((role) => role.code === roleCode);
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await updateUserRole(member.id, { roleCode, rowVersion: member.rowVersion });
+      setSaved(true);
+      await onSaved(result.role);
+    } catch (requestError) { setError(toError(requestError)); }
+    finally { setBusy(false); }
+  };
+  return <Modal title={t("Edit application role")} subtitle={t("Role changes update system permissions, not employee profile data")} size="md" onClose={() => { if (!busy) onClose(); }} footer={<>
+    <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
+    <button className="btn primary" type="button" disabled={loading || busy || saved || roleCode === member.role || !selectedRole} onClick={() => { void submit(); }}><Icon name="shield" />{busy ? t("Saving…") : t("Save role")}</button>
+  </>}>
+    <div className="role-account-summary">
+      <div className="user-account-cell"><strong>{member.name}</strong><small>{member.email}</small></div>
+      <Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge>
+    </div>
+    <Field label={t("New application role")}>
+      <select disabled={loading || busy || saved} value={roleCode} onChange={(event) => setRoleCode(event.target.value)}>
+        {loading ? <option value={member.role}>{t("Loading roles…")}</option> : roles.map((role) => <option key={role.id} value={role.code}>{role.name}{role.name !== role.code ? ` (${role.code})` : ""}</option>)}
+      </select>
+      {selectedRole ? <small className="role-option-description">{selectedRole.description || selectedRole.code}</small> : null}
+    </Field>
+    <div className="info-strip amber" role="note"><Icon name="alertTriangle" /><span>{isCurrentAccount ? t("Changing your own role refreshes your navigation and permissions immediately after saving.") : t("The employee will receive the new permissions on their next request.")}</span></div>
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+  </Modal>;
 }
 
 export function ProductionTeam({ bootstrap, teamTestMode }: Pick<CommonProps, "bootstrap"> & { teamTestMode: boolean }) {

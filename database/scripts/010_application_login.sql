@@ -178,7 +178,7 @@ GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_effort TO [iot_team_app_rol
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_tasks TO [iot_team_app_role];
 GRANT SELECT, INSERT ON OBJECT::dbo.resource_task_sources TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.module_templates TO [iot_team_app_role];
--- Role assignments are read-only to the API; no self-service escalation.
+-- Additional signing-role assignments remain read-only to the API.
 IF OBJECT_ID(N'dbo.user_business_roles',N'U') IS NOT NULL
  GRANT SELECT ON dbo.user_business_roles TO iot_team_app_role;
 IF OBJECT_ID(N'dbo.user_signing_permissions',N'V') IS NOT NULL
@@ -200,6 +200,7 @@ REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.cost_items FROM [iot_team_app_role]
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.manhour_lines FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.expense_lines FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.other_cost_lines FROM [iot_team_app_role];
+REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.users FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.projects FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.project_members FROM [iot_team_app_role];
 REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo.project_folders FROM [iot_team_app_role];
@@ -258,6 +259,9 @@ GRANT INSERT ON OBJECT::dbo.project_members TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_folders TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_docs TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.audit_log TO [iot_team_app_role];
+-- Primary application roles are managed only by the permission-gated Admin API.
+-- Keep the database grant column-scoped so identity and account state stay immutable.
+GRANT UPDATE (role_id, updated_at) ON OBJECT::dbo.users TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.supplier_quotations TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.mat_items TO [iot_team_app_role];
 

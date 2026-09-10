@@ -1,5 +1,65 @@
 /** Static planning, pricing, knowledge, administration and core workspace copy. */
 export const OPERATIONS_WORKSPACE_COPY: Record<string, { th: string; en: string; jp: string }> = {
+  "active user accounts": {
+    "th": "บัญชีผู้ใช้ที่ใช้งานอยู่",
+    "en": "active user accounts",
+    "jp": "有効なユーザーアカウント"
+  },
+  "System accounts and permission roles, separate from the employee register in Employees": {
+    "th": "บัญชีที่ใช้เข้าสู่ระบบและบทบาทสิทธิ์ แยกจากทะเบียนพนักงานในแท็บ Employees",
+    "en": "System accounts and permission roles, separate from the employee register in Employees",
+    "jp": "システムアカウントと権限ロールです。Employeesの従業員台帳とは別に管理されます"
+  },
+  "Current account": {
+    "th": "บัญชีปัจจุบัน",
+    "en": "Current account",
+    "jp": "現在のアカウント"
+  },
+  "Edit role": {
+    "th": "แก้ไข Role",
+    "en": "Edit role",
+    "jp": "ロールを変更"
+  },
+  "Edit application role": {
+    "th": "แก้ไข Role ของบัญชีผู้ใช้",
+    "en": "Edit application role",
+    "jp": "アプリケーションロールを変更"
+  },
+  "Role changes update system permissions, not employee profile data": {
+    "th": "การเปลี่ยน Role จะเปลี่ยนสิทธิ์ในระบบ แต่ไม่แก้ข้อมูลประวัติพนักงาน",
+    "en": "Role changes update system permissions, not employee profile data",
+    "jp": "ロール変更はシステム権限を更新しますが、従業員プロフィールは変更しません"
+  },
+  "New application role": {
+    "th": "Role ใหม่",
+    "en": "New application role",
+    "jp": "新しいアプリケーションロール"
+  },
+  "Loading roles…": {
+    "th": "กำลังโหลด Role…",
+    "en": "Loading roles…",
+    "jp": "ロールを読み込み中…"
+  },
+  "Save role": {
+    "th": "บันทึก Role",
+    "en": "Save role",
+    "jp": "ロールを保存"
+  },
+  "Changing your own role refreshes your navigation and permissions immediately after saving.": {
+    "th": "หากเปลี่ยน Role ของตนเอง เมนูและสิทธิ์ของบัญชีนี้จะรีเฟรชทันทีหลังบันทึก",
+    "en": "Changing your own role refreshes your navigation and permissions immediately after saving.",
+    "jp": "自分のロールを変更すると、保存後すぐにナビゲーションと権限が更新されます。"
+  },
+  "The employee will receive the new permissions on their next request.": {
+    "th": "พนักงานจะได้รับสิทธิ์ใหม่ตั้งแต่คำขอครั้งถัดไป",
+    "en": "The employee will receive the new permissions on their next request.",
+    "jp": "従業員には次回のリクエストから新しい権限が適用されます。"
+  },
+  "Application role updated to {role}": {
+    "th": "อัปเดต Role เป็น {role} แล้ว",
+    "en": "Application role updated to {role}",
+    "jp": "アプリケーションロールを{role}に更新しました"
+  },
   "ไม่พบสิทธิ์เข้าถึง": {
     "th": "ไม่พบสิทธิ์เข้าถึง",
     "en": "Access not available",

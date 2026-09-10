@@ -15,6 +15,7 @@ type SupplierRow = { id: number; code: string; name: string; category: string };
 type TeamRow = {
   id: number; name: string; email: string; role: string; department: string; level: string;
   employee_id: number; employee_no: number; nickname: string; start_work_date: Date | string; can_sign_in: boolean;
+  row_version: Buffer;
 };
 type PermissionRow = { code: string };
 
@@ -66,7 +67,8 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
       SELECT app_user.id, employee.name_en AS name, employee.email, role.code AS role,
         employee.department, employee.position AS level, employee.id AS employee_id,
         employee.employee_no, employee.nickname, employee.start_work_date,
-        CONVERT(bit, CASE WHEN app_user.entra_object_id IS NULL THEN 0 ELSE 1 END) AS can_sign_in
+        CONVERT(bit, CASE WHEN app_user.entra_object_id IS NULL THEN 0 ELSE 1 END) AS can_sign_in,
+        app_user.row_version
       FROM dbo.employees employee
       INNER JOIN dbo.users app_user ON app_user.id = employee.user_id
       INNER JOIN dbo.roles role ON role.id = app_user.role_id
@@ -116,6 +118,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         department: row.department, level: row.level, employeeId: Number(row.employee_id),
         employeeNo: Number(row.employee_no), nickname: row.nickname,
         startWorkDate: dateOnly(row.start_work_date), canSignIn: Boolean(row.can_sign_in),
+        rowVersion: row.row_version.toString("base64"),
       })),
       permissions: permissions.map((row) => row.code),
     };

@@ -35,6 +35,13 @@ export type ApiUser = {
   isActive: boolean;
 };
 
+export type AccessRole = {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+};
+
 export type BootstrapData = {
   user: ApiUser;
   employment?: {
@@ -82,6 +89,7 @@ export type BootstrapData = {
     nickname: string;
     startWorkDate?: string;
     canSignIn: boolean;
+    rowVersion: string;
   }[];
   permissions: string[];
 };
@@ -1277,6 +1285,15 @@ export const createEmployee = (input: EmployeeInput) =>
 
 export const updateEmployee = (id: number, input: EmployeeInput & { rowVersion: string }) =>
   apiRequest<{ id: number; employeeNo: number; nameEn: string; rowVersion: string }>(`/api/v1/master/employees/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+
+export const listAccessRoles = () =>
+  apiRequest<{ items: AccessRole[] }>("/api/v1/admin/roles");
+
+export const updateUserRole = (id: number, input: { roleCode: string; rowVersion: string }) =>
+  apiRequest<{ id: number; role: string; rowVersion: string }>(`/api/v1/admin/users/${id}/role`, {
     method: "PUT",
     body: JSON.stringify(input),
   });

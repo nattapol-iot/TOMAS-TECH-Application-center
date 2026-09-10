@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import sql from "mssql/msnodesqlv8.js";
+import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
-import { booleanQuery, clampedInteger, dateOnly, optionalText } from "../http.js";
+import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalText, parseRowVersion, positiveLong, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
 type EngineeringRateRow = {
@@ -41,7 +42,76 @@ type AuditRow = {
   total_count: number | string;
 };
 
+type AccessRoleRow = { id: number | string; code: string; name: string; description: string };
+type UserRoleRow = { id: number | string; name: string; email: string; role: string; row_version: Buffer };
+
 export function registerAdminRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
+  app.get("/api/v1/admin/roles", async (request) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const result = await database.query<AccessRoleRow>(`
+      SELECT id,code,name,description
+      FROM dbo.roles
+      WHERE is_active=1
+      ORDER BY CASE WHEN code=N'Admin' THEN 0 ELSE 1 END,name,code;
+    `);
+    return { items: result.recordset.map((row) => ({ id: Number(row.id), code: row.code, name: row.name, description: row.description })) };
+  });
+
+  app.put("/api/v1/admin/users/:id/role", async (request) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "User id");
+    const body = bodyObject(request.body);
+    const roleCode = requiredText(body.roleCode, 50, "Role");
+    const rowVersion = parseRowVersion(body.rowVersion);
+    return database.transaction(async (transaction) => {
+      const currentRequest = new sql.Request(transaction);
+      currentRequest.input("id", sql.BigInt, id);
+      const current = (await currentRequest.query<UserRoleRow>(`
+        SELECT app_user.id,app_user.name,app_user.email,role.code AS role,app_user.row_version
+        FROM dbo.users app_user WITH (UPDLOCK,HOLDLOCK)
+        INNER JOIN dbo.roles role ON role.id=app_user.role_id
+        WHERE app_user.id=@id AND app_user.is_active=1 AND app_user.deleted_at IS NULL;
+      `)).recordset[0];
+      if (!current) throw new ApiError(404, "user_not_found", "The active user account was not found.");
+
+      const roleRequest = new sql.Request(transaction);
+      roleRequest.input("role", sql.NVarChar(50), roleCode);
+      const nextRole = (await roleRequest.query<AccessRoleRow>(`
+        SELECT id,code,name,description FROM dbo.roles WITH (UPDLOCK,HOLDLOCK)
+        WHERE code=@role AND is_active=1;
+      `)).recordset[0];
+      if (!nextRole) throw new ApiError(422, "invalid_role", "Select an active application role.");
+      if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This user account changed. Refresh and try again.");
+      if (current.role === nextRole.code) return { id, role: current.role, rowVersion: current.row_version.toString("base64") };
+
+      if (current.role === "Admin" && nextRole.code !== "Admin") {
+        const adminCount = (await new sql.Request(transaction).query<{ count: number | string }>(`
+          SELECT COUNT_BIG(*) AS count
+          FROM dbo.users app_user WITH (UPDLOCK,HOLDLOCK)
+          INNER JOIN dbo.roles role ON role.id=app_user.role_id
+          WHERE role.code=N'Admin' AND app_user.is_active=1 AND app_user.deleted_at IS NULL;
+        `)).recordset[0]?.count ?? 0;
+        if (Number(adminCount) <= 1) throw new ApiError(409, "last_admin_required", "Assign another active Admin before changing the last Admin account.");
+      }
+
+      const update = new sql.Request(transaction);
+      update.input("id", sql.BigInt, id);
+      update.input("role_id", sql.BigInt, Number(nextRole.id));
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const saved = (await update.query<{ row_version: Buffer }>(`
+        UPDATE dbo.users SET role_id=@role_id,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.row_version
+        WHERE id=@id AND is_active=1 AND deleted_at IS NULL AND row_version=@row_version;
+      `)).recordset[0];
+      if (!saved) throw new ApiError(409, "concurrency_conflict", "This user account changed. Refresh and try again.");
+      await insertAudit(transaction, actor.id, "UserAccount", id, String(id), "Primary role changed",
+        { name: current.name, email: current.email, role: current.role },
+        { name: current.name, email: current.email, role: nextRole.code });
+      return { id, role: nextRole.code, rowVersion: saved.row_version.toString("base64") };
+    });
+  });
+
   app.get("/api/v1/admin/engineering-rates", async (request) => {
     await users.demandPermission(request, "master.read");
     const query = request.query as Record<string, unknown>;

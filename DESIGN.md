@@ -20,6 +20,7 @@ Evidence reviewed:
 - `app/system/i18n.ts`, `app/system/production/performance-evidence-copy.ts`, and `app/globals.css`: Thai/English/Japanese copy, localization pattern, TOMAS TECH tokens, density, and responsive rules.
 - `docs/manual/screenshots/performance-th.jpg`: current Thai KPI Framework visual hierarchy and desktop density.
 - `tests/performance-guardrails.test.mjs` and `tests/performance-presentation.test.mjs`: privacy, source traceability, missing-score behavior, and localized evidence guardrails.
+- User account role management evidence: user-supplied Master Data > User accounts screenshot; `app/system/production/CoreScreens.tsx`; `app/system/api-client.ts`; `backend-node/src/routes/bootstrap.ts`, `backend-node/src/routes/admin.ts`, and `backend-node/src/users.ts`; `database/migrations/001_core.sql` and `004_security_seed.sql`. The current surface is read-only and exposes one primary application role per active account.
 
 Observed facts:
 
@@ -47,6 +48,14 @@ Preserve the current TOMAS TECH Estimate identity, terminology and familiar cont
 - Never label a person as “มีปัญหา”, “ช้า”, or “ผลงานแย่”. Describe the work state and the next controllable action.
 
 ## Product goals
+
+### User account role management addition
+
+- Let an authorized Admin change an active employee login account's primary application Role from the existing User accounts table.
+- Make the access impact explicit before saving, refresh effective permissions after saving, and record every change in the immutable audit log.
+- Keep Employee department, level, job title, and personal data unchanged; those remain owned by the Employees tab.
+- Non-goals: creating/deleting accounts, editing role definitions or permission grants, assigning additional signing/business roles, or bypassing Microsoft Entra provisioning.
+- Success means an Admin can complete a role change in one modal, unauthorized users see no edit control, stale writes are rejected, and the last active Admin cannot be demoted.
 
 ### Estimate Cost addition
 
@@ -103,6 +112,12 @@ Engineer, estimate owner, reviewer/manager and authorized Sales users retain the
 
 ## Information architecture
 
+### User account role management addition
+
+- Keep role management in `Master Data > User accounts`, beside the current role badge and account identity.
+- Add one right-aligned Actions column. `Edit role` opens a focused modal with read-only employee/account context, current role, new role, role description, and an access-impact warning.
+- Do not place application Role in the Employee edit form because Employee Master and login authorization are separate records.
+
 ### Estimate Cost addition
 
 Retain all nine existing tabs and their order: Summary, Cost Items, Engineering Man-hour, Other Project Cost, Assignment, Validation, Revision History, Compare Revision and Engineering Review. Keep Summary as first-open default, the eight summary tiles, toolbar and current editing modals. Do not consolidate navigation, move Validation into a drawer, or collapse the cost breakdown by default. The scoped brief now documents the existing structure and a bounded investigation plan.
@@ -138,6 +153,13 @@ Hierarchy rules:
 
 ## Design principles
 
+### User account role management addition
+
+1. **Authorization is visible and enforced twice.** Only users with `admin.manage_roles` see the control; the API independently requires the same permission.
+2. **One deliberate change.** The modal edits only the primary Role and cannot silently alter department, level, sign-in state, or secondary signing roles.
+3. **Safe administration.** Use optimistic concurrency, active-role validation, immutable audit history, and a last-Admin guard.
+4. **Immediate truth.** Refresh bootstrap data after saving so badges, navigation, and the current user's permissions reflect the database result.
+
 ### Estimate Cost addition
 
 Observe first, distinguish facts from hypotheses, reproduce the specific problem, then change the smallest relevant part. Keep existing keyboard shortcuts, column views, grouping, totals and permissions. Missing-data prompts and server validation have different meanings; do not unify their counts or blocking rules without a separate functional requirement.
@@ -167,6 +189,12 @@ Reuse the current tokens, typography, table density and layout. Measure clipping
 - Motion is limited to a 150–200 ms hover/focus transition. No celebratory animation in the pilot.
 
 ## Components
+
+### User account role management addition
+
+- Reuse `Panel`, `Badge`, `Modal`, `Field`, `Icon`, existing buttons, form controls, callouts, and master-data layout tokens.
+- Add `UserRoleModal` inside `CoreScreens.tsx`; add no new global component layer.
+- The Role list is API-backed from active `dbo.roles`; the browser must not hard-code security roles.
 
 ### Estimate Cost addition
 
@@ -255,6 +283,11 @@ Selection and conflict rules:
 
 ## Accessibility
 
+### User account role management addition
+
+- The action button has an employee-specific accessible name; the Role select has a visible label and description.
+- Error, saving, disabled, and warning states remain available without color alone. Keyboard users can open, select, save, cancel, and close the modal.
+
 ### Estimate Cost addition
 
 Target WCAG 2.2 AA using existing table and dialog semantics. Verify focus, current keyboard shortcuts and IME behavior before changing cancellation or navigation. Avoid silently discarding entered values. Validate contrast and 200% enlargement for any visual change without claiming compliance from source inspection alone.
@@ -270,6 +303,10 @@ Target WCAG 2.2 AA using existing table and dialog semantics. Verify focus, curr
 
 ## Responsive behavior
 
+### User account role management addition
+
+- Preserve the horizontally scrollable account table on narrow screens. The action remains the final column and the modal uses the existing single-column mobile behavior.
+
 ### Estimate Cost addition
 
 Preserve current responsive rules initially. Capture before/after evidence at the actual desktop viewport and a narrow viewport before changing Estimate-scoped spacing or pinned columns. Do not introduce a new responsive layout or full-screen editing flow as an assumed requirement.
@@ -281,6 +318,16 @@ Preserve current responsive rules initially. Capture before/after evidence at th
 - At narrow widths, cycle and confidence metadata wrap below the section title rather than compressing the title.
 
 ## Interaction states
+
+### User account role management addition
+
+- Loading roles: disable the selector and save action.
+- No change: keep Save disabled.
+- Saving: disable close-sensitive controls and show the existing saving label.
+- Success: close the modal, refresh bootstrap, update the badge, and show a notification.
+- Stale account version: keep the modal open, show the API conflict, and require a refresh before retrying.
+- Self-role change: show an amber warning that the current session's navigation and permissions will refresh immediately.
+- Last active Admin: reject demotion with a specific error and leave the account unchanged.
 
 ### Estimate Cost addition
 
@@ -315,6 +362,20 @@ Clarify labels in place using existing TH/EN/JP mechanisms. Explain that documen
 - Use `Issue`, `Project`, `Inquiry`, and `Task` consistently with the current product vocabulary.
 
 ## Implementation constraints
+
+### User account role management addition
+
+- Node/SQL Server remains the authorization source. Add a dedicated `admin.manage_roles` permission granted only to Admin; do not reuse broad `master.write` access held by non-admin operational roles.
+- Role updates require the account row version, an active target account, and an active target Role. The transaction locks the target and protects the final active Admin.
+- The application database role receives only column-scoped update access needed for `users.role_id` and `users.updated_at`.
+- Tests must cover the dedicated permission, active-role lookup, concurrency check, last-Admin protection, audit write, API client contract, hidden unauthorized UI, refresh-after-save behavior, and readiness schema range.
+
+Acceptance criteria:
+
+1. Admin sees an Edit role action for every active user account and can choose only active Roles returned by the API.
+2. A successful save updates the SQL user Role, writes an audit event, refreshes bootstrap, and updates the table without a page reload.
+3. Users without `admin.manage_roles` cannot see the action and receive HTTP 403 if they call the endpoint directly.
+4. Concurrent edits, unknown/inactive Roles, missing accounts, and demotion of the last active Admin fail without a partial update.
 
 ### Estimate Cost addition
 
