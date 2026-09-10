@@ -36,10 +36,8 @@ fi
 rm "$probe"
 echo 'NAS mount write-read-delete probe passed.'
 
-shopt -s nullglob dotglob
-target_entries=("$DOCUMENT_DIR"/*)
-shopt -u nullglob dotglob
-(( ${#target_entries[@]} == 0 )) || { echo 'NAS target is not empty; refusing to overwrite it.' >&2; exit 1; }
+target_entries="$(ls -A "$DOCUMENT_DIR")"
+[[ -z "$target_entries" ]] || { echo 'NAS target is not empty; refusing to overwrite it.' >&2; exit 1; }
 echo 'NAS target is empty.'
 
 api_id="$(/usr/bin/perl -e 'alarm 30; exec @ARGV' docker --context colima-iot compose "${COMPOSE[@]}" ps -q api)"
