@@ -38,6 +38,8 @@ GO
 
 -- Immutable: lines are replaced wholesale (delete+reinsert) not updated in-place.
 -- This trigger blocks UPDATE so callers must DELETE+INSERT instead.
+GO
+
 CREATE TRIGGER tr_supplier_quotation_lines_no_update
 ON dbo.supplier_quotation_lines AFTER UPDATE AS
 BEGIN
