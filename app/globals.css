@@ -2351,6 +2351,19 @@ tbody tr.diff-change:hover td { background: #fbecd6; }
 }
 
 /* Production-only shell and live API states */
+.local-read-only-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: var(--fs-sm);
+}
+.local-read-only-banner strong { color: #92400e; }
+
 .production-indicator { display: flex; align-items: center; gap: 7px; color: var(--ink-soft); }
 .production-indicator strong { font-size: var(--fs-sm); }
 .production-indicator small { color: var(--muted); font-size: var(--fs-xs); }

@@ -44,6 +44,45 @@ test("TeamTest fails closed outside staging", () => {
   }), /only in staging/);
 });
 
+test("remote-database safety overrides are explicit and never allowed in production", () => {
+  const base: NodeJS.ProcessEnv = {
+    NODE_ENV: "development",
+    Authentication__Mode: "Development",
+    ConnectionStrings__IoTTeamCenter: "Server=localhost;Database=Unused;User ID=test;Password=test;Encrypt=true",
+    DocumentStorage__RootPath: ".",
+    Database__RunMigrations: "false",
+    Database__ReadOnly: "true",
+  };
+  const configured = loadConfig(base);
+  assert.equal(configured.database.runMigrations, false);
+  assert.equal(configured.database.readOnly, true);
+  assert.throws(() => loadConfig({ ...base, Database__RunMigrations: "maybe" }), /must be true or false/);
+  assert.throws(() => loadConfig({ ...base, Database__RunMigrations: "true" }), /requires Database__RunMigrations=false/);
+  assert.throws(() => loadConfig({
+    ...base,
+    NODE_ENV: "production",
+    Authentication__Mode: "Entra",
+    Authentication__TenantId: "11111111-1111-4111-8111-111111111111",
+    Authentication__ClientId: "22222222-2222-4222-8222-222222222222",
+    Authentication__Audience: "22222222-2222-4222-8222-222222222222",
+    Authentication__RequiredScope: "access_as_user",
+    Cors__AllowedOrigins__0: "https://iot.example.com",
+  }), /not allowed in production/);
+
+  const teamTest = loadConfig({
+    ...base,
+    NODE_ENV: "staging",
+    Authentication__Mode: "TeamTest",
+    Authentication__TeamTestSigningKey: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGH",
+    Cors__AllowedOrigins__0: "http://127.0.0.1:3010",
+    Database__ApplicationRoleName: "iot_team_company_test",
+    Database__ApplicationRolePassword: "0123456789abcdefghijklmnopqrstuvwxyz_ABCD",
+    Database__TrustServerCertificateForTeamTest: "true",
+  });
+  assert.equal(teamTest.database.runMigrations, false);
+  assert.equal(teamTest.database.readOnly, true);
+});
+
 test("Microsoft Graph email fails closed when confidential settings are incomplete", () => {
   const base: NodeJS.ProcessEnv = {
     NODE_ENV: "development",

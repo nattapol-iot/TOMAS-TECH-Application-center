@@ -34,6 +34,8 @@ export type AppConfig = {
   database: {
     connectionString: string;
     trustServerCertificate: boolean;
+    runMigrations?: boolean;
+    readOnly?: boolean;
     applicationRoleName?: string;
     applicationRolePassword?: string;
   };
@@ -66,6 +68,14 @@ function optional(env: NodeJS.ProcessEnv, name: string): string | undefined {
 
 function boolean(env: NodeJS.ProcessEnv, name: string): boolean {
   return optional(env, name)?.toLowerCase() === "true";
+}
+
+function optionalBoolean(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
+  const raw = optional(env, name)?.toLowerCase();
+  if (raw === undefined) return fallback;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new Error(`${name} must be true or false.`);
 }
 
 function positiveInteger(
@@ -337,6 +347,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     );
   }
 
+  const runMigrations = optionalBoolean(env, "Database__RunMigrations", true);
+  const readOnly = optionalBoolean(env, "Database__ReadOnly", false);
+  if ((!runMigrations || readOnly) && environment === "production") {
+    throw new Error("Database migration and read-only overrides are not allowed in production.");
+  }
+  if (readOnly && runMigrations) {
+    throw new Error("Database__ReadOnly=true requires Database__RunMigrations=false.");
+  }
+
   const storageMode =
     optional(env, "DocumentStorage__Mode") ??
     (environment === "production" ? "Nas" : "Local");
@@ -401,6 +420,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       connectionString: required(env, "ConnectionStrings__IoTTeamCenter"),
       trustServerCertificate:
         environment === "development" || trustTeamTestCertificate,
+      runMigrations,
+      readOnly,
       ...(roleName ? { applicationRoleName: roleName } : {}),
       ...(rolePassword ? { applicationRolePassword: rolePassword } : {}),
     },

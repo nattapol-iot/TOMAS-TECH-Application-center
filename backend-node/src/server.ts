@@ -1,6 +1,6 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { runPendingMigrations } from "./migrate.js";
+import { runConfiguredMigrations } from "./startup-migrations.js";
 
 const config = loadConfig();
 const hosts = [...new Set(config.host.split(";").map((host) => host.trim()).filter(Boolean))];
@@ -20,7 +20,7 @@ try {
   // Run pending DB migrations before accepting HTTP traffic.
   // Idempotent: skips versions already recorded in dbo.schema_versions.
   // Logs to stdout so Docker/systemd captures the migration history.
-  await runPendingMigrations(config, (msg) => console.log(msg)).catch((err) => {
+  await runConfiguredMigrations(config, (msg) => console.log(msg)).catch((err) => {
     console.error("[migrate] Fatal:", err);
     process.exit(1);
   });

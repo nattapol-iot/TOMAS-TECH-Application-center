@@ -51,3 +51,5 @@ The [previous README](docs/archive/README-before-2026-09-10.md) is preserved for
 ## Main-based integration candidate
 
 This isolated checkout combines main d43eb346 with the preserved source snapshot672f1d0. Main features include TMT ID login, NAS settings, quotation PDF parsing and report exports. The integration must retain Performance Pulse, user-role management and local Estimate enhancements. No deployment has been performed. See [candidate integration record](docs/planning/CANDIDATE_INTEGRATION.md) and [Mac host handoff](docs/MACMINI_HANDOFF.md).
+
+Further application changes now use the [local-only development plan](docs/planning/LOCAL_ONLY_DEVELOPMENT.md). Its launchers connect to the verified Team Test database in explicit migration-disabled, read-only mode and bind only to localhost.

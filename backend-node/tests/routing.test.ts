@@ -31,3 +31,28 @@ test("frontend collection URLs select the same route with or without a trailing 
     await app.close();
   }
 });
+
+test("local read-only mode allows reads and blocks writes before route or database work", async () => {
+  const config = loadConfig({
+    NODE_ENV: "development",
+    Authentication__Mode: "Development",
+    ConnectionStrings__IoTTeamCenter: "Server=localhost;Database=UnusedRoutingTest;Integrated Security=true",
+    DocumentStorage__RootPath: ".",
+    Database__RunMigrations: "false",
+    Database__ReadOnly: "true",
+  });
+  const { app } = await buildApp(config);
+  try {
+    const live = await app.inject({ method: "GET", url: "/health/live" });
+    assert.equal(live.statusCode, 200);
+    const write = await app.inject({ method: "POST", url: "/api/v1/inquiries", payload: {} });
+    assert.equal(write.statusCode, 403);
+    assert.deepEqual(write.json(), {
+      code: "local_read_only",
+      message: "This local API is connected in read-only mode. Database changes are disabled.",
+      details: null,
+    });
+  } finally {
+    await app.close();
+  }
+});

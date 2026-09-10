@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { ConnectionError, RequestError } from "mssql";
+import { DatabaseReadOnlyViolationError } from "./db.js";
 
 export class ApiError extends Error {
   constructor(
@@ -20,9 +21,14 @@ function sqlErrorNumber(error: RequestError): number | undefined {
 }
 
 export function registerErrorHandler(app: FastifyInstance): void {
-  app.setErrorHandler((error: FastifyError | ApiError | ConnectionError | RequestError, request, reply) => {
+  app.setErrorHandler((error: FastifyError | ApiError | ConnectionError | RequestError | DatabaseReadOnlyViolationError, request, reply) => {
     if (error instanceof ApiError) {
       void reply.status(error.statusCode).send({ code: error.code, message: error.message, details: error.details ?? null });
+      return;
+    }
+
+    if (error instanceof DatabaseReadOnlyViolationError) {
+      void reply.status(403).send({ code: "local_read_only", message: "This local API is connected in read-only mode. Database changes are disabled.", details: null });
       return;
     }
 

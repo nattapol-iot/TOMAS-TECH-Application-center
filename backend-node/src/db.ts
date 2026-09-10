@@ -17,6 +17,24 @@ export class DatabaseCommitOutcomeUnknownError extends Error {
   }
 }
 
+export class DatabaseReadOnlyViolationError extends Error {
+  constructor() {
+    super("The database is connected in read-only mode.");
+    this.name = "DatabaseReadOnlyViolationError";
+  }
+}
+
+const MUTATING_SQL = /\b(?:ALTER|BACKUP|BULK|CREATE|DBCC|DELETE|DENY|DROP|EXEC(?:UTE)?|GRANT|INSERT|INTO|MERGE|NEXT\s+VALUE\s+FOR|RESTORE|REVOKE|TRUNCATE|UPDATE)\b/i;
+
+export function isReadOnlySql(text: string): boolean {
+  const executable = text
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\r\n]*/g, " ")
+    .replace(/N?'(?:''|[^'])*'/gi, "''")
+    .replace(/\[(?:\]\]|[^\]])*\]/g, "[]");
+  return !MUTATING_SQL.test(executable);
+}
+
 function createRequest(executor: Executor): RequestType {
   return executor instanceof Transaction ? new Request(executor) : new Request(executor);
 }
@@ -26,6 +44,10 @@ export class Database {
   private sharedConnect: Promise<ConnectionPoolType> | null = null;
 
   constructor(private readonly config: AppConfig["database"]) {}
+
+  get readOnly(): boolean {
+    return this.config.readOnly === true;
+  }
 
   private connectionConfig(): SqlConfig {
     // The stored secret is an ADO.NET connection string; tedious speaks TDS directly, so the
@@ -68,7 +90,7 @@ export class Database {
     return this.sharedConnect;
   }
 
-  async withSession<T>(work: (executor: Executor) => Promise<T>): Promise<T> {
+  private async session<T>(work: (executor: Executor) => Promise<T>): Promise<T> {
     if (!this.config.applicationRoleName || !this.config.applicationRolePassword) {
       return work(await this.shared());
     }
@@ -84,8 +106,14 @@ export class Database {
     }
   }
 
+  async withSession<T>(work: (executor: Executor) => Promise<T>): Promise<T> {
+    if (this.readOnly) throw new DatabaseReadOnlyViolationError();
+    return this.session(work);
+  }
+
   async query<T extends object>(text: string, bind?: (request: RequestType) => void): Promise<sql.IResult<T>> {
-    return this.withSession(async (executor) => {
+    if (this.readOnly && !isReadOnlySql(text)) throw new DatabaseReadOnlyViolationError();
+    return this.session(async (executor) => {
       const request = createRequest(executor);
       bind?.(request);
       return request.query<T>(text);
@@ -96,7 +124,8 @@ export class Database {
     work: (transaction: TransactionType) => Promise<T>,
     isolationLevel: number = sql.ISOLATION_LEVEL.SERIALIZABLE,
   ): Promise<T> {
-    return this.withSession(async (executor) => {
+    if (this.readOnly) throw new DatabaseReadOnlyViolationError();
+    return this.session(async (executor) => {
       if (!(executor instanceof ConnectionPool)) throw new Error("A transaction requires a connection pool.");
       const transaction = new Transaction(executor);
       await transaction.begin(isolationLevel);

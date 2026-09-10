@@ -51,3 +51,5 @@
 Current work: [candidate integration record](planning/CANDIDATE_INTEGRATION.md). Historical audit statements describe the pre-integration snapshot; use the candidate record for new verification.
 
 Follow-up: [estimate aggregate boundary hardening](planning/COST_TOTAL_GUARD.md) records migration042, transactional validation and isolated SQL evidence after the integration checkpoint.
+
+Current execution mode: [local-only application development](planning/LOCAL_ONLY_DEVELOPMENT.md) uses the verified Team Test database in migration-disabled read-only mode while further UI work continues.

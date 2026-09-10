@@ -157,7 +157,9 @@ const NAV: { group?: string; items: NavItem[] }[] = [
 ];
 
 const IS_AUTH_CONFIGURED = (IS_TMT_ID_MODE || IS_TEAM_TEST_MODE || IS_ENTRA_CONFIGURED) && IS_API_CONFIGURED;
-const WORKSPACE_LABEL = IS_TEAM_TEST_MODE ? "TEAM TEST" : "PRODUCTION";
+const IS_LOCAL_READ_ONLY = process.env.NEXT_PUBLIC_LOCAL_READ_ONLY === "true";
+const CONNECTED_SCHEMA_VERSION = process.env.NEXT_PUBLIC_CONNECTED_SCHEMA_VERSION ?? "unknown";
+const WORKSPACE_LABEL = IS_LOCAL_READ_ONLY ? "LOCAL READ ONLY" : IS_TEAM_TEST_MODE ? "TEAM TEST" : "PRODUCTION";
 const LANGUAGE_STORAGE_KEY = "tomas-tech-language";
 const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups";
 const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
@@ -597,6 +599,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             </div>
           </div>
         </header>
+        {IS_LOCAL_READ_ONLY ? <div className="local-read-only-banner" role="status"><strong>Local read-only</strong><span>Remote Team Test database · schema {CONNECTED_SCHEMA_VERSION} · changes disabled</span></div> : null}
         <main className="page">
           {view === "dashboard" ? DASHBOARD_ROLES.includes(bootstrap.user.role) ? <ExecutiveDashboard bootstrap={bootstrap} personal={personalDashboard} onOpen={(destination, id) => {
             if (id && destination === "inquiries") openInquiry(id);

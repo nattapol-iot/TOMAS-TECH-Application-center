@@ -20,7 +20,7 @@ import { registerTmtIdAuthRoutes } from "./routes/auth-tmt-id.js";
 import { createUserProvisioning } from "./tmt-id/user-provisioning.js";
 import { Database } from "./db.js";
 import { EmailService } from "./email.js";
-import { registerErrorHandler } from "./errors.js";
+import { ApiError, registerErrorHandler } from "./errors.js";
 import { registerEstimateRoutes } from "./routes/estimates.js";
 import { registerOverheadPolicyRoutes } from "./routes/overhead-policies.js";
 import { registerEstimateWorkspaceReadRoute } from "./routes/estimate-workspace-read.js";
@@ -114,6 +114,16 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   });
 
   app.addHook("onRequest", async (request) => {
+    if (
+      config.database.readOnly === true &&
+      !["GET", "HEAD", "OPTIONS"].includes(request.method)
+    ) {
+      throw new ApiError(
+        403,
+        "local_read_only",
+        "This local API is connected in read-only mode. Database changes are disabled.",
+      );
+    }
     const host = request.hostname;
     if (
       config.environment !== "development" &&
