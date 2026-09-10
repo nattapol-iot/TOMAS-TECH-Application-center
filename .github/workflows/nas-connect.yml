@@ -1,0 +1,18 @@
+name: NAS connection verification
+on:
+  push:
+    branches: [ops/nas-connect-20260910]
+    paths: [.github/workflows/nas-connect.yml, scripts/macos/nas-connect.mjs]
+permissions:
+  contents: read
+concurrency:
+  group: nas-connect-macmini
+  cancel-in-progress: false
+jobs:
+  nas:
+    environment: production
+    runs-on: [self-hosted, iot-team-center-macmini]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - run: node scripts/macos/nas-connect.mjs
