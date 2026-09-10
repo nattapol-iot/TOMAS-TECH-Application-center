@@ -1,8 +1,6 @@
 name: NAS connection verification
 on:
-  push:
-    branches: [ops/nas-connect-20260910]
-    paths: [.github/workflows/nas-connect.yml, scripts/macos/nas-connect.mjs]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
