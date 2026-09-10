@@ -1,5 +1,7 @@
 # IoT Team Center Operations Runbook
 
+> Status review 2026-09-10: Historical operations baseline; runtime-specific commands require Node validation. See [current operations index](operations/README.md) and [release tasks](planning/PRODUCTION_BACKLOG.md).
+
 This runbook covers the production operation of the Vercel-hosted frontend, the ASP.NET Core API hosted on Windows/IIS, the `IoTTeamCenter` Microsoft SQL Server database, and the company-NAS document store reached by the API through Tailscale/SMB. Replace every value in angle brackets before use and record all production changes in the team's change or incident system.
 
 ## Supported production scope

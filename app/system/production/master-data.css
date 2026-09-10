@@ -4,6 +4,12 @@
 .master-data-content .table-wrap { overflow-x: auto; }
 .master-data-content .modal .panel { margin-bottom: 0; box-shadow: none; }
 .master-data-content .modal .panel-head { display: none; }
+.master-row-action { width: 1%; white-space: nowrap; text-align: right; }
+.user-account-cell { display: flex; min-width: 170px; flex-direction: column; gap: 3px; }
+.user-account-cell small { color: var(--muted); }
+.role-account-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-25); }
+.role-option-description { display: block; margin-top: 6px; color: var(--muted); line-height: 1.45; }
+.role-account-summary + .field { margin-top: 0; }
 @media (max-width: 640px) {
   .master-data-content > .toolbar > .btn.primary { margin-left: 0; }
 }

@@ -53,6 +53,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Project Schedule": { th: "แผนงานโปรเจกต์", jp: "プロジェクト工程" },
   "Stock Balances": { th: "ยอดคงเหลือสต๊อก", jp: "在庫残高" },
   "Adjustments & Quarantine": { th: "ปรับสต๊อกและกักกัน", jp: "在庫調整・検疫" },
+  "Units": { th: "หน่วยงานตรวจสอบ", jp: "検査ユニット" },
+  "Operation Tests": { th: "การทดสอบการทำงาน", jp: "動作試験" },
   "PRICE & SUPPLIER": { th: "ราคาและผู้ขาย", jp: "価格・仕入先" },
   "PLANNING": { th: "การวางแผน", jp: "計画" },
   "ORGANISATION": { th: "องค์กร", jp: "組織" },

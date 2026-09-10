@@ -15,7 +15,6 @@ import {
   listEstimates,
   listInquiries,
   listProjects,
-  listQuotationLines,
   listSupplierQuotations,
   listSupplierPriceHistory,
   loadEstimateCostWorkspace,
@@ -31,7 +30,6 @@ import {
   type SupplierQuotationRecord,
   type SupplierPriceHistoryRecord,
 } from "../api-client";
-import type { ParsedLine } from "./supplier-quotation-pdf-parser";
 import {
   Badge,
   EmptyState,
@@ -1756,7 +1754,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
           </tr>)}</tbody>
         </table>
-      </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>ยังไม่มี line items — กด "Parse PDF" หรือ "Add line" เพื่อเพิ่ม</div>}
+      </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>ยังไม่มี line items — กด &quot;Parse PDF&quot; หรือ &quot;Add line&quot; เพื่อเพิ่ม</div>}
     </div>
 
     {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}

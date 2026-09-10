@@ -5,6 +5,7 @@ import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { apiRequest, checkAdminStorage, loadNasSettings, saveNasSettings, testNasConnection, type BootstrapData, type NasConnectionTestResult, type NasSettingsInput, type NasSettingsResult, type PagedResult, type ProjectSummary, type StorageCheckResult } from "../api-client";
+import { canManageEngineeringRates, canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
 import { canonicalLocalizedName, contactNameLines, localizedNameLines, localizedNamesFromCard, type ContactTitles, type LocalizedNames } from "./customer-localized-names";
@@ -586,8 +587,8 @@ export function ProductionEngineeringRates({ bootstrap, notify, refreshBootstrap
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const canRead = bootstrap.permissions.includes("master.read");
-  const canWrite = bootstrap.permissions.includes("master.write");
+  const canRead = bootstrap.permissions.includes("master.read") && canViewEngineeringRates(bootstrap.user.role);
+  const canWrite = bootstrap.permissions.includes("master.write") && canManageEngineeringRates(bootstrap.user.role);
   const load = useCallback(async () => {
     if (!canRead) return;
     setLoading(true);
@@ -601,7 +602,7 @@ export function ProductionEngineeringRates({ bootstrap, notify, refreshBootstrap
     }
   }, [activeOnly, canRead, page, pageSize, search]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
-  if (!canRead) return <PermissionNotice permission="master.read" />;
+  if (!canRead) return <PermissionNotice permission="Management role" />;
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
   return <>
     {!embedded ? <PageHeader eyebrow="COST MASTER" title={uiText("Engineering Rate")} subtitle="อัตราที่มีผลตามช่วงวันที่จาก SQL Server" actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New Rate"} /></button> : undefined} /> : null}

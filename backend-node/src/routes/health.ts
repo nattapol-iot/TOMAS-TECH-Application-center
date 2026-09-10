@@ -3,8 +3,13 @@ import { constants } from "node:fs";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
-
-const REQUIRED_SCHEMA_VERSION = 38;
+import {
+  migrationReadiness,
+  REQUIRED_MIGRATIONS,
+  REQUIRED_SCHEMA_VERSION,
+  REQUIRED_SCHEMA_VERSIONS,
+  type AppliedMigration,
+} from "../migration-validation.js";
 
 export function registerHealthRoutes(
   app: FastifyInstance,
@@ -35,18 +40,25 @@ export function registerHealthRoutes(
           });
       }
 
-      const result = await database.query<{ schema_version: number; required_schemas_ready:number }>(
-        "SELECT COALESCE(MAX(version), 0) AS schema_version, CASE WHEN COUNT(DISTINCT CASE WHEN version BETWEEN 25 AND 38 THEN version END)=14 THEN 1 ELSE 0 END AS required_schemas_ready FROM dbo.schema_versions;",
+      const result = await database.query<AppliedMigration>(
+        "SELECT version, name FROM dbo.schema_versions ORDER BY version;",
       );
-      const schemaVersion = Number(result.recordset[0]?.schema_version ?? 0);
-      if (schemaVersion < REQUIRED_SCHEMA_VERSION || !result.recordset[0]?.required_schemas_ready) {
+      const schemaVersion = result.recordset.reduce(
+        (maximum, migration) => Math.max(maximum, Number(migration.version)),
+        0,
+      );
+      const readiness = migrationReadiness(result.recordset);
+      if (!readiness.ready) {
         return reply
           .status(503)
           .send({
             status: "migrations_required",
             schemaVersion,
             requiredSchemaVersion: REQUIRED_SCHEMA_VERSION,
-            requiredSchemaVersions: [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38],
+            requiredSchemaVersions: REQUIRED_SCHEMA_VERSIONS,
+            requiredSchemaIdentities: REQUIRED_MIGRATIONS.map(({ version, name }) => ({ version, name })),
+            missingSchemaVersions: readiness.missingVersions,
+            mismatchedSchemaVersions: readiness.mismatchedVersions,
             timestamp: new Date().toISOString(),
           });
       }

@@ -42,6 +42,10 @@ yarn-error.log*
 /.output/
 /.wrangler/
 /outputs/
+/.codex-tmp/
+/.omx/
+/tmp/
+/backend-node/tmp/
 /work/
 *.tsbuildinfo
 

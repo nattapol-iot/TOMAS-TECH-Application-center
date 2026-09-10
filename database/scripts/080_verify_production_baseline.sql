@@ -7,7 +7,38 @@ GO
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
-IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 35) THROW 51350, 'Team Activity migration 035 is required.', 1;
+
+DECLARE @required_schema_versions TABLE (
+    version int NOT NULL PRIMARY KEY,
+    name nvarchar(255) NOT NULL
+);
+INSERT INTO @required_schema_versions(version, name)
+VALUES
+    (25, N'Unified revisioned reports and customer acknowledgment'),
+    (26, N'Durable role-scoped KPI performance reviews'),
+    (27, N'Reusable sanitized report templates and frozen provenance'),
+    (28, N'Optional end user companies for inquiries and projects'),
+    (29, N'Role-specific Sales KPI performance reviews'),
+    (30, N'Customer and contact names in Thai, English and Japanese'),
+    (31, N'Customer contact titles in Thai, English and Japanese'),
+    (32, N'Estimate Excel import audited historical rate provenance'),
+    (33, N'Historical PR workbook imports with source versions and reconciliation links'),
+    (34, N'Support Center and reporter contribution points'),
+    (35, N'Team activity, reporting discipline and versioned KPI contribution'),
+    (36, N'Report evidence images with immutable file hashes'),
+    (37, N'Archive generated report PDF/PPTX exports on NAS storage'),
+    (38, N'supplier_quotation_lines'),
+    (39, N'NAS storage connection draft settings'),
+    (40, N'Immutable overhead policies and estimate revision snapshots'),
+    (41, N'Admin-managed primary user roles with audited least-privilege writes');
+
+IF EXISTS (
+    SELECT required.version
+    FROM @required_schema_versions required
+    LEFT JOIN dbo.schema_versions installed ON installed.version = required.version
+    WHERE installed.version IS NULL OR installed.name <> required.name
+)
+    THROW 51410, 'Required schema versions 025 through 041 are missing or have unexpected identities.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
@@ -42,6 +73,11 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
    OR OBJECT_ID(N'dbo.v_estimate_totals', N'V') IS NULL
    OR OBJECT_ID(N'dbo.v_item_balances', N'V') IS NULL
+   OR OBJECT_ID(N'dbo.overhead_policies', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.estimate_overhead_snapshots', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.estimate_submission_snapshots', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.trg_estimate_overhead_snapshots_immutable', N'TR') IS NULL
+   OR OBJECT_ID(N'dbo.trg_estimate_submission_snapshots_immutable', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_estimate_revisions_append_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_cost_items_current_revision_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_manhour_lines_current_revision_only', N'TR') IS NULL
@@ -289,7 +325,12 @@ BEGIN
                 OR (object_item.name = N'schedule_baselines' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
                 OR (object_item.name IN (N'estimates', N'estimate_assignments', N'cost_items', N'manhour_lines', N'expense_lines', N'other_cost_lines')
                     AND permission.permission_name = N'DELETE')
-                OR (object_item.name = N'users' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'users' AND (
+                       permission.permission_name IN (N'INSERT', N'DELETE')
+                    OR (permission.permission_name = N'UPDATE'
+                        AND permission.minor_id NOT IN (
+                            COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'role_id', 'ColumnId'),
+                            COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')))))
                 OR (object_item.name = N'employees' AND permission.permission_name = N'DELETE')
                 OR (object_item.name = N'supplier_price_history' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
                 OR (object_item.name = N'supplier_quotations' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
@@ -357,7 +398,6 @@ BEGIN
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.expense_lines', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.other_cost_lines', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'INSERT'), 0) = 1
-        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'UPDATE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.users', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.employees', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'INSERT'), 0) = 1
@@ -378,6 +418,37 @@ END;
 
 IF @has_forbidden_effective_permission = 1
     THROW 51091, 'The application principal has an effective permission that bypasses the least-privilege baseline.', 1;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.users')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W')
+      AND permission.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'role_id', 'ColumnId'), COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')))
+    THROW 51371, 'The application role can update an unapproved dbo.users column.', 1;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.users')
+      AND permission.minor_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'role_id', 'ColumnId')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W'))
+   OR NOT EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.users')
+      AND permission.minor_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W'))
+    THROW 51372, 'The application role is missing its column-scoped user role update grant.', 1;
 
 IF EXISTS (SELECT 1 FROM @required_material_permissions WHERE is_effective <> 1 OR is_effective IS NULL)
     THROW 51093, 'The application principal is missing an effective material-workflow permission.', 1;
@@ -458,6 +529,19 @@ IF EXISTS (
       AND class = 1 AND major_id = OBJECT_ID(N'dbo.estimate_revisions')
       AND permission_name IN (N'UPDATE', N'DELETE') AND state IN ('G', 'W'))
     THROW 51082, 'Estimate revision snapshots must not be updateable or deletable by the application role.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id=OBJECT_ID(N'dbo.overhead_policies') AND permission_name=N'INSERT' AND state IN('G','W'))
+   OR NOT EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id=OBJECT_ID(N'dbo.estimate_overhead_snapshots') AND permission_name=N'INSERT' AND state IN('G','W'))
+   OR NOT EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id=OBJECT_ID(N'dbo.estimate_submission_snapshots') AND permission_name=N'INSERT' AND state IN('G','W'))
+    THROW 51411, 'The application role is missing append-only overhead grants.', 1;
+
+IF EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id IN (OBJECT_ID(N'dbo.overhead_policies'),OBJECT_ID(N'dbo.estimate_overhead_snapshots'),OBJECT_ID(N'dbo.estimate_submission_snapshots'))
+      AND permission_name IN(N'UPDATE',N'DELETE') AND state IN('G','W'))
+    THROW 51412, 'Overhead policies and snapshots must not be updateable or deletable by the application role.', 1;
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.database_permissions

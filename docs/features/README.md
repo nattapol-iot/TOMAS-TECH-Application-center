@@ -1,0 +1,28 @@
+# features
+
+Canonical topical documents. Updated 2026-09-10. See [governance and status definitions](../README.md). Historical release/test claims apply only to their stated candidate and environment.
+
+- [Business-card OCR for customer entry](business-card-ocr.md)
+- [Customer contact position and department](customer-contact-roles.md)
+- [Customer contact titles](customer-contact-titles.md)
+- [Multilingual customer and contact names](customer-multilingual-names.md)
+- [Employee manual application integration](employee-manual-integration.md)
+- [Employee operation manual — coverage and maintenance](employee-operation-manual.md)
+- [End user companies](end-user-companies.md)
+- [Estimate assignment email](estimate-assignment-email.md)
+- [Excel Estimate Cost import](estimate-excel-import.md)
+- [Manager and executive dashboard](executive-dashboard.md)
+- [Historical PR import](historical-pr-import.md)
+- [Inquiry-first customer workflow](inquiry-visit-flow.md)
+- [Knowledge Hub sales materials](knowledge-sales-library.md)
+- [KPI performance reviews](kpi-performance-reviews.md)
+- [Report form usability correction](report-form-redesign.md)
+- [Production Resource Plan & Workload](resource-planning.md)
+- [Resource Plan tasks and Project Punchlist](resource-task-workflow.md)
+- [Sales customer and contact creation](sales-customer-self-service.md)
+- [Signed file preview and placement](signing-preview.md)
+- [Site Visit workspace simplification](site-visit-workspace.md)
+- [Support Center — implemented release](support-center-implementation.md)
+- [Team Activity and reporting discipline](team-activity.md)
+- [Unified Reports backend](unified-reports-backend.md)
+- [Unified Reports](unified-reports.md)

@@ -6,13 +6,14 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "no
 import { resolve } from "node:path";
 import { buildApp } from "../src/app.js";
 import type { AppConfig } from "../src/config.js";
+import { createSqlIntegrationConfig } from "./sql-integration-config.js";
 
-const repo = process.cwd();
-const name = `IoTTeamCenter_HandoverCI_${randomUUID().replaceAll("-", "")}`;
+const sqlTest = createSqlIntegrationConfig("Handover");
+const name = sqlTest.databaseName;
 assert.match(name, /^IoTTeamCenter_HandoverCI_[a-f0-9]{32}$/);
-const sqlArgs = ["-S", "localhost", "-E", "-C", "-I", "-b"];
-const run = (statement: string) => execFileSync("sqlcmd", [...sqlArgs, "-d", name, "-Q", statement], { cwd: repo, stdio: "pipe" });
-const storageRoot = resolve(repo, "tmp", name);
+const sqlArgs = sqlTest.sqlcmdArgs;
+const run = (statement: string) => execFileSync("sqlcmd", [...sqlArgs, "-d", name, "-Q", statement], sqlTest.sqlcmdOptions);
+const storageRoot = sqlTest.storageRoot;
 let application: Awaited<ReturnType<typeof buildApp>> | undefined;
 let checks = 0;
 
@@ -37,7 +38,7 @@ function filesBelow(path: string): string[] {
 }
 
 try {
-  execFileSync("sqlcmd", [...sqlArgs, "-i", "database/scripts/020_deploy_fresh_database.sql", "-v", `DatabaseName=${name}`], { cwd: repo, stdio: "pipe" });
+  execFileSync("sqlcmd", [...sqlArgs, "-i", sqlTest.freshDatabaseScript, "-v", `DatabaseName=${name}`], sqlTest.sqlcmdOptions);
   run(`INSERT dbo.users(entra_object_id,email,name,role_id)
     SELECT v.identity_id,v.identity_id+N'@test.invalid',v.identity_id,r.id
     FROM (VALUES(N'handover-sales',N'Sales Engineer'),(N'handover-engineer',N'Engineer'),
@@ -53,11 +54,11 @@ try {
       VALUES(N'Engineer',N'Engineering',100,800,120,960,'2020-01-01',@admin);`);
   const password = randomUUID().replaceAll("-", "");
   run(`CREATE APPLICATION ROLE handover_ci_role WITH PASSWORD='${password}';`);
-  execFileSync("sqlcmd", [...sqlArgs, "-d", name, "-i", "database/scripts/010_application_login.sql", "-v", `DatabaseName=${name}`, "AppLogin=handover_ci_role"], { cwd: repo, stdio: "pipe" });
+  execFileSync("sqlcmd", [...sqlArgs, "-d", name, "-i", sqlTest.applicationLoginScript, "-v", `DatabaseName=${name}`, "AppLogin=handover_ci_role"], sqlTest.sqlcmdOptions);
   const config: AppConfig = {
     environment: "development", host: "127.0.0.1", port: 0, allowedHosts: ["localhost"],
     corsOrigins: ["http://localhost:3000"], businessTimeZone: "Asia/Bangkok", auth: { mode: "Development" },
-    database: { connectionString: `Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`, trustServerCertificate: true, applicationRoleName: "handover_ci_role", applicationRolePassword: password },
+    database: { connectionString: sqlTest.connectionString, trustServerCertificate: true, applicationRoleName: "handover_ci_role", applicationRolePassword: password },
     documentStorage: { mode: "Local", rootPath: storageRoot, maxFileSizeBytes: 10_000_000 }, email: { mode: "Disabled" }, pdfParserUrl: "http://pdf-parser:8000",
   };
   application = await buildApp(config);
@@ -133,7 +134,7 @@ try {
   const intakeId = Number(intake.id);
   const intakeBytes = Buffer.from("TEST ONLY linked RFQ from sales intake\n");
   await upload("sales", `/api/v1/sales-intakes/${intakeId}/attachments`, "customer-rfq.txt", intakeBytes, { category: "Customer RFQ", description: "TEST ONLY original RFQ" });
-  let intakeDetail = await api("sales", "GET", `/api/v1/sales-intakes/${intakeId}`);
+  const intakeDetail = await api("sales", "GET", `/api/v1/sales-intakes/${intakeId}`);
   const intakeSubmitted = await api("sales", "POST", `/api/v1/sales-intakes/${intakeId}/status`, { status: "Pending Technical Review", reason: "TEST ONLY ready", rowVersion: intakeDetail.rowVersion });
   const intakeReviewed = await api("manager", "POST", `/api/v1/sales-intakes/${intakeId}/review`, { decision: "Ready to Schedule", comment: "TEST ONLY sufficient information",
     engineerCount: 1, estimatedDurationMinutes: 240, skillIds: [skillId], rowVersion: intakeSubmitted.rowVersion });
@@ -259,6 +260,6 @@ try {
 } finally {
   if (application) { await application.app.close(); await application.database.close(); }
   assert.match(name, /^IoTTeamCenter_HandoverCI_[a-f0-9]{32}$/);
-  execFileSync("sqlcmd", [...sqlArgs, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`], { stdio: "pipe" });
+  execFileSync("sqlcmd", [...sqlArgs, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`], sqlTest.sqlcmdOptions);
   rmSync(storageRoot, { recursive: true, force: true });
 }

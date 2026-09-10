@@ -194,7 +194,7 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
           ? <button className="btn warn" type="button" disabled={busy} onClick={() => setRetireConfirm(true)}><Icon name="trash" /><LocalizedText text={"เลิกใช้งาน"} /></button>
           : null}
         <span className="spacer" />
-        {canEdit && selected.status !== "Retired"
+        {canEdit && selected.status === "Draft"
           ? <button className="btn primary" type="button" disabled={busy} onClick={() => setEditor({ mode: "edit", template: selected })}><Icon name="edit" /><LocalizedText text={"แก้ไขชุดและรายการ"} /></button>
           : null}
       </>}
@@ -233,6 +233,7 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
       template={editor.template}
       duplicate={editor.mode === "copy"}
       suppliers={bootstrap.suppliers}
+      canPublish={canRetire}
       onClose={() => setEditor(null)}
       onSave={async (values) => {
         let savedId: number;

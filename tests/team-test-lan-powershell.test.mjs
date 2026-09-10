@@ -1,12 +1,29 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+
+test("Team Test firewall binds the API rule to the detected runtime", () => {
+  const firewallPath = fileURLToPath(new URL("../scripts/Configure-TeamTestLanFirewall.ps1", import.meta.url));
+  const firewallScript = readFileSync(firewallPath, "utf8");
+  assert.match(firewallScript, /\$apiRuntime\s*=\s*Get-TeamTestApiRuntimeConfiguration/);
+  assert.match(firewallScript, /\$apiProgramPath\s*=\s*\[string\]\$apiRuntime\.ProgramPath/);
+
+  const apiRuleStart = firewallScript.indexOf("$createdRuleNames.Add($apiRuleName)");
+  const stateStart = firewallScript.indexOf("$state = @{", apiRuleStart);
+  assert.ok(apiRuleStart >= 0 && stateStart > apiRuleStart, "API firewall rule block must be present");
+  const apiRuleBlock = firewallScript.slice(apiRuleStart, stateStart);
+  assert.match(apiRuleBlock, /-Program \$apiProgramPath/);
+  assert.doesNotMatch(apiRuleBlock, /-Program \$dotnetPath/);
+});
 
 test("Team Test PowerShell LAN validators fail closed", { skip: process.platform !== "win32" }, (context) => {
   const validationPath = fileURLToPath(new URL("../scripts/TeamTestLanValidation.ps1", import.meta.url));
   const processPath = fileURLToPath(new URL("../scripts/TeamTestLanFrontendProcess.ps1", import.meta.url));
   const script = String.raw`
+try {
+& {
 $ErrorActionPreference = 'Stop'
 . '${validationPath.replaceAll("'", "''")}'
 . '${processPath.replaceAll("'", "''")}'
@@ -19,6 +36,8 @@ function Assert-Throws([scriptblock] $Action, [string] $Message) {
     catch { $threw = $true }
     if (!$threw) { throw $Message }
 }
+
+Assert-True ($null -ne (Get-Command Get-TeamTestApiRuntimeConfiguration -ErrorAction SilentlyContinue)) 'API runtime resolver must be available.'
 
 [void](Get-TeamTestCanonicalOrigin 'http://192.168.1.140:3000')
 Assert-Throws { [void](Get-TeamTestCanonicalOrigin 'http://192.168.1.140:3000/') } 'Trailing slash must be rejected.'
@@ -48,6 +67,30 @@ $extraSettings.ListenUrls += ';http://192.168.1.141:5105'
 Assert-Throws { [void](Get-TeamTestValidatedListenerConfiguration $extraSettings @('192.168.1.140')) } 'Extra listener must be rejected.'
 Assert-Throws { [void](Get-TeamTestValidatedListenerConfiguration $validSettings @('192.168.1.141')) } 'Unassigned address must be rejected.'
 
+$runtimeRoot = Join-Path ([IO.Path]::GetTempPath()) ('iot-team-runtime-' + [Guid]::NewGuid().ToString('N'))
+try {
+    $nodeRelease = Join-Path $runtimeRoot 'node-release'
+    $nodeEntrypoint = Join-Path $nodeRelease 'dist\src\server.js'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $nodeEntrypoint) -Force | Out-Null
+    New-Item -ItemType File -Path $nodeEntrypoint -Force | Out-Null
+    $nodeRuntime = Get-TeamTestApiRuntimeConfiguration $nodeRelease 'C:\Program Files\nodejs\node.exe' 'C:\Program Files\dotnet\dotnet.exe'
+    Assert-True ($nodeRuntime.Kind -eq 'Node') 'Node release must select the Node runtime.'
+    Assert-True ($nodeRuntime.ProgramPath -eq 'C:\Program Files\nodejs\node.exe') 'Node release must authorize node.exe.'
+    Assert-True ($nodeRuntime.Entrypoint -eq $nodeEntrypoint) 'Node release must return its server entrypoint.'
+
+    $legacyRelease = Join-Path $runtimeRoot 'legacy-release'
+    $legacyEntrypoint = Join-Path $legacyRelease 'IoTTeamCenter.Api.dll'
+    New-Item -ItemType Directory -Path $legacyRelease -Force | Out-Null
+    New-Item -ItemType File -Path $legacyEntrypoint -Force | Out-Null
+    $legacyRuntime = Get-TeamTestApiRuntimeConfiguration $legacyRelease 'C:\Program Files\nodejs\node.exe' 'C:\Program Files\dotnet\dotnet.exe'
+    Assert-True ($legacyRuntime.Kind -eq 'LegacyDotNet') 'Legacy release must select the .NET runtime.'
+    Assert-True ($legacyRuntime.ProgramPath -eq 'C:\Program Files\dotnet\dotnet.exe') 'Legacy release must authorize dotnet.exe.'
+    Assert-Throws { [void](Get-TeamTestApiRuntimeConfiguration (Join-Path $runtimeRoot 'missing-release') 'node.exe' 'dotnet.exe') } 'Incomplete release must be rejected.'
+}
+finally {
+    if (Test-Path -LiteralPath $runtimeRoot) { Remove-Item -LiteralPath $runtimeRoot -Recurse -Force }
+}
+
 $entrypoint = [IO.Path]::GetFullPath((Join-Path $env:SystemDrive 'Team Test\vinext\dist\cli.js'))
 $goodProcess = [pscustomobject]@{
     Name = 'node.exe'
@@ -64,9 +107,15 @@ $wrongCommandProcess = [pscustomobject]@{
     CommandLine = '"C:\Program Files\nodejs\node.exe" "' + $entrypoint + '" build --hostname 192.168.1.140 --port 3000'
 }
 Assert-False (Test-TeamTestLanFrontendCommandLine $wrongCommandProcess $entrypoint '192.168.1.140' 3000) 'Non-start command must fail.'
+}
+}
+catch {
+    [Console]::Error.WriteLine(($_ | Out-String))
+    exit 1
+}
 `;
 
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "-"], {
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "-"], {
     encoding: "utf8",
     input: script,
     windowsHide: true,

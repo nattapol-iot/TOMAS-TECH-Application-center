@@ -21,7 +21,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 $bundle = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'dist\client\_next\static\chunks') -Filter 'PerformanceScreen-*.js' | Select-Object -First 1
 if (!$bundle) { throw 'The KPI client bundle was not built.' }
 $bundleResponse = Invoke-WebRequest -Uri "$frontendOrigin/_next/static/chunks/$($bundle.Name)" -UseBasicParsing -TimeoutSec 10
-if ($bundleResponse.StatusCode -ne 200 -or $bundleResponse.Content -notmatch 'KPI & Growth' -or $bundleResponse.Content -notmatch 'Work evidence' -or $bundleResponse.Content -notmatch 'Decision support' -or $bundleResponse.Content -notmatch 'Sales KPI framework') {
+if ($bundleResponse.StatusCode -ne 200 -or $bundleResponse.Content -notmatch 'KPI & Growth' -or $bundleResponse.Content -notmatch 'Work evidence' -or $bundleResponse.Content -notmatch 'My Performance Pulse' -or $bundleResponse.Content -notmatch 'Decision support' -or $bundleResponse.Content -notmatch 'Sales KPI framework') {
     throw 'The served KPI bundle is missing required markers.'
 }
 $apiBundle = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'dist\client\_next\static\chunks') -Filter '*.js' | Where-Object {

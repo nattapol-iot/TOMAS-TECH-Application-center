@@ -98,10 +98,42 @@ GO
 :r database/migrations/034_support_center.sql
 :r database/migrations/035_team_activity.sql
 :r database/migrations/036_report_evidence_images.sql
+:r database/migrations/037_unified_report_exports.sql
+:r database/migrations/038_supplier_quotation_lines.sql
+:r database/migrations/039_nas_storage_settings.sql
+:r database/migrations/040_estimate_overhead_policy.sql
+:r database/migrations/041_user_role_management.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36)) <> 36
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41)) <> 41
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
+
+IF EXISTS (
+    SELECT expected.version, expected.name
+    FROM (VALUES
+        (25, N'Unified revisioned reports and customer acknowledgment'),
+        (26, N'Durable role-scoped KPI performance reviews'),
+        (27, N'Reusable sanitized report templates and frozen provenance'),
+        (28, N'Optional end user companies for inquiries and projects'),
+        (29, N'Role-specific Sales KPI performance reviews'),
+        (30, N'Customer and contact names in Thai, English and Japanese'),
+        (31, N'Customer contact titles in Thai, English and Japanese'),
+        (32, N'Estimate Excel import audited historical rate provenance'),
+        (33, N'Historical PR workbook imports with source versions and reconciliation links'),
+        (34, N'Support Center and reporter contribution points'),
+        (35, N'Team activity, reporting discipline and versioned KPI contribution'),
+        (36, N'Report evidence images with immutable file hashes'),
+        (37, N'Archive generated report PDF/PPTX exports on NAS storage'),
+        (38, N'supplier_quotation_lines'),
+        (39, N'NAS storage connection draft settings'),
+        (40, N'Immutable overhead policies and estimate revision snapshots'),
+        (41, N'Admin-managed primary user roles with audited least-privilege writes')
+    ) expected(version, name)
+    LEFT JOIN dbo.schema_versions installed
+      ON installed.version = expected.version AND installed.name = expected.name
+    WHERE installed.version IS NULL
+)
+    THROW 51021, 'Fresh database deployment found an unexpected required migration identity.', 1;
 GO

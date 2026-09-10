@@ -35,6 +35,13 @@ export type ApiUser = {
   isActive: boolean;
 };
 
+export type AccessRole = {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+};
+
 export type BootstrapData = {
   user: ApiUser;
   employment?: {
@@ -82,6 +89,7 @@ export type BootstrapData = {
     nickname: string;
     startWorkDate?: string;
     canSignIn: boolean;
+    rowVersion: string;
   }[];
   permissions: string[];
 };
@@ -130,6 +138,16 @@ export type PerformanceOverview = {
   assessments: PerformanceAssessment[];
 };
 
+export type PerformanceInsight = {
+  reasonCode: string;
+  kind: "STRENGTH" | "ATTENTION" | "NEXT" | "CONTEXT";
+  areaCode: string;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  priority: number;
+  facts: Record<string, number | string | boolean | null>;
+  source: { type: "PROJECT" | "INQUIRY" | "TASK"; id: number; label: string } | null;
+};
+
 export type PerformanceEvidence = {
   frameworkCode: "ENGINEERING" | "SALES";
   employeeId: number;
@@ -141,6 +159,7 @@ export type PerformanceEvidence = {
   asOf: string;
   confidence: "LOW" | "MEDIUM" | "HIGH";
   methodology: string;
+  insights: PerformanceInsight[];
   sources: Array<{ key: "PROJECT" | "INQUIRY" | "TASK" | "MEETING" | "ESTIMATE"; label: string; count: number; connected: boolean }>;
   metrics: {
     projectCount: number;
@@ -326,6 +345,8 @@ export type InquiryEstimate = {
   engineeringTotal: number;
   outsourceTotal: number;
   otherTotal: number;
+  overheadState: "Missing" | "Applied" | "Zero" | null;
+  overheadTotal: number | null;
   total: number;
   rowVersion: string;
 };
@@ -727,6 +748,7 @@ export type EstimateWorkspaceCapabilities = {
 
 export type EstimateCostWorkspace = {
   header: {
+    overhead?: EstimateOverhead;
     id: number;
     number: string;
     inquiryId: number;
@@ -751,6 +773,7 @@ export type EstimateCostWorkspace = {
     updatedAt: string;
     rowVersion: string;
     totals: {
+      overhead?: number | null;
       material: number;
       engineering: number;
       outsource: number;
@@ -770,6 +793,15 @@ export type EstimateCostWorkspace = {
   assignments: EstimateAssignment[];
   revisionHistory: EstimateRevision[];
   validationIssues: EstimateValidationIssue[];
+};
+
+export type EstimateOverhead = {
+  state: "Missing" | "Applied" | "Zero";
+  policyId: number | null;
+  policyVersion: number | null;
+  hourlyRate: number | null;
+  eligibleDirectHours: number | null;
+  amount: number | null;
 };
 
 export type CostItemInput = {
@@ -914,8 +946,8 @@ async function authorizedFetch(path: string, init?: RequestInit, timeoutMs = 30_
   return response;
 }
 
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await authorizedFetch(path, init);
+export async function apiRequest<T>(path: string, init?: RequestInit, timeoutMs = 30_000): Promise<T> {
+  const response = await authorizedFetch(path, init, timeoutMs);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
@@ -1340,6 +1372,15 @@ export const createEmployee = (input: EmployeeInput) =>
 
 export const updateEmployee = (id: number, input: EmployeeInput & { rowVersion: string }) =>
   apiRequest<{ id: number; employeeNo: number; nameEn: string; rowVersion: string }>(`/api/v1/master/employees/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+
+export const listAccessRoles = () =>
+  apiRequest<{ items: AccessRole[] }>("/api/v1/admin/roles");
+
+export const updateUserRole = (id: number, input: { roleCode: string; rowVersion: string }) =>
+  apiRequest<{ id: number; role: string; rowVersion: string }>(`/api/v1/admin/users/${id}/role`, {
     method: "PUT",
     body: JSON.stringify(input),
   });
@@ -2465,7 +2506,7 @@ export const markNotificationsRead = (input: { ids?: number[]; all?: boolean }) 
  * RFC 5987 form is preferred and the quoted form is the fallback, the same
  * order the inquiry download uses.
  */
-async function downloadNamedFile(path: string) {
+export async function downloadNamedFile(path: string) {
   const response = await authorizedFetch(path, { headers: { Accept: "application/octet-stream" } }, 180_000);
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];

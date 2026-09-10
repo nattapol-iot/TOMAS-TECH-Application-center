@@ -35,6 +35,7 @@ test("work evidence scores only due assigned work and keeps suggestions advisory
   assert.equal(result.areas.find((area) => area.areaCode === "QUALITY")?.suggestedScore, 3);
   assert.match(result.methodology, /decision support only/i);
   assert.match(result.areas.find((area) => area.areaCode === "DELIVERY")?.evidenceText ?? "", /3\/4/);
+  assert.deepEqual(result.insights.map((insight) => insight.reasonCode), ["TECHNICAL_CONTRIBUTION", "DELIVERY_REVIEW"]);
 });
 
 test("work evidence with sparse data does not invent a score", () => {
@@ -51,6 +52,7 @@ test("work evidence with sparse data does not invent a score", () => {
   assert.equal(result.confidence, "LOW");
   assert.ok(result.areas.every((area) => area.suggestedScore === null));
   assert.equal(result.sources.reduce((sum, source) => sum + source.count, 0), 0);
+  assert.deepEqual(result.insights, []);
 });
 
 test("sales evidence uses owned pipeline, forecast outcomes and Project handovers without inventing sparse scores", () => {
@@ -80,6 +82,7 @@ test("sales evidence uses owned pipeline, forecast outcomes and Project handover
   assert.equal(result.areas.find((area) => area.areaCode === "HANDOVER")?.suggestedScore, 5);
   assert.match(result.areas.find((area) => area.areaCode === "FORECAST")?.evidenceText ?? "", /without dated pre-outcome snapshots/);
   assert.match(result.methodology, /decision support only/i);
+  assert.deepEqual(result.insights.map((insight) => insight.reasonCode), ["HANDOVER_COMPLETE", "FORECAST_CONTEXT"]);
 });
 
 test("role-specific frameworks and manager scope keep Sales separate from Engineering", () => {

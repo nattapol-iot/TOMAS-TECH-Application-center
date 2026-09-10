@@ -1,5 +1,7 @@
 # Production deployment
 
+> Status review 2026-09-10: Historical .NET/IIS procedure; NOT a verified deployment guide for the current Node API. See [current operations index](operations/README.md) and [release tasks](planning/PRODUCTION_BACKLOG.md).
+
 This guide deploys the production path that exists in this repository:
 
 ```text

@@ -36,6 +36,7 @@ if ($evidencePayload.employeeId -ne $evidenceAssessment.employeeId) { throw 'The
 if (@($evidencePayload.sources).Count -ne 3 -or @($evidencePayload.areas).Count -ne 4) { throw 'The evidence response is incomplete.' }
 if ((@($evidencePayload.sources).key -join ',') -ne 'PROJECT,INQUIRY,TASK') { throw 'The evidence source contract changed unexpectedly.' }
 if ($evidencePayload.confidence -notin @('LOW','MEDIUM','HIGH')) { throw 'The evidence confidence is invalid.' }
+if ($null -eq $evidencePayload.insights -or @($evidencePayload.insights).Count -gt 3) { throw 'The Engineering Performance Pulse insight contract is invalid.' }
 if ($evidencePayload.methodology -notmatch 'decision support only') { throw 'The human-decision safeguard is missing.' }
 
 $salesAssessment = @($evidenceOverview.assessments | Where-Object frameworkCode -eq 'SALES')[0]
@@ -46,6 +47,7 @@ if ($salesAssessment) {
     if (@($salesPayload.sources).Count -ne 4 -or @($salesPayload.areas).Count -ne 5) { throw 'The Sales evidence response is incomplete.' }
     if ((@($salesPayload.sources).key -join ',') -ne 'INQUIRY,MEETING,ESTIMATE,PROJECT') { throw 'The Sales evidence source contract changed unexpectedly.' }
     if ((@($salesPayload.areas).areaCode -join ',') -ne 'PIPELINE,CUSTOMER,FORECAST,COMMERCIAL,HANDOVER') { throw 'The Sales KPI area contract changed unexpectedly.' }
+    if ($null -eq $salesPayload.insights -or @($salesPayload.insights).Count -gt 3) { throw 'The Sales Performance Pulse insight contract is invalid.' }
 }
 
 [pscustomobject]@{

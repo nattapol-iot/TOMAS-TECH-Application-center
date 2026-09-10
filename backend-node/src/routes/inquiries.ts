@@ -49,7 +49,8 @@ type EstimateRow = Record<string, unknown> & {
   id: number | string; estimate_no: string; revision: number; owner_id: number | string; owner_name: string;
   created_date: Date | string; due_date: Date | string; status: string; progress: number | string;
   material_total: number | string; engineering_total: number | string; outsource_total: number | string;
-  other_total: number | string; total: number | string; row_version: Buffer;
+  other_total: number | string; overhead_state: string | null; overhead_total: number | string | null;
+  total: number | string; row_version: Buffer;
 };
 
 type MeetingRow = Record<string, unknown> & {
@@ -211,7 +212,7 @@ export function registerInquiryRoutes(
       SELECT e.id, e.estimate_no, e.revision, e.owner_id, u.name AS owner_name, e.created_date, e.due_date,
         e.status, e.progress, t.material_total, t.engineering_total, t.outsource_total,
         t.transportation_total+t.accommodation_total+t.other_total+t.contingency_total AS other_total,
-        t.total, e.row_version
+        t.overhead_state, t.overhead_total, t.total, e.row_version
       FROM dbo.estimates e INNER JOIN dbo.users u ON u.id=e.owner_id
       INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
       WHERE e.inquiry_id=@id AND e.deleted_at IS NULL;
@@ -248,7 +249,8 @@ export function registerInquiryRoutes(
       createdDate: dateOnly(estimateRow.created_date), dueDate: dateOnly(estimateRow.due_date),
       status: estimateRow.status, progress: Number(estimateRow.progress), materialTotal: Number(estimateRow.material_total),
       engineeringTotal: Number(estimateRow.engineering_total), outsourceTotal: Number(estimateRow.outsource_total),
-      otherTotal: Number(estimateRow.other_total), total: Number(estimateRow.total),
+      otherTotal: Number(estimateRow.other_total), overheadState: estimateRow.overhead_state,
+      overheadTotal: estimateRow.overhead_total === null ? null : Number(estimateRow.overhead_total), total: Number(estimateRow.total),
       rowVersion: estimateRow.row_version.toString("base64"),
     } : null;
     const meetings = (result.recordsets[2] as unknown as MeetingRow[]).map((row) => ({

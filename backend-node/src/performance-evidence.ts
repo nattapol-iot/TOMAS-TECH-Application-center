@@ -1,3 +1,5 @@
+import { buildEngineeringPerformanceInsights, buildSalesPerformanceInsights } from "./performance-insights.js";
+
 const AREA_CODES = ["DELIVERY", "QUALITY", "TECHNICAL", "TEAMWORK"] as const;
 const SALES_AREA_CODES = ["PIPELINE", "CUSTOMER", "FORECAST", "COMMERCIAL", "HANDOVER"] as const;
 
@@ -186,6 +188,9 @@ export function buildPerformanceEvidence(input: {
   const measurableCount = allTasks.length + input.projects.length + input.inquiries.length;
   const sourceCoverage = [input.projects.length > 0, input.inquiries.length > 0, allTasks.length > 0].filter(Boolean).length;
   const confidence = measurableCount >= 8 && sourceCoverage >= 2 ? "HIGH" : measurableCount >= 3 ? "MEDIUM" : "LOW";
+  const insights = buildEngineeringPerformanceInsights({
+    projects: input.projects, scheduleTasks: input.scheduleTasks, resourceTasks: input.resourceTasks, asOf, confidence,
+  });
 
   return {
     frameworkCode: "ENGINEERING" as const,
@@ -197,6 +202,7 @@ export function buildPerformanceEvidence(input: {
     periodEnd,
     asOf,
     confidence,
+    insights,
     methodology: "Suggestions use assigned work due within the cycle. They are decision support only; managers confirm impact, complexity and context.",
     sources: [
       { key: "PROJECT", label: "Projects", count: input.projects.length, connected: true },
@@ -297,6 +303,7 @@ export function buildSalesPerformanceEvidence(input: {
   const measurableCount = inquiries.length + meetingCount + estimates.length + handovers.length;
   const coverage = [inquiries.length > 0, meetingCount > 0, estimates.length > 0, handovers.length > 0].filter(Boolean).length;
   const confidence = measurableCount >= 8 && coverage >= 2 ? "HIGH" : measurableCount >= 3 ? "MEDIUM" : "LOW";
+  const insights = buildSalesPerformanceInsights({ inquiries: input.inquiries, confidence });
 
   return {
     frameworkCode: "SALES" as const,
@@ -308,6 +315,7 @@ export function buildSalesPerformanceEvidence(input: {
     periodEnd,
     asOf,
     confidence,
+    insights,
     methodology: "Sales signals use owned inquiries, recorded customer meetings, estimate outcomes and Project handovers in the cycle. These are current records selected by cycle dates, not historical snapshots. Estimate values are recorded costs, not booked sales or margin. They are decision support only; managers confirm targets, margin, complexity and customer context.",
     sources: [
       { key: "INQUIRY", label: "Owned inquiries", count: inquiries.length, connected: true },

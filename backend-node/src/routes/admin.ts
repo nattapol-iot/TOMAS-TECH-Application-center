@@ -5,9 +5,11 @@ import { dirname, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { AppConfig } from "../config.js";
+import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
+import { canViewEngineeringRates } from "../engineering-rate-access.js";
 import { ApiError } from "../errors.js";
-import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalText, requiredText } from "../http.js";
+import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalText, parseRowVersion, positiveLong, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
 type EngineeringRateRow = {
@@ -24,6 +26,18 @@ type EngineeringRateRow = {
   created_by_name: string;
   created_at: Date | string;
   row_version: Buffer;
+  total_count: number | string;
+};
+
+type EngineeringRateOptionRow = {
+  id: number | string;
+  level: string;
+  department: string;
+  engineering_daily: number | string;
+  installation_daily: number | string;
+  effective_from: Date | string;
+  effective_to: Date | string | null;
+  is_active: boolean | number;
   total_count: number | string;
 };
 
@@ -64,7 +78,7 @@ function nasInput(value: unknown): { server: string; share: string; destinationP
     .replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
   const username = requiredText(body.username, 255, "NAS username");
   if (!/^[A-Za-z0-9.-]+$/.test(server)) throw new ApiError(400, "validation_failed", "NAS server must be an IP address or hostname.");
-  if (/[\\/\x00-\x1f]/.test(share)) throw new ApiError(400, "validation_failed", "NAS share cannot contain a slash or control character.");
+  if ([...share].some((character) => character === "\\" || character === "/" || character.charCodeAt(0) <= 31)) throw new ApiError(400, "validation_failed", "NAS share cannot contain a slash or control character.");
   if (!destinationPath || destinationPath.split("/").some((part) => !part || part === "." || part === "..")) {
     throw new ApiError(400, "validation_failed", "Destination path must contain valid folder names.");
   }
@@ -75,7 +89,7 @@ async function tcpCheck(host: string, port: number, timeoutMs = 5000): Promise<n
   const started = Date.now();
   await new Promise<void>((resolvePromise, reject) => {
     const socket = connect({ host, port });
-    const done = (error?: Error) => { socket.destroy(); error ? reject(error) : resolvePromise(); };
+    const done = (error?: Error) => { socket.destroy(); if (error) reject(error); else resolvePromise(); };
     socket.setTimeout(timeoutMs, () => done(new Error("Connection timed out")));
     socket.once("connect", () => done());
     socket.once("error", done);
@@ -100,15 +114,30 @@ async function storageCheck(storage: AppConfig["documentStorage"]) {
   }
 }
 
-export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
+type AccessRoleRow = { id: number | string; code: string; name: string; description: string };
+type UserRoleRow = { id: number | string; name: string; email: string; role: string; row_version: Buffer };
+
+export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void;
+export function registerAdminRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void;
+export function registerAdminRoutes(
+  app: FastifyInstance,
+  configOrDatabase: AppConfig | Database,
+  databaseOrUsers: Database | CurrentUserService,
+  maybeUsers?: CurrentUserService,
+): void {
+  const config = maybeUsers ? configOrDatabase as AppConfig : undefined;
+  const database = (maybeUsers ? databaseOrUsers : configOrDatabase) as Database;
+  const users = (maybeUsers ?? databaseOrUsers) as CurrentUserService;
   // Storage health: write a temp file, read it back, delete it — proves end-to-end write access.
   app.get("/api/v1/admin/storage-check", async (request) => {
     await users.demandPermission(request, "master.read");
+    if (!config) throw new ApiError(503, "storage_unavailable", "Document storage is unavailable.");
     return storageCheck(config.documentStorage);
   });
 
   app.get("/api/v1/admin/nas-settings", async (request) => {
     await users.demandPermission(request, "master.read");
+    if (!config) throw new ApiError(503, "storage_unavailable", "Document storage is unavailable.");
     const result = await database.query<NasSettingsRow>(`
       SELECT setting.server_name, setting.share_name, setting.destination_path, setting.username,
              setting.updated_at, updater.name AS updated_by_name, setting.row_version
@@ -129,6 +158,7 @@ export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, dat
 
   app.put("/api/v1/admin/nas-settings", async (request) => {
     await users.demandPermission(request, "master.write");
+    if (!config) throw new ApiError(503, "storage_unavailable", "Document storage is unavailable.");
     const actor = await users.required(request);
     const input = nasInput(request.body);
     const result = await database.query<NasSettingsRow>(`
@@ -162,8 +192,78 @@ export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, dat
       return { ok: false, durationMs: 5000, error: String(error instanceof Error ? error.message : error) };
     }
   });
+  app.get("/api/v1/admin/roles", async (request) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const result = await database.query<AccessRoleRow>(`
+      SELECT id,code,name,description
+      FROM dbo.roles
+      WHERE is_active=1
+      ORDER BY CASE WHEN code=N'Admin' THEN 0 ELSE 1 END,name,code;
+    `);
+    return { items: result.recordset.map((row) => ({ id: Number(row.id), code: row.code, name: row.name, description: row.description })) };
+  });
+
+  app.put("/api/v1/admin/users/:id/role", async (request) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "User id");
+    const body = bodyObject(request.body);
+    const roleCode = requiredText(body.roleCode, 50, "Role");
+    const rowVersion = parseRowVersion(body.rowVersion);
+    return database.transaction(async (transaction) => {
+      const currentRequest = new sql.Request(transaction);
+      currentRequest.input("id", sql.BigInt, id);
+      const current = (await currentRequest.query<UserRoleRow>(`
+        SELECT app_user.id,app_user.name,app_user.email,role.code AS role,app_user.row_version
+        FROM dbo.users app_user WITH (UPDLOCK,HOLDLOCK)
+        INNER JOIN dbo.roles role ON role.id=app_user.role_id
+        WHERE app_user.id=@id AND app_user.is_active=1 AND app_user.deleted_at IS NULL;
+      `)).recordset[0];
+      if (!current) throw new ApiError(404, "user_not_found", "The active user account was not found.");
+
+      const roleRequest = new sql.Request(transaction);
+      roleRequest.input("role", sql.NVarChar(50), roleCode);
+      const nextRole = (await roleRequest.query<AccessRoleRow>(`
+        SELECT id,code,name,description FROM dbo.roles WITH (UPDLOCK,HOLDLOCK)
+        WHERE code=@role AND is_active=1;
+      `)).recordset[0];
+      if (!nextRole) throw new ApiError(422, "invalid_role", "Select an active application role.");
+      if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This user account changed. Refresh and try again.");
+      if (current.role === nextRole.code) return { id, role: current.role, rowVersion: current.row_version.toString("base64") };
+
+      if (current.role === "Admin" && nextRole.code !== "Admin") {
+        const adminCount = (await new sql.Request(transaction).query<{ count: number | string }>(`
+          SELECT COUNT_BIG(*) AS count
+          FROM dbo.users app_user WITH (UPDLOCK,HOLDLOCK)
+          INNER JOIN dbo.roles role ON role.id=app_user.role_id
+          WHERE role.code=N'Admin' AND app_user.is_active=1 AND app_user.deleted_at IS NULL;
+        `)).recordset[0]?.count ?? 0;
+        if (Number(adminCount) <= 1) throw new ApiError(409, "last_admin_required", "Assign another active Admin before changing the last Admin account.");
+      }
+
+      const update = new sql.Request(transaction);
+      update.input("id", sql.BigInt, id);
+      update.input("role_id", sql.BigInt, Number(nextRole.id));
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const saved = (await update.query<{ row_version: Buffer }>(`
+        UPDATE dbo.users SET role_id=@role_id,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.row_version
+        WHERE id=@id AND is_active=1 AND deleted_at IS NULL AND row_version=@row_version;
+      `)).recordset[0];
+      if (!saved) throw new ApiError(409, "concurrency_conflict", "This user account changed. Refresh and try again.");
+      await insertAudit(transaction, actor.id, "UserAccount", id, String(id), "Primary role changed",
+        { name: current.name, email: current.email, role: current.role },
+        { name: current.name, email: current.email, role: nextRole.code });
+      return { id, role: nextRole.code, rowVersion: saved.row_version.toString("base64") };
+    });
+  });
+
   app.get("/api/v1/admin/engineering-rates", async (request) => {
     await users.demandPermission(request, "master.read");
+    const actor = await users.required(request);
+    if (!canViewEngineeringRates(actor.role)) {
+      throw new ApiError(403, "engineering_rate_management_required", "Management-level access is required to view engineering rates.");
+    }
     const query = request.query as Record<string, unknown>;
     const page = clampedInteger(query.page, 1, 1, 1_000_000);
     const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
@@ -201,6 +301,39 @@ export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, dat
         effectiveFrom: dateOnly(row.effective_from), effectiveTo: dateOnly(row.effective_to),
         isActive: Boolean(row.is_active), createdByName: row.created_by_name, createdAt: row.created_at,
         rowVersion: row.row_version.toString("base64"),
+      })),
+      page,
+      pageSize,
+      total: Number(rows[0]?.total_count ?? 0),
+    };
+  });
+
+  app.get("/api/v1/estimates/engineering-rate-options", async (request) => {
+    await users.demandPermission(request, "estimate.write");
+    const query = request.query as Record<string, unknown>;
+    const page = clampedInteger(query.page, 1, 1, 1_000_000);
+    const pageSize = clampedInteger(query.pageSize, 100, 1, 100);
+    const result = await database.query<EngineeringRateOptionRow>(`
+      SELECT
+        rate.id, rate.level, rate.department,
+        rate.engineering_daily, rate.installation_daily,
+        rate.effective_from, rate.effective_to, rate.is_active,
+        COUNT_BIG(*) OVER() AS total_count
+      FROM dbo.engineering_rates rate
+      WHERE rate.is_active = 1
+      ORDER BY rate.department, rate.level, rate.effective_from DESC, rate.id DESC
+      OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
+    `, (sqlRequest) => {
+      sqlRequest.input("offset", sql.BigInt, (page - 1) * pageSize);
+      sqlRequest.input("page_size", sql.Int, pageSize);
+    });
+    const rows = result.recordset;
+    return {
+      items: rows.map((row) => ({
+        id: Number(row.id), level: row.level, department: row.department,
+        engineeringDaily: Number(row.engineering_daily), installationDaily: Number(row.installation_daily),
+        effectiveFrom: dateOnly(row.effective_from), effectiveTo: dateOnly(row.effective_to),
+        isActive: Boolean(row.is_active),
       })),
       page,
       pageSize,

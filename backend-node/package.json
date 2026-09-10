@@ -12,7 +12,8 @@
     "start": "node dist/src/server.js",
     "start:team-test": "pwsh -NoProfile -File scripts/Start-TeamTestNode.ps1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:sql-integration": "node --import tsx tests/estimate-original-integration.ts && node --import tsx tests/overhead-integration.ts && node --import tsx tests/project-document-carryover-integration.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.2",

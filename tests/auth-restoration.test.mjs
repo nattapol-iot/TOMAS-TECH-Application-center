@@ -32,6 +32,7 @@ const loginCopy = {
 
 function createHarness({
   mode,
+  configured = true,
   restoreAccount = async () => null,
   loadTmtIdSession = async () => ({ status: "signed-out" }),
   loadBootstrap = async () => bootstrap,
@@ -70,13 +71,13 @@ function createHarness({
     react,
     "react/jsx-runtime": jsxRuntime,
     "./auth-client": {
-      IS_ENTRA_CONFIGURED: mode === "entra",
+      IS_ENTRA_CONFIGURED: configured && mode === "entra",
       restoreAccount,
       signInWithMicrosoft: async () => {},
       signOutMicrosoft: async () => {},
     },
     "./api-client": {
-      IS_API_CONFIGURED: true,
+      IS_API_CONFIGURED: configured,
       apiRequest: async () => [],
       loadBootstrap,
     },
@@ -185,6 +186,16 @@ const assertLoading = (node) => {
   assert.equal(findNode(node, isLogin), undefined);
 };
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
 test("TMT ID keeps the loading screen mounted while redirecting a signed-out visitor", async () => {
   const harness = createHarness({ mode: "tmt-id" });
   try {
@@ -198,23 +209,41 @@ test("TMT ID keeps the loading screen mounted while redirecting a signed-out vis
   }
 });
 
+test("pending configured session restoration renders a status screen without flashing Login", () => {
+  const harness = createHarness({ mode: "entra", restoreAccount: () => new Promise(() => {}) });
+  try {
+    const initial = harness.render();
+    assert.equal(initial.type, "main");
+    assert.equal(initial.props.className, "session-loading");
+    assert.equal(initial.props.role, "status");
+    assert.equal(initial.props["aria-busy"], "true");
+    assert.equal(findNode(initial, isLogin), undefined);
+
+    harness.runMountEffects();
+    const whilePending = harness.render();
+    assert.equal(whilePending.props.className, "session-loading");
+    assert.equal(findNode(whilePending, isLogin), undefined);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("all sign-in modes wait for bootstrap before rendering the workspace", async (t) => {
   for (const mode of ["tmt-id", "team-test", "entra"]) {
     await t.test(mode, async () => {
-      let finishBootstrap;
-      const pendingBootstrap = new Promise((resolve) => { finishBootstrap = resolve; });
+      const bootstrapRequest = deferred();
       const harness = createHarness({
         mode,
         restoreAccount: async () => ({ username: "user@example.com" }),
         loadTmtIdSession: async () => ({ status: "signed-in", user: { id: "7" } }),
-        loadBootstrap: () => pendingBootstrap,
+        loadBootstrap: () => bootstrapRequest.promise,
       });
       try {
         assertLoading(harness.render());
         harness.runMountEffects();
         await new Promise((resolve) => setImmediate(resolve));
         assertLoading(harness.render());
-        finishBootstrap(bootstrap);
+        bootstrapRequest.resolve(bootstrap);
         await new Promise((resolve) => setImmediate(resolve));
         const restored = harness.render();
         assert.ok(findNode(restored, isWorkspace));
@@ -226,30 +255,59 @@ test("all sign-in modes wait for bootstrap before rendering the workspace", asyn
   }
 });
 
-test("missing Entra session shows Login only after restoration settles", async () => {
-  const harness = createHarness({ mode: "entra" });
+test("missing or failed restored sessions show Login after restoration settles", async (t) => {
+  for (const [name, restoreAccount] of [
+    ["missing", async () => null],
+    ["failed", async () => { throw new Error("restore failed"); }],
+  ]) {
+    await t.test(name, async () => {
+      const harness = createHarness({ mode: "entra", restoreAccount });
+      try {
+        assert.equal(harness.render().props.className, "session-loading");
+        harness.runMountEffects();
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.ok(findNode(harness.render(), isLogin));
+      } finally {
+        harness.cleanup();
+      }
+    });
+  }
+});
+
+test("bootstrap failure shows Login only after the failed request settles", async () => {
+  const bootstrapRequest = deferred();
+  const harness = createHarness({
+    mode: "entra",
+    restoreAccount: async () => ({ username: "user@example.com" }),
+    loadBootstrap: () => bootstrapRequest.promise,
+  });
   try {
-    assertLoading(harness.render());
+    harness.render();
     harness.runMountEffects();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.ok(findNode(harness.render(), isLogin));
+    assert.equal(harness.render().props.className, "session-loading");
+
+    bootstrapRequest.reject(new Error("bootstrap failed"));
+    await new Promise((resolve) => setImmediate(resolve));
+    const login = findNode(harness.render(), isLogin);
+    assert.ok(login);
+    assert.equal(login.props.error, "bootstrap failed");
   } finally {
     harness.cleanup();
   }
 });
 
-test("bootstrap failure shows Login only after the failed request settles", async () => {
+test("unconfigured authentication renders Login immediately without attempting restoration", () => {
+  let restoreCalls = 0;
   const harness = createHarness({
-    mode: "team-test",
-    loadBootstrap: async () => { throw new Error("bootstrap failed"); },
+    mode: "entra",
+    configured: false,
+    restoreAccount: async () => { restoreCalls += 1; return null; },
   });
   try {
-    assertLoading(harness.render());
+    assert.ok(findNode(harness.render(), isLogin));
     harness.runMountEffects();
-    await new Promise((resolve) => setImmediate(resolve));
-    const failed = harness.render();
-    assert.ok(findNode(failed, isLogin));
-    assert.equal(findNode(failed, (node) => node.props?.className === "session-loading"), undefined);
+    assert.equal(restoreCalls, 0);
   } finally {
     harness.cleanup();
   }

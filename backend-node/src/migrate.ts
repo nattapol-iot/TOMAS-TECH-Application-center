@@ -33,6 +33,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sql from "mssql";
 import type { AppConfig } from "./config.js";
+import {
+  validateAppliedMigrationIdentities,
+  validateMigrationFiles,
+  type AppliedMigration,
+} from "./migration-validation.js";
 
 // Default: /app/migrations (set in Dockerfile ENV; override via env var for dev)
 const DEFAULT_MIGRATIONS_DIR = process.env.MIGRATIONS_DIR
@@ -60,21 +65,6 @@ export async function runPendingMigrations(
 ): Promise<void> {
   const migrationsDir = DEFAULT_MIGRATIONS_DIR;
 
-  // Read which versions are already applied
-  let applied: Set<number>;
-  {
-    const pool = await new sql.ConnectionPool(connectionConfig(config.database)).connect();
-    try {
-      const result = await new sql.Request(pool).query<{ version: number }>(
-        "SELECT version FROM dbo.schema_versions ORDER BY version;"
-      );
-      applied = new Set(result.recordset.map((r) => r.version));
-    } finally {
-      await pool.close();
-    }
-  }
-
-  // Discover migration files
   let files: string[];
   try {
     files = (await readdir(migrationsDir))
@@ -84,6 +74,29 @@ export async function runPendingMigrations(
     log(`[migrate] Migrations directory not found: ${migrationsDir} — skipping auto-migration.`);
     return;
   }
+
+  const migrationFiles = await Promise.all(files.map(async (fileName) => ({
+    fileName,
+    sql: await readFile(join(migrationsDir, fileName), "utf8"),
+  })));
+  validateMigrationFiles(migrationFiles);
+
+  // Identity is checked before any version is skipped. This prevents a
+  // historically reused number from silently standing in for another schema.
+  let appliedRows: AppliedMigration[];
+  {
+    const pool = await new sql.ConnectionPool(connectionConfig(config.database)).connect();
+    try {
+      const result = await new sql.Request(pool).query<AppliedMigration>(
+        "SELECT version, name FROM dbo.schema_versions ORDER BY version;"
+      );
+      appliedRows = result.recordset;
+      validateAppliedMigrationIdentities(appliedRows);
+    } finally {
+      await pool.close();
+    }
+  }
+  const applied = new Set(appliedRows.map((row) => Number(row.version)));
 
   const pending = files.filter((f) => {
     const v = parseInt(f.slice(0, 3), 10);
@@ -100,7 +113,8 @@ export async function runPendingMigrations(
   for (const file of pending) {
     const version = parseInt(file.slice(0, 3), 10);
     const filePath = join(migrationsDir, file);
-    const sqlText = await readFile(filePath, "utf8");
+    const sqlText = migrationFiles.find((migration) => migration.fileName === file)?.sql
+      ?? await readFile(filePath, "utf8");
 
     // Split on bare GO lines (sqlcmd batch separator)
     const batches = sqlText

@@ -3,6 +3,7 @@ import sql from "mssql";
 import type { Request as SqlRequestType, Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
+import { canManageEngineeringRates } from "../engineering-rate-access.js";
 import { ApiError } from "../errors.js";
 import {
   bodyObject,
@@ -421,6 +422,9 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
   app.post("/api/v1/master/engineering-rates", async (request, reply) => {
     await users.demandPermission(request, "master.write");
     const actor = await users.required(request);
+    if (!canManageEngineeringRates(actor.role)) {
+      throw new ApiError(403, "engineering_rate_management_required", "Engineering Manager or Admin access is required to change engineering rates.");
+    }
     const body = bodyObject(request.body);
     const input = {
       level: requiredText(body.level, 100, "Engineering level"),
@@ -454,11 +458,19 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
       insert.input("effective_from", sql.Date, input.effectiveFrom); insert.input("effective_to", sql.Date, input.effectiveTo);
       insert.input("actor", sql.BigInt, actor.id);
       const row = (await insert.query<{ id: number | string; level: string; department: string; row_version: Buffer }>(`
+        DECLARE @created TABLE (
+          id bigint NOT NULL,
+          level nvarchar(100) NOT NULL,
+          department nvarchar(100) NOT NULL,
+          row_version binary(8) NOT NULL
+        );
         INSERT INTO dbo.engineering_rates (level,department,engineering_hourly,engineering_daily,installation_hourly,
           installation_daily,effective_from,effective_to,created_by)
         OUTPUT inserted.id,inserted.level,inserted.department,inserted.row_version
+          INTO @created (id,level,department,row_version)
         VALUES (@level,@department,@engineering_hourly,@engineering_daily,@installation_hourly,@installation_daily,
           @effective_from,@effective_to,@actor);
+        SELECT id,level,department,row_version FROM @created;
       `)).recordset[0]!;
       const id = Number(row.id);
       await insertAudit(transaction, actor.id, "EngineeringRate", id, String(id), "Created", null, input);

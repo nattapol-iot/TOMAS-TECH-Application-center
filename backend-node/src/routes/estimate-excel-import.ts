@@ -1,11 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import sql from "mssql";
 import { insertAudit } from "../audit.js";
-import type { Database } from "../db.js";
+import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
+import type { AppConfig } from "../config.js";
+import { deleteStoredFile, DOCUMENT_DOWNLOAD_RATE_LIMIT, DOCUMENT_UPLOAD_RATE_LIMIT, multipartText, readMultipartUpload, sendStoredFile, storageKey, uploadedFileName, writeStoredFile } from "../document-storage.js";
 import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, requiredText, optionalBodyText, positiveLong, parseRowVersion, parseDateOnly } from "../http.js";
+import { parseEstimateWorkbook } from "../estimate-workbook.js";
 
 const categories: Record<string, string> = { "01": "Hardware", "02": "Software", "03": "Electrical", "04": "Mechanical", "05": "Robot", "06": "Engineering", "07": "Outsource", "08": "Transportation", "09": "Accommodation", "10": "Other Cost" };
 function decimal(v: unknown, minimum: number, maximum: number, scale = 4): number {
@@ -47,18 +51,67 @@ export function parseExcelImport(body: Record<string, unknown>) {
     sourceRevision: optionalBodyText(body.sourceRevision, 50, "Source revision") ?? "" };
 }
 
-export function registerEstimateExcelImportRoutes(app: FastifyInstance, database: Database, users: CurrentUserService) {
+export function validateOriginalEstimateWorkbook(input: ReturnType<typeof parseExcelImport>, bytes: Uint8Array, uploadedName: string): void {
+  const workbook = parseEstimateWorkbook(bytes, uploadedName);
+  if (workbook.errors.length) throw new ApiError(400, "invalid_original_file", workbook.errors[0]!);
+  if (workbook.sourceRevision !== input.sourceRevision || (workbook.sourceDate && workbook.sourceDate !== input.sourceDate)
+    || Math.abs(workbook.sourceTotal - input.sourceTotal) > .011) {
+    throw new ApiError(400, "original_preview_mismatch", "The submitted preview does not match the uploaded workbook metadata.");
+  }
+  const comparable = (line: typeof input.lines[number] | ReturnType<typeof parseEstimateWorkbook>["lines"][number]) => ({
+    kind: line.kind, categoryCode: line.categoryCode, itemCode: line.itemCode, module: line.module,
+    quantity: line.quantity, unitCost: line.unitCost, description: line.description, unit: line.unit,
+    source: line.source, department: line.department ?? "Imported", costType: line.costType ?? "Engineering", brand: line.brand,
+    model: line.model, supplierName: line.supplierName, remark: line.remark,
+  });
+  if (JSON.stringify(input.lines.map(comparable)) !== JSON.stringify(workbook.lines.map(comparable))) {
+    throw new ApiError(400, "original_preview_mismatch", "The submitted import rows do not match the uploaded workbook.");
+  }
+}
+
+export function registerEstimateExcelImportRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, config?: AppConfig) {
+  const publicReceipt = (receipt: Record<string, unknown>) => {
+    const { sourceFile, ...rest } = receipt;
+    const file = sourceFile as { sizeBytes: number; sha256: string } | undefined;
+    return { ...rest, originalAvailable: Boolean(file), originalSizeBytes: file?.sizeBytes, originalSha256: file?.sha256 };
+  };
   app.get("/api/v1/estimates/:id/excel-imports", async request => {
     await users.demandPermission(request, "estimate.read");
     const id = positiveLong((request.params as { id: string }).id, "Estimate");
     const result = await database.query<{ after_json: string }>(`SELECT TOP(20) after_json FROM dbo.audit_log WHERE entity_type=N'Estimate' AND entity_id=@id AND action=N'Excel imported' ORDER BY id DESC;`, r => r.input("id", sql.BigInt, id));
-    return result.recordset.map(r => JSON.parse(r.after_json));
+    return result.recordset.map(r => publicReceipt(JSON.parse(r.after_json)));
   });
-  app.post("/api/v1/estimates/:id/excel-import", async (request, reply) => {
+  app.get("/api/v1/estimates/:id/excel-imports/:revision/:hash/content", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, async (request, reply) => {
+    await users.demandPermission(request, "estimate.read");
+    if (!config) throw new ApiError(503, "storage_unavailable", "Document storage is unavailable.");
+    const params = request.params as { id: string; revision: string; hash: string };
+    const id = positiveLong(params.id, "Estimate");
+    if (!/^\d{1,8}$/.test(params.revision) || !/^[a-f0-9]{64}$/.test(params.hash)) throw new ApiError(400, "invalid_reference", "Invalid original file reference.");
+    const result = await database.query<{ after_json: string }>(`SELECT TOP(1) a.after_json FROM dbo.audit_log a JOIN dbo.estimates e ON e.id=a.entity_id AND e.deleted_at IS NULL WHERE a.entity_type=N'Estimate' AND a.entity_id=@id AND a.action=N'Excel imported' AND JSON_VALUE(a.after_json,'$.sourceHash')=@hash AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=@revision ORDER BY a.id DESC;`, r => { r.input("id", sql.BigInt, id); r.input("hash", sql.NVarChar(64), params.hash); r.input("revision", sql.Int, Number(params.revision)); });
+    const receipt = result.recordset[0] ? JSON.parse(result.recordset[0].after_json) : null;
+    if (!receipt?.sourceFile) throw new ApiError(404, "original_not_stored", "This historical import has no stored original file.");
+    return sendStoredFile(request, reply, config.documentStorage, { ...receipt.sourceFile, fileName: receipt.sourceName, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  });
+  app.post("/api/v1/estimates/:id/excel-import", { config: { rateLimit: DOCUMENT_UPLOAD_RATE_LIMIT } }, async (request, reply) => {
     await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
     const id = positiveLong((request.params as { id: string }).id, "Estimate");
-    const body = bodyObject(request.body); const input = parseExcelImport(body); const version = parseRowVersion(body.estimateRowVersion);
-    const result = await database.transaction(async transaction => {
+    if (!config) throw new ApiError(503, "storage_unavailable", "Document storage is unavailable.");
+    const storage = config.documentStorage;
+    const upload = await readMultipartUpload(request, storage.maxFileSizeBytes);
+    let body: Record<string, unknown>;
+    try { body = bodyObject(JSON.parse(multipartText(upload.values, "payload", 1_048_576, true)!)); }
+    catch { throw new ApiError(400, "invalid_import_payload", "Invalid Excel import payload."); }
+    const input = parseExcelImport(body); const version = parseRowVersion(body.estimateRowVersion);
+    if (uploadedFileName(upload.file.filename) !== input.sourceName || !/\.xlsx$/i.test(input.sourceName)) throw new ApiError(400, "invalid_original_file", "The original workbook name must match the preview.");
+    validateOriginalEstimateWorkbook(input, await readFile(upload.file.filepath), uploadedFileName(upload.file.filename));
+    const preflight = (await database.query<{ owner_id: number; revision: number; status: string }>("SELECT owner_id,revision,status FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL;", r => r.input("id", sql.BigInt, id))).recordset[0];
+    if (!preflight) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
+    if (Number(preflight.owner_id) !== actor.id && !["Admin", "Engineering Manager"].includes(actor.role)) throw new ApiError(403, "import_forbidden", "Only the estimate owner or engineering manager can import a complete workbook.");
+    const writtenKey = storageKey(`estimates/${id}/R${preflight.revision}/originals`, ".xlsx");
+    const stored = await writeStoredFile(storage, writtenKey, upload.file.filepath);
+    const sourceFile = { storageKey: writtenKey, ...stored };
+    let result;
+    try { result = await database.transaction(async transaction => {
       const query = () => new sql.Request(transaction);
       const lock = query(); lock.input("id", sql.BigInt, id);
       const e = (await lock.query<{ estimate_no: string; owner_id: number; revision: number; status: string; row_version: Buffer; due_date: Date }>(`SELECT estimate_no,owner_id,revision,status,row_version,due_date FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
@@ -105,10 +158,14 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
       }
       const update = query(); update.input("id", sql.BigInt, id); update.input("actor", sql.BigInt, actor.id);
       await update.query(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),progress=CASE WHEN progress<10 THEN 10 ELSE progress END WHERE id=@id;`);
-      const after = { sourceName: input.sourceName, sourceHash: input.sourceHash, sourceRevision: input.sourceRevision, sourceDate: input.sourceDate, revision: e.revision, sourceTotal: input.sourceTotal, importedAt: new Date().toISOString(), hoursPerDay: input.hoursPerDay, created, references: input.lines.filter(l => l.kind === "reference") };
+      const after = { sourceName: input.sourceName, sourceHash: input.sourceHash, sourceRevision: input.sourceRevision, sourceDate: input.sourceDate, revision: e.revision, sourceTotal: input.sourceTotal, importedAt: new Date().toISOString(), hoursPerDay: input.hoursPerDay, sourceFile, created, references: input.lines.filter(l => l.kind === "reference") };
       await insertAudit(transaction, actor.id, "Estimate", id, e.estimate_no, "Excel imported", null, after);
       return { ...after, alreadyImported: false };
-    });
-    return reply.status(result.alreadyImported ? 200 : 201).send(result);
+    }); } catch (error) {
+      if (writtenKey && !(error instanceof DatabaseCommitOutcomeUnknownError)) await deleteStoredFile(storage, writtenKey);
+      throw error;
+    }
+    if (result.alreadyImported && writtenKey) await deleteStoredFile(storage, writtenKey);
+    return reply.status(result.alreadyImported ? 200 : 201).send(publicReceipt(result));
   });
 }

@@ -61,14 +61,14 @@ const MONTH_MAP: Record<string, number> = {
 function parseDate(raw: string): string {
   raw = raw.trim();
   // DD/MM/YYYY or DD-MM-YYYY
-  let m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  let m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (m) {
     const d = m[1]!.padStart(2, "0"), mo = m[2]!.padStart(2, "0");
     const y = beToCe(Number(m[3]!.length === 2 ? `20${m[3]}` : m[3]));
     return `${y}-${mo}-${d}`;
   }
   // D Mon YYYY or DD-Mon-YYYY (handles Thai full/short month names and English)
-  m = raw.match(/^(\d{1,2})[\s\-]([^\s\d\-\/]{2,20})[\s\-](\d{2,4})$/);
+  m = raw.match(/^(\d{1,2})[\s-]([^\s\d/-]{2,20})[\s-](\d{2,4})$/);
   if (m) {
     const d = m[1]!.padStart(2, "0");
     const monthKey = m[2]!.toLowerCase().replace(/\./g, "");
@@ -77,7 +77,7 @@ function parseDate(raw: string): string {
     return `${y}-${String(mo).padStart(2, "0")}-${d}`;
   }
   // YYYY-MM-DD (ISO)
-  m = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  m = raw.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (m) {
     const y = beToCe(Number(m[1]));
     return `${y}-${m[2]!.padStart(2,"0")}-${m[3]!.padStart(2,"0")}`;
@@ -100,13 +100,13 @@ function extractTaxId(text: string): string {
 
 function extractQuotationNumber(text: string): string {
   // Explicit label
-  const labeled = text.match(/(?:quotation\s*(?:no\.?|number:?|date:?)|ใบเสนอราคา(?:เลขที่)?|QT(?:NO)?|BT\s*NO|SQ\s*NO)[:\s#]+([A-Z0-9\-\/]+)/i);
+  const labeled = text.match(/(?:quotation\s*(?:no\.?|number:?|date:?)|ใบเสนอราคา(?:เลขที่)?|QT(?:NO)?|BT\s*NO|SQ\s*NO)[:\s#]+([A-Z0-9/-]+)/i);
   if (labeled) return labeled[1]!.trim();
   // Common prefixes
-  const prefixed = text.match(/\b(QT\d[\w\-]{4,}|SQ[\d\-]{4,}|BT\d{2}[-\d]{5,}|OTP\d{6,}|TMTS\d{2}-\d+|FA\d+[A-Z]+|QCA\d+|Q\d{6,}|INV\d+)/);
+  const prefixed = text.match(/\b(QT\d[\w-]{4,}|SQ[\d-]{4,}|BT\d{2}[-\d]{5,}|OTP\d{6,}|TMTS\d{2}-\d+|FA\d+[A-Z]+|QCA\d+|Q\d{6,}|INV\d+)/);
   if (prefixed) return prefixed[1]!;
   // Fallback: any token that looks like a document number near "No."
-  const generic = text.match(/(?:No\.|NO\.|เลขที่)[:\s]*([A-Z0-9\-\/]{5,20})/i);
+  const generic = text.match(/(?:No\.|NO\.|เลขที่)[:\s]*([A-Z0-9/-]{5,20})/i);
   return generic ? generic[1]!.trim() : "";
 }
 
@@ -137,7 +137,7 @@ function extractDate(text: string, keywords: string[]): string {
     if (m) { const d = parseDate(m[1]!.trim()); if (d) return d; }
   }
   // Fallback: first date-like string in text
-  const m = text.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/);
+  const m = text.match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/);
   return m ? parseDate(m[1]!) : "";
 }
 
@@ -212,10 +212,11 @@ function parseLineItems(textLines: string[], defaultCurrency: string): ParsedLin
   // Row patterns in order of specificity (most specific first)
 
   // MISUMI-style: line_no  CODE  qty  unit  unit_price  amount  (description on next line)
-  const misumiPat = /^\s*(\d+)\s{2,}([A-Z0-9\-]{5,40})\s{2,}(\d[\d,]*)\s{1,6}(\w{1,10})\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$/;
+  const misumiPat = /^\s*(\d+)\s{2,}([A-Z0-9-]{5,40})\s{2,}(\d[\d,]*)\s{1,6}(\w{1,10})\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$/;
 
   // Full: line_no  code  description  qty  unit  unit_price  amount
-  const fullPat = /^\s*(\d{1,4})\s{2,}([A-Z0-9\-\/\.]{2,40})\s{2,}(.{3,80}?)\s{2,}([\d,]+\.?\d*)\s{1,6}([A-Za-zชิ้นอันชุดEA\w\/]{1,15})\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$/i;
+  // eslint-disable-next-line no-misleading-character-class -- Thai combining marks intentionally enumerate supported unit text.
+  const fullPat = /^\s*(\d{1,4})\s{2,}([A-Z0-9/.-]{2,40})\s{2,}(.{3,80}?)\s{2,}([\d,]+\.?\d*)\s{1,6}([A-Za-zชิ้นอันชุดEA\w/]{1,15})\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$/i;
 
   // Simple Thai: line_no  description  qty  unit_price  amount
   const simplePat = /^\s*(\d{1,3})\s{2,}(.{5,80}?)\s{2,}(\d[\d,]*)\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$/;

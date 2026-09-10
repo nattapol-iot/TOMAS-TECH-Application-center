@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalizedText } from "../LocalizedText";
 import { useLanguage, useT } from "../i18n";
 import { ActivityKpiSummary } from "./ActivityKpiSummary";
+import { PerformancePulse } from "./PerformancePulse";
 import { performanceEvidenceText } from "./performance-evidence-copy";
 import { canSubmitPerformanceScores, performanceDate, performanceScoreText, weightedPerformanceScore } from "./performance-presentation";
 import { Badge, Icon, Modal, PageHeader, Progress, SearchInput, Select, Tabs, type IconName, type Tone } from "../ui";
@@ -456,6 +457,7 @@ function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evi
         <button className="btn primary" type="button" disabled={!canEdit} onClick={onEdit}><Icon name={canEdit ? "edit" : "lock"} />{review.status === "Not started" ? <LocalizedText text={"Start self review"} /> : canEdit ? <LocalizedText text={"Update self review"} /> : review.status === "Completed" ? <LocalizedText text={"Review completed"} /> : <LocalizedText text={"Submitted to manager"} />}</button>
       </section>
 
+      <PerformancePulse evidence={evidence} loading={evidenceLoading} error={evidenceError} onRetry={onRetry} onOpenSource={onOpenSource} />
       <ActivityKpiSummary activity={review.activity}/>
       <section className="performance-goal-grid">
         {areas.map((area, index) => (
@@ -493,7 +495,7 @@ function WorkEvidencePanel({ role, evidence, loading, error, onRetry, onOpenSour
   }
   if (!evidence) return null;
   return (
-    <section className="panel performance-work-evidence">
+    <section className="panel performance-work-evidence" id="performance-work-evidence">
       <div className="panel-head performance-evidence-head">
         <div><h2><LocalizedText text={"Work evidence"} /></h2><p><LocalizedText text={"Connected to assigned work from"} /> {performanceDate(evidence.periodStart, lang)}  <LocalizedText text={"to"} /> {performanceDate(evidence.periodEnd, lang)}</p></div>
         <Badge tone={confidenceTone} dot>{t(evidence.confidence === "HIGH" ? "High" : evidence.confidence === "MEDIUM" ? "Medium" : "Low")}  <LocalizedText text={"confidence"} /></Badge>

@@ -28,8 +28,8 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Build backend Docker image
-        run: docker build -t iot-team-center-api:ci-check backend/IoTTeamCenter.Api
+      - name: Build Node backend Docker image
+        run: docker build -f backend-node/Dockerfile -t iot-team-center-api:ci-check .
 
       - name: Build frontend Docker image
         # Placeholder build ARGs only -- proves the image builds and passes
@@ -47,7 +47,7 @@ jobs:
             --build-arg SITE_ORIGIN=https://ci-check.example.com
 
   sql-integration:
-    name: SQL Server integration test
+    name: Legacy .NET material SQL regression (not Node acceptance)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -101,3 +101,54 @@ jobs:
 
       - name: Run fresh-database material flow
         run: node --test --test-isolation=none tests/full-material-flow.integration.test.mjs
+
+  node-sql-integration:
+    name: Node XLSX, overhead and handover SQL acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IOT_RUN_SQL_INTEGRATION: "1"
+      IOT_SQL_TEST_SERVER: localhost
+      IOT_SQL_TEST_USER: sa
+      IOT_SQL_TEST_PASSWORD: "TOMAS_CI!Sql2026#Run"
+      SQLCMDPASSWORD: "TOMAS_CI!Sql2026#Run"
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: "TOMAS_CI!Sql2026#Run"
+        ports:
+          - 1433:1433
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+      - name: Install Node API dependencies
+        working-directory: backend-node
+        run: npm ci
+      - name: Install SQL Server command-line tools
+        shell: bash
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/packages-microsoft-prod.deb" \
+            https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+          sudo dpkg -i "$RUNNER_TEMP/packages-microsoft-prod.deb"
+          sudo apt-get update
+          sudo env ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+      - name: Require isolated SQL Server availability
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -Q "SELECT 1;"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Node SQL acceptance requires the CI SQL service; tests cannot skip." >&2
+          exit 1
+      - name: Run Node SQL acceptance without skips
+        working-directory: backend-node
+        run: npm run test:sql-integration

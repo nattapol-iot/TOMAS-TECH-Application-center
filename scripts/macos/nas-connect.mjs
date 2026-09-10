@@ -43,7 +43,7 @@ function inspectConfig(file){
   if(read.status!==0){console.log('NAS_SEARCH_UNREADABLE '+file);return;}
   const text=read.stdout;
   const targetMatch=needles.some(n=>text.includes(n));
-  const envFile=/(^|\/)\.env(?:[.\-][^/]*)?$|\.env\.(input|example)$|\.nsmbrc$/.test(file);
+  const envFile=/(^|\/)\.env(?:[.-][^/]*)?$|\.env\.(input|example)$|\.nsmbrc$/.test(file);
   const keys=[...text.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)].map(m=>m[1]);
   const storageKeys=keys.filter(k=>/NAS|SMB|CIFS|DOCUMENT.?STORAGE|STORAGE.?ROOT|MOUNT/i.test(k));
   if(targetMatch || (envFile && storageKeys.length)){const hit={file,targetMatch,storageKeys};hits.push(hit);console.log('NAS_SEARCH_HIT '+JSON.stringify(hit));}
@@ -58,7 +58,7 @@ function walk(root,depth){
   if(e.isSymbolicLink() || ignored.has(e.name))continue;
   const file=root+'/'+e.name;
   if(e.isDirectory())walk(file,depth+1);
-  else if(e.isFile() && (/^\.env(?:[.\-].*)?$|\.env\.(input|example)$|\.nsmbrc$|\.(ya?ml|toml|ini|conf|cfg|sh|mjs|cjs)$/.test(e.name)))inspectConfig(file);
+  else if(e.isFile() && (/^\.env(?:[.-].*)?$|\.env\.(input|example)$|\.nsmbrc$|\.(ya?ml|toml|ini|conf|cfg|sh|mjs|cjs)$/.test(e.name)))inspectConfig(file);
  }
 }
 // Avoid personal/cloud folders and unrelated workloads. Search app checkouts and host config.

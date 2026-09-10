@@ -8,9 +8,9 @@
   "scripts": {
     "prepare:ocr": "node scripts/prepare-ocr-assets.mjs",
     "predev": "npm run prepare:ocr",
-    "prebuild": "npm run prepare:ocr",
-    "prebuild:local": "npm run prepare:ocr",
-    "prebuild:vercel": "npm run prepare:ocr",
+    "prebuild": "node scripts/guard-running-frontend-build.mjs && npm run prepare:ocr",
+    "prebuild:local": "node scripts/guard-running-frontend-build.mjs && npm run prepare:ocr",
+    "prebuild:vercel": "node scripts/guard-running-frontend-build.mjs && npm run prepare:ocr",
     "dev": "vinext dev",
     "build": "node scripts/validate-production-env.mjs && vinext build",
     "build:local": "vinext build",

@@ -24,6 +24,10 @@ function mountForm(file, exportName, props) {
     "../ui": new Proxy({}, { get: (_, name) => name }),
     "../i18n": { useT: () => value => value },
     "../LocalizedText": { LocalizedText: "localized" },
+    "../../../backend-node/src/engineering-rate-access": {
+      canManageEngineeringRates: role => ["Admin", "Engineering Manager"].includes(role),
+      canViewEngineeringRates: role => ["Admin", "Engineering Manager", "Managing Director"].includes(role),
+    },
     "./customer-localized-names": {
       canonicalLocalizedName: (names, fallback = "") => names.nameEn.trim() || names.nameTh.trim() || names.nameJa.trim() || fallback.trim(),
       localizedNamesFromCard(candidates, fallback) {

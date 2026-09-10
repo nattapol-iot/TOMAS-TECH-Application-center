@@ -37,15 +37,23 @@ jobs:
         run: npm test
 
   backend-compile:
-    name: Backend compile check
+    name: Node API typecheck, unit tests and build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-node@v6
         with:
-          dotnet-version: 10.0.x
+          node-version: 24.x
 
-      - name: Build backend API
-        run: dotnet build backend/IoTTeamCenter.Api/IoTTeamCenter.Api.csproj -c Release
+      - name: Install Node API dependencies
+        working-directory: backend-node
+        run: npm ci
+
+      - name: Verify Node API
+        working-directory: backend-node
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
