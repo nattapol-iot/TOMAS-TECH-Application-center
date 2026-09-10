@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DEPLOY_DIR=/Users/tomastc/iot-team-center/src
-MOUNT_DIR=/Users/tomastc/iot-team-center/nas
+MOUNT_DIR=/private/tmp/iot-team-center-nas
 DOCUMENT_DIR="$MOUNT_DIR/IoT Team Center"
 COMPOSE=(-f docker-compose.dev.yml -f docker-compose.tls.yml)
 [[ -n "${NAS_USERNAME:-}" && -n "${NAS_PASSWORD:-}" ]] || { echo 'NAS secrets are not configured.' >&2; exit 1; }
@@ -28,7 +28,7 @@ vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$p
 if [[ "$vm_probe" != 'iot-team-center-nas-check' ]]; then
   echo 'Refreshing Colima host shares so the NAS mount becomes visible.'
   colima stop -p iot
-  colima start -p iot
+  colima start -p iot --mount /Users/tomastc:w --mount "$MOUNT_DIR:w" --save-config
   docker --context colima-iot compose "${COMPOSE[@]}" up -d
   vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
 fi
@@ -69,7 +69,7 @@ target_count="$(docker --context colima-iot run --rm -v "$DOCUMENT_DIR:/data:ro"
 
 node - "$DEPLOY_DIR/.env" <<'NODE'
 const fs=require('fs'); const file=process.argv[2]; let text=fs.readFileSync(file,'utf8');
-for(const [key,value] of [['DEV_DOCUMENT_STORAGE_MODE','Nas'],['DEV_DOCUMENT_STORAGE_PATH','/Users/tomastc/iot-team-center/nas/IoT Team Center'],['DEV_NAS_USERNAME',process.env.DEV_NAS_USERNAME]]){
+for(const [key,value] of [['DEV_DOCUMENT_STORAGE_MODE','Nas'],['DEV_DOCUMENT_STORAGE_PATH','/private/tmp/iot-team-center-nas/IoT Team Center'],['DEV_NAS_USERNAME',process.env.DEV_NAS_USERNAME]]){
  const line=key+'='+value; const re=new RegExp('^'+key+'=.*$','m'); text=re.test(text)?text.replace(re,line):text.replace(/\s*$/, '\n'+line+'\n');
 }
 fs.writeFileSync(file+'.tmp',text,{mode:0o600}); fs.renameSync(file+'.tmp',file);

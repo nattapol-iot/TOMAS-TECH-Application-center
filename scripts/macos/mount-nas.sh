@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-MOUNT_DIR=/Users/tomastc/iot-team-center/nas
+MOUNT_DIR=/private/tmp/iot-team-center-nas
 [[ -n "${DEV_NAS_USERNAME:-}" ]] || { echo 'DEV_NAS_USERNAME is missing.' >&2; exit 1; }
 if /sbin/mount | grep -Fq " on $MOUNT_DIR "; then exit 0; fi
 mkdir -p "$MOUNT_DIR"
