@@ -31,7 +31,9 @@ done
 [[ -n "$SOURCE" ]] || die "--source is required."
 [[ -f "$SOURCE/docker-compose.dev.yml" ]] || die "$SOURCE does not look like the repository root."
 [[ -f "$DEPLOY_DIR/.env" ]] || die "$DEPLOY_DIR/.env is missing; see docs/MACMINI_HANDOFF.md for the keys it must carry."
-docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context '$DOCKER_CONTEXT' does not exist; is the colima profile running?"
+docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context '$DOCKER_CONTEXT' does not exist."
+# A context can exist while its VM is down; compose would then hang on the dead socket for minutes.
+/usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 || die "Docker daemon behind '$DOCKER_CONTEXT' is not answering; on the Mac host run: colima start -p iot"
 
 DOCUMENT_MODE="$(grep -E '^DEV_DOCUMENT_STORAGE_MODE=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
 if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
