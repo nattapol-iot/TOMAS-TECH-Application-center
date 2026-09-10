@@ -27,7 +27,7 @@ printf 'iot-team-center-nas-check' > "$probe"
 vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
 if [[ "$vm_probe" != 'iot-team-center-nas-check' ]]; then
   echo 'Refreshing Colima host shares so the NAS mount becomes visible.'
-  colima stop -p iot
+  colima stop -p iot --force
   colima start -p iot --mount /Users/tomastc:w --mount "$MOUNT_DIR:w" --save-config
   docker --context colima-iot compose "${COMPOSE[@]}" up -d
   vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
