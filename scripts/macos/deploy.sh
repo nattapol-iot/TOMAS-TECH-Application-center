@@ -82,7 +82,8 @@ wait_for() {
   until curl -fsS --max-time 15 -o /dev/null "$url" 2>/dev/null; do
     if (( $(date +%s) >= deadline )); then
       compose ps
-      compose logs --tail=40
+      compose logs --tail=250 api
+      compose logs --tail=40 frontend caddy
       die "$label did not become healthy within ${HEALTH_TIMEOUT_SECONDS}s."
     fi
     sleep 5

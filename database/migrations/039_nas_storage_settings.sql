@@ -1,4 +1,8 @@
 SET XACT_ABORT ON;
+
+IF EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 39)
+    RETURN;
+
 BEGIN TRANSACTION;
 
 IF OBJECT_ID(N'dbo.nas_storage_settings', N'U') IS NULL
@@ -15,5 +19,8 @@ BEGIN
         row_version rowversion NOT NULL
     );
 END;
+
+INSERT dbo.schema_versions(version, name)
+VALUES (39, N'NAS storage connection draft settings');
 
 COMMIT TRANSACTION;
