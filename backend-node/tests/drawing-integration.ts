@@ -15,7 +15,7 @@ const name = `IoTTeamCenter_DrawingCI_${randomUUID().replaceAll("-", "")}`;
 assert.match(name,/^IoTTeamCenter_DrawingCI_[a-f0-9]{32}$/);
 const sqlArgs = ["-S","localhost","-E","-C","-I","-b"];
 function sqlFile(path:string) { execFileSync("sqlcmd", [...sqlArgs,"-d",name,"-i",path,"-v",`DatabaseName=${name}`],{cwd:repo,stdio:"inherit"}); }
-const config: AppConfig = {environment:"development",host:"127.0.0.1",port:0,allowedHosts:["localhost"],corsOrigins:["http://localhost:3000"],businessTimeZone:"Asia/Bangkok",auth:{mode:"Development"},database:{connectionString:`Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`,trustServerCertificate:true},documentStorage:{mode:"Local",rootPath:resolve(repo,"tmp",name),maxFileSizeBytes:10_000_000},email:{mode:"Disabled"}};
+const config: AppConfig = {environment:"development",host:"127.0.0.1",port:0,allowedHosts:["localhost"],corsOrigins:["http://localhost:3000"],businessTimeZone:"Asia/Bangkok",auth:{mode:"Development"},database:{connectionString:`Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`,trustServerCertificate:true},documentStorage:{mode:"Local",rootPath:resolve(repo,"tmp",name),maxFileSizeBytes:10_000_000},email:{mode:"Disabled"},pdfParserUrl:"http://pdf-parser:8000"};
 let application: Awaited<ReturnType<typeof buildApp>> | undefined;
 try {
   execFileSync("sqlcmd",[...sqlArgs,"-i","database/scripts/020_deploy_fresh_database.sql","-v",`DatabaseName=${name}`],{cwd:repo,stdio:"pipe"});

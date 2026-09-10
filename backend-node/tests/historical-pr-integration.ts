@@ -46,7 +46,7 @@ try {
     GRANT SELECT ON dbo.cost_items TO hpr_ci_app; GRANT SELECT,INSERT ON dbo.audit_log TO hpr_ci_app;`);
   const config: AppConfig = { environment: "development", host: "127.0.0.1", port: 0, allowedHosts: ["localhost"], corsOrigins: [], businessTimeZone: "Asia/Bangkok", auth: { mode: "Development" },
     database: { connectionString: `Server=localhost;Database=${name};Integrated Security=true`, trustServerCertificate: true, applicationRoleName: "hpr_ci_app", applicationRolePassword: password },
-    documentStorage: { mode: "Local", rootPath: resolve("tmp"), maxFileSizeBytes: 8000000 }, email: { mode: "Disabled" } };
+    documentStorage: { mode: "Local", rootPath: resolve("tmp"), maxFileSizeBytes: 8000000 }, email: { mode: "Disabled" }, pdfParserUrl: "http://pdf-parser:8000" };
   database = new Database(config.database); registerAuthentication(app, config); registerErrorHandler(app); registerHistoricalPrRoutes(app, database, new CurrentUserService(database));
   async function api(method: "POST" | "GET" | "PUT", url: string, payload?: object, expected = 200, actor = "admin") {
     const r = await app.inject({ method, url, headers: { "x-dev-user-id": actor }, ...(payload ? { payload } : {}) });

@@ -58,7 +58,7 @@ try {
     environment: "development", host: "127.0.0.1", port: 0, allowedHosts: ["localhost"],
     corsOrigins: ["http://localhost:3000"], businessTimeZone: "Asia/Bangkok", auth: { mode: "Development" },
     database: { connectionString: `Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`, trustServerCertificate: true, applicationRoleName: "handover_ci_role", applicationRolePassword: password },
-    documentStorage: { mode: "Local", rootPath: storageRoot, maxFileSizeBytes: 10_000_000 }, email: { mode: "Disabled" },
+    documentStorage: { mode: "Local", rootPath: storageRoot, maxFileSizeBytes: 10_000_000 }, email: { mode: "Disabled" }, pdfParserUrl: "http://pdf-parser:8000",
   };
   application = await buildApp(config);
   const { app, database } = application;
