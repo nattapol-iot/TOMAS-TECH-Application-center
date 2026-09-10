@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { AppConfig } from "../config.js";
 import { insertAudit } from "../audit.js";
-import type { Database } from "../db.js";
+import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
+import { createStoredDirectory, deleteStoredFile, removeEmptyStoredDirectory } from "../document-storage.js";
+import { transferProjectDocuments } from "../project-handover.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
@@ -99,7 +101,11 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       || input.targetDelivery < input.startDate || input.targetDelivery > shiftDate(input.startDate, "year", 10)) {
       throw new ApiError(400, "validation_failed", "PO, start and target delivery dates are outside the allowed project range.");
     }
-    const created = await database.transaction(async (transaction) => {
+    const writtenKeys: string[] = [];
+    let projectDirectory: string | undefined;
+    let created: { id: number; number: string; rowVersion: string; folderMetadataCreated: number; documentsTransferred: number };
+    try {
+    created = await database.transaction(async (transaction) => {
       const people = new sql.Request(transaction); people.input("manager_id", sql.BigInt, input.managerId); people.input("lead_id", sql.BigInt, input.leadEngineerId);
       const roles = (await people.query<{ manager_role: string | null; lead_role: string | null }>(`
         SELECT (SELECT r.code FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
@@ -145,6 +151,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           @inquiry_id,@estimate_id,@po_no,@po_date,@start_date,@target_delivery,0,@site,@remark,@folder_path,@actor,@actor);
       `)).recordset[0]!;
       const projectId = Number(row.id);
+      projectDirectory = `projects/${projectId}`;
       const members = new sql.Request(transaction);
       members.input("project_id", sql.BigInt, projectId); members.input("manager_id", sql.BigInt, input.managerId);
       members.input("lead_id", sql.BigInt, input.leadEngineerId); members.input("actor", sql.BigInt, actor.id);
@@ -153,12 +160,30 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         IF @lead_id<>@manager_id INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@lead_id,N'Lead Engineer',@actor);
       `);
       const folders = new sql.Request(transaction); folders.input("project_id", sql.BigInt, projectId); folders.input("actor", sql.BigInt, actor.id);
-      const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'',@actor)`).join(",\n");
+      const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
       await folders.query(`INSERT INTO dbo.project_folders(project_id,folder_code,name,storage_key,created_by) VALUES ${values};`);
+      for (const [code] of STANDARD_FOLDERS) await createStoredDirectory(config.documentStorage, `${projectDirectory}/${code}`);
+      const documentsTransferred = await transferProjectDocuments(transaction, config.documentStorage,
+        projectId, Number(estimate.inquiry_id), input.estimateId, actor.id, writtenKeys);
       await insertAudit(transaction, actor.id, "Project", projectId, number, "Created from approved estimate", estimate.estimate_no,
-        { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined });
-      return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length };
+        { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred });
+      return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred };
     });
+    } catch (error) {
+      if (error instanceof DatabaseCommitOutcomeUnknownError) {
+        request.log.fatal({ err: error.originalError, storageKeys: writtenKeys }, "Project handover commit outcome unknown; preserving files");
+      } else {
+        for (const key of writtenKeys) {
+          await deleteStoredFile(config.documentStorage, key).catch((cleanupError: unknown) => {
+            request.log.error({ err: cleanupError, storageKey: key }, "Could not remove rolled-back project handover file");
+          });
+        }
+        if (projectDirectory) await removeEmptyStoredDirectory(config.documentStorage, projectDirectory).catch((cleanupError: unknown) => {
+          request.log.error({ err: cleanupError, storageKey: projectDirectory }, "Could not remove empty rolled-back project folders");
+        });
+      }
+      throw error;
+    }
     return reply.status(201).header("Location", `/api/v1/projects/${created.id}`).send(created);
   });
 }

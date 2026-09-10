@@ -792,6 +792,13 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
 
 function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClose }: { project: ProjectSummary; canWrite: boolean; teamTestMode: boolean; notify: (message: string) => void; onClose: () => void }) {
   const localizeCopy = useStaticCopy();
+  const { lang } = useLanguage();
+  const sourceRemarkLabel = lang === "TH" ? "แหล่งที่มา / หมายเหตุ" : lang === "JP" ? "引継ぎ元・備考" : "Source / remark";
+  const registerCopy = lang === "TH"
+    ? "รวมเอกสารที่ส่งต่ออัตโนมัติจาก Inquiry และ Site Visit พร้อมหมวดและเลขเอกสารต้นทาง"
+    : lang === "JP"
+      ? "Inquiry・Site Visitから自動引継ぎされた文書を、分類・元文書番号とともに表示します"
+      : "Includes documents automatically carried from the Inquiry and Site Visit, with their category and source number";
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [folderCode, setFolderCode] = useState<string>(PROJECT_DOCUMENT_FOLDERS[0][0]);
   const [documentType, setDocumentType] = useState("");
@@ -898,13 +905,19 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
     {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{actionError}</span></div> : null}
     {loadError ? <LoadError message={loadError} retry={() => { void load(); }} /> : null}
 
-    <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : teamTestMode ? "Temporary local document register" : "NAS document register"} flush>
-      {documents.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"File"} /></th><th><LocalizedText text={"Folder"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Size"} /></th><th><LocalizedText text={"Remark"} /></th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Uploaded"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
+    <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : registerCopy} flush>
+      {documents.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"File"} /></th><th><LocalizedText text={"Folder"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Size"} /></th><th>{sourceRemarkLabel}</th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Uploaded"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
     </Panel>
   </Modal>;
 }
 
 function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCreated }: { bootstrap: BootstrapData; refreshBootstrap: () => Promise<void>; notify: (message: string) => void; onClose: () => void; onCreated: (number: string) => Promise<void> }) {
+  const { lang } = useLanguage();
+  const handoverCopy = lang === "TH"
+    ? "เมื่อสร้าง Project ระบบจะสร้างโฟลเดอร์มาตรฐานและจัดเอกสารจาก Inquiry กับ Site Visit ที่เชื่อมโยงเข้าโฟลเดอร์ให้อัตโนมัติ โดยยังเก็บไฟล์ต้นฉบับไว้"
+    : lang === "JP"
+      ? "プロジェクト作成時に標準フォルダーを作成し、関連するInquiry・Site Visit文書を自動分類します。元ファイルは保持されます。"
+      : "Creating the Project builds the standard folders and automatically categorizes documents from the linked Inquiry and Site Visit. Source files are retained.";
   const managers = bootstrap.team.filter((member) => ["Project Manager", "Engineering Manager", "Admin"].includes(member.role));
   const engineers = bootstrap.team.filter((member) => ["Engineer", "Engineering Manager", "Admin"].includes(member.role));
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
@@ -916,6 +929,7 @@ function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCr
   const submit = async () => { setBusy(true); setError(""); try { const input = { ...form }; if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null; const created = await createProject(input); await onCreated(created.number); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
   return <Modal title="Create production project" subtitle="ใช้ได้เฉพาะ Estimate สถานะ Approved" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !form.estimateId || !form.managerId || !form.leadEngineerId || !form.purchaseOrderNumber.trim() || !form.site.trim()} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
+    <div className="info-strip" role="note"><Icon name="folder" /><span>{handoverCopy}</span></div>
     <div className="form-grid two">
       <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select value={form.estimateId} onChange={(event) => setForm((current) => ({ ...current, estimateId: Number(event.target.value) }))}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName}</option>)}</select></label>
       <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label><small><LocalizedText text={"เอาเครื่องหมายออกเพื่อระบุ End user สำหรับ Project นี้เอง หรือเว้นว่างเมื่อยังไม่ทราบ / Uncheck to choose a company or leave unspecified."} /></small></div>

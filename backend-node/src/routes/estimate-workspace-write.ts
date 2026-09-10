@@ -257,9 +257,11 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
     const created = await database.transaction(async (transaction) => { const estimate = await lockEstimate(transaction, id, input.estimateVersion);
       await demandNewSection(transaction, id, estimate, actor, "06", input.ownerId); await validateOwnerSupplier(transaction, input.ownerId, input.supplierId);
       const rate = await resolveRate(transaction, input, today); const insert = new sql.Request(transaction); bindManhour(insert, id, estimate.revision, input, rate, today, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,provider,
-        supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by) OUTPUT inserted.id,inserted.row_version
-        VALUES(@estimate,@revision,@package,@activity,@department,@level,@cost_type,@provider,@supplier,@quotation,@price_date,@engineers,@man_days,@hours,@rate,@owner,@remark,@actor,@actor);`)).recordset[0]!;
+      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
+        INSERT INTO dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,provider,
+        supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by) OUTPUT inserted.id,inserted.row_version INTO @created
+        VALUES(@estimate,@revision,@package,@activity,@department,@level,@cost_type,@provider,@supplier,@quotation,@price_date,@engineers,@man_days,@hours,@rate,@owner,@remark,@actor,@actor);
+        SELECT id,row_version FROM @created;`)).recordset[0]!;
       const lineId = Number(row.id); const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await snapshot(transaction, "dbo.manhour_lines", manhourColumns, id, estimate.revision, lineId, row.row_version, false, "This man-hour line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "ManhourLine", lineId, estimate.estimate_no, "Created", null, after);
       return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") }; });
