@@ -8,22 +8,15 @@ COMPOSE=(-f docker-compose.dev.yml -f docker-compose.tls.yml)
 [[ -f "$DEPLOY_DIR/.env" ]] || { echo 'Deployment .env is missing.' >&2; exit 1; }
 cd "$DEPLOY_DIR"
 
-export NAS_PASSWORD
-/usr/bin/expect <<'EXPECT'
-log_user 0
-set timeout 15
-spawn /usr/bin/security add-generic-password -a $env(NAS_USERNAME) -s iot-team-center-nas -U
-expect {
-  -re {(?i)password.*:} { send -- "$env(NAS_PASSWORD)\r"; exp_continue }
-  eof
-}
-catch wait result
-exit [lindex $result 3]
-EXPECT
-stored_password="$(/usr/bin/security find-generic-password -a "$NAS_USERNAME" -s iot-team-center-nas -w)"
-[[ "$stored_password" == "$NAS_PASSWORD" ]] || { echo 'Keychain verification failed.' >&2; exit 1; }
-unset stored_password NAS_PASSWORD
+credential_file=/Users/tomastc/iot-team-center/.nas-password.b64
+umask 077
+printf '%s' "$NAS_PASSWORD" | base64 > "$credential_file.tmp"
+chmod 0600 "$credential_file.tmp"
+mv "$credential_file.tmp" "$credential_file"
+[[ "$(base64 -d < "$credential_file")" == "$NAS_PASSWORD" ]] || { echo 'Protected credential verification failed.' >&2; exit 1; }
+unset NAS_PASSWORD
 export DEV_NAS_USERNAME="$NAS_USERNAME"
+echo 'Protected NAS credential installed.'
 bash "$GITHUB_WORKSPACE/scripts/macos/mount-nas.sh"
 unset NAS_USERNAME
 mkdir -p "$DOCUMENT_DIR"

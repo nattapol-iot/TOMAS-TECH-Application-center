@@ -4,8 +4,11 @@ MOUNT_DIR=/Users/tomastc/iot-team-center/nas
 [[ -n "${DEV_NAS_USERNAME:-}" ]] || { echo 'DEV_NAS_USERNAME is missing.' >&2; exit 1; }
 if /sbin/mount | grep -Fq " on $MOUNT_DIR "; then exit 0; fi
 mkdir -p "$MOUNT_DIR"
-password="$(/usr/bin/security find-generic-password -a "$DEV_NAS_USERNAME" -s iot-team-center-nas -w)"
-[[ -n "$password" ]] || { echo 'NAS password is unavailable in Keychain.' >&2; exit 1; }
+CREDENTIAL_FILE=/Users/tomastc/iot-team-center/.nas-password.b64
+[[ -f "$CREDENTIAL_FILE" && ! -L "$CREDENTIAL_FILE" ]] || { echo 'Protected NAS credential file is missing.' >&2; exit 1; }
+[[ "$(stat -f '%Lp' "$CREDENTIAL_FILE")" == '600' ]] || { echo 'Protected NAS credential file has unsafe permissions.' >&2; exit 1; }
+password="$(base64 -d < "$CREDENTIAL_FILE")"
+[[ -n "$password" ]] || { echo 'NAS password is unavailable.' >&2; exit 1; }
 encoded_user="$(DEV_NAS_USERNAME="$DEV_NAS_USERNAME" node -e 'process.stdout.write(encodeURIComponent(process.env.DEV_NAS_USERNAME))')"
 export NAS_MOUNT_PASSWORD="$password"
 unset password
