@@ -4,6 +4,8 @@ MOUNT_DIR=/Users/tomastc/iot-team-center/nas
 [[ -n "${DEV_NAS_USERNAME:-}" ]] || { echo 'DEV_NAS_USERNAME is missing.' >&2; exit 1; }
 if /sbin/mount | grep -Fq " on $MOUNT_DIR "; then exit 0; fi
 mkdir -p "$MOUNT_DIR"
+/usr/bin/nc -G 8 -z 100.64.0.53 445 || { echo 'NAS SMB port is unreachable from the Mac host.' >&2; exit 1; }
+echo 'NAS SMB port is reachable from the Mac host.'
 CREDENTIAL_FILE=/Users/tomastc/iot-team-center/.nas-password.b64
 [[ -f "$CREDENTIAL_FILE" && ! -L "$CREDENTIAL_FILE" ]] || { echo 'Protected NAS credential file is missing.' >&2; exit 1; }
 [[ "$(stat -f '%Lp' "$CREDENTIAL_FILE")" == '600' ]] || { echo 'Protected NAS credential file has unsafe permissions.' >&2; exit 1; }
@@ -13,7 +15,7 @@ encoded_user="$(DEV_NAS_USERNAME="$DEV_NAS_USERNAME" node -e 'process.stdout.wri
 export NAS_MOUNT_PASSWORD="$password"
 unset password
 /usr/bin/expect <<EXPECT
-log_user 0
+log_user 1
 set timeout 30
 set attempts 0
 spawn /sbin/mount_smbfs "//$encoded_user@100.64.0.53/IoT%20Department" "$MOUNT_DIR"
