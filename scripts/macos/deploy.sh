@@ -56,20 +56,6 @@ cd "$DEPLOY_DIR"
 # PID and exits instead of starting, so clear it before every deploy.
 rm -rf .vinext
 
-log "Pre-pulling pdf-parser base image (90s timeout per attempt, 3 tries)"
-for attempt in 1 2 3; do
-  if timeout 90 docker --context "$DOCKER_CONTEXT" pull python:3.12-slim-bookworm; then
-    log "python:3.12-slim-bookworm cached"
-    break
-  fi
-  if [[ $attempt -lt 3 ]]; then
-    log "Pull attempt $attempt failed — retrying in 20s"
-    sleep 20
-  else
-    log "WARNING: could not pull python:3.12-slim-bookworm — build will use existing cache if present"
-  fi
-done
-
 log "Building images"
 compose build
 log "Starting containers"
