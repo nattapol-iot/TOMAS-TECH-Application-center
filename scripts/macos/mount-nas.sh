@@ -13,6 +13,9 @@ password="$(base64 -d < "$CREDENTIAL_FILE")"
 [[ -n "$password" ]] || { echo 'NAS password is unavailable.' >&2; exit 1; }
 encoded_user="$(DEV_NAS_USERNAME="$DEV_NAS_USERNAME" node -e 'process.stdout.write(encodeURIComponent(process.env.DEV_NAS_USERNAME))')"
 [[ "$password" != *$'\n'* && "$password" != *$'\r'* ]] || { echo 'NAS password contains an unsupported line break.' >&2; exit 1; }
+encrypted_password="$(/usr/bin/smbutil crypt "$password")"
+[[ "$encrypted_password" == '$$1'* ]] || { echo 'Could not protect the NAS password for nsmb.conf.' >&2; exit 1; }
+unset password
 preferences_dir=/Users/tomastc/Library/Preferences
 nsmb_conf="$preferences_dir/nsmb.conf"
 mkdir -p "$preferences_dir"
@@ -26,11 +29,11 @@ fi
 umask 077
 {
   printf '[100.64.0.53:%s]\n' "$DEV_NAS_USERNAME"
-  printf 'password=%s\n' "$password"
+  printf "password='%s'\n" "$encrypted_password"
 } > "$nsmb_conf.tmp"
 chmod 0600 "$nsmb_conf.tmp"
 mv "$nsmb_conf.tmp" "$nsmb_conf"
-unset password
+unset encrypted_password
 
 # -N prevents GUI/password prompts and reads the credentials from nsmb.conf.
 /usr/bin/perl -e 'alarm 30; exec @ARGV' /sbin/mount_smbfs -N "//$encoded_user@100.64.0.53/IoT%20Department" "$MOUNT_DIR"
