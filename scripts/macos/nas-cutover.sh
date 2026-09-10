@@ -36,6 +36,11 @@ fi
 rm "$probe"
 echo 'NAS mount write-read-delete probe passed.'
 
+rm -f \
+  "$DOCUMENT_DIR/.iot-team-center-nas-probe" \
+  "$DOCUMENT_DIR/._.iot-team-center-nas-probe" \
+  "$DOCUMENT_DIR/.DS_Store" \
+  "$DOCUMENT_DIR/._.DS_Store"
 target_entries="$(ls -A "$DOCUMENT_DIR")"
 [[ -z "$target_entries" ]] || { echo 'NAS target is not empty; refusing to overwrite it.' >&2; exit 1; }
 echo 'NAS target is empty.'
