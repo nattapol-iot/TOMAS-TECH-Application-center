@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { dirname, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
-import { booleanQuery, clampedInteger, dateOnly, optionalText } from "../http.js";
+import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalText, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
 type EngineeringRateRow = {
@@ -45,24 +46,120 @@ type AuditRow = {
   total_count: number | string;
 };
 
+type NasSettingsRow = {
+  server_name: string;
+  share_name: string;
+  destination_path: string;
+  username: string;
+  updated_at: Date | string;
+  updated_by_name: string;
+  row_version: Buffer;
+};
+
+function nasInput(value: unknown): { server: string; share: string; destinationPath: string; username: string } {
+  const body = bodyObject(value);
+  const server = requiredText(body.server, 255, "NAS server");
+  const share = requiredText(body.share, 255, "NAS share");
+  const destinationPath = requiredText(body.destinationPath, 1000, "Destination path")
+    .replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+  const username = requiredText(body.username, 255, "NAS username");
+  if (!/^[A-Za-z0-9.-]+$/.test(server)) throw new ApiError(400, "validation_failed", "NAS server must be an IP address or hostname.");
+  if (/[\\/\x00-\x1f]/.test(share)) throw new ApiError(400, "validation_failed", "NAS share cannot contain a slash or control character.");
+  if (!destinationPath || destinationPath.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new ApiError(400, "validation_failed", "Destination path must contain valid folder names.");
+  }
+  return { server, share, destinationPath, username };
+}
+
+async function tcpCheck(host: string, port: number, timeoutMs = 5000): Promise<number> {
+  const started = Date.now();
+  await new Promise<void>((resolvePromise, reject) => {
+    const socket = connect({ host, port });
+    const done = (error?: Error) => { socket.destroy(); error ? reject(error) : resolvePromise(); };
+    socket.setTimeout(timeoutMs, () => done(new Error("Connection timed out")));
+    socket.once("connect", () => done());
+    socket.once("error", done);
+  });
+  return Date.now() - started;
+}
+
+async function storageCheck(storage: AppConfig["documentStorage"]) {
+  const testPath = resolve(storage.rootPath, `_health-check-${randomUUID()}.tmp`);
+  const payload = `IoTTeamCenter storage check ${new Date().toISOString()}`;
+  const start = Date.now();
+  try {
+    await mkdir(dirname(testPath), { recursive: true });
+    await writeFile(testPath, payload, "utf8");
+    const read = await readFile(testPath, "utf8");
+    await unlink(testPath);
+    if (read !== payload) throw new Error("Read-back content mismatch");
+    return { ok: true, mode: storage.mode, rootPath: storage.rootPath, durationMs: Date.now() - start };
+  } catch (err) {
+    try { await unlink(testPath); } catch { /* ignore */ }
+    return { ok: false, mode: storage.mode, rootPath: storage.rootPath, durationMs: Date.now() - start, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
 export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
   // Storage health: write a temp file, read it back, delete it — proves end-to-end write access.
   app.get("/api/v1/admin/storage-check", async (request) => {
     await users.demandPermission(request, "master.read");
-    const storage = config.documentStorage;
-    const testPath = resolve(storage.rootPath, `_health-check-${randomUUID()}.tmp`);
-    const payload = `IoTTeamCenter storage check ${new Date().toISOString()}`;
-    const start = Date.now();
+    return storageCheck(config.documentStorage);
+  });
+
+  app.get("/api/v1/admin/nas-settings", async (request) => {
+    await users.demandPermission(request, "master.read");
+    const result = await database.query<NasSettingsRow>(`
+      SELECT setting.server_name, setting.share_name, setting.destination_path, setting.username,
+             setting.updated_at, updater.name AS updated_by_name, setting.row_version
+      FROM dbo.nas_storage_settings setting
+      INNER JOIN dbo.users updater ON updater.id=setting.updated_by
+      WHERE setting.id=1;
+    `);
+    const row = result.recordset[0];
+    return {
+      active: { mode: config.documentStorage.mode, rootPath: config.documentStorage.rootPath },
+      draft: row ? {
+        server: row.server_name, share: row.share_name, destinationPath: row.destination_path,
+        username: row.username, updatedAt: row.updated_at, updatedByName: row.updated_by_name,
+        rowVersion: row.row_version.toString("base64"),
+      } : null,
+    };
+  });
+
+  app.put("/api/v1/admin/nas-settings", async (request) => {
+    await users.demandPermission(request, "master.write");
+    const actor = await users.required(request);
+    const input = nasInput(request.body);
+    const result = await database.query<NasSettingsRow>(`
+      MERGE dbo.nas_storage_settings WITH (HOLDLOCK) AS target
+      USING (SELECT CAST(1 AS tinyint) AS id) AS source ON target.id=source.id
+      WHEN MATCHED THEN UPDATE SET server_name=@server,share_name=@share,destination_path=@path,
+        username=@username,updated_by=@actor,updated_at=SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN INSERT(id,server_name,share_name,destination_path,username,updated_by)
+        VALUES(1,@server,@share,@path,@username,@actor)
+      OUTPUT inserted.server_name,inserted.share_name,inserted.destination_path,inserted.username,
+        inserted.updated_at,CAST(@actor_name AS nvarchar(300)) updated_by_name,inserted.row_version;
+    `, (bind) => bind.input("server", sql.NVarChar(255), input.server)
+      .input("share", sql.NVarChar(255), input.share)
+      .input("path", sql.NVarChar(1000), input.destinationPath)
+      .input("username", sql.NVarChar(255), input.username)
+      .input("actor", sql.BigInt, actor.id)
+      .input("actor_name", sql.NVarChar(300), actor.name));
+    const row = result.recordset[0]!;
+    return { server: row.server_name, share: row.share_name, destinationPath: row.destination_path,
+      username: row.username, updatedAt: row.updated_at, updatedByName: row.updated_by_name,
+      rowVersion: row.row_version.toString("base64") };
+  });
+
+  app.post("/api/v1/admin/nas-settings/test", async (request) => {
+    await users.demandPermission(request, "master.read");
+    const input = nasInput(request.body);
     try {
-      await mkdir(dirname(testPath), { recursive: true });
-      await writeFile(testPath, payload, "utf8");
-      const read = await readFile(testPath, "utf8");
-      await unlink(testPath);
-      if (read !== payload) throw new Error("Read-back content mismatch");
-      return { ok: true, mode: storage.mode, rootPath: storage.rootPath, durationMs: Date.now() - start };
-    } catch (err) {
-      try { await unlink(testPath); } catch { /* ignore */ }
-      return { ok: false, mode: storage.mode, rootPath: storage.rootPath, durationMs: Date.now() - start, error: String(err instanceof Error ? err.message : err) };
+      const durationMs = await tcpCheck(input.server, 445);
+      return { ok: true, durationMs, uncPath: `\\\\${input.server}\\${input.share}\\${input.destinationPath.replaceAll("/", "\\")}` };
+    } catch (error) {
+      return { ok: false, durationMs: 5000, error: String(error instanceof Error ? error.message : error) };
     }
   });
   app.get("/api/v1/admin/engineering-rates", async (request) => {

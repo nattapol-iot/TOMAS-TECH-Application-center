@@ -4,7 +4,7 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { apiRequest, checkAdminStorage, type BootstrapData, type PagedResult, type ProjectSummary, type StorageCheckResult } from "../api-client";
+import { apiRequest, checkAdminStorage, loadNasSettings, saveNasSettings, testNasConnection, type BootstrapData, type NasConnectionTestResult, type NasSettingsInput, type NasSettingsResult, type PagedResult, type ProjectSummary, type StorageCheckResult } from "../api-client";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
 import { canonicalLocalizedName, contactNameLines, localizedNameLines, localizedNamesFromCard, type ContactTitles, type LocalizedNames } from "./customer-localized-names";
@@ -691,10 +691,26 @@ export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
   </>;
 }
 
-function StorageCheckPanel() {
+const EMPTY_NAS_SETTINGS: NasSettingsInput = { server: "", share: "", destinationPath: "", username: "" };
+
+function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (message: string) => void }) {
   const [result, setResult] = useState<StorageCheckResult | null>(null);
+  const [settings, setSettings] = useState<NasSettingsResult | null>(null);
+  const [form, setForm] = useState<NasSettingsInput>(EMPTY_NAS_SETTINGS);
+  const [connection, setConnection] = useState<NasConnectionTestResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const uncPreview = form.server && form.share
+    ? `\\\\${form.server}\\${form.share}${form.destinationPath ? `\\${form.destinationPath.replaceAll("/", "\\")}` : ""}`
+    : "";
+
+  useEffect(() => {
+    void loadNasSettings().then((value) => {
+      setSettings(value);
+      if (value.draft) setForm({ server: value.draft.server, share: value.draft.share, destinationPath: value.draft.destinationPath, username: value.draft.username });
+    }).catch((error) => setErr(String(error instanceof Error ? error.message : error)));
+  }, []);
 
   const run = async () => {
     setBusy(true); setErr(""); setResult(null);
@@ -703,11 +719,46 @@ function StorageCheckPanel() {
     finally { setBusy(false); }
   };
 
+  const set = (key: keyof NasSettingsInput, value: string) => { setForm((current) => ({ ...current, [key]: value })); setConnection(null); };
+  const test = async () => {
+    setBusy(true); setErr(""); setConnection(null);
+    try { setConnection(await testNasConnection(form)); }
+    catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    finally { setBusy(false); }
+  };
+  const save = async () => {
+    setSaving(true); setErr("");
+    try {
+      const draft = await saveNasSettings(form);
+      setSettings((current) => ({ active: current?.active ?? { mode: "Local", rootPath: "" }, draft }));
+      notify("บันทึกการตั้งค่า NAS แล้ว");
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    finally { setSaving(false); }
+  };
+
   return (
+    <>
+    <Panel title="NAS connection & destination" subtitle="กำหนดปลายทางไว้ที่จุดเดียว แล้วทดสอบ Server ก่อนนำไปใช้กับ Document Storage">
+      <div className="form-grid two">
+        <Field label="NAS Server / IP"><input value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} /></Field>
+        <Field label="Share name"><input value={form.share} placeholder="IoT Department" onChange={(event) => set("share", event.target.value)} /></Field>
+        <Field label="Destination path" span={2} hint="โฟลเดอร์ใต้ Share เช่น IoT Team Center/Projects"><input value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} /></Field>
+        <Field label="NAS username"><input value={form.username} autoComplete="username" onChange={(event) => set("username", event.target.value)} /></Field>
+        <Field label="Password"><input value="จัดการที่ Server Secret" disabled aria-label="NAS password is managed on the server" /></Field>
+      </div>
+      {uncPreview ? <div className="info-strip" style={{ marginTop: 14 }}><Icon name="folder" /><span><strong>ปลายทางที่ต้องการใช้</strong><br /><small style={{ wordBreak: "break-all" }}>{uncPreview}</small></span></div> : null}
+      <div className="row-actions" style={{ justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn ghost" type="button" disabled={busy || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void test(); }}><Icon name="refresh" />{busy ? "Testing…" : "Test server"}</button>
+        <button className="btn primary" type="button" disabled={!canWrite || saving || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void save(); }}><Icon name="check" />{saving ? "Saving…" : "Save settings"}</button>
+      </div>
+      {connection ? <div className={`callout ${connection.ok ? "info" : "error"}`} style={{ marginTop: 12 }}><Icon name={connection.ok ? "checkCircle" : "alertTriangle"} /><span>{connection.ok ? <>เชื่อมต่อ SMB Port 445 สำเร็จใน {connection.durationMs} ms<br /><small>{connection.uncPath}</small></> : connection.error}</span></div> : null}
+      {settings?.draft ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="clock" /><span><strong>บันทึกเป็น Draft แล้ว</strong><br /><small>บันทึกล่าสุดโดย {settings.draft.updatedByName} · {formatDateTime(settings.draft.updatedAt)} ค่านี้จะเป็น Active หลังฝั่ง Server Apply/Deploy สำเร็จ</small></span></div> : null}
+      <div className="info-strip" style={{ marginTop: 14 }}><Icon name="shield" />Password ไม่ถูกส่งกลับ Browser และยังคงจัดการด้วย Server Secret</div>
+    </Panel>
     <Panel
-      title="Document Storage (NAS)"
+      title="Active document storage"
       subtitle="ทดสอบ write-read-delete ไฟล์จริงบน storage path ที่ backend ใช้งานอยู่"
-      actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void run(); }}>{busy ? <><span className="spinner" /> Testing…</> : <><Icon name="refresh" /> Run test</>}</button>}
+      actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void run(); }}>{busy ? <><span className="spinner" /> Testing…</> : <><Icon name="refresh" /> Run storage test</>}</button>}
     >
       <div className="settings-list">
         {result ? (<>
@@ -718,19 +769,20 @@ function StorageCheckPanel() {
           </div>
           {result.error && <div className="callout error" style={{ marginTop: 8 }}><Icon name="alertTriangle" /><span>{result.error}</span></div>}
         </>) : (
-          <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>ยังไม่ได้ทดสอบ</strong><small>กด "Run test" เพื่อ write ไฟล์ทดสอบไปที่ NAS และ verify กลับ</small></span></div>
+          <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>ยังไม่ได้ทดสอบ</strong><small>กด Run storage test เพื่อเขียน อ่าน และลบไฟล์ทดสอบบน storage ที่ใช้งานจริง</small></span></div>
         )}
         {err && <div className="callout error"><Icon name="alertTriangle" /><span>{err}</span></div>}
       </div>
     </Panel>
+    </>
   );
 }
 
-export function ProductionSettings({ bootstrap, teamTestMode = false }: AdminAnalyticsProps) {
+export function ProductionSettings({ bootstrap, notify, teamTestMode = false }: AdminAnalyticsProps) {
   const uiText = useUiText();
   const endpoint = (() => { try { return new URL(API_BASE_URL).origin; } catch { return "Not configured"; } })();
   return <>
-    <PageHeader eyebrow="RUNTIME STATUS" title={uiText("Settings")} subtitle="ข้อมูลสถานะจริงแบบ read-only ไม่มีปุ่ม Save จำลอง" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
+    <PageHeader eyebrow="RUNTIME STATUS" title={uiText("Settings")} subtitle="ตรวจสถานะระบบและกำหนดปลายทางจัดเก็บเอกสารของ NAS" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
     <div className="grid-2">
       <Panel title="Signed-in identity" subtitle="Resolved by the API and SQL user registry"><div className="settings-list">
         <div><span className="setting-icon blue"><Icon name="user" /></span><span><strong>{bootstrap.user.name}</strong><small>{bootstrap.user.email}</small></span><Badge>{bootstrap.user.role}</Badge></div>
@@ -743,7 +795,7 @@ export function ProductionSettings({ bootstrap, teamTestMode = false }: AdminAna
         <div><span className="setting-icon violet"><Icon name="shield" /></span><span><strong><LocalizedText text={"Authentication"} /></strong><small>{teamTestMode ? "Temporary LAN Team Test session" : "Microsoft Entra ID access token"}</small></span><Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "UAT only" : "Entra"}</Badge></div>
       </div></Panel>
     </div>
-    <StorageCheckPanel />
+    <StorageCheckPanel canWrite={bootstrap.permissions.includes("master.write")} notify={notify} />
     <Panel title={`Permissions (${bootstrap.permissions.length})`} subtitle="สิทธิ์ RBAC ที่ API ส่งให้บัญชีปัจจุบัน"><div className="chip-select">{bootstrap.permissions.map((permission) => <Badge key={permission} tone="slate">{permission}</Badge>)}</div></Panel>
     <div className="callout info"><Icon name="settings" /><span><strong><LocalizedText text={"Configuration ownership"} /></strong><LocalizedText text={"ค่า connection string, Entra, CORS และ host ถูกจัดการที่ server environment เพื่อไม่ให้ browser แก้ไขความปลอดภัยของ Production ได้"} /></span></div>
   </>;

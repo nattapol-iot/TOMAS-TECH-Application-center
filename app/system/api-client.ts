@@ -3004,3 +3004,20 @@ export type StorageCheckResult = {
   error?: string;
 };
 export const checkAdminStorage = () => apiRequest<StorageCheckResult>("/api/v1/admin/storage-check");
+
+export type NasSettingsInput = { server: string; share: string; destinationPath: string; username: string };
+export type NasSettingsDraft = NasSettingsInput & {
+  updatedAt: string;
+  updatedByName: string;
+  rowVersion: string;
+};
+export type NasSettingsResult = {
+  active: { mode: "Local" | "Nas"; rootPath: string };
+  draft: NasSettingsDraft | null;
+};
+export type NasConnectionTestResult = { ok: boolean; durationMs: number; uncPath?: string; error?: string };
+export const loadNasSettings = () => apiRequest<NasSettingsResult>("/api/v1/admin/nas-settings");
+export const saveNasSettings = (input: NasSettingsInput) =>
+  apiRequest<NasSettingsDraft>("/api/v1/admin/nas-settings", { method: "PUT", body: JSON.stringify(input) });
+export const testNasConnection = (input: NasSettingsInput) =>
+  apiRequest<NasConnectionTestResult>("/api/v1/admin/nas-settings/test", { method: "POST", body: JSON.stringify(input) });
