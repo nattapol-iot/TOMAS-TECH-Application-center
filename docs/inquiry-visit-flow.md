@@ -83,8 +83,32 @@ rejected before file copying rather than holding revision locks indefinitely.
   `backend-node/src/routes/estimate-workspace-write.ts`,
   `database/scripts/010_application_login.sql`, and handover copy in
   `InquiryScreens.tsx` / the Project modals in `CoreScreens.tsx`.
-- Validation is local and isolated. The shared running app and the separate
-  Sites cloud project have not been redeployed by this task.
+- Initial validation was local and isolated; the subsequent authorized LAN
+  deployment is recorded below. The separate Sites cloud project is unchanged.
+
+### Authorized commit and LAN deployment — 2026-09-10
+
+- Feature commit: `35318d5655e5ea77cba8b055ed7eb12af1e72b73`. Only handover,
+  its two discovered Flow blockers, focused UI copy, tests and documentation
+  were included; concurrent Admin role work was excluded.
+- Built from an isolated checkout of `35318d5`. The selective API stage preserved
+  the running baseline and replaced only document storage, Project creation,
+  handover and man-hour write modules. That exact stage passed the same **56
+  SQL/API checks** on a disposable database before installation.
+- Installed API: `20260910-043322-project-handover`, PID `28620`; all **376**
+  artifact hashes matched the tested stage. Readiness: schema **36**, document
+  storage available. The configured company database already had all four
+  required history-read permissions, verified with the runtime principal; no
+  schema or permission changes were applied to it.
+- Frontend PID `33452`; served `ProductionApp-BwFO698G.js` matched its build hash
+  and contained the handover UI. Page and bundle returned HTTP 200.
+- The saved LAN IP `192.168.1.125` was no longer assigned to the machine. Managed
+  settings, frontend build and the existing subnet-scoped firewall rules were
+  updated to the active Wi-Fi IP. Current URL: **http://192.168.1.171:3000**.
+- Previous API remains `20260907-102449`. Previous frontend build is retained at
+  `%LOCALAPPDATA%/IoTTeamCenter/TeamTest/frontend-backups/20260910-043322-project-handover`.
+  Earlier restart/copy attempts rolled back; the final installed artifacts and
+  both service health checks were verified after the successful switch.
 
 The customer intake form shows five main inputs, with optional details expandable.
 Inquiry and preparation tables are reduced to eight and six columns respectively.

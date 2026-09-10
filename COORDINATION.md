@@ -100,7 +100,7 @@ so we never merge-conflict.
 
 ## Active claims
 
-| 2026-09-10 | Codex Project Handover | User-authorized Inquiry/Site Visit document transfer on Project creation. New project-handover helper/tests, storage folder helpers, projects route, scoped Inquiry/Project copy; fixes discovered manhour INSERT trigger conflict and adds SELECT grants for immutable visit history. Preserves concurrent user-role changes. | released — 56 full-flow SQL/API checks, 105 backend unit tests, 9 focused UI regressions, backend build/typecheck and isolated frontend build/scoped typecheck/lint passed; no shared runtime restart — Codex, 2026-09-10 |
+| 2026-09-10 | Codex Project Handover | User-authorized Inquiry/Site Visit document transfer on Project creation; then explicit commit/deploy. Preserves concurrent Admin role source changes. | released — feature35318d5; exact API stage56 SQL/API checks; deployed20260910-043322-project-handover API28620/frontend33452, schema36/storage ready,376 artifact hashes and served UI verified. LAN updated from unassigned .125 to active192.168.1.171; subnet-scoped firewall refreshed. Remote runtime already had required read grants; no DB mutation. Prior releases retained. — Codex, 2026-09-10 |
 
 | 2026-09-07 12:09 | Codex Manual Integration | User-requested in-app employee manual. Owns additive `EmployeeManualScreen.tsx`/CSS, `ProductionApp.tsx` wiring, public handbook copy, handbook builder/query-language support, focused tests/docs. No API, database or business data writes. | implementation complete — typecheck, scoped lint, focused tests, production build and Chrome public-asset QA pass; shared frontend activation pending explicit user approval — Codex, 2026-09-07 12:20 |
 
