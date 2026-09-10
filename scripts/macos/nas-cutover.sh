@@ -24,15 +24,12 @@ mkdir -p "$DOCUMENT_DIR"
 probe="$DOCUMENT_DIR/.iot-team-center-nas-probe"
 printf 'iot-team-center-nas-check' > "$probe"
 [[ "$(cat "$probe")" == 'iot-team-center-nas-check' ]]
+# Never stop/start colima from inside a job: the runner kills every process the job spawned when
+# the job ends (RUNNER_TRACKING_ID cleanup), which takes the VM hostagent down with it. The NAS
+# mount is already saved in the iot profile config; a human starts the VM on the host.
+colima status -p iot >/dev/null 2>&1 || { echo "colima profile 'iot' is not running. On the Mac host run: colima start -p iot" >&2; exit 1; }
 vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
-if [[ "$vm_probe" != 'iot-team-center-nas-check' ]]; then
-  echo 'Refreshing Colima host shares so the NAS mount becomes visible.'
-  colima stop -p iot --force
-  colima start -p iot --mount /Users/tomastc:w --mount "$MOUNT_DIR:w" --save-config
-  docker --context colima-iot compose "${COMPOSE[@]}" up -d
-  vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
-fi
-[[ "$vm_probe" == 'iot-team-center-nas-check' ]] || { echo 'NAS probe is not visible inside Colima.' >&2; exit 1; }
+[[ "$vm_probe" == 'iot-team-center-nas-check' ]] || { echo "NAS probe is not visible inside Colima. The iot profile must mount $MOUNT_DIR; on the Mac host run: colima stop -p iot && colima start -p iot --mount /Users/tomastc:w --mount $MOUNT_DIR:w --save-config" >&2; exit 1; }
 rm "$probe"
 echo 'NAS mount write-read-delete probe passed.'
 
