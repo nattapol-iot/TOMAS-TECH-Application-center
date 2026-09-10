@@ -5,10 +5,27 @@
  *
  * Each SQL file is named NNN_name.sql where NNN is a zero-padded integer.
  * GO statements are used as batch separators (SQL Server convention).
- * All batches of a single migration share the same connection so that
- * explicit BEGIN TRANSACTION / COMMIT blocks span GO boundaries correctly.
+ * All batches of a single migration share the same connection (pool max=1)
+ * so explicit BEGIN TRANSACTION / COMMIT blocks span GO boundaries correctly.
  *
  * Safe to run on every startup: already-applied versions are skipped.
+ *
+ * ── MIGRATION AUTHORING RULES ───────────────────────────────────────────────
+ * 1. CREATE TRIGGER must be the FIRST statement in its batch (SQL Server rule).
+ *    Always put it in its own GO-separated batch:
+ *      IF OBJECT_ID('dbo.trg', 'TR') IS NOT NULL DROP TRIGGER dbo.trg;
+ *      GO
+ *      CREATE TRIGGER dbo.trg ...  ← first line of this batch
+ *
+ * 2. Record INSERT INTO schema_versions LAST (after all GO batches) so that
+ *    if any batch fails the runner retries all batches on next startup.
+ *
+ * 3. Wrap CREATE TABLE / ALTER TABLE in IF NOT EXISTS so batches are safe
+ *    to re-run if a prior attempt partially succeeded and was interrupted.
+ *
+ * 4. Test every migration against a local SQL Server before pushing.
+ *    A syntax error kills the API container on startup.
+ * ────────────────────────────────────────────────────────────────────────────
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -100,7 +117,10 @@ export async function runPendingMigrations(
       }
       log(`[migrate] ✓ Migration ${version} (${file}) applied successfully.`);
     } catch (err) {
-      log(`[migrate] ✗ Migration ${file} FAILED: ${String(err)}`);
+      // A syntax error or constraint violation in any batch stops the server.
+      // Fix the SQL file and redeploy — do NOT push untested migration files.
+      log(`[migrate] ✗ Migration ${file} FAILED (batch error). The API will not start until this is resolved.`);
+      log(`[migrate] Error: ${String(err)}`);
       await pool.close();
       throw err; // Stop; don't attempt subsequent migrations after a failure
     }
