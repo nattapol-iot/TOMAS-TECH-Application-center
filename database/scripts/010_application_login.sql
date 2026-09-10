@@ -334,18 +334,18 @@ GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.sales_intake_purposes TO [iot_team_a
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.sales_intake_skills TO [iot_team_app_role];
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.sales_intake_windows TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.sales_intake_attachments TO [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.sales_intake_reviews TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.sales_intake_reviews TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visits TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_assignments TO [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.site_visit_confirmations TO [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.site_visit_schedule_history TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.site_visit_confirmations TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.site_visit_schedule_history TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_checklist_responses TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_findings TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_attachments TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_reports TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_report_revisions TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_visit_action_items TO [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.site_visit_status_history TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.site_visit_status_history TO [iot_team_app_role];
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.site_visit_links TO [iot_team_app_role];
 GRANT EXECUTE ON OBJECT::dbo.assert_engineer_available TO [iot_team_app_role];
 

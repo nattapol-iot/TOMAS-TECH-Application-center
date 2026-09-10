@@ -1,7 +1,7 @@
 "use client";
 import { useT as useStaticCopy } from "../i18n";
 
-import { currentLocale, useT as useUiText } from "../i18n";
+import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ProductionSalesIntake } from "./SiteVisitScreens";
@@ -378,11 +378,17 @@ function InquiryEstimateTab({ detail, openEstimate }: { detail: InquiryDetail; o
 
 function InquiryAttachments({ detail, canWrite, onUpload, notify }: { detail: InquiryDetail; canWrite: boolean; onUpload: () => void; notify: (message: string) => void }) {
   const uiText = useUiText();
+  const { lang } = useLanguage();
+  const handoverCopy = lang === "TH"
+    ? "ไฟล์ที่แนบจะถูกจัดหมวดและส่งต่อไปยัง Project อัตโนมัติเมื่อสร้าง Project"
+    : lang === "JP"
+      ? "添付ファイルは分類され、プロジェクト作成時に自動的に引き継がれます"
+      : "Attachments are categorized and automatically carried into the Project when it is created";
   const download = async (attachment: InquiryAttachment) => {
     try { const result = await downloadInquiryAttachment(detail.id, attachment.id); const url = URL.createObjectURL(result.blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = result.fileName || attachment.fileName; anchor.click(); URL.revokeObjectURL(url); }
     catch (error) { notify(toError(error)); }
   };
-  return <Panel title={uiText("Attachments")} subtitle="Files are stored in the configured company document storage" actions={canWrite ? <button className="btn default sm" type="button" onClick={onUpload}><Icon name="upload" /><LocalizedText text={"Upload"} /></button> : undefined}>{canWrite ? <button className="attachment-drop" type="button" onClick={onUpload}><Icon name="upload" /><strong><LocalizedText text={"Upload an inquiry document"} /></strong><span><LocalizedText text={"Each file is tagged with a document category and linked to this inquiry"} /></span></button> : null}<div style={{ marginTop: 12 }}>{detail.attachments.length ? detail.attachments.map((file) => <div className="file-row" key={file.id}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{file.fileName}</strong><small>{file.category} <LocalizedText text={"·"} /> {formatFileSize(file.sizeBytes)} <LocalizedText text={"·"} /> {file.uploadedByName} <LocalizedText text={"·"} /> {formatDateTime(file.uploadedAt)}</small></div><Badge tone="slate">{file.category}</Badge><button className="row-action" type="button" onClick={() => { void download(file); }} aria-label={`Download ${file.fileName}`}><Icon name="download" /></button></div>) : <EmptyState icon="file" title="No attachment yet" message="Upload the customer RFQ, drawing or specification for this inquiry." />}</div></Panel>;
+  return <Panel title={uiText("Attachments")} subtitle={handoverCopy} actions={canWrite ? <button className="btn default sm" type="button" onClick={onUpload}><Icon name="upload" /><LocalizedText text={"Upload"} /></button> : undefined}>{canWrite ? <button className="attachment-drop" type="button" onClick={onUpload}><Icon name="upload" /><strong><LocalizedText text={"Upload an inquiry document"} /></strong><span><LocalizedText text={"Each file is tagged with a document category and linked to this inquiry"} /></span></button> : null}<div style={{ marginTop: 12 }}>{detail.attachments.length ? detail.attachments.map((file) => <div className="file-row" key={file.id}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{file.fileName}</strong><small>{file.category} <LocalizedText text={"·"} /> {formatFileSize(file.sizeBytes)} <LocalizedText text={"·"} /> {file.uploadedByName} <LocalizedText text={"·"} /> {formatDateTime(file.uploadedAt)}</small></div><Badge tone="slate">{file.category}</Badge><button className="row-action" type="button" onClick={() => { void download(file); }} aria-label={`Download ${file.fileName}`}><Icon name="download" /></button></div>) : <EmptyState icon="file" title="No attachment yet" message="Upload the customer RFQ, drawing or specification for this inquiry." />}</div></Panel>;
 }
 
 function InquiryActivityTab({ detail }: { detail: InquiryDetail }) {

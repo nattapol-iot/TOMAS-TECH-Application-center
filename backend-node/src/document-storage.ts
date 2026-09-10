@@ -1,6 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, open, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { MultipartFields, SavedMultipartFile } from "@fastify/multipart";
@@ -240,6 +240,25 @@ export async function deleteStoredFile(storage: AppConfig["documentStorage"], ke
     await rm(resolveStoragePath(storage, key), { force: true });
   } catch (error) {
     storageFailure(error, "An incomplete document could not be removed from configured storage.");
+  }
+}
+
+export async function createStoredDirectory(storage: AppConfig["documentStorage"], key: string): Promise<void> {
+  try { await mkdir(resolveStoragePath(storage, key), { recursive: true }); }
+  catch (error) { storageFailure(error, "The project folder could not be created in configured storage."); }
+}
+
+/** Prune only empty directories after rollback; never delete an untracked file or follow a link. */
+export async function removeEmptyStoredDirectory(storage: AppConfig["documentStorage"], key: string): Promise<void> {
+  const path = resolveStoragePath(storage, key);
+  try {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.isSymbolicLink()) await removeEmptyStoredDirectory(storage, `${key}/${entry.name}`);
+    }
+    await rmdir(path);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTEMPTY" && code !== "EEXIST") throw error;
   }
 }
 
