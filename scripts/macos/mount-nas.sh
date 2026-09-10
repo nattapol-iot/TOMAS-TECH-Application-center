@@ -15,9 +15,16 @@ unset password
 /usr/bin/expect <<EXPECT
 log_user 0
 set timeout 30
+set attempts 0
 spawn /sbin/mount_smbfs "//$encoded_user@100.64.0.53/IoT%20Department" "$MOUNT_DIR"
 expect {
-  -re {(?i)password.*:} { send -- "\$env(NAS_MOUNT_PASSWORD)\r"; exp_continue }
+  -re {(?i)password.*:} {
+    incr attempts
+    if {\$attempts > 1} { exit 35 }
+    send -- "\$env(NAS_MOUNT_PASSWORD)\r"
+    exp_continue -continue_timer
+  }
+  timeout { exit 124 }
   eof
 }
 catch wait result
