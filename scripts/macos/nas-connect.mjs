@@ -31,22 +31,27 @@ const ignored=new Set(['node_modules','.git','.Trash','Library','Pictures','Movi
 const needles=['100.64.0.53','IoT Department','IoT Team Center'];
 let examined=0,bytes=0,limited=false;
 const hits=[];
+const deadline=Date.now()+45000;
+let directories=0;
 function inspectConfig(file){
- if(examined>=12000 || bytes>64*1024*1024){limited=true;return;}
+ if(examined>=12000 || bytes>64*1024*1024 || Date.now()>deadline){limited=true;return;}
  try {
   const stat=fs.lstatSync(file);
   if(!stat.isFile() || stat.isSymbolicLink() || stat.size>512*1024)return;
   examined++;bytes+=stat.size;
-  const text=fs.readFileSync(file,'utf8');
+  const read=spawnSync('/usr/bin/head',['-c','524288',file],{encoding:'utf8',timeout:2000,maxBuffer:600000});
+  if(read.status!==0){console.log('NAS_SEARCH_UNREADABLE '+file);return;}
+  const text=read.stdout;
   const targetMatch=needles.some(n=>text.includes(n));
   const envFile=/(^|\/)\.env(?:[.\-][^/]*)?$|\.env\.(input|example)$|\.nsmbrc$/.test(file);
   const keys=[...text.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)].map(m=>m[1]);
   const storageKeys=keys.filter(k=>/NAS|SMB|CIFS|DOCUMENT.?STORAGE|STORAGE.?ROOT|MOUNT/i.test(k));
-  if(targetMatch || (envFile && storageKeys.length))hits.push({file,targetMatch,storageKeys});
+  if(targetMatch || (envFile && storageKeys.length)){const hit={file,targetMatch,storageKeys};hits.push(hit);console.log('NAS_SEARCH_HIT '+JSON.stringify(hit));}
+  else if(envFile && file.includes('/iot-team-center/'))console.log('NAS_SEARCH_ENV_WITHOUT_NAS '+file);
  }catch(e){if(e.code==='EACCES')console.log('NAS_SEARCH_UNREADABLE '+file);}
 }
 function walk(root,depth){
- if(depth>6 || limited)return;
+ if(depth>5 || limited || ++directories>1000 || Date.now()>deadline){limited=true;return;}
  let entries;try{entries=fs.readdirSync(root,{withFileTypes:true});}catch{return;}
  for(const e of entries){
   if(e.isSymbolicLink() || ignored.has(e.name))continue;
@@ -55,7 +60,13 @@ function walk(root,depth){
   else if(e.isFile() && (/^\.env(?:[.\-].*)?$|\.env\.(input|example)$|\.nsmbrc$|\.(ya?ml|toml|ini|conf|cfg|sh|mjs|cjs)$/.test(e.name)))inspectConfig(file);
  }
 }
-walk(home,0);
+// Avoid personal/cloud folders and unrelated workloads. Search app checkouts and host config.
+for(const entry of fs.readdirSync(home,{withFileTypes:true})){
+ if(entry.isFile() && /^\.env/.test(entry.name))inspectConfig(home+'/'+entry.name);
+ if(entry.isDirectory() && /iot.team|tomas.tech/i.test(entry.name))walk(home+'/'+entry.name,0);
+}
+walk(home+'/actions-runner/_work/IoT-Team-Center',0);
+walk(home+'/.config/iot-team-center',0);
 for(const file of [home+'/.nsmbrc','/etc/nsmb.conf','/etc/fstab',home+'/.colima/iot/colima.yaml'])inspectConfig(file);
 for(const root of ['/etc/iot-team-center',home+'/Library/LaunchAgents'])walk(root,0);
 console.log('NAS_SEARCH '+JSON.stringify({examined,bytes,limited,hits}));
