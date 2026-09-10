@@ -8,6 +8,8 @@ dist/
 .tmp/
 .git/
 backend/
-database/
+database/*
+!database/migrations/
+!database/migrations/**
 docs/
 *.tsbuildinfo
