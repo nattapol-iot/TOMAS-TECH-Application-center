@@ -28,6 +28,7 @@ services:
       # for localhost, so a hostname origin here has to be https (see docker-compose.tls.yml).
       Cors__AllowedOrigins__0: ${DEV_SITE_ORIGIN:-http://localhost:3000}
       AllowedHosts: ${DEV_API_ALLOWED_HOSTS:-localhost;127.0.0.1}
+      PDF_PARSER_URL: http://pdf-parser:8000
     volumes:
       - "${DEV_DOCUMENT_STORAGE_PATH:-api-dev-documents}:/app/App_Data/project-documents"
     ports:
@@ -42,6 +43,15 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+  pdf-parser:
+    build:
+      context: ./pdf-parser
+    ports:
+      - "18000:8000"   # expose to host for direct curl/browser testing
+    restart: unless-stopped
+    mem_limit: 1g      # Tesseract is memory-hungry at 300 DPI
+    logging: *dev-logging
 
   frontend:
     image: node:24-slim

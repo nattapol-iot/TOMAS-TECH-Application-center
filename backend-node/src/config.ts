@@ -50,6 +50,7 @@ export type AppConfig = {
     senderUser?: string;
     applicationBaseUrl?: string;
   };
+  pdfParserUrl: string;
 };
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
@@ -416,5 +417,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ...(emailSenderUser ? { senderUser: emailSenderUser } : {}),
       ...(emailApplicationBaseUrl ? { applicationBaseUrl: emailApplicationBaseUrl } : {}),
     },
+    pdfParserUrl: optional(env, "PDF_PARSER_URL") ?? "http://pdf-parser:8000",
   };
 }

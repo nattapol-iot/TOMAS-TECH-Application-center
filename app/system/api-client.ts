@@ -1189,6 +1189,30 @@ export const findOrCreateSupplier = (input: { name: string; taxId: string; categ
     method: "POST", body: JSON.stringify(input),
   });
 
+// PDF quotation parsing — proxied through the Node backend to the Python pdf-parser service
+export type ParsedQuotationResult = {
+  supplierName: string; supplierTaxId: string; quotationNumber: string;
+  receivedDate: string; validUntil: string;
+  currency: "THB" | "JPY" | "USD" | "EUR";
+  totalAmount: number;
+  lines: QuotationLineItem[];
+  rawText: string; requiresOcr: boolean;
+  confidence: Record<string, "high" | "low" | "none">;
+};
+
+export async function parsePdfViaBackend(file: File): Promise<ParsedQuotationResult> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  // authorizedFetch injects auth headers and throws ApiClientError on non-2xx.
+  // FormData body lets the browser set the correct multipart/form-data boundary automatically.
+  const response = await authorizedFetch(
+    "/api/v1/supplier-quotations/parse-pdf",
+    { method: "POST", body: form },
+    120_000, // OCR on large scanned PDFs can take up to 2 minutes
+  );
+  return response.json() as Promise<ParsedQuotationResult>;
+}
+
 export const createEstimate = (input: CreateEstimateInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
 

@@ -264,6 +264,53 @@ export function registerSupplierQuotationRoutes(
     }));
   });
 
+  // ── PDF parsing proxy → Python pdf-parser service ──────────────────────
+  // Accepts a PDF file upload and proxies it to the Python service for
+  // text + OCR extraction. Keeps the Python service off the public internet.
+
+  app.post("/api/v1/supplier-quotations/parse-pdf", async (request, reply) => {
+    await users.demandPermission(request, "estimate.read");
+
+    // readMultipartUpload saves the file to a temp path; read its bytes then clean up
+    const { readFile, unlink } = await import("node:fs/promises");
+    const upload = await readMultipartUpload(request, config.documentStorage.maxFileSizeBytes);
+    const { file } = upload;
+
+    if (file.mimetype !== "application/pdf" && !file.filename.toLowerCase().endsWith(".pdf")) {
+      await unlink(file.filepath).catch(() => undefined);
+      throw new ApiError(400, "validation_failed", "File must be a PDF.");
+    }
+
+    let pdfBytes: Buffer;
+    try {
+      pdfBytes = await readFile(file.filepath);
+    } finally {
+      await unlink(file.filepath).catch(() => undefined);
+    }
+
+    // Forward to the Python pdf-parser service (internal Docker network)
+    const parserUrl = config.pdfParserUrl.replace(/\/$/, "");
+    let response: Response;
+    try {
+      const form = new FormData();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      form.append("file", blob, file.filename || "quotation.pdf");
+      response = await fetch(`${parserUrl}/parse`, { method: "POST", body: form });
+    } catch (err) {
+      app.log.error({ err }, "PDF parser service unreachable");
+      throw new ApiError(503, "pdf_parser_unavailable", "PDF parser service is unavailable. Try again or enter details manually.");
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      app.log.error({ status: response.status, detail }, "PDF parser returned error");
+      throw new ApiError(502, "pdf_parser_error", "PDF parser failed. Enter details manually.");
+    }
+
+    const result = await response.json() as Record<string, unknown>;
+    return reply.status(200).send(result);
+  });
+
   // All quotation lines for Price Library — joined with supplier + quotation header
   app.get("/api/v1/supplier-quotation-lines", async (request) => {
     await users.demandPermission(request, "estimate.read");

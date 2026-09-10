@@ -19,6 +19,7 @@ import {
   listSupplierQuotations,
   listSupplierPriceHistory,
   loadEstimateCostWorkspace,
+  parsePdfViaBackend,
   saveQuotationLines,
   type BootstrapData,
   type EstimateCostItem,
@@ -26,10 +27,11 @@ import {
   type ProjectSummary,
   type QuotationLineForPriceLibrary,
   type QuotationLineItem,
+  type ParsedQuotationResult,
   type SupplierQuotationRecord,
   type SupplierPriceHistoryRecord,
 } from "../api-client";
-import { parsePdfQuotation, type ParsedLine } from "./supplier-quotation-pdf-parser";
+import type { ParsedLine } from "./supplier-quotation-pdf-parser";
 import {
   Badge,
   EmptyState,
@@ -1592,31 +1594,35 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     if (!file || !file.name.toLowerCase().endsWith(".pdf")) return;
     setParsing(true); setParseWarning(""); setError("");
     try {
-      const result = await parsePdfQuotation(file);
-      if (result.requiresOcr) {
-        setParseWarning("PDF นี้เป็นไฟล์สแกน ไม่มีข้อความฝังอยู่ กรุณากรอกข้อมูลเอง");
-      } else {
-        if (result.quotationNumber) setSupplierReference(result.quotationNumber);
-        if (result.receivedDate) setReceivedDate(result.receivedDate);
-        if (result.validUntil) setValidUntil(result.validUntil);
-        if (result.currency) setCurrency(result.currency);
-        if (result.totalAmount > 0) setAmount(String(result.totalAmount));
-        if (result.lines.length > 0) setLines(result.lines);
+      // Use Python-backed OCR service via Node backend proxy
+      const result: ParsedQuotationResult = await parsePdfViaBackend(file);
 
-        // Auto-match supplier by name from extracted text
-        if (result.supplierName) {
-          try {
-            const found = await findOrCreateSupplier({ name: result.supplierName, taxId: result.supplierTaxId });
-            setSupplierId(String(found.id));
-            if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
-          } catch { /* use current supplierId */ }
-        }
+      if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
+        setParseWarning("PDF เป็นไฟล์สแกนที่อ่านยาก OCR ได้บางส่วน — กรุณาตรวจสอบและกรอกข้อมูลเพิ่มเติม");
+      }
 
-        const missing: string[] = [];
-        if (!result.receivedDate) missing.push("วันที่");
-        if (!result.quotationNumber) missing.push("เลขที่ใบเสนอราคา");
-        if (result.lines.length === 0) missing.push("รายการสินค้า");
-        if (missing.length) setParseWarning(`อ่าน PDF ได้บางส่วน ตรวจสอบ: ${missing.join(", ")}`);
+      if (result.quotationNumber) setSupplierReference(result.quotationNumber);
+      if (result.receivedDate) setReceivedDate(result.receivedDate);
+      if (result.validUntil) setValidUntil(result.validUntil);
+      if (result.currency) setCurrency(result.currency);
+      if (result.totalAmount > 0) setAmount(String(result.totalAmount));
+      if (result.lines.length > 0) setLines(result.lines);
+
+      // Auto-match supplier by name from extracted text
+      if (result.supplierName) {
+        try {
+          const found = await findOrCreateSupplier({ name: result.supplierName, taxId: result.supplierTaxId });
+          setSupplierId(String(found.id));
+          if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
+        } catch { /* use current supplierId */ }
+      }
+
+      const missing: string[] = [];
+      if (!result.receivedDate) missing.push("วันที่");
+      if (!result.quotationNumber) missing.push("เลขที่ใบเสนอราคา");
+      if (result.lines.length === 0) missing.push("รายการสินค้า");
+      if (missing.length && !result.requiresOcr) {
+        setParseWarning(`อ่าน PDF ได้บางส่วน ตรวจสอบ: ${missing.join(", ")}`);
       }
     } catch (e) {
       setError(`Parse PDF ไม่สำเร็จ: ${String(e instanceof Error ? e.message : e)}`);
