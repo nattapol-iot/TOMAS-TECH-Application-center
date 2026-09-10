@@ -41,7 +41,7 @@ api_id="$(docker --context colima-iot compose "${COMPOSE[@]}" ps -q api)"
 old_volume="$(docker --context colima-iot inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/App_Data/project-documents"}}{{.Name}}{{end}}{{end}}')"
 [[ -n "$old_volume" ]] || { echo 'Existing document volume was not found.' >&2; exit 1; }
 
-target_entries="$(colima ssh -p iot -- find "$DOCUMENT_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
+target_entries="$(find "$DOCUMENT_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
 [[ -z "$target_entries" ]] || { echo 'NAS target is not empty; refusing to overwrite it.' >&2; exit 1; }
 docker --context colima-iot compose "${COMPOSE[@]}" stop api
 rollback_needed=1
