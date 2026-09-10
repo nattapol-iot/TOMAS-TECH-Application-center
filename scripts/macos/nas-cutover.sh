@@ -23,8 +23,9 @@ mkdir -p "$DOCUMENT_DIR"
 probe="$DOCUMENT_DIR/.iot-team-center-nas-probe"
 printf 'iot-team-center-nas-check' > "$probe"
 [[ "$(cat "$probe")" == 'iot-team-center-nas-check' ]]
+vm_probe="$(colima ssh -p iot -- cat "$probe")"
+[[ "$vm_probe" == 'iot-team-center-nas-check' ]] || { echo 'NAS probe is not visible inside Colima.' >&2; exit 1; }
 rm "$probe"
-colima ssh -p iot -- test -d "$DOCUMENT_DIR"
 echo 'NAS mount write-read-delete probe passed.'
 
 api_id="$(docker --context colima-iot compose "${COMPOSE[@]}" ps -q api)"
