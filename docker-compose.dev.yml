@@ -2,8 +2,11 @@ services:
   api:
     # backend-node replaced the ASP.NET Core API (see backend-node/README.md); the .NET project
     # stops at schema version 28 and lacks every route added by migrations 014-036.
+    # Build context is the repo root so the Dockerfile can COPY database/migrations/ into
+    # the image for the Node migration runner that applies pending migrations on startup.
     build:
-      context: ./backend-node
+      context: .
+      dockerfile: backend-node/Dockerfile
     environment:
       NODE_ENV: development
       Authentication__Mode: ${DEV_API_AUTH_MODE:-Development}
