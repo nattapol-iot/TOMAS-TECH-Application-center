@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 # Tesseract + Thai/Japanese/English language packs + poppler (for PDF image render fallback)
 RUN apt-get update && apt-get install -y --no-install-recommends \
