@@ -36,14 +36,20 @@ fi
 rm "$probe"
 echo 'NAS mount write-read-delete probe passed.'
 
-api_id="$(docker --context colima-iot compose "${COMPOSE[@]}" ps -q api)"
-[[ -n "$api_id" ]] || { echo 'API container is not running.' >&2; exit 1; }
-old_volume="$(docker --context colima-iot inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/App_Data/project-documents"}}{{.Name}}{{end}}{{end}}')"
-[[ -n "$old_volume" ]] || { echo 'Existing document volume was not found.' >&2; exit 1; }
+shopt -s nullglob dotglob
+target_entries=("$DOCUMENT_DIR"/*)
+shopt -u nullglob dotglob
+(( ${#target_entries[@]} == 0 )) || { echo 'NAS target is not empty; refusing to overwrite it.' >&2; exit 1; }
+echo 'NAS target is empty.'
 
-target_entries="$(find "$DOCUMENT_DIR" -mindepth 1 -maxdepth 1 -print -quit)"
-[[ -z "$target_entries" ]] || { echo 'NAS target is not empty; refusing to overwrite it.' >&2; exit 1; }
+api_id="$(/usr/bin/perl -e 'alarm 30; exec @ARGV' docker --context colima-iot compose "${COMPOSE[@]}" ps -q api)"
+[[ -n "$api_id" ]] || { echo 'API container is not running.' >&2; exit 1; }
+echo 'API container was found.'
+old_volume="$(/usr/bin/perl -e 'alarm 30; exec @ARGV' docker --context colima-iot inspect "$api_id" --format '{{range .Mounts}}{{if eq .Destination "/app/App_Data/project-documents"}}{{.Name}}{{end}}{{end}}')"
+[[ -n "$old_volume" ]] || { echo 'Existing document volume was not found.' >&2; exit 1; }
+echo 'Existing document volume was found.'
 docker --context colima-iot compose "${COMPOSE[@]}" stop api
+echo 'API stopped for document migration.'
 rollback_needed=1
 backup="$DEPLOY_DIR/.env.bak.nas-$(date +%Y%m%d-%H%M%S)"
 cp "$DEPLOY_DIR/.env" "$backup"
