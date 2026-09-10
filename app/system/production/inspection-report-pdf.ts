@@ -25,6 +25,28 @@ type Align = "l" | "r" | "ctr";
 
 function chk(v: boolean): string { return v ? "X" : ""; }
 
+// StandardFonts (Helvetica) only support WinAnsi encoding, which cannot render
+// arbitrary Unicode (e.g. full-width CJK punctuation like "（" U+FF08). NFKC
+// normalization folds most full-width/compatibility variants back to their
+// plain-ASCII form; anything still unencodable after that is replaced so
+// drawText() never throws.
+const encodableCache = new Map<string, boolean>();
+function isEncodable(font: PDFFont, ch: string): boolean {
+  const cached = encodableCache.get(ch);
+  if (cached !== undefined) return cached;
+  let ok = true;
+  try { font.widthOfTextAtSize(ch, 10); } catch { ok = false; }
+  encodableCache.set(ch, ok);
+  return ok;
+}
+
+function sanitizeForFont(font: PDFFont, str: string): string {
+  const normalized = str.normalize("NFKC");
+  let out = "";
+  for (const ch of normalized) out += isEncodable(font, ch) ? ch : "?";
+  return out;
+}
+
 class DocBuilder {
   doc!: PDFDocument;
   regular!: PDFFont;
@@ -56,6 +78,7 @@ class DocBuilder {
     if (!str) return;
     const font = opts.bold ? this.bold : this.regular;
     const size = opts.size;
+    str = sanitizeForFont(font, str);
     const width = font.widthOfTextAtSize(str, size);
     const boxW = pt(cxEmu);
     let x = pt(xEmu);
