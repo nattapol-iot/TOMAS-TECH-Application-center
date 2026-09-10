@@ -5,6 +5,7 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import {
   bodyObject,
   oneOf,
@@ -923,6 +924,7 @@ export function registerSiteVisitReportRoutes(
         OUTPUT inserted.id VALUES(@number,@inquiry,@customer,@project,@type,@owner,0,@today,@due,N'Draft',0,0,@actor,@actor);`)
         ).recordset[0]!.id,
       );
+      await assertEstimateTotals(transaction, estimateId);
       const update = new sql.Request(transaction);
       update.input("estimate", sql.BigInt, estimateId);
       update.input("inquiry", sql.BigInt, inquiryId);

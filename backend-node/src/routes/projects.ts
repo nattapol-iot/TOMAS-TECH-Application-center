@@ -7,6 +7,7 @@ import { createStoredDirectory, deleteStoredFile, removeEmptyStoredDirectory } f
 import { transferProjectDocuments } from "../project-handover.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, requiredInteger, requiredText } from "../http.js";
 import { isProjectElevated } from "../project-scope.js";
@@ -123,6 +124,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL;
       `)).recordset[0];
       if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
+      await assertEstimateTotals(transaction, input.estimateId);
       const inquiryLookup = new sql.Request(transaction);
       inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));
       const inquiry = (await inquiryLookup.query<{ end_user_customer_id: number | string | null }>(`

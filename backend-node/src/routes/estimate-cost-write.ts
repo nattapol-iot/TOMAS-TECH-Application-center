@@ -4,6 +4,7 @@ import type { Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -153,6 +154,7 @@ function bindCost(request: InstanceType<typeof sql.Request>, estimateId: number,
 }
 
 async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
+  await assertEstimateTotals(transaction, id);
   const request = new sql.Request(transaction); request.input("actor", sql.BigInt, actorId); request.input("id", sql.BigInt, id);
   const row = (await request.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),
     progress=CASE WHEN progress<10 THEN 10 ELSE progress END OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0];

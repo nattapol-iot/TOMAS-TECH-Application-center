@@ -3,6 +3,8 @@
 Status: Local integration complete; production release blocked by the gates below. Not deployed.
 Owner: Codex Integration Lead. User approved combining main with the feature worktree.
 
+This record describes integration commit `1c135def97b1258e86b73f76f9eb73a225b5ea31`. Subsequent COST-01 hardening and its new SQL evidence are tracked in [COST_TOTAL_GUARD.md](COST_TOTAL_GUARD.md); the findings and counts below are the original integration checkpoint.
+
 ## Frozen inputs
 
 | Input | Identity |
@@ -55,7 +57,7 @@ This job has been authored locally, not run on GitHub or against SQL Server in t
 
 Independent code review covered 81 candidate files and a final 10-file remediation delta. Final verdict: APPROVE local candidate integration; REQUEST CHANGES for Production. The architecture review covered 44 files and returned WATCH: the integrated structure is usable, but deployment topology, target schema and runtime acceptance still need evidence. These verdicts apply to the reviewed local changes, not to the running service.
 
-- **COST-01, open:** migration040 can overflow `decimal(19,4)` when accepted `internal_direct_hours * hourly_rate` or final totals exceed the supported range. Per-policy rate validation is now bounded, but it does not bound aggregate cost. Add a forward migration and coordinated validation for every mutation/approval/import/template path, with boundary tests. Do not rewrite an already-applied040 or hide overflow with a zero/NULL total.
+- **COST-01, locally resolved after this checkpoint:** migration042 and transaction-bound validation now reject unsupported aggregate totals. Private SQL boundary, upgrade and rollback checks passed; see [COST_TOTAL_GUARD.md](COST_TOTAL_GUARD.md). Node SQL-login API, staging and business cost acceptance remain open. Migration040 remains unchanged.
 - **CI-02 / DB-01, open:** run the newly authored Node SQL job without skips, including fresh/upgrade and restricted-role acceptance. The three current cases use an isolated SQL administrator for fixture/API setup; their success alone will not prove application least-privilege grants. Inspect the actual target's migration identities/checksums separately before any upgrade.
 - **UX-01 / QA-01–22, open:** exercise role-based browser flows and persisted results on isolated staging. Main's TMT ID, NAS and report/quotation features and the recovered Estimate/Pulse features remain in source, but this session has not certified live end-to-end behavior.
 - **REL-02 / REL-04 / OPS-02, open:** verify the intended production runtime and configuration, artifact promotion, recovery and rollback. The inherited Mac deployment still uses development compose behavior; this candidate does not make that topology production-ready.
@@ -73,11 +75,11 @@ Review fixes included mandatory original XLSX upload with server parsing/preview
 | Markdown navigation | 112 Markdown files inspected, 259 local links checked, 0 missing targets |
 | Merge / whitespace | No unresolved merge index entries; staged and unstaged diff checks pass |
 
-Local logs are stored in the workstation temporary directory as `iot-candidate-final-root.log`, `iot-candidate-final-backend.log` and `iot-candidate-build.log`. They are local diagnostics, not durable CI artifacts. The commit containing this record on `codex/production-candidate-20260910` freezes the candidate; retrieve its exact identity with `git log -1 --format=%H -- docs/planning/CANDIDATE_INTEGRATION.md`.
+Local logs are stored in the workstation temporary directory as `iot-candidate-final-root.log`, `iot-candidate-final-backend.log` and `iot-candidate-build.log`. They are local diagnostics, not durable CI artifacts. Integration was frozen at `1c135def97b1258e86b73f76f9eb73a225b5ea31`; the candidate branch also contains subsequent hardening recorded in the linked follow-up.
 
 ## Next execution order
 
-1. Fix COST-01 aggregate limits with forward SQL changes and boundary coverage.
+1. Complete COST-01's Node SQL-login API and business acceptance; the local aggregate fix and private SQL boundary checks are complete in the follow-up record.
 2. Run Node SQL CI and extend restricted-role/upgrade acceptance; reconcile the staging target's schema history.
 3. Use this one candidate branch for role-based UAT, production configuration and recovery rehearsal; record each result in [PRODUCTION_BACKLOG.md](PRODUCTION_BACKLOG.md).
 4. Make the release decision only after the P0 gates are closed. Keep development work on short-lived branches from this integrated baseline so older worktrees do not overwrite recovered features.

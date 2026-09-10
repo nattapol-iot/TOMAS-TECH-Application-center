@@ -7,6 +7,7 @@ import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, clampedInteger, dateOnly, firstQueryValue, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -198,6 +199,7 @@ async function transition(
     const ownerId = Number(current.owner_id);
     if (requireOwner && ownerId !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can submit this estimate.");
     if (forbidOwner && ownerId === actor.id) throw new ApiError(403, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
+    await assertEstimateTotals(transaction, id);
     const issues = await validationIssues(database, id, transaction);
     if (issues.length) throw new ApiError(422, "estimate_invalid", "The estimate has critical validation errors.", issues);
     const update = new sql.Request(transaction); update.input("status", sql.NVarChar(50), targetStatus);
@@ -286,6 +288,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         VALUES(@number,@inquiry_id,@customer_id,@project_name,@project_type,@owner_id,0,@today,@due_date,N'Draft',0,@contingency_rate,@actor,@actor);`)).recordset[0]!;
       const id = Number(row.id); const updateInquiryRequest = new sql.Request(transaction);
       await snapshotOverheadPolicy(transaction,id,0,actor.id,today);
+      await assertEstimateTotals(transaction, id);
       updateInquiryRequest.input("estimate_id", sql.BigInt, id); updateInquiryRequest.input("actor", sql.BigInt, actor.id); updateInquiryRequest.input("inquiry_id", sql.BigInt, inquiryId);
       const changed = await updateInquiryRequest.query(`UPDATE dbo.inquiries SET estimate_id=@estimate_id,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE id=@inquiry_id AND status=N'New' AND estimate_id IS NULL AND deleted_at IS NULL;`);
@@ -325,6 +328,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       if (!["approved", "locked"].includes(current.status.toLowerCase())) throw new ApiError(409, "invalid_transition", `Cannot create a revision while the estimate is '${current.status}'.`);
       if (Number(current.owner_id) !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can create a revision.");
+      await assertEstimateTotals(transaction, id);
       await ensureRevisionSnapshot(transaction, id, current.revision, reason, current.status, actor.id);
       const nextRevision = current.revision + 1;
       const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
@@ -335,6 +339,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       await snapshotOverheadPolicy(transaction,id,nextRevision,actor.id,todayIn(config.businessTimeZone));
       await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
+      await assertEstimateTotals(transaction, id);
       const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
       await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision created",
         { revision: current.revision, status: current.status, progress: Number(current.progress) }, { revision: nextRevision, status: "Revision Required", progress: 75, reason });
@@ -360,6 +365,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       if (current.status.toLowerCase() !== "engineering review") throw new ApiError(409, "invalid_transition", `Cannot request a revision while the estimate is '${current.status}'.`);
       if (Number(current.owner_id) === actor.id) throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
+      await assertEstimateTotals(transaction, id);
       await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id); const nextRevision = current.revision + 1;
       const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
       update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
@@ -369,6 +375,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       await snapshotOverheadPolicy(transaction,id,nextRevision,actor.id,todayIn(config.businessTimeZone));
       await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
+      await assertEstimateTotals(transaction, id);
       const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
       await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision requested",
         { revision: current.revision, status: current.status, progress: Number(current.progress) }, { revision: nextRevision, status: "Revision Required", progress: 75, reason });

@@ -6,6 +6,7 @@ import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, dateOnly, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { OVERHEAD_METHOD, overheadDecimal, snapshotOverheadPolicy, validateOverheadRate, type OverheadSnapshotRow } from "../overhead.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import type { CurrentUserService } from "../users.js";
 
 const EDITABLE = new Set(["Draft", "Engineering Input", "Revision Required"]);
@@ -86,6 +87,7 @@ export function registerOverheadPolicyRoutes(app: FastifyInstance, config: AppCo
       if (Number(estimate.owner_id)!==actor.id && actor.role!=="Engineering Manager" && actor.role!=="Admin") throw new ApiError(403,"estimate_owner_required","Only the estimate owner, an engineering manager or an administrator can apply overhead.");
       const snapshot = await snapshotOverheadPolicy(transaction,id,estimate.revision,actor.id,today,policyId);
       if (!snapshot) throw new ApiError(409,"overhead_policy_missing","No overhead policy is effective yet. Create a policy before applying overhead.");
+      await assertEstimateTotals(transaction, id);
       const totalsRequest = new sql.Request(transaction); totalsRequest.input("id",sql.BigInt,id); totalsRequest.input("actor",sql.BigInt,actor.id);
       const totals = (await totalsRequest.query<{ internal_direct_hours:number|string; overhead_total:number|string; row_version:Buffer }>(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id;
         SELECT internal_direct_hours,overhead_total FROM dbo.v_estimate_totals WHERE estimate_id=@id;`));

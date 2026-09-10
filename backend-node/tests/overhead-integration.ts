@@ -38,7 +38,7 @@ try {
   const users=Object.fromEntries((await database.query<{id:number;entra_object_id:string}>("SELECT id,entra_object_id FROM dbo.users WHERE entra_object_id LIKE N'overhead-%'")).recordset.map(row=>[row.entra_object_id,Number(row.id)]));
   const customerId=Number((await database.query<{id:number}>("SELECT id FROM dbo.customers WHERE code=N'OH-CI'")).recordset[0]!.id);
   const today=new Date(Date.now()+7*60*60*1000).toISOString().slice(0,10); const due=new Date(Date.now()+14*86_400_000).toISOString().slice(0,10);
-  async function api(actor:string,method:"GET"|"POST",url:string,payload?:object,expected=200){const response=await app.inject({method,url,headers:{"x-dev-user-id":`overhead-${actor}`},...(payload?{payload}:{})});assert.equal(response.statusCode,expected,response.body);return response.json();}
+  async function api(actor:string,method:"GET"|"POST"|"PUT",url:string,payload?:object,expected=200){const response=await app.inject({method,url,headers:{"x-dev-user-id":`overhead-${actor}`},...(payload?{payload}:{})});assert.equal(response.statusCode,expected,response.body);return response.json();}
   async function inquiry(suffix:string){
     const row=(await database.query<{id:number}>(`INSERT dbo.inquiries(inquiry_no,inquiry_date,customer_id,contact,project_name,project_type,sales_owner,estimate_owner_id,due_date,priority,status,progress,created_by,updated_by)
       OUTPUT inserted.id VALUES(N'INQ-OH-${suffix}',@today,@customer,N'TEST',N'Overhead ${suffix}',N'IoT',N'Overhead Engineer',@owner,@due,N'Normal',N'New',0,@admin,@admin);`,request=>request.input("today",today).input("customer",customerId).input("owner",users["overhead-engineer"]).input("due",due).input("admin",users["overhead-admin"]))).recordset[0]!;
@@ -56,6 +56,32 @@ try {
   assert.ok(workspace.validationIssues.some((issue:{code:string;severity:string})=>issue.code==="overhead_policy_missing"&&issue.severity==="Warning"));
   const policy=await api("admin","POST","/api/v1/overhead-policies",{monthlyBudget:60_000,normalDirectHours:400,effectiveFrom:today,reason:"TEST ONLY budget divided by normal direct hours"},201);
   assert.equal(policy.hourlyRate,150); assert.equal((await api("engineer","GET","/api/v1/overhead-policies")).activePolicyId,policy.id);
+
+  const hoursOverflow=await estimate(await inquiry("OVERFLOW-HOURS"));
+  const hoursFailure=await api("engineer","POST",`/api/v1/estimates/${hoursOverflow.id}/manhour-lines`,{
+    estimateRowVersion:hoursOverflow.rowVersion,package:"TEST",activity:"Overflow guard",department:"IoT",level:"Engineer",costType:"Engineering",provider:"Internal",
+    supplierId:null,quotationNumber:null,priceDate:null,engineers:1_000_000,manDays:1_000_000,hoursPerDay:8,dailyRate:0,
+    ownerId:users["overhead-engineer"],remark:"TEST ONLY must roll back when aggregate overhead exceeds decimal(19,4)"
+  },422);
+  assert.equal(hoursFailure.code,"estimate_total_out_of_range");
+  assert.equal(Number((await database.query<{count:number}>(`SELECT COUNT(*) count FROM dbo.manhour_lines WHERE estimate_id=${hoursOverflow.id} AND deleted_at IS NULL`)).recordset[0]!.count),1);
+  assert.equal((await database.query<{row_version:Buffer}>(`SELECT row_version FROM dbo.estimates WHERE id=${hoursOverflow.id}`)).recordset[0]!.row_version.toString("base64"),hoursOverflow.rowVersion);
+
+  let contingencyOverflow=await estimate(await inquiry("OVERFLOW-CONTINGENCY"));
+  const largeCost=await api("engineer","POST",`/api/v1/estimates/${contingencyOverflow.id}/cost-items`,{
+    estimateRowVersion:contingencyOverflow.rowVersion,categoryCode:"01",subcategory:"",module:"TEST",itemCode:"OVERFLOW-CONTINGENCY",
+    description:"Large but individually valid cost",brand:"",model:"",specification:null,supplierId:null,quantity:900_000,unit:"Lot",unitCost:1_000_000_000,
+    priceSource:"Manual Estimate",referenceNumber:null,referenceProject:null,priceDate:null,remark:"TEST ONLY aggregate contingency boundary",ownerId:users["overhead-engineer"]
+  },201);
+  contingencyOverflow={...contingencyOverflow,rowVersion:largeCost.estimateRowVersion};
+  const contingencyFailure=await api("engineer","PUT",`/api/v1/estimates/${contingencyOverflow.id}/contingency`,{
+    rowVersion:contingencyOverflow.rowVersion,contingencyRate:100
+  },422);
+  assert.equal(contingencyFailure.code,"estimate_total_out_of_range");
+  const unchangedContingency=(await database.query<{contingency_rate:number;row_version:Buffer}>(`SELECT contingency_rate,row_version FROM dbo.estimates WHERE id=${contingencyOverflow.id}`)).recordset[0]!;
+  assert.equal(Number(unchangedContingency.contingency_rate),5);
+  assert.equal(unchangedContingency.row_version.toString("base64"),contingencyOverflow.rowVersion);
+
   missing=await api("engineer","POST",`/api/v1/estimates/${missing.id}/submit`,{rowVersion:missing.rowVersion,comment:"TEST ONLY draft stays missing after policy creation"});
   assert.equal(missing.status,"Engineering Review");
   const frozenMissing=(await database.query<{snapshot_json:string;snapshot_sha256:string}>(`SELECT snapshot_json,snapshot_sha256 FROM dbo.estimate_submission_snapshots WHERE estimate_id=${missing.id} AND revision=0`)).recordset[0]!;

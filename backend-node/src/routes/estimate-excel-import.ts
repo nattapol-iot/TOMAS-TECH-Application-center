@@ -10,6 +10,7 @@ import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, requiredText, optionalBodyText, positiveLong, parseRowVersion, parseDateOnly } from "../http.js";
 import { parseEstimateWorkbook } from "../estimate-workbook.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 
 const categories: Record<string, string> = { "01": "Hardware", "02": "Software", "03": "Electrical", "04": "Mechanical", "05": "Robot", "06": "Engineering", "07": "Outsource", "08": "Transportation", "09": "Accommodation", "10": "Other Cost" };
 function decimal(v: unknown, minimum: number, maximum: number, scale = 4): number {
@@ -156,6 +157,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
         const a = query(); a.input("id", sql.BigInt, id); a.input("section", sql.NVarChar(100), section); a.input("owner", sql.BigInt, e.owner_id); a.input("due", sql.Date, e.due_date);
         await a.query(`IF NOT EXISTS(SELECT 1 FROM dbo.estimate_assignments WHERE estimate_id=@id AND section=@section) INSERT dbo.estimate_assignments(estimate_id,section,owner_id,due_date,status,progress) VALUES(@id,@section,@owner,@due,N'In Progress',0);`);
       }
+      await assertEstimateTotals(transaction, id);
       const update = query(); update.input("id", sql.BigInt, id); update.input("actor", sql.BigInt, actor.id);
       await update.query(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),progress=CASE WHEN progress<10 THEN 10 ELSE progress END WHERE id=@id;`);
       const after = { sourceName: input.sourceName, sourceHash: input.sourceHash, sourceRevision: input.sourceRevision, sourceDate: input.sourceDate, revision: e.revision, sourceTotal: input.sourceTotal, importedAt: new Date().toISOString(), hoursPerDay: input.hoursPerDay, sourceFile, created, references: input.lines.filter(l => l.kind === "reference") };

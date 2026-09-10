@@ -28,6 +28,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     if (error instanceof sql.RequestError) {
       const number = sqlErrorNumber(error);
+      if (number === 51420) {
+        void reply.status(422).send({ code: "estimate_total_out_of_range", message: "The estimate total exceeds the supported monetary range. Reduce quantities, rates, contingency or overhead before continuing.", details: null });
+        return;
+      }
       if (number === 51352 || number === 51351) {
         void reply.status(409).send({code:"activity_conflict",message:number===51352?"A reporting commitment overlaps this period.":"Activity history or a finalized score cannot be changed.",details:null});
         return;

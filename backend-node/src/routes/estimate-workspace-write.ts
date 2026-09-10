@@ -6,6 +6,7 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import type { EmailRecipient, EmailService, EstimateAssignmentEmail } from "../email.js";
 import { ApiError } from "../errors.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, dateOnly, oneOf, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -122,6 +123,7 @@ async function deliverAssignmentEmail(email: EmailService, message: EstimateAssi
 }
 
 async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
+  await assertEstimateTotals(transaction, id);
   const request = new sql.Request(transaction); request.input("id", sql.BigInt, id); request.input("actor", sql.BigInt, actorId);
   const row = (await request.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),
     progress=CASE WHEN progress<10 THEN 10 ELSE progress END OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0];
@@ -446,6 +448,7 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       const update = new sql.Request(transaction); update.input("rate", sql.Decimal(9, 4), rate); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("revision", sql.Int, estimate.revision); update.input("version", sql.VarBinary(8), rowVersion);
       const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET contingency_rate=@rate,updated_by=@actor,updated_at=SYSUTCDATETIME(),progress=CASE WHEN progress<10 THEN 10 ELSE progress END
         OUTPUT inserted.row_version WHERE id=@id AND revision=@revision AND row_version=@version;`)).recordset[0]; if (!row) throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and try again.");
+      await assertEstimateTotals(transaction, id);
       await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Contingency updated", { contingencyRate: previous }, { contingencyRate: rate });
       return { id, contingencyRate: rate, rowVersion: row.row_version.toString("base64") }; });
   });

@@ -30,7 +30,8 @@ VALUES
     (38, N'supplier_quotation_lines'),
     (39, N'NAS storage connection draft settings'),
     (40, N'Immutable overhead policies and estimate revision snapshots'),
-    (41, N'Admin-managed primary user roles with audited least-privilege writes');
+    (41, N'Admin-managed primary user roles with audited least-privilege writes'),
+    (42, N'Guard estimate aggregates within supported decimal precision');
 
 IF EXISTS (
     SELECT required.version
@@ -38,7 +39,7 @@ IF EXISTS (
     LEFT JOIN dbo.schema_versions installed ON installed.version = required.version
     WHERE installed.version IS NULL OR installed.name <> required.name
 )
-    THROW 51410, 'Required schema versions 025 through 041 are missing or have unexpected identities.', 1;
+    THROW 51410, 'Required schema versions 025 through 042 are missing or have unexpected identities.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
@@ -72,6 +73,7 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
          AND execute_as_principal_id = -2)
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
    OR OBJECT_ID(N'dbo.v_estimate_totals', N'V') IS NULL
+   OR OBJECT_ID(N'dbo.assert_estimate_totals', N'P') IS NULL
    OR OBJECT_ID(N'dbo.v_item_balances', N'V') IS NULL
    OR OBJECT_ID(N'dbo.overhead_policies', N'U') IS NULL
    OR OBJECT_ID(N'dbo.estimate_overhead_snapshots', N'U') IS NULL
@@ -256,6 +258,7 @@ VALUES
     (N'expense_lines', N'SELECT'), (N'expense_lines', N'INSERT'), (N'expense_lines', N'UPDATE'),
     (N'other_cost_lines', N'SELECT'), (N'other_cost_lines', N'INSERT'), (N'other_cost_lines', N'UPDATE'),
     (N'v_estimate_totals', N'SELECT'), (N'fn_estimate_validation', N'SELECT'),
+    (N'assert_estimate_totals', N'EXECUTE'),
     (N'employees', N'SELECT'), (N'employees', N'INSERT'), (N'employees', N'UPDATE'),
     (N'supplier_price_history', N'SELECT'),
     (N'supplier_quotations', N'SELECT'), (N'supplier_quotations', N'INSERT'),

@@ -6,6 +6,8 @@ Owner: Integration Lead; role assignments ด้านล่างเป็น�
 
 Candidate integration follow-up: [CANDIDATE_INTEGRATION.md](CANDIDATE_INTEGRATION.md) records completed local portions of REL-01, CI-01, DB-01, COST-01 and COST-02. Their staging, target-database and release acceptance criteria below remain open; local unit/build success does not close those criteria.
 
+COST-01 follow-up: [COST_TOTAL_GUARD.md](COST_TOTAL_GUARD.md) records migration042 and transactional aggregate validation, with actual private LocalDB boundary/upgrade/preflight checks passing. Aggregate-overflow implementation is complete locally; Node SQL-login API acceptance, staging and business cost sign-off remain open.
+
 ## เป้าหมายและกติกาปิดงาน
 
 รักษาฟีเจอร์เดิมทุกกลุ่มใน [ทะเบียน](FEATURE_REGISTER.md), ทำ source/API/schema/artifact ให้เป็น candidate เดียวกัน และเก็บหลักฐานก่อน Go-live ใช้ [audit ล่าสุด](../audits/production-readiness-2026-09-10.md) และ [flow plan เดิม](../audits/full-system-flow-audit-plan.md) เป็นขอบเขต

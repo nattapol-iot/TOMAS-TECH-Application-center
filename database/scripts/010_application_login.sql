@@ -93,10 +93,12 @@ REVOKE EXECUTE ON OBJECT::dbo.issue_document_number FROM [public];
 REVOKE EXECUTE ON OBJECT::dbo.answer_schedule_day_request FROM [public];
 REVOKE EXECUTE ON OBJECT::dbo.issue_knowledge_document_number FROM [public];
 REVOKE EXECUTE ON OBJECT::dbo.sync_employee_directory_user FROM [public];
+REVOKE EXECUTE ON OBJECT::dbo.assert_estimate_totals FROM [public];
 GRANT EXECUTE ON OBJECT::dbo.issue_document_number TO [iot_team_app_role];
 GRANT EXECUTE ON OBJECT::dbo.answer_schedule_day_request TO [iot_team_app_role];
 GRANT EXECUTE ON OBJECT::dbo.issue_knowledge_document_number TO [iot_team_app_role];
 GRANT EXECUTE ON OBJECT::dbo.sync_employee_directory_user TO [iot_team_app_role];
+GRANT EXECUTE ON OBJECT::dbo.assert_estimate_totals TO [iot_team_app_role];
 
 -- Reads are limited to objects used by the currently mapped production API.
 GRANT SELECT ON OBJECT::dbo.schema_versions TO [iot_team_app_role];

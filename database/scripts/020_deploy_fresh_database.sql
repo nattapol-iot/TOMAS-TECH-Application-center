@@ -103,11 +103,12 @@ GO
 :r database/migrations/039_nas_storage_settings.sql
 :r database/migrations/040_estimate_overhead_policy.sql
 :r database/migrations/041_user_role_management.sql
+:r database/migrations/042_estimate_total_guard.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41)) <> 41
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42)) <> 42
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -129,7 +130,8 @@ IF EXISTS (
         (38, N'supplier_quotation_lines'),
         (39, N'NAS storage connection draft settings'),
         (40, N'Immutable overhead policies and estimate revision snapshots'),
-        (41, N'Admin-managed primary user roles with audited least-privilege writes')
+        (41, N'Admin-managed primary user roles with audited least-privilege writes'),
+        (42, N'Guard estimate aggregates within supported decimal precision')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

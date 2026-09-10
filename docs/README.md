@@ -49,3 +49,5 @@
 ## Main integration follow-up
 
 Current work: [candidate integration record](planning/CANDIDATE_INTEGRATION.md). Historical audit statements describe the pre-integration snapshot; use the candidate record for new verification.
+
+Follow-up: [estimate aggregate boundary hardening](planning/COST_TOTAL_GUARD.md) records migration042, transactional validation and isolated SQL evidence after the integration checkpoint.

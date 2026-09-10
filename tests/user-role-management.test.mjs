@@ -41,7 +41,7 @@ test("role management migration grants Admin permission and only column-scoped u
   assert.match(login, /GRANT UPDATE \(role_id, updated_at\) ON OBJECT::dbo\.users/);
   assert.match(login, /REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo\.users/);
   assert.match(deploy, /:r database\/migrations\/041_user_role_management\.sql/);
-  assert.match(deploy, /35, 36, 37, 38, 39, 40, 41\)\) <> 41/);
+  assert.match(deploy, /35, 36, 37, 38, 39, 40, 41, 42\)\) <> 42/);
   assert.match(verifier, /\(37, N'Archive generated report PDF\/PPTX exports on NAS storage'\)/);
   assert.match(verifier, /\(41, N'Admin-managed primary user roles with audited least-privilege writes'\)/);
   assert.match(verifier, /minor_id NOT IN/);
