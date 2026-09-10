@@ -2969,3 +2969,12 @@ export const applyModuleTemplate = (estimateId: number, input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+
+export type StorageCheckResult = {
+  ok: boolean;
+  mode: "Local" | "Nas";
+  rootPath: string;
+  durationMs: number;
+  error?: string;
+};
+export const checkAdminStorage = () => apiRequest<StorageCheckResult>("/api/v1/admin/storage-check");

@@ -174,7 +174,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerStockControlRoutes(app, config, database, users);
   registerSupplierQuotationRoutes(app, config, database, users);
   registerVisitMasterRoutes(app, database, users);
-  registerAdminRoutes(app, database, users);
+  registerAdminRoutes(app, config, database, users);
   registerUnifiedReportRoutes(app, config, database, users);
   registerReportTemplateRoutes(app, database, users);
   registerPerformanceRoutes(app, database, users);

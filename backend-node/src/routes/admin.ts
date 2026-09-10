@@ -1,5 +1,9 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
+import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { booleanQuery, clampedInteger, dateOnly, optionalText } from "../http.js";
@@ -41,7 +45,26 @@ type AuditRow = {
   total_count: number | string;
 };
 
-export function registerAdminRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
+export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
+  // Storage health: write a temp file, read it back, delete it — proves end-to-end write access.
+  app.get("/api/v1/admin/storage-check", async (request) => {
+    await users.demandPermission(request, "master.read");
+    const storage = config.documentStorage;
+    const testPath = resolve(storage.rootPath, `_health-check-${randomUUID()}.tmp`);
+    const payload = `IoTTeamCenter storage check ${new Date().toISOString()}`;
+    const start = Date.now();
+    try {
+      await mkdir(dirname(testPath), { recursive: true });
+      await writeFile(testPath, payload, "utf8");
+      const read = await readFile(testPath, "utf8");
+      await unlink(testPath);
+      if (read !== payload) throw new Error("Read-back content mismatch");
+      return { ok: true, mode: storage.mode, rootPath: storage.rootPath, durationMs: Date.now() - start };
+    } catch (err) {
+      try { await unlink(testPath); } catch { /* ignore */ }
+      return { ok: false, mode: storage.mode, rootPath: storage.rootPath, durationMs: Date.now() - start, error: String(err instanceof Error ? err.message : err) };
+    }
+  });
   app.get("/api/v1/admin/engineering-rates", async (request) => {
     await users.demandPermission(request, "master.read");
     const query = request.query as Record<string, unknown>;

@@ -4,7 +4,7 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { apiRequest, type BootstrapData, type PagedResult, type ProjectSummary } from "../api-client";
+import { apiRequest, checkAdminStorage, type BootstrapData, type PagedResult, type ProjectSummary, type StorageCheckResult } from "../api-client";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
 import { canonicalLocalizedName, contactNameLines, localizedNameLines, localizedNamesFromCard, type ContactTitles, type LocalizedNames } from "./customer-localized-names";
@@ -691,6 +691,41 @@ export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
   </>;
 }
 
+function StorageCheckPanel() {
+  const [result, setResult] = useState<StorageCheckResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const run = async () => {
+    setBusy(true); setErr(""); setResult(null);
+    try { setResult(await checkAdminStorage()); }
+    catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Panel
+      title="Document Storage (NAS)"
+      subtitle="ทดสอบ write-read-delete ไฟล์จริงบน storage path ที่ backend ใช้งานอยู่"
+      actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void run(); }}>{busy ? <><span className="spinner" /> Testing…</> : <><Icon name="refresh" /> Run test</>}</button>}
+    >
+      <div className="settings-list">
+        {result ? (<>
+          <div>
+            <span className={`setting-icon ${result.ok ? "green" : "red"}`}><Icon name={result.ok ? "database" : "alertTriangle"} /></span>
+            <span><strong>{result.mode === "Nas" ? "NAS (Network Share)" : "Local disk"}</strong><small style={{ wordBreak: "break-all" }}>{result.rootPath}</small></span>
+            <Badge tone={result.ok ? "green" : "red"}>{result.ok ? `OK · ${result.durationMs} ms` : "FAILED"}</Badge>
+          </div>
+          {result.error && <div className="callout error" style={{ marginTop: 8 }}><Icon name="alertTriangle" /><span>{result.error}</span></div>}
+        </>) : (
+          <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>ยังไม่ได้ทดสอบ</strong><small>กด "Run test" เพื่อ write ไฟล์ทดสอบไปที่ NAS และ verify กลับ</small></span></div>
+        )}
+        {err && <div className="callout error"><Icon name="alertTriangle" /><span>{err}</span></div>}
+      </div>
+    </Panel>
+  );
+}
+
 export function ProductionSettings({ bootstrap, teamTestMode = false }: AdminAnalyticsProps) {
   const uiText = useUiText();
   const endpoint = (() => { try { return new URL(API_BASE_URL).origin; } catch { return "Not configured"; } })();
@@ -708,6 +743,7 @@ export function ProductionSettings({ bootstrap, teamTestMode = false }: AdminAna
         <div><span className="setting-icon violet"><Icon name="shield" /></span><span><strong><LocalizedText text={"Authentication"} /></strong><small>{teamTestMode ? "Temporary LAN Team Test session" : "Microsoft Entra ID access token"}</small></span><Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "UAT only" : "Entra"}</Badge></div>
       </div></Panel>
     </div>
+    <StorageCheckPanel />
     <Panel title={`Permissions (${bootstrap.permissions.length})`} subtitle="สิทธิ์ RBAC ที่ API ส่งให้บัญชีปัจจุบัน"><div className="chip-select">{bootstrap.permissions.map((permission) => <Badge key={permission} tone="slate">{permission}</Badge>)}</div></Panel>
     <div className="callout info"><Icon name="settings" /><span><strong><LocalizedText text={"Configuration ownership"} /></strong><LocalizedText text={"ค่า connection string, Entra, CORS และ host ถูกจัดการที่ server environment เพื่อไม่ให้ browser แก้ไขความปลอดภัยของ Production ได้"} /></span></div>
   </>;
