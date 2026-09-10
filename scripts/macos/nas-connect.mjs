@@ -72,3 +72,15 @@ for(const file of [home+'/.nsmbrc','/etc/nsmb.conf','/etc/fstab',home+'/.colima/
 for(const root of ['/etc/iot-team-center',home+'/Library/LaunchAgents'])walk(root,0);
 console.log('NAS_SEARCH '+JSON.stringify({examined,bytes,limited,hits}));
 console.log('NAS_SEARCH_COMPLETE');
+
+// Query only Keychain metadata. Never request or print the stored password value.
+for (const args of [
+ ['find-internet-password','-s','100.64.0.53'],
+ ['find-generic-password','-s','100.64.0.53'],
+ ['find-internet-password','-s','nas-ugreen'],
+ ['find-generic-password','-s','nas-ugreen'],
+]) {
+ const keychain=spawnSync('/usr/bin/security',args,{encoding:'utf8',timeout:5000});
+ const metadata=(keychain.stdout+'\n'+keychain.stderr).split('\n').filter(line=>/"acct"|"srvr"|"svce"|keychain:/.test(line));
+ console.log('NAS_KEYCHAIN '+JSON.stringify({query:args.slice(1),found:keychain.status===0,metadata}));
+}
