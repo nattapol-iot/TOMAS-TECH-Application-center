@@ -1,5 +1,7 @@
 # Team Test Mode
 
+> Status review 2026-09-10: Historical Team Test staging guide; does not establish current Production configuration. See [current operations index](operations/README.md) and [release tasks](planning/PRODUCTION_BACKLOG.md).
+
 Team Test Mode lets registered team members perform UAT without Microsoft Entra. It is intentionally limited to an ASP.NET Core `Staging` environment and a Vercel Preview deployment. Production rejects this mode at startup/build time.
 
 ## Security boundary

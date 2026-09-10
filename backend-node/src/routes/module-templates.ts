@@ -93,7 +93,7 @@ function parseTemplate(request: FastifyRequest): TemplateInput {
   const rawLines = body.lines;
   if (!Array.isArray(rawLines) || rawLines.length === 0) throw validation("A template needs at least one line.");
   if (rawLines.length > MAXIMUM_LINES) throw validation(`A template cannot hold more than ${MAXIMUM_LINES} lines.`);
-  const status = optionalBodyText(body.status, 20, "Status") ?? "Active";
+  const status = optionalBodyText(body.status, 20, "Status") ?? "Draft";
   if (!templateStatuses.includes(status)) throw validation("Status is not allowed.");
   if (status === "Retired") throw validation("Retire a template through the retire action, not by editing it.");
   return {
@@ -279,6 +279,7 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
     await users.demandPermission(request, "estimate.write");
     const actor = await users.required(request);
     const input = parseTemplate(request);
+    if (input.status === "Active") await users.demandPermission(request, "master.write");
     const created = await database.transaction(async (transaction) => {
       await assertSuppliersUsable(transaction, input.lines);
       const insert = new sql.Request(transaction);
@@ -311,6 +312,7 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
     const id = positiveLong((request.params as { id?: string }).id, "Template id");
     const expected = parseRowVersion(bodyObject(request.body).rowVersion);
     const input = parseTemplate(request);
+    if (input.status === "Active") await users.demandPermission(request, "master.write");
     return database.transaction(async (transaction) => {
       const lock = new sql.Request(transaction);
       lock.input("id", sql.BigInt, id);
@@ -322,6 +324,7 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
         throw new ApiError(409, "concurrency_conflict", "This template changed. Reload and try again.");
       }
       if (current.status === "Retired") throw new ApiError(409, "module_template_retired", "A retired template cannot be edited.");
+      if (current.status === "Active") throw new ApiError(409, "published_template_locked", "Published templates cannot be overwritten. Copy this template to a new draft, then publish it.");
       await assertSuppliersUsable(transaction, input.lines);
       const update = new sql.Request(transaction);
       update.input("id", sql.BigInt, id);
@@ -427,7 +430,7 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
         IF EXISTS (SELECT 1 FROM dbo.module_templates WHERE code = @code)
           THROW 51300, 'A module template with this code already exists.', 1;
         INSERT INTO dbo.module_templates(code,name,category_code,project_type,description,status,created_by,updated_by)
-        OUTPUT inserted.id VALUES(@code,@name,@category_code,@project_type,@description,N'Active',@actor,@actor);
+        OUTPUT inserted.id VALUES(@code,@name,@category_code,@project_type,@description,N'Draft',@actor,@actor);
       `)).recordset[0]!;
       const templateId = Number(row.id);
       await replaceLines(transaction, templateId, lines);

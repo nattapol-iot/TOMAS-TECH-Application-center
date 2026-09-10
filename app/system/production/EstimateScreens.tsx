@@ -1,14 +1,17 @@
 "use client";
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
+import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { CostItemFields, COST_CATEGORIES, PRICE_SOURCES, UNITS } from "./CostItemFields";
 import { validCostItemNumbers } from "../../../lib/cost-item-validation";
+import { estimateIssueTab, estimateUxCopy, estimateIssueMessage } from "../../../lib/estimate-ux";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiClientError,
+  apiRequest,
   createCostItem,
   createEstimate,
   createEstimateAssignment,
@@ -95,6 +98,9 @@ type PriceLibraryRecord = {
   projectName: string;
   customerName: string;
   sourceKind: "Estimate" | "Historical Purchase";
+  sourceEstimateId?: number;
+  sourceRevision?: number;
+  sourceStatus?: string;
   item: EstimateCostItem;
 };
 type QuickManhourDraft = {
@@ -110,6 +116,17 @@ type QuickManhourDraft = {
   hoursPerDay: number;
   ownerId: number;
   remark: string;
+};
+
+type EngineeringRateOption = {
+  id: number;
+  level: string;
+  department: string;
+  engineeringDaily: number;
+  installationDaily: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
 };
 type QuickCostDraft = Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion"> & { version: number; groupKey: string };
 
@@ -171,6 +188,9 @@ async function loadPriceLibraryRecords(currentEstimateId: number) {
   const estimateRecords: PriceLibraryRecord[] = loaded.flatMap((entry) => entry ? entry.workspace.costItems.map((item) => ({
     key: `estimate:${entry.estimate.id}:${item.id}`,
     sourceNumber: entry.estimate.number,
+    sourceEstimateId: entry.estimate.id,
+    sourceRevision: entry.workspace.header.revision,
+    sourceStatus: entry.workspace.header.status,
     projectName: entry.estimate.projectName,
     customerName: entry.estimate.customerName,
     sourceKind: "Estimate" as const,
@@ -548,9 +568,10 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       ["Severity", "Code", "Message", "Entity type", "Entity ID"],
       ...workspace.validationIssues.map((issue) => [issue.severity, issue.code, issue.message, issue.entityType, issue.entityId]),
       [], ["TOTALS"],
+      ["Overhead state", header.overhead?.state ?? "Missing"], ["Overhead policy version", header.overhead?.policyVersion ?? null], ["Overhead hourly rate", header.overhead?.hourlyRate ?? null], ["Overhead eligible hours", header.overhead?.eligibleDirectHours ?? null], ["Overhead", totals.overhead ?? null],
       ["Material", numberOf(totals.material)], ["Engineering", numberOf(totals.engineering)], ["Outsource", numberOf(totals.outsource)], ["Transportation", numberOf(totals.transportation)], ["Accommodation", numberOf(totals.accommodation)], ["Other", numberOf(totals.other)], [`Contingency ${formatNumber(header.contingencyRate)}%`, numberOf(totals.contingency)], ["TOTAL ESTIMATED COST", numberOf(totals.total)],
     ];
-    exportXlsx(rows, `${header.number}_${revisionCode(header.revision)}_EstimateCost.xlsx`);
+    exportXlsx(rows, `${header.number}_${revisionCode(header.revision)}_${header.status.replaceAll(" ", "-")}_EstimateCost.xlsx`);
     notify("Estimate exported from live workspace");
   };
 
@@ -587,7 +608,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /><EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -654,7 +675,17 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       finally { setBusy(false); }
     }} /> : null}
     {tab === "assignment" ? <EstimateAssignmentTab workspace={workspace} onAssign={() => setAssignmentCreateOpen(true)} onEdit={setAssignmentEditor} /> : null}
-    {tab === "validation" ? <EstimateValidationTab workspace={workspace} onFix={(entityType) => setTab(entityType === "ManhourLine" || entityType === "ExpenseLine" ? "manhour" : entityType === "OtherCostLine" ? "other" : "cost")} /> : null}
+    {tab === "validation" ? <EstimateValidationTab workspace={workspace} onFix={(issue) => {
+      setTab(estimateIssueTab(issue));
+      const cost = workspace.costItems.find((line) => issue.entityType === "CostItem" && line.id === issue.entityId);
+      const manhour = workspace.manhourLines.find((line) => issue.entityType === "ManhourLine" && line.id === issue.entityId);
+      const expense = workspace.expenseLines.find((line) => issue.entityType === "ExpenseLine" && line.id === issue.entityId);
+      const other = workspace.otherCostLines.find((line) => issue.entityType === "OtherCostLine" && line.id === issue.entityId);
+      if (cost?.canEdit) { setCostSeed({}); setCostEditor(cost); }
+      if (manhour?.canEdit) { setManhourSeed({}); setManhourEditor(manhour); }
+      if (expense?.canEdit) { setExpenseSeed({}); setExpenseEditor(expense); }
+      if (other && capabilities.canEditOtherCosts) setOtherEditor(other);
+    }} /> : null}
     {tab === "revision" ? <EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /> : null}
     {tab === "compare" ? <EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /> : null}
     {tab === "review" ? <EstimateReviewTab workspace={workspace} onWorkflow={setWorkflowAction} /> : null}
@@ -744,6 +775,20 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   return [...groups.values()].sort((left, right) => left.categoryCode.localeCompare(right.categoryCode) || left.module.localeCompare(right.module, "th"));
 }
 
+function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorkspace; onOpen: (tab: WorkspaceTab) => void }) {
+  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  const { capabilities } = workspace;
+  if (!capabilities.canEdit) return null;
+  return <Panel title={copy("เริ่มตรงนี้ · ทำประมาณการให้พร้อมตรวจ", "Start here · prepare your estimate", "ここから開始 · 見積の準備")} subtitle={copy("เลือกขั้นตอนเพื่อเปิดหน้าที่ต้องทำ ข้อมูลที่บันทึกแล้วใช้ต่อได้ทันที", "Open a step to continue using your saved data.", "保存済みのデータを使い、各ステップから作業を続けます。") }>
+    <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+      {capabilities.canEditCostItems ? <button className="btn default" type="button" onClick={() => onOpen("cost")}>{copy("1. อุปกรณ์ / ใช้ชุดต้นแบบ", "1. Equipment / templates", "1. 機器・テンプレート")}</button> : null}
+      {capabilities.canEditManhour ? <button className="btn default" type="button" onClick={() => onOpen("manhour")}>{copy("2. ค่าแรงวิศวกรรม", "2. Engineering effort", "2. 技術工数")}</button> : null}
+      {capabilities.canEditOtherCosts ? <button className="btn default" type="button" onClick={() => onOpen("other")}>{copy("3. ค่าใช้จ่ายอื่น (ถ้ามี)", "3. Other costs (if any)", "3. その他の費用（必要時）")}</button> : null}
+      <button className="btn primary" type="button" onClick={() => onOpen("validation")}>{copy("4. ตรวจความพร้อม", "4. Check readiness", "4. 内容を確認")}</button>
+    </div>
+  </Panel>;
+}
+
 function EstimateSummaryTab({ workspace, onFocusModule }: { workspace: EstimateCostWorkspace; onFocusModule: (key: string) => void }) {
   const uiText = useUiText();
   const { header, costItems, manhourLines, expenseLines, otherCostLines } = workspace;
@@ -783,7 +828,7 @@ function EstimateSummaryTab({ workspace, onFocusModule }: { workspace: EstimateC
       </Panel>
       <div className="stack">
         <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง"><ul className="check-list">
-          <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>
+          <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>
           <li className={`check-item ${manhourLines.length ? "pass" : "warning"}`}><Icon name={manhourLines.length ? "checkCircle" : "alertTriangle"} /><div><strong>{formatNumber(manDays)} <LocalizedText text={"man-days"} /></strong><p>{manhourLines.length} <LocalizedText text={"man-hour line ·"} /> {expenseLines.length + otherCostLines.length} <LocalizedText text={"project cost line"} /></p></div></li>
           <li className={`check-item ${validationTone}`}><Icon name={validationIcon} /><div><strong>{workspace.validationIssues.length ? `${criticalCount} error · ${warningCount} warning` : "Server validation passed"}</strong><p>{criticalCount ? "Critical error ปิดกั้นการ submit และ approve" : warningCount ? "Warning เป็นคำเตือน ไม่ปิดกั้น workflow" : "ตรวจกับ revision ปัจจุบันแล้ว"}</p></div></li>
         </ul></Panel>
@@ -1044,6 +1089,8 @@ function costSeedFromLine(line: EstimateCostItem, ownerId: number, priceSource: 
 
 function PriceLibraryPicker({ workspace, busy, onClose, onUse }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onUse: (record: PriceLibraryRecord) => Promise<void> }) {
   const uiText = useUiText();
+  const [source, setSource] = useState<PriceLibraryRecord | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState(100);
   const [records, setRecords] = useState<PriceLibraryRecord[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1054,11 +1101,15 @@ function PriceLibraryPicker({ workspace, busy, onClose, onUse }: { workspace: Es
     return () => { active = false; };
   }, [workspace.header.id]);
   const needle = search.trim().toLocaleLowerCase();
-  const visible = records.filter(({ item, sourceNumber, projectName, customerName }) => !needle || [item.itemCode, item.description, item.brand, item.model, item.supplierName, sourceNumber, projectName, customerName].some((value) => value?.toLocaleLowerCase().includes(needle))).slice(0, 100);
+  const matches = records.filter(({ item, sourceNumber, projectName, customerName }) => !needle || [item.itemCode, item.description, item.brand, item.model, item.supplierName, sourceNumber, projectName, customerName].some((value) => value?.toLocaleLowerCase().includes(needle))).sort((a, b) => (b.item.priceDate ?? "").localeCompare(a.item.priceDate ?? ""));
+  const visible = matches.slice(0, visibleLimit);
   return <Modal title={uiText("Search Price Library")} subtitle="ค้นจาก Estimate เดิมและประวัติราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา" size="xl" onClose={onClose} footer={<><span className="muted">{records.length} <LocalizedText text={"live price record(s)"} /></span><span className="spacer" /><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Close"} /></button></>}>
-    <SearchInput value={search} onChange={setSearch} placeholder="Search item code, description, brand, supplier or estimate…" />
+    <SearchInput value={search} onChange={(value) => { setSearch(value); setVisibleLimit(100); }} placeholder="Search item code, description, brand, supplier or estimate…" />
+    <p className="muted">{estimateUxCopy(currentLocale(), "ราคาอ้างอิงเรียงจากวันที่ล่าสุด ตรวจหน่วย จำนวน และเงื่อนไขก่อนใช้ ราคานี้ไม่ได้ยืนยันว่าผู้ขายยังเสนออยู่", "Newest reference dates first. Check units, quantities and terms; these are not confirmed current offers.", "参照日の新しい順です。単位・数量・条件を確認してください。現在有効な見積価格とは限りません。")}</p>
+    {source ? <div className="panel" style={{ padding: 12, marginTop: 12 }}><strong>{source.sourceNumber} {source.sourceRevision !== undefined ? revisionCode(source.sourceRevision) : ""} · {source.sourceStatus ?? source.sourceKind}</strong><p>{source.item.description} · {source.item.quantity} {source.item.unit} × {formatMoney(source.item.unitCost)} · {formatDate(source.item.priceDate)}</p><p>{source.item.referenceNumber || "—"} · {source.item.remark || "—"}</p>{source.sourceEstimateId ? <EstimateImportHistory estimateId={source.sourceEstimateId} /> : null}<button className="btn ghost sm" type="button" onClick={() => setSource(null)}><LocalizedText text="Close" /></button></div> : null}
+    {matches.length > visibleLimit ? <button type="button" className="btn default sm" onClick={() => setVisibleLimit((value) => value + 100)}>{estimateUxCopy(currentLocale(), "แสดงเพิ่ม", "Show more", "さらに表示")} ({visible.length}/{matches.length})</button> : null}
     {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live Price Library…"} /></div> : visible.length ? <div className="table-wrap tall" style={{ marginTop: 12 }}><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Price date"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th><th /></tr></thead><tbody>{visible.map((record) => <tr key={record.key}><td><strong className="mono">{record.item.itemCode}</strong></td><td>{record.item.description}</td><td>{[record.item.brand, record.item.model].filter(Boolean).join(" · ") || "—"}</td><td>{record.item.supplierName ?? "—"}</td><td><div className="cell-primary"><strong>{record.sourceNumber}</strong><span>{record.projectName} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td><td>{formatDate(record.item.priceDate)}</td><td className="num"><strong>{formatMoney(record.item.unitCost)}</strong></td><td><button className="btn primary sm" type="button" disabled={busy} onClick={() => { void onUse(record); }}><Icon name="plus" /><LocalizedText text={"Use price"} /></button></td></tr>)}</tbody></table></div> : <EmptyState icon="search" title="No matching price" message="ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร" />}
+    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live Price Library…"} /></div> : visible.length ? <div className="table-wrap tall" style={{ marginTop: 12 }}><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Price date"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th><th /></tr></thead><tbody>{visible.map((record) => <tr key={record.key}><td><strong className="mono">{record.item.itemCode}</strong></td><td>{record.item.description}</td><td>{[record.item.brand, record.item.model].filter(Boolean).join(" · ") || "—"}</td><td>{record.item.supplierName ?? "—"}</td><td><div className="cell-primary"><button type="button" className="link-btn" onClick={() => setSource(record)}>{record.sourceNumber} {record.sourceRevision !== undefined ? revisionCode(record.sourceRevision) : ""}</button><span>{record.projectName} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td><td>{formatDate(record.item.priceDate)}</td><td className="num"><strong>{formatMoney(record.item.unitCost)}</strong><div className="muted">/ {record.item.unit} · Qty {record.item.quantity}</div></td><td><button className="btn primary sm" type="button" disabled={busy} onClick={() => { void onUse(record); }}><Icon name="plus" /><LocalizedText text={"Use price"} /></button></td></tr>)}</tbody></table></div> : <EmptyState icon="search" title="No matching price" message="ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร" />}
   </Modal>;
 }
 
@@ -1452,14 +1503,14 @@ function EstimateAssignmentTab({ workspace, onAssign, onEdit }: { workspace: Est
   </Panel><div className="stack"><Panel title="Estimate completion"><div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}><span className="muted"><LocalizedText text={"Overall assignment progress"} /></span><strong style={{ fontSize: "var(--fs-xl)" }}>{Math.round(overall)}%</strong></div><Progress value={overall} /><ul className="check-list" style={{ marginTop: 12 }}>{workspace.assignments.map((assignment) => <li key={assignment.id} className={`check-item ${numberOf(assignment.progress) === 100 ? "pass" : ""}`}><Icon name={numberOf(assignment.progress) === 100 ? "checkCircle" : assignment.status.includes("Waiting") ? "clock" : "alertCircle"} /><div><strong>{assignment.section} — {formatNumber(assignment.progress)}%</strong><p>{assignment.ownerName} <LocalizedText text={"·"} /> {assignment.status}</p></div></li>)}</ul></Panel><Panel title="Permission"><div className="info-strip"><Icon name="shield" /><span>{workspace.capabilities.canManageAssignments ? "บัญชีนี้สามารถมอบหมายผู้รับผิดชอบ เปลี่ยน schedule และอัปเดต progress ได้" : workspace.assignments.some((assignment) => assignment.canEdit) ? "คุณอัปเดตสถานะ progress และ comment ของ section ที่รับผิดชอบได้ โดยเปลี่ยนผู้รับผิดชอบหรือ due date ไม่ได้" : "อ่านอย่างเดียว — Estimate owner, Engineering Manager หรือ Admin เป็นผู้จัด assignment"}</span></div></Panel></div></section>;
 }
 
-function EstimateValidationTab({ workspace, onFix }: { workspace: EstimateCostWorkspace; onFix: (entityType: string) => void }) {
+function EstimateValidationTab({ workspace, onFix }: { workspace: EstimateCostWorkspace; onFix: (issue: EstimateCostWorkspace["validationIssues"][number]) => void }) {
   const criticalIssues = workspace.validationIssues.filter(isCriticalValidationIssue);
   const warningIssues = workspace.validationIssues.filter((issue) => !isCriticalValidationIssue(issue));
   const orderedIssues = [...criticalIssues, ...warningIssues];
   const resultTone = criticalIssues.length ? "red" : warningIssues.length ? "amber" : "green";
   const resultIcon = criticalIssues.length || warningIssues.length ? "alertTriangle" : "checkCircle";
   return <section className="grid-main"><Panel title="Estimate Validation" subtitle="ตรวจโดย API/SQL Server ก่อน Submit และ Approve">
-    {orderedIssues.length ? <ul className="check-list">{orderedIssues.map((issue) => { const critical = isCriticalValidationIssue(issue); return <li className={`check-item ${critical ? "error" : "warning"}`} key={`${issue.code}-${issue.entityType}-${issue.entityId}`}><Icon name={critical ? "alertCircle" : "alertTriangle"} /><div style={{ flex: 1 }}><strong>{issue.code.replaceAll("_", " ")} <LocalizedText text={"·"} /> {issue.severity}</strong><p>{issue.message} <LocalizedText text={"·"} /> {issue.entityType} #{issue.entityId}</p></div><button className="btn ghost sm" type="button" onClick={() => onFix(issue.entityType)}><LocalizedText text={"Open line"} /><Icon name="arrowRight" /></button></li>; })}</ul> : <div className="empty"><span className="empty-icon"><Icon name="checkCircle" /></span><strong><LocalizedText text={"Server validation passed"} /></strong><p><LocalizedText text={"Revision ปัจจุบันไม่มี critical issue หรือ advisory warning"} /></p></div>}
+    {orderedIssues.length ? <ul className="check-list">{orderedIssues.map((issue) => { const critical = isCriticalValidationIssue(issue); return <li className={`check-item ${critical ? "error" : "warning"}`} key={`${issue.code}-${issue.entityType}-${issue.entityId}`}><Icon name={critical ? "alertCircle" : "alertTriangle"} /><div style={{ flex: 1 }}><strong>{estimateIssueMessage(issue, currentLocale())}</strong><details><summary>{estimateUxCopy(currentLocale(), "รายละเอียดการตรวจ", "Validation details", "検証の詳細")}</summary><p>{issue.message} · {issue.code} · {issue.entityType} #{issue.entityId}</p></details></div>{estimateIssueTab(issue) !== "validation" ? <button className="btn ghost sm" type="button" onClick={() => onFix(issue)}>{estimateUxCopy(currentLocale(), "เปิดจุดที่ต้องตรวจ", "Open affected section", "該当箇所を開く")}<Icon name="arrowRight" /></button> : null}</li>; })}</ul> : <div className="empty"><span className="empty-icon"><Icon name="checkCircle" /></span><strong><LocalizedText text={"Server validation passed"} /></strong><p><LocalizedText text={"Revision ปัจจุบันไม่มี critical issue หรือ advisory warning"} /></p></div>}
   </Panel><div className="stack"><Panel title="Result"><div className={`info-strip ${resultTone}`}><Icon name={resultIcon} /><span>{criticalIssues.length ? `${criticalIssues.length} error(s) block submission and approval${warningIssues.length ? ` · ${warningIssues.length} warning(s) are advisory` : ""}` : warningIssues.length ? `${warningIssues.length} advisory warning(s) do not block submission or approval` : "No validation error or warning"}</span></div></Panel><Panel title="Rules enforced"><ul className="check-list"><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Positive quantity"} /></strong><p><LocalizedText text={"Every persisted line must have quantity greater than zero."} /></p></div></li><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Unit cost and owner"} /></strong><p><LocalizedText text={"Required references are checked at the API boundary."} /></p></div></li><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Supplier man-hour"} /></strong><p><LocalizedText text={"Supplier and quotation are mandatory."} /></p></div></li><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Non-empty revision"} /></strong><p><LocalizedText text={"At least one cost or effort line is required."} /></p></div></li></ul></Panel></div></section>;
 }
 
@@ -1563,9 +1614,16 @@ function WorkPackageEditor({ busy, onClose, onContinue }: { busy: boolean; onClo
 }
 
 function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; line: EstimateManhourLine | null; seed?: ManhourSeed; busy: boolean; onClose: () => void; onSave: (input: EstimateManhourInput, lineId?: number) => Promise<void> }) {
+  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
+  const canReadRateMaster = bootstrap.permissions.includes("master.read");
+  const importedExcelRate = line?.provider === "Internal" && line.level === "Imported Excel rate";
+  const [rateOptions, setRateOptions] = useState<EngineeringRateOption[]>([]);
+  const [rateLoading, setRateLoading] = useState(canReadRateMaster && !importedExcelRate);
+  const [rateLoadError, setRateLoadError] = useState("");
+  const supplierRateDraft = useRef(line?.provider === "Supplier" ? numberOf(line.dailyRate) : 0);
   const [form, setForm] = useState<EstimateManhourInput>(() => ({
     estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion,
     package: line?.package ?? seed.package ?? "Design & Engineering", activity: line?.activity ?? "System Design", department: line?.department ?? bootstrap.user.department,
@@ -1573,16 +1631,69 @@ function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, o
     supplierId: line?.supplierId ?? undefined, quotationNumber: line?.quotationNumber ?? "", priceDate: line?.priceDate ? dateValue(line.priceDate) : undefined, engineers: numberOf(line?.engineers) || 1, manDays: numberOf(line?.manDays) || 1,
     hoursPerDay: numberOf(line?.hoursPerDay) || 8, dailyRate: numberOf(line?.dailyRate), ownerId: line?.ownerId ?? defaultOwner, remark: line?.remark ?? "",
   }));
+  useEffect(() => {
+    if (!canReadRateMaster || importedExcelRate) return;
+    let cancelled = false;
+    const loadRates = async () => {
+      setRateLoading(true);
+      setRateLoadError("");
+      try {
+        const firstPage = await apiRequest<PagedResult<EngineeringRateOption>>("/api/v1/estimates/engineering-rate-options?page=1&pageSize=100");
+        const pageCount = Math.ceil(firstPage.total / firstPage.pageSize);
+        const remainingPages = pageCount > 1
+          ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) => apiRequest<PagedResult<EngineeringRateOption>>(`/api/v1/estimates/engineering-rate-options?page=${index + 2}&pageSize=100`)))
+          : [];
+        if (cancelled) return;
+        const today = businessDate();
+        const available = [firstPage, ...remainingPages].flatMap((page) => page.items).filter((rate) => rate.isActive && rate.effectiveFrom <= today && (!rate.effectiveTo || rate.effectiveTo >= today));
+        setRateOptions(available);
+        setForm((current) => {
+          if (current.provider !== "Internal" || current.level === "Imported Excel rate") return current;
+          const currentRate = available.find((rate) => rate.department === current.department && rate.level === current.level);
+          return currentRate ? {
+            ...current,
+            dailyRate: current.costType === "Installation" ? currentRate.installationDaily : currentRate.engineeringDaily,
+          } : current;
+        });
+      } catch (requestError) {
+        if (!cancelled) setRateLoadError(toError(requestError));
+      } finally {
+        if (!cancelled) setRateLoading(false);
+      }
+    };
+    void loadRates();
+    return () => { cancelled = true; };
+  }, [canReadRateMaster, importedExcelRate, line]);
   const update = <K extends keyof EstimateManhourInput>(key: K, value: EstimateManhourInput[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const availableRateOptions = rateOptions.filter((rate) => (form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily) > 0);
+  const selectedRate = availableRateOptions.find((rate) => rate.department === form.department && rate.level === form.level);
+  const rateSelectionRequired = form.provider === "Internal" && canReadRateMaster && !importedExcelRate && !rateLoadError;
+  const internalRateReady = !rateSelectionRequired || (!rateLoading && Boolean(selectedRate));
   const supplierValid = form.provider === "Internal" || Boolean(form.supplierId && form.quotationNumber?.trim() && form.priceDate);
   const lineCostWithinRange = form.provider === "Internal" || form.engineers * form.manDays * form.dailyRate <= MAX_LEDGER_LINE_TOTAL;
-  const valid = Boolean(form.package.trim() && form.activity.trim() && form.department.trim() && form.level.trim() && form.engineers > 0 && form.manDays > 0 && form.hoursPerDay > 0 && form.dailyRate >= 0 && form.ownerId && supplierValid && lineCostWithinRange);
-  return <Modal title={line ? `Edit ${line.activity}` : "Add engineering man-hour"} subtitle="Internal rate is validated by the API; supplier effort requires a supplier and quotation" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create man-hour"}</button></>}>
+  const valid = Boolean(form.package.trim() && form.activity.trim() && form.department.trim() && form.level.trim() && form.engineers > 0 && form.manDays > 0 && form.hoursPerDay > 0 && form.dailyRate >= 0 && form.ownerId && supplierValid && lineCostWithinRange && internalRateReady);
+  const chooseRate = (rateId: string) => {
+    const rate = availableRateOptions.find((option) => option.id === Number(rateId));
+    if (!rate) return;
+    setForm((current) => ({ ...current, department: rate.department, level: rate.level, dailyRate: current.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily }));
+  };
+  const changeCostType = (costType: EstimateManhourInput["costType"]) => setForm((current) => ({
+    ...current,
+    costType,
+    dailyRate: current.provider === "Internal" && current.level !== "Imported Excel rate"
+      ? (() => { const rate = rateOptions.find((option) => option.department === current.department && option.level === current.level); const amount = rate ? (costType === "Installation" ? rate.installationDaily : rate.engineeringDaily) : 0; return amount > 0 ? amount : 0; })()
+      : current.dailyRate,
+  }));
+  return <Modal title={line ? `Edit ${line.activity}` : "Add engineering man-hour"} subtitle={copy("เลือกอัตราที่ใช้งานได้ก่อนบันทึก ระบบจะตรวจอัตราอีกครั้งที่ API", "Choose an available rate before saving. The API verifies it again.", "保存前に利用可能な単価を選択してください。APIでも再確認します。")} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create man-hour"}</button></>}>
+    {form.provider === "Internal" && canReadRateMaster && !importedExcelRate && !rateLoading && !rateLoadError && !availableRateOptions.length ? <div className="info-strip red" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span><strong>{copy("ยังไม่มีอัตราค่าแรงที่ใช้งานได้", "No available engineering rate", "利用可能な技術単価がありません")}</strong><br />{copy("กรุณาให้ผู้ดูแลเพิ่ม Engineering Rate ที่มีผลวันนี้และมากกว่า 0 ก่อนสร้างรายการค่าแรง", "Ask an administrator to add an Engineering Rate effective today and greater than zero before creating this line.", "この工数を作成する前に、本日有効で0より大きい技術単価を管理者に登録してもらってください。")}</span></div> : null}
+    {form.provider === "Internal" && !canReadRateMaster && !importedExcelRate ? <div className="info-strip amber" role="note" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("บัญชีนี้ดู Rate Master ไม่ได้ กรุณาเลือก Department และ Level ให้ตรงกับข้อมูลกลาง โดย API จะตรวจสอบก่อนบันทึก", "This account cannot view the Rate Master. Match Department and Level to the master data; the API will verify them before saving.", "このアカウントは単価マスターを閲覧できません。部門とレベルをマスターに合わせてください。保存前にAPIが確認します。")}</span></div> : null}
+    {form.provider === "Internal" && rateLoadError ? <div className="info-strip amber" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("โหลด Rate Master ไม่สำเร็จ", "Could not load the Rate Master", "単価マスターを読み込めませんでした")}: {rateLoadError} {copy("กรุณาตรวจ Department และ Level ก่อนลองบันทึก", "Check Department and Level before trying to save.", "保存する前に部門とレベルを確認してください。")}</span></div> : null}
     <div className="form-grid four">
       <Field label="Work package *" span={2}><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Activity *" span={2}><input required maxLength={300} value={form.activity} onChange={(event) => update("activity", event.target.value)} /></Field>
-      <Field label="Provider *"><select value={form.provider} onChange={(event) => { const provider = event.target.value as EstimateManhourInput["provider"]; setForm((current) => ({ ...current, provider, ...(provider === "Internal" ? { supplierId: undefined, quotationNumber: "", priceDate: undefined } : {}) })); }}><option value="Internal"><LocalizedText text={"Own engineer"} /></option><option value="Supplier"><LocalizedText text={"Supplier man-hour"} /></option></select></Field><Field label="Cost type *"><select value={form.costType} onChange={(event) => update("costType", event.target.value as EstimateManhourInput["costType"])}><option value={"Engineering"}><LocalizedText text={"Engineering"} /></option><option value={"Installation"}><LocalizedText text={"Installation"} /></option></select></Field><Field label="Department *"><input required maxLength={100} value={form.department} onChange={(event) => update("department", event.target.value)} /></Field><Field label="Engineer level *"><input required maxLength={100} value={form.level} onChange={(event) => update("level", event.target.value)} /></Field>
+      <Field label="Provider *"><select value={form.provider} onChange={(event) => { const provider = event.target.value as EstimateManhourInput["provider"]; setForm((current) => ({ ...current, provider, dailyRate: provider === "Supplier" ? supplierRateDraft.current : selectedRate ? (current.costType === "Installation" ? selectedRate.installationDaily : selectedRate.engineeringDaily) : 0, ...(provider === "Internal" ? { supplierId: undefined, quotationNumber: "", priceDate: undefined } : {}) })); }}><option value="Internal"><LocalizedText text={"Own engineer"} /></option><option value="Supplier"><LocalizedText text={"Supplier man-hour"} /></option></select></Field><Field label="Cost type *"><select value={form.costType} onChange={(event) => changeCostType(event.target.value as EstimateManhourInput["costType"])}><option value={"Engineering"}><LocalizedText text={"Engineering"} /></option><option value={"Installation"}><LocalizedText text={"Installation"} /></option></select></Field>
+      {form.provider === "Internal" && canReadRateMaster && !importedExcelRate && !rateLoadError ? <Field label={copy("อัตราที่ใช้งานได้ *", "Available rate *", "利用可能な単価 *")} span={2} hint={rateLoading ? copy("กำลังโหลด Rate Master…", "Loading Rate Master…", "単価マスターを読み込み中…") : selectedRate ? `${form.department} · ${form.level}` : copy("เลือกจากอัตราที่มีผลวันนี้เท่านั้น", "Only rates effective today are shown.", "本日有効な単価のみ表示します。")}><select disabled={rateLoading || !availableRateOptions.length} value={selectedRate?.id ?? ""} onChange={(event) => chooseRate(event.target.value)}><option value="">{rateLoading ? copy("กำลังโหลดอัตรา…", "Loading rates…", "単価を読み込み中…") : copy("เลือกอัตราที่ใช้งานได้", "Select an available rate", "利用可能な単価を選択")}</option>{availableRateOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.department} — {rate.level} · {formatMoney(form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily)}/{copy("วัน", "day", "日")}</option>)}</select></Field> : <><Field label="Department *"><input required maxLength={100} value={form.department} onChange={(event) => update("department", event.target.value)} /></Field><Field label="Engineer level *"><input required maxLength={100} value={form.level} onChange={(event) => update("level", event.target.value)} /></Field></>}
       <Field label="Supplier" hint={form.provider === "Supplier" ? "Required" : "Not used for internal rate"}><select disabled={form.provider === "Internal"} value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"Select supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Quotation number" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={form.provider === "Internal"} maxLength={100} value={form.quotationNumber ?? ""} onChange={(event) => update("quotationNumber", event.target.value)} /></Field><Field label="Quotation date" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={form.provider === "Internal"} type="date" value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>
-      <Field label="Engineer qty *"><input type="number" min="0.01" max="10000" step="0.01" value={form.engineers} onChange={(event) => update("engineers", Number(event.target.value))} /></Field><Field label="Man-days *"><input type="number" min="0.01" max="100000" step="0.01" value={form.manDays} onChange={(event) => update("manDays", Number(event.target.value))} /></Field><Field label="Hours / day *"><input type="number" min="0.01" max="24" step="0.01" value={form.hoursPerDay} onChange={(event) => update("hoursPerDay", Number(event.target.value))} /></Field><Field label={form.provider === "Internal" ? (form.level === "Imported Excel rate" ? "Daily rate (Excel)" : "Daily rate (Rate Master)") : "Daily rate (THB) *"} hint={form.provider === "Internal" ? (form.level === "Imported Excel rate" ? "Original Excel rate is retained when adjusting quantity" : "Server resolves the active rate after save") : "Supplier quotation rate"}><input type="number" readOnly={form.provider === "Internal"} className={form.provider === "Internal" ? "calculated" : undefined} min="0" max="1000000000" step="0.0001" value={form.dailyRate} onChange={(event) => update("dailyRate", Number(event.target.value))} /></Field>
+      <Field label="Engineer qty *"><input type="number" min="0.01" max="10000" step="0.01" value={form.engineers} onChange={(event) => update("engineers", Number(event.target.value))} /></Field><Field label="Man-days *"><input type="number" min="0.01" max="100000" step="0.01" value={form.manDays} onChange={(event) => update("manDays", Number(event.target.value))} /></Field><Field label="Hours / day *"><input type="number" min="0.01" max="24" step="0.01" value={form.hoursPerDay} onChange={(event) => update("hoursPerDay", Number(event.target.value))} /></Field><Field label={form.provider === "Internal" ? (form.level === "Imported Excel rate" ? "Daily rate (Excel)" : "Daily rate (Rate Master)") : "Daily rate (THB) *"} hint={form.provider === "Internal" ? (form.level === "Imported Excel rate" ? "Original Excel rate is retained when adjusting quantity" : "Server resolves the active rate after save") : "Supplier quotation rate"}><input type="number" readOnly={form.provider === "Internal"} className={form.provider === "Internal" ? "calculated" : undefined} min="0" max="1000000000" step="0.0001" value={form.dailyRate} onChange={(event) => { const dailyRate = Number(event.target.value); supplierRateDraft.current = dailyRate; update("dailyRate", dailyRate); }} /></Field>
       <Field label="Man-hours"><input className="calculated" readOnly value={formatNumber(form.engineers * form.manDays * form.hoursPerDay)} /></Field><Field label="Line cost" hint={!lineCostWithinRange ? "Exceeds the maximum amount supported by the estimate ledger" : undefined}><input className="calculated" readOnly value={formatMoney(form.engineers * form.manDays * form.dailyRate)} /></Field><Field label="Remark" span={2}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field>
     </div>
   </Modal>;

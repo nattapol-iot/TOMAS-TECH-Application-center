@@ -126,8 +126,15 @@ export async function transferProjectDocuments(
   await snapshot(`${inquiry.inquiry_no}-requirements.txt`, "06", "Specification", inquiry, `Inquiry ${inquiry.inquiry_no}`);
   const estimate = (await query.query<Record<string, unknown>>(`SELECT e.estimate_no,e.revision,e.project_name,e.status,
     t.material_total,t.engineering_total,t.outsource_total,t.transportation_total,t.accommodation_total,
-    t.other_total,t.contingency_total,t.total FROM dbo.estimates e
-    JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@estimate;`)).recordset[0]!;
+    t.other_total,t.base_total,t.internal_direct_hours,t.overhead_state,t.overhead_total,t.contingency_total,t.total,
+    overhead.policy_id overhead_policy_id,overhead.policy_version overhead_policy_version,
+    overhead.method overhead_method,overhead.monthly_budget overhead_monthly_budget,
+    overhead.normal_direct_hours overhead_normal_direct_hours,overhead.hourly_rate overhead_hourly_rate,
+    overhead.effective_from overhead_effective_from,overhead.reason overhead_reason,
+    overhead.applied_by overhead_applied_by,overhead.applied_at overhead_applied_at
+    FROM dbo.estimates e JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
+    LEFT JOIN dbo.estimate_overhead_snapshots overhead ON overhead.estimate_id=e.id AND overhead.revision=e.revision
+    WHERE e.id=@estimate;`)).recordset[0]!;
   await snapshot(`${estimate.estimate_no}-R${estimate.revision}-summary.txt`, "03", "Estimate cost", estimate, `Estimate ${estimate.estimate_no} revision ${estimate.revision}`);
   const reports = (await query.query<Record<string, unknown>>(`${links}
     SELECT r.report_no,r.current_revision,r.status,v.visit_no,rv.visit_summary,rv.customer_requirement,

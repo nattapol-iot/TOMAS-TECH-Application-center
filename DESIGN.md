@@ -2,8 +2,14 @@
 
 ## Source of truth
 
-- Status: Performance Pulse pilot implemented; Estimate Cost brief remains design-only
-- Updated: 2026-09-07
+- Governance review 2026-09-10: [documentation hub](docs/README.md), [feature register](docs/planning/FEATURE_REGISTER.md), and [production tasks](docs/planning/PRODUCTION_BACKLOG.md). Existing module requirements below are preserved; a proposal is not a release record.
+- Evidence inspected this round: ProductionApp.tsx navigation, app/globals.css brand/semantic tokens, existing design briefs and release notes. No new live browser, accessibility or visual comparison was performed. Existing screenshots/assets were not revalidated against a frozen candidate; assign that work to UX-01.
+
+- Status: Needs refresh at module level; preserve existing UX contracts. Local implementation and deployment evidence are tracked separately.
+- Updated: 2026-09-10
+- New user brief (Draft, 2026-09-10): [Small-team urgent Inquiry / Estimate workflow](docs/small-team-estimate-design.md). This is the current design direction for ownership, controlled files/revisions, published template versions, overhead and traceable reference prices. It extends the local UI improvements; the original design task did not implement or deploy these capabilities. Subsequent local work is recorded in [Small-team release evidence](docs/releases/small-team-estimate-release.md); deployment remains unverified in this audit. The user has no overhead policy and requests a proposed method; use a draft hourly allocation model pending actual cost/capacity inputs.
+- Inquiry / Estimate implementation follow-up: show a compact next-step guide using existing tabs; route validation by issue code and entity, opening editable affected lines; explain missing rate configuration before saving effort. Preserve API permissions, server rate authority, imported rates and the nine-tab layout. New guidance supports Thai, English and Japanese. A missing rate must never be replaced with a fabricated or zero rate. Empty cost lists must not claim all items are priced. These changes are local implementation work, not a production release or measured time-saving claim.
+- Inquiry / Estimate usability evidence: [Engineer workflow audit](docs/inquiry-estimate-engineer-ux-audit.md). Live desktop walkthrough of Inquiry INQ-2609-0014, Estimate EST-2609-0014 Draft and IMP-EST-PJ260013 Locked, with local source cross-check. Recommendations remain design-only; no measured time saving or Engineer-role test is claimed.
 - Product surfaces: `KPI & Growth > My KPI` and its links to `Team Activity`, Project, Inquiry, and Task records; plus `Estimate Cost > Estimate detail` (added 2026-09-07). Surface-specific rules below apply only to their named feature.
 - Estimate Cost brief: [Existing-workflow study and incremental improvements](docs/estimate-cost-workspace-design.md). Updated after the user explicitly rejected a whole-page redesign; prior tab consolidation/drawer proposals are withdrawn. KPI pilot scope remains unchanged.
 - Estimate evidence reviewed: user-supplied Approved R00 / Cost Items screenshot; `EstimateScreens.tsx` workspace, grouping, quick-add and workflow; `globals.css` tokens and pinned cost columns; Node estimate write routes; `docs/estimate-excel-import.md`; existing cost validation, revision and Excel import regression files. No approved target mockup or Estimate Storybook baseline was supplied. The screenshot is the current-state baseline, not a pixel-matching target.
@@ -48,6 +54,10 @@ Preserve the current TOMAS TECH Estimate identity, terminology and familiar cont
 - Never label a person as “มีปัญหา”, “ช้า”, or “ผลงานแย่”. Describe the work state and the next controllable action.
 
 ## Product goals
+
+### Small-team urgent estimating
+
+Make the owner, deadline, current working revision, approved revision and price evidence visible in one job. Reduce repeated searches and manual file naming; do not add approval gates merely to start a draft. Proposed acceptance targets and phased delivery are in the scoped brief; time savings remain unmeasured.
 
 ### User account role management addition
 
@@ -111,6 +121,10 @@ Engineer, estimate owner, reviewer/manager and authorized Sales users retain the
 - Job: verify policy, localization, privacy, and source coverage. Admin access must not change the employee-facing tone.
 
 ## Information architecture
+
+### Small-team urgent estimating
+
+Use existing Inquiry and Estimate navigation. Add My work / Team / Unassigned views, a job-linked document area with explicit Draft versus Approved files, published template selection, and source-rich Price Library results. Retain nine Estimate tabs and current summary amounts; overhead is a separately labelled proposed cost component whose integration needs an explicit calculation contract.
 
 ### User account role management addition
 
@@ -189,6 +203,10 @@ Reuse the current tokens, typography, table density and layout. Measure clipping
 - Motion is limited to a 150–200 ms hover/focus transition. No celebratory animation in the pilot.
 
 ## Components
+
+### Small-team estimating additions (proposed)
+
+Reuse current tables, badges, modals and buttons for owner/next action, document revision labels, template version selection, price-source previews and a compact overhead calculation explanation. One primary next action per work state. No new design-system dependency or automatic external notification is part of this brief.
 
 ### User account role management addition
 
@@ -319,6 +337,10 @@ Preserve current responsive rules initially. Capture before/after evidence at th
 
 ## Interaction states
 
+### Controlled estimating work
+
+Distinguish unassigned from owned, waiting-for-price from completed, working draft from immutable published snapshot, missing overhead policy from explicit zero, and stored file metadata from verified upload success. Failed upload/import must retain actionable retry context; concurrent edits use existing row-version checks. Draft saves do not increment formal revisions.
+
 ### User account role management addition
 
 - Loading roles: disable the selector and save action.
@@ -416,6 +438,9 @@ Acceptance criteria:
 6. Thai, English, and Japanese states are complete and accessible on desktop and mobile.
 
 ## Open questions
+
+- [ ] Small-team overhead: obtain actual shared monthly expenses and realistic direct engineering hours; confirm existing labor rates do not already include overhead. Proposed base is internal direct labor hours, not a fabricated percentage of equipment purchases.
+- [ ] Small-team workflow: configure queue steward/template publisher, confirm Excel's continuing role and verify the actual document-storage destination. See the scoped brief for acceptance tests and ownership.
 
 - [ ] Estimate product owner/QA: confirm the specific friction after an existing-workflow walkthrough; preserve all nine tabs and defaults in the meantime.
 - [ ] Estimate QA: reproduce nonempty quick-add cancellation/navigation behavior and section-limited access before changing it.

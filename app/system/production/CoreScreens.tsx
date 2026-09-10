@@ -49,6 +49,7 @@ import {
 } from "../api-client";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
+import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import "./master-data.css";
 import {
   Badge,
@@ -974,12 +975,13 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
   const uiText = useUiText();
   const [tab, setTab] = useState<MasterTab>("customers");
   const canWrite = bootstrap.permissions.includes("master.write");
+  const canViewRates = canViewEngineeringRates(bootstrap.user.role);
   const tabs: { id: MasterTab; label: string; count?: number }[] = [
     { id: "customers", label: "Customers", count: bootstrap.customers.length },
     { id: "suppliers", label: "Suppliers", count: bootstrap.suppliers.length },
     { id: "employees", label: "Employees" },
     { id: "inventory", label: "Inventory items" },
-    { id: "rates", label: "Engineering rates" },
+    ...(canViewRates ? [{ id: "rates" as const, label: "Engineering rates" }] : []),
     { id: "team", label: "User accounts", count: bootstrap.team.length },
   ];
 
@@ -996,7 +998,7 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
       {tab === "suppliers" ? <SupplierMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
       {tab === "employees" ? <EmployeeMasterTab canWrite={canWrite} notify={notify} /> : null}
       {tab === "inventory" ? <InventoryItemMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-      {tab === "rates" ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
+      {tab === "rates" && canViewRates ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
       {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={bootstrap.permissions.includes("admin.manage_roles")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
     </div>
   </>;

@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import sql from "mssql/msnodesqlv8.js";
 import { insertAudit } from "../audit.js";
-import type { Database } from "../db.js";
+import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
+import type { AppConfig } from "../config.js";
+import { readMultipartUpload, multipartText, uploadedFileName, storageKey, writeStoredFile, deleteStoredFile, sendStoredFile } from "../document-storage.js";
 import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, requiredText, optionalBodyText, positiveLong, parseRowVersion, parseDateOnly } from "../http.js";
@@ -47,18 +49,50 @@ export function parseExcelImport(body: Record<string, unknown>) {
     sourceRevision: optionalBodyText(body.sourceRevision, 50, "Source revision") ?? "" };
 }
 
-export function registerEstimateExcelImportRoutes(app: FastifyInstance, database: Database, users: CurrentUserService) {
+export function registerEstimateExcelImportRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, config?: AppConfig) {
+  const publicReceipt = (receipt: Record<string, unknown>) => {
+    const { sourceFile, ...rest } = receipt;
+    const file = sourceFile as { sizeBytes: number; sha256: string } | undefined;
+    return { ...rest, originalAvailable: Boolean(file), originalSizeBytes: file?.sizeBytes, originalSha256: file?.sha256 };
+  };
   app.get("/api/v1/estimates/:id/excel-imports", async request => {
     await users.demandPermission(request, "estimate.read");
     const id = positiveLong((request.params as { id: string }).id, "Estimate");
     const result = await database.query<{ after_json: string }>(`SELECT TOP(20) after_json FROM dbo.audit_log WHERE entity_type=N'Estimate' AND entity_id=@id AND action=N'Excel imported' ORDER BY id DESC;`, r => r.input("id", sql.BigInt, id));
-    return result.recordset.map(r => JSON.parse(r.after_json));
+    return result.recordset.map(r => publicReceipt(JSON.parse(r.after_json)));
+  });
+  app.get("/api/v1/estimates/:id/excel-imports/:revision/:hash/content", async (request, reply) => {
+    await users.demandPermission(request, "estimate.read");
+    if (!config) throw new ApiError(503, "storage_unavailable", "Document storage is unavailable.");
+    const params = request.params as { id: string; revision: string; hash: string };
+    const id = positiveLong(params.id, "Estimate");
+    if (!/^\d{1,8}$/.test(params.revision) || !/^[a-f0-9]{64}$/.test(params.hash)) throw new ApiError(400, "invalid_reference", "Invalid original file reference.");
+    const result = await database.query<{ after_json: string }>(`SELECT TOP(1) a.after_json FROM dbo.audit_log a JOIN dbo.estimates e ON e.id=a.entity_id AND e.deleted_at IS NULL WHERE a.entity_type=N'Estimate' AND a.entity_id=@id AND a.action=N'Excel imported' AND JSON_VALUE(a.after_json,'$.sourceHash')=@hash AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=@revision ORDER BY a.id DESC;`, r => { r.input("id", sql.BigInt, id); r.input("hash", sql.NVarChar(64), params.hash); r.input("revision", sql.Int, Number(params.revision)); });
+    const receipt = result.recordset[0] ? JSON.parse(result.recordset[0].after_json) : null;
+    if (!receipt?.sourceFile) throw new ApiError(404, "original_not_stored", "This historical import has no stored original file.");
+    return sendStoredFile(request, reply, config.documentStorage, { ...receipt.sourceFile, fileName: receipt.sourceName, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   });
   app.post("/api/v1/estimates/:id/excel-import", async (request, reply) => {
     await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
     const id = positiveLong((request.params as { id: string }).id, "Estimate");
-    const body = bodyObject(request.body); const input = parseExcelImport(body); const version = parseRowVersion(body.estimateRowVersion);
-    const result = await database.transaction(async transaction => {
+    const upload = request.isMultipart() && config ? await readMultipartUpload(request, config.documentStorage.maxFileSizeBytes) : null;
+    let body: Record<string, unknown>;
+    try { body = upload ? bodyObject(JSON.parse(multipartText(upload.values, "payload", 1_048_576, true)!)) : bodyObject(request.body); }
+    catch { throw new ApiError(400, "invalid_import_payload", "Invalid Excel import payload."); }
+    const input = parseExcelImport(body); const version = parseRowVersion(body.estimateRowVersion);
+    if (upload && (uploadedFileName(upload.file.filename) !== input.sourceName || !/\.xlsx$/i.test(input.sourceName))) throw new ApiError(400, "invalid_original_file", "The original workbook name must match the preview.");
+    let writtenKey: string | undefined;
+    let sourceFile: { storageKey: string; sizeBytes: number; sha256: string } | undefined;
+    if (upload && config) {
+      const preflight = (await database.query<{ owner_id: number; revision: number; status: string }>("SELECT owner_id,revision,status FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL;", r => r.input("id", sql.BigInt, id))).recordset[0];
+      if (!preflight) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
+      if (Number(preflight.owner_id) !== actor.id && !["Admin", "Engineering Manager"].includes(actor.role)) throw new ApiError(403, "import_forbidden", "Only the estimate owner or engineering manager can import a complete workbook.");
+      writtenKey = storageKey(`estimates/${id}/R${preflight.revision}/originals`, ".xlsx");
+      const stored = await writeStoredFile(config.documentStorage, writtenKey, upload.file.filepath);
+      sourceFile = { storageKey: writtenKey, ...stored };
+    }
+    let result;
+    try { result = await database.transaction(async transaction => {
       const query = () => new sql.Request(transaction);
       const lock = query(); lock.input("id", sql.BigInt, id);
       const e = (await lock.query<{ estimate_no: string; owner_id: number; revision: number; status: string; row_version: Buffer; due_date: Date }>(`SELECT estimate_no,owner_id,revision,status,row_version,due_date FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
@@ -105,10 +139,14 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
       }
       const update = query(); update.input("id", sql.BigInt, id); update.input("actor", sql.BigInt, actor.id);
       await update.query(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),progress=CASE WHEN progress<10 THEN 10 ELSE progress END WHERE id=@id;`);
-      const after = { sourceName: input.sourceName, sourceHash: input.sourceHash, sourceRevision: input.sourceRevision, sourceDate: input.sourceDate, revision: e.revision, sourceTotal: input.sourceTotal, importedAt: new Date().toISOString(), hoursPerDay: input.hoursPerDay, created, references: input.lines.filter(l => l.kind === "reference") };
+      const after = { sourceName: input.sourceName, sourceHash: input.sourceHash, sourceRevision: input.sourceRevision, sourceDate: input.sourceDate, revision: e.revision, sourceTotal: input.sourceTotal, importedAt: new Date().toISOString(), hoursPerDay: input.hoursPerDay, sourceFile, created, references: input.lines.filter(l => l.kind === "reference") };
       await insertAudit(transaction, actor.id, "Estimate", id, e.estimate_no, "Excel imported", null, after);
       return { ...after, alreadyImported: false };
-    });
-    return reply.status(result.alreadyImported ? 200 : 201).send(result);
+    }); } catch (error) {
+      if (writtenKey && config && !(error instanceof DatabaseCommitOutcomeUnknownError)) await deleteStoredFile(config.documentStorage, writtenKey);
+      throw error;
+    }
+    if (result.alreadyImported && writtenKey && config) await deleteStoredFile(config.documentStorage, writtenKey);
+    return reply.status(result.alreadyImported ? 200 : 201).send(publicReceipt(result));
   });
 }

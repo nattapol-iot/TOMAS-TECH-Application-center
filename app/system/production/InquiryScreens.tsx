@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { ProductionSalesIntake } from "./SiteVisitScreens";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
 import { InquiryCustomerFields } from "./InquiryCustomerFields";
+import { defaultInquiryQueueScope, inquiryNextAction, type InquiryNextAction, type InquiryQueueScope } from "../../../lib/inquiry-queue";
 import {
   assignInquiryOwner,
   createEstimate,
@@ -117,6 +118,7 @@ export function ProductionInquiries(props: Props) {
 function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => void; onOpen: (id: number) => void }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
+  const { lang } = useLanguage();
   const [result, setResult] = useState(EMPTY_PAGE);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -124,6 +126,7 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
   const [customer, setCustomer] = useState("All customers");
   const [projectType, setProjectType] = useState("All project types");
   const [owner, setOwner] = useState("All owners");
+  const [queueScope, setQueueScope] = useState<InquiryQueueScope>(() => defaultInquiryQueueScope(bootstrap.user.role));
   const [status, setStatus] = useState("All status");
   const [priority, setPriority] = useState("All priorities");
   const [interestGrade, setInterestGrade] = useState("All grades");
@@ -134,7 +137,8 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
   const [error, setError] = useState("");
 
   const customerId = bootstrap.customers.find((item) => item.code === customer)?.id;
-  const ownerId = bootstrap.team.find((item) => item.name === owner)?.id;
+  const selectedOwnerId = bootstrap.team.find((item) => item.name === owner)?.id;
+  const ownerId = queueScope === "mine" ? bootstrap.user.id : selectedOwnerId;
   const selectedProbabilityRange = PROBABILITY_RANGES.find((item) => item.label === probabilityRange) ?? PROBABILITY_RANGES[0];
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -161,14 +165,54 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
   const pageCount = Math.max(1, Math.ceil(result.total / Math.max(1, result.pageSize)));
   const types = useMemo(() => Array.from(new Set([...PROJECT_TYPES, ...result.items.map((item) => item.projectType)])).sort(), [result.items]);
   const canWrite = bootstrap.permissions.includes("inquiry.write");
+  const canManageQueue = ["Admin", "Engineering Manager", "Project Manager", "Sales Manager"].includes(bootstrap.user.role);
+  const queueCopy = lang === "TH"
+    ? { mine: "งานของฉัน", team: "งานทีม", unassigned: "ยังไม่มอบหมาย", unavailable: "ทุก Inquiry มีผู้รับผิดชอบแล้ว เพราะต้องเลือกผู้รับผิดชอบตอนรับเรื่อง" }
+    : lang === "JP"
+      ? { mine: "自分の案件", team: "チーム案件", unassigned: "未割当", unavailable: "受付時に担当者を必ず選ぶため、すべての Inquiry に担当者がいます。" }
+      : { mine: "My work", team: "Team work", unassigned: "Unassigned", unavailable: "Every inquiry already has an owner because ownership is required at intake." };
+  const nextActionCopy: Record<InquiryNextAction, string> = lang === "TH" ? {
+    review_inputs: "ตรวจข้อมูลและเริ่ม Estimate",
+    complete_costs: "เติมต้นทุนและตรวจความพร้อม",
+    follow_supplier: "ติดตามราคาจากผู้ขาย",
+    submit_review: "ส่งให้ฝ่ายวิศวกรรมตรวจ",
+    engineering_review: "ตรวจและให้ข้อสรุป",
+    handover_project: "ส่งต่อเพื่อสร้าง Project",
+    closed: "ปิดงานแล้ว",
+  } : lang === "JP" ? {
+    review_inputs: "内容確認・見積開始",
+    complete_costs: "原価入力・検証",
+    follow_supplier: "仕入先価格を確認",
+    submit_review: "技術レビューへ提出",
+    engineering_review: "レビュー・結論",
+    handover_project: "プロジェクトへ引継ぎ",
+    closed: "終了済み",
+  } : {
+    review_inputs: "Review inputs and start estimate",
+    complete_costs: "Complete costs and validation",
+    follow_supplier: "Follow up supplier prices",
+    submit_review: "Submit for engineering review",
+    engineering_review: "Review and decide",
+    handover_project: "Hand over to project",
+    closed: "Closed",
+  };
 
   return <>
     <PageHeader eyebrow="SALES TO ENGINEERING" title="Inquiry · รับเรื่องลูกค้า" subtitle="เริ่มเรื่องที่นี่ → ขอเข้าหน้างานเมื่อจำเป็น → ทำ Estimate จากเรื่องเดิม" actions={canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับเรื่องใหม่"} /></button> : undefined} />
+    <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
+      <Icon name="users" />
+      <div className="seg-control" role="group" aria-label={queueCopy.team}>
+        <button type="button" className={queueScope === "mine" ? "on" : ""} aria-pressed={queueScope === "mine"} onClick={() => { setQueueScope("mine"); resetPage(); }}>{queueCopy.mine}</button>
+        <button type="button" className={queueScope === "team" ? "on" : ""} aria-pressed={queueScope === "team"} onClick={() => { setQueueScope("team"); resetPage(); }}>{queueCopy.team}</button>
+        {canManageQueue ? <button type="button" disabled title={queueCopy.unavailable} style={{ cursor: "not-allowed", opacity: 0.55 }}>{queueCopy.unassigned}</button> : null}
+      </div>
+      <span className="muted" style={{ flex: "1 1 320px" }}>{queueScope === "mine" ? `${bootstrap.user.name} · ${result.total}` : `${queueCopy.team} · ${result.total}`}{canManageQueue ? ` · ${queueCopy.unavailable}` : ""}</span>
+    </div>
     <Toolbar>
       <div style={{ minWidth: 310, flex: 1 }}><label className="search-field"><Icon name="search" /><input maxLength={200} value={search} onChange={(event) => { setSearch(event.target.value); resetPage(); }} placeholder={uiText("Search inquiry, project, customer, end user or RFQ…")} />{search ? <button type="button" onClick={() => setSearch("")} aria-label={uiText("Clear search")}><Icon name="x" /></button> : null}</label></div>
       <Select label="Customer" value={customer} onChange={(value) => { setCustomer(value); resetPage(); }} options={["All customers", ...bootstrap.customers.map((item) => item.code)]} />
       <Select label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...types]} />
-      <Select label="Estimate owner" value={owner} onChange={(value) => { setOwner(value); resetPage(); }} options={["All owners", ...bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role)).map((member) => member.name)]} />
+      {queueScope === "team" ? <Select label="Estimate owner" value={owner} onChange={(value) => { setOwner(value); resetPage(); }} options={["All owners", ...bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role)).map((member) => member.name)]} /> : null}
       <Select label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "New", "Estimating", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Approved", "Cancelled"]} />
       <Select label="Priority" value={priority} onChange={(value) => { setPriority(value); resetPage(); }} options={["All priorities", "Urgent", "High", "Normal", "Low"]} />
       <Select label="Customer interest" value={interestGrade} onChange={(value) => { setInterestGrade(value); resetPage(); }} options={["All grades", ...INTEREST_GRADES.map((item) => item.value)]} />
@@ -191,7 +235,7 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
     <Panel title={`${result.total} ${uiText("inquiries")}`} flush>
       <GridControls hideSearch pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
       {result.items.length ? <div className="table-wrap"><table>
-        <thead><tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Sales Owner"} /></th><th><LocalizedText text={"Estimate Owner"} /></th><th><LocalizedText text={"Response Due"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead>
+        <thead><tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead>
         <tbody>{result.items.map((item) => {
           const customerItem = bootstrap.customers.find((entry) => entry.id === item.customerId);
           const late = item.dueDate < today() && item.status !== "Approved" && item.status !== "Cancelled";
@@ -199,9 +243,8 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
           return <tr key={item.id} className={`clickable ${rowClass}`} onClick={() => onOpen(item.id)}>
             <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div></td>
             <td><div className="cell-primary"><strong>{customerItem?.code ?? "—"}</strong><span>{item.customerName}</span><small><LocalizedText text={"End user:"} /> {item.endUserName || "ยังไม่ระบุ / Not specified"}</small></div></td>
-            <td>{item.salesOwner || "—"}</td>
-            <td><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /></td>
-            <td className={late ? "red-text" : undefined}>{formatDate(item.dueDate)}</td>
+            <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
+            <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId))]}</strong></td>
             <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
             <td><span className="row-action"><Icon name="chevronRight" /></span></td>
           </tr>;
@@ -289,6 +332,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
 }
 
 function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEstimate, openVisit, onBack }: Props & { id: number; onBack: () => void }) {
+  const { lang } = useLanguage();
   const [requestVisit, setRequestVisit] = useState(0);
   const [detail, setDetail] = useState<InquiryDetail | null>(null);
   const [tab, setTab] = useState<DetailTab>("overview");
@@ -314,6 +358,63 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   if (!detail) return <><button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button><LoadError message={error || "Inquiry not found"} retry={() => { void load(); }} /></>;
   const canWrite = bootstrap.permissions.includes("inquiry.write");
   const canCreateEstimate = bootstrap.permissions.includes("estimate.write");
+  const estimateIsReadOnly = detail.estimate ? ["Approved", "Locked"].includes(detail.estimate.status) : false;
+  const flowCopy = lang === "TH"
+    ? detail.estimate
+      ? estimateIsReadOnly ? {
+          title: "ขั้นต่อไป: ตรวจ Estimate ที่อนุมัติแล้ว",
+          description: "Revision นี้อ่านได้อย่างเดียว เปิดเพื่อตรวจต้นทุนและประวัติ หากต้องแก้ไขให้สร้าง Revision ใหม่ใน Estimate",
+          action: "เปิดดู Estimate",
+          ariaLabel: "ขั้นตอน Inquiry ไป Estimate",
+        } : {
+          title: "ขั้นต่อไป: เติมต้นทุนใน Estimate",
+          description: "เปิด Estimate แล้วกรอกค่าวัสดุ ค่าแรงวิศวกรรม และค่าใช้จ่ายอื่น จากนั้นตรวจ Validation ก่อนส่งตรวจ",
+          action: "เปิด Estimate",
+          ariaLabel: "ขั้นตอน Inquiry ไป Estimate",
+        }
+      : {
+          title: "ขั้นต่อไป: ตรวจข้อมูลแล้วสร้าง Estimate",
+          description: "ตรวจ Requirement และไฟล์แนบให้ครบ แล้วสร้าง Estimate จากเรื่องนี้ได้ทันที การเข้าหน้างานทำเฉพาะเมื่อข้อมูลยังไม่พอ",
+          action: "สร้าง Estimate",
+          ariaLabel: "ขั้นตอน Inquiry ไป Estimate",
+        }
+    : lang === "JP"
+      ? detail.estimate
+        ? estimateIsReadOnly ? {
+            title: "次のステップ：承認済み見積を確認",
+            description: "このリビジョンは読み取り専用です。原価と履歴を確認し、変更が必要な場合は見積画面で新しいリビジョンを作成します。",
+            action: "見積を確認",
+            ariaLabel: "Inquiry から Estimate への手順",
+          } : {
+            title: "次のステップ：見積原価を入力",
+            description: "見積を開き、材料費・技術工数・その他費用を入力してから、Validation を確認してレビューへ送ります。",
+            action: "見積を開く",
+            ariaLabel: "Inquiry から Estimate への手順",
+          }
+        : {
+            title: "次のステップ：内容を確認して見積を作成",
+            description: "Requirement と添付資料を確認し、この Inquiry から見積を作成します。現地調査は情報が不足する場合のみ実施します。",
+            action: "見積を作成",
+            ariaLabel: "Inquiry から Estimate への手順",
+          }
+      : detail.estimate
+        ? estimateIsReadOnly ? {
+            title: "Next: review the approved estimate",
+            description: "This revision is read-only. Open it to review costs and history; create a new revision in the estimate if changes are needed.",
+            action: "Review estimate",
+            ariaLabel: "Inquiry to estimate steps",
+          } : {
+            title: "Next: complete the estimate cost",
+            description: "Open the estimate, add material, engineering man-hour and other costs, then check Validation before review.",
+            action: "Open estimate",
+            ariaLabel: "Inquiry to estimate steps",
+          }
+        : {
+            title: "Next: review the inputs and create an estimate",
+            description: "Check the requirement and attachments, then create the estimate from this inquiry. Request a site visit only when more information is needed.",
+            action: "Create estimate",
+            ariaLabel: "Inquiry to estimate steps",
+          };
 
   const createLinkedEstimate = async () => {
     setBusy(true); setError("");
@@ -327,13 +428,21 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   return <>
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
     <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
-      {detail.estimate ? <button className="btn default" type="button" onClick={() => openEstimate?.(detail.estimate!.id)}><Icon name="file" /><LocalizedText text={"Open estimate"} /></button> : canCreateEstimate ? <button className="btn primary" type="button" disabled={busy} onClick={() => { void createLinkedEstimate(); }}><Icon name="plus" />{busy ? "Creating…" : "Create estimate cost"}</button> : null}
       {bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setAssignOpen(true)}><Icon name="user" /><LocalizedText text={"Assign owner"} /></button> : null}
       {canWrite && canEditEndUser(detail.status) ? <button className="btn default" type="button" onClick={() => setEndUserOpen(true)}><LocalizedText text={"End user / บริษัทผู้ใช้งานปลายทาง"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setQualificationOpen(true)}><Icon name="trendingUp" /><LocalizedText text={"Update qualification"} /></button> : null}
     </>} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
+    <div className="info-strip" role="region" aria-label={flowCopy.ariaLabel} style={{ marginBottom: 14, flexWrap: "wrap" }}>
+      <Icon name={estimateIsReadOnly ? "lock" : detail.estimate ? "checkCircle" : "arrowRight"} />
+      <span style={{ flex: "1 1 360px" }}><strong>{flowCopy.title}</strong>{flowCopy.description}</span>
+      {detail.estimate
+        ? <button className="btn primary sm" type="button" onClick={() => openEstimate?.(detail.estimate!.id)}>{flowCopy.action}<Icon name="arrowRight" /></button>
+        : canCreateEstimate
+          ? <button className="btn primary sm" type="button" disabled={busy} onClick={() => { void createLinkedEstimate(); }}><Icon name="plus" />{busy ? "…" : flowCopy.action}</button>
+          : null}
+    </div>
     <Tabs active={tab} onChange={(value) => { setRequestVisit(0); setTab(value); }} tabs={[{ id: "overview", label: "Overview" }, { id: "requirement", label: "Requirement" }, ...(bootstrap.permissions.includes("intake.read") ? [{ id: "visits" as const, label: "เข้าหน้างาน / ผลสำรวจ" }] : []), { id: "meeting", label: "Meeting Log", count: detail.meetings.length }, { id: "estimate", label: "Estimate Cost", count: detail.estimate ? 1 : 0 }, { id: "attachments", label: "Attachments", count: detail.attachments.length }, { id: "activity", label: "Activity" }]} />
     <div style={{ height: 14 }} />
     {tab === "overview" ? <InquiryOverview detail={detail} openEstimate={openEstimate} /> : null}
@@ -371,9 +480,11 @@ function MeetingLog({ detail, canWrite, onAdd }: { detail: InquiryDetail; canWri
 
 function InquiryEstimateTab({ detail, openEstimate }: { detail: InquiryDetail; openEstimate?: (estimateId: number) => void }) {
   const uiText = useUiText();
+  const { lang } = useLanguage();
   if (!detail.estimate) return <Panel><EmptyState icon="file" title="No estimate cost created" message="Create an estimate to divide the engineering scope and start collecting cost." /></Panel>;
   const estimate = detail.estimate;
-  return <Panel title="Estimate cost linked to this inquiry" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Estimate No."} /></th><th><LocalizedText text={"Rev."} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Due"} /></th><th className="num"><LocalizedText text={"Material"} /></th><th className="num"><LocalizedText text={"Engineering"} /></th><th className="num"><LocalizedText text={"Outsource"} /></th><th className="num"><LocalizedText text={"Other"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead><tbody><tr className="clickable" onClick={() => openEstimate?.(estimate.id)}><td><strong className="mono">{estimate.number}</strong></td><td><Pill>{`R${String(estimate.revision).padStart(2, "0")}`}</Pill></td><td>{estimate.ownerName}</td><td>{formatDate(estimate.createdDate)}</td><td>{formatDate(estimate.dueDate)}</td><td className="num">{formatMoney(estimate.materialTotal)}</td><td className="num">{formatMoney(estimate.engineeringTotal)}</td><td className="num">{formatMoney(estimate.outsourceTotal)}</td><td className="num">{formatMoney(estimate.otherTotal)}</td><td className="num"><strong>{formatMoney(estimate.total)}</strong></td><td style={{ minWidth: 110 }}><ProgressCell value={estimate.progress} /></td><td><Badge tone={toneOf(estimate.status)}>{estimate.status}</Badge></td><td><span className="row-action"><Icon name="chevronRight" /></span></td></tr></tbody></table></div></Panel>;
+  const missingOverhead = lang === "TH" ? "ยังไม่ตั้ง" : lang === "JP" ? "未設定" : "Missing";
+  return <Panel title="Estimate cost linked to this inquiry" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Estimate No."} /></th><th><LocalizedText text={"Rev."} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Due"} /></th><th className="num"><LocalizedText text={"Material"} /></th><th className="num"><LocalizedText text={"Engineering"} /></th><th className="num"><LocalizedText text={"Outsource"} /></th><th className="num"><LocalizedText text={"Other"} /></th><th className="num"><LocalizedText text={"Overhead"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead><tbody><tr className="clickable" onClick={() => openEstimate?.(estimate.id)}><td><strong className="mono">{estimate.number}</strong></td><td><Pill>{`R${String(estimate.revision).padStart(2, "0")}`}</Pill></td><td>{estimate.ownerName}</td><td>{formatDate(estimate.createdDate)}</td><td>{formatDate(estimate.dueDate)}</td><td className="num">{formatMoney(estimate.materialTotal)}</td><td className="num">{formatMoney(estimate.engineeringTotal)}</td><td className="num">{formatMoney(estimate.outsourceTotal)}</td><td className="num">{formatMoney(estimate.otherTotal)}</td><td className="num">{estimate.overheadState === "Missing" || estimate.overheadTotal === null ? <Badge tone="amber">{missingOverhead}</Badge> : formatMoney(estimate.overheadTotal)}</td><td className="num"><strong>{formatMoney(estimate.total)}</strong></td><td style={{ minWidth: 110 }}><ProgressCell value={estimate.progress} /></td><td><Badge tone={toneOf(estimate.status)}>{estimate.status}</Badge></td><td><span className="row-action"><Icon name="chevronRight" /></span></td></tr></tbody></table></div></Panel>;
 }
 
 function InquiryAttachments({ detail, canWrite, onUpload, notify }: { detail: InquiryDetail; canWrite: boolean; onUpload: () => void; notify: (message: string) => void }) {

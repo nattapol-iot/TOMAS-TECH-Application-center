@@ -38,10 +38,14 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
         e.project_name,e.project_type,e.owner_id,owner_user.name owner_name,e.revision,e.created_date,e.due_date,e.status,
         e.progress,e.contingency_rate,e.locked_at,e.locked_by,locked_user.name locked_by_name,e.created_at,e.updated_at,e.row_version,
         t.material_total,t.engineering_total,t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,
-        t.base_total,t.contingency_total,t.total
+        t.base_total,t.internal_direct_hours,t.overhead_state,t.overhead_policy_id,t.overhead_policy_version,t.overhead_hourly_rate,
+        t.overhead_total,t.contingency_total,t.total,overhead.monthly_budget overhead_monthly_budget,
+        overhead.normal_direct_hours overhead_normal_direct_hours,overhead.method overhead_method,
+        overhead.effective_from overhead_effective_from,overhead.reason overhead_reason
       FROM dbo.estimates e INNER JOIN dbo.inquiries i ON i.id=e.inquiry_id AND i.deleted_at IS NULL
       INNER JOIN dbo.customers c ON c.id=e.customer_id AND c.deleted_at IS NULL INNER JOIN dbo.users owner_user ON owner_user.id=e.owner_id
       LEFT JOIN dbo.users locked_user ON locked_user.id=e.locked_by INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
+      LEFT JOIN dbo.estimate_overhead_snapshots overhead ON overhead.estimate_id=e.id AND overhead.revision=e.revision
       WHERE e.id=@id AND e.deleted_at IS NULL;
 
       SELECT CONVERT(bit,COALESCE(MAX(CASE WHEN p.code=N'estimate.write' THEN 1 ELSE 0 END),0)) can_write,
@@ -82,6 +86,9 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       WHERE r.estimate_id=@id ORDER BY r.revision DESC,r.id DESC;
 
       SELECT code,message,entity_type,entity_id,CAST(N'Error' AS nvarchar(20)) severity FROM dbo.fn_estimate_validation(@id)
+      UNION ALL SELECT N'overhead_policy_missing',N'No overhead policy is applied. The total excludes overhead.',N'Estimate',e.id,N'Warning'
+        FROM dbo.estimates e WHERE e.id=@id AND e.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM dbo.estimate_overhead_snapshots overhead
+          WHERE overhead.estimate_id=e.id AND overhead.revision=e.revision)
       UNION ALL SELECT N'cost_reference_missing',N'Cost item "'+ci.item_code+N'" has no reference number.',N'CostItem',ci.id,N'Warning'
         FROM dbo.cost_items ci INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
         WHERE ci.estimate_id=@id AND ci.deleted_at IS NULL AND NULLIF(LTRIM(RTRIM(ci.reference_no)),N'') IS NULL
@@ -123,7 +130,15 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       createdAt: headerRow.created_at, updatedAt: headerRow.updated_at, rowVersion: (headerRow.row_version as Buffer).toString("base64"),
       totals: { material: number(headerRow.material_total), engineering: number(headerRow.engineering_total), outsource: number(headerRow.outsource_total),
         transportation: number(headerRow.transportation_total), accommodation: number(headerRow.accommodation_total), other: number(headerRow.other_total),
-        subtotal: number(headerRow.base_total), contingency: number(headerRow.contingency_total), total: number(headerRow.total) },
+        subtotal: number(headerRow.base_total), overhead: nullableNumber(headerRow.overhead_total), contingency: number(headerRow.contingency_total), total: number(headerRow.total) },
+      overhead: headerRow.overhead_state === "Missing" ? { state: "Missing", policyId: null, policyVersion: null, method: null,
+        monthlyBudget: null, normalDirectHours: null, hourlyRate: null, effectiveFrom: null, reason: null,
+        eligibleDirectHours: number(headerRow.internal_direct_hours), amount: null } : {
+        state: headerRow.overhead_state, policyId: nullableNumber(headerRow.overhead_policy_id), policyVersion: nullableNumber(headerRow.overhead_policy_version),
+        method: headerRow.overhead_method, monthlyBudget: nullableNumber(headerRow.overhead_monthly_budget),
+        normalDirectHours: nullableNumber(headerRow.overhead_normal_direct_hours), hourlyRate: nullableNumber(headerRow.overhead_hourly_rate),
+        effectiveFrom: headerRow.overhead_effective_from ? dateOnly(headerRow.overhead_effective_from as Date|string) : null,
+        reason: headerRow.overhead_reason, eligibleDirectHours: number(headerRow.internal_direct_hours), amount: nullableNumber(headerRow.overhead_total) },
     };
     const permissionRow = (result.recordsets[1] as unknown as Array<{ can_write: boolean; can_approve: boolean }>)[0] ?? { can_write: false, can_approve: false };
     const assignmentRows = result.recordsets[2] as unknown as Array<Record<string, unknown>>;

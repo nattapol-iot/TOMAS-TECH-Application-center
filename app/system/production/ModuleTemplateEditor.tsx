@@ -14,10 +14,11 @@ const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Me
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB" }).format(Number.isFinite(value) ? value : 0);
 const newLine = (categoryCode: string): ModuleTemplateLineInput => ({ categoryCode, itemCode: "", description: "", quantityPerModule: 1, unit: "Set", referenceUnitCost: 0, referencePriceSource: "Manual Estimate" });
 
-export function ModuleTemplateEditor({ template, duplicate, suppliers, onClose, onSave }: {
+export function ModuleTemplateEditor({ template, duplicate, suppliers, canPublish = false, onClose, onSave }: {
   template?: ModuleTemplateDetail;
   duplicate?: boolean;
   suppliers: BootstrapData["suppliers"];
+  canPublish?: boolean;
   onClose: () => void;
   onSave: (input: ModuleTemplateInput) => Promise<void>;
 }) {
@@ -28,7 +29,7 @@ export function ModuleTemplateEditor({ template, duplicate, suppliers, onClose, 
   const [name, setName] = useState(template ? `${template.name}${duplicate ? " (สำเนา)" : ""}`.slice(0, 200) : "");
   const [categoryCode, setCategoryCode] = useState(template?.categoryCode ?? "01");
   const [projectType, setProjectType] = useState(template?.projectType ?? "");
-  const [description, setDescription] = useState(template?.description ?? "");
+  const [description, setDescription] = useState(duplicate && template ? `Source: ${template.code} R${template.revision}\n${template.description ?? ""}`.slice(0, 1000) : template?.description ?? "");
   const [status, setStatus] = useState(isEdit ? template!.status : "Draft");
   const [lines, setLines] = useState(() => (template?.lines ?? [newLine("01")]).map((line, index) => ({ key: index, value: { ...line } as ModuleTemplateLineInput })));
   const [nextKey, setNextKey] = useState(lines.length);
@@ -101,7 +102,7 @@ export function ModuleTemplateEditor({ template, duplicate, suppliers, onClose, 
         </div>
         {!lines.length ? <p role="status"><LocalizedText text={"เพิ่มอย่างน้อย 1 รายการก่อนบันทึก"} /></p> : null}
         <h3><LocalizedText text={"3. สถานะการใช้งาน"} /></h3>
-        <div className="template-editor-status"><label><input type="radio" name={`${formId}-status`} checked={status === "Draft"} onChange={() => setStatus("Draft")} /><LocalizedText text={"ฉบับร่าง — เตรียมข้อมูลก่อน ยังไม่แสดงใน Estimate"} /></label><label><input type="radio" name={`${formId}-status`} checked={status === "Active"} onChange={() => setStatus("Active")} /><LocalizedText text={"พร้อมใช้งาน — ทีมเลือกใช้ใน Estimate ได้"} /></label></div>
+        <div className="template-editor-status"><label><input type="radio" name={`${formId}-status`} checked={status === "Draft"} onChange={() => setStatus("Draft")} /><LocalizedText text={"ฉบับร่าง — เตรียมข้อมูลก่อน ยังไม่แสดงใน Estimate"} /></label><label><input type="radio" name={`${formId}-status`} disabled={!canPublish} checked={status === "Active"} onChange={() => setStatus("Active")} /><LocalizedText text={"พร้อมใช้งาน — ทีมเลือกใช้ใน Estimate ได้"} /></label></div>
         <p className="muted"><LocalizedText text={"ระบบบันทึกผู้สร้าง ผู้แก้ไข และเวลาให้อัตโนมัติ"} />{isEdit ? " " + localizeCopy("· การแก้ไขจะเพิ่ม Revision และไม่เปลี่ยนรายการใน Estimate ที่ใช้ไปแล้ว") : ""}</p>
       </fieldset>
     </form>

@@ -264,9 +264,9 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       const estimate = await lockEditableEstimate(transaction, id, estimateRowVersion);
       const templateRequest = new sql.Request(transaction); templateRequest.input("template_id", sql.BigInt, templateId);
       const template = (await templateRequest.query<{ code: string; name: string; revision: number; status: string }>(`
-        SELECT code,name,revision,status FROM dbo.module_templates WHERE id=@template_id;`)).recordset[0];
+        SELECT code,name,revision,status FROM dbo.module_templates WITH(UPDLOCK,HOLDLOCK) WHERE id=@template_id;`)).recordset[0];
       if (!template) throw new ApiError(404, "module_template_not_found", "Module template not found.");
-      if (template.status === "Retired") throw new ApiError(409, "module_template_retired", "A retired template cannot be applied.");
+      if (template.status !== "Active") throw new ApiError(409, "module_template_not_published", "Only published templates can be applied. Ask the template maintainer to publish this draft.");
       const linesRequest = new sql.Request(transaction); linesRequest.input("template_id", sql.BigInt, templateId);
       const lines = (await linesRequest.query<{
         category_code: string; subcategory: string; item_code: string; description: string; brand: string; model: string;

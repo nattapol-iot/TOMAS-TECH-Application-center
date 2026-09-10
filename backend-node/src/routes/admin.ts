@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import sql from "mssql/msnodesqlv8.js";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
+import { canViewEngineeringRates } from "../engineering-rate-access.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalText, parseRowVersion, positiveLong, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
@@ -20,6 +21,18 @@ type EngineeringRateRow = {
   created_by_name: string;
   created_at: Date | string;
   row_version: Buffer;
+  total_count: number | string;
+};
+
+type EngineeringRateOptionRow = {
+  id: number | string;
+  level: string;
+  department: string;
+  engineering_daily: number | string;
+  installation_daily: number | string;
+  effective_from: Date | string;
+  effective_to: Date | string | null;
+  is_active: boolean | number;
   total_count: number | string;
 };
 
@@ -114,6 +127,10 @@ export function registerAdminRoutes(app: FastifyInstance, database: Database, us
 
   app.get("/api/v1/admin/engineering-rates", async (request) => {
     await users.demandPermission(request, "master.read");
+    const actor = await users.required(request);
+    if (!canViewEngineeringRates(actor.role)) {
+      throw new ApiError(403, "engineering_rate_management_required", "Management-level access is required to view engineering rates.");
+    }
     const query = request.query as Record<string, unknown>;
     const page = clampedInteger(query.page, 1, 1, 1_000_000);
     const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
@@ -151,6 +168,39 @@ export function registerAdminRoutes(app: FastifyInstance, database: Database, us
         effectiveFrom: dateOnly(row.effective_from), effectiveTo: dateOnly(row.effective_to),
         isActive: Boolean(row.is_active), createdByName: row.created_by_name, createdAt: row.created_at,
         rowVersion: row.row_version.toString("base64"),
+      })),
+      page,
+      pageSize,
+      total: Number(rows[0]?.total_count ?? 0),
+    };
+  });
+
+  app.get("/api/v1/estimates/engineering-rate-options", async (request) => {
+    await users.demandPermission(request, "estimate.write");
+    const query = request.query as Record<string, unknown>;
+    const page = clampedInteger(query.page, 1, 1, 1_000_000);
+    const pageSize = clampedInteger(query.pageSize, 100, 1, 100);
+    const result = await database.query<EngineeringRateOptionRow>(`
+      SELECT
+        rate.id, rate.level, rate.department,
+        rate.engineering_daily, rate.installation_daily,
+        rate.effective_from, rate.effective_to, rate.is_active,
+        COUNT_BIG(*) OVER() AS total_count
+      FROM dbo.engineering_rates rate
+      WHERE rate.is_active = 1
+      ORDER BY rate.department, rate.level, rate.effective_from DESC, rate.id DESC
+      OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
+    `, (sqlRequest) => {
+      sqlRequest.input("offset", sql.BigInt, (page - 1) * pageSize);
+      sqlRequest.input("page_size", sql.Int, pageSize);
+    });
+    const rows = result.recordset;
+    return {
+      items: rows.map((row) => ({
+        id: Number(row.id), level: row.level, department: row.department,
+        engineeringDaily: Number(row.engineering_daily), installationDaily: Number(row.installation_daily),
+        effectiveFrom: dateOnly(row.effective_from), effectiveTo: dateOnly(row.effective_to),
+        isActive: Boolean(row.is_active),
       })),
       page,
       pageSize,

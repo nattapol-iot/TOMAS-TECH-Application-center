@@ -345,6 +345,8 @@ export type InquiryEstimate = {
   engineeringTotal: number;
   outsourceTotal: number;
   otherTotal: number;
+  overheadState: "Missing" | "Applied" | "Zero" | null;
+  overheadTotal: number | null;
   total: number;
   rowVersion: string;
 };
@@ -746,6 +748,7 @@ export type EstimateWorkspaceCapabilities = {
 
 export type EstimateCostWorkspace = {
   header: {
+    overhead?: EstimateOverhead;
     id: number;
     number: string;
     inquiryId: number;
@@ -770,6 +773,7 @@ export type EstimateCostWorkspace = {
     updatedAt: string;
     rowVersion: string;
     totals: {
+      overhead?: number | null;
       material: number;
       engineering: number;
       outsource: number;
@@ -789,6 +793,15 @@ export type EstimateCostWorkspace = {
   assignments: EstimateAssignment[];
   revisionHistory: EstimateRevision[];
   validationIssues: EstimateValidationIssue[];
+};
+
+export type EstimateOverhead = {
+  state: "Missing" | "Applied" | "Zero";
+  policyId: number | null;
+  policyVersion: number | null;
+  hourlyRate: number | null;
+  eligibleDirectHours: number | null;
+  amount: number | null;
 };
 
 export type CostItemInput = {
@@ -930,8 +943,8 @@ async function authorizedFetch(path: string, init?: RequestInit, timeoutMs = 30_
   return response;
 }
 
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await authorizedFetch(path, init);
+export async function apiRequest<T>(path: string, init?: RequestInit, timeoutMs = 30_000): Promise<T> {
+  const response = await authorizedFetch(path, init, timeoutMs);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
@@ -2419,7 +2432,7 @@ export const markNotificationsRead = (input: { ids?: number[]; all?: boolean }) 
  * RFC 5987 form is preferred and the quoted form is the fallback, the same
  * order the inquiry download uses.
  */
-async function downloadNamedFile(path: string) {
+export async function downloadNamedFile(path: string) {
   const response = await authorizedFetch(path, { headers: { Accept: "application/octet-stream" } }, 180_000);
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];

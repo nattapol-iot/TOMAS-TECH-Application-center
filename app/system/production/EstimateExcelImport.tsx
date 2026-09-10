@@ -3,30 +3,39 @@ import { useT as useStaticCopy } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
 import { useEffect, useState } from "react";
-import { apiRequest, type BootstrapData, type EstimateCostWorkspace } from "../api-client";
+import { apiRequest, downloadNamedFile, type BootstrapData, type EstimateCostWorkspace } from "../api-client";
 import { Modal, Icon } from "../ui";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { parseEstimateWorkbook, type EstimateImportPreview, type EstimateImportLine } from "../../../lib/estimate-excel-import";
 
 const money = (n: number) => n.toLocaleString(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-type ImportRecord = { sourceName: string; sourceRevision: string; revision: number; sourceTotal: number; references: EstimateImportLine[]; created: { kind: string; id: number }[]; alreadyImported?: boolean };
+type ImportRecord = { sourceName: string; sourceHash: string; originalAvailable?: boolean; sourceRevision: string; revision: number; sourceTotal: number; references: EstimateImportLine[]; created: { kind: string; id: number }[]; alreadyImported?: boolean };
 
 export function EstimateImportHistory({ estimateId }: { estimateId: number }) {
   const localizeCopy = useStaticCopy();
   const [records, setRecords] = useState<ImportRecord[]>([]);
+  const [downloadError, setDownloadError] = useState("");
+  const downloadOriginal = async (record: ImportRecord) => {
+    setDownloadError("");
+    try {
+      const file = await downloadNamedFile(`/api/v1/estimates/${estimateId}/excel-imports/${record.revision}/${record.sourceHash}/content`);
+      const url = URL.createObjectURL(file.blob); const link = document.createElement("a"); link.href = url; link.download = file.fileName ?? record.sourceName; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setDownloadError(error instanceof Error ? error.message : "Download failed"); }
+  };
   useEffect(() => { let alive = true; void apiRequest<ImportRecord[]>(`/api/v1/estimates/${estimateId}/excel-imports`).then(r => { if (alive) setRecords(r); }).catch(() => undefined); return () => { alive = false; }; }, [estimateId]);
   if (!records.length) return null;
-  return <details className="panel" style={{ padding: 16, marginTop: 16 }}><summary><LocalizedText text={"ประวัตินำเข้า Excel และอุปกรณ์ลูกค้าจัดหา ("} />{records.length}<LocalizedText text={")"} /></summary>{records.map((r, i) => <div key={i} style={{ marginTop: 12 }}><strong>{r.sourceName}</strong><p><LocalizedText text={"ไฟล์"} /> {r.sourceRevision || localizeCopy("ไม่ระบุ revision")} <LocalizedText text={"→ ระบบ R"} />{String(r.revision).padStart(2, "0")} <LocalizedText text={"· ต้นทุน"} /> {money(r.sourceTotal)} <LocalizedText text={"บาท"} /></p>{r.references.map((l, n) => <p key={n}><LocalizedText text={"ลูกค้าจัดหา:"} /> {l.description} {l.model} <LocalizedText text={"·"} /> {l.quantity} {l.unit} <LocalizedText text={"· ไม่นับเป็นต้นทุนซื้อ"} /></p>)}</div>)}</details>;
+  return <details className="panel" style={{ padding: 16, marginTop: 16 }}><summary><LocalizedText text={"ประวัตินำเข้า Excel และอุปกรณ์ลูกค้าจัดหา ("} />{records.length}<LocalizedText text={")"} /></summary>{downloadError ? <p role="alert">{downloadError}</p> : null}{records.map((r, i) => <div key={i} style={{ marginTop: 12 }}><strong>{r.sourceName}</strong>{r.originalAvailable ? <button className="btn default sm" type="button" onClick={() => { void downloadOriginal(r); }}><Icon name="download" />Original Excel · R{String(r.revision).padStart(2, "0")}</button> : <span className="muted"> · ไม่ได้เก็บต้นฉบับ / Original not stored</span>}<p><LocalizedText text={"ไฟล์"} /> {r.sourceRevision || localizeCopy("ไม่ระบุ revision")} <LocalizedText text={"→ ระบบ R"} />{String(r.revision).padStart(2, "0")} <LocalizedText text={"· ต้นทุน"} /> {money(r.sourceTotal)} <LocalizedText text={"บาท"} /></p>{r.references.map((l, n) => <p key={n}><LocalizedText text={"ลูกค้าจัดหา:"} /> {l.description} {l.model} <LocalizedText text={"·"} /> {l.quantity} {l.unit} <LocalizedText text={"· ไม่นับเป็นต้นทุนซื้อ"} /></p>)}</div>)}</details>;
 }
 
 export function EstimateExcelImport({ workspace, bootstrap, onClose, onImported, onLegacy }: { workspace: EstimateCostWorkspace; bootstrap: BootstrapData; onClose: () => void; onImported: () => Promise<void>; onLegacy: () => void }) {
   const localizeCopy = useStaticCopy();
   const [preview, setPreview] = useState<EstimateImportPreview | null>(null);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState(""); const [error, setError] = useState("");
   const [busy, setBusy] = useState(false); const [reading, setReading] = useState(false); const [hours, setHours] = useState(8);
   const [date, setDate] = useState("");
   const choose = async (file?: File) => {
-    if (!file) return; setReading(true); setError(""); setPreview(null); setFileName(file.name);
+    if (!file) return; setReading(true); setError(""); setPreview(null); setOriginalFile(null); setFileName(file.name);
     try {
       if (!/\.xlsx$/i.test(file.name)) throw new Error("เลือกไฟล์ .xlsx หรือใช้ตัวนำเข้าตารางทั่วไปสำหรับ CSV/TSV");
       const p = parseEstimateWorkbook(await readWorkbookSheets(file), file.name);
@@ -35,16 +44,19 @@ export function EstimateExcelImport({ workspace, bootstrap, onClose, onImported,
         const supplier = bootstrap.suppliers.find(s => [s.name, s.code].some(v => v.trim().toLowerCase() === l.supplierName.toLowerCase()));
         if (supplier) l.supplierId = supplier.id;
       }
-      setPreview(p); setDate(p.sourceDate);
+      setPreview(p); setDate(p.sourceDate); setOriginalFile(file);
     } catch (e) { setError(e instanceof Error ? e.message : "อ่านไฟล์ไม่ได้"); } finally { setReading(false); }
   };
   const duplicates = preview?.lines.filter(l => l.kind !== "reference" && (workspace.costItems.some(c => c.itemCode.toLowerCase() === l.itemCode.toLowerCase() || (c.module === l.module && c.description === l.description && c.model === l.model && c.brand === l.brand)) || workspace.manhourLines.some(c => c.package === l.module && c.activity === l.description))) ?? [];
   const locked = !["Draft", "Engineering Input", "Revision Required"].includes(workspace.header.status);
   const canImport = preview && !preview.errors.length && !duplicates.length && !locked && date && hours > 0 && hours <= 24 && !busy && !reading;
   const submit = async () => {
-    if (!canImport) return; setBusy(true); setError("");
+    if (!canImport || !originalFile) return; setBusy(true); setError("");
     try {
-      await apiRequest(`/api/v1/estimates/${workspace.header.id}/excel-import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ estimateRowVersion: workspace.header.rowVersion, sourceName: fileName, sourceRevision: preview.sourceRevision, sourceDate: date, sourceTotal: preview.sourceTotal, hoursPerDay: hours, lines: preview.lines }) });
+      const body = new FormData();
+      body.append("payload", JSON.stringify({ estimateRowVersion: workspace.header.rowVersion, sourceName: fileName, sourceRevision: preview.sourceRevision, sourceDate: date, sourceTotal: preview.sourceTotal, hoursPerDay: hours, lines: preview.lines }));
+      body.append("file", originalFile);
+      await apiRequest(`/api/v1/estimates/${workspace.header.id}/excel-import`, { method: "POST", body }, 180_000);
       await onImported(); onClose();
     } catch (e) { setError(e instanceof Error ? e.message : "นำเข้าไม่สำเร็จ ทั้งชุดยังไม่ถูกบันทึก"); } finally { setBusy(false); }
   };

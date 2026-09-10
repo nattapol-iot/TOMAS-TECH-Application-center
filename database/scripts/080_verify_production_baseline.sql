@@ -8,6 +8,8 @@ GO
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 37) THROW 51370, 'User role management migration 037 is required.', 1;
+IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version = 40 AND name=N'Immutable overhead policies and estimate revision snapshots')
+    THROW 51410, 'Estimate overhead migration 040 is required.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
@@ -42,6 +44,11 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
    OR OBJECT_ID(N'dbo.v_estimate_totals', N'V') IS NULL
    OR OBJECT_ID(N'dbo.v_item_balances', N'V') IS NULL
+   OR OBJECT_ID(N'dbo.overhead_policies', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.estimate_overhead_snapshots', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.estimate_submission_snapshots', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.trg_estimate_overhead_snapshots_immutable', N'TR') IS NULL
+   OR OBJECT_ID(N'dbo.trg_estimate_submission_snapshots_immutable', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_estimate_revisions_append_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_cost_items_current_revision_only', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_manhour_lines_current_revision_only', N'TR') IS NULL
@@ -493,6 +500,19 @@ IF EXISTS (
       AND class = 1 AND major_id = OBJECT_ID(N'dbo.estimate_revisions')
       AND permission_name IN (N'UPDATE', N'DELETE') AND state IN ('G', 'W'))
     THROW 51082, 'Estimate revision snapshots must not be updateable or deletable by the application role.', 1;
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id=OBJECT_ID(N'dbo.overhead_policies') AND permission_name=N'INSERT' AND state IN('G','W'))
+   OR NOT EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id=OBJECT_ID(N'dbo.estimate_overhead_snapshots') AND permission_name=N'INSERT' AND state IN('G','W'))
+   OR NOT EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id=OBJECT_ID(N'dbo.estimate_submission_snapshots') AND permission_name=N'INSERT' AND state IN('G','W'))
+    THROW 51411, 'The application role is missing append-only overhead grants.', 1;
+
+IF EXISTS (SELECT 1 FROM sys.database_permissions WHERE grantee_principal_id=@app_role_id AND class=1
+      AND major_id IN (OBJECT_ID(N'dbo.overhead_policies'),OBJECT_ID(N'dbo.estimate_overhead_snapshots'),OBJECT_ID(N'dbo.estimate_submission_snapshots'))
+      AND permission_name IN(N'UPDATE',N'DELETE') AND state IN('G','W'))
+    THROW 51412, 'Overhead policies and snapshots must not be updateable or deletable by the application role.', 1;
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.database_permissions

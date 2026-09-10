@@ -164,6 +164,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   // signed in.
   const [view, setViewState] = useState<View>(initialVerifyCode ? "documents" : "dashboard");
   const [busy, setBusy] = useState(IS_AUTH_CONFIGURED);
+  const [restoringSession, setRestoringSession] = useState(IS_AUTH_CONFIGURED);
   const [authError, setAuthError] = useState("");
   const [toast, setToast] = useState("");
   const [userOpen, setUserOpen] = useState(false);
@@ -309,7 +310,10 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       } catch (error) {
         if (!cancelled) setAuthError(error instanceof Error ? error.message : "Unable to restore the Microsoft session.");
       } finally {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) {
+          setBusy(false);
+          setRestoringSession(false);
+        }
       }
     };
     void restore();
@@ -444,6 +448,16 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       ? current.filter((value) => value !== group)
       : [...current, group]);
   };
+
+  // A missing bootstrap is not a signed-out session until restoration settles.
+  if (restoringSession) {
+    return (
+      <main className="session-loading" role="status" aria-live="polite" aria-busy="true">
+        <BrandMark size={40} />
+        <p>{t("Restoring your session…")}</p>
+      </main>
+    );
+  }
 
   if (!bootstrap) {
     return (

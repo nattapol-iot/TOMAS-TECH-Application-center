@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import sql from "mssql/msnodesqlv8.js";
 import type { Transaction as TransactionType } from "mssql";
@@ -9,6 +10,7 @@ import { ApiError } from "../errors.js";
 import { bodyObject, clampedInteger, dateOnly, firstQueryValue, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
+import { snapshotOverheadPolicy } from "../overhead.js";
 
 type EstimateRow = Record<string, unknown> & {
   id: number | string; estimate_no: string; inquiry_no: string; customer_id: number | string; customer_name: string;
@@ -16,7 +18,7 @@ type EstimateRow = Record<string, unknown> & {
   due_date: Date | string; status: string; progress: number | string; material_total: number | string;
   engineering_total: number | string; outsource_total: number | string; transportation_total: number | string;
   accommodation_total: number | string; other_total: number | string; contingency_total: number | string;
-  total: number | string; created_date: Date | string; updated_at: Date | string; row_version: Buffer; total_count: number | string;
+  overhead_state: string; overhead_total: number | string | null; total: number | string; created_date: Date | string; updated_at: Date | string; row_version: Buffer; total_count: number | string;
 };
 
 function todayIn(timeZone: string): string {
@@ -62,6 +64,44 @@ async function validationIssues(database: Database, estimateId: number, transact
     (request) => request.input("estimate_id", sql.BigInt, estimateId))).recordset);
 }
 
+async function snapshotSubmission(transaction: TransactionType, estimateId: number, revision: number, actorId: number): Promise<void> {
+  const read = new sql.Request(transaction); read.input("estimate_id",sql.BigInt,estimateId); read.input("revision",sql.Int,revision);
+  const snapshot = (await read.query<{ snapshot_json:string }>(`SELECT (SELECT e.estimate_no estimateNumber,e.inquiry_id inquiryId,e.customer_id customerId,
+      e.project_name projectName,e.project_type projectType,e.owner_id ownerId,e.revision,e.created_date createdDate,e.due_date dueDate,e.status,
+      e.progress,e.contingency_rate contingencyRate,e.updated_at updatedAt,
+      JSON_QUERY((SELECT t.material_total material,t.engineering_total engineering,t.outsource_total outsource,t.transportation_total transportation,
+        t.accommodation_total accommodation,t.other_total other,t.base_total subtotal,t.internal_direct_hours internalDirectHours,
+        t.overhead_state overheadState,t.overhead_policy_id overheadPolicyId,t.overhead_policy_version overheadPolicyVersion,
+        t.overhead_hourly_rate overheadHourlyRate,t.overhead_total overhead,t.contingency_total contingency,t.total
+        FROM dbo.v_estimate_totals t WHERE t.estimate_id=e.id FOR JSON PATH,WITHOUT_ARRAY_WRAPPER)) totals,
+      JSON_QUERY((SELECT snapshot.policy_id policyId,snapshot.policy_version policyVersion,snapshot.method,snapshot.monthly_budget monthlyBudget,
+        snapshot.normal_direct_hours normalDirectHours,snapshot.hourly_rate hourlyRate,snapshot.effective_from effectiveFrom,snapshot.reason
+        FROM dbo.estimate_overhead_snapshots snapshot WHERE snapshot.estimate_id=e.id AND snapshot.revision=e.revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER)) overheadPolicy,
+      JSON_QUERY((SELECT category_code categoryCode,category,subcategory,module,item_code itemCode,description,brand,model,specification,supplier_id supplierId,
+        qty quantity,unit,unit_cost unitCost,price_source priceSource,reference_no referenceNumber,reference_project referenceProject,price_date priceDate,
+        remark,owner_id ownerId,status FROM dbo.cost_items WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY id FOR JSON PATH)) costItems,
+      JSON_QUERY((SELECT package,activity,department,level,cost_type costType,provider,supplier_id supplierId,quotation_no quotationNumber,price_date priceDate,
+        engineers,man_days manDays,hours_per_day hoursPerDay,daily_rate dailyRate,owner_id ownerId,remark FROM dbo.manhour_lines
+        WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY id FOR JSON PATH)) manhourLines,
+      JSON_QUERY((SELECT package,expense_type expenseType,description,cost_type costType,supplier_id supplierId,reference_no referenceNumber,qty quantity,
+        unit,unit_cost unitCost,owner_id ownerId,remark FROM dbo.expense_lines WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY id FOR JSON PATH)) expenseLines,
+      JSON_QUERY((SELECT category,description,qty quantity,unit,unit_cost unitCost,remark FROM dbo.other_cost_lines
+        WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY id FOR JSON PATH)) otherCostLines,
+      JSON_QUERY((SELECT attachment.id,attachment.name,attachment.category,attachment.content_type contentType,attachment.size_bytes sizeBytes,
+        attachment.storage_key storageKey,attachment.sha256,attachment.uploaded_at uploadedAt FROM dbo.inquiry_attachments attachment
+        WHERE attachment.inquiry_id=e.inquiry_id AND attachment.deleted_at IS NULL ORDER BY attachment.id FOR JSON PATH)) inquiryFiles,
+      JSON_QUERY((SELECT JSON_VALUE(a.after_json,'$.sourceName') sourceName,JSON_VALUE(a.after_json,'$.sourceHash') sourceHash,
+        JSON_QUERY(a.after_json,'$.sourceFile') sourceFile,a.occurred_at importedAt FROM dbo.audit_log a WHERE a.entity_type=N'Estimate'
+        AND a.entity_id=e.id AND a.action=N'Excel imported' AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision ORDER BY a.id FOR JSON PATH)) excelImports
+      FROM dbo.estimates e WHERE e.id=@estimate_id AND e.revision=@revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER) snapshot_json;`)).recordset[0]?.snapshot_json;
+  if (!snapshot) throw new ApiError(409,"submission_snapshot_failed","The submitted estimate could not be snapshotted.");
+  const insert = new sql.Request(transaction); insert.input("estimate_id",sql.BigInt,estimateId); insert.input("revision",sql.Int,revision);
+  insert.input("snapshot",sql.NVarChar(sql.MAX),snapshot); insert.input("hash",sql.Char(64),createHash("sha256").update(snapshot).digest("hex"));
+  insert.input("actor",sql.BigInt,actorId);
+  await insert.query(`INSERT dbo.estimate_submission_snapshots(estimate_id,revision,snapshot_json,snapshot_sha256,submitted_by)
+    VALUES(@estimate_id,@revision,@snapshot,@hash,@actor);`);
+}
+
 async function snapshotRevision(transaction: TransactionType, estimateId: number, revision: number, reason: string, status: string, actorId: number): Promise<void> {
   const request = new sql.Request(transaction);
   request.input("estimate_id", sql.BigInt, estimateId); request.input("revision", sql.Int, revision);
@@ -73,6 +113,8 @@ async function snapshotRevision(transaction: TransactionType, estimateId: number
       e.created_at createdAt,e.updated_at updatedAt,@reason reviewComment,
       JSON_QUERY((SELECT t.material_total material,t.engineering_total engineering,t.outsource_total outsource,
         t.transportation_total transportation,t.accommodation_total accommodation,t.other_total other,t.base_total subtotal,
+        t.internal_direct_hours internalDirectHours,t.overhead_state overheadState,t.overhead_policy_id overheadPolicyId,
+        t.overhead_policy_version overheadPolicyVersion,t.overhead_hourly_rate overheadHourlyRate,t.overhead_total overhead,
         t.contingency_total contingency,t.total FROM dbo.v_estimate_totals t WHERE t.estimate_id=e.id FOR JSON PATH,WITHOUT_ARRAY_WRAPPER)) totals
       FROM dbo.estimates e WHERE e.id=@estimate_id AND e.revision=@revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
     INSERT INTO dbo.estimate_revisions(estimate_id,revision,reason,description,created_by,reviewed_by,reviewed_at,status,total)
@@ -168,6 +210,7 @@ async function transition(
       OUTPUT inserted.row_version WHERE id=@id AND row_version=@row_version;
     `)).recordset[0];
     if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+    if (action === "Submitted") await snapshotSubmission(transaction,id,current.revision,actor.id);
     if (action === "Approved") await snapshotRevision(transaction, id, current.revision, "Approved", "Approved", actor.id);
     const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, inquiryStatus, inquiryProgress, actor.id);
     await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, action,
@@ -191,7 +234,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const result = await database.query<EstimateRow>(`
       SELECT e.id,e.estimate_no,i.inquiry_no,e.customer_id,c.name customer_name,e.project_name,e.project_type,
         e.owner_id,u.name owner_name,e.revision,e.due_date,e.status,e.progress,t.material_total,t.engineering_total,
-        t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,t.contingency_total,t.total,
+        t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,t.overhead_state,t.overhead_total,t.contingency_total,t.total,
         e.created_date,e.updated_at,e.row_version,COUNT_BIG(*) OVER() total_count
       FROM dbo.estimates e INNER JOIN dbo.inquiries i ON i.id=e.inquiry_id INNER JOIN dbo.customers c ON c.id=e.customer_id
       INNER JOIN dbo.users u ON u.id=e.owner_id INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
@@ -211,6 +254,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       status: row.status, progress: Number(row.progress), materialTotal: Number(row.material_total), engineeringTotal: Number(row.engineering_total),
       outsourceTotal: Number(row.outsource_total), transportationTotal: Number(row.transportation_total), accommodationTotal: Number(row.accommodation_total),
       otherTotal: Number(row.other_total), contingencyTotal: Number(row.contingency_total), total: Number(row.total), updatedAt: row.updated_at,
+      overheadState: row.overhead_state, overheadTotal: row.overhead_total === null ? null : Number(row.overhead_total),
       rowVersion: row.row_version.toString("base64") })), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0) };
   });
 
@@ -241,6 +285,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         revision,created_date,due_date,status,progress,contingency_rate,created_by,updated_by) OUTPUT inserted.id,inserted.row_version
         VALUES(@number,@inquiry_id,@customer_id,@project_name,@project_type,@owner_id,0,@today,@due_date,N'Draft',0,@contingency_rate,@actor,@actor);`)).recordset[0]!;
       const id = Number(row.id); const updateInquiryRequest = new sql.Request(transaction);
+      await snapshotOverheadPolicy(transaction,id,0,actor.id,today);
       updateInquiryRequest.input("estimate_id", sql.BigInt, id); updateInquiryRequest.input("actor", sql.BigInt, actor.id); updateInquiryRequest.input("inquiry_id", sql.BigInt, inquiryId);
       const changed = await updateInquiryRequest.query(`UPDATE dbo.inquiries SET estimate_id=@estimate_id,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE id=@inquiry_id AND status=N'New' AND estimate_id IS NULL AND deleted_at IS NULL;`);
@@ -288,6 +333,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
         WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+      await snapshotOverheadPolicy(transaction,id,nextRevision,actor.id,todayIn(config.businessTimeZone));
       await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
       const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
       await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision created",
@@ -321,6 +367,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
         WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+      await snapshotOverheadPolicy(transaction,id,nextRevision,actor.id,todayIn(config.businessTimeZone));
       await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
       const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
       await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision requested",

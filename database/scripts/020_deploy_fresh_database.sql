@@ -99,10 +99,11 @@ GO
 :r database/migrations/035_team_activity.sql
 :r database/migrations/036_report_evidence_images.sql
 :r database/migrations/037_user_role_management.sql
+:r database/migrations/040_estimate_overhead_policy.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37)) <> 37
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 40)) <> 38
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 GO
