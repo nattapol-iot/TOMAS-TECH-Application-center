@@ -23,3 +23,40 @@ const vm=spawnSync('colima',['ssh','-p','iot','--','sh','-c','cat /proc/mounts |
 console.log('NAS_VM_MOUNTS '+(vm.stdout||'').replace(/username=[^, ]+/g,'username=[redacted]').replace(/password=[^, ]+/g,'password=[redacted]'));
 console.log('NAS_HOST_ENTRIES '+JSON.stringify(fs.readdirSync('/Volumes')));
 console.log('INSPECTION_COMPLETE');
+
+// Bounded discovery only: never print file contents, credentials, or unrelated settings.
+const home='/Users/tomastc';
+const ignored=new Set(['node_modules','.git','.Trash','Library','Pictures','Movies','Music',
+ '.ssh','.npm','.cache','.rustup','.cargo','dist','build','vendor','venv','.venv']);
+const needles=['100.64.0.53','IoT Department','IoT Team Center'];
+let examined=0,bytes=0,limited=false;
+const hits=[];
+function inspectConfig(file){
+ if(examined>=12000 || bytes>64*1024*1024){limited=true;return;}
+ try {
+  const stat=fs.lstatSync(file);
+  if(!stat.isFile() || stat.isSymbolicLink() || stat.size>512*1024)return;
+  examined++;bytes+=stat.size;
+  const text=fs.readFileSync(file,'utf8');
+  const targetMatch=needles.some(n=>text.includes(n));
+  const envFile=/(^|\/)\.env(?:[.\-][^/]*)?$|\.env\.(input|example)$|\.nsmbrc$/.test(file);
+  const keys=[...text.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)].map(m=>m[1]);
+  const storageKeys=keys.filter(k=>/NAS|SMB|CIFS|DOCUMENT.?STORAGE|STORAGE.?ROOT|MOUNT/i.test(k));
+  if(targetMatch || (envFile && storageKeys.length))hits.push({file,targetMatch,storageKeys});
+ }catch(e){if(e.code==='EACCES')console.log('NAS_SEARCH_UNREADABLE '+file);}
+}
+function walk(root,depth){
+ if(depth>6 || limited)return;
+ let entries;try{entries=fs.readdirSync(root,{withFileTypes:true});}catch{return;}
+ for(const e of entries){
+  if(e.isSymbolicLink() || ignored.has(e.name))continue;
+  const file=root+'/'+e.name;
+  if(e.isDirectory())walk(file,depth+1);
+  else if(e.isFile() && (/^\.env(?:[.\-].*)?$|\.env\.(input|example)$|\.nsmbrc$|\.(ya?ml|toml|ini|conf|cfg|sh|mjs|cjs)$/.test(e.name)))inspectConfig(file);
+ }
+}
+walk(home,0);
+for(const file of [home+'/.nsmbrc','/etc/nsmb.conf','/etc/fstab',home+'/.colima/iot/colima.yaml'])inspectConfig(file);
+for(const root of ['/etc/iot-team-center',home+'/Library/LaunchAgents'])walk(root,0);
+console.log('NAS_SEARCH '+JSON.stringify({examined,bytes,limited,hits}));
+console.log('NAS_SEARCH_COMPLETE');
