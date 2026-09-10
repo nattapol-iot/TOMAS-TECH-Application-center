@@ -19,13 +19,14 @@ services:
       MASTER_DATA_URL: ${MASTER_DATA_URL:-}
       MASTER_DATA_API_KEY: ${MASTER_DATA_API_KEY:-}
       ConnectionStrings__IoTTeamCenter: ${DEV_SQL_CONNECTION_STRING:?set this in .env, copied from .env.dev.example}
+      DocumentStorage__Mode: ${DEV_DOCUMENT_STORAGE_MODE:-Local}
       DocumentStorage__RootPath: /app/App_Data/project-documents
       # backend-node validates CORS origins in every environment and accepts plain http only
       # for localhost, so a hostname origin here has to be https (see docker-compose.tls.yml).
       Cors__AllowedOrigins__0: ${DEV_SITE_ORIGIN:-http://localhost:3000}
       AllowedHosts: ${DEV_API_ALLOWED_HOSTS:-localhost;127.0.0.1}
     volumes:
-      - api-dev-documents:/app/App_Data/project-documents
+      - "${DEV_DOCUMENT_STORAGE_PATH:-api-dev-documents}:/app/App_Data/project-documents"
     ports:
       - "5105:5106"
     restart: unless-stopped

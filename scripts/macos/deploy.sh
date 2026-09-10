@@ -33,6 +33,14 @@ done
 [[ -f "$DEPLOY_DIR/.env" ]] || die "$DEPLOY_DIR/.env is missing; see docs/MACMINI_HANDOFF.md for the keys it must carry."
 docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context '$DOCKER_CONTEXT' does not exist; is the colima profile running?"
 
+DOCUMENT_MODE="$(grep -E '^DEV_DOCUMENT_STORAGE_MODE=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
+if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
+  log "Verifying the NAS mount inside the iot VM"
+  colima ssh -p iot -- sudo mkdir -p /mnt/iot-department
+  colima ssh -p iot -- mountpoint -q /mnt/iot-department || colima ssh -p iot -- sudo mount /mnt/iot-department
+  colima ssh -p iot -- mountpoint -q /mnt/iot-department || die "NAS mode is enabled but /mnt/iot-department is not mounted."
+fi
+
 compose() { docker --context "$DOCKER_CONTEXT" compose -f docker-compose.dev.yml -f docker-compose.tls.yml "$@"; }
 
 log "Syncing $SOURCE -> $DEPLOY_DIR"

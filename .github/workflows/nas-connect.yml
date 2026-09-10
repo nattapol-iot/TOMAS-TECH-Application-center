@@ -16,4 +16,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: node scripts/macos/nas-connect.mjs
+      - name: Mount, verify, migrate, and activate NAS storage
+        env:
+          NAS_USERNAME: ${{ secrets.NAS_USERNAME }}
+          NAS_PASSWORD: ${{ secrets.NAS_PASSWORD }}
+        run: bash scripts/macos/nas-cutover.sh
