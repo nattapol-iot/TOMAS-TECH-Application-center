@@ -34,6 +34,7 @@ CREATE TABLE dbo.supplier_quotation_lines (
 );
 
 CREATE INDEX IX_sql_quotation ON dbo.supplier_quotation_lines (quotation_id);
+GO
 
 -- Immutable: lines are replaced wholesale (delete+reinsert) not updated in-place.
 -- This trigger blocks UPDATE so callers must DELETE+INSERT instead.
