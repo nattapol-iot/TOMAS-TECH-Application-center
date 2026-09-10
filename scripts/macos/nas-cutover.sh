@@ -1,50 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DEPLOY_DIR=/Users/tomastc/iot-team-center/src
-MOUNT_DIR=/mnt/iot-department
+MOUNT_DIR=/Users/tomastc/iot-team-center/nas
 DOCUMENT_DIR="$MOUNT_DIR/IoT Team Center"
 COMPOSE=(-f docker-compose.dev.yml -f docker-compose.tls.yml)
 [[ -n "${NAS_USERNAME:-}" && -n "${NAS_PASSWORD:-}" ]] || { echo 'NAS secrets are not configured.' >&2; exit 1; }
 [[ -f "$DEPLOY_DIR/.env" ]] || { echo 'Deployment .env is missing.' >&2; exit 1; }
 cd "$DEPLOY_DIR"
 
-credential_payload="username=$NAS_USERNAME
-password=$NAS_PASSWORD
-"
-credential_b64="$(printf '%s' "$credential_payload" | base64)"
-unset credential_payload NAS_PASSWORD
-
-vm_script="$(cat <<VM_SCRIPT
-set -eu
-if ! command -v mount.cifs >/dev/null 2>&1; then
-  if command -v apk >/dev/null 2>&1; then
-    sudo apk add --no-cache cifs-utils >/dev/null
-  elif command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update -qq
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cifs-utils >/dev/null
-  else
-    echo 'No supported package manager is available for cifs-utils.' >&2
-    exit 1
-  fi
-fi
-sudo install -d -m 0700 /etc/iot-team-center
-printf '%s' '$credential_b64' | base64 -d | sudo tee /etc/iot-team-center/nas.credentials >/dev/null
-sudo chmod 0600 /etc/iot-team-center/nas.credentials
-sudo mkdir -p '$MOUNT_DIR'
-entry='//100.64.0.53/IoT\\040Department $MOUNT_DIR cifs credentials=/etc/iot-team-center/nas.credentials,vers=3.0,iocharset=utf8,rw,nofail,_netdev,file_mode=0660,dir_mode=0770 0 0'
-sudo sed -i '\|[[:space:]]$MOUNT_DIR[[:space:]]|d' /etc/fstab
-printf '%s\n' "\$entry" | sudo tee -a /etc/fstab >/dev/null
-mountpoint -q '$MOUNT_DIR' || sudo mount '$MOUNT_DIR'
-mountpoint -q '$MOUNT_DIR'
-mkdir -p '$DOCUMENT_DIR'
-probe='$DOCUMENT_DIR/.iot-team-center-nas-probe'
-printf 'iot-team-center-nas-check' > "\$probe"
-test "\$(cat "\$probe")" = 'iot-team-center-nas-check'
-rm "\$probe"
-VM_SCRIPT
-)"
-printf '%s\n' "$vm_script" | colima ssh -p iot -- sh -s
-unset vm_script credential_b64 NAS_USERNAME
+export NAS_PASSWORD
+/usr/bin/expect <<'EXPECT'
+log_user 0
+set timeout 15
+spawn /usr/bin/security add-generic-password -a $env(NAS_USERNAME) -s iot-team-center-nas -U
+expect {
+  -re {(?i)password.*:} { send -- "$env(NAS_PASSWORD)\r"; exp_continue }
+  eof
+}
+catch wait result
+exit [lindex $result 3]
+EXPECT
+stored_password="$(/usr/bin/security find-generic-password -a "$NAS_USERNAME" -s iot-team-center-nas -w)"
+[[ "$stored_password" == "$NAS_PASSWORD" ]] || { echo 'Keychain verification failed.' >&2; exit 1; }
+unset stored_password NAS_PASSWORD
+export DEV_NAS_USERNAME="$NAS_USERNAME"
+bash "$GITHUB_WORKSPACE/scripts/macos/mount-nas.sh"
+unset NAS_USERNAME
+mkdir -p "$DOCUMENT_DIR"
+probe="$DOCUMENT_DIR/.iot-team-center-nas-probe"
+printf 'iot-team-center-nas-check' > "$probe"
+[[ "$(cat "$probe")" == 'iot-team-center-nas-check' ]]
+rm "$probe"
+colima ssh -p iot -- test -d "$DOCUMENT_DIR"
 echo 'NAS mount write-read-delete probe passed.'
 
 api_id="$(docker --context colima-iot compose "${COMPOSE[@]}" ps -q api)"
@@ -74,7 +61,7 @@ target_count="$(docker --context colima-iot run --rm -v "$DOCUMENT_DIR:/data:ro"
 
 node - "$DEPLOY_DIR/.env" <<'NODE'
 const fs=require('fs'); const file=process.argv[2]; let text=fs.readFileSync(file,'utf8');
-for(const [key,value] of [['DEV_DOCUMENT_STORAGE_MODE','Nas'],['DEV_DOCUMENT_STORAGE_PATH','/mnt/iot-department/IoT Team Center']]){
+for(const [key,value] of [['DEV_DOCUMENT_STORAGE_MODE','Nas'],['DEV_DOCUMENT_STORAGE_PATH','/Users/tomastc/iot-team-center/nas/IoT Team Center'],['DEV_NAS_USERNAME',process.env.DEV_NAS_USERNAME]]){
  const line=key+'='+value; const re=new RegExp('^'+key+'=.*$','m'); text=re.test(text)?text.replace(re,line):text.replace(/\s*$/, '\n'+line+'\n');
 }
 fs.writeFileSync(file+'.tmp',text,{mode:0o600}); fs.renameSync(file+'.tmp',file);
