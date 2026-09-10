@@ -34,19 +34,15 @@ CREATE TABLE dbo.supplier_quotation_lines (
 );
 
 CREATE INDEX IX_sql_quotation ON dbo.supplier_quotation_lines (quotation_id);
-GO
 
 -- Immutable: lines are replaced wholesale (delete+reinsert) not updated in-place.
 -- This trigger blocks UPDATE so callers must DELETE+INSERT instead.
-GO
-
-CREATE TRIGGER tr_supplier_quotation_lines_no_update
+EXEC(N'CREATE TRIGGER tr_supplier_quotation_lines_no_update
 ON dbo.supplier_quotation_lines AFTER UPDATE AS
 BEGIN
-    RAISERROR('supplier_quotation_lines rows are immutable; delete and re-insert to correct.', 16, 1);
+    RAISERROR(''supplier_quotation_lines rows are immutable; delete and re-insert to correct.'', 16, 1);
     ROLLBACK;
-END;
-GO
+END;');
 
 INSERT INTO dbo.schema_versions (version, name) VALUES (38, N'supplier_quotation_lines');
 
