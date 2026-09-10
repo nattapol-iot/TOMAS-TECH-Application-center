@@ -16,7 +16,17 @@ unset credential_payload NAS_PASSWORD
 
 vm_script="$(cat <<VM_SCRIPT
 set -eu
-command -v mount.cifs >/dev/null 2>&1 || sudo apk add --no-cache cifs-utils >/dev/null
+if ! command -v mount.cifs >/dev/null 2>&1; then
+  if command -v apk >/dev/null 2>&1; then
+    sudo apk add --no-cache cifs-utils >/dev/null
+  elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cifs-utils >/dev/null
+  else
+    echo 'No supported package manager is available for cifs-utils.' >&2
+    exit 1
+  fi
+fi
 sudo install -d -m 0700 /etc/iot-team-center
 printf '%s' '$credential_b64' | base64 -d | sudo tee /etc/iot-team-center/nas.credentials >/dev/null
 sudo chmod 0600 /etc/iot-team-center/nas.credentials
