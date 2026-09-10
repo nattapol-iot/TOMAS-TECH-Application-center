@@ -1163,6 +1163,32 @@ export async function downloadSupplierQuotation(id: number) {
   return { blob: await response.blob(), fileName };
 }
 
+export type QuotationLineItem = {
+  id?: number; lineNo: number; itemCode: string; description: string;
+  brand: string; model: string; qty: number; unit: string;
+  unitPrice: number; lineTotal?: number; currency: string; remark: string;
+};
+
+export type QuotationLineForPriceLibrary = QuotationLineItem & {
+  quotationId: number; quotationNumber: string; supplierReference: string;
+  receivedDate: string; validUntil: string;
+  supplierId: number; supplierName: string;
+};
+
+export const saveQuotationLines = (quotationId: number, lines: QuotationLineItem[]) =>
+  apiRequest<void>(`/api/v1/supplier-quotations/${quotationId}/lines`, { method: "PUT", body: JSON.stringify({ lines }) });
+
+export const listQuotationLines = (quotationId: number) =>
+  apiRequest<QuotationLineItem[]>(`/api/v1/supplier-quotations/${quotationId}/lines`);
+
+export const listAllQuotationLinesForPriceLibrary = () =>
+  apiRequest<QuotationLineForPriceLibrary[]>("/api/v1/supplier-quotation-lines");
+
+export const findOrCreateSupplier = (input: { name: string; taxId: string; category?: string }) =>
+  apiRequest<{ id: number; name: string; created: boolean }>("/api/v1/master/suppliers/find-or-create", {
+    method: "POST", body: JSON.stringify(input),
+  });
+
 export const createEstimate = (input: CreateEstimateInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
 

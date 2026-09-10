@@ -10,19 +10,26 @@ import {
   apiRequest,
   createSupplierQuotation,
   downloadSupplierQuotation,
+  findOrCreateSupplier,
+  listAllQuotationLinesForPriceLibrary,
   listEstimates,
   listInquiries,
   listProjects,
+  listQuotationLines,
   listSupplierQuotations,
   listSupplierPriceHistory,
   loadEstimateCostWorkspace,
+  saveQuotationLines,
   type BootstrapData,
   type EstimateCostItem,
   type EstimateSummary,
   type ProjectSummary,
+  type QuotationLineForPriceLibrary,
+  type QuotationLineItem,
   type SupplierQuotationRecord,
   type SupplierPriceHistoryRecord,
 } from "../api-client";
+import { parsePdfQuotation, type ParsedLine } from "./supplier-quotation-pdf-parser";
 import {
   Badge,
   EmptyState,
@@ -202,7 +209,7 @@ export type ProjectSchedule = {
 
 type PriceRecord = {
   key: string;
-  sourceKind: "Estimate" | "Historical Purchase";
+  sourceKind: "Estimate" | "Historical Purchase" | "Supplier Quotation";
   estimateId: number;
   estimateNo: string;
   estimateStatus: string;
@@ -231,6 +238,7 @@ type PriceLoadState = {
   records: PriceRecord[];
   estimateCount: number;
   historicalCount: number;
+  quotationLineCount: number;
   skippedWorkspaces: number;
 };
 
@@ -352,7 +360,10 @@ async function mapSettledLimited<T, R>(items: T[], limit: number, work: (item: T
 }
 
 async function loadPriceRecords(): Promise<PriceLoadState> {
-  const [estimates, historical] = await Promise.all([loadAllEstimates(), loadAllSupplierPriceHistory()]);
+  const [estimates, historical, quotationLines] = await Promise.all([
+    loadAllEstimates(), loadAllSupplierPriceHistory(),
+    listAllQuotationLinesForPriceLibrary().catch(() => [] as QuotationLineForPriceLibrary[]),
+  ]);
   const settled = await mapSettledLimited(estimates, 5, async (estimate) => ({
     estimate,
     workspace: await loadEstimateCostWorkspace(estimate.id),
@@ -414,11 +425,38 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
     lineStatus: item.purchaseOrderStatus || "Purchased",
     ageDays: ageInDays(item.quotationDate),
   }));
+  quotationLines.forEach((item) => records.push({
+    key: `sqline:${item.id}`,
+    sourceKind: "Supplier Quotation",
+    estimateId: 0,
+    estimateNo: item.quotationNumber,
+    estimateStatus: "Quoted",
+    projectName: item.supplierReference || item.quotationNumber,
+    customerName: "",
+    itemId: item.id ?? 0,
+    itemCode: item.itemCode,
+    description: item.description,
+    brand: item.brand,
+    model: item.model,
+    supplierId: item.supplierId,
+    supplierName: item.supplierName,
+    quantity: Number(item.qty),
+    unit: item.unit,
+    unitCost: Number(item.unitPrice),
+    lineTotal: Number(item.lineTotal ?? item.qty * item.unitPrice),
+    priceSource: "Supplier Quotation",
+    referenceNumber: item.quotationNumber,
+    priceDate: item.receivedDate,
+    ownerName: item.supplierName,
+    lineStatus: "Quoted",
+    ageDays: ageInDays(item.receivedDate),
+  }));
   records.sort((a, b) => (b.priceDate ?? "").localeCompare(a.priceDate ?? "") || b.itemId - a.itemId);
   return {
     records,
     estimateCount: estimates.length,
     historicalCount: historical.length,
+    quotationLineCount: quotationLines.length,
     skippedWorkspaces: settled.filter((item) => !item.ok).length,
   };
 }
@@ -435,7 +473,7 @@ export async function loadSchedules(): Promise<ScheduleLoadState> {
 }
 
 function usePrices(enabled: boolean) {
-  const [state, setState] = useState<PriceLoadState>({ records: [], estimateCount: 0, historicalCount: 0, skippedWorkspaces: 0 });
+  const [state, setState] = useState<PriceLoadState>({ records: [], estimateCount: 0, historicalCount: 0, quotationLineCount: 0, skippedWorkspaces: 0 });
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
@@ -1437,7 +1475,7 @@ function PriceLoadWarning({ estimateCount, skippedWorkspaces }: Pick<PriceLoadSt
 export function ProductionPriceLibrary({ bootstrap }: ProductionPlanningProps) {
   const uiText = useUiText();
   const allowed = bootstrap.permissions.includes("estimate.read");
-  const { records, estimateCount, historicalCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
+  const { records, estimateCount, historicalCount, quotationLineCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("All sources");
   const [supplier, setSupplier] = useState("All suppliers");
@@ -1469,7 +1507,7 @@ export function ProductionPriceLibrary({ bootstrap }: ProductionPlanningProps) {
   const stale = priced.filter((record) => record.ageDays === null || record.ageDays > 180).length;
   return <>
     <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
-    <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchase records`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
+    <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
     <Toolbar>
       <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
       <Select label="Price source" value={source} onChange={(value) => { setSource(value); setPage(1); }} options={sources} />
@@ -1535,41 +1573,81 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
+  const [parseWarning, setParseWarning] = useState("");
+  const [lines, setLines] = useState<QuotationLineItem[]>([]);
 
   useEffect(() => {
     let active = true;
     void listInquiries({ page: 1, pageSize: 100 }).then((response) => {
       if (active) setInquiries(response.items.map((item) => ({
-        id: item.id,
-        number: item.number,
-        projectName: item.projectName,
-        customerName: item.customerName,
+        id: item.id, number: item.number, projectName: item.projectName, customerName: item.customerName,
       })));
-    }).catch((requestError) => {
-      if (active) setError(toError(requestError));
-    });
+    }).catch((requestError) => { if (active) setError(toError(requestError)); });
     return () => { active = false; };
   }, []);
+
+  const parsePdf = async () => {
+    if (!file || !file.name.toLowerCase().endsWith(".pdf")) return;
+    setParsing(true); setParseWarning(""); setError("");
+    try {
+      const result = await parsePdfQuotation(file);
+      if (result.requiresOcr) {
+        setParseWarning("PDF นี้เป็นไฟล์สแกน ไม่มีข้อความฝังอยู่ กรุณากรอกข้อมูลเอง");
+      } else {
+        if (result.quotationNumber) setSupplierReference(result.quotationNumber);
+        if (result.receivedDate) setReceivedDate(result.receivedDate);
+        if (result.validUntil) setValidUntil(result.validUntil);
+        if (result.currency) setCurrency(result.currency);
+        if (result.totalAmount > 0) setAmount(String(result.totalAmount));
+        if (result.lines.length > 0) setLines(result.lines);
+
+        // Auto-match supplier by name from extracted text
+        if (result.supplierName) {
+          try {
+            const found = await findOrCreateSupplier({ name: result.supplierName, taxId: result.supplierTaxId });
+            setSupplierId(String(found.id));
+            if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
+          } catch { /* use current supplierId */ }
+        }
+
+        const missing: string[] = [];
+        if (!result.receivedDate) missing.push("วันที่");
+        if (!result.quotationNumber) missing.push("เลขที่ใบเสนอราคา");
+        if (result.lines.length === 0) missing.push("รายการสินค้า");
+        if (missing.length) setParseWarning(`อ่าน PDF ได้บางส่วน ตรวจสอบ: ${missing.join(", ")}`);
+      }
+    } catch (e) {
+      setError(`Parse PDF ไม่สำเร็จ: ${String(e instanceof Error ? e.message : e)}`);
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const updateLine = (idx: number, patch: Partial<QuotationLineItem>) =>
+    setLines((prev) => prev.map((l, i) => i === idx ? { ...l, ...patch } : l));
+  const removeLine = (idx: number) =>
+    setLines((prev) => prev.filter((_, i) => i !== idx).map((l, i) => ({ ...l, lineNo: i + 1 })));
+  const addLine = () =>
+    setLines((prev) => [...prev, { lineNo: prev.length + 1, itemCode: "", description: "", brand: "", model: "", qty: 1, unit: "EA", unitPrice: 0, currency, remark: "" }]);
 
   const parsedAmount = Number(amount);
   const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
+
   const submit = async () => {
     if (invalid || !file) return;
-    setBusy(true);
-    setError("");
+    setBusy(true); setError("");
     try {
       const created = await createSupplierQuotation({
-        file,
-        supplierId: Number(supplierId),
-        supplierReference: supplierReference.trim(),
-        receivedDate,
-        validUntil,
-        inquiryId: inquiryId ? Number(inquiryId) : undefined,
-        currency,
-        amount: parsedAmount,
+        file, supplierId: Number(supplierId),
+        supplierReference: supplierReference.trim(), receivedDate, validUntil,
+        inquiryId: inquiryId ? Number(inquiryId) : undefined, currency, amount: parsedAmount,
       });
+      if (lines.length > 0) {
+        await saveQuotationLines(created.id, lines).catch(() => {/* non-blocking */});
+      }
       await onCreated(created.quotationNumber);
     } catch (requestError) {
       setError(toError(requestError));
@@ -1578,10 +1656,12 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     }
   };
 
+  const isPdf = file?.name.toLowerCase().endsWith(".pdf") ?? false;
+
   return <Modal
     title="Upload supplier quotation"
-    subtitle="ระบบออกเลข SQ-YYMM-XXXX และเก็บไฟล์กับ metadata ลงฐานข้อมูลจริง"
-    size="lg"
+    subtitle="ระบบออกเลข SQ-YYMM-XXXX · Parse PDF เพื่อดึงข้อมูลอัตโนมัติ"
+    size="xl"
     onClose={onClose}
     footer={<>
       <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
@@ -1590,14 +1670,30 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       </button>
     </>}
   >
-    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Upload failed"} /></strong><small>{error}</small></span></div> : null}
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Error"} /></strong> {error}</span></div> : null}
+    {parseWarning ? <div className="callout warning"><Icon name="alertTriangle" /><span>{parseWarning}</span></div> : null}
+
+    {/* File selector + Parse button */}
+    <div className="form-grid two" style={{ marginBottom: 16 }}>
+      <Field label="Quotation file *" hint="PDF, Excel, CSV, JPG or PNG · maximum 50 MB" span={2}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
+            onChange={(event) => { setFile(event.target.files?.[0] ?? null); setLines([]); setParseWarning(""); }} />
+          {isPdf && <button className="btn ghost sm" type="button" disabled={parsing || busy} onClick={() => { void parsePdf(); }} style={{ whiteSpace: "nowrap" }}>
+            {parsing ? <><span className="spinner" /> Parsing…</> : <><Icon name="eye" /> Parse PDF</>}
+          </button>}
+        </div>
+      </Field>
+    </div>
+
+    {/* Header form */}
     <div className="form-grid two">
       <Field label="System quotation no." hint="Generated automatically after upload">
         <input value="SQ-YYMM-XXXX" readOnly />
       </Field>
       <Field label="Supplier *">
         <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} <LocalizedText text={"·"} /> {supplier.name}</option>)}
+          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
         </select>
       </Field>
       <Field label="Supplier quotation / reference">
@@ -1605,8 +1701,8 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       </Field>
       <Field label="Related inquiry">
         <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
-          <option value=""><LocalizedText text={"Not linked"} /></option>
-          {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} <LocalizedText text={"·"} /> {inquiry.projectName} <LocalizedText text={"·"} /> {inquiry.customerName}</option>)}
+          <option value="">Not linked</option>
+          {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
         </select>
       </Field>
       <Field label="Received date *">
@@ -1620,17 +1716,44 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       </Field>
       <Field label="Currency *">
         <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
-          <option value={"THB"}><LocalizedText text={"THB"} /></option><option value={"JPY"}>JPY</option><option value={"USD"}>USD</option><option value={"EUR"}>EUR</option>
+          <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
         </select>
       </Field>
       <Field label="Quotation amount *">
         <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
       </Field>
-      <Field label="Quotation file *" hint="PDF, Excel, CSV, JPG or PNG · maximum 50 MB" span={2}>
-        <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-      </Field>
     </div>
-    {file ? <div className="file-row"><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} <LocalizedText text={"·"} /> {number(file.size / 1024, 1)} KB</span></div></div> : null}
+
+    {/* Line items table */}
+    <div style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <strong style={{ fontSize: 13 }}>Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ</strong>
+        <button className="btn ghost sm" type="button" onClick={addLine}><Icon name="plus" /> Add line</button>
+      </div>
+      {lines.length > 0 ? <div className="table-wrap">
+        <table style={{ fontSize: 12, minWidth: 900 }}>
+          <thead><tr>
+            <th style={{ width: 36 }}>#</th><th>Item code</th><th>Description *</th><th style={{ width: 60 }}>Qty</th>
+            <th style={{ width: 60 }}>Unit</th><th style={{ width: 110 }}>Unit price</th><th style={{ width: 70 }}>Cur.</th>
+            <th style={{ width: 32 }}></th>
+          </tr></thead>
+          <tbody>{lines.map((line, idx) => <tr key={idx}>
+            <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
+            <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
+            <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
+            <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
+            <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
+            <td><input type="number" style={{ width: "100%" }} value={line.unitPrice} min="0" step="0.01" onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })} /></td>
+            <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
+              <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
+            </select></td>
+            <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
+          </tr>)}</tbody>
+        </table>
+      </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>ยังไม่มี line items — กด "Parse PDF" หรือ "Add line" เพื่อเพิ่ม</div>}
+    </div>
+
+    {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}
   </Modal>;
 }
 

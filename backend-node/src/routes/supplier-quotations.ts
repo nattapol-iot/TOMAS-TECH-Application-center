@@ -17,7 +17,7 @@ import {
 } from "../document-storage.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
-import { clampedInteger, dateOnly, optionalPositiveLong, optionalText, parseDateOnly, positiveLong } from "../http.js";
+import { bodyObject, clampedInteger, dateOnly, optionalPositiveLong, optionalText, parseDateOnly, positiveLong } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
 function todayIn(timeZone: string): string {
@@ -175,5 +175,122 @@ export function registerSupplierQuotationRoutes(
       storageKey: String(row.storage_key), fileName: String(row.file_name), contentType: String(row.content_type),
       sizeBytes: Number(row.size_bytes), sha256: String(row.sha256),
     });
+  });
+
+  // ── Quotation line items (extracted from PDF) ───────────────────────────
+
+  type LineInput = {
+    lineNo: number; itemCode: string; description: string; brand: string;
+    model: string; qty: number; unit: string; unitPrice: number; currency: string; remark: string;
+  };
+
+  function parseLines(body: Record<string, unknown>): LineInput[] {
+    const raw = body.lines;
+    if (!Array.isArray(raw)) throw new ApiError(400, "validation_failed", "lines must be an array.");
+    if (raw.length > 200) throw new ApiError(400, "validation_failed", "Maximum 200 line items per quotation.");
+    const validCurrencies = new Set(["THB", "JPY", "USD", "EUR"]);
+    return raw.map((item: unknown, idx: number) => {
+      if (typeof item !== "object" || item === null) throw new ApiError(400, "validation_failed", `Line ${idx + 1} must be an object.`);
+      const it = item as Record<string, unknown>;
+      const lineNo = Number(it.lineNo);
+      if (!Number.isInteger(lineNo) || lineNo < 1) throw new ApiError(400, "validation_failed", `Line ${idx + 1}: lineNo must be a positive integer.`);
+      const description = String(it.description ?? "").trim();
+      if (!description) throw new ApiError(400, "validation_failed", `Line ${lineNo}: description is required.`);
+      const qty = Number(it.qty ?? 1);
+      const unitPrice = Number(it.unitPrice ?? 0);
+      if (!Number.isFinite(qty) || qty <= 0) throw new ApiError(400, "validation_failed", `Line ${lineNo}: qty must be > 0.`);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new ApiError(400, "validation_failed", `Line ${lineNo}: unitPrice must be >= 0.`);
+      const currency = String(it.currency ?? "THB").toUpperCase();
+      if (!validCurrencies.has(currency)) throw new ApiError(400, "validation_failed", `Line ${lineNo}: currency must be THB/JPY/USD/EUR.`);
+      return {
+        lineNo, itemCode: String(it.itemCode ?? "").trim().slice(0, 200),
+        description: description.slice(0, 500),
+        brand: String(it.brand ?? "").trim().slice(0, 100), model: String(it.model ?? "").trim().slice(0, 200),
+        qty, unit: String(it.unit ?? "EA").trim().slice(0, 50) || "EA", unitPrice, currency,
+        remark: String(it.remark ?? "").trim().slice(0, 1000),
+      };
+    });
+  }
+
+  async function demandQuotationAccess(request: Parameters<typeof users.required>[0], id: number) {
+    await users.demandPermission(request, "estimate.write");
+    const check = await database.query<{ id: number }>(
+      "SELECT id FROM dbo.supplier_quotations WHERE id=@id;",
+      (bind) => bind.input("id", sql.BigInt, id),
+    );
+    if (!check.recordset[0]) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
+  }
+
+  // Replace all line items for a quotation (idempotent — safe to call again after corrections)
+  app.put("/api/v1/supplier-quotations/:id/lines", async (request, reply) => {
+    const id = positiveLong((request.params as { id?: string }).id, "Supplier quotation id");
+    await demandQuotationAccess(request, id);
+    const actor = await users.required(request);
+    const body = bodyObject(request.body);
+    const lines = parseLines(body);
+
+    await database.transaction(async (transaction) => {
+      await new sql.Request(transaction).input("id", sql.BigInt, id)
+        .query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
+      for (const line of lines) {
+        const ins = new sql.Request(transaction);
+        ins.input("qid", sql.BigInt, id); ins.input("no", sql.Int, line.lineNo);
+        ins.input("code", sql.NVarChar(200), line.itemCode); ins.input("desc", sql.NVarChar(500), line.description);
+        ins.input("brand", sql.NVarChar(100), line.brand); ins.input("model", sql.NVarChar(200), line.model);
+        ins.input("qty", sql.Decimal(19, 4), line.qty); ins.input("unit", sql.NVarChar(50), line.unit);
+        ins.input("price", sql.Decimal(19, 4), line.unitPrice); ins.input("cur", sql.Char(3), line.currency);
+        ins.input("remark", sql.NVarChar(sql.MAX), line.remark); ins.input("actor", sql.BigInt, actor.id);
+        await ins.query(`INSERT INTO dbo.supplier_quotation_lines
+          (quotation_id,line_no,item_code,description,brand,model,qty,unit,unit_price,currency,remark,created_by)
+          VALUES(@qid,@no,@code,@desc,@brand,@model,@qty,@unit,@price,@cur,@remark,@actor);`);
+      }
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+
+    return reply.status(204).send();
+  });
+
+  app.get("/api/v1/supplier-quotations/:id/lines", async (request) => {
+    await users.demandPermission(request, "estimate.read");
+    const id = positiveLong((request.params as { id?: string }).id, "Supplier quotation id");
+    const rows = await database.query<Record<string, unknown>>(
+      `SELECT l.id,l.line_no,l.item_code,l.description,l.brand,l.model,l.qty,l.unit,l.unit_price,l.line_total,l.currency,l.remark
+       FROM dbo.supplier_quotation_lines l WHERE l.quotation_id=@id ORDER BY l.line_no;`,
+      (bind) => bind.input("id", sql.BigInt, id),
+    );
+    return rows.recordset.map((r) => ({
+      id: Number(r.id), lineNo: Number(r.line_no), itemCode: String(r.item_code), description: String(r.description),
+      brand: String(r.brand), model: String(r.model), qty: Number(r.qty), unit: String(r.unit),
+      unitPrice: Number(r.unit_price), lineTotal: Number(r.line_total), currency: String(r.currency), remark: String(r.remark ?? ""),
+    }));
+  });
+
+  // All quotation lines for Price Library — joined with supplier + quotation header
+  app.get("/api/v1/supplier-quotation-lines", async (request) => {
+    await users.demandPermission(request, "estimate.read");
+    const rows = await database.query<Record<string, unknown>>(`
+      SELECT l.id, l.line_no, l.item_code, l.description, l.brand, l.model,
+             l.qty, l.unit, l.unit_price, l.line_total, l.currency, l.remark,
+             q.id quotation_id, q.quotation_no, q.supplier_reference, q.received_date,
+             q.valid_until, q.currency quotation_currency,
+             s.id supplier_id, s.name supplier_name
+      FROM dbo.supplier_quotation_lines l
+      JOIN dbo.supplier_quotations q ON q.id = l.quotation_id
+      JOIN dbo.suppliers s ON s.id = q.supplier_id
+      WHERE q.status IS NULL OR q.status != N'Superseded'
+      ORDER BY q.received_date DESC, l.quotation_id DESC, l.line_no;
+    `);
+    return rows.recordset.map((r) => ({
+      id: Number(r.id), lineNo: Number(r.line_no),
+      itemCode: String(r.item_code), description: String(r.description),
+      brand: String(r.brand), model: String(r.model),
+      qty: Number(r.qty), unit: String(r.unit),
+      unitPrice: Number(r.unit_price), lineTotal: Number(r.line_total),
+      currency: String(r.currency), remark: String(r.remark ?? ""),
+      quotationId: Number(r.quotation_id), quotationNumber: String(r.quotation_no),
+      supplierReference: String(r.supplier_reference ?? ""),
+      receivedDate: dateOnly(r.received_date as Date | string),
+      validUntil: dateOnly(r.valid_until as Date | string),
+      supplierId: Number(r.supplier_id), supplierName: String(r.supplier_name),
+    }));
   });
 }

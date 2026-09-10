@@ -466,4 +466,57 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     });
     return reply.status(201).header("Location", `/api/v1/master/engineering-rates/${created.id}`).send(created);
   });
+
+  // Find-or-create supplier by TAX ID or name. Used by the PDF quotation importer so
+  // the user doesn't have to manually pick a supplier when parsing a new PDF.
+  app.post("/api/v1/master/suppliers/find-or-create", async (request, reply) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const body = bodyObject(request.body);
+    const name = requiredText(body.name, 300, "Supplier name");
+    const taxId = optionalBodyText(body.taxId, 20, "Tax ID") ?? "";
+    const category = optionalBodyText(body.category, 100, "Category") ?? "Supplier";
+
+    const result = await database.transaction(async (transaction) => {
+      const find = new sql.Request(transaction);
+      find.input("name", sql.NVarChar(300), name.trim());
+      find.input("taxId", sql.NVarChar(20), taxId.trim());
+      const existing = (await find.query<{ id: number | string; name: string }>(`
+        SELECT TOP 1 id, name FROM dbo.suppliers
+        WHERE deleted_at IS NULL AND is_active = 1
+          AND ((@taxId != N'' AND REPLACE(tax_id, N'-', N'') = REPLACE(@taxId, N'-', N''))
+               OR LOWER(LTRIM(RTRIM(name))) = LOWER(LTRIM(RTRIM(@name))))
+        ORDER BY id;
+      `)).recordset[0];
+      if (existing) return { id: Number(existing.id), name: String(existing.name), created: false };
+
+      // Auto-generate a code from the name (uppercase initials, max 10 chars)
+      const codeBase = name.trim().replace(/[^A-Za-zก-๙0-9]/g, " ").split(/\s+/)
+        .map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 8) || "SUP";
+      const suffix = new sql.Request(transaction);
+      suffix.input("base", sql.NVarChar(10), codeBase);
+      const taken = (await suffix.query<{ code: string }>(`
+        SELECT code FROM dbo.suppliers WHERE code LIKE @base + N'%';
+      `)).recordset.map((r) => r.code);
+      let code = codeBase;
+      for (let i = 2; taken.includes(code); i++) code = `${codeBase}${i}`;
+
+      const insert = new sql.Request(transaction);
+      insert.input("code", sql.NVarChar(30), code);
+      insert.input("name", sql.NVarChar(300), name.trim());
+      insert.input("taxId", sql.NVarChar(20), taxId.trim());
+      insert.input("category", sql.NVarChar(100), category);
+      insert.input("brands_json", sql.NVarChar(sql.MAX), "[]");
+      insert.input("actor", sql.BigInt, actor.id);
+      const row = (await insert.query<{ id: number | string; name: string }>(`
+        INSERT INTO dbo.suppliers (code,name,tax_id,category,contact,email,phone,brands_json,created_by,updated_by)
+        OUTPUT inserted.id, inserted.name
+        VALUES (@code,@name,@taxId,@category,N'',N'',N'',@brands_json,@actor,@actor);
+      `)).recordset[0]!;
+      await insertAudit(transaction, actor.id, "Supplier", Number(row.id), code, "Created", null, { name, taxId, category, source: "PDF import" });
+      return { id: Number(row.id), name: String(row.name), created: true };
+    }, sql.ISOLATION_LEVEL.SERIALIZABLE);
+
+    return reply.status(result.created ? 201 : 200).send(result);
+  });
 }
