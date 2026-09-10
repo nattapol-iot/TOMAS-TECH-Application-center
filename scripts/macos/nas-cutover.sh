@@ -19,11 +19,19 @@ export DEV_NAS_USERNAME="$NAS_USERNAME"
 echo 'Protected NAS credential installed.'
 bash "$GITHUB_WORKSPACE/scripts/macos/mount-nas.sh"
 unset NAS_USERNAME
+echo 'NAS host mount is active.'
 mkdir -p "$DOCUMENT_DIR"
 probe="$DOCUMENT_DIR/.iot-team-center-nas-probe"
 printf 'iot-team-center-nas-check' > "$probe"
 [[ "$(cat "$probe")" == 'iot-team-center-nas-check' ]]
-vm_probe="$(colima ssh -p iot -- cat "$probe")"
+vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
+if [[ "$vm_probe" != 'iot-team-center-nas-check' ]]; then
+  echo 'Refreshing Colima host shares so the NAS mount becomes visible.'
+  colima stop -p iot
+  colima start -p iot
+  docker --context colima-iot compose "${COMPOSE[@]}" up -d
+  vm_probe="$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$probe" 2>/dev/null || true)"
+fi
 [[ "$vm_probe" == 'iot-team-center-nas-check' ]] || { echo 'NAS probe is not visible inside Colima.' >&2; exit 1; }
 rm "$probe"
 echo 'NAS mount write-read-delete probe passed.'
