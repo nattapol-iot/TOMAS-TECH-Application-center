@@ -343,8 +343,8 @@ export function registerSupplierQuotationRoutes(
 
       const newSupplierId = supplierId ?? Number(current.supplier_id);
       const newReference = body.supplierReference !== undefined ? supplierReference : String(current.supplier_reference ?? "");
-      const newReceived = receivedDate ?? dateOnly(current.received_date as Date | string);
-      const newValid = validUntil ?? dateOnly(current.valid_until as Date | string);
+      const newReceived = (receivedDate ?? dateOnly(current.received_date as Date | string))!;
+      const newValid = (validUntil ?? dateOnly(current.valid_until as Date | string))!;
       const newCurrency = currency ?? String(current.currency);
       const newAmount = amountValue ?? Number(current.amount);
       const newInquiryId = inquiryId === undefined ? (current.inquiry_id === null ? null : Number(current.inquiry_id)) : (inquiryId ?? null);
