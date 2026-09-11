@@ -247,11 +247,13 @@ def clean_num(s: str) -> float:
 # ── Tier 1: pymupdf4llm Markdown table parser (column-aware) ──────────────
 
 def _find_col(headers: list[str], keywords: list[str]) -> Optional[int]:
-    """Return the first header index containing any keyword (case-insensitive)."""
-    for i, h in enumerate(headers):
-        h_norm = re.sub(r"\s+", " ", h.lower())
-        for kw in keywords:
-            if kw.lower() in h_norm:
+    """Return the first column whose header contains any keyword, checked in keyword-priority
+    order so that more-specific keywords (earlier in the list) win over generic ones."""
+    for kw in keywords:
+        kw_l = kw.lower()
+        for i, h in enumerate(headers):
+            h_norm = re.sub(r"\s+", " ", h.lower().strip())
+            if kw_l in h_norm:
                 return i
     return None
 
@@ -289,14 +291,18 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             n_cols = len(header)
             data_rows = table_lines[2:]
 
-            desc_col   = _find_col(header, ["description", "detail", "product", "item", "รายการ", "ชื่อ", "name", "สินค้า", "goods"])
+            desc_col   = _find_col(header, ["item description", "description", "detail", "product name",
+                                            "product", "รายการ", "ชื่อ", "name", "สินค้า", "goods"])
             qty_col    = _find_col(header, ["qty", "quantity", "จำนวน", "pcs", "pieces", "数量"])
             price_col  = _find_col(header, ["unit price", "unit\nprice", "price/unit", "unitprice",
                                             "ราคา/หน่วย", "ราคาต่อหน่วย", "単価", "price", "ราคา"])
             amount_col = _find_col(header, ["amount", "total", "รวม", "ยอด", "line total", "金額", "ext"])
             code_col   = _find_col(header, ["code", "part no", "part number", "model no", "item no",
-                                            "รหัส", "no.", "model", "sku", "品番"])
-            unit_col   = _find_col(header, ["unit", "หน่วย", "uom", "単位"])
+                                            "item", "รหัส", "model", "sku", "品番"])
+            # Exact-match "unit" first to avoid matching "Unit Price" columns
+            unit_col = next((i for i, h in enumerate(header) if h.strip().lower() == "unit"), None)
+            if unit_col is None:
+                unit_col = _find_col(header, ["uom", "หน่วย", "単位"])
 
             if desc_col is None and price_col is None and amount_col is None:
                 continue
