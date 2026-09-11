@@ -70,9 +70,19 @@ function dbConfig() {
     console.error("ERROR: ConnectionStrings__IoTTeamCenter is not set.");
     process.exit(1);
   }
-  // mssql.ConnectionPool.parseConnectionString understands the ADO.NET format:
-  // Server=tcp:host,1433;Database=...;User ID=...;Password=...;Encrypt=True;...
-  return mssql.ConnectionPool.parseConnectionString(connStr);
+  // Mirror what db.ts does: parse the ADO.NET string then explicitly set TLS
+  // options. parseConnectionString does NOT reliably forward TrustServerCertificate
+  // into the tedious options object, so we must set it ourselves.
+  const config = mssql.ConnectionPool.parseConnectionString(connStr);
+  config.options = {
+    ...config.options,
+    encrypt: true,
+    trustServerCertificate: true,
+    useUTC: true,
+  };
+  config.requestTimeout = 30_000;
+  config.connectionTimeout = 15_000;
+  return config;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
