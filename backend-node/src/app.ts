@@ -43,6 +43,8 @@ import { registerKnowledgeCollaborationRoutes } from "./routes/knowledge-collabo
 import { registerKnowledgeDocumentRoutes } from "./routes/knowledge-documents.js";
 import { registerKnowledgeWorkflowRoutes } from "./routes/knowledge-workflow.js";
 import { registerKnowledgeSalesMaterialRoutes } from "./routes/knowledge-sales-materials.js";
+import { registerLaborPackageRoutes } from "./routes/labor-packages.js";
+import { registerLaborRateRoutes } from "./routes/labor-rates.js";
 import { registerMasterRoutes } from "./routes/master.js";
 import { registerSalesCustomerRoutes } from "./routes/sales-customers.js";
 import { registerModuleTemplateRoutes } from "./routes/module-templates.js";
@@ -172,6 +174,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerKnowledgeWorkflowRoutes(app, config, database, users);
   registerKnowledgeSalesMaterialRoutes(app, config, database, users);
   registerMasterRoutes(app, database, users);
+  registerLaborRateRoutes(app, config, database, users);
+  registerLaborPackageRoutes(app, config, database, users);
   registerSalesCustomerRoutes(app, database, users);
   registerModuleTemplateRoutes(app, database, users);
   registerMaterialIssueRoutes(app, config, database, users);

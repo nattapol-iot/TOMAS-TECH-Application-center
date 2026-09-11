@@ -3183,6 +3183,241 @@ export const applyModuleTemplate = (estimateId: number, input: {
     body: JSON.stringify(input),
   });
 
+/* Labor rate master and reusable labor work packages. The rate picker is a
+   read an estimator may perform; the lifecycle actions stay behind master.write
+   and the Engineering Manager / Admin rate check. */
+
+export type LaborRate = {
+  id: number;
+  code: string | null;
+  level: string;
+  department: string;
+  roleActivity: string;
+  engineeringHourly: number;
+  engineeringDaily: number;
+  installationHourly: number;
+  installationDaily: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+  version: number;
+  defaultErpCategory: string | null;
+  supersededByRateId: number | null;
+  notes: string | null;
+  createdByName: string;
+  status: "Effective" | "Future" | "Expired" | "Inactive";
+  costType: "Engineering" | "Installation" | null;
+  /** The rate the server would freeze on a line for the requested cost type. */
+  dailyRate: number | null;
+  hourlyRate: number | null;
+};
+
+export type LaborRatePage = PagedResult<LaborRate> & {
+  on: string;
+  costType: "Engineering" | "Installation" | null;
+  /** False on a database without migration 044: code, role and ERP are null. */
+  masterFieldsAvailable: boolean;
+};
+
+export const listLaborRates = (values: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  costType?: "Engineering" | "Installation";
+  department?: string;
+  level?: string;
+  on?: string;
+  effectiveOnly?: boolean;
+  includeInactive?: boolean;
+} = {}) => apiRequest<LaborRatePage>(`/api/v1/labor-rates${queryString(values)}`);
+
+export const supersedeLaborRate = (id: number, input: {
+  rowVersion: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  engineeringHourly: number;
+  engineeringDaily: number;
+  installationHourly: number;
+  installationDaily: number;
+  code?: string;
+  roleActivity?: string;
+  defaultErpCategory?: string | null;
+  notes?: string;
+  reason: string;
+}) => apiRequest<{
+  supersededRateId: number;
+  supersededEffectiveTo: string;
+  rateId: number;
+  level: string;
+  department: string;
+  version: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  rowVersion: string;
+}>(`/api/v1/master/engineering-rates/${id}/supersede`, { method: "POST", body: JSON.stringify(input) });
+
+export const retireLaborRate = (id: number, input: { rowVersion: string; effectiveTo: string; reason: string }) =>
+  apiRequest<{ id: number; effectiveTo: string; alreadyClosed: boolean; rowVersion?: string }>(
+    `/api/v1/master/engineering-rates/${id}/retire`, { method: "POST", body: JSON.stringify(input) });
+
+export type LaborPackageSummary = {
+  id: number;
+  code: string;
+  name: string;
+  costType: "Engineering" | "Installation";
+  department: string;
+  projectType: string;
+  description: string;
+  status: string;
+  revision: number;
+  createdByName: string;
+  updatedByName: string;
+  createdAt: string;
+  updatedAt: string;
+  lineCount: number;
+  /** Indicative: an applied internal line is re-priced from the live master. */
+  referenceTotal: number;
+  referenceManDays: number;
+  rowVersion: string;
+};
+
+export type LaborPackageLine = {
+  id: number;
+  sortOrder: number;
+  activity: string;
+  department: string;
+  level: string;
+  costType: "Engineering" | "Installation";
+  provider: "Internal" | "Supplier";
+  rateId: number | null;
+  rateCode: string | null;
+  rateStillEffective: boolean | null;
+  rateBasis: "Daily" | "Hourly";
+  defaultEngineers: number;
+  defaultManDays: number;
+  defaultHours: number | null;
+  defaultHoursPerDay: number;
+  referenceDailyRate: number;
+  defaultErpCategory: string | null;
+  remark: string | null;
+};
+
+export type LaborPackageDetail = LaborPackageSummary & { lines: LaborPackageLine[] };
+
+export type LaborPackageLineInput = {
+  activity: string;
+  department: string;
+  level: string;
+  costType?: "Engineering" | "Installation";
+  provider?: "Internal" | "Supplier";
+  rateId?: number | null;
+  rateBasis?: "Daily" | "Hourly";
+  defaultEngineers?: number;
+  defaultManDays?: number;
+  defaultHours?: number | null;
+  defaultHoursPerDay?: number;
+  referenceDailyRate?: number;
+  defaultErpCategory?: string | null;
+  remark?: string | null;
+};
+
+export type LaborPackageInput = {
+  code: string;
+  name: string;
+  costType: "Engineering" | "Installation";
+  department?: string;
+  projectType?: string;
+  description?: string;
+  status?: string;
+  lines: LaborPackageLineInput[];
+};
+
+export const listLaborPackages = (values: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  costType?: "Engineering" | "Installation";
+  department?: string;
+} = {}) => apiRequest<PagedResult<LaborPackageSummary>>(`/api/v1/labor-packages${queryString(values)}`);
+
+export const loadLaborPackage = (id: number) =>
+  apiRequest<LaborPackageDetail>(`/api/v1/labor-packages/${id}`);
+
+export const createLaborPackage = (input: LaborPackageInput) =>
+  apiRequest<{ id: number; code: string }>("/api/v1/labor-packages", { method: "POST", body: JSON.stringify(input) });
+
+export const updateLaborPackage = (id: number, input: LaborPackageInput & { rowVersion: string }) =>
+  apiRequest<{ id: number; revision: number; rowVersion: string }>(`/api/v1/labor-packages/${id}`, { method: "PUT", body: JSON.stringify(input) });
+
+export const retireLaborPackage = (id: number, rowVersion: string) =>
+  apiRequest<{ id: number; status: string }>(`/api/v1/labor-packages/${id}/retire`, { method: "POST", body: JSON.stringify({ rowVersion }) });
+
+export const createLaborPackageFromEstimate = (input: {
+  estimateId: number;
+  package: string;
+  costType: "Engineering" | "Installation";
+  code: string;
+  name: string;
+  department?: string;
+  projectType?: string;
+  description?: string;
+}) => apiRequest<{ id: number; code: string; lineCount: number }>("/api/v1/labor-packages/from-estimate", {
+  method: "POST",
+  body: JSON.stringify(input),
+});
+
+export type LaborPackageApplyOverride = {
+  lineId: number;
+  skip?: boolean;
+  activity?: string;
+  engineers?: number;
+  manDays?: number;
+  hours?: number;
+  hoursPerDay?: number;
+  dailyRate?: number;
+  supplierId?: number;
+  quotationNumber?: string;
+  priceDate?: string;
+  remark?: string | null;
+  erpCategory?: string | null;
+};
+
+export type LaborPackageAppliedLine = {
+  packageLineId: number;
+  manhourLineId: number;
+  activity: string;
+  level: string;
+  department: string;
+  costType: string;
+  provider: string;
+  engineers: number;
+  manDays: number;
+  hoursPerDay: number;
+  requestedHours: number | null;
+  effectiveHours: number;
+  dailyRate: number;
+  priceDate: string;
+  rateSource: string;
+  erpCategory: string | null;
+};
+
+export const applyLaborPackage = (estimateId: number, input: {
+  packageId: number;
+  ownerId: number;
+  package?: string;
+  lines?: LaborPackageApplyOverride[];
+  estimateRowVersion: string;
+}) => apiRequest<{
+  packageId: number;
+  reference: string;
+  workPackage: string;
+  lines: number;
+  skipped: number;
+  appliedLines: LaborPackageAppliedLine[];
+  estimateRowVersion: string;
+}>(`/api/v1/estimates/${estimateId}/apply-labor-package`, { method: "POST", body: JSON.stringify(input) });
+
 export type StorageCheckResult = {
   ok: boolean;
   mode: "Local" | "Nas";

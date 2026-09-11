@@ -21,7 +21,7 @@ const estimateSections = [
 ] as const;
 const estimateSectionCodes = estimateSections.map(([code]) => code);
 
-type EstimateContext = { estimate_no: string; project_name: string; revision: number; status: string; owner_id: number | string; due_date: Date | string };
+export type EstimateContext = { estimate_no: string; project_name: string; revision: number; status: string; owner_id: number | string; due_date: Date | string };
 
 function businessToday(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -50,7 +50,7 @@ function optionalLineVersion(value: unknown, required: boolean): Buffer | null {
   return parsed;
 }
 
-async function lockEstimate(transaction: TransactionType, id: number, expected: Buffer): Promise<EstimateContext> {
+export async function lockEstimate(transaction: TransactionType, id: number, expected: Buffer): Promise<EstimateContext> {
   const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
   const row = (await request.query<EstimateContext & { row_version: Buffer }>(`SELECT estimate_no,project_name,revision,status,row_version,owner_id,due_date
     FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
@@ -62,7 +62,7 @@ async function lockEstimate(transaction: TransactionType, id: number, expected: 
   return row;
 }
 
-function elevated(actor: CurrentUser, estimate: EstimateContext): boolean {
+export function elevated(actor: CurrentUser, estimate: EstimateContext): boolean {
   return actor.id === Number(estimate.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
 }
 
@@ -75,7 +75,7 @@ async function hasSection(transaction: TransactionType, estimateId: number, revi
       AND (a.owner_id=@actor OR a.support_id=@actor)) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)).recordset[0]?.allowed);
 }
 
-async function demandNewSection(transaction: TransactionType, estimateId: number, estimate: EstimateContext, actor: CurrentUser, section: string, ownerId: number): Promise<void> {
+export async function demandNewSection(transaction: TransactionType, estimateId: number, estimate: EstimateContext, actor: CurrentUser, section: string, ownerId: number): Promise<void> {
   if (elevated(actor, estimate)) return;
   if (ownerId !== actor.id || !await hasSection(transaction, estimateId, estimate.revision, section, actor.id)) {
     throw new ApiError(403, "estimate_section_forbidden", `You may add this estimate line only when section ${section} is assigned to you, and the new line must remain assigned to you.`);
@@ -92,7 +92,7 @@ async function demandExistingSection(transaction: TransactionType, estimateId: n
   }
 }
 
-async function validateOwnerSupplier(transaction: TransactionType, ownerId: number, supplierId: number | null): Promise<void> {
+export async function validateOwnerSupplier(transaction: TransactionType, ownerId: number, supplierId: number | null): Promise<void> {
   const request = new sql.Request(transaction); request.input("owner", sql.BigInt, ownerId); request.input("supplier", sql.BigInt, supplierId);
   const row = (await request.query<{ owner_valid: boolean; supplier_valid: boolean }>(`SELECT
     CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@owner AND u.is_active=1
@@ -122,7 +122,7 @@ async function deliverAssignmentEmail(email: EmailService, message: EstimateAssi
     : { status: "not_required" as const, recipients: [] as string[] };
 }
 
-async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
+export async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
   await assertEstimateTotals(transaction, id);
   const request = new sql.Request(transaction); request.input("id", sql.BigInt, id); request.input("actor", sql.BigInt, actorId);
   const row = (await request.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),
@@ -180,15 +180,27 @@ function parseManhour(request: FastifyRequest, requireLine: boolean): ManhourInp
     ownerId: requiredInteger(body.ownerId, "Owner", 1), remark: optionalBodyText(body.remark, 20_000, "Remark") };
 }
 
-async function resolveRate(transaction: TransactionType, input: ManhourInput, today: string): Promise<number> {
-  if (input.provider === "Supplier") return input.dailyRate;
-  const request = new sql.Request(transaction); request.input("cost_type", sql.NVarChar(30), input.costType); request.input("level", sql.NVarChar(100), input.level);
-  request.input("department", sql.NVarChar(100), input.department); request.input("today", sql.Date, today);
+/* The one place an internal man-hour rate is read from the master. Exported so a
+   reusable labor package applies the same effective rate the estimator would get
+   by typing the line by hand - a package must never inject its own price. */
+export async function resolveInternalDailyRate(transaction: TransactionType, costType: string, level: string,
+  department: string, today: string, activity?: string): Promise<number> {
+  const request = new sql.Request(transaction); request.input("cost_type", sql.NVarChar(30), costType); request.input("level", sql.NVarChar(100), level);
+  request.input("department", sql.NVarChar(100), department); request.input("today", sql.Date, today);
   const row = (await request.query<{ rate: number | string }>(`SELECT TOP(1) CASE WHEN @cost_type=N'Installation' THEN installation_daily ELSE engineering_daily END rate
     FROM dbo.engineering_rates WHERE level=@level AND department=@department AND is_active=1 AND effective_from<=@today
       AND (effective_to IS NULL OR effective_to>=@today) ORDER BY effective_from DESC,id DESC;`)).recordset[0];
-  if (!row) throw new ApiError(422, "engineering_rate_missing", "No active engineering rate matches the selected level, department and cost type.");
+  if (!row) {
+    throw new ApiError(422, "engineering_rate_missing", activity
+      ? `No active engineering rate matches ${level} / ${department} / ${costType} for '${activity}'.`
+      : "No active engineering rate matches the selected level, department and cost type.");
+  }
   return Number(row.rate);
+}
+
+async function resolveRate(transaction: TransactionType, input: ManhourInput, today: string): Promise<number> {
+  if (input.provider === "Supplier") return input.dailyRate;
+  return resolveInternalDailyRate(transaction, input.costType, input.level, input.department, today);
 }
 
 function bindManhour(request: InstanceType<typeof sql.Request>, id: number, revision: number, input: ManhourInput, rate: number, today: string, actor: number): void {
