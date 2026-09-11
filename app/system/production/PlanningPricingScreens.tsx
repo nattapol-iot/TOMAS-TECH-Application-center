@@ -1583,9 +1583,10 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [supplierAutoMatched, setSupplierAutoMatched] = useState(false);
   const [extractedSupplierName, setExtractedSupplierName] = useState("");
   const [extractedSupplierTaxId, setExtractedSupplierTaxId] = useState("");
+  // Editable new-supplier name — pre-filled from PDF extraction, user can correct before Upload
+  const [newSupplierName, setNewSupplierName] = useState("");
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [showPdf, setShowPdf] = useState(false);
-  const [manualSupplierName, setManualSupplierName] = useState("");
 
   const hasParsed = Object.keys(confidence).length > 0;
 
@@ -1635,7 +1636,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const parsePdf = async (targetFile: File) => {
     if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
     setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setSupplierAutoMatched(false);
-    setExtractedSupplierName(""); setExtractedSupplierTaxId("");
+    setExtractedSupplierName(""); setExtractedSupplierTaxId(""); setNewSupplierName("");
     // Reset all extracted fields so stale values from a previous PDF don't persist
     setSupplierReference("");
     setReceivedDate(isoToday());
@@ -1660,6 +1661,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       if (result.supplierName) {
         setExtractedSupplierName(result.supplierName);
         setExtractedSupplierTaxId(result.supplierTaxId ?? "");
+        setNewSupplierName(result.supplierName);   // pre-fill editable preview
       }
 
       if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
@@ -1680,7 +1682,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     setLines((prev) => [...prev, { lineNo: prev.length + 1, itemCode: "", description: "", brand: "", model: "", qty: 1, unit: "EA", unitPrice: 0, currency, remark: "" }]);
 
   const parsedAmount = Number(amount);
-  const hasSupplier = !!supplierId || !!extractedSupplierName || !!manualSupplierName;
+  const hasSupplier = !!supplierId || !!newSupplierName.trim();
   const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
 
@@ -1695,11 +1697,11 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       let resolvedSupplierId = supplierId ? Number(supplierId) : 0;
 
       if (!resolvedSupplierId) {
-        const nameToUse = extractedSupplierName.trim() || manualSupplierName.trim();
+        const nameToUse = newSupplierName.trim();
         if (!nameToUse) throw new Error("กรุณาเลือกหรือกรอกชื่อ Supplier");
         const found = await findOrCreateSupplier({
           name: nameToUse,
-          taxId: extractedSupplierName.trim() ? extractedSupplierTaxId : "",
+          taxId: extractedSupplierTaxId,
         });
         resolvedSupplierId = found.id;
         setSupplierId(String(found.id));
@@ -1792,7 +1794,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                 onChange={(event) => {
                   const f = event.target.files?.[0] ?? null;
                   setFile(f); setLines([]); setConfidence({}); setParseWarning(""); setSupplierAutoMatched(false);
-                  setExtractedSupplierName(""); setExtractedSupplierTaxId(""); setManualSupplierName("");
+                  setExtractedSupplierName(""); setExtractedSupplierTaxId(""); setNewSupplierName("");
                   if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
                 }} />
               {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
@@ -1812,33 +1814,30 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             <input value="SQ-YYMM-XXXX" readOnly />
           </Field>
           <div style={confWrap("supplierName")}>
-            <Field label="Supplier *" hint={
-              !supplierId && extractedSupplierName
-                ? `จาก PDF: "${extractedSupplierName}" — จะถูกเพิ่มใน Master Data เมื่อกด Upload`
-                : (!supplierId && !extractedSupplierName && hasParsed && confidence["supplierName"] === "none")
-                  ? "← ไม่พบชื่อ Supplier ใน PDF — เลือกจากรายการหรือพิมพ์ชื่อใหม่ด้านล่าง"
-                  : confHint("supplierName")
-            }>
+            <Field label="Supplier *" hint={confHint("supplierName")}>
               <select value={supplierId} onChange={(event) => {
                 setSupplierId(event.target.value);
-                setManualSupplierName("");
+                setNewSupplierName("");
                 if (event.target.value) { setExtractedSupplierName(""); setExtractedSupplierTaxId(""); }
               }}>
-                {!supplierId && (
-                  <option value="">
-                    {extractedSupplierName ? `${extractedSupplierName} (ใหม่ — จะสร้างตอน Upload)` : "— เลือก Supplier —"}
-                  </option>
-                )}
+                <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
                 {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
               </select>
-              {!supplierId && !extractedSupplierName && (
-                <input
-                  style={{ marginTop: 6 }}
-                  placeholder="หรือพิมพ์ชื่อ Supplier ใหม่..."
-                  value={manualSupplierName}
-                  onChange={(e) => setManualSupplierName(e.target.value)}
-                  maxLength={200}
-                />
+              {!supplierId && (
+                <div style={{ marginTop: 6 }}>
+                  <input
+                    placeholder="ชื่อ Supplier ใหม่..."
+                    value={newSupplierName}
+                    onChange={(e) => setNewSupplierName(e.target.value)}
+                    maxLength={200}
+                    style={{ width: "100%" }}
+                  />
+                  <div style={{ fontSize: 12, color: newSupplierName.trim() ? "var(--accent)" : "var(--text-muted)", marginTop: 3 }}>
+                    {newSupplierName.trim()
+                      ? `จะสร้าง Supplier ใหม่ "${newSupplierName.trim()}" ใน Master Data เมื่อกด Upload`
+                      : "กรอกชื่อ Supplier ใหม่ หรือเลือกจากรายการด้านบน"}
+                  </div>
+                </div>
               )}
             </Field>
           </div>
