@@ -528,6 +528,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     notify: setToast,
     openProjectSchedule,
     preferredProjectId: preferredScheduleProjectId,
+    openEstimate,
     onMyWorkUrgentCountChange: setMyWorkUrgentCount,
   };
   return (

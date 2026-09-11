@@ -1364,6 +1364,69 @@ export const updateEstimateAssignment = (estimateId: number, assignmentId: numbe
 export const createEstimateAssignment = (estimateId: number, input: EstimateAssignmentCreateInput) =>
   apiRequest<EstimateAssignmentMutationResult>(`/api/v1/estimates/${estimateId}/assignments`, { method: "POST", body: JSON.stringify(input) });
 
+export type EstimateCopyInput = {
+  estimateRowVersion: string;
+  sourceEstimateId: number;
+  ownerId: number;
+  sections?: string[];
+  includeCostItems?: boolean;
+  includeManhour?: boolean;
+  includeExpenses?: boolean;
+  includeOtherCosts?: boolean;
+  includeErpCategories?: boolean;
+};
+
+export type EstimateCopyResult = {
+  sourceEstimateId: number;
+  sourceNumber: string;
+  sourceRevision: number;
+  sourceProjectName: string;
+  sections: string[];
+  costItems: number;
+  manhourLines: number;
+  expenseLines: number;
+  otherCostLines: number;
+  erpCategories: number;
+  renamedItemCodes: Array<{ original: string; applied: string }>;
+  droppedSuppliers: Array<{ line: string; supplierId: number }>;
+  estimateRowVersion: string;
+};
+
+/** One transactional copy of another estimate's ledgers into this revision. */
+export const copyEstimateContent = (estimateId: number, input: EstimateCopyInput) =>
+  apiRequest<EstimateCopyResult>(`/api/v1/estimates/${estimateId}/copy-from`, { method: "POST", body: JSON.stringify(input) });
+
+export type MyEstimateAssignment = {
+  assignmentId: number;
+  estimateId: number;
+  estimateNumber: string;
+  inquiryNumber: string;
+  projectName: string;
+  customerName: string;
+  revision: number;
+  estimateStatus: string;
+  estimateDueDate: string | null;
+  estimateOwnerId: number;
+  estimateOwnerName: string;
+  section: string;
+  sectionCode: string;
+  role: string;
+  ownerId: number;
+  ownerName: string;
+  supportId: number | null;
+  supportName: string | null;
+  dueDate: string | null;
+  status: string;
+  progress: number;
+  comment: string | null;
+  costLineCount: number;
+  updatedAt: string;
+};
+
+/** Estimate sections assigned to the signed-in engineer, started or not. */
+export const listMyEstimateAssignments = (values: { includeClosed?: boolean } = {}) =>
+  apiRequest<MyEstimateAssignment[]>(`/api/v1/me/estimate-assignments${queryString(values)}`);
+
 export const updateEstimateContingency = (estimateId: number, contingencyRate: number, rowVersion: string) =>
   apiRequest<{ id: number; contingencyRate: number; rowVersion: string }>(`/api/v1/estimates/${estimateId}/contingency`, {
     method: "PUT",

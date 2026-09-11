@@ -13,6 +13,7 @@ import {
   findOrCreateSupplier,
   listAllQuotationLinesForPriceLibrary,
   listEstimates,
+  listMyEstimateAssignments,
   listInquiries,
   listProjects,
   listSupplierQuotations,
@@ -23,6 +24,7 @@ import {
   type BootstrapData,
   type EstimateCostItem,
   type EstimateSummary,
+  type MyEstimateAssignment,
   type ProjectSummary,
   type QuotationLineForPriceLibrary,
   type QuotationLineItem,
@@ -48,12 +50,16 @@ import {
   Tabs,
   Toolbar,
 } from "../ui";
+import {
+  assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue,
+} from "../../../lib/estimate-assignment-queue";
 
 type ProductionPlanningProps = {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   refreshBootstrap?: () => Promise<void>;
   openProjectSchedule?: (projectId: number) => void;
+  openEstimate?: (estimateId: number) => void;
   preferredProjectId?: number | null;
   onMyWorkUrgentCountChange?: (count: number) => void;
 };
@@ -621,10 +627,112 @@ type MyWorkProgressInput = {
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting" | "all";
 type MyWorkSort = "priority" | "due" | "project";
 
+const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { overdue: "red", "due-soon": "amber", "on-track": "blue", none: "slate" };
+
+/**
+ * Estimate sections assigned to the signed-in engineer.
+ *
+ * Project schedule tasks and the estimate ledger are two different queues, and
+ * only the first one had a home in My Work. An assigned section used to surface
+ * nowhere until somebody had already worked on it, so the engineer had to guess
+ * which estimate to open. This panel lists the assignment itself — estimate,
+ * discipline, status, due date — with the next step and a direct way in.
+ */
+function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, onOpenEstimate, onReload }: {
+  assignments: MyEstimateAssignment[];
+  loading: boolean;
+  error: string;
+  todayIso: string;
+  onOpenEstimate?: ((estimateId: number) => void) | undefined;
+  onReload: () => void;
+}) {
+  const localizeCopy = useStaticCopy();
+  const [showFinished, setShowFinished] = useState(false);
+  const ordered = useMemo(() => sortAssignmentQueue(assignments, todayIso), [assignments, todayIso]);
+  const visible = showFinished ? ordered : ordered.filter(isActionableAssignment);
+  const summary = useMemo(() => assignmentQueueSummary(assignments, todayIso), [assignments, todayIso]);
+  return <Panel
+    title="Estimate sections assigned to me"
+    subtitle="งาน Estimate ที่คุณรับผิดชอบ แสดงตั้งแต่ยังไม่เริ่ม ไม่ต้องเปลี่ยนสถานะก่อนจึงจะเห็น"
+    flush
+    actions={<>
+      <button className="btn ghost sm" type="button" onClick={() => setShowFinished((current) => !current)}>
+        <Icon name="checkCircle" />{showFinished ? localizeCopy("Hide finished") : localizeCopy("Show finished")}
+      </button>
+      <button className="btn ghost sm" type="button" disabled={loading} onClick={onReload}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+    </>}
+  >
+    <div className="my-work-filter-row" role="status">
+      <span className="my-work-result-count"><LocalizedText text={"Assigned to me"} /> <strong>{summary.actionable}</strong></span>
+      <span className="my-work-result-count"><LocalizedText text={"Not started"} /> <strong>{summary.notStarted}</strong></span>
+      <span className="my-work-result-count"><LocalizedText text={"Overdue"} /> <strong>{summary.overdue}</strong></span>
+      <span className="my-work-result-count"><LocalizedText text={"Due this week"} /> <strong>{summary.dueThisWeek}</strong></span>
+    </div>
+    {error ? <LoadError message={error} retry={onReload} /> : null}
+    {loading && !assignments.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your estimate assignments…"} /></div> : null}
+    {!loading && !visible.length ? <EmptyState
+      icon="checkCircle"
+      title={localizeCopy("No estimate section is waiting for you")}
+      message={localizeCopy("A section appears here as soon as the estimate owner assigns it to you, before any work starts.")}
+    /> : null}
+    {visible.length ? <div className="table-wrap"><table>
+      <thead><tr>
+        <th><LocalizedText text={"Estimate"} /></th>
+        <th><LocalizedText text={"Section"} /></th>
+        <th><LocalizedText text={"Role"} /></th>
+        <th><LocalizedText text={"Status"} /></th>
+        <th><LocalizedText text={"Due Date"} /></th>
+        <th><LocalizedText text={"Progress"} /></th>
+        <th><LocalizedText text={"Next step"} /></th>
+        <th />
+      </tr></thead>
+      <tbody>{visible.map((record) => {
+        const urgency = assignmentUrgency(record, todayIso);
+        const next = assignmentNextAction(record);
+        return <tr key={record.assignmentId}>
+          <td><div className="cell-primary">
+            <strong className="mono">{record.estimateNumber} R{String(record.revision).padStart(2, "0")}</strong>
+            <span>{record.projectName} · {record.customerName}</span>
+          </div></td>
+          <td><strong>{record.sectionCode}</strong> {sectionName(record.sectionCode)}</td>
+          <td>{record.role}</td>
+          <td><Badge>{record.status}</Badge> <Badge tone="slate">{record.estimateStatus}</Badge></td>
+          <td><Badge tone={ASSIGNMENT_TONE[urgency]}>{record.dueDate ?? record.estimateDueDate ?? "—"}</Badge></td>
+          <td style={{ minWidth: 120 }}><ProgressCell value={Number(record.progress)} /></td>
+          <td>{next.detail}</td>
+          <td>{onOpenEstimate ? <button className="btn primary sm" type="button" onClick={() => onOpenEstimate(record.estimateId)}>
+            <Icon name="arrowRight" />{next.label}
+          </button> : <span className="muted">{record.estimateNumber}</span>}</td>
+        </tr>;
+      })}</tbody>
+    </table></div> : null}
+  </Panel>;
+}
+
+/** Loads the caller's estimate assignments; the API returns only their own rows. */
+function useMyEstimateAssignments(enabled: boolean) {
+  const [assignments, setAssignments] = useState<MyEstimateAssignment[]>([]);
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    if (!enabled) return;
+    setLoading(true); setError("");
+    try { setAssignments(await listMyEstimateAssignments({ includeClosed: true })); }
+    catch (requestError) { setError(toError(requestError)); }
+    finally { setLoading(false); }
+  }, [enabled]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+  return { assignments, loading, error, reload: () => { void load(); } };
+}
+
 export function ProductionMyWork({
   bootstrap,
   notify,
   openProjectSchedule,
+  openEstimate,
   onMyWorkUrgentCountChange,
 }: ProductionPlanningProps) {
   const localizeCopy = useStaticCopy();
@@ -645,6 +753,20 @@ export function ProductionMyWork({
   const [taskSort, setTaskSort] = useState<MyWorkSort>("priority");
   const [taskSearch, setTaskSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
+  /* Estimate assignments are read on their own permission and their own request:
+     an engineer without schedule rights still has to find the sections they own. */
+  const estimateQueue = useMyEstimateAssignments(bootstrap.permissions.includes("estimate.read"));
+  const todayIso = isoToday();
+  const estimateAssignmentsPanel = bootstrap.permissions.includes("estimate.read")
+    ? <MyEstimateAssignmentsPanel
+      assignments={estimateQueue.assignments}
+      loading={estimateQueue.loading}
+      error={estimateQueue.error}
+      todayIso={todayIso}
+      onOpenEstimate={openEstimate}
+      onReload={estimateQueue.reload}
+    />
+    : null;
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -748,7 +870,7 @@ export function ProductionMyWork({
 
   if (!allowed) {
     const missing = [!hasProgressPermission ? "schedule.progress" : "", !hasReadPermission ? "schedule.read" : ""].filter(Boolean).join(" + ");
-    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle="งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้" /></>;
+    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle="งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้" />{estimateAssignmentsPanel}</>;
   }
 
   return <>
@@ -770,6 +892,7 @@ export function ProductionMyWork({
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
 
     {tab === "tasks" ? <>
+      {estimateAssignmentsPanel}
       <Panel
         title={taskFilter === "attention" ? uiText("Needs your update") : `${visibleTasks.length} task${visibleTasks.length === 1 ? "" : "s"}`}
         subtitle={taskFilter === "attention" ? "Late, blocked or quiet for too long — clear these first" : "Search, filter and update without leaving this workspace"}

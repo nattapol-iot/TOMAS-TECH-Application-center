@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiClientError,
   apiRequest,
+  copyEstimateContent,
   createCostItem,
   createEstimate,
   createEstimateAssignment,
@@ -45,6 +46,8 @@ import {
   type EstimateAssignmentCreateInput,
   type EstimateAssignmentInput,
   type EstimateAssignmentMutationResult,
+  type EstimateCopyInput,
+  type EstimateCopyResult,
   type EstimateCostItem,
   type EstimateCostWorkspace,
   type EstimateExpenseInput,
@@ -270,6 +273,19 @@ const assignmentResultMessage = (action: "created" | "updated", result: Estimate
   return saved;
 };
 const revisionCode = (revision: number) => `R${String(revision).padStart(2, "0")}`;
+const copyResultMessage = (result: EstimateCopyResult) => {
+  const copied = [
+    [result.costItems, "cost item"], [result.manhourLines, "man-hour line"],
+    [result.expenseLines, "expense line"], [result.otherCostLines, "other-cost line"],
+  ] as const;
+  const parts = copied.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}(s)`);
+  const notes = [
+    result.erpCategories ? `${result.erpCategories} ERP classification(s) carried over` : "",
+    result.renamedItemCodes.length ? `${result.renamedItemCodes.length} item code(s) renumbered to stay unique` : "",
+    result.droppedSuppliers.length ? `${result.droppedSuppliers.length} inactive supplier reference(s) cleared` : "",
+  ].filter(Boolean);
+  return [`Copied from ${result.sourceNumber} ${revisionCode(result.sourceRevision)} · ${parts.join(" · ")} written in one transaction`, ...notes].join(" · ");
+};
 
 function LoadError({ message, retry }: { message: string; retry: () => void }) {
   return <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{message}</span><button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button></div>;
@@ -658,6 +674,15 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       try { await createCostItem(estimateId, input); await afterMutation("Cost item created · press Enter to continue adding rows"); return true; }
       catch (requestError) { await mutationError(requestError); return false; }
       finally { setBusy(false); }
+    }} onCopyFrom={async (input) => {
+      if (!workspace) return false;
+      setBusy(true); setError("");
+      try {
+        const result = await copyEstimateContent(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion, ownerId: workspace.header.ownerId });
+        await afterMutation(copyResultMessage(result));
+        return true;
+      } catch (requestError) { await mutationError(requestError); return false; }
+      finally { setBusy(false); }
     }} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /> : null}
     {tab === "manhour" ? <EstimateManhourTab
       bootstrap={bootstrap}
@@ -858,7 +883,7 @@ function EstimateSummaryTab({ workspace, onFocusModule }: { workspace: EstimateC
   </>;
 }
 
-function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
+function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
@@ -1067,9 +1092,8 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
   }} /> : null}
   {tool === "import" ? <EstimateExcelImport workspace={workspace} bootstrap={bootstrap} onClose={() => setTool(null)} onImported={onExcelImported} onLegacy={() => setTool("import-flat")} /> : null}
   {tool === "import-flat" ? <ImportCostItemsModal bootstrap={bootstrap} workspace={workspace} busy={busy} onClose={() => setTool(null)} onImport={async (seeds) => { const saved = await onBulkAddCost(seeds, "Excel import completed"); if (saved) setTool(null); }} /> : null}
-  {tool === "copy" ? <CopyPreviousEstimateModal workspace={workspace} busy={busy} onClose={() => setTool(null)} onCopy={async (source, lines) => {
-    const seeds = lines.map((line) => costSeedFromLine(line, workspace.header.ownerId, "Previous Estimate", source.number, source.projectName));
-    const saved = await onBulkAddCost(seeds, `Copied from ${source.number}`);
+  {tool === "copy" ? <CopyPreviousEstimateModal workspace={workspace} busy={busy} onClose={() => setTool(null)} onCopy={async (input) => {
+    const saved = await onCopyFrom(input);
     if (saved) setTool(null);
   }} /> : null}
   {tool === "template" ? <ApplyModuleTemplateModal workspace={workspace} busy={busy} onClose={() => setTool(null)} onApply={async (input) => {
@@ -1129,11 +1153,17 @@ function PriceLibraryPicker({ workspace, busy, onClose, onUse }: { workspace: Es
   </Modal>;
 }
 
-function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onCopy: (source: EstimateSummary, lines: EstimateCostItem[]) => Promise<void> }) {
+/* Copy Previous Estimate hands the whole selection to one server transaction.
+   It used to POST one cost line at a time, which meant a duplicate item code or
+   a deactivated supplier stopped halfway and left a partial copy behind, and it
+   only ever carried cost items. The server now copies the cost, man-hour,
+   expense and other-cost ledgers with their ERP classifications, or nothing. */
+function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<void> }) {
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [sourceId, setSourceId] = useState(0);
   const [sourceWorkspace, setSourceWorkspace] = useState<EstimateCostWorkspace | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [ledgers, setLedgers] = useState({ manhour: true, expenses: true, otherCosts: true, erpCategories: true });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -1153,18 +1183,37 @@ function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { works
     return () => { active = false; };
   }, [sourceId]);
   const source = estimates.find((item) => item.id === sourceId);
-  const lines = sourceWorkspace?.costItems.filter((line) => selected.includes(line.categoryCode)) ?? [];
-  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกเฉพาะหมวดที่เลือกจาก Estimate จริง แล้วสร้างเป็นรายการใหม่ใน revision นี้" size="lg" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !lines.length} onClick={() => { if (source) void onCopy(source, lines); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {lines.length} <LocalizedText text={"item(s)"} /></button></>}>
+  const allowedSection = (code: string) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code);
+  const sectionCounts = (code: string) => {
+    if (!sourceWorkspace) return 0;
+    const costs = sourceWorkspace.costItems.filter((line) => line.categoryCode === code).length;
+    const manhour = code === "06" && ledgers.manhour ? sourceWorkspace.manhourLines.length : 0;
+    const expenses = ledgers.expenses ? sourceWorkspace.expenseLines.filter((line) => EXPENSE_SECTION_BY_TYPE[line.expenseType] === code).length : 0;
+    const other = ledgers.otherCosts ? sourceWorkspace.otherCostLines.filter((line) => OTHER_COST_SECTION_BY_CATEGORY[line.category] === code).length : 0;
+    return costs + manhour + expenses + other;
+  };
+  const totalLines = COST_CATEGORIES.reduce((sum, [code]) => sum + (selected.includes(code) && allowedSection(code) ? sectionCounts(code) : 0), 0);
+  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว" size="lg" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !totalLines} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: selected.filter(allowedSection), includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: ledgers.erpCategories }); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} /></button></>}>
     <Field label="Source estimate *"><select value={sourceId} disabled={loading && !estimates.length} onChange={(event) => { setLoading(true); setError(""); setSourceId(Number(event.target.value)); }}>{estimates.map((estimate) => <option key={estimate.id} value={estimate.id}>{estimate.number} <LocalizedText text={"·"} /> {estimate.projectName} <LocalizedText text={"·"} /> {estimate.customerName}</option>)}</select></Field>
     {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading source estimate…"} /></div> : sourceWorkspace ? <div className="settings-list" style={{ marginTop: 12 }}>{COST_CATEGORIES.map(([code, name]) => {
-      const count = sourceWorkspace.costItems.filter((line) => line.categoryCode === code).length;
-      if (!count) return null;
-      const allowed = workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code);
-      return <div key={code} className="check-row"><input id={`copy-category-${code}`} type="checkbox" disabled={!allowed} checked={allowed && selected.includes(code)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, code] : current.filter((item) => item !== code))} /><label htmlFor={`copy-category-${code}`}><strong>{code} — {name}</strong><small>{count} <LocalizedText text={"item(s)"} />{allowed ? "" : " · no permission for this section"}</small></label></div>;
-    })}</div> : null}
+    <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} /></span></div>
+    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading source estimate…"} /></div> : sourceWorkspace ? <>
+      <div className="settings-list" style={{ marginTop: 12 }}>{COST_CATEGORIES.map(([code, name]) => {
+        const count = sectionCounts(code);
+        if (!count) return null;
+        const allowed = allowedSection(code);
+        return <div key={code} className="check-row"><input id={`copy-category-${code}`} type="checkbox" disabled={!allowed} checked={allowed && selected.includes(code)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, code] : current.filter((item) => item !== code))} /><label htmlFor={`copy-category-${code}`}><strong>{code} — {name}</strong><small>{count} <LocalizedText text={"line(s)"} />{allowed ? "" : " · no permission for this section"}</small></label></div>;
+      })}</div>
+      <div className="settings-list" style={{ marginTop: 12 }}>
+        {([["manhour", "Engineering man-hour", sourceWorkspace.manhourLines.length], ["expenses", "Expenses", sourceWorkspace.expenseLines.length], ["otherCosts", "Other project cost", sourceWorkspace.otherCostLines.length], ["erpCategories", "ERP classifications", 0]] as const).map(([key, label, count]) => (
+          <div key={key} className="check-row"><input id={`copy-ledger-${key}`} type="checkbox" checked={ledgers[key]} onChange={(event) => setLedgers((current) => ({ ...current, [key]: event.target.checked }))} /><label htmlFor={`copy-ledger-${key}`}><strong><LocalizedText text={label} /></strong>{count ? <small>{count} <LocalizedText text={"line(s)"} /></small> : null}</label></div>
+        ))}
+      </div>
+    </> : null}
   </Modal>;
 }
+
+const OTHER_COST_SECTION_BY_CATEGORY: Record<string, string> = { Outsource: "07", Transportation: "08", Accommodation: "09", "Other Cost": "10" };
 
 const normalizedHeader = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9ก-๙]+/g, "");
 const spreadsheetValue = (row: SpreadsheetRow, aliases: string[]) => {

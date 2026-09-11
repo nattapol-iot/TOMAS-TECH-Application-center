@@ -20,8 +20,8 @@ const allowedPriceSources = [
   "Master Template",
 ];
 
-type EditableEstimate = { estimate_no: string; revision: number; owner_id: number | string; due_date: Date | string };
-type CategoryAssignment = { owner_id: number | string; support_id: number | string | null };
+export type EditableEstimate = { estimate_no: string; revision: number; owner_id: number | string; due_date: Date | string };
+export type CategoryAssignment = { owner_id: number | string; support_id: number | string | null };
 type CostInput = {
   estimateRowVersion: Buffer; lineRowVersion: Buffer | null; categoryCode: string; subcategory: string;
   module: string; itemCode: string; description: string; brand: string; model: string; specification: string | null;
@@ -70,7 +70,7 @@ function parseCostInput(request: FastifyRequest, requireLineVersion: boolean): C
   };
 }
 
-async function lockEditableEstimate(transaction: TransactionType, id: number, expected: Buffer): Promise<EditableEstimate> {
+export async function lockEditableEstimate(transaction: TransactionType, id: number, expected: Buffer): Promise<EditableEstimate> {
   const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
   const row = (await request.query<EditableEstimate & { status: string; row_version: Buffer }>(`
     SELECT estimate_no,revision,status,row_version,owner_id,due_date FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK)
@@ -84,7 +84,7 @@ async function lockEditableEstimate(transaction: TransactionType, id: number, ex
   return row;
 }
 
-async function validateReferences(transaction: TransactionType, ownerId: number, supplierId: number | null): Promise<void> {
+export async function validateReferences(transaction: TransactionType, ownerId: number, supplierId: number | null): Promise<void> {
   const request = new sql.Request(transaction); request.input("owner_id", sql.BigInt, ownerId); request.input("supplier_id", sql.BigInt, supplierId);
   const row = (await request.query<{ owner_valid: boolean; supplier_valid: boolean }>(`
     SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
@@ -97,7 +97,7 @@ async function validateReferences(transaction: TransactionType, ownerId: number,
   if (!row.supplier_valid) throw new ApiError(400, "validation_failed", "The selected supplier is inactive or does not exist.");
 }
 
-async function categoryAssignment(transaction: TransactionType, estimateId: number, revision: number, categoryCode: string): Promise<CategoryAssignment | null> {
+export async function categoryAssignment(transaction: TransactionType, estimateId: number, revision: number, categoryCode: string): Promise<CategoryAssignment | null> {
   const request = new sql.Request(transaction); request.input("estimate_id", sql.BigInt, estimateId); request.input("revision", sql.Int, revision);
   request.input("section", sql.NVarChar(100), categoryCode);
   return (await request.query<CategoryAssignment>(`
@@ -118,10 +118,10 @@ async function upsertCategoryAssignment(transaction: TransactionType, estimateId
       VALUES(@estimate_id,@section,@owner_id,NULL,@due_date,N'In Progress',0,NULL);`);
 }
 
-function elevated(actor: CurrentUser, estimate: EditableEstimate): boolean {
+export function elevated(actor: CurrentUser, estimate: EditableEstimate): boolean {
   return actor.id === Number(estimate.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
 }
-function assigned(actor: CurrentUser, assignment: CategoryAssignment | null): boolean {
+export function assigned(actor: CurrentUser, assignment: CategoryAssignment | null): boolean {
   return !!assignment && (actor.id === Number(assignment.owner_id) || actor.id === Number(assignment.support_id));
 }
 
@@ -153,7 +153,7 @@ function bindCost(request: InstanceType<typeof sql.Request>, estimateId: number,
   request.input("owner_id", sql.BigInt, input.ownerId); request.input("actor", sql.BigInt, actorId);
 }
 
-async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
+export async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
   await assertEstimateTotals(transaction, id);
   const request = new sql.Request(transaction); request.input("actor", sql.BigInt, actorId); request.input("id", sql.BigInt, id);
   const row = (await request.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME(),
