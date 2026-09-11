@@ -6,3 +6,4 @@ PyMuPDF==1.24.13
 pymupdf4llm==0.0.17
 pytesseract==0.3.13
 Pillow==11.0.0
+anthropic>=0.40.0

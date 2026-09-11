@@ -1,21 +1,25 @@
 """
 PDF Parser Service for TOMAS TECH Supplier Quotations
 ======================================================
-Tier 1  pymupdf4llm  → Markdown → column-aware table parser
-         (knows WHICH column is description / qty / price / amount from the header)
-Tier 2  pdfplumber   → raw table cells → heuristic cell matcher
-         (fallback when Markdown tables are empty)
-Tier 3  text regex   → last-resort line-pattern matching
+Tier 0  Claude LLM       → primary extraction  (requires ANTHROPIC_API_KEY env var)
+Tier 1  pymupdf4llm      → Markdown → column-aware table parser
+Tier 2  pdfplumber       → raw table cells → heuristic cell matcher
+Tier 3  text regex       → last-resort line-pattern matching
 Tier 4  PyMuPDF + Tesseract OCR → for scanned / image-only PDFs
+
+Set PDF_PARSER_MODEL env var to override the default LLM model.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import logging
+import os
 import re
 from typing import Optional
 
+import anthropic
 import pymupdf4llm
 import pymupdf as fitz
 import pdfplumber
@@ -27,14 +31,18 @@ from PIL import Image
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("pdf-parser")
 
-app = FastAPI(title="TOMAS PDF Parser", version="2.0.0")
+app = FastAPI(title="TOMAS PDF Parser", version="3.0.0")
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
 OCR_LANG = "tha+eng+jpn"
 OCR_DPI = 300
-# Count only real content chars (strip Markdown markup) before triggering OCR
-TEXT_THRESHOLD = 80
+TEXT_THRESHOLD = 80   # below this many non-markup chars → trigger OCR
+
+# Max chars sent to LLM (covers ~3-5 pages of a typical quotation)
+LLM_TEXT_LIMIT = 14_000
+
+DEFAULT_MODEL = os.environ.get("PDF_PARSER_MODEL", "claude-haiku-4-5-20251001")
 
 UNIT_TOKENS = {
     "ea", "pcs", "pc", "set", "lot", "m", "cm", "mm", "kg", "g", "l", "ml",
@@ -59,6 +67,115 @@ MONTH_EN: dict[str, int] = {
 }
 
 SKIP_PAT = re.compile(r"sub\s*total|grand\s*total|ภาษี|vat|discount", re.I)
+
+# ── LLM system prompt (cached across calls via Anthropic prompt caching) ───
+
+LLM_SYSTEM = """\
+You are a structured data extractor for supplier quotation and invoice PDF documents,
+primarily from Thai companies (but also Japanese and other suppliers).
+
+Your task: read the document text and return a single valid JSON object. No explanation,
+no markdown code fences — just the raw JSON.
+
+Extraction rules:
+1. Buddhist Era (พ.ศ.) years: subtract 543 to get CE/AD (e.g. 2567 → 2024, 2568 → 2025).
+2. All dates must be in YYYY-MM-DD format. Use "" if unknown.
+3. lines[]: include ONLY actual product or service line items.
+   Exclude rows that are: subtotal, VAT/tax, discount, shipping fee, header rows,
+   blank rows, notes/remarks rows, or address lines.
+4. unitPrice: price per single unit. If only the line total is given, divide by qty.
+5. qty: default to 1.0 if not explicitly stated.
+6. currency: detect from document (¥ / JPY, $ / USD, € / EUR, ฿ / Baht / THB → "THB").
+   Default: "THB".
+7. supplierTaxId: Thai 13-digit tax identification number. Remove dashes/spaces.
+   Return "" if not found.
+8. totalAmount: the grand total / net total after all discounts. Exclude VAT unless
+   the document only shows a VAT-inclusive total.
+9. For string fields: "" if unknown. For number fields: 0 if unknown.
+10. itemCode: product part number / model number / SKU if present in the row.
+    Also copy it to the model field. brand: manufacturer brand name if identifiable.
+11. If a description spans multiple lines, concatenate them (one space between).
+12. unit: normalise to uppercase short form (EA, PCS, SET, LOT, M, KG, etc.).
+
+Return exactly this JSON shape (no extra fields, no omissions):
+{
+  "supplierName": "",
+  "supplierTaxId": "",
+  "quotationNumber": "",
+  "receivedDate": "",
+  "validUntil": "",
+  "currency": "THB",
+  "totalAmount": 0.0,
+  "lines": [
+    {
+      "lineNo": 1,
+      "itemCode": "",
+      "description": "",
+      "brand": "",
+      "model": "",
+      "qty": 1.0,
+      "unit": "EA",
+      "unitPrice": 0.0,
+      "remark": ""
+    }
+  ]
+}\
+"""
+
+# ── Anthropic client (lazy init — skipped when no API key) ────────────────
+
+_client: Optional[anthropic.Anthropic] = None
+
+
+def _get_client() -> Optional[anthropic.Anthropic]:
+    global _client
+    if _client is None:
+        key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if key:
+            _client = anthropic.Anthropic(api_key=key)
+    return _client
+
+
+def extract_with_llm(text: str) -> Optional[dict]:
+    """Call Claude to extract all fields at once.  Returns None on any failure."""
+    client = _get_client()
+    if not client:
+        return None
+    if len(text.strip()) < 50:
+        return None
+
+    # Trim to token budget — keep beginning (header) + ending (totals)
+    if len(text) > LLM_TEXT_LIMIT:
+        half = LLM_TEXT_LIMIT // 2
+        text = text[:half] + "\n…[truncated]…\n" + text[-half:]
+
+    try:
+        msg = client.messages.create(
+            model=DEFAULT_MODEL,
+            max_tokens=2048,
+            system=[{
+                "type": "text",
+                "text": LLM_SYSTEM,
+                "cache_control": {"type": "ephemeral"},  # prompt caching
+            }],
+            messages=[{"role": "user", "content": text}],
+            timeout=30.0,
+        )
+        raw = msg.content[0].text.strip()
+        # Strip accidental markdown fences
+        raw = re.sub(r"^```(?:json)?\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return None
+        if not isinstance(parsed.get("lines"), list):
+            parsed["lines"] = []
+        log.info("LLM (%s): %d line items, supplier=%r",
+                 DEFAULT_MODEL, len(parsed["lines"]), parsed.get("supplierName", ""))
+        return parsed
+    except Exception as exc:
+        log.warning("LLM extraction failed: %s", exc)
+        return None
 
 # ── Date helpers ───────────────────────────────────────────────────────────
 
@@ -191,7 +308,6 @@ def clean_num(s: str) -> float:
 # ── Tier 1: Markdown table parser (column-aware) ───────────────────────────
 
 def _find_col(headers: list[str], keywords: list[str]) -> Optional[int]:
-    """Return first header index whose text contains any keyword (case-insensitive)."""
     for i, h in enumerate(headers):
         h_norm = re.sub(r"\s+", " ", h.lower())
         for kw in keywords:
@@ -201,10 +317,6 @@ def _find_col(headers: list[str], keywords: list[str]) -> Optional[int]:
 
 
 def parse_markdown_table(md: str, currency: str) -> list[dict]:
-    """
-    Parse line items from Markdown tables produced by pymupdf4llm.
-    Uses column headers to identify fields — no position guessing.
-    """
     items: list[dict] = []
     seen_desc: set[str] = set()
     line_no = 1
@@ -212,18 +324,15 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
     lines = md.split("\n")
     i = 0
     while i < len(lines):
-        # Find a Markdown table row (starts and ends with |)
         if not (lines[i].strip().startswith("|") and lines[i].strip().endswith("|")):
             i += 1
             continue
 
-        # Collect all contiguous table rows
         table_lines: list[str] = []
         while i < len(lines) and lines[i].strip().startswith("|"):
             table_lines.append(lines[i].strip())
             i += 1
 
-        # Need: header | separator | ≥1 data row
         if len(table_lines) < 3:
             continue
         if not re.match(r"^\|[-: |]+\|$", table_lines[1]):
@@ -232,7 +341,6 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
         header = [c.strip() for c in table_lines[0].split("|")[1:-1]]
         n_cols = len(header)
 
-        # Identify columns by keyword
         desc_col   = _find_col(header, ["description", "detail", "product", "item", "รายการ", "ชื่อ", "name", "สินค้า"])
         qty_col    = _find_col(header, ["qty", "quantity", "จำนวน", "pcs", "pieces"])
         price_col  = _find_col(header, ["unit price", "unit\nprice", "price/unit", "unitprice",
@@ -241,7 +349,6 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
         code_col   = _find_col(header, ["code", "part no", "part number", "model no", "รหัส", "no.", "item no", "model"])
         unit_col   = _find_col(header, ["unit", "หน่วย", "uom"])
 
-        # Skip tables with no usable columns
         if desc_col is None and price_col is None and amount_col is None:
             continue
 
@@ -251,7 +358,6 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 cells.append("")
             cells = cells[:n_cols]
 
-            # Description
             if desc_col is not None and desc_col < len(cells):
                 desc = cells[desc_col]
             else:
@@ -265,14 +371,11 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 continue
             if SKIP_PAT.search(desc):
                 continue
-            # Skip column-header repeats
             if re.match(r"^(?:no\.?|#|ลำดับ|item|description|รายการ|qty|จำนวน|price|ราคา)$", desc, re.I):
                 continue
-            # Skip address lines
             if re.search(r"ซอย|ถนน|แขวง|เขต|\bSoi\b|\bRoad\b", desc):
                 continue
 
-            # Unit price
             unit_price = 0.0
             if price_col is not None and price_col < len(cells):
                 raw = cells[price_col]
@@ -282,7 +385,6 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                     except ValueError:
                         pass
 
-            # Amount / line total
             amount = 0.0
             if amount_col is not None and amount_col < len(cells):
                 raw = cells[amount_col]
@@ -292,7 +394,6 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                     except ValueError:
                         pass
 
-            # Fallback: last-two-numerics in row
             if unit_price == 0 and amount == 0:
                 nums = []
                 for c in cells:
@@ -313,7 +414,6 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
 
             effective_price = unit_price if unit_price > 0 else amount
 
-            # Quantity
             qty = 1.0
             if qty_col is not None and qty_col < len(cells):
                 m = re.match(r"([\d,]+\.?\d*)", cells[qty_col].replace(" ", ""))
@@ -327,14 +427,12 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 if 0 < q <= 100_000:
                     qty = q
 
-            # Item code
             item_code = ""
             if code_col is not None and code_col < len(cells):
                 c = cells[code_col]
                 if c and not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
                     item_code = re.sub(r"\s+", "", c)[:40]
 
-            # Unit
             unit = "EA"
             if unit_col is not None and unit_col < len(cells):
                 u = cells[unit_col]
@@ -432,7 +530,6 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
         if SKIP_PAT.search(raw):
             continue
 
-        # MISUMI-style: no  CODE  qty  unit  price  amount
         m = re.match(
             r"^\s*(\d+)\s{2,}([A-Z0-9\-]{5,40})\s{2,}(\d[\d,]*)\s{1,6}(\w{1,10})"
             r"\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$", raw
@@ -451,7 +548,6 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
             line_no += 1
             continue
 
-        # Generic: number  desc  price  amount
         m = re.match(r"^\s*(\d{1,4})\s+(.{3,70}?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$", raw)
         if m:
             price = clean_num(m.group(3))
@@ -467,7 +563,6 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
                 line_no += 1
                 continue
 
-        # Single-price format: number  desc  price  (Thai quotations)
         m = re.match(r"^\s*(\d{1,4})\s+(.{5,80}?)\s+([\d,]+\.?\d{2})\s*$", raw)
         if m:
             price = clean_num(m.group(3))
@@ -484,23 +579,46 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
 
 # ── Main PDF processing ────────────────────────────────────────────────────
 
+def _normalise_llm_lines(lines: list[dict], currency: str) -> list[dict]:
+    """Ensure LLM line items have the currency field and correct types."""
+    out = []
+    for i, ln in enumerate(lines, 1):
+        if not isinstance(ln, dict):
+            continue
+        desc = str(ln.get("description", "")).strip()
+        if not desc:
+            continue
+        out.append({
+            "lineNo":      int(ln.get("lineNo", i)),
+            "itemCode":    str(ln.get("itemCode", "") or ""),
+            "description": desc,
+            "brand":       str(ln.get("brand", "") or ""),
+            "model":       str(ln.get("model", "") or ""),
+            "qty":         float(ln.get("qty", 1) or 1),
+            "unit":        str(ln.get("unit", "EA") or "EA").upper(),
+            "unitPrice":   float(ln.get("unitPrice", 0) or 0),
+            "currency":    currency,
+            "remark":      str(ln.get("remark", "") or ""),
+        })
+    return out
+
+
 def process_pdf(pdf_bytes: bytes) -> dict:
     md_text = ""
     table_rows: list[list] = []
     all_text = ""
     requires_ocr = False
 
-    # ── Tier 1: pymupdf4llm → Markdown ────────────────────────────────────
+    # ── Extract text ─────────────────────────────────────────────────────────
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         md_text = pymupdf4llm.to_markdown(doc, show_progress=False)
         doc.close()
         all_text = md_text
-        log.info("pymupdf4llm: %d chars of Markdown", len(md_text))
+        log.info("pymupdf4llm: %d chars", len(md_text))
     except Exception as exc:
         log.warning("pymupdf4llm failed: %s", exc)
 
-    # ── Tier 2: pdfplumber → table rows + plain text backup ───────────────
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             for page in pdf.pages:
@@ -511,7 +629,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
     except Exception as exc:
         log.warning("pdfplumber failed: %s", exc)
 
-    # ── Tier 3/4: OCR when real content is sparse ─────────────────────────
+    # OCR for scanned / image-only PDFs
     content_chars = len(re.sub(r"[#|*`\-=_>\s]", "", all_text))
     if content_chars < TEXT_THRESHOLD:
         requires_ocr = True
@@ -527,31 +645,65 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         except Exception as exc:
             log.warning("OCR failed: %s", exc)
 
-    # Strip Markdown markup for field-extraction regexes
+    # Strip Markdown markup for header-field regexes
     plain_text = re.sub(r"(?m)^#{1,6}\s+", "", all_text)
     plain_text = re.sub(r"[*`]", "", plain_text)
     text_lines = [ln for ln in plain_text.split("\n") if ln.strip()]
     currency = detect_currency(plain_text)
 
-    # ── Header fields ──────────────────────────────────────────────────────
-    supplier_name     = extract_supplier_name(text_lines)
-    supplier_tax_id   = extract_tax_id(plain_text)
-    quotation_number  = extract_quotation_number(plain_text)
-    received_date     = find_date(plain_text, ["วันที่", "date", "Quotation Date", "Date:", "issued", "ออกเมื่อ"])
-    valid_until       = find_date(plain_text, ["valid until", "valid to", "Valid Until", "expiration",
-                                               "expire", "หมดอายุ", "expiry", "ใช้ได้ถึง"])
-    total_amount      = extract_total(plain_text)
+    # ── Tier 0: Claude LLM — primary extraction ──────────────────────────────
+    llm_result = extract_with_llm(md_text or plain_text)
+    extraction_method = "regex"
 
-    # ── Line items: try each tier until we get results ─────────────────────
-    items: list[dict] = []
+    if llm_result:
+        extraction_method = "llm"
+        supplier_name    = str(llm_result.get("supplierName", "") or "")
+        supplier_tax_id  = str(llm_result.get("supplierTaxId", "") or "")
+        quotation_number = str(llm_result.get("quotationNumber", "") or "")
+        received_date    = str(llm_result.get("receivedDate", "") or "")
+        valid_until      = str(llm_result.get("validUntil", "") or "")
+        llm_currency     = str(llm_result.get("currency", "") or "")
+        if llm_currency in ("THB", "JPY", "USD", "EUR"):
+            currency = llm_currency
+        total_amount     = float(llm_result.get("totalAmount", 0) or 0)
+        items            = _normalise_llm_lines(llm_result.get("lines", []), currency)
 
-    # Tier 1 — Markdown column-aware
-    if md_text:
+        # Fallback to regex tiers only for fields the LLM left empty
+        if not supplier_name:
+            supplier_name = extract_supplier_name(text_lines)
+        if not supplier_tax_id:
+            supplier_tax_id = extract_tax_id(plain_text)
+        if not quotation_number:
+            quotation_number = extract_quotation_number(plain_text)
+        if not received_date:
+            received_date = find_date(plain_text, ["วันที่", "date", "Quotation Date", "Date:", "issued", "ออกเมื่อ"])
+        if not valid_until:
+            valid_until = find_date(plain_text, ["valid until", "valid to", "Valid Until",
+                                                  "expiration", "expire", "หมดอายุ", "expiry", "ใช้ได้ถึง"])
+        if total_amount <= 0:
+            total_amount = extract_total(plain_text)
+
+        # If LLM returned no line items, fall through to regex tiers below
+        if not items:
+            log.info("LLM returned 0 lines — falling back to regex tiers")
+            extraction_method = "regex"
+    else:
+        # ── Regex path (no API key / LLM call failed) ────────────────────────
+        supplier_name    = extract_supplier_name(text_lines)
+        supplier_tax_id  = extract_tax_id(plain_text)
+        quotation_number = extract_quotation_number(plain_text)
+        received_date    = find_date(plain_text, ["วันที่", "date", "Quotation Date", "Date:", "issued", "ออกเมื่อ"])
+        valid_until      = find_date(plain_text, ["valid until", "valid to", "Valid Until",
+                                                   "expiration", "expire", "หมดอายุ", "expiry", "ใช้ได้ถึง"])
+        total_amount     = extract_total(plain_text)
+        items            = []
+
+    # ── Line-item fallback tiers (run when LLM gave 0 items) ─────────────────
+    if not items and md_text:
         items = parse_markdown_table(md_text, currency)
         if items:
             log.info("Tier 1 (Markdown): %d line items", len(items))
 
-    # Tier 2 — pdfplumber cell heuristic
     if not items and table_rows:
         seen: set[str] = set()
         ln = 1
@@ -564,24 +716,30 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         if items:
             log.info("Tier 2 (pdfplumber): %d line items", len(items))
 
-    # Tier 3 — text regex
     if not items:
         items = lines_to_items(text_lines, currency)
         if items:
             log.info("Tier 3 (text regex): %d line items", len(items))
 
-    # ── Confidence ────────────────────────────────────────────────────────
-    def conf(val: str, strong: bool, weak: bool = False) -> str:
+    if requires_ocr:
+        extraction_method = "ocr"
+
+    # ── Confidence scores ─────────────────────────────────────────────────────
+    is_llm = extraction_method == "llm"
+
+    def conf(val: str | float, strong: bool, weak: bool = False) -> str:
+        if is_llm:
+            return "high" if val else "none"
         return "high" if strong else ("low" if weak else "none")
 
     confidence = {
-        "supplierName":   conf(supplier_name,    len(supplier_name) > 5,      bool(supplier_name)),
-        "supplierTaxId":  conf(supplier_tax_id,  len(supplier_tax_id) == 13,  bool(supplier_tax_id)),
-        "quotationNumber":conf(quotation_number, len(quotation_number) >= 5,  bool(quotation_number)),
-        "receivedDate":   "high" if received_date else "none",
-        "validUntil":     "high" if valid_until  else "none",
-        "totalAmount":    "high" if total_amount > 0 else "none",
-        "lines":          "high" if items else ("low" if not requires_ocr else "none"),
+        "supplierName":    conf(supplier_name,    len(supplier_name) > 5,       bool(supplier_name)),
+        "supplierTaxId":   conf(supplier_tax_id,  len(supplier_tax_id) == 13,   bool(supplier_tax_id)),
+        "quotationNumber": conf(quotation_number, len(quotation_number) >= 5,   bool(quotation_number)),
+        "receivedDate":    "high" if received_date else "none",
+        "validUntil":      "high" if valid_until  else "none",
+        "totalAmount":     "high" if total_amount > 0 else "none",
+        "lines":           "high" if items else ("low" if not requires_ocr else "none"),
     }
 
     return {
@@ -595,6 +753,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         "lines":           items,
         "rawText":         plain_text[:8000],
         "requiresOcr":     requires_ocr,
+        "extractionMethod": extraction_method,
         "confidence":      confidence,
     }
 
@@ -602,7 +761,13 @@ def process_pdf(pdf_bytes: bytes) -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "pdf-parser", "version": "2.0.0"}
+    llm_enabled = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+    return {
+        "status":     "ok",
+        "service":    "pdf-parser",
+        "version":    "3.0.0",
+        "llm":        DEFAULT_MODEL if llm_enabled else "disabled",
+    }
 
 
 @app.post("/parse")
@@ -615,8 +780,9 @@ async def parse_endpoint(file: UploadFile = File(...)) -> JSONResponse:
     log.info("Parsing %s (%d bytes)", file.filename, len(content))
     try:
         result = process_pdf(content)
-        log.info("Done: supplier=%r lines=%d ocr=%s",
-                 result["supplierName"], len(result["lines"]), result["requiresOcr"])
+        log.info("Done: supplier=%r lines=%d method=%s ocr=%s",
+                 result["supplierName"], len(result["lines"]),
+                 result["extractionMethod"], result["requiresOcr"])
         return JSONResponse(content=result)
     except Exception as exc:
         log.exception("Parse failed for %s", file.filename)
