@@ -424,6 +424,9 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             # Description
             if desc_col is not None and desc_col < len(cells):
                 desc = cells[desc_col]
+            elif code_col is not None and code_col < len(cells):
+                # Supplier has no separate description column — use the code column as desc
+                desc = cells[code_col]
             else:
                 desc = max(
                     (c for c in cells if c and not is_numeric(c) and len(c) > 2),
@@ -501,6 +504,9 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 c = cells[code_col]
                 if c and not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
                     item_code = re.sub(r"\s+", "", c)[:40]
+            # No separate description column → code is also the description
+            if desc_col is None and item_code:
+                desc = item_code
 
             # Unit
             unit = "EA"
