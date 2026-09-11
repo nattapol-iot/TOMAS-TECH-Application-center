@@ -193,22 +193,64 @@ def extract_quotation_number(text: str) -> str:
 
 
 def extract_supplier_name(lines: list[str]) -> str:
-    # Priority 1: line explicitly containing company-type keyword
-    for line in lines[:30]:
+    # Our own company — never return these as the supplier name
+    SELF_PAT = re.compile(
+        r"tomas\s*tech|tomastc|โทมัสเทค|โทมัส\s*เทค|ทอมัสเทค", re.I
+    )
+
+    def is_garbled(t: str) -> bool:
+        # Thai consonant immediately adjacent to an ASCII letter (OCR artefact)
+        if re.search(r"[ก-ฮ][A-Za-z]|[A-Za-z][ก-ฮ]", t):
+            return True
+        # Short string of bare Thai consonants with no vowels/tone marks
+        # (real Thai words always carry vowel characters U+0E30-U+0E4E)
+        if len(t) <= 12 and not re.search(r"[ะ-๎]", t):
+            pure_consonants = re.sub(r"[^ก-ฮ]", "", t)
+            if len(pure_consonants) >= 3:
+                return True
+        return False
+
+    def eng_ratio(s: str) -> float:
+        alpha = [c for c in s if c.isalpha()]
+        if not alpha:
+            return 0.0
+        return sum(1 for c in alpha if c.isascii()) / len(alpha)
+
+    def clean_name(t: str) -> str:
+        # Strip Thai company-type prefix words
+        t = re.sub(r"^(?:บริษัท|หจก\.|ห้างหุ้นส่วน(?:จำกัด)?)\s*", "", t).strip()
+        # Strip everything from address indicators onward
+        t = re.sub(r"\s+(?:ที่อยู่|ที่อยู|no\.\s*\d|no\s+\d|\d{1,3}\s*[,/]|soi\b|road\b|rd\.\b|floor\b|fl[,\s]|tower\b)", " ", t, flags=re.I)
+        t = re.sub(r"\s{2,}", " ", t).strip()
+        # Trim trailing punctuation/spaces
+        t = t.rstrip(".,; ").strip()
+        # Remove replacement/corrupted characters
+        t = re.sub(r"[^\x20-\x7E฀-๿()/.,'&\-]", "", t).strip()
+        return t
+
+    # Pass 1: line with English company suffix (CO.,LTD. / INC. / CORP. / PTE.LTD. etc.)
+    for line in lines[:50]:
         t = line.strip()
-        if len(t) < 5 or len(t) > 120:
+        if len(t) < 5 or len(t) > 250:
             continue
-        if re.search(r"co\.,?\s*ltd\.?|จำกัด|company|corporation|inc\.|gmbh|บริษัท|หจก\.|ห้างหุ้น", t, re.I):
-            # Remove trailing address noise
-            t = re.sub(r"\s+\d{1,3}[\s,].*", "", t).strip()
-            if len(t) >= 5:
-                return t
-    # Priority 2: short all-caps English line near top (logo text)
-    for line in lines[:15]:
+        if SELF_PAT.search(t):
+            continue
+        if is_garbled(t):
+            continue
+        if re.search(r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b|\bpte\.\s*ltd", t, re.I):
+            name = clean_name(t)
+            # Must be at least half English characters — no Thai-only names
+            if len(name) >= 5 and eng_ratio(name) >= 0.5:
+                return name
+
+    # Pass 2: short all-caps English line (letterhead / logo text)
+    for line in lines[:20]:
         t = line.strip()
-        if 5 <= len(t) <= 60 and t == t.upper() and re.search(r"[A-Z]{3}", t):
-            if not re.search(r"\d{5,}|@|http", t):
-                return t
+        if 5 <= len(t) <= 70 and t == t.upper() and re.search(r"[A-Z]{3}", t):
+            if not re.search(r"\d{5,}|@|http|[฀-๿]", t):
+                if not SELF_PAT.search(t):
+                    return t
+
     return ""
 
 
