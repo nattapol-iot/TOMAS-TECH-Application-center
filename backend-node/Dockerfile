@@ -13,6 +13,8 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
 # SQL migration files — bundled so the Node migration runner can apply them on startup
 COPY database/migrations/ ./migrations/
+# One-shot operational scripts (e.g. storage path migration)
+COPY scripts/ ./scripts/
 ENV HOST=0.0.0.0 PORT=5106
 ENV MIGRATIONS_DIR=/app/migrations
 EXPOSE 5106
