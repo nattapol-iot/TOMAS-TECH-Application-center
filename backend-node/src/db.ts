@@ -31,7 +31,10 @@ export function isReadOnlySql(text: string): boolean {
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/--[^\r\n]*/g, " ")
     .replace(/N?'(?:''|[^'])*'/gi, "''")
-    .replace(/\[(?:\]\]|[^\]])*\]/g, "[]");
+    .replace(/\[(?:\]\]|[^\]])*\]/g, "[]")
+    // Table variables and temporary tables live only for this connection and
+    // are used by reporting queries to build a scoped read model.
+    .replace(/\bINSERT\s+(?:INTO\s+)?[@#][A-Za-z0-9_]+\b/gi, " ");
   return !MUTATING_SQL.test(executable);
 }
 
