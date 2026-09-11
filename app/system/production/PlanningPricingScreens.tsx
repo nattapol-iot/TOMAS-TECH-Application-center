@@ -1585,6 +1585,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [extractedSupplierTaxId, setExtractedSupplierTaxId] = useState("");
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [showPdf, setShowPdf] = useState(false);
+  const [manualSupplierName, setManualSupplierName] = useState("");
 
   const hasParsed = Object.keys(confidence).length > 0;
 
@@ -1679,7 +1680,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     setLines((prev) => [...prev, { lineNo: prev.length + 1, itemCode: "", description: "", brand: "", model: "", qty: 1, unit: "EA", unitPrice: 0, currency, remark: "" }]);
 
   const parsedAmount = Number(amount);
-  const hasSupplier = !!supplierId || !!extractedSupplierName;
+  const hasSupplier = !!supplierId || !!extractedSupplierName || !!manualSupplierName;
   const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
 
@@ -1694,6 +1695,12 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
         resolvedSupplierId = found.id;
         setSupplierId(String(found.id));
         setSupplierAutoMatched(true);
+        if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
+      }
+      if (!supplierId && !extractedSupplierName && manualSupplierName.trim()) {
+        const found = await findOrCreateSupplier({ name: manualSupplierName.trim(), taxId: "" });
+        resolvedSupplierId = found.id;
+        setSupplierId(String(found.id));
         if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
       }
       const created = await createSupplierQuotation({
@@ -1781,7 +1788,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                 onChange={(event) => {
                   const f = event.target.files?.[0] ?? null;
                   setFile(f); setLines([]); setConfidence({}); setParseWarning(""); setSupplierAutoMatched(false);
-                  setExtractedSupplierName(""); setExtractedSupplierTaxId("");
+                  setExtractedSupplierName(""); setExtractedSupplierTaxId(""); setManualSupplierName("");
                   if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
                 }} />
               {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
@@ -1804,10 +1811,13 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             <Field label="Supplier *" hint={
               !supplierId && extractedSupplierName
                 ? `จาก PDF: "${extractedSupplierName}" — จะถูกเพิ่มใน Master Data เมื่อกด Upload`
-                : confHint("supplierName")
+                : (!supplierId && !extractedSupplierName && hasParsed && confidence["supplierName"] === "none")
+                  ? "← ไม่พบชื่อ Supplier ใน PDF — เลือกจากรายการหรือพิมพ์ชื่อใหม่ด้านล่าง"
+                  : confHint("supplierName")
             }>
               <select value={supplierId} onChange={(event) => {
                 setSupplierId(event.target.value);
+                setManualSupplierName("");
                 if (event.target.value) { setExtractedSupplierName(""); setExtractedSupplierTaxId(""); }
               }}>
                 {!supplierId && extractedSupplierName && (
@@ -1816,6 +1826,15 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                 {!supplierId && !extractedSupplierName && <option value="">— เลือก Supplier —</option>}
                 {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
               </select>
+              {!supplierId && !extractedSupplierName && (
+                <input
+                  style={{ marginTop: 6 }}
+                  placeholder="หรือพิมพ์ชื่อ Supplier ใหม่..."
+                  value={manualSupplierName}
+                  onChange={(e) => setManualSupplierName(e.target.value)}
+                  maxLength={200}
+                />
+              )}
             </Field>
           </div>
           <div style={confWrap("quotationNumber")}>

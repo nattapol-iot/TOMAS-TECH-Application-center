@@ -5,6 +5,10 @@ Tier 1  pymupdf4llm  → Markdown → column-aware table parser
 Tier 2  pdfplumber   → raw table cells → heuristic cell matcher
 Tier 3  text regex   → last-resort line-pattern matching
 Tier 4  PyMuPDF + Tesseract OCR → for scanned / image-only PDFs
+
+v2.2.0 — pdfplumber plain text primary for field extraction,
+         supplier name exclusion set, Month DD YYYY date format,
+         THB-first currency detection, more total/quotation-no patterns.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from PIL import Image
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("pdf-parser")
 
-app = FastAPI(title="TOMAS PDF Parser", version="2.1.0")
+app = FastAPI(title="TOMAS PDF Parser", version="2.2.0")
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
@@ -95,11 +99,26 @@ def parse_date(raw: str) -> str:
         mo = MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1
         yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
         return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
+    # Month DD, YYYY  (e.g. "September 11, 2026")
+    m = re.fullmatch(r"([A-Za-z]{3,15})\s+(\d{1,2}),?\s+(\d{2,4})", raw)
+    if m:
+        key = m.group(1).lower()
+        mo = MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1
+        d = m.group(2).zfill(2)
+        yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
+        return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
     return ""
 
 
 def find_date(text: str, keywords: list[str]) -> str:
     for kw in keywords:
+        # keyword followed by "Month DD, YYYY" (e.g. "Date: September 11, 2026")
+        pat3 = re.escape(kw) + r"[:\s]*([A-Za-z]{3,15}\s+\d{1,2},?\s+\d{2,4})"
+        m = re.search(pat3, text, re.IGNORECASE)
+        if m:
+            d = parse_date(m.group(1).strip())
+            if d:
+                return d
         # keyword followed by Thai/English date with month name
         pat = re.escape(kw) + r"[:\s]*(\d{1,2}[\s/\-][^\d\n\r]{2,15}[\s/\-]\d{2,4})"
         m = re.search(pat, text, re.IGNORECASE)
@@ -127,6 +146,9 @@ def find_date(text: str, keywords: list[str]) -> str:
 # ── Field extraction helpers ───────────────────────────────────────────────
 
 def detect_currency(text: str) -> str:
+    # Check THB first — explicit marker beats default
+    if re.search(r"\bTHB\b|฿|\bBaht\b|\bบาท\b", text, re.I):
+        return "THB"
     if re.search(r"\bJPY\b|\bYEN\b|¥", text, re.I):
         return "JPY"
     if re.search(r"\bUSD\b|\bUS\$|\$\d", text, re.I):
@@ -136,15 +158,18 @@ def detect_currency(text: str) -> str:
     return "THB"
 
 
-def extract_tax_id(text: str) -> str:
+def extract_tax_id(text: str, top_lines: Optional[list[str]] = None) -> str:
+    # Search in supplier letterhead (top lines) first to avoid picking up the buyer's tax ID.
+    # Build a combined search text: supplier section first, then full text as fallback.
+    search_text = "\n".join((top_lines or [])[:30]) + "\n" + text if top_lines else text
     # Thai 13-digit tax ID — may be formatted with dashes
-    m = re.search(r"(?:เลขประจำตัวผู้เสียภาษี|tax\s*id|taxpayer)[:\s]*(\d[\d\-]{12,16})", text, re.I)
+    m = re.search(r"(?:เลขประจำตัวผู้เสียภาษี|tax\s*id|taxpayer)[:\s]*(\d[\d\-]{12,16})", search_text, re.I)
     if m:
         return re.sub(r"\D", "", m.group(1))[:13]
-    m = re.search(r"\b(\d{13})\b", text)
+    m = re.search(r"\b(\d{13})\b", search_text)
     if m:
         return m.group(1)
-    m = re.search(r"(\d{1}-\d{4}-\d{5}-\d{1,2}-\d{1})", text)
+    m = re.search(r"(\d{1}-\d{4}-\d{5}-\d{1,2}-\d{1})", search_text)
     if m:
         return m.group(1).replace("-", "")
     return ""
@@ -154,8 +179,12 @@ def extract_quotation_number(text: str) -> str:
     # Labeled patterns first (most reliable)
     labeled = re.search(
         r"(?:quotation\s*(?:no\.?|number:?|no:)|invoice\s*(?:no\.?|number:?)|"
-        r"ใบเสนอราคา(?:เลขที่|ที่)?|เลขที่ใบเสนอราคา|เลขที่\s*:|"
-        r"QT\s*(?:NO\.?|:)|BT\s*NO\.?|SQ\s*NO\.?|document\s*no\.?)"
+        r"ใบเสนอราคา(?:เลขที่|ที่)?|เลขที่ใบเสนอราคา|เลขที่เอกสาร|เลขที่ใบ|เลขที่\s*:|"
+        r"QT\s*(?:NO\.?|:)|BT\s*NO\.?|SQ\s*NO\.?|"
+        r"doc(?:ument)?\s*(?:no\.?|number)|"
+        r"REF\s*(?:NO\.?|:)|REFERENCE\s*(?:NO\.?|:)|"
+        r"PO\s*(?:NO\.?|:)|order\s*(?:no\.?|number:?)|"
+        r"document\s*no\.?)"
         r"[:\s#\/]*([A-Z0-9][A-Z0-9\-\/\.]{3,29})",
         text, re.I,
     )
@@ -192,7 +221,7 @@ def extract_quotation_number(text: str) -> str:
     return ""
 
 
-def extract_supplier_name(lines: list[str]) -> str:
+def extract_supplier_name(lines: list[str], metadata: Optional[dict] = None) -> str:
     # Buyer-section markers — the supplier name only appears ABOVE these lines.
     # Everything from "To:", "Bill To:", "เรียน:", etc. onward is the buyer section
     # where our own company name (TOMAS TECH) will appear and must be ignored.
@@ -231,12 +260,28 @@ def extract_supplier_name(lines: list[str]) -> str:
         t = re.sub(r"[^\x20-\x7E฀-๿()/.,'&\-]", "", t).strip()
         return t
 
+    # Words that identify the document type, not the supplier — excluded from Pass 2
+    DOCUMENT_TYPE_WORDS = {
+        "QUOTATION", "TAX INVOICE", "INVOICE", "PURCHASE ORDER", "DELIVERY NOTE",
+        "RECEIPT", "PROFORMA", "CREDIT NOTE", "DEBIT NOTE", "PACKING LIST",
+        "STATEMENT", "PROPOSAL", "OFFER", "ESTIMATE", "ORDER CONFIRMATION",
+    }
+    _doc_type_nospace = {w.replace(" ", "") for w in DOCUMENT_TYPE_WORDS}
+
     # Cut off search window at the buyer section — supplier letterhead is always above it
     search_lines: list[str] = []
     for line in lines[:60]:
         if BUYER_SECTION_PAT.match(line.strip()):
             break
         search_lines.append(line)
+
+    # Metadata check — PDF author/creator fields often contain the supplier company name
+    if metadata:
+        for key in ("author", "creator"):
+            val = (metadata.get(key) or "").strip()
+            if 5 <= len(val) <= 100 and not is_garbled(val) and eng_ratio(val) >= 0.5:
+                if re.search(r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b", val, re.I):
+                    return clean_name(val)
 
     # Pass 1: line with explicit English company suffix (CO.,LTD. / INC. / CORP. etc.)
     for line in search_lines:
@@ -252,10 +297,15 @@ def extract_supplier_name(lines: list[str]) -> str:
                 return name
 
     # Pass 2: short all-caps English line (letterhead / logo text)
+    # Skip lines that are document-type words (e.g. "QUOTATION", "INVOICE")
     for line in search_lines[:20]:
         t = line.strip()
         if 5 <= len(t) <= 70 and t == t.upper() and re.search(r"[A-Z]{3}", t):
             if not re.search(r"\d{5,}|@|http|[฀-๿]", t):
+                if t.upper() in DOCUMENT_TYPE_WORDS:
+                    continue
+                if t.upper().replace(" ", "") in _doc_type_nospace:
+                    continue
                 return t
 
     return ""
@@ -264,6 +314,8 @@ def extract_supplier_name(lines: list[str]) -> str:
 def extract_total(text: str) -> float:
     patterns = [
         r"(?:grand\s*total|total\s*net|net\s*total|ยอดรวมทั้งหมด|ยอดสุทธิ|รวมทั้งสิ้น)[^\d\n]*([\d,]+\.?\d*)",
+        r"(?:net\s*amount|net\s*total|total\s*net)[^\d\n]*([\d,]+\.?\d*)",
+        r"(?:รวมเงิน|ราคารวม|มูลค่ารวม|ยอดชำระ|ยอดสุทธิ)[^\d\n]*([\d,]+\.?\d*)",
         r"(?:total\s*amount|amount\s*due)[^\d\n]*([\d,]+\.?\d*)",
         r"(?:total)[^\d\n]*([\d,]+\.?\d*)",
         r"(?:รวม)[^\d\n]*([\d,]+\.?\d*)",
@@ -713,11 +765,14 @@ def process_pdf(pdf_bytes: bytes) -> dict:
     md_text = ""
     table_rows: list[list] = []
     all_text = ""
+    plumber_text = ""
+    pdf_meta: dict = {}
     requires_ocr = False
 
     # ── Tier 1: pymupdf4llm → Markdown ────────────────────────────────────
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pdf_meta = doc.metadata or {}
         md_text = pymupdf4llm.to_markdown(doc, show_progress=False)
         doc.close()
         all_text = md_text
@@ -726,11 +781,14 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         log.warning("pymupdf4llm failed: %s", exc)
 
     # ── Tier 2: pdfplumber → table rows + plain text backup ───────────────
+    plumber_text = ""
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             for page in pdf.pages:
+                page_text = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
+                plumber_text += page_text + "\n"
                 if not all_text:
-                    all_text += (page.extract_text(x_tolerance=3, y_tolerance=3) or "") + "\n"
+                    all_text += page_text + "\n"
                 for table in page.extract_tables():
                     table_rows.extend(row for row in table if row)
     except Exception as exc:
@@ -755,22 +813,26 @@ def process_pdf(pdf_bytes: bytes) -> dict:
     # Strip Markdown markup for field-extraction regexes
     plain_text = re.sub(r"(?m)^#{1,6}\s+", "", all_text)
     plain_text = re.sub(r"[*`]", "", plain_text)
-    text_lines = [ln for ln in plain_text.split("\n") if ln.strip()]
-    currency = detect_currency(plain_text)
+
+    # Use pdfplumber plain text for field extraction (cleaner than markdown — no | or # noise).
+    # Fall back to stripped markdown text if pdfplumber returned nothing.
+    extraction_text = plumber_text.strip() if plumber_text.strip() else plain_text
+    text_lines = [ln for ln in extraction_text.split("\n") if ln.strip()]
+    currency = detect_currency(extraction_text)
 
     # ── Header fields ──────────────────────────────────────────────────────
-    supplier_name     = extract_supplier_name(text_lines)
-    supplier_tax_id   = extract_tax_id(plain_text)
-    quotation_number  = extract_quotation_number(plain_text)
-    received_date     = find_date(plain_text, [
+    supplier_name     = extract_supplier_name(text_lines, metadata=pdf_meta)
+    supplier_tax_id   = extract_tax_id(extraction_text, top_lines=text_lines)
+    quotation_number  = extract_quotation_number(extraction_text)
+    received_date     = find_date(extraction_text, [
         "วันที่", "date", "Quotation Date", "Issue Date", "Date:", "issued", "ออกเมื่อ",
     ])
-    valid_until       = find_date(plain_text, [
+    valid_until       = find_date(extraction_text, [
         "valid until", "valid to", "Valid Until",
         "Expire Date", "expiry date", "expiration date", "expiration", "expire",
         "หมดอายุ", "expiry", "ใช้ได้ถึง", "validity",
     ])
-    total_amount      = extract_total(plain_text)
+    total_amount      = extract_total(extraction_text)
 
     # ── Line items: try each tier until results appear ─────────────────────
     items: list[dict] = []
@@ -817,7 +879,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         "currency":        currency,
         "totalAmount":     total_amount,
         "lines":           items,
-        "rawText":         plain_text[:8000],
+        "rawText":         extraction_text[:8000],
         "requiresOcr":     requires_ocr,
         "confidence":      confidence,
     }
@@ -826,7 +888,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "pdf-parser", "version": "2.1.0"}
+    return {"status": "ok", "service": "pdf-parser", "version": "2.2.0"}
 
 
 @app.post("/parse")
