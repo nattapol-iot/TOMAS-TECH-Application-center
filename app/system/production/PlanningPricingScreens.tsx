@@ -1565,7 +1565,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   onClose: () => void;
   onCreated: (quotationNumber: string) => Promise<void>;
 }) {
-  const [supplierId, setSupplierId] = useState(String(bootstrap.suppliers[0]?.id ?? ""));
+  const [supplierId, setSupplierId] = useState("");
   const [supplierReference, setSupplierReference] = useState("");
   const [receivedDate, setReceivedDate] = useState(isoToday());
   const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
@@ -1820,10 +1820,11 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                 setManualSupplierName("");
                 if (event.target.value) { setExtractedSupplierName(""); setExtractedSupplierTaxId(""); }
               }}>
-                {!supplierId && extractedSupplierName && (
-                  <option value="">{extractedSupplierName} (ใหม่)</option>
+                {!supplierId && (
+                  <option value="">
+                    {extractedSupplierName ? `${extractedSupplierName} (ใหม่ — จะสร้างตอน Upload)` : "— เลือก Supplier —"}
+                  </option>
                 )}
-                {!supplierId && !extractedSupplierName && <option value="">— เลือก Supplier —</option>}
                 {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
               </select>
               {!supplierId && !extractedSupplierName && (
