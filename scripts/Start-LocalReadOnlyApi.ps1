@@ -5,6 +5,7 @@ param(
     [string] $DatabaseName = 'IoTTeamCenterTeamTest',
     [int] $ExpectedSchemaVersion = 39,
     [switch] $AllowUntrustedTeamTestCertificate,
+    [switch] $AllowRemoteWrites,
     [string] $RuntimeRoot = (Join-Path $env:LOCALAPPDATA 'IoTTeamCenter\TeamTest')
 )
 
@@ -100,6 +101,7 @@ finally { $connection.Dispose() }
 
 $localStorage = Join-Path $env:LOCALAPPDATA 'IoTTeamCenter\LocalReadOnly\documents'
 New-Item -ItemType Directory -Path $localStorage -Force | Out-Null
+$readOnly = !$AllowRemoteWrites
 $environmentValues = @{
     NODE_ENV = 'staging'
     HOST = '127.0.0.1'
@@ -113,7 +115,7 @@ $environmentValues = @{
     ConnectionStrings__IoTTeamCenter = $connectionString
     Database__TrustServerCertificateForTeamTest = 'true'
     Database__RunMigrations = 'false'
-    Database__ReadOnly = 'true'
+    Database__ReadOnly = if ($readOnly) { 'true' } else { 'false' }
     DocumentStorage__Mode = 'Local'
     DocumentStorage__RootPath = $localStorage
     Email__Mode = 'Disabled'
@@ -128,9 +130,16 @@ try {
         $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         [Environment]::SetEnvironmentVariable($name, $environmentValues[$name], 'Process')
     }
-    Write-Output "Starting local read-only API at http://127.0.0.1:$ApiPort against $DatabaseName schema $ExpectedSchemaVersion."
+    $accessMode = if ($readOnly) { 'read-only' } else { 'writable' }
+    Write-Output "Starting local $accessMode API at http://127.0.0.1:$ApiPort against $DatabaseName schema $ExpectedSchemaVersion."
     Write-Warning 'SQL certificate validation is disabled only for this explicit Team Test run.'
-    Write-Output 'Migrations, database transactions and mutating SQL/HTTP methods are disabled. GET, HEAD and OPTIONS remain available. Press Ctrl+C to stop.'
+    if ($readOnly) {
+        Write-Output 'Migrations, database transactions and mutating SQL/HTTP methods are disabled. GET, HEAD and OPTIONS remain available. Press Ctrl+C to stop.'
+    }
+    else {
+        Write-Warning 'Remote Team Test writes are enabled. Changes are committed to 202.151.188.68. Automatic migrations and email delivery remain disabled.'
+        Write-Output 'Press Ctrl+C to stop.'
+    }
     & npm.cmd --prefix $backendRoot run dev
     if ($LASTEXITCODE -ne 0) { throw "Local API exited with code $LASTEXITCODE." }
 }
