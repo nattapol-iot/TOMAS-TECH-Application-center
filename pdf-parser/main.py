@@ -246,16 +246,112 @@ def clean_num(s: str) -> float:
 
 # ── Tier 1: pymupdf4llm Markdown table parser (column-aware) ──────────────
 
-def _find_col(headers: list[str], keywords: list[str]) -> Optional[int]:
+def _find_col(headers: list[str], keywords: list[str],
+              exclude: Optional[set[int]] = None) -> Optional[int]:
     """Return the first column whose header contains any keyword, checked in keyword-priority
-    order so that more-specific keywords (earlier in the list) win over generic ones."""
+    order so that more-specific keywords (earlier in the list) win over generic ones.
+    Columns in `exclude` are skipped (used for conflict resolution)."""
     for kw in keywords:
         kw_l = kw.lower()
         for i, h in enumerate(headers):
+            if exclude and i in exclude:
+                continue
             h_norm = re.sub(r"\s+", " ", h.lower().strip())
             if kw_l in h_norm:
                 return i
     return None
+
+
+def _detect_columns(header: list[str]) -> dict:
+    """
+    Detect column roles from header cells with conflict resolution.
+
+    Priority rules:
+    - Most-specific keywords first (e.g. "item description" beats "item")
+    - desc/code conflict: if both map to same col, try to find alternative for code
+    - unit vs unit-price: exact "unit" match only, never substring of "unit price"
+    - Covers EN / TH / JP / CN / common abbreviation variants
+    """
+    # ── Description ─────────────────────────────────────────────
+    DESC_KW = [
+        "item description", "product description", "goods description",
+        "description", "descriptions",
+        "detail", "details",
+        "product name", "product",
+        "material description", "material",
+        "รายการสินค้า", "ชื่อสินค้า", "รายละเอียดสินค้า",
+        "รายการ", "รายละเอียด", "ชื่อ", "สินค้า",
+        "goods", "commodity",
+        "品名", "商品名", "規格", "品目",
+        "名称",
+    ]
+    # ── Item code / part number ──────────────────────────────────
+    CODE_KW = [
+        "part number", "part no.", "part no",
+        "item number", "item no.", "item no",
+        "item code", "product code", "goods code",
+        "model number", "model no.", "model no",
+        "code", "part", "item",
+        "รหัสสินค้า", "รหัส", "รุ่น",
+        "model", "sku", "ref", "cat no", "catalog no",
+        "品番", "型番", "品名コード",
+    ]
+    # ── Quantity ────────────────────────────────────────────────
+    QTY_KW = [
+        "quantity", "จำนวน",
+        "qty", "pcs", "pieces", "count", "数量", "個数",
+    ]
+    # ── Unit price ──────────────────────────────────────────────
+    PRICE_KW = [
+        "unit price", "price per unit", "price/unit", "price / unit",
+        "unitprice", "unit\nprice", "rate",
+        "ราคาต่อหน่วย", "ราคา/หน่วย",
+        "単価", "单价",
+        "price", "ราคา",
+    ]
+    # ── Line total / amount ──────────────────────────────────────
+    AMOUNT_KW = [
+        "line total", "line amount", "extended price", "ext price", "ext. price",
+        "total price", "total amount",
+        "amount", "total",
+        "ยอดรวม", "รวมเงิน", "รวม", "ยอด",
+        "金額", "合計", "小計",
+        "ext",
+    ]
+    # ── Unit of measure ─────────────────────────────────────────
+    UOM_KW = ["uom", "u/m", "หน่วย", "単位", "单位"]
+
+    desc_col   = _find_col(header, DESC_KW)
+    qty_col    = _find_col(header, QTY_KW)
+    price_col  = _find_col(header, PRICE_KW)
+    amount_col = _find_col(header, AMOUNT_KW)
+    code_col   = _find_col(header, CODE_KW)
+
+    # Exact-match "unit" / "uom" only — prevent "Unit Price" being picked as UOM
+    unit_col: Optional[int] = None
+    for i, h in enumerate(header):
+        hn = h.strip().lower()
+        if hn in ("unit", "uom", "u/m", "u.m.", "หน่วย"):
+            unit_col = i
+            break
+    if unit_col is None:
+        unit_col = _find_col(header, UOM_KW)
+
+    # ── Conflict resolution ──────────────────────────────────────
+    # If desc and code point at the same column, the match was ambiguous.
+    # Re-run code search excluding desc_col; if nothing found, leave code=None.
+    if code_col is not None and code_col == desc_col:
+        code_col = _find_col(header, CODE_KW, exclude={desc_col})
+
+    # price_col must not equal amount_col (e.g. single "Total" column table).
+    # In that case prefer amount_col and leave price_col=None.
+    if price_col is not None and price_col == amount_col:
+        price_col = _find_col(header, PRICE_KW, exclude={amount_col})
+
+    return {
+        "desc": desc_col, "qty": qty_col, "price": price_col,
+        "amount": amount_col, "code": code_col, "unit": unit_col,
+    }
 
 
 def parse_markdown_table(md: str, currency: str) -> list[dict]:
@@ -291,27 +387,19 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             n_cols = len(header)
             data_rows = table_lines[2:]
 
-            desc_col   = _find_col(header, ["item description", "description", "detail", "product name",
-                                            "product", "รายการ", "ชื่อ", "name", "สินค้า", "goods"])
-            qty_col    = _find_col(header, ["qty", "quantity", "จำนวน", "pcs", "pieces", "数量"])
-            price_col  = _find_col(header, ["unit price", "unit\nprice", "price/unit", "unitprice",
-                                            "ราคา/หน่วย", "ราคาต่อหน่วย", "単価", "price", "ราคา"])
-            amount_col = _find_col(header, ["amount", "total", "รวม", "ยอด", "line total", "金額", "ext"])
-            code_col   = _find_col(header, ["code", "part no", "part number", "model no", "item no",
-                                            "item", "รหัส", "model", "sku", "品番"])
-            # Exact-match "unit" first to avoid matching "Unit Price" columns
-            unit_col = next((i for i, h in enumerate(header) if h.strip().lower() == "unit"), None)
-            if unit_col is None:
-                unit_col = _find_col(header, ["uom", "หน่วย", "単位"])
+            col_map = _detect_columns(header)
+            desc_col   = col_map["desc"]
+            qty_col    = col_map["qty"]
+            price_col  = col_map["price"]
+            amount_col = col_map["amount"]
+            code_col   = col_map["code"]
+            unit_col   = col_map["unit"]
 
             if desc_col is None and price_col is None and amount_col is None:
                 continue
 
             # Save column map for continuation tables (page 2+)
-            last_col_map = {
-                "desc": desc_col, "qty": qty_col, "price": price_col,
-                "amount": amount_col, "code": code_col, "unit": unit_col,
-            }
+            last_col_map = col_map
             last_n_cols = n_cols
         else:
             # No separator → headerless continuation table from a later page
