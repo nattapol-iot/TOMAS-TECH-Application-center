@@ -15,7 +15,7 @@ $environmentValues = @{
     NEXT_PUBLIC_API_BASE_URL = 'http://127.0.0.1:5116'
     NEXT_PUBLIC_BUSINESS_TIME_ZONE = 'Asia/Bangkok'
     NEXT_PUBLIC_LOCAL_READ_ONLY = if ($AllowRemoteWrites) { 'false' } else { 'true' }
-    NEXT_PUBLIC_CONNECTED_SCHEMA_VERSION = '39'
+    NEXT_PUBLIC_CONNECTED_SCHEMA_VERSION = '43'
     SITE_ORIGIN = "http://127.0.0.1:$FrontendPort"
 }
 $previousEnvironment = @{}

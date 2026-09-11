@@ -3,7 +3,7 @@ param(
     [ValidateRange(1024, 65535)][int] $ApiPort = 5116,
     [string] $DatabaseServer = '202.151.188.68',
     [string] $DatabaseName = 'IoTTeamCenterTeamTest',
-    [int] $ExpectedSchemaVersion = 39,
+    [int] $ExpectedSchemaVersion = 43,
     [switch] $AllowUntrustedTeamTestCertificate,
     [switch] $AllowRemoteWrites,
     [string] $RuntimeRoot = (Join-Path $env:LOCALAPPDATA 'IoTTeamCenter\TeamTest')
@@ -71,6 +71,10 @@ $expectedMigrationNames = [ordered]@{
     37 = 'Archive generated report PDF/PPTX exports on NAS storage'
     38 = 'supplier_quotation_lines'
     39 = 'NAS storage connection draft settings'
+    40 = 'Immutable overhead policies and estimate revision snapshots'
+    41 = 'Admin-managed primary user roles with audited least-privilege writes'
+    42 = 'Guard estimate aggregates within supported decimal precision'
+    43 = 'Revision-scoped Estimate ERP cost classifications'
 }
 $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
 try {
