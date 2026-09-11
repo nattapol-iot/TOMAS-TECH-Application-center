@@ -761,6 +761,122 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
 
 # ── Main PDF processing ────────────────────────────────────────────────────
 
+def extract_supplier_from_layout(pdf_bytes: bytes) -> str:
+    """
+    Coordinate-based supplier name extraction using pymupdf text blocks.
+
+    Strategy: on page 1, collect text blocks in the top 35% of the page.
+    The supplier name is typically the largest-font or topmost prominent
+    English text before any 'To:' / buyer section appears.
+
+    Returns the best candidate or "" if nothing found.
+    """
+    SELF_PAT = re.compile(r"tomas\s*tech|tomastc|โทมัสเทค", re.I)
+    BUYER_KW  = re.compile(
+        r"^(?:to\s*:|bill\s*to|ship\s*to|attention:|attn:|เรียน|ถึง:|customer:)",
+        re.I,
+    )
+    DOC_TYPE = {
+        "QUOTATION","INVOICE","TAX INVOICE","PURCHASE ORDER","RECEIPT",
+        "PROFORMA","DELIVERY NOTE","PACKING LIST","STATEMENT","PROPOSAL",
+        "OFFER","ESTIMATE","ORDER CONFIRMATION","CREDIT NOTE","DEBIT NOTE",
+    }
+
+    def _eng_ratio(s: str) -> float:
+        alpha = [c for c in s if c.isalpha()]
+        return sum(1 for c in alpha if c.isascii()) / len(alpha) if alpha else 0.0
+
+    def _is_garbled(t: str) -> bool:
+        if re.search(r"[ก-ฮ][A-Za-z]|[A-Za-z][ก-ฮ]", t):
+            return True
+        if len(t) <= 12 and not re.search(r"[ะ-๎]", t):
+            if len(re.sub(r"[^ก-ฮ]", "", t)) >= 3:
+                return True
+        return False
+
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[0]
+        page_h = page.rect.height
+        cutoff_y = page_h * 0.40   # look only in top 40% of first page
+
+        # Collect (y0, font_size, text) for blocks in the header area
+        candidates: list[tuple[float, float, str]] = []
+        for block in page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]:
+            if block.get("type") != 0:   # 0 = text block
+                continue
+            block_y0 = block["bbox"][1]
+            if block_y0 > cutoff_y:
+                break
+            for line in block.get("lines", []):
+                line_text = " ".join(
+                    span["text"] for span in line.get("spans", [])
+                ).strip()
+                if not line_text or len(line_text) < 3:
+                    continue
+                if BUYER_KW.match(line_text):
+                    # Reached the buyer section — stop collecting
+                    doc.close()
+                    candidates.sort()   # sort by y position
+                    return _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled)
+                avg_size = (
+                    sum(s["size"] for s in line.get("spans", []) if s.get("size"))
+                    / max(len(line.get("spans", [])), 1)
+                )
+                candidates.append((block_y0, avg_size, line_text))
+
+        doc.close()
+
+        # Sort by y position (top → bottom) and pick the best candidate
+        candidates.sort(key=lambda x: x[0])
+        return _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled)
+
+    except Exception as exc:
+        log.warning("Layout-based supplier extraction failed: %s", exc)
+        return ""
+
+
+def _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled) -> str:
+    """Pick the best supplier name from (y0, font_size, text) candidates."""
+    COMPANY_KW = re.compile(
+        r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b|\bpte\.\s*ltd|"
+        r"จำกัด|บริษัท|หจก\.",
+        re.I,
+    )
+
+    def _clean(t: str) -> str:
+        t = re.sub(r"^(?:บริษัท|หจก\.|ห้างหุ้นส่วน(?:จำกัด)?)\s*", "", t).strip()
+        t = re.sub(
+            r"\s+(?:ที่อยู่|no\.\s*\d|no\s+\d|\d{1,3}\s*[,/]|soi\b|road\b|rd\.\b|floor\b|fl[,\s]|tower\b)",
+            "", t, flags=re.I,
+        )
+        t = re.sub(r"\s{2,}", " ", t).strip().rstrip(".,; ")
+        return t
+
+    # Pass A: line with explicit English company suffix, good eng_ratio
+    for _, _size, text in candidates:
+        if SELF_PAT.search(text) or _is_garbled(text):
+            continue
+        if COMPANY_KW.search(text):
+            name = _clean(text)
+            if len(name) >= 5 and _eng_ratio(name) >= 0.5:
+                return name
+
+    # Pass B: short all-caps line that looks like a brand / company (not a doc-type word)
+    for _, _size, text in candidates[:15]:
+        t = text.strip()
+        if SELF_PAT.search(t) or _is_garbled(t):
+            continue
+        if 5 <= len(t) <= 70 and t == t.upper() and re.search(r"[A-Z]{3}", t):
+            if not re.search(r"\d{5,}|@|http|[฀-๿]", t):
+                if t.upper() not in DOC_TYPE and t.upper().replace(" ", "") not in {
+                    w.replace(" ", "") for w in DOC_TYPE
+                }:
+                    return t
+
+    return ""
+
+
 def process_pdf(pdf_bytes: bytes) -> dict:
     md_text = ""
     table_rows: list[list] = []
@@ -821,7 +937,13 @@ def process_pdf(pdf_bytes: bytes) -> dict:
     currency = detect_currency(extraction_text)
 
     # ── Header fields ──────────────────────────────────────────────────────
-    supplier_name     = extract_supplier_name(text_lines, metadata=pdf_meta)
+    # Pass 0: coordinate-based layout extraction (most reliable for digital PDFs)
+    supplier_name = extract_supplier_from_layout(pdf_bytes)
+    log.info("Layout supplier: %r", supplier_name)
+    # Pass 1+: regex/metadata fallback when layout extraction returns nothing
+    if not supplier_name:
+        supplier_name = extract_supplier_name(text_lines, metadata=pdf_meta)
+        log.info("Regex supplier: %r", supplier_name)
     supplier_tax_id   = extract_tax_id(extraction_text, top_lines=text_lines)
     quotation_number  = extract_quotation_number(extraction_text)
     received_date     = find_date(extraction_text, [
