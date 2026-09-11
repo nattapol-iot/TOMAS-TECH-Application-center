@@ -1641,17 +1641,39 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     setValidUntil(addIsoDays(isoToday(), 30));
     setCurrency("THB");
     setAmount("");
+    setLines([]);
     try {
       const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
 
       setConfidence(result.confidence ?? {});
 
-      // Only fill the 3 reliable fields: date, total, currency (+ ref no)
       if (result.quotationNumber) setSupplierReference(result.quotationNumber);
       if (result.receivedDate) setReceivedDate(result.receivedDate);
       if (result.validUntil) setValidUntil(result.validUntil);
       if (result.currency) setCurrency(result.currency);
       if (result.totalAmount > 0) setAmount(String(result.totalAmount));
+
+      // Auto-match supplier: try exact/substring match against master data first;
+      // fall back to pre-filling the new-supplier text box so user can confirm.
+      if (result.supplierName) {
+        const normalizedParsed = result.supplierName.toLowerCase().trim();
+        const matched = bootstrap.suppliers.find(
+          (s) => s.name.toLowerCase() === normalizedParsed
+            || s.name.toLowerCase().includes(normalizedParsed)
+            || normalizedParsed.includes(s.name.toLowerCase()),
+        );
+        if (matched) {
+          setSupplierId(String(matched.id));
+          setNewSupplierName("");
+        } else {
+          setNewSupplierName(result.supplierName);
+        }
+      }
+
+      // Auto-populate line items extracted from the PDF
+      if (result.lines?.length > 0) {
+        setLines(result.lines.map((l, i) => ({ ...l, lineNo: i + 1, currency: l.currency || result.currency })));
+      }
 
       if (result.requiresOcr) {
         setParseWarning("PDF เป็นไฟล์สแกน — ระบบอ่านได้บางส่วน กรุณาตรวจสอบทุก field");
@@ -1743,7 +1765,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       <div className="callout" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
         <Icon name="check" />
         <span>
-          <strong>อ่าน PDF แล้ว</strong> · วันที่ / ยอดรวม / สกุลเงิน ถูก fill อัตโนมัติ
+          <strong>อ่าน PDF แล้ว</strong> · Supplier / วันที่ / ยอดรวม / สกุลเงิน / รายการสินค้า ถูก fill อัตโนมัติ
           {highCount > 0 && <> · <span style={{ color: "#15803d" }}>●</span> {highCount} field มั่นใจ</>}
           {lowCount > 0  && <> · <span style={{ color: "#a16207" }}>●</span> {lowCount} field ควรตรวจสอบ</>}
           {noneCount > 0 && <> · <span style={{ color: "#dc2626" }}>●</span> {noneCount} field ดูจาก PDF</>}
@@ -1779,7 +1801,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
               <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
                 onChange={(event) => {
                   const f = event.target.files?.[0] ?? null;
-                  setFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName("");
+                  setFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName(""); setLines([]);
                   if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
                 }} />
               {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
@@ -1891,7 +1913,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
               ))}</tbody>
             </table>
           </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>
-            {parsing ? "กำลังอ่าน PDF…" : "กด \"Add line\" เพื่อเพิ่มรายการ — อ่านจาก PDF ต้นฉบับด้านขวาได้เลย"}
+            {parsing ? "กำลังอ่าน PDF…" : hasParsed ? "ไม่พบรายการสินค้าใน PDF — กด \"Add line\" เพื่อเพิ่มเอง" : "เลือกไฟล์ PDF เพื่ออ่านรายการสินค้าอัตโนมัติ หรือกด \"Add line\" เพื่อกรอกเอง"}
           </div>}
         </div>
 
