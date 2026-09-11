@@ -9,8 +9,10 @@ import {
   ApiClientError,
   apiRequest,
   createSupplierQuotation,
+  deleteSupplierQuotation,
   downloadSupplierQuotation,
   findOrCreateSupplier,
+  updateSupplierQuotation,
   listAllQuotationLinesForPriceLibrary,
   listEstimates,
   listInquiries,
@@ -1924,6 +1926,108 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   </Modal>;
 }
 
+function EditQuotationModal({
+  record,
+  bootstrap,
+  onClose,
+  onSaved,
+}: {
+  record: SupplierQuotationRecord;
+  bootstrap: BootstrapData;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [supplierId, setSupplierId] = useState(String(record.supplierId));
+  const [supplierReference, setSupplierReference] = useState(record.supplierReference);
+  const [receivedDate, setReceivedDate] = useState(record.receivedDate);
+  const [validUntil, setValidUntil] = useState(record.validUntil);
+  const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>(record.currency);
+  const [amount, setAmount] = useState(String(record.amount));
+  const [inquiryId, setInquiryId] = useState(record.inquiryId ? String(record.inquiryId) : "");
+  const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void listInquiries({ page: 1, pageSize: 100 }).then((r) =>
+      setInquiries(r.items.map((i) => ({ id: i.id, number: i.number, projectName: i.projectName, customerName: i.customerName })))
+    ).catch(() => undefined);
+  }, []);
+
+  const parsedAmount = Number(amount);
+  const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
+    || !Number.isFinite(parsedAmount) || parsedAmount <= 0;
+
+  const submit = async () => {
+    if (invalid) return;
+    setBusy(true); setError("");
+    try {
+      await updateSupplierQuotation(record.id, {
+        supplierId: Number(supplierId),
+        supplierReference: supplierReference.trim(),
+        receivedDate,
+        validUntil,
+        currency,
+        amount: parsedAmount,
+        inquiryId: inquiryId ? Number(inquiryId) : null,
+        rowVersion: record.rowVersion,
+      });
+      onSaved();
+    } catch (e) {
+      setError(toError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={`Edit ${record.quotationNumber}`}
+      size="lg"
+      onClose={onClose}
+      footer={<>
+        <button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
+          <Icon name="check" />{busy ? "Saving…" : "Save changes"}
+        </button>
+      </>}
+    >
+      {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+      <div className="form-grid two">
+        <Field label="Supplier *">
+          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">— เลือก Supplier —</option>
+            {bootstrap.suppliers.map((s) => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Supplier reference">
+          <input maxLength={200} value={supplierReference} onChange={(e) => setSupplierReference(e.target.value)} placeholder="e.g. QT-2609-001" />
+        </Field>
+        <Field label="Received date *">
+          <input type="date" value={receivedDate} onChange={(e) => { setReceivedDate(e.target.value); if (e.target.value && validUntil < e.target.value) setValidUntil(addIsoDays(e.target.value, 30)); }} />
+        </Field>
+        <Field label="Valid until *">
+          <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+        </Field>
+        <Field label="Currency *">
+          <select value={currency} onChange={(e) => setCurrency(e.target.value as SupplierQuotationRecord["currency"])}>
+            <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
+          </select>
+        </Field>
+        <Field label="Amount *">
+          <input type="number" min="0.0001" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+        </Field>
+        <Field label="Related inquiry" span={2}>
+          <select value={inquiryId} onChange={(e) => setInquiryId(e.target.value)}>
+            <option value="">Not linked</option>
+            {inquiries.map((i) => <option key={i.id} value={i.id}>{i.number} · {i.projectName} · {i.customerName}</option>)}
+          </select>
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
 export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPlanningProps) {
   const allowed = bootstrap.permissions.includes("estimate.read");
   const canUpload = bootstrap.permissions.includes("estimate.write");
@@ -1940,6 +2044,8 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
   const [showUpload, setShowUpload] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingRecord, setEditingRecord] = useState<SupplierQuotationRecord | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -1991,6 +2097,20 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
     }
   };
 
+  const deleteQuotation = async (record: SupplierQuotationRecord) => {
+    if (!window.confirm(`ลบ ${record.quotationNumber} (${record.supplierName}) ใช่หรือไม่?\nการลบไม่สามารถย้อนกลับได้`)) return;
+    setDeletingId(record.id);
+    try {
+      await deleteSupplierQuotation(record.id);
+      setRefreshKey((v) => v + 1);
+      notify(`ลบ ${record.quotationNumber} แล้ว`);
+    } catch (e) {
+      notify("ลบไม่สำเร็จ: " + toError(e));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return <>
     <PageHeader
       eyebrow="SUPPLIER SOURCING"
@@ -2037,7 +2157,24 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
             <td><div className="cell-primary"><strong>{record.uploadedByName}</strong><span>{dateTime(record.uploadedAt)}</span></div></td>
             <td><Badge>{record.status}</Badge></td>
             <td><div className="cell-primary"><strong>{quotationFileKind(record.fileName)}</strong><span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span></div></td>
-            <td><button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}><Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button></td>
+            <td>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}>
+                  <Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}
+                </button>
+                {canUpload && (
+                  <button className="btn ghost sm" type="button" onClick={() => setEditingRecord(record)}>
+                    <Icon name="edit" />Edit
+                  </button>
+                )}
+                {canUpload && (
+                  <button className="btn ghost sm" type="button" disabled={deletingId === record.id} onClick={() => { void deleteQuotation(record); }}
+                    style={{ color: "#dc2626" }}>
+                    <Icon name="trash" />{deletingId === record.id ? "Deleting…" : "Delete"}
+                  </button>
+                )}
+              </div>
+            </td>
           </tr>)}</tbody>
         </table>
       </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading supplier quotations…"} /></div> : <EmptyState icon="quote" title="No supplier quotation found" message="อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก" action={canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : undefined} />}
@@ -2049,6 +2186,18 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
       setRefreshKey((value) => value + 1);
       notify("Supplier quotation " + quotationNumber + " uploaded");
     }} /> : null}
+    {editingRecord ? (
+      <EditQuotationModal
+        record={editingRecord}
+        bootstrap={bootstrap}
+        onClose={() => setEditingRecord(null)}
+        onSaved={() => {
+          setEditingRecord(null);
+          setRefreshKey((v) => v + 1);
+          notify("Quotation updated");
+        }}
+      />
+    ) : null}
   </>;
 }
 

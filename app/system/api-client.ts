@@ -1184,6 +1184,37 @@ export const listQuotationLines = (quotationId: number) =>
 export const listAllQuotationLinesForPriceLibrary = () =>
   apiRequest<QuotationLineForPriceLibrary[]>("/api/v1/supplier-quotation-lines");
 
+export const updateSupplierQuotation = (
+  id: number,
+  patch: {
+    supplierId?: number;
+    supplierReference?: string;
+    receivedDate?: string;
+    validUntil?: string;
+    currency?: SupplierQuotationRecord["currency"];
+    amount?: number;
+    inquiryId?: number | null;
+    rowVersion: string;
+  },
+) => apiRequest<{ rowVersion: string }>(`/api/v1/supplier-quotations/${id}`, {
+  method: "PATCH",
+  body: JSON.stringify(patch),
+})
+
+export const deleteSupplierQuotation = (id: number) =>
+  apiRequest<void>(`/api/v1/supplier-quotations/${id}`, { method: "DELETE" })
+
+export const updateSupplier = (
+  id: number,
+  input: { name: string; category: string; contact?: string; email?: string; phone?: string; brands?: string[] },
+) => apiRequest<{ id: number }>(`/api/v1/master/suppliers/${id}`, {
+  method: "PUT",
+  body: JSON.stringify(input),
+})
+
+export const deleteSupplier = (id: number) =>
+  apiRequest<void>(`/api/v1/master/suppliers/${id}`, { method: "DELETE" })
+
 export const findOrCreateSupplier = (input: { name: string; taxId: string; category?: string }) =>
   apiRequest<{ id: number; name: string; created: boolean }>("/api/v1/master/suppliers/find-or-create", {
     method: "POST", body: JSON.stringify(input),

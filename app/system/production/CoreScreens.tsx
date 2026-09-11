@@ -12,6 +12,8 @@ import {
   createInventoryItem,
   createProject,
   createSupplier,
+  deleteSupplier,
+  updateSupplier,
   downloadProjectDocument,
   estimateWorkflow,
   listEstimates,
@@ -1042,24 +1044,114 @@ function SupplierMasterTab({ bootstrap, canWrite, notify, refreshBootstrap }: Ma
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<{ id: number; code: string; name: string; category: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const suppliers = bootstrap.suppliers.filter((supplier) =>
     [supplier.code, supplier.name, supplier.category].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const pageCount = Math.max(1, Math.ceil(suppliers.length / pageSize));
   const resolvedPage = Math.min(page, pageCount);
   const from = suppliers.length ? (resolvedPage - 1) * pageSize + 1 : 0;
   const to = Math.min(resolvedPage * pageSize, suppliers.length);
+  const deleteSupplierRow = async (supplier: { id: number; code: string; name: string }) => {
+    if (!window.confirm(`ลบ Supplier "${supplier.name}" (${supplier.code}) ใช่หรือไม่?`)) return;
+    setDeletingId(supplier.id);
+    try {
+      await deleteSupplier(supplier.id);
+      await refreshBootstrap();
+      notify(`ลบ Supplier ${supplier.code} แล้ว`);
+    } catch (e) {
+      notify("ลบไม่สำเร็จ: " + toError(e));
+    } finally {
+      setDeletingId(null);
+    }
+  };
   return <>
     <Toolbar><SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search supplier code, name or category…" />
       {canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add supplier"} /></button> : null}
     </Toolbar>
     <Panel title={suppliers.length + " suppliers"} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
       {suppliers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
-        <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier name"} /></th><th><LocalizedText text={"Category"} /></th></tr></thead>
-        <tbody>{suppliers.slice(from - 1, to).map((supplier) => <tr key={supplier.id}><td><strong className="mono">{supplier.code}</strong></td><td><strong>{supplier.name}</strong></td><td><Badge>{supplier.category}</Badge></td></tr>)}</tbody>
+        <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier name"} /></th><th><LocalizedText text={"Category"} /></th>{canWrite ? <th></th> : null}</tr></thead>
+        <tbody>{suppliers.slice(from - 1, to).map((supplier) => (
+          <tr key={supplier.id}>
+            <td><strong className="mono">{supplier.code}</strong></td>
+            <td><strong>{supplier.name}</strong></td>
+            <td><Badge>{supplier.category}</Badge></td>
+            {canWrite ? (
+              <td>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button className="btn ghost sm" type="button" onClick={() => setEditingSupplier(supplier)}><Icon name="edit" />Edit</button>
+                  <button className="btn ghost sm" type="button" disabled={deletingId === supplier.id}
+                    onClick={() => { void deleteSupplierRow(supplier); }} style={{ color: "#dc2626" }}>
+                    <Icon name="trash" />{deletingId === supplier.id ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </td>
+            ) : null}
+          </tr>
+        ))}</tbody>
       </table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={suppliers.length} onPage={setPage} /></div> : <EmptyState icon="truck" title="No supplier found" message="ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย" />}
     </Panel>
     {createOpen ? <Modal title="Add supplier" size="lg" onClose={() => setCreateOpen(false)}><SupplierCreateForm notify={(message) => { setCreateOpen(false); notify(message); }} refreshBootstrap={refreshBootstrap} /></Modal> : null}
+    {editingSupplier ? (
+      <SupplierEditModal
+        supplier={editingSupplier}
+        notify={notify}
+        refreshBootstrap={refreshBootstrap}
+        onClose={() => setEditingSupplier(null)}
+      />
+    ) : null}
   </>;
+}
+
+function SupplierEditModal({
+  supplier,
+  notify,
+  refreshBootstrap,
+  onClose,
+}: {
+  supplier: { id: number; code: string; name: string; category: string };
+  notify: (msg: string) => void;
+  refreshBootstrap: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const { busy, error, submit } = useMasterForm(refreshBootstrap, (msg) => { onClose(); notify(msg); });
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const brands = (data.get("brands") as string ?? "").split(",").map((b) => b.trim()).filter(Boolean);
+    void submit(form, async () => {
+      await updateSupplier(supplier.id, {
+        name: data.get("name") as string,
+        category: data.get("category") as string,
+        contact: (data.get("contact") as string) || undefined,
+        email: (data.get("email") as string) || undefined,
+        phone: (data.get("phone") as string) || undefined,
+        brands,
+      });
+    }, `Supplier ${supplier.code} updated`);
+  };
+  return (
+    <Modal title={`Edit ${supplier.code}`} size="lg" onClose={onClose}>
+      <MasterFormError message={error} />
+      <form onSubmit={onSubmit}>
+        <div className="form-grid two">
+          <label className="field"><span>Code (read-only)</span><input value={supplier.code} readOnly /></label>
+          <label className="field"><span>Name *</span><input name="name" defaultValue={supplier.name} required maxLength={300} /></label>
+          <label className="field"><span>Category *</span><input name="category" defaultValue={supplier.category} required maxLength={100} /></label>
+          <label className="field"><span>Contact</span><input name="contact" maxLength={200} /></label>
+          <label className="field"><span>Email</span><input name="email" type="email" maxLength={200} /></label>
+          <label className="field"><span>Phone</span><input name="phone" maxLength={50} /></label>
+          <label className="field" style={{ gridColumn: "span 2" }}><span>Brands (comma-separated)</span><input name="brands" maxLength={2000} /></label>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function SupplierCreateForm({ notify, refreshBootstrap }: Pick<CommonProps, "notify" | "refreshBootstrap">) {

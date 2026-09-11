@@ -519,4 +519,67 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
 
     return reply.status(result.created ? 201 : 200).send(result);
   });
+
+  app.put("/api/v1/master/suppliers/:id", async (request, reply) => {
+    await users.demandPermission(request, "master.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Supplier id");
+    const body = bodyObject(request.body);
+    const name = requiredText(body.name, 300, "Supplier name");
+    const category = requiredText(body.category, 100, "Supplier category");
+    const contact = optionalBodyText(body.contact, 200, "Contact") ?? "";
+    const emailValue = email(body.email, false);
+    const phone = optionalBodyText(body.phone, 100, "Phone") ?? "";
+    const brands = normalizedBrands(body.brands);
+
+    const updated = await database.transaction(async (transaction) => {
+      const req = new sql.Request(transaction);
+      req.input("id", sql.BigInt, id);
+      const existing = (await req.query<{ id: number; code: string }>(
+        "SELECT id, code FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
+      )).recordset[0];
+      if (!existing) throw new ApiError(404, "supplier_not_found", "Supplier not found.");
+
+      const upd = new sql.Request(transaction);
+      upd.input("id", sql.BigInt, id); upd.input("name", sql.NVarChar(300), name);
+      upd.input("category", sql.NVarChar(100), category); upd.input("contact", sql.NVarChar(200), contact);
+      upd.input("email", sql.NVarChar(256), emailValue); upd.input("phone", sql.NVarChar(100), phone);
+      upd.input("brands", sql.NVarChar(sql.MAX), JSON.stringify(brands)); upd.input("actor", sql.BigInt, actor.id);
+      await upd.query(`UPDATE dbo.suppliers SET name=@name, category=@category, contact=@contact,
+        email=@email, phone=@phone, brands_json=@brands, updated_by=@actor WHERE id=@id;`);
+
+      await insertAudit(transaction, actor.id, "Supplier", id, existing.code, "Updated", null,
+        { name, category, contact, email: emailValue, phone, brands });
+      return { id };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+
+    return reply.status(200).send(updated);
+  });
+
+  app.delete("/api/v1/master/suppliers/:id", async (request, reply) => {
+    await users.demandPermission(request, "master.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Supplier id");
+
+    await database.transaction(async (transaction) => {
+      const req = new sql.Request(transaction);
+      req.input("id", sql.BigInt, id);
+      const existing = (await req.query<{ id: number; code: string }>(
+        "SELECT id, code FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
+      )).recordset[0];
+      if (!existing) throw new ApiError(404, "supplier_not_found", "Supplier not found.");
+
+      const inUse = (await req.query<{ cnt: number }>(
+        "SELECT COUNT(*) cnt FROM dbo.supplier_quotations WHERE supplier_id=@id;"
+      )).recordset[0]!.cnt;
+      if (inUse > 0) throw new ApiError(409, "supplier_in_use", `ไม่สามารถลบได้ — Supplier นี้มี ${inUse} Quotation อ้างอิงอยู่`);
+
+      const del = new sql.Request(transaction);
+      del.input("id", sql.BigInt, id); del.input("actor", sql.BigInt, actor.id);
+      await del.query("UPDATE dbo.suppliers SET is_active=0, deleted_at=GETUTCDATE(), updated_by=@actor WHERE id=@id;");
+      await insertAudit(transaction, actor.id, "Supplier", id, existing.code, "Deleted", null, null);
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+
+    return reply.status(204).send();
+  });
 }
