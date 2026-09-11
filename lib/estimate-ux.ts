@@ -47,3 +47,59 @@ export function estimateIssueMessage(issue: { code: string; message: string }, l
   const message = messages[issue.code];
   return message ? estimateUxCopy(locale, ...message) : issue.message;
 }
+
+/* Section permission for a library apply.
+
+   Applying a module template or a labor package is a bulk line create, and the
+   API authorises it exactly like a hand-typed line: the estimate owner, an
+   engineering manager and an administrator may write any section, while an
+   assigned engineer may write only the sections assigned to them and may only
+   put a new line in their own name. The pickers add lines without an owner
+   field, so the rule has to be read here rather than discovered as a 403 after
+   the estimator has filled the form in. */
+
+export type EstimateSectionCapabilities = {
+  canEditAllSections: boolean;
+  editableSections: readonly string[];
+};
+
+/** The owner a picker must send for a new estimate line, given who is looking at it. */
+export function estimateApplyOwnerId(
+  capabilities: EstimateSectionCapabilities,
+  estimateOwnerId: number,
+  currentUserId: number,
+): number {
+  return capabilities.canEditAllSections ? estimateOwnerId : currentUserId;
+}
+
+/** Sections in `sections` the current user is not allowed to write, in first-seen order. */
+export function estimateForbiddenSections(
+  capabilities: EstimateSectionCapabilities,
+  sections: readonly string[],
+): string[] {
+  if (capabilities.canEditAllSections) return [];
+  const seen = new Set<string>();
+  return sections.filter((section) => {
+    if (seen.has(section) || capabilities.editableSections.includes(section)) return false;
+    seen.add(section);
+    return true;
+  });
+}
+
+/** Reasons a module template cannot be applied to the estimate in front of the user. */
+export function moduleTemplateApplyBlocker(input: {
+  status: string;
+  lineSections: readonly string[];
+  canEditCostItems: boolean;
+  capabilities: EstimateSectionCapabilities;
+}): string | null {
+  if (!input.canEditCostItems) return "You cannot add cost lines to this estimate.";
+  if (input.status === "Retired") return "This template has been retired.";
+  if (input.status !== "Active") return "Only published templates can be applied. Ask the template maintainer to publish this draft.";
+  if (!input.lineSections.length) return "This template has no lines to apply.";
+  const forbidden = estimateForbiddenSections(input.capabilities, input.lineSections);
+  if (forbidden.length) {
+    return `This template writes to estimate section ${forbidden.join(", ")}, which is not assigned to you. Ask the estimate owner for the section, or pick a template in your own discipline.`;
+  }
+  return null;
+}

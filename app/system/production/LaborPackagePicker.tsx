@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ApiClientError,
   applyLaborPackage,
   createLaborPackageFromEstimate,
   listLaborPackages,
@@ -15,7 +16,7 @@ import {
 import { currentLocale } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { EmptyState, Field, Icon, Modal, Pagination, SearchInput } from "../ui";
-import { estimateBusinessDate } from "../../../lib/estimate-ux";
+import { estimateApplyOwnerId, estimateBusinessDate } from "../../../lib/estimate-ux";
 import {
   applyOverrides,
   draftFromPackageLine,
@@ -42,6 +43,13 @@ const PAGE_SIZE = 25;
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(value);
 const number = (value: number, maximumFractionDigits = 2) => value.toLocaleString(currentLocale(), { maximumFractionDigits });
 const errorText = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+
+/* Migration 044 is reserved rather than required, so a database that predates it
+   answers 503 labor_packages_unavailable. That is an environment fact, not an
+   empty library: telling the estimator to "build one" would send them at a
+   button that answers 503 as well. */
+const unavailableReason = (error: unknown): string | null =>
+  error instanceof ApiClientError && error.code === "labor_packages_unavailable" ? error.message : null;
 
 const ERP_CATEGORIES = ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"] as const;
 
@@ -170,8 +178,9 @@ function linePreviewShape(line: LaborPackageDetail["lines"][number]): LaborPacka
  * the estimator fixes it or skips it on purpose, rather than discovering later
  * that a line quietly went missing.
  */
-export function ApplyLaborPackageModal({ workspace, busy, onClose, onApplied }: {
+export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose, onApplied }: {
   workspace: EstimateCostWorkspace;
+  currentUserId: number;
   busy: boolean;
   onClose: () => void;
   onApplied: (message: string) => Promise<void>;
@@ -189,14 +198,22 @@ export function ApplyLaborPackageModal({ workspace, busy, onClose, onApplied }: 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [unavailable, setUnavailable] = useState("");
 
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
       void listLaborPackages({ status: "Active", search: search || undefined, costType: costType || undefined, page, pageSize: PAGE_SIZE })
-        .then((result) => { if (active) { setPackages(result.items); setTotal(result.total); setError(""); } })
-        .catch((requestError) => { if (active) setError(errorText(requestError)); })
+        .then((result) => { if (active) { setPackages(result.items); setTotal(result.total); setError(""); setUnavailable(""); } })
+        .catch((requestError) => {
+          if (!active) return;
+          const reason = unavailableReason(requestError);
+          setPackages([]);
+          setTotal(0);
+          setUnavailable(reason ?? "");
+          setError(reason ? "" : errorText(requestError));
+        })
         .finally(() => { if (active) setLoading(false); });
     }, 200);
     return () => { active = false; window.clearTimeout(timer); };
@@ -247,7 +264,10 @@ export function ApplyLaborPackageModal({ workspace, busy, onClose, onApplied }: 
     try {
       const result = await applyLaborPackage(workspace.header.id, {
         packageId: selected.id,
-        ownerId: workspace.header.ownerId,
+        /* An assigned engineer may only add a line in their own name; only the
+           estimate owner, an engineering manager or an administrator may write
+           a line for somebody else. */
+        ownerId: estimateApplyOwnerId(workspace.capabilities, workspace.header.ownerId, currentUserId),
         package: workPackage.trim(),
         lines: applyOverrides(lines.map(linePreviewShape), drafts, today),
         estimateRowVersion: workspace.header.rowVersion,
@@ -277,6 +297,7 @@ export function ApplyLaborPackageModal({ workspace, busy, onClose, onApplied }: 
     </>}
   >
     {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
+    {unavailable ? <EmptyState icon="alertCircle" title="Labor package library is not available on this database" message={unavailable} /> : <>
     <div className="row" style={{ gap: 8 }}>
       <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search code, name, activity or level" />
       <label className="check-inline">
@@ -430,6 +451,7 @@ export function ApplyLaborPackageModal({ workspace, busy, onClose, onApplied }: 
         <div className="foot-total"><span><LocalizedText text={"Added to estimate"} /></span><strong>{money(summary.estimatedCost)}</strong></div>
       </div>
     </> : null}
+    </>}
   </Modal>;
 }
 

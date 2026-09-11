@@ -8,7 +8,7 @@ import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { CostItemFields, COST_CATEGORIES, PRICE_SOURCES, UNITS } from "./CostItemFields";
 import { validCostItemNumbers } from "../../../lib/cost-item-validation";
-import { estimateIssueTab, estimateNextAction, estimateUxCopy, estimateIssueMessage } from "../../../lib/estimate-ux";
+import { estimateApplyOwnerId, estimateIssueTab, estimateNextAction, estimateUxCopy, estimateIssueMessage, moduleTemplateApplyBlocker } from "../../../lib/estimate-ux";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1098,7 +1098,7 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
     const saved = await onCopyFrom(input);
     if (saved) setTool(null);
   }} /> : null}
-  {tool === "template" ? <ApplyModuleTemplateModal workspace={workspace} busy={busy} onClose={() => setTool(null)} onApply={async (input) => {
+  {tool === "template" ? <ApplyModuleTemplateModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} onClose={() => setTool(null)} onApply={async (input) => {
     const applied = await onApplyTemplate(input);
     if (applied) setTool(null);
     return applied;
@@ -1272,7 +1272,7 @@ function ImportCostItemsModal({ bootstrap, workspace, busy, onClose, onImport }:
 
 /* Pull a whole module out of the library. The engineer says how many of it the project
    needs; the multiplication is the point of the feature. */
-function ApplyModuleTemplateModal({ workspace, busy, onClose, onApply }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onApply: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean> }) {
+function ApplyModuleTemplateModal({ workspace, currentUserId, busy, onClose, onApply }: { workspace: EstimateCostWorkspace; currentUserId: number; busy: boolean; onClose: () => void; onApply: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean> }) {
   const [templates, setTemplates] = useState<ModuleTemplateSummary[]>([]);
   const [templatePage, setTemplatePage] = useState(1);
   const [templateTotal, setTemplateTotal] = useState(0);
@@ -1311,13 +1311,21 @@ function ApplyModuleTemplateModal({ workspace, busy, onClose, onApply }: { works
   const stale = staleDays !== null && staleDays > STALE_TEMPLATE_PRICE_DAYS;
   const projected = selected ? selected.lines.map((line) => ({ line, quantity: line.quantityPerModule * modules, total: line.quantityPerModule * modules * (keepPrices ? line.referenceUnitCost : 0) })) : [];
   const projectedTotal = projected.reduce((sum, entry) => sum + entry.total, 0);
-  const valid = Boolean(selected && moduleName.trim() && modules >= 1);
+  /* A template can carry lines from several disciplines, so the section check has
+     to read every line rather than the template's primary discipline. */
+  const blocker = selected ? moduleTemplateApplyBlocker({
+    status: selected.status,
+    lineSections: selected.lines.map((line) => line.categoryCode),
+    canEditCostItems: workspace.capabilities.canEditCostItems,
+    capabilities: workspace.capabilities,
+  }) : null;
+  const valid = Boolean(selected && moduleName.trim() && modules >= 1) && !blocker;
   return <Modal title="Apply Master Template" subtitle="เลือกโมดูลจากคลัง ใส่จำนวนชุด แล้วดูผลก่อนลงจริง" size="lg" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
     <button className="btn primary" type="button" disabled={!valid || busy || saving} onClick={async () => {
       if (!selected) return;
       setSaving(true);
-      await onApply({ templateId: selected.id, module: moduleName.trim(), modules, ownerId: workspace.header.ownerId, keepReferencePrices: keepPrices });
+      await onApply({ templateId: selected.id, module: moduleName.trim(), modules, ownerId: estimateApplyOwnerId(workspace.capabilities, workspace.header.ownerId, currentUserId), keepReferencePrices: keepPrices });
       setSaving(false);
     }}><Icon name="plus" />{saving ? "Applying…" : selected ? `Apply ${projected.length} line(s)` : "Apply"}</button>
   </>}>
@@ -1335,6 +1343,7 @@ function ApplyModuleTemplateModal({ workspace, busy, onClose, onApply }: { works
     </tr>)}</tbody></table></div> : <EmptyState icon="package" title="No template" message="ไม่พบชุดที่พร้อมใช้งาน — สร้างได้ที่หน้า Module Templates หรือปุ่ม Save as template บนแถบโมดูล" />}
     <Pagination page={templatePage} pageCount={Math.max(1, Math.ceil(templateTotal / 50))} from={templateTotal ? (templatePage - 1) * 50 + 1 : 0} to={Math.min(templatePage * 50, templateTotal)} total={templateTotal} onPage={setTemplatePage} />
     {selected ? <>
+      {blocker ? <div className="info-strip red"><Icon name="alertCircle" /><span>{blocker}</span></div> : null}
       <div className="info-strip"><Icon name="user" /><span>{selected.name} <LocalizedText text={"· Revision"} /> {selected.revision} <LocalizedText text={"· สร้างโดย"} /> {selected.createdByName} <LocalizedText text={"· แก้ไขล่าสุดโดย"} /> {selected.updatedByName} <LocalizedText text={"เมื่อ"} /> {new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(selected.updatedAt))}</span></div>
       <div className="form-grid three" style={{ marginTop: 12 }}>
         <Field label="ชื่อโมดูลในใบนี้ *"><input required maxLength={200} value={moduleName} onChange={(event) => setModuleName(event.target.value)} /></Field>
@@ -1532,7 +1541,7 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
         })}{!visible.length ? <tr><td colSpan={18}><EmptyState icon="layers" title="No work package yet" message="สร้าง Work Package แล้วเพิ่ม Activity, Supplier man-hour หรือค่าเดินทางที่เกี่ยวข้อง" action={canAddManhour ? <button className="btn primary" type="button" disabled={busy} onClick={onNewPackage}><Icon name="layers" /><LocalizedText text={"New Work Package"} /></button> : undefined} /></td></tr> : null}</tbody>
       </table>
     </div>
-    {laborLibraryOpen ? <ApplyLaborPackageModal workspace={workspace} busy={busy} onClose={() => setLaborLibraryOpen(false)} onApplied={onLaborLibraryChanged} /> : null}
+    {laborLibraryOpen ? <ApplyLaborPackageModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} onClose={() => setLaborLibraryOpen(false)} onApplied={onLaborLibraryChanged} /> : null}
     {laborSaveTarget ? <SaveLaborPackageModal estimateId={workspace.header.id} packageName={laborSaveTarget.name} costType={laborSaveTarget.costType} lineCount={laborSaveTarget.lineCount} busy={busy} onClose={() => setLaborSaveTarget(null)} onSaved={onLaborLibraryChanged} /> : null}
     <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Engineering cost"} /></span><strong>{formatMoney(engineeringCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Installation & service"} /></span><strong>{formatMoney(installationCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Supplier man-hour"} /></span><strong>{formatMoney(supplierCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Travel / hotel / per diem"} /></span><strong>{formatMoney(expenseCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Man-days"} /></span><strong>{formatNumber(visibleManhours.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0))} <LocalizedText text={"MD"} /></strong></div><div className="foot-item"><span><LocalizedText text={"Man-hours"} /></span><strong>{formatNumber(visibleManhours.reduce((sum, line) => sum + numberOf(line.manHours), 0))} <LocalizedText text={"HR"} /></strong></div><div className="foot-total"><span>{costType === "all" ? "Shown" : costType} <LocalizedText text={"subtotal"} /></span><strong>{formatMoney(visibleCost)}</strong></div></div>
   </Panel>;
