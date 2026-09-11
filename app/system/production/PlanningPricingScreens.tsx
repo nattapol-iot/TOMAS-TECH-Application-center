@@ -1580,9 +1580,6 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [parseWarning, setParseWarning] = useState("");
   const [lines, setLines] = useState<QuotationLineItem[]>([]);
   const [confidence, setConfidence] = useState<Record<string, "high" | "low" | "none">>({});
-  const [supplierAutoMatched, setSupplierAutoMatched] = useState(false);
-  const [extractedSupplierName, setExtractedSupplierName] = useState("");
-  const [extractedSupplierTaxId, setExtractedSupplierTaxId] = useState("");
   // Editable new-supplier name — pre-filled from PDF extraction, user can correct before Upload
   const [newSupplierName, setNewSupplierName] = useState("");
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
@@ -1617,9 +1614,9 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const confHint = (key: string): string | undefined => {
     if (!hasParsed) return undefined;
     const c = confidence[key];
-    if (c === "high") return "✓ AI อ่านได้";
+    if (c === "high") return "✓ อ่านได้";
     if (c === "low")  return "⚠ ควรตรวจสอบ";
-    return "← ดูค่าจากไฟล์ PDF ด้านขวา";
+    return "ไม่พบใน PDF — กรอกเอง";
   };
 
   useEffect(() => {
@@ -1635,37 +1632,27 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   // Accept File directly so we can call from onChange before state updates
   const parsePdf = async (targetFile: File) => {
     if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
-    setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setSupplierAutoMatched(false);
-    setExtractedSupplierName(""); setExtractedSupplierTaxId(""); setNewSupplierName("");
-    // Reset all extracted fields so stale values from a previous PDF don't persist
+    setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setNewSupplierName("");
+    // Reset header fields so stale values from a previous PDF don't persist
     setSupplierReference("");
     setReceivedDate(isoToday());
     setValidUntil(addIsoDays(isoToday(), 30));
     setCurrency("THB");
     setAmount("");
-    setLines([]);
     try {
       const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
 
       setConfidence(result.confidence ?? {});
 
+      // Only fill the 3 reliable fields: date, total, currency (+ ref no)
       if (result.quotationNumber) setSupplierReference(result.quotationNumber);
       if (result.receivedDate) setReceivedDate(result.receivedDate);
       if (result.validUntil) setValidUntil(result.validUntil);
       if (result.currency) setCurrency(result.currency);
       if (result.totalAmount > 0) setAmount(String(result.totalAmount));
-      if (result.lines.length > 0) setLines(result.lines);
 
-      // Store supplier info extracted from the PDF — actual Master Data lookup/create
-      // happens only when the user presses Upload (not during parse).
-      if (result.supplierName) {
-        setExtractedSupplierName(result.supplierName);
-        setExtractedSupplierTaxId(result.supplierTaxId ?? "");
-        setNewSupplierName(result.supplierName);   // pre-fill editable preview
-      }
-
-      if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
-        setParseWarning("PDF เป็นไฟล์สแกน OCR ได้บางส่วน — กรุณาตรวจสอบและกรอกข้อมูลเพิ่มเติม");
+      if (result.requiresOcr) {
+        setParseWarning("PDF เป็นไฟล์สแกน — ระบบอ่านได้บางส่วน กรุณาตรวจสอบทุก field");
       }
     } catch (e) {
       setError(`Parse PDF ไม่สำเร็จ: ${String(e instanceof Error ? e.message : e)}`);
@@ -1686,6 +1673,11 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
 
+  // Warn when manual line items total doesn't match declared amount (>1% diff)
+  const linesTotal = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
+    && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
+
   const submit = async () => {
     if (invalid || !file) return;
     setBusy(true); setError("");
@@ -1699,13 +1691,9 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       if (!resolvedSupplierId) {
         const nameToUse = newSupplierName.trim();
         if (!nameToUse) throw new Error("กรุณาเลือกหรือกรอกชื่อ Supplier");
-        const found = await findOrCreateSupplier({
-          name: nameToUse,
-          taxId: extractedSupplierTaxId,
-        });
+        const found = await findOrCreateSupplier({ name: nameToUse, taxId: "" });
         resolvedSupplierId = found.id;
         setSupplierId(String(found.id));
-        setSupplierAutoMatched(true);
         if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
       }
 
@@ -1732,11 +1720,10 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const highCount = confValues.filter((v) => v === "high").length;
   const lowCount  = confValues.filter((v) => v === "low").length;
   const noneCount = confValues.filter((v) => v === "none").length;
-  const missingLines = lines.some((l) => l.unitPrice === 0);
 
   return <Modal
     title="Upload supplier quotation"
-    subtitle="เลือกไฟล์ PDF — ระบบอ่านข้อมูลอัตโนมัติ ตรวจสอบ field สีเหลือง/แดงก่อน Upload"
+    subtitle="เลือกไฟล์ PDF · ดู PDF ต้นฉบับด้านขวา · กรอก Supplier + Line items ด้านซ้าย"
     size="xl"
     onClose={onClose}
     footer={<>
@@ -1754,21 +1741,12 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       <div className="callout" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
         <Icon name="check" />
         <span>
-          <strong>อ่าน PDF อัตโนมัติแล้ว</strong>
-          {highCount > 0 && <> · <span style={{ color: "#15803d" }}>●</span> {highCount} field อ่านได้</>}
+          <strong>อ่าน PDF แล้ว</strong> · วันที่ / ยอดรวม / สกุลเงิน ถูก fill อัตโนมัติ
+          {highCount > 0 && <> · <span style={{ color: "#15803d" }}>●</span> {highCount} field มั่นใจ</>}
           {lowCount > 0  && <> · <span style={{ color: "#a16207" }}>●</span> {lowCount} field ควรตรวจสอบ</>}
           {noneCount > 0 && <> · <span style={{ color: "#dc2626" }}>●</span> {noneCount} field ดูจาก PDF</>}
-          {supplierAutoMatched && <> · จับคู่ Supplier อัตโนมัติ</>}
-          {missingLines && <> · <span style={{ color: "#dc2626" }}>⚠ บางรายการยังไม่มีราคา</span></>}
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {pdfObjectUrl && (
-            <button className="btn ghost sm" type="button"
-              onClick={() => setShowPdf((v) => !v)}
-              style={{ whiteSpace: "nowrap" }}>
-              <Icon name="eye" /> {showPdf ? "ซ่อน PDF" : "ดู PDF"}
-            </button>
-          )}
           {isPdf && (
             <button className="btn ghost sm" type="button" disabled={parsing || busy}
               onClick={() => { if (file) void parsePdf(file); }}
@@ -1777,6 +1755,12 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             </button>
           )}
         </div>
+      </div>
+    )}
+    {linesTotalMismatch && (
+      <div className="callout warning" style={{ marginBottom: 12 }}>
+        <Icon name="alertTriangle" />
+        <span>ผลรวม line items ({number(linesTotal, 2)}) ไม่ตรงกับยอด Quotation ({number(parsedAmount, 2)}) — กรุณาตรวจสอบ</span>
       </div>
     )}
 
@@ -1793,8 +1777,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
               <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
                 onChange={(event) => {
                   const f = event.target.files?.[0] ?? null;
-                  setFile(f); setLines([]); setConfidence({}); setParseWarning(""); setSupplierAutoMatched(false);
-                  setExtractedSupplierName(""); setExtractedSupplierTaxId(""); setNewSupplierName("");
+                  setFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName("");
                   if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
                 }} />
               {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
@@ -1813,12 +1796,11 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
           <Field label="System quotation no." hint="Generated automatically after upload">
             <input value="SQ-YYMM-XXXX" readOnly />
           </Field>
-          <div style={confWrap("supplierName")}>
-            <Field label="Supplier *" hint={confHint("supplierName")}>
+          <div>
+            <Field label="Supplier *">
               <select value={supplierId} onChange={(event) => {
                 setSupplierId(event.target.value);
                 setNewSupplierName("");
-                if (event.target.value) { setExtractedSupplierName(""); setExtractedSupplierTaxId(""); }
               }}>
                 <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
                 {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
@@ -1880,10 +1862,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
         {/* Line items table */}
         <div style={{ marginTop: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <strong style={{ fontSize: 13 }}>
-              Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ
-              {hasParsed && missingLines && <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8, fontWeight: 400 }}>⚠ แถวสีแดง = ราคายังไม่ถูกต้อง กรุณากรอก</span>}
-            </strong>
+            <strong style={{ fontSize: 13 }}>Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ</strong>
             <button className="btn ghost sm" type="button" onClick={addLine}><Icon name="plus" /> Add line</button>
           </div>
           {lines.length > 0 ? <div className="table-wrap">
@@ -1893,35 +1872,32 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                 <th style={{ width: 60 }}>Unit</th><th style={{ width: 110 }}>Unit price</th><th style={{ width: 70 }}>Cur.</th>
                 <th style={{ width: 32 }}></th>
               </tr></thead>
-              <tbody>{lines.map((line, idx) => {
-                const needsPrice = line.unitPrice === 0;
-                return <tr key={idx} style={needsPrice ? { background: "#fff7f7" } : undefined}>
+              <tbody>{lines.map((line, idx) => (
+                <tr key={idx}>
                   <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
                   <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
                   <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
                   <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
                   <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
-                  <td><input type="number" style={{ width: "100%", ...(needsPrice ? { outline: "2px solid #ef4444", borderRadius: 4 } : {}) }}
-                    value={line.unitPrice} min="0" step="0.01"
-                    onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })}
-                    placeholder={needsPrice ? "กรอกราคา" : undefined} /></td>
+                  <td><input type="number" style={{ width: "100%" }} value={line.unitPrice} min="0" step="0.01"
+                    onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })} /></td>
                   <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
                     <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
                   </select></td>
                   <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
-                </tr>;
-              })}</tbody>
+                </tr>
+              ))}</tbody>
             </table>
           </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>
-            {parsing ? "กำลังอ่าน PDF…" : "ยังไม่มี line items — เลือก PDF หรือกด \"Add line\" เพื่อเพิ่ม"}
+            {parsing ? "กำลังอ่าน PDF…" : "กด \"Add line\" เพื่อเพิ่มรายการ — อ่านจาก PDF ต้นฉบับด้านขวาได้เลย"}
           </div>}
         </div>
 
         {/* Legend */}
         {hasParsed && <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
-          <span><span style={{ color: "#22c55e" }}>●</span> AI อ่านได้</span>
+          <span><span style={{ color: "#22c55e" }}>●</span> มั่นใจ</span>
           <span><span style={{ color: "#f59e0b" }}>●</span> ควรตรวจสอบ</span>
-          <span><span style={{ color: "#ef4444" }}>●</span> ดูจาก PDF ด้านขวา</span>
+          <span><span style={{ color: "#ef4444" }}>●</span> ไม่พบ — กรอกเอง</span>
         </div>}
 
         {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}
