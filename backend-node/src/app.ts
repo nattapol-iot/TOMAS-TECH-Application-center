@@ -22,6 +22,7 @@ import { Database } from "./db.js";
 import { EmailService } from "./email.js";
 import { ApiError, registerErrorHandler } from "./errors.js";
 import { registerEstimateRoutes } from "./routes/estimates.js";
+import { registerEstimateErpRoutes } from "./routes/estimate-erp.js";
 import { registerOverheadPolicyRoutes } from "./routes/overhead-policies.js";
 import { registerEstimateWorkspaceReadRoute } from "./routes/estimate-workspace-read.js";
 import { registerEstimateCostWriteRoutes } from "./routes/estimate-cost-write.js";
@@ -151,6 +152,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerBomRoutes(app, config, database, users);
   registerPricingRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users);
+  registerEstimateErpRoutes(app, database, users);
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);
   registerEstimateCostWriteRoutes(app, database, users);

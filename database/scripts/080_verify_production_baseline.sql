@@ -31,7 +31,8 @@ VALUES
     (39, N'NAS storage connection draft settings'),
     (40, N'Immutable overhead policies and estimate revision snapshots'),
     (41, N'Admin-managed primary user roles with audited least-privilege writes'),
-    (42, N'Guard estimate aggregates within supported decimal precision');
+    (42, N'Guard estimate aggregates within supported decimal precision'),
+    (43, N'Revision-scoped Estimate ERP cost classifications');
 
 IF EXISTS (
     SELECT required.version
@@ -39,7 +40,7 @@ IF EXISTS (
     LEFT JOIN dbo.schema_versions installed ON installed.version = required.version
     WHERE installed.version IS NULL OR installed.name <> required.name
 )
-    THROW 51410, 'Required schema versions 025 through 042 are missing or have unexpected identities.', 1;
+    THROW 51410, 'Required schema versions 025 through 043 are missing or have unexpected identities.', 1;
 
 IF COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, N'VIEW ANY DEFINITION'), 0) <> 1
     THROW 51092, 'Run the baseline verifier with an approved audit/DBA identity that can view all server principal metadata.', 1;
@@ -78,6 +79,7 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
    OR OBJECT_ID(N'dbo.overhead_policies', N'U') IS NULL
    OR OBJECT_ID(N'dbo.estimate_overhead_snapshots', N'U') IS NULL
    OR OBJECT_ID(N'dbo.estimate_submission_snapshots', N'U') IS NULL
+   OR OBJECT_ID(N'dbo.estimate_erp_mappings', N'U') IS NULL
    OR OBJECT_ID(N'dbo.trg_estimate_overhead_snapshots_immutable', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_estimate_submission_snapshots_immutable', N'TR') IS NULL
    OR OBJECT_ID(N'dbo.trg_estimate_revisions_append_only', N'TR') IS NULL

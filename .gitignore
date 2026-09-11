@@ -47,6 +47,7 @@ yarn-error.log*
 /tmp/
 /backend-node/tmp/
 /work/
+/Example Estimate cost file/
 *.tsbuildinfo
 
 # .NET build output and local-only configuration

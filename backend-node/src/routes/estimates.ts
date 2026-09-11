@@ -88,6 +88,14 @@ async function snapshotSubmission(transaction: TransactionType, estimateId: numb
         unit,unit_cost unitCost,owner_id ownerId,remark FROM dbo.expense_lines WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY id FOR JSON PATH)) expenseLines,
       JSON_QUERY((SELECT category,description,qty quantity,unit,unit_cost unitCost,remark FROM dbo.other_cost_lines
         WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY id FOR JSON PATH)) otherCostLines,
+      JSON_QUERY((SELECT mapping.source_type sourceType,mapping.source_id sourceId,mapping.erp_category erpCategory,mapping.copied_from_revision copiedFromRevision
+        FROM dbo.estimate_erp_mappings mapping WHERE mapping.estimate_id=e.id AND mapping.revision=e.revision AND (
+          (mapping.source_type=N'CostItem' AND EXISTS(SELECT 1 FROM dbo.cost_items line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'ManhourLine' AND EXISTS(SELECT 1 FROM dbo.manhour_lines line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'ExpenseLine' AND EXISTS(SELECT 1 FROM dbo.expense_lines line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'OtherCostLine' AND EXISTS(SELECT 1 FROM dbo.other_cost_lines line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'Contingency' AND EXISTS(SELECT 1 FROM dbo.v_estimate_totals totals WHERE totals.estimate_id=e.id AND ABS(totals.contingency_total)>0.005))
+        ) ORDER BY mapping.source_type,mapping.source_id FOR JSON PATH)) erpMappings,
       JSON_QUERY((SELECT attachment.id,attachment.name,attachment.category,attachment.content_type contentType,attachment.size_bytes sizeBytes,
         attachment.storage_key storageKey,attachment.sha256,attachment.uploaded_at uploadedAt FROM dbo.inquiry_attachments attachment
         WHERE attachment.inquiry_id=e.inquiry_id AND attachment.deleted_at IS NULL ORDER BY attachment.id FOR JSON PATH)) inquiryFiles,
@@ -116,7 +124,16 @@ async function snapshotRevision(transaction: TransactionType, estimateId: number
         t.transportation_total transportation,t.accommodation_total accommodation,t.other_total other,t.base_total subtotal,
         t.internal_direct_hours internalDirectHours,t.overhead_state overheadState,t.overhead_policy_id overheadPolicyId,
         t.overhead_policy_version overheadPolicyVersion,t.overhead_hourly_rate overheadHourlyRate,t.overhead_total overhead,
-        t.contingency_total contingency,t.total FROM dbo.v_estimate_totals t WHERE t.estimate_id=e.id FOR JSON PATH,WITHOUT_ARRAY_WRAPPER)) totals
+        t.contingency_total contingency,t.total FROM dbo.v_estimate_totals t WHERE t.estimate_id=e.id FOR JSON PATH,WITHOUT_ARRAY_WRAPPER)) totals,
+      JSON_QUERY((SELECT mapping.source_type sourceType,mapping.source_id sourceId,mapping.erp_category erpCategory,
+        mapping.copied_from_revision copiedFromRevision FROM dbo.estimate_erp_mappings mapping
+        WHERE mapping.estimate_id=e.id AND mapping.revision=e.revision AND (
+          (mapping.source_type=N'CostItem' AND EXISTS(SELECT 1 FROM dbo.cost_items line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'ManhourLine' AND EXISTS(SELECT 1 FROM dbo.manhour_lines line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'ExpenseLine' AND EXISTS(SELECT 1 FROM dbo.expense_lines line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'OtherCostLine' AND EXISTS(SELECT 1 FROM dbo.other_cost_lines line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
+          (mapping.source_type=N'Contingency' AND EXISTS(SELECT 1 FROM dbo.v_estimate_totals totals WHERE totals.estimate_id=e.id AND ABS(totals.contingency_total)>0.005))
+        ) ORDER BY mapping.source_type,mapping.source_id FOR JSON PATH)) erpMappings
       FROM dbo.estimates e WHERE e.id=@estimate_id AND e.revision=@revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
     INSERT INTO dbo.estimate_revisions(estimate_id,revision,reason,description,created_by,reviewed_by,reviewed_at,status,total)
     OUTPUT inserted.id SELECT e.id,e.revision,@reason,@snapshot,@actor,@actor,SYSUTCDATETIME(),@snapshot_status,t.total
@@ -144,8 +161,12 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
   const clone = new sql.Request(transaction); clone.input("estimate_id", sql.BigInt, estimateId); clone.input("current_revision", sql.Int, currentRevision);
   clone.input("next_revision", sql.Int, nextRevision); clone.input("actor", sql.BigInt, actorId);
   await clone.query(`
-    INSERT INTO dbo.cost_items(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by)
-    SELECT estimate_id,@next_revision,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,@actor,@actor FROM dbo.cost_items WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL;
+    DECLARE @copiedCosts TABLE(old_id bigint,new_id bigint);
+    MERGE dbo.cost_items AS target
+    USING (SELECT * FROM dbo.cost_items WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
+    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by)
+    VALUES(source.estimate_id,@next_revision,source.category_code,source.category,source.subcategory,source.module,source.item_code,source.description,source.brand,source.model,source.specification,source.supplier_id,source.qty,source.unit,source.unit_cost,source.price_source,source.reference_no,source.reference_project,source.price_date,source.remark,source.owner_id,source.status,@actor,@actor)
+    OUTPUT source.id,inserted.id INTO @copiedCosts;
     DECLARE @copiedManhours TABLE(old_id bigint,new_id bigint);
     MERGE dbo.manhour_lines AS target
     USING (SELECT * FROM dbo.manhour_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
@@ -160,11 +181,95 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
         AND JSON_VALUE(after_json,'$.kind')=N'manhour' AND LEN(JSON_VALUE(after_json,'$.sourceHash'))=64
       ORDER BY id
     ) a;
-    INSERT INTO dbo.expense_lines(estimate_id,revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by)
-    SELECT estimate_id,@next_revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,@actor,@actor FROM dbo.expense_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL;
-    INSERT INTO dbo.other_cost_lines(estimate_id,revision,category,description,qty,unit,unit_cost,remark,created_by,updated_by)
-    SELECT estimate_id,@next_revision,category,description,qty,unit,unit_cost,remark,@actor,@actor FROM dbo.other_cost_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL;
+    DECLARE @copiedExpenses TABLE(old_id bigint,new_id bigint);
+    MERGE dbo.expense_lines AS target
+    USING (SELECT * FROM dbo.expense_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
+    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by)
+    VALUES(source.estimate_id,@next_revision,source.package,source.expense_type,source.description,source.cost_type,source.supplier_id,source.reference_no,source.qty,source.unit,source.unit_cost,source.owner_id,source.remark,@actor,@actor)
+    OUTPUT source.id,inserted.id INTO @copiedExpenses;
+    DECLARE @copiedOtherCosts TABLE(old_id bigint,new_id bigint);
+    MERGE dbo.other_cost_lines AS target
+    USING (SELECT * FROM dbo.other_cost_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
+    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,category,description,qty,unit,unit_cost,remark,created_by,updated_by)
+    VALUES(source.estimate_id,@next_revision,source.category,source.description,source.qty,source.unit,source.unit_cost,source.remark,@actor,@actor)
+    OUTPUT source.id,inserted.id INTO @copiedOtherCosts;
+
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'CostItem',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    FROM dbo.estimate_erp_mappings m INNER JOIN @copiedCosts copied ON copied.old_id=m.source_id
+    WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'CostItem';
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'ManhourLine',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    FROM dbo.estimate_erp_mappings m INNER JOIN @copiedManhours copied ON copied.old_id=m.source_id
+    WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'ManhourLine';
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'ExpenseLine',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    FROM dbo.estimate_erp_mappings m INNER JOIN @copiedExpenses copied ON copied.old_id=m.source_id
+    WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'ExpenseLine';
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'OtherCostLine',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    FROM dbo.estimate_erp_mappings m INNER JOIN @copiedOtherCosts copied ON copied.old_id=m.source_id
+    WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'OtherCostLine';
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,m.source_type,NULL,m.erp_category,m.id,@current_revision,@actor,@actor
+    FROM dbo.estimate_erp_mappings m
+    WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'Contingency';
   `);
+}
+
+async function materializeErpMappings(transaction: TransactionType, estimateId: number, revision: number, actorId: number): Promise<number> {
+  const request = new sql.Request(transaction);
+  request.input("estimate_id", sql.BigInt, estimateId);
+  request.input("revision", sql.Int, revision);
+  request.input("actor", sql.BigInt, actorId);
+  const result = await request.query<{ unmapped_count: number | string }>(`
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+    SELECT @estimate_id,@revision,N'CostItem',line.id,
+      CASE line.category_code WHEN '01' THEN N'Hardware' WHEN '02' THEN N'Software' ELSE N'Unmapped' END,@actor,@actor
+    FROM dbo.cost_items line
+    WHERE line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
+        WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'CostItem' AND mapping.source_id=line.id);
+
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+    SELECT @estimate_id,@revision,N'ManhourLine',line.id,
+      CASE WHEN line.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END,@actor,@actor
+    FROM dbo.manhour_lines line
+    WHERE line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
+        WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'ManhourLine' AND mapping.source_id=line.id);
+
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+    SELECT @estimate_id,@revision,N'ExpenseLine',line.id,N'Unmapped',@actor,@actor
+    FROM dbo.expense_lines line
+    WHERE line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
+        WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'ExpenseLine' AND mapping.source_id=line.id);
+
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+    SELECT @estimate_id,@revision,N'OtherCostLine',line.id,N'Unmapped',@actor,@actor
+    FROM dbo.other_cost_lines line
+    WHERE line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
+        WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'OtherCostLine' AND mapping.source_id=line.id);
+
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+    SELECT @estimate_id,@revision,N'Contingency',NULL,N'Unmapped',@actor,@actor
+    FROM dbo.v_estimate_totals totals
+    WHERE totals.estimate_id=@estimate_id AND ABS(totals.contingency_total)>0.005
+      AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
+        WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'Contingency' AND mapping.source_id IS NULL);
+
+    SELECT COUNT_BIG(*) unmapped_count FROM dbo.estimate_erp_mappings mapping
+    WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.erp_category=N'Unmapped' AND (
+      (mapping.source_type=N'CostItem' AND EXISTS(SELECT 1 FROM dbo.cost_items line WHERE line.id=mapping.source_id AND line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL)) OR
+      (mapping.source_type=N'ManhourLine' AND EXISTS(SELECT 1 FROM dbo.manhour_lines line WHERE line.id=mapping.source_id AND line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL)) OR
+      (mapping.source_type=N'ExpenseLine' AND EXISTS(SELECT 1 FROM dbo.expense_lines line WHERE line.id=mapping.source_id AND line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL)) OR
+      (mapping.source_type=N'OtherCostLine' AND EXISTS(SELECT 1 FROM dbo.other_cost_lines line WHERE line.id=mapping.source_id AND line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL)) OR
+      (mapping.source_type=N'Contingency' AND EXISTS(SELECT 1 FROM dbo.v_estimate_totals totals WHERE totals.estimate_id=@estimate_id AND ABS(totals.contingency_total)>0.005))
+    );
+  `);
+  return Number(result.recordset[0]?.unmapped_count ?? 0);
 }
 
 async function transition(
@@ -202,6 +307,11 @@ async function transition(
     await assertEstimateTotals(transaction, id);
     const issues = await validationIssues(database, id, transaction);
     if (issues.length) throw new ApiError(422, "estimate_invalid", "The estimate has critical validation errors.", issues);
+    if (action === "Submitted") await materializeErpMappings(transaction, id, current.revision, actor.id);
+    if (action === "Approved") {
+      const unmappedCount = await materializeErpMappings(transaction, id, current.revision, actor.id);
+      if (unmappedCount > 0) throw new ApiError(422, "estimate_erp_mapping_incomplete", `${unmappedCount} cost line(s) must be assigned to an ERP category before approval.`);
+    }
     const update = new sql.Request(transaction); update.input("status", sql.NVarChar(50), targetStatus);
     update.input("progress", sql.Decimal(5, 2), targetProgress); update.input("actor", sql.BigInt, actor.id);
     update.input("lock_estimate", sql.Bit, action === "Approved"); update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);

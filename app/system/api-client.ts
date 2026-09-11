@@ -795,6 +795,50 @@ export type EstimateCostWorkspace = {
   validationIssues: EstimateValidationIssue[];
 };
 
+export type EstimateErpCategory = "Hardware" | "Software" | "Service" | "Installation" | "License" | "Maintenance" | "Training";
+export type EstimateErpSourceType = "CostItem" | "ManhourLine" | "ExpenseLine" | "OtherCostLine" | "Contingency";
+
+export type EstimateErpSummary = {
+  estimateId: number;
+  revision: number;
+  estimateRowVersion: string;
+  categories: Array<{ category: EstimateErpCategory; amount: number; lineCount: number }>;
+  unmapped: { amount: number; lineCount: number };
+  overhead: { state: "Missing" | "Applied" | "Zero"; amount: number };
+  classifiedTotal: number;
+  canonicalTotal: number;
+  difference: number;
+  reconciled: boolean;
+  capabilities: { canEditMappings: boolean; canExport: boolean };
+  lines: Array<{
+    sourceType: EstimateErpSourceType;
+    sourceId: number | null;
+    description: string;
+    internalCategory: string;
+    amount: number;
+    erpCategory: EstimateErpCategory | "Unmapped";
+    mappingRowVersion: string | null;
+    copiedFromRevision: number | null;
+    item?: string | number | null;
+    modelPartNumber?: string | null;
+    supplier?: string | null;
+    brand?: string | null;
+    leadTime?: string | null;
+    quoteRevision?: string | null;
+    unitPrice?: number | null;
+    quantity?: number | null;
+    unit?: string | null;
+    remark?: string | null;
+  }>;
+};
+
+export type EstimateErpMappingInput = {
+  sourceType: EstimateErpSourceType;
+  sourceId: number | null;
+  erpCategory: EstimateErpCategory | "Unmapped";
+  mappingRowVersion: string | null;
+};
+
 export type EstimateOverhead = {
   state: "Missing" | "Applied" | "Zero";
   policyId: number | null;
@@ -1256,6 +1300,21 @@ export const estimateWorkflow = (id: number, action: "submit" | "approve" | "req
 
 export const loadEstimateCostWorkspace = (id: number) =>
   apiRequest<EstimateCostWorkspace>(`/api/v1/estimates/${id}/cost-workspace`);
+
+export const loadEstimateErpSummary = (id: number) =>
+  apiRequest<EstimateErpSummary>(`/api/v1/estimates/${id}/erp-summary`);
+
+export const updateEstimateErpMappings = (id: number, estimateRowVersion: string, mappings: EstimateErpMappingInput[]) =>
+  apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-mappings`, {
+    method: "PUT",
+    body: JSON.stringify({ estimateRowVersion, mappings }),
+  });
+
+export const recordEstimateErpExport = (id: number, input: { estimateRowVersion: string; templateVersion: string; sha256: string; filename: string; fileBase64: string }) =>
+  apiRequest<{ recorded: true }>(`/api/v1/estimates/${id}/erp-export-events`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const createCostItem = (estimateId: number, input: CostItemInput) =>
   apiRequest<{ id: number; rowVersion: string; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/cost-items`, { method: "POST", body: JSON.stringify(input) });

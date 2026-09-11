@@ -14,7 +14,7 @@ React 19 + TypeScript + vinext/Vite frontend -> Node.js/TypeScript Fastify API i
 
 - [ProductionApp](app/system/ProductionApp.tsx) composes the permission-filtered application screens.
 - [Node API](backend-node/README.md) is the current native API implementation; [app registration](backend-node/src/app.ts) shows the active route modules.
-- [Database migrations](database/migrations) and [fresh runner](database/scripts/020_deploy_fresh_database.sql) define repository schema requirements: main's 037 report exports, 038 quotation lines and 039 NAS settings; 040 overhead; 041 role management; 042 aggregate-total validation. Startup/readiness checks exact required identities. A legacy database that recorded role management as 037 is blocked pending target-specific reconciliation.
+- [Database migrations](database/migrations) and [fresh runner](database/scripts/020_deploy_fresh_database.sql) define repository schema requirements: main's 037 report exports, 038 quotation lines and 039 NAS settings; 040 overhead; 041 role management; 042 aggregate-total validation; 043 Estimate ERP cost classifications. Startup/readiness checks exact required identities. A legacy database that recorded role management as 037 is blocked pending target-specific reconciliation.
 - backend/ contains the earlier ASP.NET Core API. backend-php/ and worker/ are retained paths, not evidence that they are active production dependencies. CI now checks the Node API typecheck/unit/build and Node Docker image; the legacy .NET material-flow SQL wrapper remains explicitly labeled and does not replace Node SQL acceptance.
 - Existing .openai, Vercel and local Team Test configuration does not establish which environment is the production target.
 

@@ -7,8 +7,33 @@ export function estimateIssueTab(issue: { code: string; entityType: string }): "
   return "validation";
 }
 
+export type EstimateNextActionKind = "resolve-blockers" | "add-cost" | "add-effort" | "submit-review" | "approve" | "review-warnings" | "review-summary";
+
+export function estimateNextAction(input: {
+  criticalCount: number;
+  warningCount: number;
+  costItemCount: number;
+  manhourLineCount: number;
+  canEditCostItems: boolean;
+  canEditManhour: boolean;
+  canSubmit: boolean;
+  canApprove: boolean;
+}): { kind: EstimateNextActionKind; tab: "summary" | "cost" | "manhour" | "validation" | "review" } {
+  if (input.criticalCount > 0) return { kind: "resolve-blockers", tab: "validation" };
+  if (input.costItemCount === 0 && input.canEditCostItems) return { kind: "add-cost", tab: "cost" };
+  if (input.manhourLineCount === 0 && input.canEditManhour) return { kind: "add-effort", tab: "manhour" };
+  if (input.canApprove) return { kind: "approve", tab: "review" };
+  if (input.canSubmit) return { kind: "submit-review", tab: "review" };
+  if (input.warningCount > 0) return { kind: "review-warnings", tab: "validation" };
+  return { kind: "review-summary", tab: "summary" };
+}
+
 export function estimateUxCopy(locale: string, th: string, en: string, ja: string): string {
   return locale.startsWith("th") ? th : locale.startsWith("ja") ? ja : en;
+}
+
+export function estimateBusinessDate(date = new Date(), timeZone = "Asia/Bangkok"): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
 export function estimateIssueMessage(issue: { code: string; message: string }, locale: string): string {

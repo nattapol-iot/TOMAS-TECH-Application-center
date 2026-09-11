@@ -2,11 +2,12 @@
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
+import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { CostItemFields, COST_CATEGORIES, PRICE_SOURCES, UNITS } from "./CostItemFields";
 import { validCostItemNumbers } from "../../../lib/cost-item-validation";
-import { estimateIssueTab, estimateUxCopy, estimateIssueMessage } from "../../../lib/estimate-ux";
+import { estimateIssueTab, estimateNextAction, estimateUxCopy, estimateIssueMessage } from "../../../lib/estimate-ux";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -300,9 +301,10 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
   const [status, setStatus] = useState("All status");
   const [customerId, setCustomerId] = useState("All customers");
   const [projectType, setProjectType] = useState("All project types");
-  const [ownerId, setOwnerId] = useState("All owners");
+  const [ownerId, setOwnerId] = useState(() => canOwnEstimate(bootstrap.user.role) ? String(bootstrap.user.id) : "All owners");
   const [department, setDepartment] = useState("All departments");
   const [revision, setRevision] = useState("All revisions");
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -361,14 +363,21 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     />
     <Toolbar>
       <SearchInput value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
+      {canOwnEstimate(bootstrap.user.role) ? <>
+        <button className={ownerId === String(bootstrap.user.id) ? "btn primary" : "btn default"} type="button" onClick={() => { setOwnerId(String(bootstrap.user.id)); resetPage(); }}><Icon name="user" /><LocalizedText text={"My estimates"} /></button>
+        <button className={ownerId === "All owners" ? "btn primary" : "btn default"} type="button" onClick={() => { setOwnerId("All owners"); resetPage(); }}><Icon name="users" /><LocalizedText text={"All estimates"} /></button>
+      </> : null}
+      <Select label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "Draft", "Engineering Input", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Revision Required", "Approved", "Locked"]} />
+      <button className={advancedFiltersOpen ? "btn default active" : "btn default"} type="button" aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((current) => !current)}><Icon name="filter" /><LocalizedText text={"Advanced filters"} /></button>
+      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+    </Toolbar>
+    {advancedFiltersOpen ? <Toolbar>
       <FilterSelect label="Customer" value={customerId} onChange={(value) => { setCustomerId(value); resetPage(); }} options={[{ value: "All customers", label: "All customers" }, ...bootstrap.customers.map((customer) => ({ value: String(customer.id), label: `${customer.code} — ${customer.name}` }))]} />
       <Select label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...PROJECT_TYPES]} />
       <FilterSelect label="Owner" value={ownerId} onChange={(value) => { setOwnerId(value); resetPage(); }} options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]} />
       <Select label="Department" value={department} onChange={(value) => { setDepartment(value); resetPage(); }} options={["All departments", ...departments]} />
-      <Select label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "Draft", "Engineering Input", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Revision Required", "Approved", "Locked"]} />
       <FilterSelect label="Revision" value={revision} onChange={(value) => { setRevision(value); resetPage(); }} options={[{ value: "All revisions", label: "All revisions" }, ...Array.from({ length: 11 }, (_, index) => ({ value: String(index), label: revisionCode(index) }))]} />
-      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-    </Toolbar>
+    </Toolbar> : null}
     {/* The eight statuses dbo.estimates actually allows, in workflow order.
         "Overdue" used to be listed here but is not a status — it is a derived
         flag — while "Revision Required", which the grid does show, was missing. */}
@@ -608,7 +617,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /><EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel key={`erp-${header.rowVersion}`} workspace={workspace} notify={notify} onChanged={afterMutation} /><EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /><EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -778,14 +787,21 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
 function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorkspace; onOpen: (tab: WorkspaceTab) => void }) {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const { capabilities } = workspace;
-  if (!capabilities.canEdit) return null;
-  return <Panel title={copy("เริ่มตรงนี้ · ทำประมาณการให้พร้อมตรวจ", "Start here · prepare your estimate", "ここから開始 · 見積の準備")} subtitle={copy("เลือกขั้นตอนเพื่อเปิดหน้าที่ต้องทำ ข้อมูลที่บันทึกแล้วใช้ต่อได้ทันที", "Open a step to continue using your saved data.", "保存済みのデータを使い、各ステップから作業を続けます。") }>
-    <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-      {capabilities.canEditCostItems ? <button className="btn default" type="button" onClick={() => onOpen("cost")}>{copy("1. อุปกรณ์ / ใช้ชุดต้นแบบ", "1. Equipment / templates", "1. 機器・テンプレート")}</button> : null}
-      {capabilities.canEditManhour ? <button className="btn default" type="button" onClick={() => onOpen("manhour")}>{copy("2. ค่าแรงวิศวกรรม", "2. Engineering effort", "2. 技術工数")}</button> : null}
-      {capabilities.canEditOtherCosts ? <button className="btn default" type="button" onClick={() => onOpen("other")}>{copy("3. ค่าใช้จ่ายอื่น (ถ้ามี)", "3. Other costs (if any)", "3. その他の費用（必要時）")}</button> : null}
-      <button className="btn primary" type="button" onClick={() => onOpen("validation")}>{copy("4. ตรวจความพร้อม", "4. Check readiness", "4. 内容を確認")}</button>
-    </div>
+  const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
+  const warningCount = workspace.validationIssues.length - criticalCount;
+  const action = estimateNextAction({ criticalCount, warningCount, costItemCount: workspace.costItems.length, manhourLineCount: workspace.manhourLines.length, canEditCostItems: capabilities.canEditCostItems, canEditManhour: capabilities.canEditManhour, canSubmit: capabilities.canSubmit, canApprove: capabilities.canApprove });
+  const content = {
+    "resolve-blockers": [copy(`แก้ ${criticalCount} รายการที่ปิดกั้นการส่งตรวจ`, `Resolve ${criticalCount} submission blocker(s)`, `送信を妨げる${criticalCount}件を修正`), copy("เปิด Validation เพื่อไปยังรายการที่ต้องแก้", "Open Validation and go directly to the affected lines.", "Validationから対象明細を開きます。")],
+    "add-cost": [copy("เพิ่มรายการต้นทุนรายการแรก", "Add the first cost item", "最初の原価明細を追加"), copy("เริ่มจากอุปกรณ์ ซอฟต์แวร์ หรือใช้ Template", "Start with equipment, software or a template.", "機器、ソフトウェア、テンプレートから開始します。")],
+    "add-effort": [copy("เพิ่มค่าแรงวิศวกรรม", "Add engineering effort", "技術工数を追加"), copy("ระบุงาน จำนวนคน และวันทำงานก่อนตรวจความพร้อม", "Add the activity, staffing and work days before validation.", "作業、人数、日数を入力してから確認します。")],
+    "submit-review": [copy("ส่ง Estimate ให้ Engineering Review", "Submit for Engineering Review", "技術レビューへ送信"), copy("ไม่มีข้อผิดพลาดที่ปิดกั้น สามารถตรวจสรุปแล้วส่งได้", "No blocking errors remain. Review the totals and submit.", "重大エラーはありません。合計を確認して送信できます。")],
+    approve: [copy("ตรวจและอนุมัติ Estimate", "Review and approve the Estimate", "見積を確認して承認"), copy("ตรวจยอดต้นทุนและคำเตือนก่อนอนุมัติ", "Review totals and advisory warnings before approval.", "承認前に合計と注意事項を確認します。")],
+    "review-warnings": [copy(`ตรวจคำเตือน ${warningCount} รายการ`, `Review ${warningCount} advisory warning(s)`, `${warningCount}件の注意事項を確認`), copy("คำเตือนไม่ปิดกั้น workflow แต่ควรตรวจความถูกต้อง", "Warnings do not block workflow, but should be checked.", "注意事項は処理を妨げませんが、確認してください。")],
+    "review-summary": [copy("ตรวจสรุป Estimate", "Review the Estimate summary", "見積サマリーを確認"), copy("ข้อมูลปัจจุบันไม่มีงานที่ระบบระบุว่าต้องแก้", "There is no system-identified action for the current state.", "現在、システムが要求する修正はありません。")],
+  } as const;
+  const [title, subtitle] = content[action.kind];
+  return <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
+    <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}><Icon name="arrowRight" />{title}</button>
   </Panel>;
 }
 

@@ -30,7 +30,7 @@ test("migration 042 adds a forced decimal aggregate guard without changing the t
 
   assert.match(manifest, /version: 42, fileName: "042_estimate_total_guard\.sql"/);
   assert.match(deploy, /:r database\/migrations\/042_estimate_total_guard\.sql/);
-  assert.match(deploy, /40, 41, 42\)\) <> 42/);
+  assert.match(deploy, /40, 41, 42, 43\)\) <> 43/);
   assert.match(grants, /REVOKE EXECUTE ON OBJECT::dbo\.assert_estimate_totals FROM \[public\]/);
   assert.match(grants, /GRANT EXECUTE ON OBJECT::dbo\.assert_estimate_totals TO \[iot_team_app_role\]/);
   assert.match(verifier, /OBJECT_ID\(N'dbo\.assert_estimate_totals', N'P'\)/);

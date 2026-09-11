@@ -28,6 +28,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 40, fileName: "040_estimate_overhead_policy.sql", name: "Immutable overhead policies and estimate revision snapshots" },
   { version: 41, fileName: "041_user_role_management.sql", name: "Admin-managed primary user roles with audited least-privilege writes" },
   { version: 42, fileName: "042_estimate_total_guard.sql", name: "Guard estimate aggregates within supported decimal precision" },
+  { version: 43, fileName: "043_estimate_erp_cost_mapping.sql", name: "Revision-scoped Estimate ERP cost classifications" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

@@ -47,7 +47,7 @@ test("applied migration identities reject the legacy role-as-037 collision", () 
   );
 });
 
-test("readiness requires every exact identity from 25 through 42", () => {
+test("readiness requires every exact identity from 25 through 43", () => {
   const applied = REQUIRED_MIGRATIONS.map(({ version, name }) => ({ version, name }));
   assert.deepEqual(migrationReadiness(applied), {
     ready: true,
