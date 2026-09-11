@@ -13,6 +13,8 @@
         launcher requires before SQL credentials are sent.
       * -IHaveABackup                       the operator states a restorable backup
         already exists; this script still takes its own COPY_ONLY one.
+        -SkipBackup may be used instead only when the operator explicitly accepts
+        applying this non-production upgrade without a restore point.
       * -ConfirmDatabase IoTTeamCenterTeamTest  the database name must be retyped and
         must match the pinned target exactly.
       * -BackupDirectory                    a server-side path for the pre-migration
@@ -34,6 +36,10 @@
 .EXAMPLE
     .\Invoke-TeamTestSchemaUpgrade.ps1 -AllowUntrustedTeamTestCertificate -IHaveABackup `
         -ConfirmDatabase IoTTeamCenterTeamTest -BackupDirectory 'D:\SQLBackup'
+
+.EXAMPLE
+    .\Invoke-TeamTestSchemaUpgrade.ps1 -AllowUntrustedTeamTestCertificate -SkipBackup `
+        -ConfirmDatabase IoTTeamCenterTeamTest
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
@@ -42,6 +48,10 @@ param(
 
     # Operator attestation that a restorable backup of this database already exists.
     [switch] $IHaveABackup,
+
+    # Explicit operator override for a disposable/non-production database where
+    # the user has accepted running without a backup.
+    [switch] $SkipBackup,
 
     # The target database name, retyped. Must match $DatabaseName exactly.
     [string] $ConfirmDatabase,
@@ -90,15 +100,21 @@ if ($WhatIfPreference) {
     Write-Output ''
     Write-Output 'Gates that a real run requires:'
     Write-Output '  1. -AllowUntrustedTeamTestCertificate  explicit Team Test certificate exception'
-    Write-Output '  2. -IHaveABackup                       operator attests a restorable backup exists'
+    Write-Output '  2. Choose -IHaveABackup or explicit -SkipBackup'
     Write-Output "  3. -ConfirmDatabase $DatabaseName      the exact database name, retyped"
-    Write-Output '  4. -BackupDirectory <server-side path> destination for the COPY_ONLY backup'
+    Write-Output '  4. -BackupDirectory <server-side path> unless -SkipBackup is selected'
     Write-Output '  5. -DbaCredential                      a DBA login (prompted for if omitted)'
     Write-Output ''
     Write-Output 'Sequence a real run would perform:'
     Write-Output "  Step 1. Run Invoke-TeamTestSchemaPreflight.ps1 against $DatabaseName and refuse every reported blocker."
-    Write-Output "  Step 2. BACKUP DATABASE [$DatabaseName] TO DISK = '<BackupDirectory>/$($DatabaseName)_before_schema43_<timestamp>.bak' WITH COPY_ONLY, CHECKSUM, INIT, STATS = 5."
-    Write-Output '  Step 3. RESTORE VERIFYONLY FROM DISK = <that file> WITH CHECKSUM.'
+    if ($SkipBackup) {
+        Write-Output '  Step 2. Skip backup by explicit operator request.'
+        Write-Output '  Step 3. Continue without RESTORE VERIFYONLY.'
+    }
+    else {
+        Write-Output "  Step 2. BACKUP DATABASE [$DatabaseName] TO DISK = '<BackupDirectory>/$($DatabaseName)_before_schema43_<timestamp>.bak' WITH COPY_ONLY, CHECKSUM, INIT, STATS = 5."
+        Write-Output '  Step 3. RESTORE VERIFYONLY FROM DISK = <that file> WITH CHECKSUM.'
+    }
     $step = 4
     foreach ($migration in $plan) {
         Write-Output "  Step $step. Apply database/migrations/$($migration.File), stopping on the first error."
@@ -119,13 +135,16 @@ if ($WhatIfPreference) {
 if (!$AllowUntrustedTeamTestCertificate) {
     throw 'The SQL certificate chain is not trusted. Refusing to send SQL credentials. Install the issuing CA/use a trusted DNS certificate, or explicitly pass -AllowUntrustedTeamTestCertificate for the existing Team Test exception.'
 }
-if (!$IHaveABackup) {
+if ($SkipBackup -and $IHaveABackup) {
+    throw 'Choose either -IHaveABackup or -SkipBackup, not both.'
+}
+if (!$SkipBackup -and !$IHaveABackup) {
     throw 'Refusing to migrate without -IHaveABackup. Take and verify a restorable backup first; this script then takes its own COPY_ONLY backup on top of it.'
 }
 if ($ConfirmDatabase -cne $DatabaseName) {
     throw "Refusing to migrate: -ConfirmDatabase must be exactly '$DatabaseName'."
 }
-if ([string]::IsNullOrWhiteSpace($BackupDirectory)) {
+if (!$SkipBackup -and [string]::IsNullOrWhiteSpace($BackupDirectory)) {
     throw 'Refusing to migrate without -BackupDirectory. It must be a path the SQL Server service account can write to on the database host.'
 }
 if ($env:Database__RunMigrations -eq 'true') {
@@ -229,21 +248,26 @@ try {
     # -----------------------------------------------------------------------------
     # Steps 2 and 3: COPY_ONLY backup with CHECKSUM, then RESTORE VERIFYONLY.
     # -----------------------------------------------------------------------------
-    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    # This script runs on Windows while the approved SQL Server runs on Linux.
-    # Preserve the separator style of the server-side path instead of applying
-    # the operator workstation's filesystem rules through Join-Path.
-    $separator = if ($BackupDirectory.Contains('/')) { '/' } else { '\' }
-    $trimmedBackupDirectory = $BackupDirectory.TrimEnd([char[]]@('/', '\'))
-    $backupFile = $trimmedBackupDirectory + $separator + ("{0}_before_schema43_{1}.bak" -f $DatabaseName, $timestamp)
-    if (!$PSCmdlet.ShouldProcess($DatabaseName, "COPY_ONLY backup to $backupFile")) {
-        throw 'The pre-migration backup was not approved. No migration was applied.'
+    if ($SkipBackup) {
+        Write-Warning 'Backup explicitly skipped by the operator. The upgrade will apply migrations without a restore point.'
     }
-    Write-Output "Step 2: backing up $DatabaseName to $backupFile."
-    Invoke-UpgradeSql -Sql "BACKUP DATABASE [$DatabaseName] TO DISK = @path WITH COPY_ONLY, CHECKSUM, INIT, NAME = N'Before Team Test schema 43', STATS = 5;" -Parameters @{ '@path' = $backupFile } -TimeoutSeconds 7200
-    Write-Output 'Step 3: verifying the backup.'
-    Invoke-UpgradeSql -Sql 'RESTORE VERIFYONLY FROM DISK = @path WITH CHECKSUM;' -Parameters @{ '@path' = $backupFile } -TimeoutSeconds 7200
-    Write-Output 'Backup verified.'
+    else {
+        $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        # This script runs on Windows while the approved SQL Server runs on Linux.
+        # Preserve the separator style of the server-side path instead of applying
+        # the operator workstation's filesystem rules through Join-Path.
+        $separator = if ($BackupDirectory.Contains('/')) { '/' } else { '\' }
+        $trimmedBackupDirectory = $BackupDirectory.TrimEnd([char[]]@('/', '\'))
+        $backupFile = $trimmedBackupDirectory + $separator + ("{0}_before_schema43_{1}.bak" -f $DatabaseName, $timestamp)
+        if (!$PSCmdlet.ShouldProcess($DatabaseName, "COPY_ONLY backup to $backupFile")) {
+            throw 'The pre-migration backup was not approved. No migration was applied.'
+        }
+        Write-Output "Step 2: backing up $DatabaseName to $backupFile."
+        Invoke-UpgradeSql -Sql "BACKUP DATABASE [$DatabaseName] TO DISK = @path WITH COPY_ONLY, CHECKSUM, INIT, NAME = N'Before Team Test schema 43', STATS = 5;" -Parameters @{ '@path' = $backupFile } -TimeoutSeconds 7200
+        Write-Output 'Step 3: verifying the backup.'
+        Invoke-UpgradeSql -Sql 'RESTORE VERIFYONLY FROM DISK = @path WITH CHECKSUM;' -Parameters @{ '@path' = $backupFile } -TimeoutSeconds 7200
+        Write-Output 'Backup verified.'
+    }
 
     # -----------------------------------------------------------------------------
     # Steps 4+: one migration at a time, stop on first error, verify each identity.
@@ -264,7 +288,8 @@ try {
             # A migration that failed mid-transaction must not leave one open on this
             # connection; XACT_ABORT normally rolls back, this is the belt and braces.
             try { Invoke-UpgradeSql -Sql 'IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;' -TimeoutSeconds 60 } catch { }
-            throw "Migration $file failed and the upgrade stopped. Nothing after it was applied. Restore from $backupFile if the database is not consistent. Error: $($_.Exception.Message)"
+            $recovery = if ($backupFile) { "Restore from $backupFile if the database is not consistent." } else { 'No backup was created for this run.' }
+            throw "Migration $file failed and the upgrade stopped. Nothing after it was applied. $recovery Error: $($_.Exception.Message)"
         }
 
         $identity = Invoke-UpgradeScalar 'SELECT name FROM dbo.schema_versions WHERE version = @version;' -Parameters @{ '@version' = $version }
@@ -281,7 +306,7 @@ try {
     $finalVersion = [int](Invoke-UpgradeScalar 'SELECT MAX(version) FROM dbo.schema_versions;')
     Write-Output ''
     Write-Output "$DatabaseName is now at schema version $finalVersion."
-    Write-Output "Pre-migration backup: $backupFile"
+    Write-Output $(if ($backupFile) { "Pre-migration backup: $backupFile" } else { 'Pre-migration backup: SKIPPED by operator request' })
     Write-Output 'API automatic migration was not enabled. Restart the API separately and confirm Database__RunMigrations is still false.'
 }
 finally {
