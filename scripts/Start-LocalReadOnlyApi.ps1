@@ -3,7 +3,7 @@ param(
     [ValidateRange(1024, 65535)][int] $ApiPort = 5116,
     [string] $DatabaseServer = '202.151.188.68',
     [string] $DatabaseName = 'IoTTeamCenterTeamTest',
-    [int] $ExpectedSchemaVersion = 43,
+    [int] $ExpectedSchemaVersion = 44,
     [switch] $AllowUntrustedTeamTestCertificate,
     [switch] $AllowRemoteWrites,
     [string] $RuntimeRoot = (Join-Path $env:LOCALAPPDATA 'IoTTeamCenter\TeamTest')
@@ -75,6 +75,7 @@ $expectedMigrationNames = [ordered]@{
     41 = 'Admin-managed primary user roles with audited least-privilege writes'
     42 = 'Guard estimate aggregates within supported decimal precision'
     43 = 'Revision-scoped Estimate ERP cost classifications'
+    44 = 'Reusable labor rate masters and estimate labor packages'
 }
 $connection = [System.Data.SqlClient.SqlConnection]::new($connectionString)
 try {
