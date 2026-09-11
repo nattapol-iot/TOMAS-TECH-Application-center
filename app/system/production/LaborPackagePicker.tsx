@@ -461,7 +461,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
  * It captures the activities, the levels, the effort and the ERP category the
  * estimator already chose — publishing it stays a master-data act.
  */
-export function SaveLaborPackageModal({ estimateId, packageName, costType, lineCount, busy, onClose, onSaved }: {
+export function SaveLaborPackageModal({ estimateId, packageName, costType, lineCount, busy, onClose, onSaved, onOpenSaved }: {
   estimateId: number;
   packageName: string;
   costType: LaborCostType;
@@ -469,10 +469,12 @@ export function SaveLaborPackageModal({ estimateId, packageName, costType, lineC
   busy: boolean;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
+  onOpenSaved: (id: number) => void;
 }) {
   const suggested = packageName.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
   const [code, setCode] = useState(suggested ? `LP-${suggested}`.slice(0, 40) : "LP-PACKAGE");
   const [name, setName] = useState(packageName);
+  const [savedPackage, setSavedPackage] = useState<{ id: number; code: string } | null>(null);
   const [department, setDepartment] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -489,14 +491,23 @@ export function SaveLaborPackageModal({ estimateId, packageName, costType, lineC
         department: department.trim() || undefined,
         description: description.trim() || undefined,
       });
+      setSavedPackage({ id: result.id, code: result.code });
       await onSaved(`Labor package ${result.code} drafted with ${result.lineCount} activity line(s)`);
-      onClose();
     } catch (requestError) {
       setError(errorText(requestError));
     } finally {
       setSaving(false);
     }
   };
+
+  if (savedPackage) return <Modal title="บันทึก Labor Package แล้ว" size="sm" onClose={onClose} footer={<>
+    <button className="btn ghost" type="button" onClick={onClose}>ปิด</button>
+    <button className="btn primary" type="button" onClick={() => onOpenSaved(savedPackage.id)}>เปิดรายการที่บันทึก</button>
+  </>}>
+    <p><strong>{savedPackage.code}</strong> บันทึกเป็น Draft ใน <strong>Labor Package Master</strong> แล้ว</p>
+    <p>เปิดได้จากเมนู Administration → Labor Package Master เมื่อเผยแพร่เป็น Active แล้ว จึงเลือกนำไปใช้ใน Estimate ได้</p>
+    {error ? <p role="alert">บันทึกสำเร็จ แต่รีเฟรชข้อมูลไม่สำเร็จ: {error}</p> : null}
+  </Modal>;
 
   return <Modal
     title="Save as labor package"

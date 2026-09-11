@@ -61,6 +61,7 @@ import {
 } from "./production/AdminAnalyticsScreens";
 import { ProductionKnowledgeHub } from "./production/KnowledgeScreens";
 import { ProductionModuleTemplates } from "./production/ModuleTemplateScreens";
+import { LaborPackageMaster } from "./production/LaborPackageMaster";
 import { ProductionProfile } from "./production/ProfileScreen";
 import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens";
 import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
@@ -79,7 +80,7 @@ type View =
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
 type MyWorkUrgencyItem = {
@@ -149,6 +150,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   { group: "ADMINISTRATION", items: [
     { view: "master", label: "Master Data", icon: "database", permission: "master.read" },
     { view: "module-templates", label: "Module Templates", icon: "package", permission: "estimate.read" },
+    { view: "labor-packages", label: "Labor Package Master", icon: "layers", permission: "estimate.read" },
     { view: "stamps", label: "Company Stamps", icon: "lock", permission: "signing.read" },
     { view: "audit", label: "Audit Log", icon: "shield", permission: "audit.read" },
     { view: "visit-master", label: "Visit Master Data", icon: "layers", permission: "visit.read" },
@@ -651,6 +653,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "master" ? <ProductionMasterData {...common} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
+          {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
           {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
           {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
           {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}

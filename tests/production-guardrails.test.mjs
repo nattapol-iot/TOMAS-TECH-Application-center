@@ -81,7 +81,7 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     // a specimen is a preference, reached from the user menu, because putting it
     // in the sidebar would imply the image is what authorises.
     "Sign Inbox", "Signed Documents",
-    "Team Activity", "KPI & Growth", "Reports", "Support Center", "Employee Manual", "Master Data", "Module Templates",
+    "Team Activity", "KPI & Growth", "Reports", "Support Center", "Employee Manual", "Master Data", "Module Templates", "Labor Package Master",
     "Company Stamps", "Audit Log", "Visit Master Data", "Settings",
   ];
   for (const label of menuLabels) {

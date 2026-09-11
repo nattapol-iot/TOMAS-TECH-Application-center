@@ -4,6 +4,7 @@ import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImpor
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
+import { LaborPackageMaster } from "./LaborPackageMaster";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { CostItemFields, COST_CATEGORIES, PRICE_SOURCES, UNITS } from "./CostItemFields";
@@ -1428,6 +1429,8 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
   const [quickDraft, setQuickDraft] = useState<QuickManhourDraft | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   const [laborLibraryOpen, setLaborLibraryOpen] = useState(false);
+  const [laborMasterOpen, setLaborMasterOpen] = useState(false);
+  const [savedLaborPackageId, setSavedLaborPackageId] = useState<number | undefined>();
   const [laborSaveTarget, setLaborSaveTarget] = useState<{ name: string; costType: EstimateManhourInput["costType"]; lineCount: number } | null>(null);
   const quickActivityRef = useRef<HTMLInputElement>(null);
   const quickDraftGroupKey = quickDraft?.groupKey;
@@ -1511,7 +1514,7 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
   return <Panel
     title="Engineering Man-hour & Site Expense"
     subtitle="Work package → activity → cost · engineering, installation, supplier man-hour และค่าเดินทางอยู่ในโครงเดียวกัน"
-    actions={canAddManhour ? <><button className="btn default sm" type="button" disabled={busy} onClick={addDefaultActivity}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button className="btn default sm" type="button" disabled={busy} onClick={() => setLaborLibraryOpen(true)}><Icon name="package" /><LocalizedText text={"Labor package library"} /></button><button className="btn primary sm" type="button" disabled={busy} onClick={onNewPackage}><Icon name="layers" /><LocalizedText text={"New Work Package"} /></button></> : undefined}
+    actions={canAddManhour ? <><button className="btn default sm" type="button" disabled={busy} onClick={addDefaultActivity}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button className="btn default sm" type="button" disabled={busy} onClick={() => setLaborLibraryOpen(true)}><Icon name="package" /><LocalizedText text={"Labor package library"} /></button><button className="btn default sm" type="button" disabled={busy} onClick={() => { setSavedLaborPackageId(undefined); setLaborMasterOpen(true); }}><Icon name="layers" />จัดการ Labor Package</button><button className="btn primary sm" type="button" disabled={busy} onClick={onNewPackage}><Icon name="layers" /><LocalizedText text={"New Work Package"} /></button></> : undefined}
     flush
   >
     <div className="subtabs" role="tablist" aria-label={localizeCopy("Cost type")}>
@@ -1542,7 +1545,8 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
       </table>
     </div>
     {laborLibraryOpen ? <ApplyLaborPackageModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} onClose={() => setLaborLibraryOpen(false)} onApplied={onLaborLibraryChanged} /> : null}
-    {laborSaveTarget ? <SaveLaborPackageModal estimateId={workspace.header.id} packageName={laborSaveTarget.name} costType={laborSaveTarget.costType} lineCount={laborSaveTarget.lineCount} busy={busy} onClose={() => setLaborSaveTarget(null)} onSaved={onLaborLibraryChanged} /> : null}
+    {laborSaveTarget ? <SaveLaborPackageModal estimateId={workspace.header.id} packageName={laborSaveTarget.name} costType={laborSaveTarget.costType} lineCount={laborSaveTarget.lineCount} busy={busy} onClose={() => setLaborSaveTarget(null)} onSaved={onLaborLibraryChanged} onOpenSaved={(id) => { setLaborSaveTarget(null); setSavedLaborPackageId(id); setLaborMasterOpen(true); }} /> : null}
+    {laborMasterOpen ? <Modal title="Labor Package Master" size="xl" onClose={() => setLaborMasterOpen(false)}><LaborPackageMaster bootstrap={bootstrap} initialPackageId={savedLaborPackageId} onClose={() => setLaborMasterOpen(false)} /></Modal> : null}
     <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Engineering cost"} /></span><strong>{formatMoney(engineeringCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Installation & service"} /></span><strong>{formatMoney(installationCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Supplier man-hour"} /></span><strong>{formatMoney(supplierCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Travel / hotel / per diem"} /></span><strong>{formatMoney(expenseCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Man-days"} /></span><strong>{formatNumber(visibleManhours.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0))} <LocalizedText text={"MD"} /></strong></div><div className="foot-item"><span><LocalizedText text={"Man-hours"} /></span><strong>{formatNumber(visibleManhours.reduce((sum, line) => sum + numberOf(line.manHours), 0))} <LocalizedText text={"HR"} /></strong></div><div className="foot-total"><span>{costType === "all" ? "Shown" : costType} <LocalizedText text={"subtotal"} /></span><strong>{formatMoney(visibleCost)}</strong></div></div>
   </Panel>;
 }
