@@ -1688,21 +1688,25 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     if (invalid || !file) return;
     setBusy(true); setError("");
     try {
-      // Resolve supplier — find existing or create new in Master Data only at Upload time
+      // Resolve supplier:
+      //   1. User selected from dropdown → use that ID directly
+      //   2. PDF extracted a name → find-or-create in Master Data
+      //   3. User typed a name manually → find-or-create in Master Data
       let resolvedSupplierId = supplierId ? Number(supplierId) : 0;
-      if (!supplierId && extractedSupplierName) {
-        const found = await findOrCreateSupplier({ name: extractedSupplierName, taxId: extractedSupplierTaxId });
+
+      if (!resolvedSupplierId) {
+        const nameToUse = extractedSupplierName.trim() || manualSupplierName.trim();
+        if (!nameToUse) throw new Error("กรุณาเลือกหรือกรอกชื่อ Supplier");
+        const found = await findOrCreateSupplier({
+          name: nameToUse,
+          taxId: extractedSupplierName.trim() ? extractedSupplierTaxId : "",
+        });
         resolvedSupplierId = found.id;
         setSupplierId(String(found.id));
         setSupplierAutoMatched(true);
         if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
       }
-      if (!supplierId && !extractedSupplierName && manualSupplierName.trim()) {
-        const found = await findOrCreateSupplier({ name: manualSupplierName.trim(), taxId: "" });
-        resolvedSupplierId = found.id;
-        setSupplierId(String(found.id));
-        if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
-      }
+
       const created = await createSupplierQuotation({
         file, supplierId: resolvedSupplierId,
         supplierReference: supplierReference.trim(), receivedDate, validUntil,
