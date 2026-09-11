@@ -1581,16 +1581,20 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [lines, setLines] = useState<QuotationLineItem[]>([]);
   const [confidence, setConfidence] = useState<Record<string, "high" | "low" | "none">>({});
   const [supplierAutoMatched, setSupplierAutoMatched] = useState(false);
+  const [extractedSupplierName, setExtractedSupplierName] = useState("");
+  const [extractedSupplierTaxId, setExtractedSupplierTaxId] = useState("");
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [showPdf, setShowPdf] = useState(false);
 
   const hasParsed = Object.keys(confidence).length > 0;
 
-  // Create / revoke an object URL for the selected PDF so the iframe can display it
+  // Create / revoke an object URL for the selected PDF so the iframe can display it.
+  // Always show the PDF panel immediately when a PDF is selected.
   useEffect(() => {
     if (file?.name.toLowerCase().endsWith(".pdf")) {
       const url = URL.createObjectURL(file);
       setPdfObjectUrl(url);
+      setShowPdf(true);
       return () => URL.revokeObjectURL(url);
     }
     setPdfObjectUrl(null);
@@ -1613,7 +1617,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     const c = confidence[key];
     if (c === "high") return "✓ AI อ่านได้";
     if (c === "low")  return "⚠ ควรตรวจสอบ";
-    return showPdf ? "← ดูค่าจากไฟล์ PDF ด้านขวา" : "กรอกเอง — กด 'ดู PDF' เพื่อเปิดไฟล์";
+    return "← ดูค่าจากไฟล์ PDF ด้านขวา";
   };
 
   useEffect(() => {
@@ -1630,6 +1634,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const parsePdf = async (targetFile: File) => {
     if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
     setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setSupplierAutoMatched(false);
+    setExtractedSupplierName(""); setExtractedSupplierTaxId("");
     // Reset all extracted fields so stale values from a previous PDF don't persist
     setSupplierReference("");
     setReceivedDate(isoToday());
@@ -1640,10 +1645,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     try {
       const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
 
-      const newConf = result.confidence ?? {};
-      setConfidence(newConf);
-      // Auto-open PDF panel when any field couldn't be extracted
-      if (Object.values(newConf).some((v) => v === "none")) setShowPdf(true);
+      setConfidence(result.confidence ?? {});
 
       if (result.quotationNumber) setSupplierReference(result.quotationNumber);
       if (result.receivedDate) setReceivedDate(result.receivedDate);
@@ -1652,13 +1654,11 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       if (result.totalAmount > 0) setAmount(String(result.totalAmount));
       if (result.lines.length > 0) setLines(result.lines);
 
+      // Store supplier info extracted from the PDF — actual Master Data lookup/create
+      // happens only when the user presses Upload (not during parse).
       if (result.supplierName) {
-        try {
-          const found = await findOrCreateSupplier({ name: result.supplierName, taxId: result.supplierTaxId });
-          setSupplierId(String(found.id));
-          setSupplierAutoMatched(true);
-          if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
-        } catch { /* keep current selection */ }
+        setExtractedSupplierName(result.supplierName);
+        setExtractedSupplierTaxId(result.supplierTaxId ?? "");
       }
 
       if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
@@ -1679,15 +1679,25 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     setLines((prev) => [...prev, { lineNo: prev.length + 1, itemCode: "", description: "", brand: "", model: "", qty: 1, unit: "EA", unitPrice: 0, currency, remark: "" }]);
 
   const parsedAmount = Number(amount);
-  const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
+  const hasSupplier = !!supplierId || !!extractedSupplierName;
+  const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
 
   const submit = async () => {
     if (invalid || !file) return;
     setBusy(true); setError("");
     try {
+      // Resolve supplier — find existing or create new in Master Data only at Upload time
+      let resolvedSupplierId = supplierId ? Number(supplierId) : 0;
+      if (!supplierId && extractedSupplierName) {
+        const found = await findOrCreateSupplier({ name: extractedSupplierName, taxId: extractedSupplierTaxId });
+        resolvedSupplierId = found.id;
+        setSupplierId(String(found.id));
+        setSupplierAutoMatched(true);
+        if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
+      }
       const created = await createSupplierQuotation({
-        file, supplierId: Number(supplierId),
+        file, supplierId: resolvedSupplierId,
         supplierReference: supplierReference.trim(), receivedDate, validUntil,
         inquiryId: inquiryId ? Number(inquiryId) : undefined, currency, amount: parsedAmount,
       });
@@ -1771,6 +1781,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                 onChange={(event) => {
                   const f = event.target.files?.[0] ?? null;
                   setFile(f); setLines([]); setConfidence({}); setParseWarning(""); setSupplierAutoMatched(false);
+                  setExtractedSupplierName(""); setExtractedSupplierTaxId("");
                   if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
                 }} />
               {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
@@ -1790,8 +1801,19 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             <input value="SQ-YYMM-XXXX" readOnly />
           </Field>
           <div style={confWrap("supplierName")}>
-            <Field label="Supplier *" hint={confHint("supplierName")}>
-              <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+            <Field label="Supplier *" hint={
+              !supplierId && extractedSupplierName
+                ? `จาก PDF: "${extractedSupplierName}" — จะถูกเพิ่มใน Master Data เมื่อกด Upload`
+                : confHint("supplierName")
+            }>
+              <select value={supplierId} onChange={(event) => {
+                setSupplierId(event.target.value);
+                if (event.target.value) { setExtractedSupplierName(""); setExtractedSupplierTaxId(""); }
+              }}>
+                {!supplierId && extractedSupplierName && (
+                  <option value="">{extractedSupplierName} (ใหม่)</option>
+                )}
+                {!supplierId && !extractedSupplierName && <option value="">— เลือก Supplier —</option>}
                 {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
               </select>
             </Field>
