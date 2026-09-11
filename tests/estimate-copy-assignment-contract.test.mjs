@@ -93,7 +93,7 @@ test("My Work lists the estimate sections assigned to the signed-in engineer", a
   // The panel is reachable whether or not the account also has schedule permissions.
   assert.equal(screens.match(/\{estimateAssignmentsPanel\}/g)?.length, 2);
   // My Work can open the estimate directly, using the app's existing navigation.
-  assert.match(app, /openEstimate,\n {4}onMyWorkUrgentCountChange: setMyWorkUrgentCount,/);
+  assert.match(app, /openEstimate,\r?\n {4}onMyWorkUrgentCountChange: setMyWorkUrgentCount,/);
   assert.match(screens, /onOpenEstimate=\{openEstimate\}/);
 });
 
