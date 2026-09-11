@@ -9,7 +9,7 @@ The detailed execution plan and ready-to-paste prompt are in `.omx/plans/schema-
 Claude may create only:
 
 - `scripts/Invoke-TeamTestSchemaPreflight.ps1`
-- `scripts/Test-TeamTestUpgrade39To42LocalDb.ps1`
+- `scripts/Test-TeamTestUpgrade39To43LocalDb.ps1` (extended after handoff to cover the ERP schema 43 migration)
 - `scripts/Invoke-TeamTestSchemaUpgrade.ps1`
 - `database/tests/schema-39-to-42-upgrade.sql`
 - `database/tests/schema-39-to-42-preflight-blockers.sql`
