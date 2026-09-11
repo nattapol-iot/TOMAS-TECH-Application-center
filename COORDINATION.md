@@ -186,6 +186,8 @@ Resource Plan verification note — Codex, 2026-09-05: current full Node typeche
 
 | 2026-09-11 | Claude | Auto-fill supplier name + line items from PDF parse result in SupplierQuotationUploadModal. Editing PlanningPricingScreens.tsx only — activate result.supplierName (auto-match existing supplier or pre-fill new-supplier text box) and result.lines (populate line items table). No backend, migration, or other files. | released — typecheck clean — Claude, 2026-09-11 |
 
+| 2026-09-11 | Claude | Quotation NAS folder restructure: add quotationStorageKey() to document-storage.ts, update supplier-quotations.ts upload handler to use Quotations/{SupplierName}/{YYYY}/{uuid} path, add scripts/migrate-quotation-paths.mjs to migrate existing files. No migration SQL, no other files. | released — frontend typecheck clean, backend new functions verified — Claude, 2026-09-11 |
+
 Add a row before you start. Remove it — or set Status to `done` — when you finish.
 
 | Since | Who | Files / area | Status |

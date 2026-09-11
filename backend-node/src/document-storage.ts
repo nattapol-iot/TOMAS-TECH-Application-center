@@ -81,6 +81,29 @@ export function storageKey(prefix: string, extension: string, now = new Date()):
   return `${prefix}/${year}/${month}/${randomUUID()}${extension}`;
 }
 
+/** Remove characters that are unsafe in SMB/POSIX path segments. */
+export function sanitizeStorageSegment(name: string): string {
+  return (
+    name
+      .trim()
+      .replace(/[/\\:*?"<>|\x00-\x1f\x7f]/g, "_")
+      .replace(/\.+$/, "")     // no trailing dots (Windows SMB compat)
+      .replace(/\s+/g, " ")
+      .slice(0, 100)
+      .trim() || "Unknown"
+  );
+}
+
+/**
+ * Storage key for supplier quotation files.
+ * Layout: Quotations/{SupplierName}/{receivedYear}/{uuid}{ext}
+ * Using received year (business date) keeps supplier folders chronologically tidy.
+ */
+export function quotationStorageKey(supplierName: string, extension: string, receivedDateIso: string): string {
+  const year = receivedDateIso.slice(0, 4);
+  return `Quotations/${sanitizeStorageSegment(supplierName)}/${year}/${randomUUID()}${extension}`;
+}
+
 export function uploadedFileName(fileName: string): string {
   const value = basename(fileName.replaceAll("\\", "/")).trim();
   if (

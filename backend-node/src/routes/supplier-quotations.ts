@@ -7,9 +7,9 @@ import {
   deleteStoredFile,
   DOCUMENT_EXTENSIONS,
   multipartText,
+  quotationStorageKey,
   readMultipartUpload,
   sendStoredFile,
-  storageKey,
   SUPPLIER_QUOTATION_EXTENSIONS,
   uploadedFileName,
   validateFileExtension,
@@ -120,7 +120,7 @@ export function registerSupplierQuotationRoutes(
     `, (bind) => { bind.input("supplier", sql.BigInt, supplierId); bind.input("inquiry", sql.BigInt, inquiryId); });
     if (!references.recordset[0]) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
 
-    const key = storageKey("supplier-quotations", extension);
+    const key = quotationStorageKey(references.recordset[0]!.supplier_name, extension, receivedDate);
     const write = await writeStoredFile(config.documentStorage, key, upload.file.filepath);
     try {
       const created = await database.transaction(async (transaction) => {
