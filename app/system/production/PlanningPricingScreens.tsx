@@ -1579,6 +1579,28 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [error, setError] = useState("");
   const [parseWarning, setParseWarning] = useState("");
   const [lines, setLines] = useState<QuotationLineItem[]>([]);
+  const [confidence, setConfidence] = useState<Record<string, "high" | "low" | "none">>({});
+  const [supplierAutoMatched, setSupplierAutoMatched] = useState(false);
+
+  const hasParsed = Object.keys(confidence).length > 0;
+
+  // Left-border colour per confidence level — applied as wrapper div style
+  const confWrap = (key: string): React.CSSProperties => {
+    if (!hasParsed) return {};
+    const c = confidence[key];
+    if (c === "high") return { borderLeft: "3px solid #22c55e", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+    if (c === "low")  return { borderLeft: "3px solid #f59e0b", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+    return               { borderLeft: "3px solid #ef4444",  paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+  };
+
+  // hint string shown under each field (Field label prop only accepts string)
+  const confHint = (key: string): string | undefined => {
+    if (!hasParsed) return undefined;
+    const c = confidence[key];
+    if (c === "high") return "✓ AI อ่านได้";
+    if (c === "low")  return "⚠ ควรตรวจสอบ";
+    return "กรอกเอง";
+  };
 
   useEffect(() => {
     let active = true;
@@ -1590,16 +1612,14 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     return () => { active = false; };
   }, []);
 
-  const parsePdf = async () => {
-    if (!file || !file.name.toLowerCase().endsWith(".pdf")) return;
-    setParsing(true); setParseWarning(""); setError("");
+  // Accept File directly so we can call from onChange before state updates
+  const parsePdf = async (targetFile: File) => {
+    if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
+    setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setSupplierAutoMatched(false);
     try {
-      // Use Python-backed OCR service via Node backend proxy
-      const result: ParsedQuotationResult = await parsePdfViaBackend(file);
+      const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
 
-      if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
-        setParseWarning("PDF เป็นไฟล์สแกนที่อ่านยาก OCR ได้บางส่วน — กรุณาตรวจสอบและกรอกข้อมูลเพิ่มเติม");
-      }
+      setConfidence(result.confidence ?? {});
 
       if (result.quotationNumber) setSupplierReference(result.quotationNumber);
       if (result.receivedDate) setReceivedDate(result.receivedDate);
@@ -1608,21 +1628,17 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       if (result.totalAmount > 0) setAmount(String(result.totalAmount));
       if (result.lines.length > 0) setLines(result.lines);
 
-      // Auto-match supplier by name from extracted text
       if (result.supplierName) {
         try {
           const found = await findOrCreateSupplier({ name: result.supplierName, taxId: result.supplierTaxId });
           setSupplierId(String(found.id));
+          setSupplierAutoMatched(true);
           if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
-        } catch { /* use current supplierId */ }
+        } catch { /* keep current selection */ }
       }
 
-      const missing: string[] = [];
-      if (!result.receivedDate) missing.push("วันที่");
-      if (!result.quotationNumber) missing.push("เลขที่ใบเสนอราคา");
-      if (result.lines.length === 0) missing.push("รายการสินค้า");
-      if (missing.length && !result.requiresOcr) {
-        setParseWarning(`อ่าน PDF ได้บางส่วน ตรวจสอบ: ${missing.join(", ")}`);
+      if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
+        setParseWarning("PDF เป็นไฟล์สแกน OCR ได้บางส่วน — กรุณาตรวจสอบและกรอกข้อมูลเพิ่มเติม");
       }
     } catch (e) {
       setError(`Parse PDF ไม่สำเร็จ: ${String(e instanceof Error ? e.message : e)}`);
@@ -1664,9 +1680,16 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
 
   const isPdf = file?.name.toLowerCase().endsWith(".pdf") ?? false;
 
+  // Summary counts for the parse-result banner
+  const confValues = Object.values(confidence);
+  const highCount = confValues.filter((v) => v === "high").length;
+  const lowCount  = confValues.filter((v) => v === "low").length;
+  const noneCount = confValues.filter((v) => v === "none").length;
+  const missingLines = lines.some((l) => l.unitPrice === 0);
+
   return <Modal
     title="Upload supplier quotation"
-    subtitle="ระบบออกเลข SQ-YYMM-XXXX · Parse PDF เพื่อดึงข้อมูลอัตโนมัติ"
+    subtitle="เลือกไฟล์ PDF — ระบบอ่านข้อมูลอัตโนมัติ ตรวจสอบ field สีเหลือง/แดงก่อน Upload"
     size="xl"
     onClose={onClose}
     footer={<>
@@ -1679,61 +1702,100 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Error"} /></strong> {error}</span></div> : null}
     {parseWarning ? <div className="callout warning"><Icon name="alertTriangle" /><span>{parseWarning}</span></div> : null}
 
-    {/* File selector + Parse button */}
+    {/* Parse result summary banner */}
+    {hasParsed && !parseWarning && (
+      <div className="callout" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+        <Icon name="check" />
+        <span>
+          <strong>อ่าน PDF อัตโนมัติแล้ว</strong>
+          {highCount > 0 && <> · <span style={{ color: "#15803d" }}>●</span> {highCount} field อ่านได้</>}
+          {lowCount > 0  && <> · <span style={{ color: "#a16207" }}>●</span> {lowCount} field ควรตรวจสอบ</>}
+          {noneCount > 0 && <> · <span style={{ color: "#dc2626" }}>●</span> {noneCount} field ต้องกรอกเอง</>}
+          {supplierAutoMatched && <> · จับคู่ Supplier อัตโนมัติ</>}
+          {missingLines && <> · <span style={{ color: "#dc2626" }}>⚠ บางรายการยังไม่มีราคา</span></>}
+        </span>
+        {isPdf && <button className="btn ghost sm" type="button" disabled={parsing || busy}
+          onClick={() => { if (file) void parsePdf(file); }}
+          style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
+          {parsing ? <><span className="spinner" /> กำลังอ่าน…</> : <><Icon name="refresh" /> อ่านใหม่</>}
+        </button>}
+      </div>
+    )}
+
+    {/* File selector — auto-parses PDF on select */}
     <div className="form-grid two" style={{ marginBottom: 16 }}>
-      <Field label="Quotation file *" hint="PDF, Excel, CSV, JPG or PNG · maximum 50 MB" span={2}>
+      <Field label="Quotation file *" hint="PDF → อ่านอัตโนมัติ · Excel, CSV, JPG, PNG · maximum 50 MB" span={2}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
-            onChange={(event) => { setFile(event.target.files?.[0] ?? null); setLines([]); setParseWarning(""); }} />
-          {isPdf && <button className="btn ghost sm" type="button" disabled={parsing || busy} onClick={() => { void parsePdf(); }} style={{ whiteSpace: "nowrap" }}>
-            {parsing ? <><span className="spinner" /> Parsing…</> : <><Icon name="eye" /> Parse PDF</>}
+            onChange={(event) => {
+              const f = event.target.files?.[0] ?? null;
+              setFile(f); setLines([]); setConfidence({}); setParseWarning(""); setSupplierAutoMatched(false);
+              if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
+            }} />
+          {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
+          {isPdf && !parsing && !hasParsed && <button className="btn ghost sm" type="button" disabled={busy}
+            onClick={() => { if (file) void parsePdf(file); }} style={{ whiteSpace: "nowrap" }}>
+            <Icon name="eye" /> Parse PDF
           </button>}
         </div>
       </Field>
     </div>
 
-    {/* Header form */}
+    {/* Header form — fields tinted by confidence */}
     <div className="form-grid two">
       <Field label="System quotation no." hint="Generated automatically after upload">
         <input value="SQ-YYMM-XXXX" readOnly />
       </Field>
-      <Field label="Supplier *">
-        <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Supplier quotation / reference">
-        <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
-      </Field>
+      <div style={confWrap("supplierName")}>
+        <Field label="Supplier *" hint={confHint("supplierName")}>
+          <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
+            {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div style={confWrap("quotationNumber")}>
+        <Field label="Supplier quotation / reference" hint={confHint("quotationNumber")}>
+          <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
+        </Field>
+      </div>
       <Field label="Related inquiry">
         <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
           <option value="">Not linked</option>
           {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
         </select>
       </Field>
-      <Field label="Received date *">
-        <input type="date" value={receivedDate} onChange={(event) => {
-          setReceivedDate(event.target.value);
-          if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
-        }} />
-      </Field>
-      <Field label="Valid until *">
-        <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
-      </Field>
+      <div style={confWrap("receivedDate")}>
+        <Field label="Received date *" hint={confHint("receivedDate")}>
+          <input type="date" value={receivedDate} onChange={(event) => {
+            setReceivedDate(event.target.value);
+            if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
+          }} />
+        </Field>
+      </div>
+      <div style={confWrap("validUntil")}>
+        <Field label="Valid until *" hint={confHint("validUntil")}>
+          <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+        </Field>
+      </div>
       <Field label="Currency *">
         <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
           <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
         </select>
       </Field>
-      <Field label="Quotation amount *">
-        <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
-      </Field>
+      <div style={confWrap("totalAmount")}>
+        <Field label="Quotation amount *" hint={confHint("totalAmount")}>
+          <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
+        </Field>
+      </div>
     </div>
 
     {/* Line items table */}
     <div style={{ marginTop: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <strong style={{ fontSize: 13 }}>Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ</strong>
+        <strong style={{ fontSize: 13 }}>
+          Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ
+          {hasParsed && missingLines && <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8, fontWeight: 400 }}>⚠ แถวสีแดง = ราคายังไม่ถูกต้อง กรุณากรอก</span>}
+        </strong>
         <button className="btn ghost sm" type="button" onClick={addLine}><Icon name="plus" /> Add line</button>
       </div>
       {lines.length > 0 ? <div className="table-wrap">
@@ -1743,21 +1805,36 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             <th style={{ width: 60 }}>Unit</th><th style={{ width: 110 }}>Unit price</th><th style={{ width: 70 }}>Cur.</th>
             <th style={{ width: 32 }}></th>
           </tr></thead>
-          <tbody>{lines.map((line, idx) => <tr key={idx}>
-            <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
-            <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
-            <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
-            <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
-            <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
-            <td><input type="number" style={{ width: "100%" }} value={line.unitPrice} min="0" step="0.01" onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })} /></td>
-            <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
-              <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
-            </select></td>
-            <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
-          </tr>)}</tbody>
+          <tbody>{lines.map((line, idx) => {
+            const needsPrice = line.unitPrice === 0;
+            return <tr key={idx} style={needsPrice ? { background: "#fff7f7" } : undefined}>
+              <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
+              <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
+              <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
+              <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
+              <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
+              <td><input type="number" style={{ width: "100%", ...(needsPrice ? { outline: "2px solid #ef4444", borderRadius: 4 } : {}) }}
+                value={line.unitPrice} min="0" step="0.01"
+                onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })}
+                placeholder={needsPrice ? "กรอกราคา" : undefined} /></td>
+              <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
+                <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
+              </select></td>
+              <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
+            </tr>;
+          })}</tbody>
         </table>
-      </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>ยังไม่มี line items — กด "Parse PDF" หรือ "Add line" เพื่อเพิ่ม</div>}
+      </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>
+        {parsing ? "กำลังอ่าน PDF…" : "ยังไม่มี line items — เลือก PDF หรือกด \"Add line\" เพื่อเพิ่ม"}
+      </div>}
     </div>
+
+    {/* Legend */}
+    {hasParsed && <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
+      <span><span style={{ color: "#22c55e" }}>●</span> AI อ่านได้ — ตรวจสอบเบาๆ</span>
+      <span><span style={{ color: "#f59e0b" }}>●</span> ตรวจสอบ — ควร verify ก่อน upload</span>
+      <span><span style={{ color: "#ef4444" }}>●</span> กรอกเอง — ระบบอ่านไม่ได้</span>
+    </div>}
 
     {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}
   </Modal>;
