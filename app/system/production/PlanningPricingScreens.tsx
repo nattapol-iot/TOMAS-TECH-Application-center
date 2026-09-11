@@ -1630,6 +1630,13 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const parsePdf = async (targetFile: File) => {
     if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
     setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setSupplierAutoMatched(false);
+    // Reset all extracted fields so stale values from a previous PDF don't persist
+    setSupplierReference("");
+    setReceivedDate(isoToday());
+    setValidUntil(addIsoDays(isoToday(), 30));
+    setCurrency("THB");
+    setAmount("");
+    setLines([]);
     try {
       const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
 

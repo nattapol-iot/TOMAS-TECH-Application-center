@@ -77,7 +77,7 @@ def parse_date(raw: str) -> str:
     m = re.fullmatch(r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", raw)
     if m:
         return f"{be_to_ce(int(m.group(1)))}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
-    # DD MonthName YYYY  (Thai or English)
+    # DD MonthName YYYY  (Thai or English, space-separated)
     m = re.fullmatch(r"(\d{1,2})\s+([^\d\s]{2,20})\s+(\d{2,4})", raw)
     if m:
         d = m.group(1).zfill(2)
@@ -85,6 +85,14 @@ def parse_date(raw: str) -> str:
         key = raw_mo.lower().rstrip(".")
         mo = (MONTH_TH.get(raw_mo) or MONTH_TH.get(raw_mo.rstrip("."))
               or MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1)
+        yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
+        return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
+    # DD-MonthName-YYYY  (dash-separated, e.g. "09-Jul-2026" from Keyence-style docs)
+    m = re.fullmatch(r"(\d{1,2})-([A-Za-z]{3,15})-(\d{2,4})", raw)
+    if m:
+        d = m.group(1).zfill(2)
+        key = m.group(2).lower()
+        mo = MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1
         yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
         return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
     return ""
@@ -106,7 +114,13 @@ def find_date(text: str, keywords: list[str]) -> str:
             d = parse_date(m.group(1).strip())
             if d:
                 return d
-    # last fallback: first bare numeric date in text
+    # fallback 1: bare DD-Mon-YYYY (e.g. "09-Jul-2026" without preceding keyword)
+    m = re.search(r"\b(\d{1,2}-[A-Za-z]{3,15}-\d{4})\b", text)
+    if m:
+        d = parse_date(m.group(1))
+        if d:
+            return d
+    # fallback 2: bare numeric date
     m = re.search(r"\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b", text)
     return parse_date(m.group(1)) if m else ""
 
@@ -168,6 +182,13 @@ def extract_quotation_number(text: str) -> str:
             c = m.group(1).strip()
             if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", c):
                 return c
+    # Pure numeric doc reference: 6-10 digit number immediately followed by a date
+    # e.g. "11244565 09-Jul-2026 1 / 1"  (Keyence/MISUMI style)
+    m = re.search(r"\b(\d{6,10})\s+\d{1,2}[-/][A-Za-z\d]{2,3}[-/]\d{4}\b", text)
+    if m:
+        c = m.group(1)
+        if len(c) != 13:          # not a tax ID
+            return c
     return ""
 
 
@@ -240,6 +261,11 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
     seen_desc: set[str] = set()
     line_no = 1
 
+    # Remember column positions from the last valid table — used for continuation
+    # tables on page 2+ that lack headers (common in multi-page PDFs).
+    last_col_map: Optional[dict] = None
+    last_n_cols: int = 0
+
     lines = md.split("\n")
     i = 0
     while i < len(lines):
@@ -252,27 +278,50 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             table_lines.append(lines[i].strip())
             i += 1
 
-        if len(table_lines) < 3:
-            continue
-        if not re.match(r"^\|[-: |]+\|$", table_lines[1]):
+        if len(table_lines) < 2:
             continue
 
-        header = [c.strip() for c in table_lines[0].split("|")[1:-1]]
-        n_cols = len(header)
+        has_separator = len(table_lines) >= 2 and re.match(r"^\|[-: |]+\|$", table_lines[1])
 
-        desc_col   = _find_col(header, ["description", "detail", "product", "item", "รายการ", "ชื่อ", "name", "สินค้า", "goods"])
-        qty_col    = _find_col(header, ["qty", "quantity", "จำนวน", "pcs", "pieces", "数量"])
-        price_col  = _find_col(header, ["unit price", "unit\nprice", "price/unit", "unitprice",
-                                        "ราคา/หน่วย", "ราคาต่อหน่วย", "単価", "price", "ราคา"])
-        amount_col = _find_col(header, ["amount", "total", "รวม", "ยอด", "line total", "金額", "ext"])
-        code_col   = _find_col(header, ["code", "part no", "part number", "model no", "item no",
-                                        "รหัส", "no.", "model", "sku", "品番"])
-        unit_col   = _find_col(header, ["unit", "หน่วย", "uom", "単位"])
+        if has_separator:
+            # Normal table with header row
+            header = [c.strip() for c in table_lines[0].split("|")[1:-1]]
+            n_cols = len(header)
+            data_rows = table_lines[2:]
 
-        if desc_col is None and price_col is None and amount_col is None:
-            continue
+            desc_col   = _find_col(header, ["description", "detail", "product", "item", "รายการ", "ชื่อ", "name", "สินค้า", "goods"])
+            qty_col    = _find_col(header, ["qty", "quantity", "จำนวน", "pcs", "pieces", "数量"])
+            price_col  = _find_col(header, ["unit price", "unit\nprice", "price/unit", "unitprice",
+                                            "ราคา/หน่วย", "ราคาต่อหน่วย", "単価", "price", "ราคา"])
+            amount_col = _find_col(header, ["amount", "total", "รวม", "ยอด", "line total", "金額", "ext"])
+            code_col   = _find_col(header, ["code", "part no", "part number", "model no", "item no",
+                                            "รหัส", "no.", "model", "sku", "品番"])
+            unit_col   = _find_col(header, ["unit", "หน่วย", "uom", "単位"])
 
-        for row_text in table_lines[2:]:
+            if desc_col is None and price_col is None and amount_col is None:
+                continue
+
+            # Save column map for continuation tables (page 2+)
+            last_col_map = {
+                "desc": desc_col, "qty": qty_col, "price": price_col,
+                "amount": amount_col, "code": code_col, "unit": unit_col,
+            }
+            last_n_cols = n_cols
+        else:
+            # No separator → headerless continuation table from a later page
+            # Try to reuse column positions from the previous table if column count matches
+            n_cols = len(table_lines[0].split("|")) - 2
+            if last_col_map is None or n_cols != last_n_cols:
+                continue
+            desc_col   = last_col_map["desc"]
+            qty_col    = last_col_map["qty"]
+            price_col  = last_col_map["price"]
+            amount_col = last_col_map["amount"]
+            code_col   = last_col_map["code"]
+            unit_col   = last_col_map["unit"]
+            data_rows  = table_lines
+
+        for row_text in data_rows:
             cells = [c.strip() for c in row_text.split("|")[1:-1]]
             while len(cells) < n_cols:
                 cells.append("")
@@ -568,7 +617,8 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         "วันที่", "date", "Quotation Date", "Issue Date", "Date:", "issued", "ออกเมื่อ",
     ])
     valid_until       = find_date(plain_text, [
-        "valid until", "valid to", "Valid Until", "expiration", "expire",
+        "valid until", "valid to", "Valid Until",
+        "Expire Date", "expiry date", "expiration date", "expiration", "expire",
         "หมดอายุ", "expiry", "ใช้ได้ถึง", "validity",
     ])
     total_amount      = extract_total(plain_text)
