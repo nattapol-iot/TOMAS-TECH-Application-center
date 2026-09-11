@@ -198,7 +198,9 @@ if (
 }
 $builder.Remove('User ID') | Out-Null
 $builder.Remove('Password') | Out-Null
-$builder.IntegratedSecurity = $false
+# PowerShell's property binder serializes this as the unsupported keyword
+# "IntegratedSecurity". Use the canonical connection-string key explicitly.
+$builder['Integrated Security'] = $false
 $storedConnectionString = $null
 
 $securePassword = $DbaCredential.Password.Copy()
