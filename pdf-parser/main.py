@@ -193,9 +193,13 @@ def extract_quotation_number(text: str) -> str:
 
 
 def extract_supplier_name(lines: list[str]) -> str:
-    # Our own company — never return these as the supplier name
-    SELF_PAT = re.compile(
-        r"tomas\s*tech|tomastc|โทมัสเทค|โทมัส\s*เทค|ทอมัสเทค", re.I
+    # Buyer-section markers — the supplier name only appears ABOVE these lines.
+    # Everything from "To:", "Bill To:", "เรียน:", etc. onward is the buyer section
+    # where our own company name (TOMAS TECH) will appear and must be ignored.
+    BUYER_SECTION_PAT = re.compile(
+        r"^(?:to\s*:|bill\s*to\s*:|ship\s*to\s*:|attention\s*:|attn\s*:|เรียน\s*:|ถึง\s*:|ที่\s*:|"
+        r"quotation\s+to\s*:|customer\s*:|sold\s*to\s*:)",
+        re.I,
     )
 
     def is_garbled(t: str) -> bool:
@@ -222,34 +226,37 @@ def extract_supplier_name(lines: list[str]) -> str:
         # Strip everything from address indicators onward
         t = re.sub(r"\s+(?:ที่อยู่|ที่อยู|no\.\s*\d|no\s+\d|\d{1,3}\s*[,/]|soi\b|road\b|rd\.\b|floor\b|fl[,\s]|tower\b)", " ", t, flags=re.I)
         t = re.sub(r"\s{2,}", " ", t).strip()
-        # Trim trailing punctuation/spaces
         t = t.rstrip(".,; ").strip()
-        # Remove replacement/corrupted characters
+        # Remove corrupted/non-printable characters
         t = re.sub(r"[^\x20-\x7E฀-๿()/.,'&\-]", "", t).strip()
         return t
 
-    # Pass 1: line with English company suffix (CO.,LTD. / INC. / CORP. / PTE.LTD. etc.)
-    for line in lines[:50]:
+    # Cut off search window at the buyer section — supplier letterhead is always above it
+    search_lines: list[str] = []
+    for line in lines[:60]:
+        if BUYER_SECTION_PAT.match(line.strip()):
+            break
+        search_lines.append(line)
+
+    # Pass 1: line with explicit English company suffix (CO.,LTD. / INC. / CORP. etc.)
+    for line in search_lines:
         t = line.strip()
         if len(t) < 5 or len(t) > 250:
-            continue
-        if SELF_PAT.search(t):
             continue
         if is_garbled(t):
             continue
         if re.search(r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b|\bpte\.\s*ltd", t, re.I):
             name = clean_name(t)
-            # Must be at least half English characters — no Thai-only names
+            # Must be at least half English characters — reject Thai-only names
             if len(name) >= 5 and eng_ratio(name) >= 0.5:
                 return name
 
     # Pass 2: short all-caps English line (letterhead / logo text)
-    for line in lines[:20]:
+    for line in search_lines[:20]:
         t = line.strip()
         if 5 <= len(t) <= 70 and t == t.upper() and re.search(r"[A-Z]{3}", t):
             if not re.search(r"\d{5,}|@|http|[฀-๿]", t):
-                if not SELF_PAT.search(t):
-                    return t
+                return t
 
     return ""
 
