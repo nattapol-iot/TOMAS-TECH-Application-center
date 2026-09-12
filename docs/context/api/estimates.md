@@ -2,19 +2,19 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e867e48e`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates` | 339–371 |
-| POST | `/api/v1/estimates` | 373–410 |
-| GET | `/api/v1/estimates/:id/validation` | 412–418 |
-| POST | `/api/v1/estimates/:id/submit` | 420–421 |
-| POST | `/api/v1/estimates/:id/approve` | 422–423 |
-| POST | `/api/v1/estimates/:id/create-revision` | 425–460 |
-| POST | `/api/v1/estimates/:id/request-revision` | 462–496 |
+| GET | `/api/v1/estimates` | 347–379 |
+| POST | `/api/v1/estimates` | 381–418 |
+| GET | `/api/v1/estimates/:id/validation` | 420–426 |
+| POST | `/api/v1/estimates/:id/submit` | 428–429 |
+| POST | `/api/v1/estimates/:id/approve` | 430–431 |
+| POST | `/api/v1/estimates/:id/create-revision` | 433–468 |
+| POST | `/api/v1/estimates/:id/request-revision` | 470–504 |
 
 ## Named functions
 
@@ -25,15 +25,16 @@ Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/
 | `optionalNonnegativeInteger` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 35–39 |
 | `percentage` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 41–49 |
 | `managerOverride` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 51–53 |
-| `validationIssues` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 55–66 |
-| `snapshotSubmission` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 68–112 |
-| `snapshotRevision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 114–143 |
-| `updateInquiry` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 145–150 |
-| `ensureRevisionSnapshot` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 152–158 |
-| `cloneRevisionLines` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 160–218 |
-| `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 220–273 |
-| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 275–336 |
-| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 338–497 |
+| `adminSelfDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 56–58 |
+| `validationIssues` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 60–71 |
+| `snapshotSubmission` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 73–117 |
+| `snapshotRevision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 119–150 |
+| `updateInquiry` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 152–157 |
+| `ensureRevisionSnapshot` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 159–165 |
+| `cloneRevisionLines` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 167–225 |
+| `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 227–280 |
+| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 282–344 |
+| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 346–505 |
 
 ## Direct local dependencies
 

@@ -123,6 +123,47 @@ Engineer, estimate owner, reviewer/manager and authorized Sales users retain the
 
 ## Information architecture
 
+### Administration navigation regrouping — Implemented locally, 2026-09-12
+
+Scope: the administration sidebar shown by the user. The sidebar grouping and direct destinations are implemented locally; deployment and authenticated visual acceptance are not claimed. Evidence: `ProductionApp.tsx` NAV; `CoreScreens.tsx` ProductionMasterData; `AdminAnalyticsScreens.tsx` ProductionSettings/ProductionEngineeringRates; the user's sidebar screenshot. No new browser/accessibility verification was performed.
+
+Observation: the current administration list mixes reusable estimating resources, business master records, signing assets and system operations. Master Data already contains Customers, Suppliers, Employees, Inventory items, Engineering rates and User accounts as tabs. Settings currently holds runtime information and document storage configuration. Inference: grouping by job makes these destinations easier to find than treating every item as an administrative function.
+
+Proposed expandable sidebar parents (maximum two menu levels):
+
+- **ข้อมูลกลาง / Master Data**: ลูกค้า / Customers; ผู้ขาย / Suppliers; พนักงาน / Employees; สินค้าและวัสดุ / Inventory items; ข้อมูลอ้างอิงงานเข้าหน้างาน / Site Visit Master.
+- **คลังประมาณราคา / Estimating Library**: แม่แบบโมดูล / Module Templates; ชุดค่าแรง / Labor Packages; อัตราค่าแรง / Engineering Rates. Keep reusable packages distinct from the authoritative internal rate master. Provide an "จัดการคลังประมาณราคา" shortcut from Estimate Cost, preserving the current estimate when returning.
+- **ผู้ดูแลระบบ / Administration**: บัญชีผู้ใช้และสิทธิ์ / User Accounts; ประวัติการเปลี่ยนแปลง / Audit Log; ตั้งค่าระบบ / System Settings.
+- Move **ตราประทับบริษัท / Company Stamps** into the existing **เอกสารและลงนาม / Documents & Signing** group alongside Sign Inbox and Signed Documents. Personal signature remains available from the profile menu.
+
+Interaction and acceptance criteria:
+
+- Parent rows expand/collapse; leaf rows navigate directly to the selected screen/tab. Do not make the same row both navigate and expand. Use existing sidebar tokens, indentation and a chevron, without adding a new component library.
+- Show a parent when at least one child is permitted. Preserve each child's existing permissions and role restrictions; placing templates/packages beside rates must not grant rate access or require master.read for estimate.read users.
+- Master Data's existing customer/supplier/employee/item views are reused. Rates and user accounts move to the new destinations without duplicate full tab bars. Existing navigation callbacks and stored view names need compatibility handling.
+- Exactly one leaf has aria-current="page"; ancestors indicate the active branch. Restore the active leaf, its containing group and selected master tab on refresh. The current top-level remembered-view implementation must be extended to support these tab destinations.
+- Collapse state is a user preference, distinct from the current destination. On narrow screens, leaf navigation closes the drawer; parent expansion keeps it open. Keyboard activation, visible focus, aria-expanded and labelled navigation are required.
+- Provide TH/EN/JP labels using existing localization. Use "ชุดค่าแรง" consistently for Labor Packages, and reserve "อัตราค่าแรง" for rates.
+- Verify all existing destinations remain reachable, denied children stay hidden, non-admin estimators can reach their library, and navigation/refresh work before release. Changing the menu does not change API permissions or database schema.
+
+Implementation slices: (1) destination/permission model with compatibility and refresh tests; (2) expandable sidebar and reused master tab destinations; (3) localization, responsive/keyboard checks and role-based navigation verification. Preserve concurrent Estimate Cost edits; coordinate any overlapping screen changes before implementation.
+
+### Organisation and help navigation — Implemented locally, 2026-09-12
+
+User scope extends the sidebar regrouping above to Organisation, Reports, Employee Manual and Support Center. Evidence: screenshot plus ProductionApp NAV/rendering, ReportScreens and TeamActivityScreen. The manual/support entries are already a separate unlabelled NAV section, but visually read as part of Organisation. Reports currently combines an operational document workspace with an analytics destination; these serve different jobs.
+
+Proposed structure, coordinated with the administration draft:
+
+- **ทีมและผลการดำเนินงาน / Team & Performance**: กิจกรรมและภาระงานทีม / Team Activity; KPI และการเติบโต / KPI & Growth; รายงานสรุป / Summary Reports (existing ProductionReports analytics, not the report document editor).
+- **เอกสารและลงนาม / Documents & Signing**: รายงานปฏิบัติงาน / Operational Reports (existing ReportScreens workspace); งานรอลงนาม / Sign Inbox; เอกสารที่ลงนามแล้ว / Signed Documents; ตราประทับบริษัท / Company Stamps (moved from Administration).
+- **ช่วยเหลือ / Help**: คู่มือการใช้งาน / Employee Manual; แจ้งปัญหาและติดตาม / Support Center. Place this labelled group at the bottom of the sidebar, separate from performance and administration. Keep the global Report a problem shortcut.
+
+Reuse current report screens and their workspace/analytics state; this proposal adds distinct navigation destinations without duplicating reports, moving data or adding a reporting system. Both report destinations keep report.read and their existing finer permissions. The shared reports view must remember its subdestination on refresh and respect the existing unsaved-report navigation guard. Team Activity keeps activity.read; KPI keeps performance.read. Help keeps current authenticated-user access and #support/<id> links. Parent visibility follows accessible children; Help must never inherit an admin-only restriction.
+
+Use "กิจกรรมและภาระงานทีม" to communicate operational work visibility rather than implying browser monitoring. Distinguish "รายงานปฏิบัติงาน" from "รายงานสรุป" in TH/EN/JP, menu labels and page headings. Preserve existing source links from team activity into projects/inquiries/tasks.
+
+Acceptance extension: no unlabelled manual/support section; no ambiguous duplicate "รายงาน" leaf; both report surfaces remain reachable, active-leaf highlighting and refresh restore the correct subdestination, and cancelling an unsaved-report exit leaves the current menu and content unchanged. Implemented locally with distinct view IDs, reusable controlled Master Data destinations, active group indication, narrow-screen drawer behavior and TH/EN/JP navigation labels. Component-harness tests cover role visibility, rate restrictions, restoration, expansion, mobile leaf navigation and unsaved-report exit cancellation. Browser visual verification after sign-in remains pending; no deployment is claimed. The optional shortcut from inside Estimate Cost is deferred to avoid changing its editing lifecycle in this sidebar task.
+
 ### Small-team urgent estimating
 
 Use existing Inquiry and Estimate navigation. Add My work / Team / Unassigned views, a job-linked document area with explicit Draft versus Approved files, published template selection, and source-rich Price Library results. Retain nine Estimate tabs and current summary amounts; overhead is a separately labelled proposed cost component whose integration needs an explicit calculation contract.

@@ -89,7 +89,7 @@ export function ReportScreens({ bootstrap, notify, onOpenAnalytics, onDirtyChang
   if (selectedId !== null) return <ReportDetail onDirtyChange={reportDirtyChange} key={selectedId} id={selectedId} bootstrap={bootstrap} notify={notify} onBack={() => { if (confirmWorkspaceNavigation()) { setSelectedId(null); void load(); } }} />;
   const begin = (type: ReportType) => { setNewType(type); setSelectedTemplate(null); setCreating(true); };
   return <div className="report-workspace">
-    <PageHeader eyebrow={t("CUSTOMER REPORTS")} title={t("รายงานลูกค้า")} subtitle={t("เลือกแบบฟอร์ม กรอกผลการทำงาน แล้วส่งตรวจและให้ลูกค้าเซ็น")} actions={onOpenAnalytics ? <button className="btn ghost" type="button" onClick={onOpenAnalytics}><LocalizedText text={"ดูสถิติรายงาน"} /></button> : undefined} />
+    <PageHeader eyebrow={t("CUSTOMER REPORTS")} title={t("Operational Reports")} subtitle={t("เลือกแบบฟอร์ม กรอกผลการทำงาน แล้วส่งตรวจและให้ลูกค้าเซ็น")} actions={onOpenAnalytics ? <button className="btn ghost" type="button" onClick={onOpenAnalytics}><LocalizedText text={"ดูสถิติรายงาน"} /></button> : undefined} />
     <Tabs tabs={[{ id: "reports", label: t("รายงานทั้งหมด") }, { id: "templates", label: t("Template ของทีม") }]} active={workspaceTab} onChange={next => { if (next === workspaceTab || confirmWorkspaceNavigation()) setWorkspaceTab(next); }} />
     {workspaceTab === "templates" ? <ReportTemplateLibrary onDirtyChange={reportDirtyChange} bootstrap={bootstrap} notify={notify} onUse={template => { setNewType(template.reportType); setSelectedTemplate(template); setCreating(true); }} /> : <>
       {bootstrap.permissions.includes("report.write") ? <section className="report-start" aria-label={t("สร้างรายงานจากแบบฟอร์ม")}>

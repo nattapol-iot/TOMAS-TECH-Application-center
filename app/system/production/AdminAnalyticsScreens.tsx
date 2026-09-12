@@ -493,7 +493,7 @@ export function ProductionReports({ bootstrap }: AdminAnalyticsProps) {
   if (!tabs.length) return <PermissionNotice permission="inventory.read, procurement.read หรือ project.read" />;
   return (
     <>
-      <PageHeader eyebrow="LIVE ANALYTICS" title={uiText("Reports")} subtitle="รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้" meta={<Badge tone="green"><LocalizedText text={"Production API"} /></Badge>} />
+      <PageHeader eyebrow="LIVE ANALYTICS" title={uiText("Summary Reports")} subtitle="รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้" meta={<Badge tone="green"><LocalizedText text={"Production API"} /></Badge>} />
       <Tabs<ReportTab> tabs={tabs} active={activeTab} onChange={setTab} />
       <Toolbar>
         {activeTab !== "project-cost" ? <>

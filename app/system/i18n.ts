@@ -27,6 +27,18 @@ type Entry = { th: string; jp: string; en?: string };
 
 export const DICTIONARY: Record<string, Entry> = {
   /* Navigation */
+  "Close navigation": { th: "ปิดเมนู", jp: "ナビゲーションを閉じる" },
+  "ESTIMATING LIBRARY": { th: "คลังประมาณราคา", jp: "見積ライブラリ" },
+  "TEAM & PERFORMANCE": { th: "ทีมและผลการดำเนินงาน", jp: "チームと実績" },
+  "HELP": { th: "ช่วยเหลือ", jp: "ヘルプ" },
+  "Operational Reports": { th: "รายงานปฏิบัติงาน", jp: "業務報告書" },
+  "Summary Reports": { th: "รายงานสรุป", jp: "集計レポート" },
+  "Team Activity & Workload": { th: "กิจกรรมและภาระงานทีม", jp: "チーム活動と作業負荷" },
+  "Site Visit Reference Data": { th: "ข้อมูลอ้างอิงงานเข้าหน้างาน", jp: "現地訪問の基本データ" },
+  "Labor Packages": { th: "ชุดค่าแรง", jp: "工数パッケージ" },
+  "User Accounts & Permissions": { th: "บัญชีผู้ใช้และสิทธิ์", jp: "ユーザーアカウントと権限" },
+  "System Settings": { th: "ตั้งค่าระบบ", jp: "システム設定" },
+  "Report & Track Issues": { th: "แจ้งปัญหาและติดตาม", jp: "問題の報告と追跡" },
   "Dashboard": { th: "แดชบอร์ด", jp: "ダッシュボード" },
   "Inquiry": { th: "งานสอบถามราคา", jp: "引合" },
   "Estimate Cost": { th: "ประมาณการต้นทุน", jp: "見積原価" },
@@ -1631,7 +1643,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Every cost, scope and workflow change with its previous value, new value and reason. Normal users cannot delete entries.": { th: "บันทึกทุกการเปลี่ยนแปลงต้นทุน ขอบเขต และขั้นตอน พร้อมค่าเดิม ค่าใหม่ และเหตุผล โดยผู้ใช้ทั่วไปลบรายการไม่ได้", jp: "原価・範囲・ワークフローの変更を旧値・新値・理由とともに記録し、一般ユーザーによる削除を禁止します。" },
   "Visit purposes, skills, checklists, service levels, engineer profiles and unavailability.": { th: "จัดการวัตถุประสงค์ ทักษะ เช็กลิสต์ ระดับบริการ โปรไฟล์วิศวกร และช่วงเวลาที่ไม่พร้อมสำหรับงานเข้าหน้างาน", jp: "訪問目的、スキル、チェックリスト、サービスレベル、技術者プロフィール、不在期間を管理します。" },
   "Roles, notifications, numbering standard and document storage.": { th: "จัดการบทบาท การแจ้งเตือน มาตรฐานเลขที่เอกสาร และพื้นที่จัดเก็บเอกสาร", jp: "役割、通知、採番規則、文書保管を管理します。" },
-  "MASTER DATA": { th: "ข้อมูลหลัก", jp: "マスタデータ" },
+  "MASTER DATA": { th: "ข้อมูลกลาง", jp: "マスタデータ" },
   "ANALYSIS": { th: "การวิเคราะห์", jp: "分析" },
   "Every balance is computed from the transaction ledger — On Hand includes quarantine; Available = On Hand − Reserved − Quarantine.": { th: "ยอดคงเหลือคำนวณจากบัญชีรายการเคลื่อนไหว โดยคงคลังรวมของกักกัน และพร้อมใช้เท่ากับคงคลังหักยอดจองและยอดกักกัน", jp: "残高は取引台帳から計算します。在庫数には隔離品を含み、使用可能数は在庫数から引当数と隔離数を差し引いた値です。" },
   "Partial deliveries are normal — accepted quantity goes to stock, damaged and rejected quantity goes to quarantine, never to Available.": { th: "รองรับการส่งมอบบางส่วน โดยจำนวนที่รับเข้าจะเพิ่มสต็อก ส่วนของเสียหายหรือไม่ผ่านจะเข้าพื้นที่กักกันและไม่รวมในยอดพร้อมใช้", jp: "分納に対応し、受入数量は在庫へ、破損品・不合格品は隔離へ計上して使用可能数には含めません。" },

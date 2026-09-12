@@ -2,15 +2,15 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e867e48e`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/estimates/:id/erp-summary` | 173–178 |
-| PUT | `/api/v1/estimates/:id/erp-mappings` | 180–251 |
-| POST | `/api/v1/estimates/:id/erp-export-events` | 253–296 |
+| PUT | `/api/v1/estimates/:id/erp-mappings` | 180–256 |
+| POST | `/api/v1/estimates/:id/erp-export-events` | 258–301 |
 
 ## Named functions
 
@@ -19,7 +19,7 @@ Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/
 | `loadSummary` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 105–118 |
 | `parseMappings` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 127–151 |
 | `parseExportEvent` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 153–170 |
-| `registerEstimateErpRoutes` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 172–297 |
+| `registerEstimateErpRoutes` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 172–302 |
 
 ## Direct local dependencies
 

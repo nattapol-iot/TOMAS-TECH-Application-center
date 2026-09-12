@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TeamActivityScreen } from "./production/TeamActivityScreen";
 import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
+import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { useActivityPresence } from "./use-activity-presence";
 import { restoredView, viewStorageKey } from "../../lib/remembered-view";
 import { BrandLockup, BrandMark } from "./Brand";
@@ -55,7 +56,6 @@ import {
 } from "./production/SigningScreens";
 import {
   ProductionAuditLog,
-  ProductionCustomers,
   ProductionEngineeringRates,
   ProductionReports,
   ProductionSettings,
@@ -81,9 +81,10 @@ type View =
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
+  | "suppliers" | "employees" | "material-master" | "user-accounts" | "summary-reports"
   | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
-type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[] };
+type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; rateAccess?: boolean };
 type MyWorkUrgencyItem = {
   status: string;
   canUpdate: boolean;
@@ -136,26 +137,36 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
   ] },
   { group: "DOCUMENTS & SIGNING", items: [
-    { view: "signing", label: "Sign Inbox", icon: "edit", permission: "signing.read" },
-    { view: "documents", label: "Signed Documents", icon: "shield", permission: "signing.read" },
+    {"view":"reports","label":"Operational Reports","icon":"file","permission":"report.read"},
+    {"view":"signing","label":"Sign Inbox","icon":"edit","permission":"signing.read"},
+    {"view":"documents","label":"Signed Documents","icon":"shield","permission":"signing.read"},
+    {"view":"stamps","label":"Company Stamps","icon":"lock","permission":"signing.read"},
   ] },
-  { group: "ORGANISATION", items: [
-    { view: "activity", label: "Team Activity", icon: "chart", permission: "activity.read" },
-    { view: "performance", label: "KPI & Growth", icon: "trendingUp", permission: "performance.read" },
-    { view: "reports", label: "Reports", icon: "chart", permission: "report.read" },
+  { group: "TEAM & PERFORMANCE", items: [
+    {"view":"activity","label":"Team Activity & Workload","icon":"chart","permission":"activity.read"},
+    {"view":"performance","label":"KPI & Growth","icon":"trendingUp","permission":"performance.read"},
+    {"view":"summary-reports","label":"Summary Reports","icon":"chart","permission":"report.read"},
   ] },
-  { items: [
-    { view: "manual", label: "Employee Manual", icon: "book" },
-    { view: "support", label: "Support Center", icon: "inbox" },
+  { group: "MASTER DATA", items: [
+    {"view":"customers","label":"Customers","icon":"users","permission":"master.read"},
+    {"view":"suppliers","label":"Suppliers","icon":"truck","permission":"master.read"},
+    {"view":"employees","label":"Employees","icon":"user","permission":"master.read"},
+    {"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"},
+    {"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit.read"},
+  ] },
+  { group: "ESTIMATING LIBRARY", items: [
+    {"view":"module-templates","label":"Module Templates","icon":"package","permission":"estimate.read"},
+    {"view":"labor-packages","label":"Labor Packages","icon":"layers","permission":"estimate.read"},
+    {"view":"rates","label":"Engineering rates","icon":"chart","permission":"master.read","rateAccess":true},
   ] },
   { group: "ADMINISTRATION", items: [
-    { view: "master", label: "Master Data", icon: "database", permission: "master.read" },
-    { view: "module-templates", label: "Module Templates", icon: "package", permission: "estimate.read" },
-    { view: "labor-packages", label: "Labor Package Master", icon: "layers", permission: "estimate.read" },
-    { view: "stamps", label: "Company Stamps", icon: "lock", permission: "signing.read" },
-    { view: "audit", label: "Audit Log", icon: "shield", permission: "audit.read" },
-    { view: "visit-master", label: "Visit Master Data", icon: "layers", permission: "visit.read" },
-    { view: "settings", label: "Settings", icon: "settings", permission: "master.read" },
+    {"view":"user-accounts","label":"User Accounts & Permissions","icon":"users","permission":"master.read"},
+    {"view":"audit","label":"Audit Log","icon":"shield","permission":"audit.read"},
+    {"view":"settings","label":"System Settings","icon":"settings","permission":"master.read"},
+  ] },
+  { group: "HELP", items: [
+    {"view":"manual","label":"Employee Manual","icon":"book"},
+    {"view":"support","label":"Report & Track Issues","icon":"inbox"},
   ] },
 ];
 
@@ -164,7 +175,8 @@ const IS_LOCAL_READ_ONLY = process.env.NEXT_PUBLIC_LOCAL_READ_ONLY === "true";
 const CONNECTED_SCHEMA_VERSION = process.env.NEXT_PUBLIC_CONNECTED_SCHEMA_VERSION ?? "unknown";
 const WORKSPACE_LABEL = IS_LOCAL_READ_ONLY ? "LOCAL READ ONLY" : IS_TEAM_TEST_MODE ? "TEAM TEST" : "PRODUCTION";
 const LANGUAGE_STORAGE_KEY = "tomas-tech-language";
-const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups";
+const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups-v2";
+const DEFAULT_COLLAPSED_GROUPS = ["MASTER DATA", "ESTIMATING LIBRARY", "ADMINISTRATION", "HELP", "TEAM & PERFORMANCE", "DOCUMENTS & SIGNING"];
 const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
 
 export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode?: string } = {}) {
@@ -183,7 +195,6 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [projectTab, setProjectTab] = useState<"portfolio" | "schedule" | "punchlist">("portfolio");
   const [myWorkTab, setMyWorkTab] = useState<"inbox" | "schedule">("inbox");
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
-  const [reportTab, setReportTab] = useState<"workspace" | "analytics">("workspace");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
@@ -200,7 +211,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [supportRevision, setSupportRevision] = useState(0);
   const onReportDirtyChange = useCallback((dirty: boolean) => { reportDirty.current = dirty; }, []);
   const [languageReady, setLanguageReady] = useState(false);
-  const [collapsedNavGroups, setCollapsedNavGroups] = useState<string[]>([]);
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState<string[]>(DEFAULT_COLLAPSED_GROUPS);
+  const [collapsedActiveGroup, setCollapsedActiveGroup] = useState<string | null>(null);
   const [navGroupsReady, setNavGroupsReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarReady, setSidebarReady] = useState(false);
@@ -218,7 +230,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (next !== view && !confirmReportNavigation()) return;
     if (next !== "support" && /^#support(?:\/|$)/.test(window.location.hash)) window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    setViewState(next);
+    if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
+    setCollapsedActiveGroup(null);
+    setViewState(next === "master" ? "customers" : next);
+    const activeGroup = NAV.find(section => section.items.some(item => item.view === next))?.group;
+    if (activeGroup) setCollapsedNavGroups(groups => groups.filter(group => group !== activeGroup));
   }, [view, confirmReportNavigation]);
 
   useEffect(() => {
@@ -272,7 +288,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const saved = JSON.parse(window.localStorage.getItem(NAV_GROUP_STORAGE_KEY) ?? "[]");
+        const stored = window.localStorage.getItem(NAV_GROUP_STORAGE_KEY);
+        const previous = stored === null ? JSON.parse(window.localStorage.getItem("tomas-tech-collapsed-nav-groups") ?? "[]") : [];
+        const saved = stored === null ? [...new Set([...DEFAULT_COLLAPSED_GROUPS, ...(Array.isArray(previous) ? previous : [])])] : JSON.parse(stored);
         if (Array.isArray(saved)) setCollapsedNavGroups(saved.filter((group): group is string => typeof group === "string"));
       } catch {
         window.localStorage.removeItem(NAV_GROUP_STORAGE_KEY);
@@ -289,7 +307,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
+      const saved = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      setSidebarCollapsed(saved === null ? Boolean(window.matchMedia?.("(max-width: 980px)").matches) : saved === "true");
       setSidebarReady(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -300,6 +319,14 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
   }, [sidebarCollapsed, sidebarReady]);
 
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, []);
+
   const refreshBootstrap = async () => {
     setBootstrap(await loadBootstrap());
   };
@@ -307,15 +334,16 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const restoreWorkspace = useCallback((data: BootstrapData) => {
     const allowed: View[] = NAV.flatMap(section => section.items)
       .filter(item => (!item.permission || data.permissions.includes(item.permission))
-        && (!item.permissions || item.permissions.every(permission => data.permissions.includes(permission))))
+        && (!item.permissions || item.permissions.every(permission => data.permissions.includes(permission)))
+        && (!item.rateAccess || canViewEngineeringRates(data.user.role)))
       .map(item => item.view);
     allowed.push("profile", "signature");
     if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
-    if (data.permissions.includes("master.read")) allowed.push("customers", "rates");
+
     let saved: string | null = null;
     try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
     catch { /* Storage may be disabled; normal navigation still works. */ }
-    setViewState(restoredView(saved, allowed, window.location.hash, initialVerifyCode, "dashboard"));
+    setViewState(restoredView(saved === "master" ? "customers" : saved, allowed, window.location.hash, initialVerifyCode, "dashboard"));
     setBootstrap(data);
   }, [initialVerifyCode]);
 
@@ -484,7 +512,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => (!item.permission || bootstrap?.permissions.includes(item.permission))
-        && (!item.permissions || item.permissions.every((permission) => bootstrap?.permissions.includes(permission)))),
+        && (!item.permissions || item.permissions.every((permission) => bootstrap?.permissions.includes(permission)))
+        && (!item.rateAccess || canViewEngineeringRates(bootstrap?.user.role ?? ""))),
     }))
     .filter((section) => section.items.length > 0), [bootstrap]);
 
@@ -514,9 +543,10 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   }, [setView]);
   const startInquiry = () => { setStartInquiryCreate(true); setPreferredInquiryId(null); setView("inquiries"); };
   const toggleNavGroup = (group: string) => {
-    setCollapsedNavGroups((current) => current.includes(group)
-      ? current.filter((value) => value !== group)
-      : [...current, group]);
+    const active = NAV.find(section => section.group === group)?.items.some(item => item.view === view);
+    const isCollapsed = collapsedNavGroups.includes(group) && (!active || collapsedActiveGroup === group);
+    setCollapsedActiveGroup(isCollapsed ? null : group);
+    setCollapsedNavGroups(current => isCollapsed ? current.filter(value => value !== group) : [...new Set([...current, group])]);
   };
 
   // A missing bootstrap is not a signed-out session until restoration settles.
@@ -560,23 +590,25 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   return (
     <LanguageContext.Provider value={languageValue}>
     <div className={sidebarCollapsed ? "app sidebar-collapsed" : "app"}>
+      {!sidebarCollapsed ? <button type="button" className="sidebar-mobile-backdrop" aria-label={t("Close navigation")} onClick={() => setSidebarCollapsed(true)} /> : null}
       <aside className="sidebar">
         <div className="brand"><BrandMark size={34} tone="dark" /><div><strong>{PRODUCT.company}</strong><span>{PRODUCT.name}</span></div></div>
         <nav className="nav" aria-label={t("Main navigation")}>
           <p className="nav-label">{t(WORKSPACE_LABEL)}</p>
           {allowedNav.map((section, sectionIndex) => {
-            const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group));
+            const activeGroup = section.items.some(item => item.view === view);
+            const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group) && (!activeGroup || collapsedActiveGroup === section.group));
             return (
-              <div className="nav-group" key={section.group ?? `primary-${sectionIndex}`}>
+              <div className={activeGroup ? "nav-group active-group" : "nav-group"} key={section.group ?? `primary-${sectionIndex}`}>
                 {section.group ? (
-                  <button className="nav-label nav-group-toggle" type="button" aria-expanded={!collapsed} onClick={() => toggleNavGroup(section.group!)}>
+                  <button className="nav-label nav-group-toggle" type="button" aria-expanded={!collapsed} aria-controls={`nav-group-${sectionIndex}`} title={t(section.group)} aria-label={t(section.group)} onClick={() => toggleNavGroup(section.group!)}>
                     <span>{t(section.group)}</span><Icon name="chevronDown" />
                   </button>
                 ) : null}
-                <div className="nav-group-items" hidden={collapsed}>
+                <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={sidebarCollapsed ? label : undefined} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount) ? <em>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)}</em> : null}</button>;
+                    return <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={label} aria-label={label} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount) ? <em>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)}</em> : null}</button>;
                   })}
                 </div>
               </div>
@@ -671,11 +703,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "stamps" ? <ProductionCompanyStamps bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={() => setView("my-work")} onOpenSignature={() => setView("signature")} /> : null}
-          {view === "customers" ? <ProductionCustomers {...common} onOpenInquiries={() => setView("inquiries")} /> : null}
-          {view === "reports" ? reportTab === "workspace" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => { if (confirmReportNavigation()) setReportTab("analytics"); }} /> : <><button className="btn ghost" type="button" onClick={() => setReportTab("workspace")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
+          {(["master", "customers", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? <ProductionMasterData key={view} {...common} destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}
+          {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => setView("summary-reports")} /> : null}
+          {view === "summary-reports" ? <><button className="btn ghost" type="button" onClick={() => setView("reports")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
           {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={(type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else setView("my-work");}}/> : null}
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
-          {view === "master" ? <ProductionMasterData {...common} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
           {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}

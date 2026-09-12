@@ -2,13 +2,13 @@
 
 [Module](../modules/estimate-copy.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e867e48e`; generated, do not edit. [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/estimates/:id/copy-from` | 134–356 |
+| POST | `/api/v1/estimates/:id/copy-from` | 118–334 |
 
 ## Named functions
 
@@ -17,10 +17,9 @@ Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/
 | `businessToday` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 59–63 |
 | `dateInput` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 65–66 |
 | `readSource` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 69–76 |
-| `ensureSectionAssignment` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 82–92 |
-| `resolveInternalRate` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 99–114 |
-| `copyErpCategory` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 119–131 |
-| `registerEstimateCopyRoutes` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 133–357 |
+| `resolveInternalRate` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 83–98 |
+| `copyErpCategory` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 103–115 |
+| `registerEstimateCopyRoutes` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 117–335 |
 
 ## Direct local dependencies
 
@@ -36,7 +35,7 @@ Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.cost_items`, `dbo.engineering_rates`, `dbo.estimate_assignments`, `dbo.estimate_erp_mappings`, `dbo.estimates`, `dbo.expense_lines`, `dbo.manhour_lines`, `dbo.other_cost_lines`, `dbo.suppliers`
+`dbo.cost_items`, `dbo.engineering_rates`, `dbo.estimate_erp_mappings`, `dbo.estimates`, `dbo.expense_lines`, `dbo.manhour_lines`, `dbo.other_cost_lines`, `dbo.suppliers`
 
 ## Change boundary
 

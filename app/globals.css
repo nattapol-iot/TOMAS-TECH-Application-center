@@ -4768,3 +4768,28 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .module-row .group-action { opacity: 0; transition: opacity 0.12s ease; }
 .module-row:hover .group-action, .module-row:focus-within .group-action, .module-row .group-action:focus-visible { opacity: 1; }
 @media (hover: none) { .module-row .group-action { opacity: 1; } }
+
+/* Group headings own expansion; leaf destinations remain independently accessible. */
+.nav-subitems { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--blue-line); }
+.active-group > .nav-group-toggle { color: var(--blue); }
+.nav-group-toggle:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.sidebar-collapsed .nav-subitems { margin-left: 0; padding-left: 0; border-left: 0; }
+@media (max-width: 980px) {
+  .nav-subitems { margin-left: 0; padding-left: 0; border-left: 0; }
+}
+.sidebar-mobile-backdrop { display: none; }
+@media (max-width: 980px) {
+  .sidebar-mobile-backdrop { display: block; position: fixed; inset: 0; z-index: 89; border: 0; background: rgb(15 23 42 / 35%); }
+  .app:not(.sidebar-collapsed) > .sidebar { position: fixed; inset: 0 auto 0 0; width: min(82vw, 260px); z-index: 90; }
+  .app:not(.sidebar-collapsed) .sidebar .brand { justify-content: flex-start; padding: 16px; }
+  .app:not(.sidebar-collapsed) .sidebar .brand strong,
+  .app:not(.sidebar-collapsed) .sidebar .brand span,
+  .app:not(.sidebar-collapsed) .sidebar .nav-item span,
+  .app:not(.sidebar-collapsed) .sidebar .nav-group-toggle span,
+  .app:not(.sidebar-collapsed) .sidebar .nav-label:not(.nav-group-toggle),
+  .app:not(.sidebar-collapsed) .sidebar .sidebar-user div { display: block; }
+  .app:not(.sidebar-collapsed) .sidebar .sidebar-user button { display: inline-flex; }
+  .app:not(.sidebar-collapsed) .sidebar .nav-item { justify-content: flex-start; }
+  .app:not(.sidebar-collapsed) .sidebar .nav-group-toggle { justify-content: space-between; }
+  .app:not(.sidebar-collapsed) .sidebar .nav-subitems { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--blue-line); }
+}

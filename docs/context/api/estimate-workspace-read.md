@@ -2,26 +2,25 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e867e48e`; generated, do not edit. [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/cost-workspace` | 33–199 |
+| GET | `/api/v1/estimates/:id/cost-workspace` | 27–194 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `todayIn` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 11–15 |
-| `shiftDays` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 17–19 |
-| `sectionCode` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 21–23 |
-| `expenseSection` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 25–30 |
-| `registerEstimateWorkspaceReadRoute` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 32–200 |
+| `todayIn` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 12–16 |
+| `shiftDays` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 18–20 |
+| `registerEstimateWorkspaceReadRoute` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 26–195 |
 
 ## Direct local dependencies
 
+- [backend-node/src/feature-flags.ts](<../../../backend-node/src/feature-flags.ts>)
 - [backend-node/src/config.ts](<../../../backend-node/src/config.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)

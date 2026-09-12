@@ -973,9 +973,10 @@ export function ProductionInventory({ bootstrap }: Pick<CommonProps, "bootstrap"
 
 type MasterTab = "customers" | "suppliers" | "employees" | "inventory" | "rates" | "team";
 
-export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOpenInquiries }: CommonProps & { onOpenInquiries?: () => void }) {
+export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOpenInquiries, destination }: CommonProps & { onOpenInquiries?: () => void; destination?: MasterTab }) {
   const uiText = useUiText();
-  const [tab, setTab] = useState<MasterTab>("customers");
+  const [localTab, setTab] = useState<MasterTab>("customers");
+  const tab = destination ?? localTab;
   const canWrite = bootstrap.permissions.includes("master.write");
   const canViewRates = canViewEngineeringRates(bootstrap.user.role);
   const tabs: { id: MasterTab; label: string; count?: number }[] = [
@@ -990,11 +991,11 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
   return <>
     <PageHeader
       eyebrow="CONTROLLED MASTER RECORDS"
-      title={uiText("Master Data")}
+      title={uiText(destination ? destination === "team" ? "User Accounts & Permissions" : tabs.find(item => item.id === destination)?.label ?? "Master Data" : "Master Data")}
       subtitle="ค้นหาและจัดการข้อมูลกลางสำหรับลูกค้า ผู้ขาย บุคลากร สินค้า และอัตราค่าแรง"
       meta={<Badge tone={canWrite ? "green" : "slate"}>{canWrite ? "Create access" : "Read only"}</Badge>}
     />
-    <Tabs tabs={tabs} active={tab} onChange={setTab} />
+    {!destination ? <Tabs tabs={tabs} active={tab} onChange={setTab} /> : null}
     <div className="master-data-content">
       {tab === "customers" ? <ProductionCustomers embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} onOpenInquiries={onOpenInquiries} /> : null}
       {tab === "suppliers" ? <SupplierMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}

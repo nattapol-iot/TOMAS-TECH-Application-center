@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import { DASHBOARD_ROLES } from "../backend-node/src/executive-dashboard-model.ts";
 import * as rememberedView from "../lib/remembered-view.ts";
 
 const source = readFileSync(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
@@ -73,6 +74,7 @@ function createHarness({
   });
   const modules = {
     "../../lib/remembered-view": rememberedView,
+    "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: role => DASHBOARD_ROLES.includes(role) },
     react,
     "react/jsx-runtime": jsxRuntime,
     "./auth-client": {
@@ -176,6 +178,7 @@ function createHarness({
 }
 
 function findNode(node, predicate) {
+  if (Array.isArray(node)) return node.map(child => findNode(child, predicate)).find(Boolean);
   if (node == null || typeof node !== "object") return undefined;
   if (predicate(node)) return node;
   const children = Array.isArray(node.props?.children) ? node.props.children : [node.props?.children];
@@ -352,4 +355,74 @@ test("refresh falls back safely for revoked permissions or blocked storage", asy
       } finally { harness.cleanup(); }
     });
   }
+});
+
+function navLeaf(tree, label) {
+  return findNode(tree, node => node.type === "button" && findNode(node, child => child.type === "span" && child.props.children === label));
+}
+
+test("master leaves restore directly and legacy master still opens customers", async (t) => {
+  for (const [savedView, destination] of [["master", "customers"], ["suppliers", "suppliers"], ["employees", "employees"], ["material-master", "inventory"], ["user-accounts", "team"]]) {
+    await t.test(savedView, async () => {
+      const harness = createHarness({mode:"team-test",savedView,loadBootstrap:async()=>({...bootstrap,permissions:["master.read"]})});
+      try {
+        harness.render(); harness.runMountEffects(); await new Promise(resolve=>setImmediate(resolve));
+        const tree=harness.render();
+        assert.equal(findNode(tree,n=>n.type==="ProductionMasterData").props.destination,destination);
+      } finally {harness.cleanup();}
+    });
+  }
+});
+
+test("non-admin estimators see libraries and help without rate or account access", async () => {
+  const harness=createHarness({mode:"team-test",loadBootstrap:async()=>({...bootstrap,permissions:["estimate.read"]})});
+  try {
+    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();
+    for(const label of ["Module Templates","Labor Packages","Employee Manual","Report & Track Issues"]) assert.ok(navLeaf(tree,label),label);
+    for(const label of ["Engineering rates","User Accounts & Permissions","Customers"]) assert.equal(navLeaf(tree,label),undefined,label);
+  } finally {harness.cleanup();}
+});
+
+test("rate visibility still requires management role as well as master.read", async (t) => {
+  for(const role of ["User","Admin"]){await t.test(role,async()=>{
+    const harness=createHarness({mode:"team-test",savedView:"rates",loadBootstrap:async()=>({...bootstrap,user:{...bootstrap.user,role},permissions:["master.read"]})});
+    try {harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();assert.equal(Boolean(navLeaf(tree,"Engineering rates")),role==="Admin");assert.equal(Boolean(findNode(tree,n=>n.type==="ProductionEngineeringRates")),role==="Admin");}finally{harness.cleanup();}
+  });}
+});
+
+test("reports have distinct restored destinations and preserve the dirty exit guard", async(t)=>{
+  for(const savedView of ["reports","summary-reports"]){await t.test(savedView,async()=>{
+    const harness=createHarness({mode:"team-test",savedView,loadBootstrap:async()=>({...bootstrap,permissions:["report.read"]})});
+    try {harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();
+      const label=savedView==="reports"?"Operational Reports":"Summary Reports";
+      assert.equal(navLeaf(tree,label).props["aria-current"],"page");
+      assert.ok(findNode(tree,n=>n.type===(savedView==="reports"?"ReportScreens":"ProductionReports")));
+      if(savedView==="reports") {findNode(tree,n=>n.type==="ReportScreens").props.onDirtyChange(true);globalThis.window.confirm=()=>false;navLeaf(tree,"Summary Reports").props.onClick();assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"));}
+    }finally{harness.cleanup();}
+  });}
+});
+
+test("active groups can collapse and reopen without changing destination",async()=>{
+  const harness=createHarness({mode:"team-test",savedView:"suppliers",loadBootstrap:async()=>({...bootstrap,permissions:["master.read"]})});
+  try {
+    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
+    const heading=tree=>findNode(tree,n=>n.type==="button"&&n.props.title==="MASTER DATA");
+    assert.equal(heading(harness.render()).props["aria-expanded"],true);
+    heading(harness.render()).props.onClick();
+    assert.equal(heading(harness.render()).props["aria-expanded"],false);
+    assert.equal(findNode(harness.render(),n=>n.type==="ProductionMasterData").props.destination,"suppliers");
+    heading(harness.render()).props.onClick();
+    assert.equal(heading(harness.render()).props["aria-expanded"],true);
+  }finally{harness.cleanup();}
+});
+
+test("mobile leaf navigation closes the drawer only after accepting navigation",async()=>{
+  const harness=createHarness({mode:"team-test",savedView:"reports",loadBootstrap:async()=>({...bootstrap,permissions:["report.read"]})});
+  try {
+    globalThis.window.matchMedia=()=>({matches:true});
+    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
+    const tree=harness.render();navLeaf(tree,"Summary Reports").props.onClick();
+    assert.ok(findNode(harness.render(),n=>n.props.className==="app sidebar-collapsed"));
+    assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
+  }finally{harness.cleanup();}
 });
