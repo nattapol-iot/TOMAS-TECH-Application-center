@@ -4826,3 +4826,6 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .erp-tiles .summary-tile.amber { background: var(--amber-soft); }
 .erp-tiles .summary-tile.amber strong { color: var(--amber-text); }
 .cost-breakdown tfoot tr.cb-unmapped td { background: var(--amber-soft); }
+.cost-breakdown tr.cb-empty td { padding: 14px 12px; color: var(--muted); font-size: var(--fs-xs); text-align: center; background: var(--n-25); }
+.cost-breakdown tr.cb-empty .btn { margin-left: 10px; }
+.cost-breakdown tr.cb-empty .icon { vertical-align: -2px; }

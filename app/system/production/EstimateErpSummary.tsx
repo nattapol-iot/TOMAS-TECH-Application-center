@@ -377,7 +377,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         {selectedShown.length ? <button className="btn ghost" type="button" onClick={() => setSelected(new Set())}>{copy("ล้างการเลือก", "Clear selection", "選択解除")}</button> : null}
       </div> : null}
 
-      {visibleSections.length ? <div className="table-wrap"><table className="cost-breakdown erp-lines">
+      <div className="table-wrap"><table className="cost-breakdown erp-lines">
         <thead><tr>
           <th className="cb-num-col">#</th>
           <th><LocalizedText text={"Description"} /></th>
@@ -389,13 +389,19 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
           <th className="cb-erp-col">{copy("หมวด ERP", "ERP category", "ERP分類")}</th>
         </tr></thead>
         {visibleSections.map(renderSection)}
+        {/* The footer (and its Contingency ERP editor) must stay reachable even when a filter matches no line — e.g. when Contingency is the last unmapped line. */}
+        {!visibleSections.length ? <tbody><tr className="cb-empty"><td colSpan={8}>
+          <Icon name="filter" /> {copy("ไม่พบรายการตามตัวกรอง", "No lines match the filters", "条件に一致する明細がありません")}
+          {unmappedOnly && contingencyErp && draftOf(contingencyErp) === "Unmapped" ? <> — {copy("เหลือเฉพาะ Contingency ด้านล่างที่ยังไม่จัดหมวด", "only Contingency below is still unmapped", "未分類は下のContingencyのみです")}</> : null}
+          <button className="btn ghost" type="button" onClick={resetFilters}><Icon name="x" />{copy("ล้างตัวกรอง", "Clear filters", "フィルター解除")}</button>
+        </td></tr></tbody> : null}
         {/* Estimate-level figures stay visible under any filter; the contingency ERP category is only editable here. */}
         <tfoot>
           <tr className="cb-foot"><td colSpan={6} className="num">{copy("รวมก่อนเงินเผื่อสำรอง", "Subtotal", "小計")}</td><td className="num">{money(Number(totals.subtotal))}</td><td /></tr>
           <tr className={`cb-foot${contingencyErp && draftOf(contingencyErp) === "Unmapped" ? " cb-unmapped" : ""}`}><td colSpan={6} className="num"><LocalizedText text={"Contingency"} /> {quantity(Number(contingencyRate))}%</td><td className="num">{money(Number(totals.contingency))}</td><td className="cb-erp-col">{contingencyErp ? erpSelect(contingencyErp, "Contingency") : null}</td></tr>
           <tr className="cb-total"><td colSpan={6} className="num"><LocalizedText text={"Total estimated cost"} /></td><td className="num"><strong>{money(Number(totals.total))}</strong></td><td /></tr>
         </tfoot>
-      </table></div> : <EmptyState icon="filter" title={copy("ไม่พบรายการตามตัวกรอง", "No lines match the filters", "条件に一致する明細がありません")} message={copy("ลองเปลี่ยนคำค้นหาหรือล้างตัวกรอง", "Adjust the search or clear the filters.", "検索条件を変更するかフィルターを解除してください。")} action={<button className="btn ghost" type="button" onClick={resetFilters}>{copy("ล้างตัวกรอง", "Clear filters", "フィルター解除")}</button>} />}
+      </table></div>
     </> : <EmptyState icon="package" title={copy("ยังไม่มีรายการต้นทุน", "No cost lines yet", "原価明細がありません")} message={copy("เพิ่มรายการในแท็บ Cost Items, Man-hour หรือ Other cost แล้วรายการจะแสดงที่นี่", "Add lines in Cost Items, Man-hour or Other cost and they appear here.", "Cost Items・Man-hour・Other costタブで明細を追加するとここに表示されます。")} />}
 
     {summary ? <>
