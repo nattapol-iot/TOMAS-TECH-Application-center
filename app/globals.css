@@ -4793,3 +4793,36 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   .app:not(.sidebar-collapsed) .sidebar .nav-group-toggle { justify-content: space-between; }
   .app:not(.sidebar-collapsed) .sidebar .nav-subitems { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--blue-line); }
 }
+
+/* Cost list & ERP: collapsible sections, ERP column, category tiles. */
+.cost-breakdown tr.cb-section { cursor: pointer; user-select: none; }
+.cost-breakdown tbody tr.cb-section:hover td { background: rgb(37 99 235 / 0.16); }
+.cost-breakdown tr.cb-section .cb-toggle { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; border-radius: var(--r-sm); color: var(--blue-text); background: transparent; vertical-align: middle; }
+.cost-breakdown tr.cb-section .cb-toggle:hover:not(:disabled) { background: rgb(37 99 235 / 0.14); }
+.cost-breakdown tr.cb-section .cb-toggle:disabled { opacity: 0.35; cursor: default; }
+.cost-breakdown tr.cb-section .cb-toggle .icon { font-size: 14px; }
+.cost-breakdown .cb-open { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 6px; border-radius: var(--r-sm); color: var(--muted); background: transparent; vertical-align: middle; opacity: 0.55; transition: opacity 0.12s ease; }
+.cost-breakdown tr.cb-section:hover .cb-open, .cost-breakdown .cb-open:focus-visible { opacity: 1; }
+.cost-breakdown .cb-open:hover { color: var(--blue-text); background: rgb(37 99 235 / 0.14); }
+@media (hover: none) { .cost-breakdown .cb-open { opacity: 1; } }
+.cost-breakdown th.cb-erp-col, .cost-breakdown td.cb-erp-col { width: 230px; }
+.cost-breakdown .cb-erp-status { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.cost-breakdown .cb-erp-status .badge .icon { font-size: 12px; margin-right: 2px; vertical-align: -2px; }
+.cost-breakdown .cb-erp-status .cb-check { width: 15px; height: 15px; margin: 0; accent-color: var(--blue); }
+.cost-breakdown td.cb-num-col .cb-check { width: 15px; height: 15px; margin-right: 6px; accent-color: var(--blue); vertical-align: middle; }
+.cost-breakdown tr.cb-line.selected td { background: var(--blue-soft); }
+.cost-breakdown .erp-map-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cost-breakdown .erp-map-cell select { max-width: 130px; }
+.cost-breakdown .erp-map-cell .chip { padding: 2px 8px; white-space: nowrap; }
+.cost-breakdown tfoot td.cb-erp-col { text-align: left; }
+.erp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; padding: 10px 12px; }
+.erp-tiles .summary-tile { min-width: 0; }
+.erp-tiles .summary-tile strong { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ERP category tiles: tone tints scoped to this panel so other screens keep the plain tile. */
+.erp-tiles .summary-tile.blue  { background: var(--blue-soft); }
+.erp-tiles .summary-tile.blue strong { color: var(--blue-text); }
+.erp-tiles .summary-tile.green { background: var(--green-soft); }
+.erp-tiles .summary-tile.green strong { color: var(--green-text); }
+.erp-tiles .summary-tile.amber { background: var(--amber-soft); }
+.erp-tiles .summary-tile.amber strong { color: var(--amber-text); }
+.cost-breakdown tfoot tr.cb-unmapped td { background: var(--amber-soft); }

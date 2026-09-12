@@ -4,7 +4,6 @@ import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImpor
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
-import { EstimateCostBreakdown } from "./EstimateCostBreakdown";
 import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
 import { LaborPackageMaster } from "./LaborPackageMaster";
@@ -638,7 +637,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel key={`erp-${header.rowVersion}`} workspace={workspace} notify={notify} onChanged={afterMutation} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -836,7 +835,7 @@ function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorks
   </Panel>;
 }
 
-function EstimateSummaryTab({ workspace, onFocusModule }: { workspace: EstimateCostWorkspace; onFocusModule: (key: string) => void }) {
+function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace }) {
   const uiText = useUiText();
   const { header, costItems, manhourLines, expenseLines, otherCostLines } = workspace;
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
@@ -846,13 +845,7 @@ function EstimateSummaryTab({ workspace, onFocusModule }: { workspace: EstimateC
   const modules = costModuleGroups(costItems);
   const openLines = modules.reduce((sum, group) => sum + group.needPrice + group.needSupplier, 0);
   const manDays = manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
-  /* Opening a cost category lands on its first module band in the Cost Items tab. */
-  const openCategory = (categoryCode: string) => {
-    const group = modules.find((entry) => entry.categoryCode === categoryCode);
-    if (group) onFocusModule(group.key);
-  };
   return <>
-    <EstimateCostBreakdown workspace={workspace} onOpenSection={openCategory} />
     <section className="grid-2">
       <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง"><ul className="check-list">
         <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>

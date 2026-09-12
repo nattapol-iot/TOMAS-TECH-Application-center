@@ -2,7 +2,7 @@
 
 [Module](../modules/estimate-copy.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `e867e48e`; generated, do not edit. [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `5eb9231a`; generated, do not edit. [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

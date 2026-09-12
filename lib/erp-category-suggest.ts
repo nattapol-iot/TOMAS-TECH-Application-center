@@ -44,38 +44,3 @@ export function suggestErpCategory(line: ErpSuggestibleLine): ErpCostCategory | 
   return null;
 }
 
-export type ErpLineFilter = {
-  search?: string;
-  sourceType?: ErpEstimateSourceType | "All";
-  internalCategory?: string | "All";
-};
-
-/** Case-insensitive match on description, internal category, supplier, brand and item code. */
-export function filterErpLines<T extends ErpSuggestibleLine & { supplier?: string | null; brand?: string | null; item?: string | number | null }>(
-  lines: T[],
-  filter: ErpLineFilter,
-): T[] {
-  const needle = (filter.search ?? "").trim().toLowerCase();
-  return lines.filter((line) => {
-    if (filter.sourceType && filter.sourceType !== "All" && line.sourceType !== filter.sourceType) return false;
-    if (filter.internalCategory && filter.internalCategory !== "All" && line.internalCategory !== filter.internalCategory) return false;
-    if (!needle) return true;
-    return [line.description, line.internalCategory, line.supplier, line.brand, line.item]
-      .some((value) => value !== null && value !== undefined && String(value).toLowerCase().includes(needle));
-  });
-}
-
-export type ErpLineGroup<T> = { key: string; lines: T[]; amount: number };
-
-/** Group lines by internal category, preserving the first-seen order of each category. */
-export function groupErpLines<T extends { internalCategory: string; amount: number }>(lines: T[]): ErpLineGroup<T>[] {
-  const groups = new Map<string, ErpLineGroup<T>>();
-  for (const line of lines) {
-    const key = line.internalCategory || "—";
-    const group = groups.get(key) ?? { key, lines: [], amount: 0 };
-    group.lines.push(line);
-    group.amount += line.amount;
-    groups.set(key, group);
-  }
-  return [...groups.values()];
-}

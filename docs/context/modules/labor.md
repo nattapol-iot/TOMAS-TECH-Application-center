@@ -4,7 +4,7 @@
 
 เซฟและใช้ชุดค่าแรง version rate และนำกลับมาใช้
 
-Evidence: snapshot `e867e48e`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `5eb9231a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,10 +17,10 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `messageOf` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 13–13 |
-| `unavailableMessage` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 14–14 |
-| `statusTone` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 15–15 |
-| `LaborPackageMaster` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 17–182 |
+| `messageOf` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 17–17 |
+| `unavailableMessage` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 18–18 |
+| `statusTone` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 19–19 |
+| `LaborPackageMaster` | [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>) | 21–231 |
 | `money` | [app/system/production/LaborPackagePicker.tsx](<../../../app/system/production/LaborPackagePicker.tsx>) | 43–43 |
 | `number` | [app/system/production/LaborPackagePicker.tsx](<../../../app/system/production/LaborPackagePicker.tsx>) | 44–44 |
 | `errorText` | [app/system/production/LaborPackagePicker.tsx](<../../../app/system/production/LaborPackagePicker.tsx>) | 45–45 |
@@ -67,6 +67,8 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/ui.tsx](<../../../app/system/ui.tsx>)
 - [lib/labor-package-master.ts](<../../../lib/labor-package-master.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
+- [app/system/production/labor-package-copy.ts](<../../../app/system/production/labor-package-copy.ts>)
+- [app/system/production/labor-package-master.css](<../../../app/system/production/labor-package-master.css>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
 - [lib/estimate-ux.ts](<../../../lib/estimate-ux.ts>)
 - [lib/labor-master.ts](<../../../lib/labor-master.ts>)
@@ -79,6 +81,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [tests/engineering-rate-create.test.mjs](<../../../tests/engineering-rate-create.test.mjs>)
 - [tests/engineering-rate-visibility.test.mjs](<../../../tests/engineering-rate-visibility.test.mjs>)
 - [tests/labor-master-ui.test.mjs](<../../../tests/labor-master-ui.test.mjs>)
+- [tests/labor-package-master-ui.test.mjs](<../../../tests/labor-package-master-ui.test.mjs>)
 - [tests/labor-package-master.test.mjs](<../../../tests/labor-package-master.test.mjs>)
 - [backend-node/tests/engineering-rate-access.test.ts](<../../../backend-node/tests/engineering-rate-access.test.ts>)
 - [backend-node/tests/labor-master-routes.test.ts](<../../../backend-node/tests/labor-master-routes.test.ts>)
