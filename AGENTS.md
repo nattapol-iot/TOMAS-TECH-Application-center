@@ -2,6 +2,20 @@
 
 Shared by Claude Code (via `CLAUDE.md` → `@AGENTS.md`) and Codex. This is the single entry point for project rules and the module index.
 
+## Shared execution rules — Codex and Claude Code
+
+- Both agents follow the same task scope and workflow: inspect → implement → verify → report. Do not stop at a plan or ask "Should I continue?" when the next step is already authorized.
+- A request to fix, update or implement authorizes the necessary local reads, edits and targeted checks. Continue through recoverable failures; fix issues in the requested scope and report the evidence.
+- Carry the user's explicit authorization through the current task. If the user asks to build, commit or push, complete those steps without asking again. Check the remote and integrate new changes safely before a normal push; never force-push or discard someone else's work without explicit authorization.
+- A local implementation request alone does not authorize pushing, deploying or changing a shared database. When a requested push triggers the repository's deployment workflow, mention that consequence and proceed within the authorization already given. Do not invent additional release approval steps.
+- Ask only when necessary information or credentials are missing, a decision materially changes scope, or a destructive/irreversible action has not been authorized. State the concrete blocker and its source. Never request passwords in chat or put secrets in context files.
+- Check branch, git status and current source before editing. Preserve unrelated changes and coordinate overlapping files with other active sessions. Commit only the work covered by the request.
+- Use the available tools directly for routine work; do not ask the user to run commands that the agent can run. If a tool is unavailable or an approval is denied, explain the actual limitation and use an authorized alternative; do not bypass tool permissions.
+- Keep progress updates short and in Thai. Finish with what changed, verification results, remaining limitations and whether changes are local, committed or pushed. Do not claim deployment or business acceptance without checking it.
+- For unfinished work, maintain a concise HANDOFF.md with the task, relevant files, completed checks, remaining steps and blockers. A new session must verify the handoff against current Git/source state before continuing.
+
+These project rules guide both agents; they do not override host/system policies or grant tools that a session does not have. Claude permission dialogs are controlled separately by Claude's runtime settings.
+
 ## Project context — read on demand
 
 - Start here, then open only the module and API/function relevant to the task from the index below. Do not preload the full documentation tree.
@@ -16,7 +30,7 @@ Shared by Claude Code (via `CLAUDE.md` → `@AGENTS.md`) and Codex. This is the 
 - Heavy commands run one at a time, never in parallel: `npx tsc --noEmit`, `npm run build`, `npm test`, `npm run lint`.
 - Check `package.json` for current test scripts; `npm test` runs lint, typecheck and root tests, not the build. Run only checks relevant to the task.
 - Typecheck/build/test once at the END of a task, after all edits are done — not after every file change.
-- Before finishing a task, stop every dev server and background process you started (`npm run dev`, `vinext dev|start`, ad-hoc `node` servers). Leave nothing running.
+- Stop temporary verification servers and background processes you started. Preserve services that were already running; if authorized work requires a temporary stop, restore the previous service configuration and verify it responds before finishing. Leave a server running when the user explicitly requested it.
 - If a dev server is needed to verify a change, reuse the one already running (see `.claude/launch.json`, port 3000) instead of starting another.
 - Prefer targeted checks over whole-project ones: run a single test file, lint only changed files.
 - Do not open the Browser/computer-use tools unless the change actually needs visual verification.
