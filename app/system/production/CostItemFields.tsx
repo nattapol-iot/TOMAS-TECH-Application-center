@@ -27,7 +27,7 @@ export const COST_ITEM_TABLE_COLUMNS = [
   { title: "Price source / Date", labels: ["Price source *", "Price date"] },
   { title: "Remark", labels: ["Remark"] },
 ];
-export function CostItemFields({ form, onChange, onLookupPick, suppliers, allowedCategories = COST_CATEGORIES, perSet = false, layout = "form", moduleField, ownerField, referenceNumberField, referenceProjectField, statusField }: {
+export function CostItemFields({ form, onChange, onLookupPick, suppliers, allowedCategories = COST_CATEGORIES, perSet = false, layout = "form", identityLocked = false, moduleField, ownerField, referenceNumberField, referenceProjectField, statusField }: {
   form: CostItemFieldsValue;
   onChange: (patch: Partial<CostItemFieldsValue>) => void;
   /* When given, Item code / Description / Brand search previously priced parts and Supplier becomes a
@@ -37,11 +37,12 @@ export function CostItemFields({ form, onChange, onLookupPick, suppliers, allowe
   allowedCategories?: ReadonlyArray<readonly [string, string]>;
   perSet?: boolean;
   layout?: "form" | "table";
+  identityLocked?: boolean;
   moduleField?: ReactNode; ownerField?: ReactNode; referenceNumberField?: ReactNode; referenceProjectField?: ReactNode; statusField?: ReactNode;
 }) {
   const update = <K extends keyof CostItemFieldsValue>(key: K, value: CostItemFieldsValue[K]) => onChange({ [key]: value });
   const content = <div className="form-grid four">
-      <Field label="Category *"><select value={form.categoryCode} onChange={(event) => { const selected = COST_CATEGORIES.find(([code]) => code === event.target.value); onChange({ categoryCode: event.target.value, category: selected?.[1] ?? form.category }); }}>{allowedCategories.map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>)}</select></Field>
+      <Field label="Category *"><select disabled={identityLocked} value={form.categoryCode} onChange={(event) => { const selected = COST_CATEGORIES.find(([code]) => code === event.target.value); onChange({ categoryCode: event.target.value, category: selected?.[1] ?? form.category }); }}>{allowedCategories.map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>)}</select></Field>
       <Field label="Subcategory"><input maxLength={100} value={form.subcategory ?? ""} onChange={(event) => update("subcategory", event.target.value)} /></Field>
       {moduleField}
       <Field label="Item code *" hint={onLookupPick ? "พิมพ์เพื่อค้นหารายการที่เคยประเมิน" : undefined}>{onLookupPick ? <CostItemLookupInput field="itemCode" required maxLength={100} value={form.itemCode} onChange={(text) => update("itemCode", text)} onPick={onLookupPick} suppliers={suppliers} /> : <input required maxLength={100} value={form.itemCode} onChange={(event) => update("itemCode", event.target.value)} />}</Field>
