@@ -52,6 +52,11 @@ function managerOverride(actor: CurrentUser): boolean {
   return actor.role === "Engineering Manager" || actor.role === "Admin";
 }
 
+/** Only the Admin role may approve or send back an estimate it owns itself. */
+export function adminSelfDecision(actor: { role: string }): boolean {
+  return actor.role === "Admin";
+}
+
 async function validationIssues(database: Database, estimateId: number, transaction?: TransactionType): Promise<Array<{ code: string; message: string; entityType: string; entityId: number }>> {
   const statement = `SELECT code,message,entity_type,entity_id FROM dbo.fn_estimate_validation(@estimate_id) ORDER BY code,entity_id;`;
   const map = (rows: Array<{ code: string; message: string; entity_type: string; entity_id: number | string }>) => rows.map((row) => ({
@@ -305,7 +310,8 @@ async function transition(
     }
     const ownerId = Number(current.owner_id);
     if (requireOwner && ownerId !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can submit this estimate.");
-    if (forbidOwner && ownerId === actor.id) throw new ApiError(403, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
+    // Administrators may decide their own estimates; every other owner needs a second approver.
+    if (forbidOwner && ownerId === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
     await assertEstimateTotals(transaction, id);
     const issues = await validationIssues(database, id, transaction);
     if (issues.length) throw new ApiError(422, "estimate_invalid", "The estimate has critical validation errors.", issues);
@@ -476,7 +482,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       if (current.status.toLowerCase() !== "engineering review") throw new ApiError(409, "invalid_transition", `Cannot request a revision while the estimate is '${current.status}'.`);
-      if (Number(current.owner_id) === actor.id) throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
+      if (Number(current.owner_id) === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
       await assertEstimateTotals(transaction, id);
       await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id); const nextRevision = current.revision + 1;
       const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);

@@ -191,8 +191,9 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     const capabilities = { canEdit: canEditCostItems || canEditManhour || canEditExpenses || canEditOther,
       canEditAllSections: permissionRow.can_write && editable && elevated, editableSections: [...assignedSections].sort(),
       canSubmit: permissionRow.can_write && editable && elevated,
-      canApprove: permissionRow.can_approve && header.status === "Engineering Review" && actor.id !== header.ownerId,
-      canRequestRevision: permissionRow.can_approve && header.status === "Engineering Review" && actor.id !== header.ownerId,
+      // Admin may decide its own estimate (mirrors adminSelfDecision in routes/estimates.ts); other owners need a second approver.
+      canApprove: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || actor.role === "Admin"),
+      canRequestRevision: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || actor.role === "Admin"),
       canCreateRevision: permissionRow.can_write && elevated && ["Approved", "Locked"].includes(header.status),
       canManageAssignments: permissionRow.can_write && editable && elevated, canUpdateContingency: permissionRow.can_write && editable && elevated,
       canEditCostItems, canEditManhour, canEditExpenses, canEditOtherCosts: canEditOther };
