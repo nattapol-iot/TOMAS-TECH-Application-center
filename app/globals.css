@@ -4709,3 +4709,18 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   .profile-permission-group { grid-template-columns: minmax(0, 1fr); gap: 9px; }
   .profile-aside { display: flex; }
 }
+
+/* ==========================================================================
+   Estimate → ERP Cost Summary (bulk mapping toolbar, grouped lines)
+   ========================================================================== */
+.erp-toolbar, .erp-bulk-bar { margin: 10px 12px; }
+.erp-bulk-bar { margin-top: 0; background: var(--blue-soft); border-color: var(--blue-line); }
+.erp-toolbar .search-field { min-width: 240px; flex: 1 1 240px; }
+.erp-toolbar .chip .icon { font-size: 13px; margin-right: 4px; vertical-align: -2px; }
+.erp-lines th.check-cell, .erp-lines td.check-cell { width: 32px; padding-right: 0; text-align: center; }
+.erp-lines .check-cell input { width: 15px; height: 15px; accent-color: var(--blue); vertical-align: middle; }
+.erp-lines .erp-map-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.erp-lines .erp-map-cell .chip { padding: 2px 8px; white-space: nowrap; }
+.erp-lines tbody + tbody tr.erp-group-row td { border-top: 2px solid var(--n-200); }
+.erp-lines tbody tr.erp-group-row:hover td { background: var(--n-100); }
+.small { font-size: var(--fs-2xs); }
