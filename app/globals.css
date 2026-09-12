@@ -4724,3 +4724,47 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .erp-lines tbody + tbody tr.erp-group-row td { border-top: 2px solid var(--n-200); }
 .erp-lines tbody tr.erp-group-row:hover td { background: var(--n-100); }
 .small { font-size: var(--fs-2xs); }
+
+/* ==========================================================================
+   Estimate → Cost breakdown (ERP-style numbered list) and cost-sheet bands
+   ========================================================================== */
+.cost-breakdown th.cb-num-col, .cost-breakdown td.cb-num-col { width: 56px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cost-breakdown .cb-qty-col { width: 90px; }
+.cost-breakdown .cb-unit-col { width: 84px; }
+.cost-breakdown .cb-source-col { width: 160px; }
+.cost-breakdown .cb-money-col { width: 150px; }
+.cost-breakdown tr.cb-section td {
+  padding: 9px 10px;
+  background: var(--blue-soft);
+  border-top: 1px solid var(--blue-line);
+  border-bottom: 1px solid var(--blue-line);
+}
+.cost-breakdown tbody tr.cb-section:hover td { background: var(--blue-soft); }
+.cost-breakdown tbody tr.cb-section.link-row:hover td { background: rgb(37 99 235 / 0.16); }
+.cost-breakdown .cb-title { color: var(--blue-text); font-size: var(--fs-sm); font-weight: 650; }
+.cost-breakdown .cb-code { margin-left: 8px; font-size: var(--fs-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.cost-breakdown .cb-section-split { text-align: right; font-size: var(--fs-2xs); color: var(--ink-soft); }
+.cb-split { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+.cb-split-inhouse strong { color: var(--green-text); font-weight: 650; }
+.cb-split-outsourced strong { color: var(--amber-text); font-weight: 650; }
+.cost-breakdown tr.cb-line td { padding: 8px 10px; }
+.cost-breakdown tr.cb-line .cb-desc strong { white-space: normal; }
+.cost-breakdown tr.cb-line .badge { white-space: nowrap; }
+.cost-breakdown tfoot td { padding: 8px 10px; border-top: 1px solid var(--line); background: var(--surface); font-weight: 600; color: var(--ink-soft); }
+.cost-breakdown tr.cb-total td { border-top: 2px solid var(--n-300); color: var(--ink); font-size: var(--fs-sm); }
+.cb-hint { display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: var(--fs-2xs); border-top: 1px solid var(--line); }
+.cb-hint .icon { font-size: 13px; }
+
+/* Cost Items sheet: numbered module bands, actions revealed on hover like a clean list. */
+.module-ordinal {
+  display: grid; place-items: center;
+  min-width: 22px; height: 20px; padding: 0 6px;
+  border-radius: var(--r-sm);
+  background: rgb(37 99 235 / 0.14);
+  color: var(--navy-900);
+  font-weight: 700; font-size: var(--fs-2xs); font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.module-row .group-action { opacity: 0; transition: opacity 0.12s ease; }
+.module-row:hover .group-action, .module-row:focus-within .group-action, .module-row .group-action:focus-visible { opacity: 1; }
+@media (hover: none) { .module-row .group-action { opacity: 1; } }

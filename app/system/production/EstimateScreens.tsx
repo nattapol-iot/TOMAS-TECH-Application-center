@@ -4,6 +4,7 @@ import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImpor
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
+import { EstimateCostBreakdown } from "./EstimateCostBreakdown";
 import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
 import { LaborPackageMaster } from "./LaborPackageMaster";
@@ -842,48 +843,23 @@ function EstimateSummaryTab({ workspace, onFocusModule }: { workspace: EstimateC
   const warningCount = workspace.validationIssues.length - criticalCount;
   const validationTone = criticalCount ? "error" : warningCount ? "warning" : "pass";
   const validationIcon = criticalCount ? "alertCircle" : warningCount ? "alertTriangle" : "checkCircle";
-  const total = numberOf(header.totals.total);
-  const shareOf = (value: number) => total ? Math.round(numberOf(value) / total * 100) : 0;
   const modules = costModuleGroups(costItems);
-  const moduleTotal = modules.reduce((sum, group) => sum + group.total, 0);
   const openLines = modules.reduce((sum, group) => sum + group.needPrice + group.needSupplier, 0);
-  const disciplines = COST_CATEGORIES.map(([code, name]) => {
-    const lines = costItems.filter((line) => line.categoryCode === code);
-    return { code, name, count: lines.length, total: lines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0) };
-  }).filter((entry) => entry.count);
-  const topItems = [...costItems].sort((left, right) => numberOf(right.lineTotal) - numberOf(left.lineTotal)).slice(0, 5);
   const manDays = manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
+  /* Opening a cost category lands on its first module band in the Cost Items tab. */
+  const openCategory = (categoryCode: string) => {
+    const group = modules.find((entry) => entry.categoryCode === categoryCode);
+    if (group) onFocusModule(group.key);
+  };
   return <>
-    <section className="grid-main">
-      <Panel title="Cost by main module" subtitle="กดชื่อโมดูลเพื่อเปิดตาราง Cost Items ตรงโมดูลนั้น" flush>
-        {modules.length ? <div className="table-wrap"><table>
-          <thead><tr><th><LocalizedText text={"Main module"} /></th><th style={{ width: 160 }}><LocalizedText text={"Discipline"} /></th><th className="num" style={{ width: 70 }}><LocalizedText text={"Items"} /></th><th className="num" style={{ width: 150 }}><LocalizedText text={"Total"} /></th><th style={{ width: 150 }}><LocalizedText text={"Share"} /></th></tr></thead>
-          <tbody>
-            {modules.map((group) => <tr key={group.key} className="link-row" onClick={() => onFocusModule(group.key)}>
-              <td><div className="cell-primary"><strong>{group.module}</strong>{group.needPrice + group.needSupplier
-                ? <span className="soft-warn">{[group.needPrice ? `${group.needPrice} item ยังไม่มีราคา` : "", group.needSupplier ? `${group.needSupplier} item ยังไม่เลือกผู้ขาย` : ""].filter(Boolean).join(" · ")}</span>
-                : <span><LocalizedText text={"ครบทุก item"} /></span>}</div></td>
-              <td><span className="pill">{group.categoryCode}</span> {group.category}</td>
-              <td className="num">{group.lines.length}</td>
-              <td className="num"><strong>{formatMoney(group.total)}</strong></td>
-              <td><ProgressCell value={shareOf(group.total)} /></td>
-            </tr>)}
-            <tr className="subtotal-row"><td colSpan={2}><LocalizedText text={"Cost items — all modules"} /></td><td className="num">{costItems.length}</td><td className="num"><strong>{formatMoney(moduleTotal)}</strong></td><td className="num">{shareOf(moduleTotal)}%</td></tr>
-          </tbody>
-        </table></div> : <EmptyState icon="layers" title="No main module yet" message="สร้าง Main Module แล้วเพิ่ม item แรกในแท็บ Cost Items" />}
-      </Panel>
-      <div className="stack">
-        <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง"><ul className="check-list">
-          <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>
-          <li className={`check-item ${manhourLines.length ? "pass" : "warning"}`}><Icon name={manhourLines.length ? "checkCircle" : "alertTriangle"} /><div><strong>{formatNumber(manDays)} <LocalizedText text={"man-days"} /></strong><p>{manhourLines.length} <LocalizedText text={"man-hour line ·"} /> {expenseLines.length + otherCostLines.length} <LocalizedText text={"project cost line"} /></p></div></li>
-          <li className={`check-item ${validationTone}`}><Icon name={validationIcon} /><div><strong>{workspace.validationIssues.length ? `${criticalCount} error · ${warningCount} warning` : "Server validation passed"}</strong><p>{criticalCount ? "Critical error ปิดกั้นการ submit และ approve" : warningCount ? "Warning เป็นคำเตือน ไม่ปิดกั้น workflow" : "ตรวจกับ revision ปัจจุบันแล้ว"}</p></div></li>
-        </ul></Panel>
-        <Panel title="Revision information"><dl className="def-list one"><div><dt><LocalizedText text={"Revision"} /></dt><dd><strong>{revisionCode(header.revision)}</strong></dd></div><div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{header.status}</Badge></dd></div><div><dt><LocalizedText text={"Last updated"} /></dt><dd>{formatDateTime(header.updatedAt)}</dd></div><div><dt><LocalizedText text={"Lock"} /></dt><dd>{header.lockedAt ? `${formatDateTime(header.lockedAt)} · ${header.lockedByName ?? "—"}` : "Not locked"}</dd></div></dl></Panel>
-      </div>
-    </section>
+    <EstimateCostBreakdown workspace={workspace} onOpenSection={openCategory} />
     <section className="grid-2">
-      <Panel title="By discipline" subtitle="หมวด 01–10 ของ revision ปัจจุบัน" flush>{disciplines.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Discipline"} /></th><th className="num" style={{ width: 70 }}><LocalizedText text={"Items"} /></th><th className="num" style={{ width: 150 }}><LocalizedText text={"Total"} /></th><th className="num" style={{ width: 70 }}><LocalizedText text={"Share"} /></th></tr></thead><tbody>{disciplines.map((entry) => <tr key={entry.code}><td><span className="pill">{entry.code}</span> {entry.name}</td><td className="num">{entry.count}</td><td className="num">{formatMoney(entry.total)}</td><td className="num muted">{shareOf(entry.total)}%</td></tr>)}</tbody></table></div> : <EmptyState icon="package" title={uiText("No cost item")} message="ยังไม่มีรายการต้นทุนใน revision นี้" />}</Panel>
-      <Panel title="Top 5 cost items" subtitle="รายการที่มีผลกับยอดรวมมากที่สุด" flush>{topItems.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th style={{ width: 160 }}><LocalizedText text={"Module"} /></th><th className="num" style={{ width: 150 }}><LocalizedText text={"Total"} /></th></tr></thead><tbody>{topItems.map((line) => <tr key={line.id}><td><div className="cell-primary"><strong>{line.description}</strong><span>{[line.brand, line.model].filter(Boolean).join(" · ") || line.itemCode}</span></div></td><td>{line.module}</td><td className="num"><strong>{formatMoney(line.lineTotal)}</strong></td></tr>)}</tbody></table></div> : <EmptyState icon="package" title={uiText("No cost item")} message="ยังไม่มีรายการต้นทุนใน revision นี้" />}</Panel>
+      <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง"><ul className="check-list">
+        <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>
+        <li className={`check-item ${manhourLines.length ? "pass" : "warning"}`}><Icon name={manhourLines.length ? "checkCircle" : "alertTriangle"} /><div><strong>{formatNumber(manDays)} <LocalizedText text={"man-days"} /></strong><p>{manhourLines.length} <LocalizedText text={"man-hour line ·"} /> {expenseLines.length + otherCostLines.length} <LocalizedText text={"project cost line"} /></p></div></li>
+        <li className={`check-item ${validationTone}`}><Icon name={validationIcon} /><div><strong>{workspace.validationIssues.length ? `${criticalCount} error · ${warningCount} warning` : "Server validation passed"}</strong><p>{criticalCount ? "Critical error ปิดกั้นการ submit และ approve" : warningCount ? "Warning เป็นคำเตือน ไม่ปิดกั้น workflow" : "ตรวจกับ revision ปัจจุบันแล้ว"}</p></div></li>
+      </ul></Panel>
+      <Panel title="Revision information"><dl className="def-list one"><div><dt><LocalizedText text={"Revision"} /></dt><dd><strong>{revisionCode(header.revision)}</strong></dd></div><div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{header.status}</Badge></dd></div><div><dt><LocalizedText text={"Last updated"} /></dt><dd>{formatDateTime(header.updatedAt)}</dd></div><div><dt><LocalizedText text={"Lock"} /></dt><dd>{header.lockedAt ? `${formatDateTime(header.lockedAt)} · ${header.lockedByName ?? "—"}` : "Not locked"}</dd></div></dl></Panel>
     </section>
   </>;
 }
@@ -992,11 +968,11 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
     <td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(false); }} aria-label={localizeCopy("Save cost item")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new cost item")}><Icon name="x" /></button></div></td>
   </tr> : null;
 
-  const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, lineCount: number, groupTotal: number, issues: number) => <tr className="module-row" key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
+  const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, ordinal: number, lineCount: number, groupTotal: number, issues: number) => <tr className="module-row" key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
     <td colSpan={colCount}><div className="row band">
       <button type="button" className="module-toggle" aria-expanded={!isCollapsed(group.key)} onClick={() => toggleModule(group.key)}>
         <Icon name={isCollapsed(group.key) ? "chevronRight" : "chevronDown"} />
-        <span className="module-bullet"><Icon name="layers" /></span>
+        <span className="module-ordinal">{ordinal}</span>
         <strong>{group.module}</strong>
       </button>
       <span className="pill">{group.categoryCode}</span>
@@ -1051,13 +1027,13 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
         <th style={{ width: 72 }} aria-label={uiText("Action")} />
       </tr></thead>
       <tbody>
-        {groups.flatMap((group) => {
+        {groups.flatMap((group, groupIndex) => {
           const issues = group.needPrice + group.needSupplier;
-          if (isCollapsed(group.key)) return [moduleBand(group, group.lines.length, group.total, issues)];
+          if (isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
           return [
-            moduleBand(group, group.lines.length, group.total, issues),
+            moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues),
             ...group.lines.map((line, index) => <tr key={line.id} className="item-row">
-              <td><span className="cell-text muted">{index + 1}</span></td>
+              <td><span className="cell-text muted mono">{`${groupIndex + 1}-${index + 1}`}</span></td>
               <td><span className="cell-text"><strong className="mono">{line.itemCode}</strong></span></td>
               <td><div className="cell-primary"><strong>{line.description}</strong>{line.specification ? <span>{line.specification}</span> : null}</div></td>
               <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
@@ -1078,11 +1054,10 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
             </tr>),
             draftRow(group.key),
             <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button></td></tr>,
-            <tr className="subtotal-row" key={`subtotal-${group.key}`}><td colSpan={8}>{group.module} <LocalizedText text={"subtotal"} /></td><td className="num">{formatMoney(group.total)}</td><td colSpan={dense ? 1 : 7} /></tr>,
           ];
         })}
         {showPending && pendingModule && pendingKey ? [
-          moduleBand({ key: pendingKey, ...pendingModule }, 0, 0, 0),
+          moduleBand({ key: pendingKey, ...pendingModule }, groups.length + 1, 0, 0, 0),
           draftRow(pendingKey),
           quickDraft?.groupKey === pendingKey ? null : <tr className="module-empty" key={`empty-${pendingKey}`}><td colSpan={colCount}><LocalizedText text={"ยังไม่มี item ในโมดูลนี้ — เพิ่ม item แรกเพื่อบันทึกโมดูลลง revision"} /></td></tr>,
           <tr className="add-row" key={`add-${pendingKey}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow({ key: pendingKey, ...pendingModule })}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {pendingModule.module}</span></button></td></tr>,
