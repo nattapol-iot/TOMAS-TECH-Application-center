@@ -99,17 +99,19 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
 });
 
 test("production My Work keeps the Demo workflow on live API contracts", async () => {
-  const [screen, shell, assignmentInbox] = await Promise.all([
+  const [screen, shell, assignmentInbox, myWorkRules] = await Promise.all([
     readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
     readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
     readFile(new URL("app/system/production/ResourceTaskWorkspace.tsx", root), "utf8"),
+    readFile(new URL("lib/my-work.ts", root), "utf8"),
   ]);
   for (const label of [
     "Needs update", "Late", "Blocked", "Due this week", "Awaiting the PM",
     "New Assignments", "My Active Work", "My Updates", "Needs your update", "Start today", "Finish today",
     "Forecast", "Request more days", "Add Personal Task", "Open plan",
     "Search project, WBS or task", "All projects", "Priority first", "Update details",
-    "Quick update", "No tasks match these filters", "Clear filters", "Last update", "quiet days", "estimated man-days",
+    "Quick update", "No work groups match these filters", "Clear filters", "Last update", "quiet days", "estimated man-days",
+    "Filter by source", "Inquiry / Estimate", "Service", "Personal", "More actions", "Set forecast date",
   ]) {
     assert.match(screen, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -123,7 +125,26 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /item\.isOwnDetail/);
   assert.match(screen, /item\.canAddDetail/);
   assert.match(screen, /item\.canDeleteDetail/);
-  assert.match(screen, /const visibleTasks = useMemo/);
+  assert.match(screen, /const scheduleGroups = useMemo/);
+  assert.match(screen, /function groupScheduleWork/);
+  assert.match(screen, /function groupEstimateWork/);
+  assert.match(screen, /const activeWorkGroups = useMemo/);
+  assert.match(screen, /sortMyWorkGroups\(groups, taskSort/);
+  assert.match(screen, /personal:\$\{item\.projectId\}:\$\{workEffectiveFinish/);
+  assert.match(screen, /parseMyWorkExpansion\(stored\)/);
+  assert.match(myWorkRules, /left\.group\.urgency - right\.group\.urgency/);
+  assert.match(screen, /tomas-tech-my-work-groups:\$\{bootstrap\.user\.id\}/);
+  assert.match(screen, /expansionOwner\.current !== expansionStorageKey/);
+  assert.match(screen, /window\.localStorage\.setItem\(expansionStorageKey/);
+  assert.match(screen, /item\.status === "Blocked"/);
+  assert.match(screen, /window\.confirm\(localizeCopy\("This task is at 0%/);
+  assert.match(screen, /function ProductionForecastModal/);
+  assert.match(screen, /disabled=\{target\.status === "Blocked"\}/);
+  assert.match(screen, /disabled=\{item\.status === "Blocked"\}/);
+  assert.match(screen, /const activeEstimateError =/);
+  assert.match(screen, /<LoadError message=\{activeEstimateError\} retry=\{estimateQueue\.reload\}/);
+  assert.match(screen, /const activeLoading =/);
+  assert.match(screen, /estimateQueue\.reload\(\)/);
   assert.match(screen, /taskFilter === "attention"/);
   assert.match(screen, /useState<MyWorkTab>\("active"\)/);
   assert.match(screen, /initialFilter="Acknowledgment"/);
@@ -143,9 +164,20 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(shell, /initialVerifyCode \? "documents" : "my-work"/);
   assert.doesNotMatch(shell, /Task inbox · ตอบรับงาน|Project schedule tasks/);
   assert.match(assignmentInbox, /variant==='new-assignments'/);
-  assert.match(assignmentInbox, /className="new-assignment-card"/);
-  assert.match(assignmentInbox, /title=\{variant==='new-assignments'\?'No new assignments'/);
+  assert.match(assignmentInbox, /className=\{`new-assignment-card\$\{expanded\?' expanded':''\}`\}/);
+  assert.match(assignmentInbox, /const newAssignmentGroups=useMemo/);
+  assert.match(assignmentInbox, /query\.set\('source',sourceFilter\)/);
+  assert.match(assignmentInbox, /title=\{t\(variant==='new-assignments'\?'No new assignments'/);
   assert.match(assignmentInbox, /View My Active Work/);
+});
+
+test("New Assignments source filtering is applied before SQL pagination", async () => {
+  const route = await readFile(new URL("backend-node/src/routes/resource-tasks.ts", root), "utf8");
+  assert.match(route, /invalid_source/);
+  assert.match(route, /\.input\('source',sql\.NVarChar\(20\),source\)/);
+  assert.match(route, /@source=N'estimate'.*t\.inquiry_id IS NOT NULL/);
+  assert.match(route, /@source=N'project'.*t\.project_id IS NOT NULL/);
+  assert.match(route, /@source=N'service'.*t\.is_issue=1/);
 });
 
 test("My Work exposes schedule effort without changing the audited update path", async () => {

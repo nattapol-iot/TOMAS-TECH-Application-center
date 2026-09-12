@@ -131,6 +131,12 @@ Project Schedule work uses responsive cards with one task identity, progress, du
 
 New Assignments contains only approved Resource Tasks waiting for acknowledgment. When empty, it explains that active work still exists separately and links directly to My Active Work. Add Personal Task is a page-level action that lets the user choose an eligible assigned Schedule parent; it writes through the existing member-detail endpoint. Progress changes, day requests, acknowledgments, and personal tasks retain their existing concurrency validation and audit-log writes.
 
+Every tab shares a Source filter: All, Inquiry / Estimate, Project, Service, and Personal. Active Schedule work is grouped by Project and WBS/phase; personal details are grouped separately by due date. Each group shows aggregate task count, urgency, effort, progress, nearest due date, Last Update, and Quiet Days while collapsed. Blocked, late, and stale groups open by default; the user's expand/collapse choices are remembered in local storage per account.
+
+Group headers carry the main next action. Individual task cards keep Update details and Set forecast date visible, with Start today, Finish today, Request more days, Open plan, personal-detail controls, and Quick update under More actions. Blocked work cannot be finished, and finishing a 0% task requires confirmation. Forecast changes continue through the audited schedule update endpoint.
+
+The existing personal-detail contract fixes the detail to its eligible parent Schedule window and records zero additional workload effort. Standalone due date, independent effort, workload inclusion, category, and note fields require a separate API and scheduling-rule decision. New Assignments sends its source filter to the read API before SQL pagination, so Estimate, Project, and Service counts remain complete. A Service source in Active Work requires source metadata in that API response. Source filters in My Updates stay disabled until the audit response has a durable source discriminator; unsupported choices remain visible but disabled.
+
 ### Labor package library — implemented locally, 2026-09-12
 
 Evidence: user's production screenshot, LaborPackageMaster.tsx, LaborPackagePicker.tsx, labor-package-master.ts and existing API types. The old page splits space equally between a code-first table and an initially empty detail panel, repeats Refresh, and mixes Thai text into English mode. Redesign keeps the existing list/detail and draft/publish/copy APIs.

@@ -91,8 +91,9 @@ test("My Work lists the estimate sections assigned to the signed-in engineer", a
   assert.match(backendApp, /registerEstimateAssignmentReadRoutes\(app, database, users\);/);
   assert.match(screens, /function MyEstimateAssignmentsPanel/);
   assert.match(screens, /useMyEstimateAssignments\(bootstrap\.permissions\.includes\("estimate\.read"\)\)/);
-  // The panel is reachable whether or not the account also has schedule permissions.
-  assert.equal(screens.match(/\{estimateAssignmentsPanel\}/g)?.length, 2);
+  // The dedicated panel remains available without Schedule access; the full workspace uses the unified urgency queue.
+  assert.equal(screens.match(/\{estimateAssignmentsPanel\}/g)?.length, 1);
+  assert.match(screens, /activeWorkGroups\.map/);
   // My Work can open the estimate directly, using the app's existing navigation.
   assert.match(app, /openEstimate,\r?\n {4}onMyWorkUrgentCountChange: setMyWorkUrgentCount,/);
   assert.match(screens, /onOpenEstimate=\{openEstimate\}/);
@@ -101,17 +102,20 @@ test("My Work lists the estimate sections assigned to the signed-in engineer", a
 test("the assignment queue groups sections by estimate revision with one navigation action", async () => {
   const screens = await source("app/system/production/PlanningPricingScreens.tsx");
   const panel = screens.slice(screens.indexOf("function MyEstimateAssignmentsPanel"), screens.indexOf("function useMyEstimateAssignments"));
-  assert.match(panel, /const grouped = new Map/);
-  assert.match(panel, /`\$\{record\.estimateId\}:\$\{record\.revision\}`/);
-  assert.match(panel, /className="estimate-work-group"/);
+  assert.match(screens, /function groupEstimateWork/);
+  assert.match(screens, /const grouped = new Map/);
+  assert.match(screens, /`estimate:\$\{record\.estimateId\}:\$\{record\.revision\}`/);
+  assert.match(panel, /className=\{`estimate-work-group urgency-\$\{group\.urgency\}\$\{expanded \? " expanded" : ""\}`\}/);
   assert.match(panel, /className="estimate-work-sections"/);
+  assert.match(panel, /aria-expanded=\{expanded\}/);
+  assert.match(panel, /className="work-group-metrics"/);
   assert.equal((panel.match(/text=\{"Open Estimate"\}/g) ?? []).length, 1);
   assert.doesNotMatch(panel, /<table|<thead|<tbody/);
   assert.match(panel, /assignmentNextAction\(record\)/);
   assert.match(panel, /sectionName\(record\.sectionCode\)/);
-  assert.match(panel, /sortAssignmentQueue\(assignments, todayIso\)/);
+  assert.match(screens, /sortAssignmentQueue\(assignments\.filter\(isActionableAssignment\), todayIso\)/);
   assert.match(panel, /assignmentQueueSummary\(assignments, todayIso\)/);
-  assert.match(panel, /quietDays\(updatedAt\)/);
+  assert.match(panel, /quietDays\(group\.updatedAt\)/);
   // Visibility never depends on the engineer changing the status first.
   assert.doesNotMatch(panel, /patchProgress|apiRequest\(/);
 });

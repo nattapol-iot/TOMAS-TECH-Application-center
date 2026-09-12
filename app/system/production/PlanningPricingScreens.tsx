@@ -57,6 +57,9 @@ import {
 import {
   assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue,
 } from "../../../lib/estimate-assignment-queue";
+import {
+  canFinishWork, needsZeroProgressFinishConfirmation, parseMyWorkExpansion, sortMyWorkGroups, type MyWorkExpansion,
+} from "../../../lib/my-work";
 
 type ProductionPlanningProps = {
   bootstrap: BootstrapData;
@@ -317,8 +320,9 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
 }
 
 function PermissionNotice({ permission, message }: { permission: string; message: string }) {
-  return <Panel title="ไม่พบสิทธิ์เข้าถึง" subtitle={`Required permission: ${permission}`}>
-    <EmptyState icon="lock" title="รายการนี้ถูกจำกัดตามบทบาท" message={message} />
+  const localizeCopy = useStaticCopy();
+  return <Panel title={localizeCopy("Access unavailable")} subtitle={`${localizeCopy("Required permission")}: ${permission}`}>
+    <EmptyState icon="lock" title={localizeCopy("This page is restricted by role")} message={message} />
   </Panel>;
 }
 
@@ -530,6 +534,8 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
   onSubmit: (input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; forecastFinish: string | null; remark: string }) => Promise<void>;
   onConflict?: () => Promise<void>;
 }) {
+  const localizeCopy = useStaticCopy();
+  const uiText = useUiText();
   const [percent, setPercent] = useState(Number(target.percentComplete));
   const [status, setStatus] = useState(target.status);
   const [actualStart, setActualStart] = useState(target.actualStart ?? "");
@@ -539,6 +545,7 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const changeStatus = (next: string) => {
+    if (!canFinishWork(target.status) && next === "Done") return;
     setStatus(next);
     if (next === "Not Started") {
       setPercent(0); setActualStart(""); setActualFinish("");
@@ -553,6 +560,8 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
     }
   };
   const submit = async () => {
+    if (needsZeroProgressFinishConfirmation(Number(target.percentComplete), status)
+      && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
     setBusy(true); setError("");
     try {
       await onSubmit({
@@ -580,31 +589,31 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
     }
   };
   const invalid = percent < 0 || percent > 100
-    || (status === "Done" && (percent !== 100 || !actualStart || !actualFinish))
+    || (status === "Done" && (!canFinishWork(target.status) || percent !== 100 || !actualStart || !actualFinish))
     || (status === "Not Started" && (percent !== 0 || Boolean(actualStart) || Boolean(actualFinish)))
     || (status !== "Done" && percent === 100)
     || (status === "Blocked" && !remark.trim())
     || Boolean(actualFinish && (!actualStart || actualFinish < actualStart))
     || Boolean(forecastFinish && actualStart && forecastFinish < actualStart);
   return <Modal
-    title={`Update ${target.wbs} · ${target.name}`}
-    subtitle={`${target.projectNo} · บันทึกลง SQL Server และ audit log`}
+    title={`${uiText("Update")} ${target.wbs} · ${target.name}`}
+    subtitle={`${target.projectNo} · ${localizeCopy("Saved to SQL Server and audit log")}`}
     onClose={onClose}
     footer={<>
       <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
       <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || invalid}>
-        <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Save progress"}
+        <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save progress"} />}
       </button>
     </>}
   >
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"}><LocalizedText text={"Done"} /></option></select></label>
+      <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option></select></label>
       <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => setPercent(Number(event.target.value))} /></label>
       <label className="field"><span><LocalizedText text={"Actual start"} /></span><input type="date" value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Actual finish"} /></span><input type="date" min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><input type="date" min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
-      <label className="field span-2"><span>{status === "Blocked" ? "Blocked reason *" : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
+      <label className="field span-2"><span>{status === "Blocked" ? <LocalizedText text={"Blocked reason *"} /> : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
     </div>
   </Modal>;
 }
@@ -627,6 +636,25 @@ const quietDays = (updatedAt: string) => {
   return Number.isNaN(updated) ? 0 : Math.max(0, Math.floor((Date.now() - updated) / 86_400_000));
 };
 
+const MY_WORK_AUDIT_FIELD_LABELS: Record<string, string> = {
+  percent_complete: "Progress",
+  actual_start: "Actual start",
+  actual_finish: "Actual finish",
+  forecast_finish: "Forecast finish",
+  status: "Status",
+  blocked_reason: "Blocked reason",
+  remark: "Remark",
+  progress: "Progress",
+  plan: "Plan",
+  plan_days: "Plan days",
+  request_answer: "Request answer",
+  baseline: "Baseline",
+  created: "Created item",
+  deleted: "Deleted",
+};
+
+const myWorkAuditFieldLabel = (field: string) => MY_WORK_AUDIT_FIELD_LABELS[field] ?? field.replaceAll("_", " ");
+
 type MyWorkProgressInput = {
   percentComplete: number;
   status: string;
@@ -636,9 +664,174 @@ type MyWorkProgressInput = {
   remark: string;
 };
 
-type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting" | "all";
+type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting";
 type MyWorkSort = "priority" | "due" | "project";
 type MyWorkTab = "new" | "active" | "updates";
+type MyWorkSource = "all" | "estimate" | "project" | "service" | "personal";
+type ScheduleWorkGroup = {
+  key: string;
+  source: Exclude<MyWorkSource, "all" | "estimate" | "service">;
+  projectId: number;
+  projectNo: string;
+  projectName: string;
+  phaseWbs: string | null;
+  phaseName: string;
+  managerName: string;
+  items: MyWorkItem[];
+  lateCount: number;
+  blockedCount: number;
+  needsUpdateCount: number;
+  dueThisWeekCount: number;
+  waitingCount: number;
+  progress: number;
+  effort: number;
+  nearestDue: string | null;
+  updatedAt: string;
+  urgency: number;
+};
+
+type EstimateWorkGroup = {
+  key: string;
+  estimateId: number;
+  estimateNumber: string;
+  revision: number;
+  projectName: string;
+  customerName: string;
+  rows: MyEstimateAssignment[];
+  lateCount: number;
+  blockedCount: number;
+  needsUpdateCount: number;
+  dueThisWeekCount: number;
+  progress: number;
+  nearestDue: string | null;
+  updatedAt: string;
+  urgency: number;
+};
+
+const MY_WORK_SOURCE_OPTIONS: { id: MyWorkSource; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "estimate", label: "Inquiry / Estimate" },
+  { id: "project", label: "Project" },
+  { id: "service", label: "Service" },
+  { id: "personal", label: "Personal" },
+];
+
+const MY_WORK_SOURCE_AVAILABILITY: Record<MyWorkTab, MyWorkSource[]> = {
+  new: ["all", "estimate", "project", "service"],
+  active: ["all", "estimate", "project", "personal"],
+  updates: ["all"],
+};
+
+const matchesWorkFilter = (item: MyWorkItem, filter: MyWorkFilter) => {
+  if (filter === "attention") return item.canUpdate && item.status !== "Done" && workNeedsUpdate(item);
+  if (filter === "open") return item.status !== "Done";
+  if (filter === "late") return item.canUpdate && workIsLate(item);
+  if (filter === "blocked") return item.canUpdate && item.status === "Blocked";
+  if (filter === "week") {
+    const days = daysFromToday(workEffectiveFinish(item));
+    return item.canUpdate && item.status !== "Done" && days !== null && days >= 0 && days <= 7;
+  }
+  if (filter === "waiting") return Boolean(item.pendingRequest);
+  return item.status !== "Done";
+};
+
+function groupScheduleWork(items: MyWorkItem[]): ScheduleWorkGroup[] {
+  const groups = new Map<string, MyWorkItem[]>();
+  for (const item of items) {
+    const key = item.isOwnDetail
+      ? `personal:${item.projectId}:${workEffectiveFinish(item) ?? "no-date"}`
+      : `project:${item.projectId}:${item.phaseWbs ?? "other"}`;
+    const current = groups.get(key);
+    if (current) current.push(item);
+    else groups.set(key, [item]);
+  }
+  return [...groups.entries()].map(([key, rows]) => {
+    const first = rows[0]!;
+    const lateCount = rows.filter(workIsLate).length;
+    const blockedCount = rows.filter((item) => item.status === "Blocked").length;
+    const needsUpdateCount = rows.filter(workNeedsUpdate).length;
+    const dueThisWeekCount = rows.filter((item) => {
+      const days = daysFromToday(workEffectiveFinish(item));
+      return days !== null && days >= 0 && days <= 7;
+    }).length;
+    const waitingCount = rows.filter((item) => item.pendingRequest).length;
+    const nearestDue = rows.map(workEffectiveFinish).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
+    const updatedAt = rows.reduce((latest, item) => Date.parse(item.updatedAt) > Date.parse(latest) ? item.updatedAt : latest, first.updatedAt);
+    const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : waitingCount ? 4 : 5;
+    return {
+      key,
+      source: (first.isOwnDetail ? "personal" : "project") as ScheduleWorkGroup["source"],
+      projectId: first.projectId,
+      projectNo: first.projectNo,
+      projectName: first.projectName,
+      phaseWbs: first.isOwnDetail ? null : first.phaseWbs,
+      phaseName: first.isOwnDetail ? "Personal tasks" : first.phaseName ?? "Other work",
+      managerName: first.managerName,
+      items: [...rows].sort((left, right) => left.wbs.localeCompare(right.wbs, undefined, { numeric: true })),
+      lateCount,
+      blockedCount,
+      needsUpdateCount,
+      dueThisWeekCount,
+      waitingCount,
+      progress: Math.round(rows.reduce((sum, item) => sum + Number(item.percentComplete), 0) / rows.length),
+      effort: rows.reduce((sum, item) => sum + Number(item.planManDays || 0), 0),
+      nearestDue,
+      updatedAt,
+      urgency,
+    };
+  }).sort((left, right) => left.urgency - right.urgency
+    || (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31")
+    || Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
+}
+
+function groupEstimateWork(assignments: MyEstimateAssignment[], todayIso: string): EstimateWorkGroup[] {
+  const grouped = new Map<string, MyEstimateAssignment[]>();
+  for (const record of sortAssignmentQueue(assignments.filter(isActionableAssignment), todayIso)) {
+    const key = `estimate:${record.estimateId}:${record.revision}`;
+    const rows = grouped.get(key);
+    if (rows) rows.push(record);
+    else grouped.set(key, [record]);
+  }
+  return [...grouped.entries()].map(([key, rows]) => {
+    const first = rows[0]!;
+    const lateCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "overdue").length;
+    const blockedCount = rows.filter((record) => record.status === "Blocked").length;
+    const needsUpdateCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "overdue"
+      || record.status === "Not Started" || quietDays(record.updatedAt) > 5).length;
+    const dueThisWeekCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "due-soon").length;
+    const nearestDue = rows.map((record) => record.dueDate ?? record.estimateDueDate).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
+    const updatedAt = rows.reduce((latest, record) => Date.parse(record.updatedAt) > Date.parse(latest) ? record.updatedAt : latest, first.updatedAt);
+    const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : 5;
+    return {
+      key,
+      estimateId: first.estimateId,
+      estimateNumber: first.estimateNumber,
+      revision: first.revision,
+      projectName: first.projectName,
+      customerName: first.customerName,
+      rows,
+      lateCount,
+      blockedCount,
+      needsUpdateCount,
+      dueThisWeekCount,
+      progress: Math.round(rows.reduce((sum, record) => sum + Number(record.progress), 0) / rows.length),
+      nearestDue,
+      updatedAt,
+      urgency,
+    };
+  }).sort((left, right) => left.urgency - right.urgency
+    || (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31")
+    || Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
+}
+
+const estimateGroupMatchesFilter = (group: EstimateWorkGroup, filter: MyWorkFilter, todayIso: string) => group.rows.some((record) => {
+  if (filter === "late") return assignmentUrgency(record, todayIso) === "overdue";
+  if (filter === "week") return assignmentUrgency(record, todayIso) === "due-soon";
+  if (filter === "blocked" || filter === "waiting") return false;
+  if (filter === "attention") return assignmentUrgency(record, todayIso) === "overdue"
+    || record.status === "Not Started" || quietDays(record.updatedAt) > 5;
+  return true;
+});
 
 const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { overdue: "red", "due-soon": "amber", "on-track": "blue", none: "slate" };
 
@@ -651,54 +844,25 @@ const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { o
  * which estimate to open. This panel lists the assignment itself — estimate,
  * discipline, status, due date — with the next step and a direct way in.
  */
-function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, filter, onOpenEstimate, onReload }: {
+function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, filter, isExpanded, onToggle, onOpenEstimate, onReload }: {
   assignments: MyEstimateAssignment[];
   loading: boolean;
   error: string;
   todayIso: string;
   filter: MyWorkFilter;
+  isExpanded: (key: string, urgent: boolean) => boolean;
+  onToggle: (key: string, current: boolean) => void;
   onOpenEstimate?: ((estimateId: number) => void) | undefined;
   onReload: () => void;
 }) {
   const localizeCopy = useStaticCopy();
-  const [showFinished, setShowFinished] = useState(false);
-  const ordered = useMemo(() => sortAssignmentQueue(assignments, todayIso), [assignments, todayIso]);
-  const visible = (showFinished ? ordered : ordered.filter(isActionableAssignment)).filter((record) => {
-    if (filter === "late") return assignmentUrgency(record, todayIso) === "overdue";
-    if (filter === "week") return assignmentUrgency(record, todayIso) === "due-soon";
-    if (filter === "blocked" || filter === "waiting") return false;
-    if (filter === "attention") return assignmentUrgency(record, todayIso) === "overdue"
-      || record.status === "Not Started" || quietDays(record.updatedAt) > 5;
-    return true;
-  });
   const summary = useMemo(() => assignmentQueueSummary(assignments, todayIso), [assignments, todayIso]);
-  const groups = useMemo(() => {
-    const grouped = new Map<string, { estimateId: number; estimateNumber: string; revision: number; projectName: string; customerName: string; rows: MyEstimateAssignment[] }>();
-    for (const record of visible) {
-      const key = `${record.estimateId}:${record.revision}`;
-      const current = grouped.get(key);
-      if (current) current.rows.push(record);
-      else grouped.set(key, {
-        estimateId: record.estimateId,
-        estimateNumber: record.estimateNumber,
-        revision: record.revision,
-        projectName: record.projectName,
-        customerName: record.customerName,
-        rows: [record],
-      });
-    }
-    return [...grouped.values()];
-  }, [visible]);
+  const groups = useMemo(() => groupEstimateWork(assignments, todayIso).filter((group) => estimateGroupMatchesFilter(group, filter, todayIso)), [assignments, filter, todayIso]);
   return <Panel
-    title="Estimate work"
-    subtitle="Grouped by Estimate and revision so each job has one clear place to continue."
+    title={localizeCopy("Estimate work")}
+    subtitle={localizeCopy("Grouped by Estimate and revision so each job has one clear place to continue.")}
     flush
-    actions={<>
-      <button className="btn ghost sm" type="button" onClick={() => setShowFinished((current) => !current)}>
-        <Icon name="checkCircle" />{showFinished ? localizeCopy("Hide finished") : localizeCopy("Show finished")}
-      </button>
-      <button className="btn ghost sm" type="button" disabled={loading} onClick={onReload}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-    </>}
+    actions={<button className="btn ghost sm" type="button" disabled={loading} onClick={onReload}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>}
   >
     <div className="my-work-filter-row" role="status">
       <span className="my-work-result-count"><LocalizedText text={"Assigned to me"} /> <strong>{summary.actionable}</strong></span>
@@ -708,45 +872,62 @@ function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, fil
     </div>
     {error ? <LoadError message={error} retry={onReload} /> : null}
     {loading && !assignments.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your estimate assignments…"} /></div> : null}
-    {!loading && !visible.length ? <EmptyState
+    {!loading && !groups.length ? <EmptyState
       icon="checkCircle"
       title={localizeCopy("No estimate section is waiting for you")}
       message={localizeCopy("A section appears here as soon as the estimate owner assigns it to you, before any work starts.")}
     /> : null}
-    {groups.length ? <div className="estimate-work-groups">{groups.map((group) => {
-      const updatedAt = group.rows.reduce((latest, record) => Date.parse(record.updatedAt) > Date.parse(latest) ? record.updatedAt : latest, group.rows[0]!.updatedAt);
-      return <article className="estimate-work-group" key={`${group.estimateId}:${group.revision}`}>
-        <header className="estimate-work-group-head">
-          <div>
-            <div className="estimate-work-reference"><strong className="mono">{group.estimateNumber}</strong><Badge tone="slate">R{String(group.revision).padStart(2, "0")}</Badge></div>
-            <h3>{group.projectName}</h3>
-            <p>{group.customerName} · {group.rows.length} section{group.rows.length === 1 ? "" : "s"}</p>
-          </div>
-          <div className="estimate-work-group-actions">
-            <span><LocalizedText text={"Last update"} /> {dateTime(updatedAt)} · {quietDays(updatedAt)} <LocalizedText text={"quiet days"} /></span>
-            {onOpenEstimate ? <button className="btn primary sm" type="button" onClick={() => onOpenEstimate(group.estimateId)}><Icon name="arrowRight" /><LocalizedText text={"Open Estimate"} /></button> : null}
-          </div>
-        </header>
-        <div className="estimate-work-sections">{group.rows.map((record) => {
-          const urgency = assignmentUrgency(record, todayIso);
-          const next = assignmentNextAction(record);
-          return <section className="estimate-work-section" key={record.assignmentId}>
-            <div className="estimate-work-section-title">
-              <strong>{record.sectionCode} · {sectionName(record.sectionCode)}</strong>
-              <Badge tone={ASSIGNMENT_TONE[urgency]}>{record.status}</Badge>
-            </div>
-            <p>{next.detail}</p>
-            <div className="estimate-work-section-meta">
-              <span>{record.role}</span>
-              <span><LocalizedText text={"Due Date"} /> {date(record.dueDate ?? record.estimateDueDate)}</span>
-              <span>{record.costLineCount} <LocalizedText text={"cost lines"} /></span>
-              <span>{Math.round(record.progress)}%</span>
-            </div>
-          </section>;
-        })}</div>
-      </article>;
-    })}</div> : null}
+    {groups.length ? <div className="estimate-work-groups">{groups.map((group) => <EstimateWorkGroupCard key={group.key} group={group} todayIso={todayIso} expanded={isExpanded(group.key, group.urgency <= 2)} onToggle={() => onToggle(group.key, isExpanded(group.key, group.urgency <= 2))} onOpenEstimate={onOpenEstimate} />)}</div> : null}
   </Panel>;
+}
+
+function EstimateWorkGroupCard({ group, todayIso, expanded, onToggle, onOpenEstimate }: {
+  group: EstimateWorkGroup;
+  todayIso: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenEstimate?: ((estimateId: number) => void) | undefined;
+}) {
+  return <article className={`estimate-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`}>
+    <header className="estimate-work-group-head">
+      <div>
+        <div className="estimate-work-reference"><Badge tone="slate"><LocalizedText text={"Inquiry / Estimate"} /></Badge><strong className="mono">{group.estimateNumber}</strong><Badge tone="slate">R{String(group.revision).padStart(2, "0")}</Badge></div>
+        <h3>{group.projectName}</h3>
+        <p>{group.customerName}</p>
+      </div>
+      <div className="estimate-work-group-actions">
+        {onOpenEstimate ? <button className="btn primary sm" type="button" onClick={() => onOpenEstimate(group.estimateId)}><Icon name="arrowRight" /><LocalizedText text={"Open Estimate"} /></button> : null}
+        <button className="btn default sm" type="button" aria-expanded={expanded} aria-controls={`${group.key}-items`} onClick={onToggle}><Icon name={expanded ? "chevronDown" : "chevronRight"} /><LocalizedText text={expanded ? "Collapse" : "Expand"} /></button>
+      </div>
+    </header>
+    <div className="work-group-metrics">
+      <span><LocalizedText text={"Sections"} /><strong>{group.rows.length}</strong></span>
+      <span><LocalizedText text={"Late"} /><strong className={group.lateCount ? "danger-text" : undefined}>{group.lateCount}</strong></span>
+      <span><LocalizedText text={"Blocked"} /><strong>{group.blockedCount}</strong></span>
+      <span><LocalizedText text={"Needs update"} /><strong>{group.needsUpdateCount}</strong></span>
+      <span><LocalizedText text={"Progress"} /><strong>{group.progress}%</strong></span>
+      <span><LocalizedText text={"Nearest due"} /><strong>{date(group.nearestDue)}</strong></span>
+      <span><LocalizedText text={"Last update"} /><strong>{date(group.updatedAt)} · {quietDays(group.updatedAt)} <LocalizedText text={"quiet days"} /></strong></span>
+    </div>
+    {expanded ? <div className="estimate-work-sections" id={`${group.key}-items`}>{group.rows.map((record) => {
+      const urgency = assignmentUrgency(record, todayIso);
+      const next = assignmentNextAction(record);
+      return <section className="estimate-work-section" key={record.assignmentId}>
+        <div className="estimate-work-section-title"><strong>{record.sectionCode} · <LocalizedText text={sectionName(record.sectionCode)} /></strong><Badge tone={ASSIGNMENT_TONE[urgency]}><LocalizedText text={record.status} /></Badge></div>
+        <p><EstimateNextActionDetail record={record} code={next.code} /></p>
+        <div className="estimate-work-section-meta"><span>{record.role}</span><span><LocalizedText text={"Due Date"} /> {date(record.dueDate ?? record.estimateDueDate)}</span><span>{record.costLineCount} <LocalizedText text={"cost lines"} /></span><span>{Math.round(record.progress)}%</span></div>
+      </section>;
+    })}</div> : null}
+  </article>;
+}
+
+function EstimateNextActionDetail({ record, code }: { record: MyEstimateAssignment; code: string }) {
+  const section = <><strong>{record.sectionCode} · <LocalizedText text={sectionName(record.sectionCode)} /></strong> </>;
+  if (code === "waiting-supplier") return <>{section}<LocalizedText text={"is waiting for a supplier price. Follow up on the quotation, then update this section."} /></>;
+  if (code === "waiting-information") return <>{section}<LocalizedText text={"is waiting for information from"} /> {record.estimateOwnerName}.</>;
+  if (code === "first-cost-line") return <>{section}<LocalizedText text={"has no cost line yet. Add the first line in Cost Items."} /></>;
+  if (code === "continue-costing") return <>{section}<LocalizedText text={"has"} /> {record.costLineCount} <LocalizedText text={"cost lines at"} /> {Math.round(record.progress)}%. <LocalizedText text={"Continue costing and update the section status."} /></>;
+  return <LocalizedText text={assignmentNextAction(record).detail} />;
 }
 
 /** Loads the caller's estimate assignments; the API returns only their own rows. */
@@ -791,8 +972,13 @@ export function ProductionMyWork({
   const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
   const [addingFor, setAddingFor] = useState<MyWorkItem | null>(null);
   const [editingFor, setEditingFor] = useState<MyWorkItem | null>(null);
+  const [forecastFor, setForecastFor] = useState<MyWorkItem | null>(null);
   const [personalTaskOpen, setPersonalTaskOpen] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("attention");
+  const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("open");
+  const [sourceFilter, setSourceFilter] = useState<MyWorkSource>("all");
+  const [expandedGroups, setExpandedGroups] = useState<MyWorkExpansion>({});
+  const [expansionReady, setExpansionReady] = useState(false);
+  const expansionOwner = useRef("");
   const [taskSort, setTaskSort] = useState<MyWorkSort>("priority");
   const [taskSearch, setTaskSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -800,7 +986,29 @@ export function ProductionMyWork({
      an engineer without schedule rights still has to find the sections they own. */
   const estimateQueue = useMyEstimateAssignments(bootstrap.permissions.includes("estimate.read"));
   const todayIso = isoToday();
+  const expansionStorageKey = `tomas-tech-my-work-groups:${bootstrap.user.id}`;
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = window.localStorage.getItem(expansionStorageKey);
+        expansionOwner.current = expansionStorageKey;
+        setExpandedGroups(parseMyWorkExpansion(stored));
+      } catch { setExpandedGroups({}); }
+      setExpansionReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [expansionStorageKey]);
+  useEffect(() => {
+    if (!expansionReady || expansionOwner.current !== expansionStorageKey) return;
+    try { window.localStorage.setItem(expansionStorageKey, JSON.stringify(expandedGroups)); }
+    catch { /* Expansion preferences are optional when storage is blocked. */ }
+  }, [expandedGroups, expansionReady, expansionStorageKey]);
+  const isGroupExpanded = useCallback((key: string, urgent: boolean) => expandedGroups[key] ?? urgent, [expandedGroups]);
+  const toggleGroup = useCallback((key: string, current: boolean) => {
+    setExpandedGroups((values) => ({ ...values, [key]: !current }));
+  }, []);
   const estimateAssignmentsPanel = bootstrap.permissions.includes("estimate.read")
+    && (sourceFilter === "all" || sourceFilter === "estimate")
     && taskFilter !== "blocked"
     && taskFilter !== "waiting"
     ? <MyEstimateAssignmentsPanel
@@ -809,6 +1017,8 @@ export function ProductionMyWork({
       error={estimateQueue.error}
       todayIso={todayIso}
       filter={taskFilter}
+      isExpanded={isGroupExpanded}
+      onToggle={toggleGroup}
       onOpenEstimate={openEstimate}
       onReload={estimateQueue.reload}
     />
@@ -851,32 +1061,46 @@ export function ProductionMyWork({
     || record.status === "Not Started" || quietDays(record.updatedAt) > 5), [actionableEstimateAssignments, todayIso]);
   const projectOptions = useMemo(() => Array.from(new Map(items.map((item) => [String(item.projectId), `${item.projectNo} · ${item.projectName}`])).entries()), [items]);
   const personalTaskParents = useMemo(() => items.filter((item) => item.canAddDetail), [items]);
-  const visibleTasks = useMemo(() => {
+  const visibleScheduleItems = useMemo(() => {
     const needle = taskSearch.trim().toLocaleLowerCase();
-    const selected = items.filter((item) => {
+    return items.filter((item) => {
+      if (item.status === "Done") return false;
+      if (sourceFilter === "estimate" || sourceFilter === "service") return false;
+      if (sourceFilter === "project" && item.isOwnDetail) return false;
+      if (sourceFilter === "personal" && !item.isOwnDetail) return false;
       if (projectFilter !== "all" && String(item.projectId) !== projectFilter) return false;
       if (needle && ![item.projectNo, item.projectName, item.wbs, item.name, item.phaseName ?? "", item.status]
         .some((value) => value.toLocaleLowerCase().includes(needle))) return false;
-      if (taskFilter === "attention") return item.canUpdate && item.status !== "Done" && workNeedsUpdate(item);
-      if (taskFilter === "open") return item.status !== "Done";
-      if (taskFilter === "late") return item.canUpdate && workIsLate(item);
-      if (taskFilter === "blocked") return item.canUpdate && item.status === "Blocked";
-      if (taskFilter === "week") return item.canUpdate && item.status !== "Done" && (() => {
-        const days = daysFromToday(workEffectiveFinish(item));
-        return days !== null && days >= 0 && days <= 7;
-      })();
-      if (taskFilter === "waiting") return Boolean(item.pendingRequest);
       return true;
     });
-    return selected.sort((left, right) => {
-      if (taskSort === "project") return `${left.projectNo}:${left.wbs}`.localeCompare(`${right.projectNo}:${right.wbs}`, undefined, { numeric: true });
-      const leftDue = workEffectiveFinish(left) ?? "9999-12-31";
-      const rightDue = workEffectiveFinish(right) ?? "9999-12-31";
-      if (taskSort === "due") return leftDue.localeCompare(rightDue);
-      const urgency = (item: MyWorkItem) => item.status === "Blocked" ? 0 : workIsLate(item) ? 1 : workNeedsForecast(item) ? 2 : workIsStale(item) ? 3 : 4;
-      return urgency(left) - urgency(right) || leftDue.localeCompare(rightDue);
+  }, [items, projectFilter, sourceFilter, taskSearch]);
+  const scheduleGroups = useMemo(() => {
+    const groups = groupScheduleWork(visibleScheduleItems).filter((group) => group.items.some((item) => matchesWorkFilter(item, taskFilter)));
+    if (taskSort === "project") return [...groups].sort((left, right) => `${left.projectNo}:${left.phaseWbs ?? ""}`.localeCompare(`${right.projectNo}:${right.phaseWbs ?? ""}`, undefined, { numeric: true }));
+    if (taskSort === "due") return [...groups].sort((left, right) => (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31"));
+    return groups;
+  }, [taskFilter, taskSort, visibleScheduleItems]);
+  const visibleEstimateGroups = useMemo(() => {
+    if (sourceFilter !== "all" && sourceFilter !== "estimate") return [];
+    if (projectFilter !== "all") return [];
+    const needle = taskSearch.trim().toLocaleLowerCase();
+    return groupEstimateWork(estimateQueue.assignments, todayIso)
+      .filter((group) => estimateGroupMatchesFilter(group, taskFilter, todayIso))
+      .filter((group) => !needle || [group.estimateNumber, group.projectName, group.customerName]
+        .some((value) => value.toLocaleLowerCase().includes(needle)));
+  }, [estimateQueue.assignments, projectFilter, sourceFilter, taskFilter, taskSearch, todayIso]);
+  const activeWorkGroups = useMemo(() => {
+    const groups = [
+      ...scheduleGroups.map((group) => ({ kind: "schedule" as const, group })),
+      ...visibleEstimateGroups.map((group) => ({ kind: "estimate" as const, group })),
+    ];
+    return sortMyWorkGroups(groups, taskSort, (entry) => {
+      return entry.kind === "schedule" ? `${entry.group.projectNo}:${entry.group.phaseWbs ?? ""}` : entry.group.estimateNumber;
     });
-  }, [items, projectFilter, taskFilter, taskSearch, taskSort]);
+  }, [scheduleGroups, taskSort, visibleEstimateGroups]);
+  const visibleUpdates = updates;
+  const activeLoading = loading || ((sourceFilter === "all" || sourceFilter === "estimate") && estimateQueue.loading);
+  const activeEstimateError = sourceFilter === "all" || sourceFilter === "estimate" ? estimateQueue.error : "";
 
   useEffect(() => {
     onMyWorkUrgentCountChange?.(needsUpdate.length);
@@ -922,32 +1146,41 @@ export function ProductionMyWork({
 
   if (!allowed) {
     const missing = [!hasProgressPermission ? "schedule.progress" : "", !hasReadPermission ? "schedule.read" : ""].filter(Boolean).join(" + ");
-    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle="งาน Schedule ที่มอบหมายให้ผู้ใช้ปัจจุบัน" /><PermissionNotice permission={missing} message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์อ่าน Schedule และอัปเดต Progress ให้บทบาทนี้" />{estimateAssignmentsPanel}</>;
+    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle={uiText("Schedule work assigned to the signed-in user")} /><PermissionNotice permission={missing} message={uiText("Ask an administrator for Schedule read and progress permissions.")} />{estimateAssignmentsPanel}</>;
   }
 
   return <>
     <PageHeader
       eyebrow="MY WORK"
       title={uiText("My Work")}
-      subtitle="Your daily work queue across assignments, project schedules and Estimate sections."
+      subtitle={uiText("Your daily work queue across assignments, project schedules and Estimate sections.")}
       actions={<>
-        <button className="btn primary" type="button" disabled={loading || !personalTaskParents.length} title={personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available"} onClick={() => setPersonalTaskOpen(true)}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button>
-        <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+        <button className="btn primary" type="button" disabled={loading || !personalTaskParents.length} title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")} onClick={() => setPersonalTaskOpen(true)}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button>
+        <button className="btn ghost" type="button" disabled={loading || estimateQueue.loading} onClick={() => { void load(); estimateQueue.reload(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       </>}
     />
     <div className="info-strip my-work-guidance"><Icon name="lock" /><LocalizedText text={"You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change."} /></div>
     <section className="my-work-kpis" aria-label={localizeCopy("Task overview")}>
-      <MyWorkStat label="Late" value={actionableOpen.filter(workIsLate).length + lateEstimateAssignments.length} tone="red" active={tab === "active" && taskFilter === "late"} onClick={() => { setTab("active"); setTaskFilter("late"); }} />
-      <MyWorkStat label="Blocked" value={actionableOpen.filter((item) => item.status === "Blocked").length} tone="amber" active={tab === "active" && taskFilter === "blocked"} onClick={() => { setTab("active"); setTaskFilter("blocked"); }} />
-      <MyWorkStat label="Needs update" value={needsUpdate.length + estimateAssignmentsNeedingUpdate.length} tone="navy" active={tab === "active" && taskFilter === "attention"} onClick={() => { setTab("active"); setTaskFilter("attention"); }} />
-      <MyWorkStat label="Due this week" value={dueThisWeek.length + dueEstimateAssignments.length} tone="blue" active={tab === "active" && taskFilter === "week"} onClick={() => { setTab("active"); setTaskFilter("week"); }} />
-      <MyWorkStat label="Awaiting the PM" value={waiting.length} tone="violet" active={tab === "active" && taskFilter === "waiting"} onClick={() => { setTab("active"); setTaskFilter("waiting"); }} />
+      <MyWorkStat label="Late" value={actionableOpen.filter(workIsLate).length + lateEstimateAssignments.length} tone="red" active={tab === "active" && taskFilter === "late"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("late"); }} />
+      <MyWorkStat label="Blocked" value={actionableOpen.filter((item) => item.status === "Blocked").length} tone="amber" active={tab === "active" && taskFilter === "blocked"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("blocked"); }} />
+      <MyWorkStat label="Needs update" value={needsUpdate.length + estimateAssignmentsNeedingUpdate.length} tone="navy" active={tab === "active" && taskFilter === "attention"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("attention"); }} />
+      <MyWorkStat label="Due this week" value={dueThisWeek.length + dueEstimateAssignments.length} tone="blue" active={tab === "active" && taskFilter === "week"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("week"); }} />
+      <MyWorkStat label="Awaiting the PM" value={waiting.length} tone="violet" active={tab === "active" && taskFilter === "waiting"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("waiting"); }} />
     </section>
-    <Tabs<MyWorkTab> active={tab} onChange={setTab} tabs={[
+    <Tabs<MyWorkTab> active={tab} onChange={(nextTab) => {
+      setTab(nextTab);
+      if (!MY_WORK_SOURCE_AVAILABILITY[nextTab].includes(sourceFilter)) setSourceFilter("all");
+    }} tabs={[
       { id: "new", label: "New Assignments", count: newAssignmentCount },
       { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
       { id: "updates", label: "My Updates", count: updates.length },
     ]} />
+    <div className="my-work-source-filter" role="group" aria-label={localizeCopy("Filter by source")}>
+      {MY_WORK_SOURCE_OPTIONS.map((option) => {
+        const available = MY_WORK_SOURCE_AVAILABILITY[tab].includes(option.id);
+        return <button key={option.id} type="button" disabled={!available} title={available ? undefined : localizeCopy("This source is not available in this tab yet") } className={sourceFilter === option.id ? "active" : ""} aria-pressed={sourceFilter === option.id} onClick={() => { setSourceFilter(option.id); if (option.id === "estimate") setProjectFilter("all"); }}><LocalizedText text={option.label} /></button>;
+      })}
+    </div>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
 
     {tab === "new" ? <ResourceTaskWorkspace
@@ -956,28 +1189,31 @@ export function ProductionMyWork({
       mine
       initialFilter="Acknowledgment"
       variant="new-assignments"
+      sourceFilter={sourceFilter}
+      isGroupExpanded={isGroupExpanded}
+      onToggleGroup={toggleGroup}
       openProjectSchedule={openProjectSchedule}
       onViewActive={() => setTab("active")}
       onChanged={() => { void load(); onNewAssignmentChanged?.(); }}
     /> : null}
 
     {tab === "active" ? <>
-      {estimateAssignmentsPanel}
       <Panel
-        title={taskFilter === "attention" ? uiText("Needs your update") : `${visibleTasks.length} task${visibleTasks.length === 1 ? "" : "s"}`}
-        subtitle={taskFilter === "attention" ? "Late, blocked or quiet for too long — clear these first" : "Search, filter and update without leaving this workspace"}
+        title={taskFilter === "attention" ? uiText("Needs your update") : `${activeWorkGroups.length} ${uiText("work groups")}`}
+        subtitle={taskFilter === "attention" ? uiText("Late, blocked or quiet for too long — clear these first") : uiText("All work is grouped and sorted by urgency, then due date.")}
         flush
       >
+        {activeEstimateError ? <LoadError message={activeEstimateError} retry={estimateQueue.reload} /> : null}
         <div className="my-work-toolbar">
           <SearchInput value={taskSearch} onChange={setTaskSearch} placeholder="Search project, WBS or task…" />
-          <label className="select-field my-work-project-filter">
+          {sourceFilter !== "estimate" ? <label className="select-field my-work-project-filter">
             <span className="sr-only"><LocalizedText text={"Project"} /></span>
             <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label={localizeCopy("Project")}>
               <option value="all"><LocalizedText text={"All projects"} /></option>
               {projectOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
             <Icon name="chevronDown" />
-          </label>
+          </label> : null}
           <label className="select-field my-work-sort">
             <span className="sr-only"><LocalizedText text={"Sort tasks"} /></span>
             <select value={taskSort} onChange={(event) => setTaskSort(event.target.value as MyWorkSort)} aria-label={localizeCopy("Sort tasks")}>
@@ -989,82 +1225,80 @@ export function ProductionMyWork({
           </label>
         </div>
         <div className="my-work-filter-row" role="group" aria-label={localizeCopy("Task filters")}>
-          {([
-            ["attention", "Needs update", needsUpdate.length],
-            ["open", "All open", open.length],
-            ["late", "Late", actionableOpen.filter(workIsLate).length],
-            ["blocked", "Blocked", actionableOpen.filter((item) => item.status === "Blocked").length],
-            ["week", "Due this week", dueThisWeek.length],
-            ["waiting", "Awaiting the PM", waiting.length],
-            ["all", "All tasks", items.length],
-          ] as [MyWorkFilter, string, number][]).map(([id, label, count]) => <button key={id} type="button" className={taskFilter === id ? "active" : ""} onClick={() => setTaskFilter(id)}>{label}<span>{count}</span></button>)}
-          <span className="my-work-result-count"><LocalizedText text={"Showing"} /> <strong>{visibleTasks.length}</strong></span>
+          <button type="button" className={taskFilter === "open" ? "active" : ""} onClick={() => setTaskFilter("open")}><LocalizedText text={"All open"} /><span>{open.length + actionableEstimateAssignments.length}</span></button>
+          <span className="my-work-result-count"><LocalizedText text={"Showing"} /> <strong>{activeWorkGroups.length}</strong> <LocalizedText text={"work groups"} /></span>
         </div>
 
-        <div className="my-work-task-list">
-          {visibleTasks.map((item) => <ProductionMyTaskRow
-            key={item.taskId}
-            item={item}
-            busy={saving.has(item.taskId)}
-            notify={notify}
-            patchProgress={patchProgress}
-            openProjectSchedule={openProjectSchedule}
-            onEdit={() => setEditingFor(item)}
-            onRequest={() => setRequestFor(item)}
-            onAdd={() => setAddingFor(item)}
-            onDelete={async () => {
-              if (!window.confirm(`Delete your task “${item.name}”?`)) return;
+        <div className="my-work-task-list work-group-list">
+          {activeWorkGroups.map((entry) => entry.kind === "estimate"
+            ? <EstimateWorkGroupCard key={entry.group.key} group={entry.group} todayIso={todayIso} expanded={isGroupExpanded(entry.group.key, entry.group.urgency <= 2)} onToggle={() => toggleGroup(entry.group.key, isGroupExpanded(entry.group.key, entry.group.urgency <= 2))} onOpenEstimate={openEstimate} />
+            : <ProductionScheduleWorkGroup
+              key={entry.group.key}
+              group={entry.group}
+              expanded={isGroupExpanded(entry.group.key, entry.group.urgency <= 2)}
+              onToggle={() => toggleGroup(entry.group.key, isGroupExpanded(entry.group.key, entry.group.urgency <= 2))}
+              saving={saving}
+              notify={notify}
+              patchProgress={patchProgress}
+              openProjectSchedule={openProjectSchedule}
+              onEdit={setEditingFor}
+              onForecast={setForecastFor}
+              onRequest={setRequestFor}
+              onAdd={setAddingFor}
+              onDelete={async (item) => {
+              if (!window.confirm(`${localizeCopy("Delete your task")} “${item.name}”?`)) return;
               setSaving((current) => new Set(current).add(item.taskId));
               try {
                 await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
                   method: "DELETE",
                   body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion }),
                 });
-                notify(`${item.wbs} deleted`);
+                notify(`${item.wbs} ${localizeCopy("deleted")}`);
                 await load();
               } catch (requestError) {
                 setError(toError(requestError));
               } finally {
                 setSaving((current) => { const next = new Set(current); next.delete(item.taskId); return next; });
               }
-            }}
-          />)}
-          {!visibleTasks.length && !loading ? <EmptyState icon="search" title="No tasks match these filters" message="Try another project, status or search term." action={<button className="btn default" type="button" onClick={() => { setTaskSearch(""); setProjectFilter("all"); setTaskFilter("open"); }}><LocalizedText text={"Clear filters"} /></button>} /> : null}
+              }}
+            />)}
+          {!activeWorkGroups.length && !activeLoading && !activeEstimateError ? <EmptyState icon="search" title={uiText("No work groups match these filters")} message={uiText("Try another source, project, status or search term.")} action={<button className="btn default" type="button" onClick={() => { setTaskSearch(""); setProjectFilter("all"); setSourceFilter("all"); setTaskFilter("open"); }}><LocalizedText text={"Clear filters"} /></button>} /> : null}
+          {activeLoading && !activeWorkGroups.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your work…"} /></div> : null}
         </div>
       </Panel>
 
-      {!items.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message="When the project manager assigns you a task it appears here." /></Panel> : null}
+      {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !items.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} /></Panel> : null}
       {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
     </> : null}
 
-    {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle="What you reported, in order — loaded from the append-only SQL audit trail" flush>
+    {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle={uiText("What you reported, in order")} flush>
       <div className="panel-body feed">
-        {updates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
+        {visibleUpdates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
           <span className="avatar sm">{myWorkInitials(bootstrap.user.name)}</span>
           <div>
             <p><strong>{entry.projectNo}{entry.wbs ? ` · ${entry.wbs}` : ""} {entry.taskName ?? entry.projectName}</strong></p>
             <p className="muted">
               {entry.field === "request" || entry.requestDays > 0
-                ? `Requested ${entry.requestDays} more day${entry.requestDays === 1 ? "" : "s"} · ${entry.answer ?? "waiting"}`
-                : `${entry.field}: ${entry.fromValue ?? "—"} → ${entry.toValue ?? "—"}`}
+                ? <><LocalizedText text={"Requested"} /> {entry.requestDays} <LocalizedText text={"more days"} /> · <LocalizedText text={entry.answer ?? "waiting"} /></>
+                : <><LocalizedText text={myWorkAuditFieldLabel(entry.field)} />: {entry.fromValue ?? "—"} → {entry.toValue ?? "—"}</>}
               {entry.comment ? ` · “${entry.comment}”` : ""}
               {entry.answerNote ? ` · PM: “${entry.answerNote}”` : ""}
             </p>
           </div>
           <span className="muted mono" style={{ fontSize: 11 }}>{dateTime(entry.occurredAt)}</span>
         </div>)}
-        {!updates.length && !loading ? <p className="muted"><LocalizedText text={"No update yet."} /></p> : null}
+        {!visibleUpdates.length && !loading ? <p className="muted"><LocalizedText text={"No update yet."} /></p> : null}
       </div>
     </Panel> : null}
 
     {requestFor ? <ProductionRequestDaysModal item={requestFor} onClose={() => setRequestFor(null)} onSubmitted={async () => {
       setRequestFor(null);
-      notify("Request sent to the project manager");
+      notify(localizeCopy("Request sent to the project manager"));
       await load();
     }} /> : null}
     {addingFor ? <ProductionAddDetailModal item={addingFor} onClose={() => setAddingFor(null)} onCreated={async () => {
       setAddingFor(null);
-      notify("Your task was added to the live schedule");
+      notify(localizeCopy("Your task was added to the live schedule"));
       await load();
     }} /> : null}
     {editingFor ? <ProgressModal
@@ -1076,13 +1310,17 @@ export function ProductionMyWork({
           method: "POST",
           body: JSON.stringify({ scheduleVersion: editingFor.scheduleVersion, rowVersion: editingFor.rowVersion, ...input }),
         });
-        notify(`${editingFor.wbs} progress updated`);
+        notify(`${editingFor.wbs} ${localizeCopy("progress updated")}`);
         await load();
       }}
     /> : null}
+    {forecastFor ? <ProductionForecastModal item={forecastFor} onClose={() => setForecastFor(null)} onSave={(forecastFinish) => {
+      patchProgress(forecastFor, { forecastFinish }, `${forecastFor.wbs} ${localizeCopy("forecast updated")}`);
+      setForecastFor(null);
+    }} /> : null}
     {personalTaskOpen ? <ProductionPersonalTaskModal items={personalTaskParents} onClose={() => setPersonalTaskOpen(false)} onCreated={async () => {
       setPersonalTaskOpen(false);
-      notify("Your personal task was added to the live schedule");
+      notify(localizeCopy("Your personal task was added to the live schedule"));
       await load();
     }} /> : null}
   </>;
@@ -1090,7 +1328,7 @@ export function ProductionMyWork({
 
 function MyWorkStat({ label, value, tone, active, onClick }: { label: string; value: number; tone: string; active: boolean; onClick: () => void }) {
   return <button className={`my-work-stat ${tone}${active ? " active" : ""}`} type="button" onClick={onClick} aria-pressed={active}>
-    <span>{label}</span><strong>{value}</strong><small><LocalizedText text={"View tasks"} /></small>
+    <span><LocalizedText text={label} /></span><strong>{value}</strong><small><LocalizedText text={"View tasks"} /></small>
   </button>;
 }
 
@@ -1101,24 +1339,30 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
   patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
   onRequest: () => void;
 }) {
+  const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const today = isoToday();
   const editable = item.canUpdate && !busy;
   const userNote = workUserNote(item.remark);
   return <div className="quick-controls">
     <div className="pct-strip" role="group" aria-label={uiText("Percent done")}>
-      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" disabled={!editable || (item.status === "Done" && value !== 100)} className={Number(item.percentComplete) === value ? "on" : undefined} onClick={() => {
+      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" disabled={!editable || (item.status === "Done" && value !== 100) || (item.status === "Blocked" && value === 100)} className={Number(item.percentComplete) === value ? "on" : undefined} onClick={() => {
+        if (needsZeroProgressFinishConfirmation(Number(item.percentComplete), value === 100 ? "Done" : item.status)
+          && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
         patchProgress(item, {
           percentComplete: value,
           ...(value === 100 ? { status: "Done", actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
           ...(value > 0 && value < 100 && item.status === "Not Started" ? { status: "In Progress", actualStart: item.actualStart ?? today } : {}),
-        }, `${item.wbs} progress updated to ${value}%`);
+        }, `${item.wbs} ${localizeCopy("progress updated to")} ${value}%`);
       }}>{value}</button>)}
     </div>
     <select disabled={!editable} value={item.status} onChange={(event) => {
       const status = event.target.value;
+      if (status === "Done" && !canFinishWork(item.status)) return;
+      if (needsZeroProgressFinishConfirmation(Number(item.percentComplete), status)
+        && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
       if (status === "Blocked" && !userNote.trim()) {
-        notify("Enter the blocking reason in Note first, then choose Blocked");
+        notify(localizeCopy("Enter the blocking reason in Note first, then choose Blocked"));
         return;
       }
       patchProgress(item, {
@@ -1127,37 +1371,101 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
         ...(status === "In Progress" ? { actualStart: item.actualStart ?? today, actualFinish: null, percentComplete: Number(item.percentComplete) === 100 ? 99 : Number(item.percentComplete) } : {}),
         ...(status === "Blocked" ? { actualStart: item.actualStart ?? today, actualFinish: null, percentComplete: Number(item.percentComplete) === 100 ? 99 : Number(item.percentComplete) } : {}),
         ...(status === "Done" ? { percentComplete: 100, actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
-      }, `${item.wbs} status changed to ${status}`);
+      }, `${item.wbs} ${localizeCopy("status changed to")} ${localizeCopy(status)}`);
     }}>
-      <option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"}><LocalizedText text={"Done"} /></option>
+      <option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={item.status === "Blocked"}><LocalizedText text={"Done"} /></option>
     </select>
-    {!item.actualStart ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: today, status: "In Progress" }, `${item.wbs} started today`)}><Icon name="play" /><LocalizedText text={"Start today"} /></button> : null}
-    {item.status !== "Done" ? <button className="btn default sm" type="button" disabled={!editable} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? today, actualFinish: today, percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
-    {workNeedsForecast(item) || workIsLate(item) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input type="date" disabled={!editable} value={item.forecastFinish ?? ""} className={workNeedsForecast(item) ? "needs-input" : undefined} min={item.actualStart ?? undefined} onChange={(event) => patchProgress(item, { forecastFinish: event.target.value || null }, `${item.wbs} forecast updated`)} /></label> : null}
+    {workNeedsForecast(item) || workIsLate(item) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input type="date" disabled={!editable} value={item.forecastFinish ?? ""} className={workNeedsForecast(item) ? "needs-input" : undefined} min={item.actualStart ?? undefined} onChange={(event) => patchProgress(item, { forecastFinish: event.target.value || null }, `${item.wbs} ${localizeCopy("forecast updated")}`)} /></label> : null}
     <input
       key={`${item.taskId}:${item.updatedAt}:note`}
       className="note-inline"
       disabled={!editable}
-      placeholder={item.status === "Blocked" ? "What is blocking it? (required)" : "Note…"}
+      placeholder={localizeCopy(item.status === "Blocked" ? "What is blocking it? (required)" : "Note…")}
       defaultValue={userNote}
       onBlur={(event) => {
         const value = event.target.value.trim();
         if (value === userNote) return;
-        if (item.status === "Blocked" && !value) { notify("Blocked tasks require a reason"); return; }
-        patchProgress(item, { remark: value }, `${item.wbs} note updated`);
+        if (item.status === "Blocked" && !value) { notify(localizeCopy("Blocked tasks require a reason")); return; }
+        patchProgress(item, { remark: value }, `${item.wbs} ${localizeCopy("note updated")}`);
       }}
     />
-    <button className="row-action" type="button" disabled={!editable || Boolean(item.pendingRequest)} title={item.pendingRequest ? "A request is already waiting for the PM" : "Request more days"} onClick={onRequest}><Icon name="clock" /></button>
+    <button className="row-action" type="button" disabled={!editable || Boolean(item.pendingRequest)} title={localizeCopy(item.pendingRequest ? "A request is already waiting for the PM" : "Request more days")} onClick={onRequest}><Icon name="clock" /></button>
   </div>;
 }
 
-function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSchedule, onEdit, onRequest, onAdd, onDelete }: {
+function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify, patchProgress, openProjectSchedule, onEdit, onForecast, onRequest, onAdd, onDelete }: {
+  group: ScheduleWorkGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  saving: Set<number>;
+  notify: (message: string) => void;
+  patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
+  openProjectSchedule?: (projectId: number) => void;
+  onEdit: (item: MyWorkItem) => void;
+  onForecast: (item: MyWorkItem) => void;
+  onRequest: (item: MyWorkItem) => void;
+  onAdd: (item: MyWorkItem) => void;
+  onDelete: (item: MyWorkItem) => Promise<void>;
+}) {
+  const focus = group.items.find((item) => item.status === "Blocked")
+    ?? group.items.find(workIsLate)
+    ?? group.items.find(workNeedsUpdate)
+    ?? group.items[0]!;
+  const urgent = group.urgency <= 2;
+  return <article className={`schedule-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`}>
+    <header className="schedule-work-group-head">
+      <div className="schedule-work-group-title">
+        <div className="estimate-work-reference">
+          <Badge tone={group.source === "personal" ? "blue" : "slate"}><LocalizedText text={group.source === "personal" ? "Personal" : "Project"} /></Badge>
+          <strong className="mono">{group.projectNo}</strong>
+          {group.phaseWbs ? <span className="mono">WBS {group.phaseWbs}</span> : null}
+        </div>
+        <h3><LocalizedText text={group.phaseName} /></h3>
+        <p>{group.projectName}</p>
+      </div>
+      <div className="schedule-work-group-actions">
+        {urgent ? <span className="work-group-focus"><LocalizedText text={"Priority task"} />: <strong>WBS {focus.wbs}</strong> · {focus.name}</span> : null}
+        {urgent && focus.canUpdate ? <button className="btn primary sm" type="button" disabled={saving.has(focus.taskId)} onClick={() => onEdit(focus)}><Icon name="edit" /><LocalizedText text={"Update progress"} /></button> : null}
+        {urgent && focus.canUpdate ? <button className="btn default sm" type="button" disabled={saving.has(focus.taskId) || Boolean(focus.pendingRequest)} onClick={() => onRequest(focus)}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
+        <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(group.projectId)}><Icon name="calendar" /><LocalizedText text={"Open Project"} /></button>
+        <button className="btn default sm" type="button" aria-expanded={expanded} aria-controls={`${group.key}-items`} onClick={onToggle}><Icon name={expanded ? "chevronDown" : "chevronRight"} /><LocalizedText text={expanded ? "Collapse" : "Expand"} /></button>
+      </div>
+    </header>
+    <div className="work-group-metrics">
+      <span><LocalizedText text={"Tasks"} /><strong>{group.items.length}</strong></span>
+      <span><LocalizedText text={"Late"} /><strong className={group.lateCount ? "danger-text" : undefined}>{group.lateCount}</strong></span>
+      <span><LocalizedText text={"Blocked"} /><strong>{group.blockedCount}</strong></span>
+      <span><LocalizedText text={"Needs update"} /><strong>{group.needsUpdateCount}</strong></span>
+      <span><LocalizedText text={"Estimated effort"} /><strong>{group.effort || "—"} MD</strong></span>
+      <span><LocalizedText text={"Progress"} /><strong>{group.progress}%</strong></span>
+      <span><LocalizedText text={"Nearest due"} /><strong>{date(group.nearestDue)}</strong></span>
+      <span><LocalizedText text={"Last update"} /><strong>{date(group.updatedAt)} · {quietDays(group.updatedAt)} <LocalizedText text={"quiet days"} /></strong></span>
+    </div>
+    {group.source === "project" ? <div className="work-group-owner"><LocalizedText text={"PM:"} /> {group.managerName}</div> : null}
+    {expanded ? <div className="schedule-work-group-items" id={`${group.key}-items`}>{group.items.map((item) => <ProductionMyTaskRow
+      key={item.taskId}
+      item={item}
+      busy={saving.has(item.taskId)}
+      notify={notify}
+      patchProgress={patchProgress}
+      openProjectSchedule={openProjectSchedule}
+      onEdit={() => onEdit(item)}
+      onForecast={() => onForecast(item)}
+      onRequest={() => onRequest(item)}
+      onAdd={() => onAdd(item)}
+      onDelete={() => onDelete(item)}
+    />)}</div> : null}
+  </article>;
+}
+
+function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSchedule, onEdit, onForecast, onRequest, onAdd, onDelete }: {
   item: MyWorkItem;
   busy: boolean;
   notify: (message: string) => void;
   patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
   openProjectSchedule?: (projectId: number) => void;
   onEdit: () => void;
+  onForecast: () => void;
   onRequest: () => void;
   onAdd: () => void;
   onDelete: () => Promise<void>;
@@ -1168,16 +1476,22 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
   const dueDays = daysFromToday(workEffectiveFinish(item));
   const silentDays = quietDays(item.updatedAt);
   const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : needsForecast ? "Forecast needed" : workIsStale(item) ? "Update due" : null;
-  const timing = item.status === "Done" ? "Completed"
-    : dueDays === null ? "No due date"
-      : dueDays < 0 ? `${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? "" : "s"} late`
-        : dueDays === 0 ? "Due today" : dueDays <= 7 ? `Due in ${dueDays} days` : `Due ${date(workEffectiveFinish(item))}`;
+  const timing = item.status === "Done" ? <LocalizedText text={"Completed"} />
+    : dueDays === null ? <LocalizedText text={"No due date"} />
+      : dueDays < 0 ? <>{Math.abs(dueDays)} <LocalizedText text={"days late"} /></>
+        : dueDays === 0 ? <LocalizedText text={"Due today"} />
+          : dueDays <= 7 ? <><LocalizedText text={"Due in"} /> {dueDays} <LocalizedText text={"days"} /></>
+            : <><LocalizedText text={"Due Date"} /> {date(workEffectiveFinish(item))}</>;
+  const finishToday = () => {
+    if (item.status === "Blocked") return;
+    if (Number(item.percentComplete) === 0 && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
+    patchProgress(item, { actualStart: item.actualStart ?? isoToday(), actualFinish: isoToday(), percentComplete: 100, status: "Done" }, `${item.wbs} ${localizeCopy("finished today")}`);
+  };
   return <article className={`my-task-card${late ? " late" : ""}${item.status === "Blocked" ? " blocked" : ""}`}>
     <div className="my-task-card-main">
       <div className="my-task-identity">
         <div className="my-task-kicker">
-          {attention ? <Badge>{attention}</Badge> : <Badge>{item.status}</Badge>}
-          <button className="my-task-project" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}>{item.projectNo}</button>
+          {attention ? <Badge><LocalizedText text={attention} /></Badge> : <Badge><LocalizedText text={item.status} /></Badge>}
           <span className="mono">WBS {item.wbs}</span>
           {item.isOwnDetail ? <Pill tone="blue"><LocalizedText text={"own"} /></Pill> : null}
           {item.isMilestone ? <Pill tone="violet"><LocalizedText text={"◆ Milestone"} /></Pill> : null}
@@ -1186,9 +1500,7 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
         <div className="my-task-meta">
           <span><Icon name="calendar" />{date(item.planStart)} → {date(item.planFinish)}</span>
           <span>{item.workDays} <LocalizedText text={"work days"} /></span>
-          {item.planManDays > 0 ? <span><Icon name="users" />{item.planManDays} <LocalizedText text={"estimated man-days"} />{item.actualManDays > 0 ? ` · ${item.actualManDays} actual` : ""}</span> : null}
-          <span><Icon name="layers" />{item.phaseWbs ? `${item.phaseWbs} · ` : ""}{item.phaseName ?? "Other work"}</span>
-          <span><LocalizedText text={"PM:"} /> {item.managerName}</span>
+          {item.planManDays > 0 ? <span><Icon name="users" />{item.planManDays} <LocalizedText text={"estimated man-days"} />{item.actualManDays > 0 ? <> · {item.actualManDays} <LocalizedText text={"actual"} /></> : null}</span> : null}
           <span><Icon name="clock" /><LocalizedText text={"Last update"} /> {dateTime(item.updatedAt)} · {silentDays} <LocalizedText text={"quiet days"} /></span>
         </div>
       </div>
@@ -1202,20 +1514,25 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
     {needsForecast ? <div className="my-task-alert"><Icon name="alertTriangle" /><span><LocalizedText text={"This was due"} /> {date(item.planFinish)}<LocalizedText text={". Add a forecast date in Update details."} /></span></div> : null}
 
     <div className="my-task-actions">
-      {item.canUpdate && !item.actualStart ? <button className="btn default sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: isoToday(), status: "In Progress" }, `${item.wbs} started today`)}><Icon name="play" /><LocalizedText text={"Start today"} /></button> : null}
       {item.canUpdate ? <button className="btn primary sm" type="button" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
-      {item.canUpdate && item.status !== "Done" ? <button className="btn default sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? isoToday(), actualFinish: isoToday(), percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
-      {item.canUpdate ? <button className="btn ghost sm" type="button" disabled={busy || Boolean(item.pendingRequest)} onClick={onRequest}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
-      <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
+      {item.canUpdate && needsForecast ? <button className="btn default sm" type="button" disabled={busy} onClick={onForecast}><Icon name="calendar" /><LocalizedText text={"Set forecast date"} /></button> : null}
       <span className="spacer" />
-      {item.canAddDetail ? <button className="link-btn" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button> : null}
-      {item.canDeleteDetail ? <button className="link-btn danger-text" type="button" disabled={busy} title={localizeCopy("Delete my task")} onClick={() => { void onDelete(); }}><Icon name="trash" /><LocalizedText text={"Delete my task"} /></button> : null}
+      <details className="my-task-more-actions">
+        <summary><LocalizedText text={"More actions"} /><Icon name="chevronDown" /></summary>
+        <div>
+          {item.canUpdate && !item.actualStart ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: isoToday(), status: "In Progress" }, `${item.wbs} ${localizeCopy("started today")}`)}><Icon name="play" /><LocalizedText text={"Start today"} /></button> : null}
+          {item.canUpdate && item.status !== "Done" ? <button className="btn ghost sm" type="button" disabled={busy || item.status === "Blocked"} title={item.status === "Blocked" ? localizeCopy("Resolve the blocker before finishing this task") : undefined} onClick={finishToday}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
+          {item.canUpdate ? <button className="btn ghost sm" type="button" disabled={busy || Boolean(item.pendingRequest)} onClick={onRequest}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
+          <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
+          {item.canAddDetail ? <button className="btn ghost sm" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button> : null}
+          {item.canDeleteDetail ? <button className="btn ghost sm danger-text" type="button" disabled={busy} title={localizeCopy("Delete my task")} onClick={() => { void onDelete(); }}><Icon name="trash" /><LocalizedText text={"Delete my task"} /></button> : null}
+          {item.canUpdate ? <details className="my-task-quick-update">
+            <summary><Icon name="settings" /><LocalizedText text={"Quick update"} /></summary>
+            <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} />
+          </details> : null}
+        </div>
+      </details>
     </div>
-
-    {item.canUpdate ? <details className="my-task-quick-update">
-      <summary><Icon name="settings" /><LocalizedText text={"Quick update"} /></summary>
-      <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} />
-    </details> : null}
   </article>;
 }
 
@@ -1247,11 +1564,36 @@ function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
   </Modal>;
 }
 
+function ProductionForecastModal({ item, onClose, onSave }: {
+  item: MyWorkItem;
+  onClose: () => void;
+  onSave: (forecastFinish: string) => void;
+}) {
+  const uiText = useUiText();
+  const minimumDate = item.actualStart ?? isoToday();
+  const [forecastFinish, setForecastFinish] = useState(item.forecastFinish ?? minimumDate);
+  return <Modal
+    title={uiText("Set forecast date")}
+    subtitle={`${item.projectNo} · WBS ${item.wbs} · ${item.name}`}
+    onClose={onClose}
+    footer={<>
+      <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+      <button className="btn primary" type="button" disabled={!forecastFinish} onClick={() => onSave(forecastFinish)}><Icon name="calendar" /><LocalizedText text={"Save forecast date"} /></button>
+    </>}
+  >
+    <div className="form-grid">
+      <Field label={uiText("Current plan finish")}><input value={date(item.planFinish)} readOnly /></Field>
+      <Field label={uiText("Forecast finish")}><input type="date" min={minimumDate} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></Field>
+    </div>
+  </Modal>;
+}
+
 function ProductionPersonalTaskModal({ items, onClose, onCreated }: {
   items: MyWorkItem[];
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
+  const uiText = useUiText();
   const [parentId, setParentId] = useState(String(items[0]?.taskId ?? ""));
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1274,21 +1616,22 @@ function ProductionPersonalTaskModal({ items, onClose, onCreated }: {
     finally { setBusy(false); }
   };
   return <Modal
-    title="Add Personal Task"
-    subtitle="Add a private detail beneath one of your assigned schedule tasks."
+    title={uiText("Add Personal Task")}
+    subtitle={uiText("Add a private detail beneath one of your assigned schedule tasks.")}
     onClose={onClose}
     footer={<>
       <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" disabled={busy || !item || !name.trim()} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? "Adding…" : <LocalizedText text={"Add task"} />}</button>
+      <button className="btn primary" type="button" disabled={busy || !item || !name.trim()} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add task"} />}</button>
     </>}
   >
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid">
-      <Field label="Project task" span={3}><select value={parentId} onChange={(event) => setParentId(event.target.value)}>{items.map((candidate) => <option key={candidate.taskId} value={candidate.taskId}>{candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}</option>)}</select></Field>
-      <Field label="Personal task" span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} placeholder="What will you do?" /></Field>
-      <Field label="Schedule window"><input value={item ? `${date(item.planStart)} → ${date(item.planFinish)}` : "—"} readOnly /></Field>
-      <Field label="Days"><input className="num" type="number" value={planDays} readOnly /></Field>
+      <Field label={uiText("Project task")} span={3}><select value={parentId} onChange={(event) => setParentId(event.target.value)}>{items.map((candidate) => <option key={candidate.taskId} value={candidate.taskId}>{candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}</option>)}</select></Field>
+      <Field label={uiText("Personal task")} span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} placeholder={uiText("What will you do?")} /></Field>
+      <Field label={uiText("Schedule window")}><input value={item ? `${date(item.planStart)} → ${date(item.planFinish)}` : "—"} readOnly /></Field>
+      <Field label={uiText("Days")}><input className="num" type="number" value={planDays} readOnly /></Field>
     </div>
+    <div className="info-strip"><Icon name="alertCircle" /><LocalizedText text={"The personal task follows the selected project task dates and does not add workload effort."} /></div>
   </Modal>;
 }
 
