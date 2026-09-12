@@ -5,6 +5,8 @@ import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CreateSignableDocumentModal } from "./SigningScreens";
+import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
+import "./my-work.css";
 import {
   ApiClientError,
   apiRequest,
@@ -64,6 +66,8 @@ type ProductionPlanningProps = {
   openEstimate?: (estimateId: number) => void;
   preferredProjectId?: number | null;
   onMyWorkUrgentCountChange?: (count: number) => void;
+  newAssignmentCount?: number;
+  onNewAssignmentChanged?: () => void;
 };
 
 type MyWorkItem = {
@@ -90,6 +94,8 @@ type MyWorkItem = {
   planStart: string | null;
   planFinish: string | null;
   workDays: number;
+  planManDays: number;
+  actualManDays: number;
   percentComplete: number;
   status: string;
   actualStart: string | null;
@@ -616,6 +622,10 @@ const daysFromToday = (value: string | null) => value
   ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
   : null;
 const myWorkInitials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
+const quietDays = (updatedAt: string) => {
+  const updated = Date.parse(updatedAt);
+  return Number.isNaN(updated) ? 0 : Math.max(0, Math.floor((Date.now() - updated) / 86_400_000));
+};
 
 type MyWorkProgressInput = {
   percentComplete: number;
@@ -628,6 +638,7 @@ type MyWorkProgressInput = {
 
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting" | "all";
 type MyWorkSort = "priority" | "due" | "project";
+type MyWorkTab = "new" | "active" | "updates";
 
 const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { overdue: "red", "due-soon": "amber", "on-track": "blue", none: "slate" };
 
@@ -640,22 +651,47 @@ const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { o
  * which estimate to open. This panel lists the assignment itself — estimate,
  * discipline, status, due date — with the next step and a direct way in.
  */
-function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, onOpenEstimate, onReload }: {
+function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, filter, onOpenEstimate, onReload }: {
   assignments: MyEstimateAssignment[];
   loading: boolean;
   error: string;
   todayIso: string;
+  filter: MyWorkFilter;
   onOpenEstimate?: ((estimateId: number) => void) | undefined;
   onReload: () => void;
 }) {
   const localizeCopy = useStaticCopy();
   const [showFinished, setShowFinished] = useState(false);
   const ordered = useMemo(() => sortAssignmentQueue(assignments, todayIso), [assignments, todayIso]);
-  const visible = showFinished ? ordered : ordered.filter(isActionableAssignment);
+  const visible = (showFinished ? ordered : ordered.filter(isActionableAssignment)).filter((record) => {
+    if (filter === "late") return assignmentUrgency(record, todayIso) === "overdue";
+    if (filter === "week") return assignmentUrgency(record, todayIso) === "due-soon";
+    if (filter === "blocked" || filter === "waiting") return false;
+    if (filter === "attention") return assignmentUrgency(record, todayIso) === "overdue"
+      || record.status === "Not Started" || quietDays(record.updatedAt) > 5;
+    return true;
+  });
   const summary = useMemo(() => assignmentQueueSummary(assignments, todayIso), [assignments, todayIso]);
+  const groups = useMemo(() => {
+    const grouped = new Map<string, { estimateId: number; estimateNumber: string; revision: number; projectName: string; customerName: string; rows: MyEstimateAssignment[] }>();
+    for (const record of visible) {
+      const key = `${record.estimateId}:${record.revision}`;
+      const current = grouped.get(key);
+      if (current) current.rows.push(record);
+      else grouped.set(key, {
+        estimateId: record.estimateId,
+        estimateNumber: record.estimateNumber,
+        revision: record.revision,
+        projectName: record.projectName,
+        customerName: record.customerName,
+        rows: [record],
+      });
+    }
+    return [...grouped.values()];
+  }, [visible]);
   return <Panel
-    title="Estimate sections assigned to me"
-    subtitle="งาน Estimate ที่คุณรับผิดชอบ แสดงตั้งแต่ยังไม่เริ่ม ไม่ต้องเปลี่ยนสถานะก่อนจึงจะเห็น"
+    title="Estimate work"
+    subtitle="Grouped by Estimate and revision so each job has one clear place to continue."
     flush
     actions={<>
       <button className="btn ghost sm" type="button" onClick={() => setShowFinished((current) => !current)}>
@@ -677,37 +713,39 @@ function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, onO
       title={localizeCopy("No estimate section is waiting for you")}
       message={localizeCopy("A section appears here as soon as the estimate owner assigns it to you, before any work starts.")}
     /> : null}
-    {visible.length ? <div className="table-wrap"><table>
-      <thead><tr>
-        <th><LocalizedText text={"Estimate"} /></th>
-        <th><LocalizedText text={"Section"} /></th>
-        <th><LocalizedText text={"Role"} /></th>
-        <th><LocalizedText text={"Status"} /></th>
-        <th><LocalizedText text={"Due Date"} /></th>
-        <th><LocalizedText text={"Progress"} /></th>
-        <th><LocalizedText text={"Next step"} /></th>
-        <th />
-      </tr></thead>
-      <tbody>{visible.map((record) => {
-        const urgency = assignmentUrgency(record, todayIso);
-        const next = assignmentNextAction(record);
-        return <tr key={record.assignmentId}>
-          <td><div className="cell-primary">
-            <strong className="mono">{record.estimateNumber} R{String(record.revision).padStart(2, "0")}</strong>
-            <span>{record.projectName} · {record.customerName}</span>
-          </div></td>
-          <td><strong>{record.sectionCode}</strong> {sectionName(record.sectionCode)}</td>
-          <td>{record.role}</td>
-          <td><Badge>{record.status}</Badge> <Badge tone="slate">{record.estimateStatus}</Badge></td>
-          <td><Badge tone={ASSIGNMENT_TONE[urgency]}>{record.dueDate ?? record.estimateDueDate ?? "—"}</Badge></td>
-          <td style={{ minWidth: 120 }}><ProgressCell value={Number(record.progress)} /></td>
-          <td>{next.detail}</td>
-          <td>{onOpenEstimate ? <button className="btn primary sm" type="button" onClick={() => onOpenEstimate(record.estimateId)}>
-            <Icon name="arrowRight" />{next.label}
-          </button> : <span className="muted">{record.estimateNumber}</span>}</td>
-        </tr>;
-      })}</tbody>
-    </table></div> : null}
+    {groups.length ? <div className="estimate-work-groups">{groups.map((group) => {
+      const updatedAt = group.rows.reduce((latest, record) => Date.parse(record.updatedAt) > Date.parse(latest) ? record.updatedAt : latest, group.rows[0]!.updatedAt);
+      return <article className="estimate-work-group" key={`${group.estimateId}:${group.revision}`}>
+        <header className="estimate-work-group-head">
+          <div>
+            <div className="estimate-work-reference"><strong className="mono">{group.estimateNumber}</strong><Badge tone="slate">R{String(group.revision).padStart(2, "0")}</Badge></div>
+            <h3>{group.projectName}</h3>
+            <p>{group.customerName} · {group.rows.length} section{group.rows.length === 1 ? "" : "s"}</p>
+          </div>
+          <div className="estimate-work-group-actions">
+            <span><LocalizedText text={"Last update"} /> {dateTime(updatedAt)} · {quietDays(updatedAt)} <LocalizedText text={"quiet days"} /></span>
+            {onOpenEstimate ? <button className="btn primary sm" type="button" onClick={() => onOpenEstimate(group.estimateId)}><Icon name="arrowRight" /><LocalizedText text={"Open Estimate"} /></button> : null}
+          </div>
+        </header>
+        <div className="estimate-work-sections">{group.rows.map((record) => {
+          const urgency = assignmentUrgency(record, todayIso);
+          const next = assignmentNextAction(record);
+          return <section className="estimate-work-section" key={record.assignmentId}>
+            <div className="estimate-work-section-title">
+              <strong>{record.sectionCode} · {sectionName(record.sectionCode)}</strong>
+              <Badge tone={ASSIGNMENT_TONE[urgency]}>{record.status}</Badge>
+            </div>
+            <p>{next.detail}</p>
+            <div className="estimate-work-section-meta">
+              <span>{record.role}</span>
+              <span><LocalizedText text={"Due Date"} /> {date(record.dueDate ?? record.estimateDueDate)}</span>
+              <span>{record.costLineCount} <LocalizedText text={"cost lines"} /></span>
+              <span>{Math.round(record.progress)}%</span>
+            </div>
+          </section>;
+        })}</div>
+      </article>;
+    })}</div> : null}
   </Panel>;
 }
 
@@ -736,6 +774,8 @@ export function ProductionMyWork({
   openProjectSchedule,
   openEstimate,
   onMyWorkUrgentCountChange,
+  newAssignmentCount = 0,
+  onNewAssignmentChanged,
 }: ProductionPlanningProps) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
@@ -746,11 +786,12 @@ export function ProductionMyWork({
   const [updates, setUpdates] = useState<MyWorkUpdate[]>([]);
   const [loading, setLoading] = useState(allowed);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"tasks" | "updates">("tasks");
+  const [tab, setTab] = useState<MyWorkTab>("active");
   const [saving, setSaving] = useState<Set<number>>(() => new Set());
   const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
   const [addingFor, setAddingFor] = useState<MyWorkItem | null>(null);
   const [editingFor, setEditingFor] = useState<MyWorkItem | null>(null);
+  const [personalTaskOpen, setPersonalTaskOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("attention");
   const [taskSort, setTaskSort] = useState<MyWorkSort>("priority");
   const [taskSearch, setTaskSearch] = useState("");
@@ -760,11 +801,14 @@ export function ProductionMyWork({
   const estimateQueue = useMyEstimateAssignments(bootstrap.permissions.includes("estimate.read"));
   const todayIso = isoToday();
   const estimateAssignmentsPanel = bootstrap.permissions.includes("estimate.read")
+    && taskFilter !== "blocked"
+    && taskFilter !== "waiting"
     ? <MyEstimateAssignmentsPanel
       assignments={estimateQueue.assignments}
       loading={estimateQueue.loading}
       error={estimateQueue.error}
       todayIso={todayIso}
+      filter={taskFilter}
       onOpenEstimate={openEstimate}
       onReload={estimateQueue.reload}
     />
@@ -800,7 +844,13 @@ export function ProductionMyWork({
     return days !== null && days >= 0 && days <= 7;
   }), [actionableOpen]);
   const waiting = useMemo(() => items.filter((item) => item.pendingRequest), [items]);
+  const actionableEstimateAssignments = useMemo(() => estimateQueue.assignments.filter(isActionableAssignment), [estimateQueue.assignments]);
+  const lateEstimateAssignments = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "overdue"), [actionableEstimateAssignments, todayIso]);
+  const dueEstimateAssignments = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "due-soon"), [actionableEstimateAssignments, todayIso]);
+  const estimateAssignmentsNeedingUpdate = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "overdue"
+    || record.status === "Not Started" || quietDays(record.updatedAt) > 5), [actionableEstimateAssignments, todayIso]);
   const projectOptions = useMemo(() => Array.from(new Map(items.map((item) => [String(item.projectId), `${item.projectNo} · ${item.projectName}`])).entries()), [items]);
+  const personalTaskParents = useMemo(() => items.filter((item) => item.canAddDetail), [items]);
   const visibleTasks = useMemo(() => {
     const needle = taskSearch.trim().toLocaleLowerCase();
     const selected = items.filter((item) => {
@@ -879,21 +929,39 @@ export function ProductionMyWork({
     <PageHeader
       eyebrow="MY WORK"
       title={uiText("My Work")}
-      subtitle="Everything assigned to you, across every project. Updates here are written to the live project schedule and SQL audit log."
-      actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>}
+      subtitle="Your daily work queue across assignments, project schedules and Estimate sections."
+      actions={<>
+        <button className="btn primary" type="button" disabled={loading || !personalTaskParents.length} title={personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available"} onClick={() => setPersonalTaskOpen(true)}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button>
+        <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+      </>}
     />
     <div className="info-strip my-work-guidance"><Icon name="lock" /><LocalizedText text={"You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change."} /></div>
     <section className="my-work-kpis" aria-label={localizeCopy("Task overview")}>
-      <MyWorkStat label="Needs update" value={needsUpdate.length} tone="navy" active={taskFilter === "attention"} onClick={() => setTaskFilter("attention")} />
-      <MyWorkStat label="Late" value={actionableOpen.filter(workIsLate).length} tone="red" active={taskFilter === "late"} onClick={() => setTaskFilter("late")} />
-      <MyWorkStat label="Blocked" value={actionableOpen.filter((item) => item.status === "Blocked").length} tone="amber" active={taskFilter === "blocked"} onClick={() => setTaskFilter("blocked")} />
-      <MyWorkStat label="Due this week" value={dueThisWeek.length} tone="blue" active={taskFilter === "week"} onClick={() => setTaskFilter("week")} />
-      <MyWorkStat label="Awaiting the PM" value={waiting.length} tone="violet" active={taskFilter === "waiting"} onClick={() => setTaskFilter("waiting")} />
+      <MyWorkStat label="Late" value={actionableOpen.filter(workIsLate).length + lateEstimateAssignments.length} tone="red" active={tab === "active" && taskFilter === "late"} onClick={() => { setTab("active"); setTaskFilter("late"); }} />
+      <MyWorkStat label="Blocked" value={actionableOpen.filter((item) => item.status === "Blocked").length} tone="amber" active={tab === "active" && taskFilter === "blocked"} onClick={() => { setTab("active"); setTaskFilter("blocked"); }} />
+      <MyWorkStat label="Needs update" value={needsUpdate.length + estimateAssignmentsNeedingUpdate.length} tone="navy" active={tab === "active" && taskFilter === "attention"} onClick={() => { setTab("active"); setTaskFilter("attention"); }} />
+      <MyWorkStat label="Due this week" value={dueThisWeek.length + dueEstimateAssignments.length} tone="blue" active={tab === "active" && taskFilter === "week"} onClick={() => { setTab("active"); setTaskFilter("week"); }} />
+      <MyWorkStat label="Awaiting the PM" value={waiting.length} tone="violet" active={tab === "active" && taskFilter === "waiting"} onClick={() => { setTab("active"); setTaskFilter("waiting"); }} />
     </section>
-    <Tabs<"tasks" | "updates"> active={tab} onChange={setTab} tabs={[{ id: "tasks", label: "My tasks", count: open.length }, { id: "updates", label: "My updates" }]} />
+    <Tabs<MyWorkTab> active={tab} onChange={setTab} tabs={[
+      { id: "new", label: "New Assignments", count: newAssignmentCount },
+      { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
+      { id: "updates", label: "My Updates", count: updates.length },
+    ]} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
 
-    {tab === "tasks" ? <>
+    {tab === "new" ? <ResourceTaskWorkspace
+      bootstrap={bootstrap}
+      notify={notify}
+      mine
+      initialFilter="Acknowledgment"
+      variant="new-assignments"
+      openProjectSchedule={openProjectSchedule}
+      onViewActive={() => setTab("active")}
+      onChanged={() => { void load(); onNewAssignmentChanged?.(); }}
+    /> : null}
+
+    {tab === "active" ? <>
       {estimateAssignmentsPanel}
       <Panel
         title={taskFilter === "attention" ? uiText("Needs your update") : `${visibleTasks.length} task${visibleTasks.length === 1 ? "" : "s"}`}
@@ -969,7 +1037,7 @@ export function ProductionMyWork({
       {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
     </> : null}
 
-    {tab === "updates" ? <Panel title={uiText("My updates")} subtitle="What you reported, in order — loaded from the append-only SQL audit trail" flush>
+    {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle="What you reported, in order — loaded from the append-only SQL audit trail" flush>
       <div className="panel-body feed">
         {updates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
           <span className="avatar sm">{myWorkInitials(bootstrap.user.name)}</span>
@@ -1012,6 +1080,11 @@ export function ProductionMyWork({
         await load();
       }}
     /> : null}
+    {personalTaskOpen ? <ProductionPersonalTaskModal items={personalTaskParents} onClose={() => setPersonalTaskOpen(false)} onCreated={async () => {
+      setPersonalTaskOpen(false);
+      notify("Your personal task was added to the live schedule");
+      await load();
+    }} /> : null}
   </>;
 }
 
@@ -1093,6 +1166,7 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
   const late = workIsLate(item);
   const needsForecast = workNeedsForecast(item);
   const dueDays = daysFromToday(workEffectiveFinish(item));
+  const silentDays = quietDays(item.updatedAt);
   const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : needsForecast ? "Forecast needed" : workIsStale(item) ? "Update due" : null;
   const timing = item.status === "Done" ? "Completed"
     : dueDays === null ? "No due date"
@@ -1112,8 +1186,10 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
         <div className="my-task-meta">
           <span><Icon name="calendar" />{date(item.planStart)} → {date(item.planFinish)}</span>
           <span>{item.workDays} <LocalizedText text={"work days"} /></span>
+          {item.planManDays > 0 ? <span><Icon name="users" />{item.planManDays} <LocalizedText text={"estimated man-days"} />{item.actualManDays > 0 ? ` · ${item.actualManDays} actual` : ""}</span> : null}
           <span><Icon name="layers" />{item.phaseWbs ? `${item.phaseWbs} · ` : ""}{item.phaseName ?? "Other work"}</span>
           <span><LocalizedText text={"PM:"} /> {item.managerName}</span>
+          <span><Icon name="clock" /><LocalizedText text={"Last update"} /> {dateTime(item.updatedAt)} · {silentDays} <LocalizedText text={"quiet days"} /></span>
         </div>
       </div>
       <div className="my-task-progress">
@@ -1130,9 +1206,9 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
       {item.canUpdate ? <button className="btn primary sm" type="button" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
       {item.canUpdate && item.status !== "Done" ? <button className="btn default sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: item.actualStart ?? isoToday(), actualFinish: isoToday(), percentComplete: 100, status: "Done" }, `${item.wbs} finished today`)}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
       {item.canUpdate ? <button className="btn ghost sm" type="button" disabled={busy || Boolean(item.pendingRequest)} onClick={onRequest}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
-      <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}><Icon name="calendar" /><LocalizedText text={"Whole plan"} /></button>
+      <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
       <span className="spacer" />
-      {item.canAddDetail ? <button className="link-btn" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add my task"} /></button> : null}
+      {item.canAddDetail ? <button className="link-btn" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button> : null}
       {item.canDeleteDetail ? <button className="link-btn danger-text" type="button" disabled={busy} title={localizeCopy("Delete my task")} onClick={() => { void onDelete(); }}><Icon name="trash" /><LocalizedText text={"Delete my task"} /></button> : null}
     </div>
 
@@ -1168,6 +1244,51 @@ function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid"><Field label="Extra days needed"><input className="num" type="number" min="1" max="3650" value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value)))} /></Field><Field label="Why? (required — the PM decides with this)" span={3}><input maxLength={20000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={uiText("e.g. rack anchor rework — re-drilling takes 3 days")} /></Field></div>
+  </Modal>;
+}
+
+function ProductionPersonalTaskModal({ items, onClose, onCreated }: {
+  items: MyWorkItem[];
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const [parentId, setParentId] = useState(String(items[0]?.taskId ?? ""));
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const item = items.find((candidate) => String(candidate.taskId) === parentId) ?? items[0];
+  const planSpan = item?.planStart && item.planFinish
+    ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1
+    : 1;
+  const planDays = Number.isFinite(planSpan) ? Math.max(1, planSpan) : 1;
+  const submit = async () => {
+    if (!item) return;
+    setBusy(true); setError("");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
+        method: "POST",
+        body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, name: name.trim(), planDays }),
+      });
+      await onCreated();
+    } catch (requestError) { setError(toError(requestError)); }
+    finally { setBusy(false); }
+  };
+  return <Modal
+    title="Add Personal Task"
+    subtitle="Add a private detail beneath one of your assigned schedule tasks."
+    onClose={onClose}
+    footer={<>
+      <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+      <button className="btn primary" type="button" disabled={busy || !item || !name.trim()} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? "Adding…" : <LocalizedText text={"Add task"} />}</button>
+    </>}
+  >
+    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
+    <div className="form-grid">
+      <Field label="Project task" span={3}><select value={parentId} onChange={(event) => setParentId(event.target.value)}>{items.map((candidate) => <option key={candidate.taskId} value={candidate.taskId}>{candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}</option>)}</select></Field>
+      <Field label="Personal task" span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} placeholder="What will you do?" /></Field>
+      <Field label="Schedule window"><input value={item ? `${date(item.planStart)} → ${date(item.planFinish)}` : "—"} readOnly /></Field>
+      <Field label="Days"><input className="num" type="number" value={planDays} readOnly /></Field>
+    </div>
   </Modal>;
 }
 

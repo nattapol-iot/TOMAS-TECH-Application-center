@@ -123,6 +123,14 @@ Engineer, estimate owner, reviewer/manager and authorized Sales users retain the
 
 ## Information architecture
 
+### My Work daily landing — implemented locally, 2026-09-12
+
+My Work is the employee's daily landing page. It has three jobs: acknowledge newly approved assignments, act on current Schedule and Estimate work, and review the employee's own append-only update history. The page uses three tabs: **New Assignments**, **My Active Work**, and **My Updates**. My Active Work opens first and prioritises Late, Blocked, Needs Update, Due This Week, and Awaiting PM; every summary card applies its matching filter and returns the user to the active queue.
+
+Project Schedule work uses responsive cards with one task identity, progress, due state, estimated/actual man-days when set, Last Update, Quiet Days, and the existing Start today, Update details, Finish today, Request more days, and Open plan actions. Estimate sections are grouped under one Estimate number and revision with one Open Estimate action per group. The Estimate name and navigation action are not repeated for each section. The default page has no wide task or Estimate table.
+
+New Assignments contains only approved Resource Tasks waiting for acknowledgment. When empty, it explains that active work still exists separately and links directly to My Active Work. Add Personal Task is a page-level action that lets the user choose an eligible assigned Schedule parent; it writes through the existing member-detail endpoint. Progress changes, day requests, acknowledgments, and personal tasks retain their existing concurrency validation and audit-log writes.
+
 ### Labor package library — implemented locally, 2026-09-12
 
 Evidence: user's production screenshot, LaborPackageMaster.tsx, LaborPackagePicker.tsx, labor-package-master.ts and existing API types. The old page splits space equally between a code-first table and an initially empty detail panel, repeats Refresh, and mixes Thai text into English mode. Redesign keeps the existing list/detail and draft/publish/copy APIs.

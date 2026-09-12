@@ -184,7 +184,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   // Arriving from a certificate's verification link lands on the signed
   // documents screen with the code already filled in, once the visitor has
   // signed in.
-  const [view, setViewState] = useState<View>(initialVerifyCode ? "documents" : "dashboard");
+  const [view, setViewState] = useState<View>(initialVerifyCode ? "documents" : "my-work");
   const [busy, setBusy] = useState(IS_AUTH_CONFIGURED);
   const [restoringSession, setRestoringSession] = useState(IS_AUTH_CONFIGURED);
   const [authError, setAuthError] = useState("");
@@ -193,7 +193,6 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [projectTab, setProjectTab] = useState<"portfolio" | "schedule" | "punchlist">("portfolio");
-  const [myWorkTab, setMyWorkTab] = useState<"inbox" | "schedule">("inbox");
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
@@ -343,7 +342,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     let saved: string | null = null;
     try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
     catch { /* Storage may be disabled; normal navigation still works. */ }
-    setViewState(restoredView(saved === "master" ? "customers" : saved, allowed, window.location.hash, initialVerifyCode, "dashboard"));
+    const dailyLanding: View = allowed.includes("my-work") ? "my-work" : "dashboard";
+    setViewState(restoredView(saved === "master" ? "customers" : saved, allowed, window.location.hash, initialVerifyCode, dailyLanding));
     setBootstrap(data);
   }, [initialVerifyCode]);
 
@@ -502,7 +502,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       if (IS_TEAM_TEST_MODE) clearTeamTestSession();
       else await signOutMicrosoft();
       reportDirty.current = false;
-      setBootstrap(null); setMyWorkUrgentCount(0); setViewState("dashboard");
+      setBootstrap(null); setMyWorkUrgentCount(0); setViewState("my-work");
     }
     catch (error) { setAuthError(error instanceof Error ? error.message : "Unable to sign out. Please try again."); }
     finally { setBusy(false); }
@@ -666,7 +666,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             else if (id && destination === "projects") openProjectSchedule(id);
             else { setView(destination); window.scrollTo({ top: 0 }); }
           }} /> : personalDashboard : null}
-          {view === "my-work" ? <><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}<Tabs tabs={[{id:"inbox",label:"Task inbox · ตอบรับงาน",count:taskAcknowledgmentCount},{id:"schedule",label:"Project schedule tasks"}]} active={myWorkTab} onChange={setMyWorkTab} />{myWorkTab === "inbox" ? <ResourceTaskWorkspace {...common} mine openProjectSchedule={openProjectSchedule} onChanged={() => setTaskInboxRevision(value => value + 1)} /> : <ProductionMyWork {...moduleProps} />}</> : null}
+          {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
           {view === "projects" ? <>

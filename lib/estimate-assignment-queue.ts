@@ -116,7 +116,7 @@ const URGENCY_ORDER: Record<AssignmentUrgency, number> = { overdue: 0, "due-soon
  * Most urgent first, then by due date, then by estimate and section so the order
  * is stable between reloads. Finished and read-only rows always sink.
  */
-export function sortAssignmentQueue(records: readonly EstimateAssignmentRecord[], todayIso: string): EstimateAssignmentRecord[] {
+export function sortAssignmentQueue<T extends EstimateAssignmentRecord>(records: readonly T[], todayIso: string): T[] {
   return [...records].sort((left, right) => {
     const actionable = Number(isActionableAssignment(right)) - Number(isActionableAssignment(left));
     if (actionable) return actionable;

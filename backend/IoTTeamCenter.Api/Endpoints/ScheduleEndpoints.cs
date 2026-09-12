@@ -1006,6 +1006,23 @@ public static class ScheduleEndpoints
             var calculation = Resolve(tasks, holidays);
             var byId = tasks.ToDictionary(task => task.Id);
             var pending = await ReadPendingRequestsAsync(connection, project.Id, actor.Id, cancellationToken);
+            var pendingAcknowledgmentTaskIds = new HashSet<long>();
+            await using (var acknowledgmentCommand = new SqlCommand("""
+                SELECT schedule_task_id
+                FROM dbo.resource_tasks
+                WHERE project_id = @project
+                  AND assignee_id = @actor
+                  AND state = N'Approved'
+                  AND acknowledged_at IS NULL
+                  AND schedule_task_id IS NOT NULL;
+                """, connection))
+            {
+                acknowledgmentCommand.Parameters.AddParameter("@project", SqlDbType.BigInt, project.Id);
+                acknowledgmentCommand.Parameters.AddParameter("@actor", SqlDbType.BigInt, actor.Id);
+                await using var acknowledgmentReader = await acknowledgmentCommand.ExecuteReaderAsync(cancellationToken);
+                while (await acknowledgmentReader.ReadAsync(cancellationToken))
+                    pendingAcknowledgmentTaskIds.Add(acknowledgmentReader.GetInt64(0));
+            }
             var dependentTaskIds = tasks
                 .Where(candidate => candidate.PredecessorId is not null)
                 .Select(candidate => candidate.PredecessorId!.Value)
@@ -1014,6 +1031,7 @@ public static class ScheduleEndpoints
             foreach (var task in tasks.Where(task =>
                          task.Kind != "phase"
                          && calculation.ById[task.Id].Children.Count == 0
+                         && !pendingAcknowledgmentTaskIds.Contains(task.Id)
                          && pics.GetValueOrDefault(task.Id, []).Any(pic => pic.Id == actor.Id)))
             {
                 var item = calculation.ById[task.Id];
@@ -1046,6 +1064,7 @@ public static class ScheduleEndpoints
                     project.Status, scheduleVersion, project.CanUpdate, isOwnDetail, canAddDetail, canDeleteDetail,
                     task.Id, task.ParentId, item.Wbs, task.Name, task.Kind, task.Origin, task.IsMilestone,
                     phase?.Wbs, phase?.Name, item.PlanStart, item.PlanFinish, item.WorkDays,
+                    task.PlanManDays, task.ActualManDays,
                     item.PercentComplete, item.Status, item.ActualStart, item.ActualFinish,
                     item.ForecastFinish, task.Note, pending.ActorRequests.GetValueOrDefault(task.Id),
                     Encode(task.RowVersion)!, task.UpdatedAt));
@@ -2030,6 +2049,8 @@ public static class ScheduleEndpoints
         DateOnly? PlanStart,
         DateOnly? PlanFinish,
         int WorkDays,
+        decimal PlanManDays,
+        decimal ActualManDays,
         decimal PercentComplete,
         string Status,
         DateOnly? ActualStart,

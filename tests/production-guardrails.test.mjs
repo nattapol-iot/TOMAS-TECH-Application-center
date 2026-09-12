@@ -99,16 +99,17 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
 });
 
 test("production My Work keeps the Demo workflow on live API contracts", async () => {
-  const [screen, shell] = await Promise.all([
+  const [screen, shell, assignmentInbox] = await Promise.all([
     readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
     readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
+    readFile(new URL("app/system/production/ResourceTaskWorkspace.tsx", root), "utf8"),
   ]);
   for (const label of [
     "Needs update", "Late", "Blocked", "Due this week", "Awaiting the PM",
-    "My tasks", "My updates", "Needs your update", "Start today", "Finish today",
-    "Forecast", "Request more days", "Add my task", "Whole plan",
+    "New Assignments", "My Active Work", "My Updates", "Needs your update", "Start today", "Finish today",
+    "Forecast", "Request more days", "Add Personal Task", "Open plan",
     "Search project, WBS or task", "All projects", "Priority first", "Update details",
-    "Quick update", "No tasks match these filters", "Clear filters",
+    "Quick update", "No tasks match these filters", "Clear filters", "Last update", "quiet days", "estimated man-days",
   ]) {
     assert.match(screen, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -124,11 +125,44 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /item\.canDeleteDetail/);
   assert.match(screen, /const visibleTasks = useMemo/);
   assert.match(screen, /taskFilter === "attention"/);
+  assert.match(screen, /useState<MyWorkTab>\("active"\)/);
+  assert.match(screen, /initialFilter="Acknowledgment"/);
+  assert.match(screen, /onViewActive=\{\(\) => setTab\("active"\)\}/);
+  assert.match(screen, /taskFilter !== "blocked"/);
+  assert.match(screen, /taskFilter !== "waiting"/);
+  assert.match(screen, /onChanged=\{\(\) => \{ void load\(\); onNewAssignmentChanged\?\.\(\); \}\}/);
+  assert.match(screen, /planManDays/);
+  assert.match(screen, /actualManDays/);
   assert.match(screen, /workUserNote/, "import provenance must not be presented as the employee note");
   assert.doesNotMatch(screen, /\{needsUpdate\.map\(/, "urgent tasks must not be rendered twice");
   assert.doesNotMatch(screen, /from ["'][^"']*(?:data|calc|store|session)["']/);
   assert.match(shell, /openProjectSchedule/);
   assert.match(shell, /myWorkUrgentCount/);
+  assert.match(shell, /newAssignmentCount=\{taskAcknowledgmentCount\}/);
+  assert.match(shell, /allowed\.includes\("my-work"\) \? "my-work" : "dashboard"/);
+  assert.match(shell, /initialVerifyCode \? "documents" : "my-work"/);
+  assert.doesNotMatch(shell, /Task inbox · ตอบรับงาน|Project schedule tasks/);
+  assert.match(assignmentInbox, /variant==='new-assignments'/);
+  assert.match(assignmentInbox, /className="new-assignment-card"/);
+  assert.match(assignmentInbox, /title=\{variant==='new-assignments'\?'No new assignments'/);
+  assert.match(assignmentInbox, /View My Active Work/);
+});
+
+test("My Work exposes schedule effort without changing the audited update path", async () => {
+  const [nodeRoute, dotnetRoute] = await Promise.all([
+    readFile(new URL("backend-node/src/routes/schedule.ts", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ScheduleEndpoints.cs", root), "utf8"),
+  ]);
+  assert.match(nodeRoute, /planManDays: task\.planManDays, actualManDays: task\.actualManDays/);
+  assert.match(dotnetRoute, /task\.PlanManDays, task\.ActualManDays/);
+  assert.match(nodeRoute, /pendingAcknowledgmentTaskIds/);
+  assert.match(nodeRoute, /acknowledged_at IS NULL/);
+  assert.match(nodeRoute, /!pendingAcknowledgmentTaskIds\.has\(item\.id\)/);
+  assert.match(dotnetRoute, /pendingAcknowledgmentTaskIds/);
+  assert.match(dotnetRoute, /acknowledged_at IS NULL/);
+  assert.match(dotnetRoute, /!pendingAcknowledgmentTaskIds\.Contains\(task\.Id\)/);
+  assert.match(nodeRoute, /await appendUpdate\(transaction/);
+  assert.match(nodeRoute, /await insertAudit\(transaction/);
 });
 
 test("production Projects table defaults to 10 rows and supports page-size selection", async () => {

@@ -98,16 +98,20 @@ test("My Work lists the estimate sections assigned to the signed-in engineer", a
   assert.match(screens, /onOpenEstimate=\{openEstimate\}/);
 });
 
-test("the assignment queue shows estimate, discipline, status, due date and a next step", async () => {
+test("the assignment queue groups sections by estimate revision with one navigation action", async () => {
   const screens = await source("app/system/production/PlanningPricingScreens.tsx");
   const panel = screens.slice(screens.indexOf("function MyEstimateAssignmentsPanel"), screens.indexOf("function useMyEstimateAssignments"));
-  for (const column of ["Estimate", "Section", "Role", "Status", "Due Date", "Progress", "Next step"]) {
-    assert.ok(panel.includes(`text={"${column}"}`), column);
-  }
+  assert.match(panel, /const grouped = new Map/);
+  assert.match(panel, /`\$\{record\.estimateId\}:\$\{record\.revision\}`/);
+  assert.match(panel, /className="estimate-work-group"/);
+  assert.match(panel, /className="estimate-work-sections"/);
+  assert.equal((panel.match(/text=\{"Open Estimate"\}/g) ?? []).length, 1);
+  assert.doesNotMatch(panel, /<table|<thead|<tbody/);
   assert.match(panel, /assignmentNextAction\(record\)/);
   assert.match(panel, /sectionName\(record\.sectionCode\)/);
   assert.match(panel, /sortAssignmentQueue\(assignments, todayIso\)/);
   assert.match(panel, /assignmentQueueSummary\(assignments, todayIso\)/);
+  assert.match(panel, /quietDays\(updatedAt\)/);
   // Visibility never depends on the engineer changing the status first.
   assert.doesNotMatch(panel, /patchProgress|apiRequest\(/);
 });
