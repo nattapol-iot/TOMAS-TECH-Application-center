@@ -14,7 +14,6 @@ import { CostItemLookupInput, SupplierLookupInput } from "./CostItemLookup";
 import type { CostItemLookupPatch } from "../../../lib/cost-item-lookup";
 import { validCostItemNumbers } from "../../../lib/cost-item-validation";
 import { estimateApplyOwnerId, estimateIssueTab, estimateNextAction, estimateUxCopy, estimateIssueMessage, moduleTemplateApplyBlocker } from "../../../lib/estimate-ux";
-import { buildEstimateModuleOverview, estimateCostModuleKey, type EstimateModuleOverview } from "../../../lib/estimate-module-overview";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -640,8 +639,8 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} onOpenModule={(module) => { if (module.focusKey) setCostFocus(module.focusKey); setTab(module.targetTab); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
-    {tab === "cost" ? <><EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
       let rowVersion = workspace.header.rowVersion;
@@ -690,7 +689,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
         return true;
       } catch (requestError) { await mutationError(requestError); return false; }
       finally { setBusy(false); }
-    }} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode); if (group) setCostFocus(group.key); }} /></> : null}
+    }} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /> : null}
     {tab === "manhour" ? <EstimateManhourTab
       bootstrap={bootstrap}
       workspace={workspace}
@@ -797,11 +796,13 @@ type CostModuleGroup = {
 };
 
 const MATERIAL_CODES = ["01", "02", "03", "04", "05"];
+const moduleKeyOf = (categoryCode: string, module: string) => `${categoryCode}::${module}`;
+
 function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   const groups = new Map<string, CostModuleGroup>();
   for (const line of lines) {
     const moduleName = line.module.trim() || "Unassigned";
-    const key = estimateCostModuleKey(line.categoryCode, moduleName);
+    const key = moduleKeyOf(line.categoryCode, moduleName);
     let group = groups.get(key);
     if (!group) {
       group = { key, module: moduleName, categoryCode: line.categoryCode, category: line.category, lines: [], total: 0, needPrice: 0, needSupplier: 0 };
@@ -813,18 +814,6 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
     else if (!line.supplierId && MATERIAL_CODES.includes(line.categoryCode)) group.needSupplier += 1;
   }
   return [...groups.values()].sort((left, right) => left.categoryCode.localeCompare(right.categoryCode) || left.module.localeCompare(right.module, "th"));
-}
-
-function EstimateModuleOverviewPanel({ workspace, costOnly = false, onOpen }: { workspace: EstimateCostWorkspace; costOnly?: boolean; onOpen: (module: EstimateModuleOverview) => void }) {
-  const modules = useMemo(() => buildEstimateModuleOverview(workspace, costOnly), [workspace, costOnly]);
-  const total = numberOf(workspace.header.totals.total);
-  return <Panel title={`${costOnly ? "Module Summary" : "Module / Work Package Summary"} · ${modules.length}`} subtitle={costOnly ? "เลือกโมดูลเพื่อเปิดรายการต้นทุนและแก้ไขรายละเอียดแต่ละรายการ" : "สรุประดับโมดูลเท่านั้น · ไม่มีรายการ Cost Item รายบรรทัดในหน้านี้"}>
-    {modules.length ? <div className="estimate-module-overview-grid">{modules.map((module, index) => <article className="estimate-module-overview-card" key={module.key}>
-      <header><span className="module-ordinal">{index + 1}</span><div><strong>{module.name}</strong><small>{module.kind} · {module.section} · {module.discipline}</small></div><div className="estimate-module-overview-total"><strong>{formatMoney(module.amount)}</strong><small>{total ? formatNumber(module.amount / total * 100, 1) : "0"}%</small></div></header>
-      <dl><div><dt>รายการภายใน</dt><dd>{module.lineCount}</dd></div><div><dt>ผู้รับผิดชอบ</dt><dd>{module.ownerNames.join(", ") || "—"}</dd></div><div><dt>อัปเดตล่าสุด</dt><dd>{formatDate(module.lastUpdated)}</dd></div></dl>
-      <footer>{module.attentionCount ? <Badge tone="amber">{module.attentionCount} รายการต้องตรวจ</Badge> : <Badge tone="green">ข้อมูลพร้อม</Badge>}<button className="btn default sm" type="button" onClick={() => onOpen(module)}><Icon name="edit" />แก้ไขรายละเอียด</button></footer>
-    </article>)}</div> : <EmptyState icon="layers" title="ยังไม่มี Module / Work Package" message="เพิ่ม Module ใน Cost Items หรือเพิ่ม Work Package ใน Engineering Man-hour" />}
-  </Panel>;
 }
 
 function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorkspace; onOpen: (tab: WorkspaceTab) => void }) {
@@ -848,7 +837,7 @@ function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorks
   </Panel>;
 }
 
-function EstimateSummaryTab({ workspace, onOpenModule }: { workspace: EstimateCostWorkspace; onOpenModule: (module: EstimateModuleOverview) => void }) {
+function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace }) {
   const uiText = useUiText();
   const { header, costItems, manhourLines, expenseLines, otherCostLines } = workspace;
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
@@ -867,7 +856,6 @@ function EstimateSummaryTab({ workspace, onOpenModule }: { workspace: EstimateCo
       </ul></Panel>
       <Panel title="Revision information"><dl className="def-list one"><div><dt><LocalizedText text={"Revision"} /></dt><dd><strong>{revisionCode(header.revision)}</strong></dd></div><div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{header.status}</Badge></dd></div><div><dt><LocalizedText text={"Last updated"} /></dt><dd>{formatDateTime(header.updatedAt)}</dd></div><div><dt><LocalizedText text={"Lock"} /></dt><dd>{header.lockedAt ? `${formatDateTime(header.lockedAt)} · ${header.lockedByName ?? "—"}` : "Not locked"}</dd></div></dl></Panel>
     </section>
-    <EstimateModuleOverviewPanel workspace={workspace} onOpen={onOpenModule} />
   </>;
 }
 
@@ -920,7 +908,7 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
   const shareOf = (value: number) => total ? Math.round(value / total * 100) : 0;
   const isCollapsed = (key: string) => collapsed.includes(key);
   const toggleModule = (key: string) => setCollapsed((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
-  const pendingKey = pendingModule ? estimateCostModuleKey(pendingModule.categoryCode, pendingModule.module) : null;
+  const pendingKey = pendingModule ? moduleKeyOf(pendingModule.categoryCode, pendingModule.module) : null;
   const showPending = Boolean(pendingModule && pendingKey && !groups.some((group) => group.key === pendingKey) && (category === "all" || category === pendingModule?.categoryCode));
 
   /* The module the summary asked for wins over whatever was folded before. */
@@ -952,12 +940,6 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
     if (!saved) return;
     setPendingModule(null);
     setQuickDraft(continueAdding ? { ...quickDraft, version: quickDraft.version + 1, itemCode: "", description: "", model: "", specification: "", referenceNumber: "", remark: "" } : null);
-  };
-  const openModuleFromOverview = (module: EstimateModuleOverview) => {
-    if (!module.focusKey) return;
-    setCategory("all");
-    setCollapsed((current) => current.filter((key) => key !== module.focusKey));
-    window.setTimeout(() => bandRefs.current[module.focusKey!]?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
   };
 
   const colCount = dense ? 10 : 16;
@@ -1002,7 +984,6 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
   </tr>;
 
   return <>
-  <EstimateModuleOverviewPanel workspace={workspace} costOnly onOpen={openModuleFromOverview} />
   <Panel title={`Estimate Cost Table · ${groups.length} module · ${visibleLines.length} item`} actions={canAdd ? <>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("price")}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("import")}><Icon name="upload" /><LocalizedText text={"Import Excel"} /></button>
@@ -1108,7 +1089,7 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
     if (!pending.module) return;
     setCategory("all");
     setPendingModule(pending);
-    startQuickRow({ key: estimateCostModuleKey(pending.categoryCode, pending.module), ...pending });
+    startQuickRow({ key: moduleKeyOf(pending.categoryCode, pending.module), ...pending });
   }} /> : null}
   </>;
 }

@@ -207,9 +207,9 @@ Use existing Inquiry and Estimate navigation. Add My work / Team / Unassigned vi
 
 ### Estimate Cost addition
 
-Retain all nine existing tabs and their order: Summary, Cost Items, Engineering Man-hour, Other Project Cost, Assignment, Validation, Revision History, Compare Revision and Engineering Review. Keep Summary as first-open default, the eight summary tiles, toolbar, Readiness and Revision information. Summary lists one aggregate per Module / Work Package and never renders individual Cost Items. Opening a Module takes the user to its editable detail in Cost Items; opening an engineering Work Package takes the user to Engineering Man-hour.
+Retain all nine existing tabs and their order: Summary, Cost Items, Engineering Man-hour, Other Project Cost, Assignment, Validation, Revision History, Compare Revision and Engineering Review. Keep Summary as first-open default, the eight summary tiles, toolbar and current editing modals. Do not consolidate navigation, move Validation into a drawer, or collapse the cost breakdown by default. The scoped brief now documents the existing structure and a bounded investigation plan.
 
-Cost Items repeats the same Module Summary above the existing expandable cost table so Engineers can select a Module, see its individual lines and edit each line. Line-level ERP category mapping and the ERP export remain in Cost Items. ERP export remains unavailable while any cost-bearing line is unmapped or the ERP total does not equal the canonical Estimate total.
+The 2026-09-11 ERP requirement extends Summary without replacing the internal breakdown. Summary must provide a distinct ERP Cost Summary for the seven company ERP categories and identify unmapped amounts. ERP export remains unavailable while any cost-bearing line is unmapped or the ERP total does not equal the canonical Estimate total. Exact workbook sheet names, columns, category codes and required metadata are governed by the real ERP import template, which is not yet present in this repository.
 
 ### KPI pilot
 
