@@ -3,6 +3,22 @@ export const LABOR_PACKAGE_COPY: Record<string, { th: string; jp: string }> = {
     "th": "เพิ่มชุดมาตรฐานจาก Excel",
     "jp": "Excel標準ライブラリを追加"
   },
+  "Install Excel labor cost masters": {
+    "th": "เพิ่ม Labor Cost Master จาก Excel",
+    "jp": "Excel工数マスターを追加"
+  },
+  "This adds 11 labor packages and 8 companion support-cost templates. Existing masters with the same code are kept unchanged.": {
+    "th": "ระบบจะเพิ่มชุดค่าแรง 11 ชุด และแม่แบบค่าใช้จ่ายประกอบ 8 ชุด โดยจะเก็บ Master เดิมที่มีรหัสเดียวกันไว้โดยไม่เขียนทับ",
+    "jp": "工数パッケージ11件と付随費用テンプレート8件を追加します。同じコードの既存マスターは上書きしません。"
+  },
+  "Install 19 masters": {
+    "th": "เพิ่ม Master ทั้ง 19 ชุด",
+    "jp": "19件のマスターを追加"
+  },
+  "Cancel": {
+    "th": "ยกเลิก",
+    "jp": "キャンセル"
+  },
   "Installing…": {
     "th": "กำลังเพิ่มข้อมูล…",
     "jp": "追加中…"

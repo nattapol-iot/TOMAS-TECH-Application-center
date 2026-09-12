@@ -39,6 +39,7 @@ export function LaborPackageMaster({ bootstrap, initialPackageId, onClose }: {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [showInstallConfirm, setShowInstallConfirm] = useState(false);
   const [error, setError] = useState("");
   const [listError, setListError] = useState("");
   const [success, setSuccess] = useState("");
@@ -116,7 +117,7 @@ export function LaborPackageMaster({ bootstrap, initialPackageId, onClose }: {
   };
 
   const installStarterLibrary = async () => {
-    if (!permission.canPublish || installing || !window.confirm(t("Install the standard labor library?"))) return;
+    if (!permission.canPublish || installing) return;
     setInstalling(true); setError(""); setSuccess("");
     try {
       const result = await installStandardLaborLibrary();
@@ -124,6 +125,7 @@ export function LaborPackageMaster({ bootstrap, initialPackageId, onClose }: {
       setSuccess(created > 0
         ? `${t("Standard library installed")}: ${result.createdLabor.length} ${t("labor packages")}, ${result.createdSupport.length} ${t("support-cost templates")}`
         : t("The standard library is already installed."));
+      setShowInstallConfirm(false);
       setSearch(""); setStatus(""); setPage(1); setRefreshKey((value) => value + 1);
     } catch (requestError) {
       setError(messageOf(requestError));
@@ -179,12 +181,16 @@ const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : v
 
   return <div className="labor-master">
     {!onClose ? <PageHeader eyebrow={t("Labor Packages")} title={t("Labor Packages")} subtitle={t("Save time with reusable activities, staffing and durations.")} actions={<>
-      {permission.canPublish ? <button className="btn primary" type="button" disabled={saving || installing} onClick={() => { void installStarterLibrary(); }}><Icon name="layers" />{installing ? t("Installing…") : t("Install standard library")}</button> : null}
+      {permission.canPublish ? <button className="btn primary" type="button" disabled={saving || installing} onClick={() => setShowInstallConfirm(true)}><Icon name="layers" />{t("Install standard library")}</button> : null}
       <button className="btn default" type="button" disabled={saving || installing || loadingDetail} onClick={refresh}><Icon name="refresh" />{t("Refresh")}</button>
     </>} /> : null}
     {error ? <div className="info-strip red" role="alert"><Icon name="alertCircle" /><span>{error}</span></div> : null}
     {listError ? <div className="info-strip red" role="alert">{listError}<button type="button" className="btn ghost" onClick={refresh}>{t("Refresh")}</button></div> : null}
     {success ? <div className="info-strip green" role="status"><Icon name="checkCircle" /><span>{success}</span></div> : null}
+    {showInstallConfirm ? <section className="labor-install-confirm" role="alertdialog" aria-labelledby="labor-install-title" aria-describedby="labor-install-description">
+      <div><strong id="labor-install-title">{t("Install Excel labor cost masters")}</strong><p id="labor-install-description">{t("This adds 11 labor packages and 8 companion support-cost templates. Existing masters with the same code are kept unchanged.")}</p></div>
+      <div className="labor-install-actions"><button className="btn ghost" type="button" disabled={installing} onClick={() => setShowInstallConfirm(false)}>{t("Cancel")}</button><button className="btn primary" type="button" disabled={installing} onClick={() => { void installStarterLibrary(); }}>{installing ? t("Installing…") : t("Install 19 masters")}</button></div>
+    </section> : null}
     {!permission.canEditDraft ? <div className="info-strip"><Icon name="lock" /><span>{t("View only — you can review packages but cannot edit them.")}</span></div> : null}
     <div className="info-strip"><Icon name="book" /><span>{t("Labor packages use person-days. Travel, accommodation, tools and safety are installed as companion templates in Module Templates.")}</span></div>
     {help}

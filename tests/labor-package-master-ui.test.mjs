@@ -44,7 +44,7 @@ test("publish is available only to authorized draft editors and saves Active wit
 });
 
 test("authorized master editor can install the idempotent standard library",async()=>{
-  const h=harness();try{const tree=await h.flush();const page=find(tree,n=>n.type==="PageHeader");button(page.props.actions,"Install standard library").props.onClick();await h.flush();assert.equal(h.calls.filter(c=>c[0]==="install").length,1);assert.ok(textOf(h.tree()).includes("1 labor packages, 1 support-cost templates"));}finally{h.cleanup();}
+  const h=harness();try{let tree=await h.flush();const page=find(tree,n=>n.type==="PageHeader");button(page.props.actions,"Install standard library").props.onClick();tree=await h.flush();assert.equal(h.calls.filter(c=>c[0]==="install").length,0);button(tree,"Install 19 masters").props.onClick();await h.flush();assert.equal(h.calls.filter(c=>c[0]==="install").length,1);assert.ok(textOf(h.tree()).includes("1 labor packages, 1 support-cost templates"));}finally{h.cleanup();}
 });
 
 test("declining copy cancellation preserves unsaved copy",async()=>{

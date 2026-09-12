@@ -1,4 +1,8 @@
 .labor-master { --labor-border: var(--n-200, #dfe5ed); }
+.labor-install-confirm { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 0 0 16px; padding: 16px 18px; border: 1px solid #f0c36a; border-radius: 10px; background: #fff9e8; box-shadow: var(--shadow-sm); }
+.labor-install-confirm strong { display: block; margin-bottom: 4px; color: var(--text); }
+.labor-install-confirm p { margin: 0; color: var(--muted, #64748b); line-height: 1.5; }
+.labor-install-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .labor-guide { margin: 0 0 20px; border: 1px solid var(--labor-border); border-radius: 10px; background: var(--surface, #fff); }
 .labor-guide summary { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; color: var(--navy, #173c61); font-weight: 600; list-style: none; }
 .labor-guide summary::-webkit-details-marker { display: none; }
@@ -62,6 +66,8 @@
   .labor-package-card { height: 100%; }
 }
 @media (max-width: 700px) {
+  .labor-install-confirm { align-items: stretch; flex-direction: column; }
+  .labor-install-actions { justify-content: flex-end; }
   .labor-guide ol { grid-template-columns: 1fr; gap: 16px; }
   .labor-detail-meta .mono { overflow-wrap: anywhere; }
   .labor-actions > button { flex: 1 1 auto; }
