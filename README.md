@@ -1,5 +1,7 @@
 # IoT Team Center
 
+For AI-assisted maintenance, start at [Project Context](AGENTS.md): a module index with API/function locations, architecture and targeted checks. Read only the module relevant to your task. Dated status sections below are historical evidence, not a live deployment status.
+
 Internal engineering operations application for TOMAS TECH. Structured business data lives in SQL Server; the browser uses the authenticated API. Internal cost is distinct from selling price and profit margin.
 
 ## Current status - 2026-09-10
