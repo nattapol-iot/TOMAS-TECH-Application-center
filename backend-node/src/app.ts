@@ -50,6 +50,7 @@ import { registerSalesCustomerRoutes } from "./routes/sales-customers.js";
 import { registerModuleTemplateRoutes } from "./routes/module-templates.js";
 import { registerMaterialIssueRoutes } from "./routes/material-issues.js";
 import { registerPricingRoutes } from "./routes/pricing.js";
+import { registerEstimateCostLookupRoutes } from "./routes/estimate-cost-lookup.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerProjectDocumentRoutes } from "./routes/project-documents.js";
 import { registerPurchaseRequisitionRoutes } from "./routes/purchase-requisitions.js";
@@ -155,6 +156,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerExecutiveDashboardRoutes(app, database, users);
   registerBomRoutes(app, config, database, users);
   registerPricingRoutes(app, database, users);
+  registerEstimateCostLookupRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users);
   registerEstimateErpRoutes(app, database, users);
   registerOverheadPolicyRoutes(app, config, database, users);

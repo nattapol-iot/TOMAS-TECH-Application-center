@@ -4829,3 +4829,32 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cost-breakdown tr.cb-empty td { padding: 14px 12px; color: var(--muted); font-size: var(--fs-xs); text-align: center; background: var(--n-25); }
 .cost-breakdown tr.cb-empty .btn { margin-left: 10px; }
 .cost-breakdown tr.cb-empty .icon { vertical-align: -2px; }
+
+/* Search-as-you-type on the cost item form (CostItemLookup.tsx). The menu is
+   portalled to <body> and positioned from the input rect, so it sits above the
+   modal overlay (z-index 100) and is never clipped by the sheet cell. */
+.lookup-menu {
+  position: fixed;
+  z-index: 300;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-xs);
+}
+.lookup-option { display: grid; gap: 3px; width: 100%; padding: 7px 9px; border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lookup-option.active { background: var(--blue-soft); }
+.lookup-option.compact { grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 6px 9px; }
+.lookup-option.compact strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lookup-option.compact .icon { font-size: 13px; vertical-align: -2px; }
+.lookup-main { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.lookup-main .lookup-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.lookup-main em { font-style: normal; color: var(--muted); white-space: nowrap; }
+.lookup-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--ink-soft); font-size: var(--fs-2xs); }
+.lookup-meta .pill { padding: 1px 7px; font-size: var(--fs-2xs); }
+.lookup-meta .lookup-price { font-variant-numeric: tabular-nums; color: var(--ink); }
+.lookup-status { display: flex; align-items: center; gap: 8px; padding: 9px 10px; color: var(--muted); }
+.lookup-status .spinner { width: 14px; height: 14px; }
+.lookup-hint { padding: 6px 9px 3px; border-top: 1px solid var(--line-soft); color: var(--n-400); font-size: var(--fs-2xs); }

@@ -2,36 +2,37 @@
 
 [Module](../modules/labor.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `5eb9231a`; generated, do not edit. [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e2819388`; generated, do not edit. [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/labor-packages` | 339–387 |
-| GET | `/api/v1/labor-packages/:id` | 389–414 |
-| POST | `/api/v1/labor-packages` | 416–452 |
-| PUT | `/api/v1/labor-packages/:id` | 454–504 |
-| POST | `/api/v1/labor-packages/:id/retire` | 506–534 |
-| POST | `/api/v1/labor-packages/from-estimate` | 539–630 |
-| POST | `/api/v1/estimates/:id/apply-labor-package` | 642–837 |
+| GET | `/api/v1/labor-packages` | 345–393 |
+| POST | `/api/v1/labor-packages/install-standard-library` | 400–542 |
+| GET | `/api/v1/labor-packages/:id` | 544–569 |
+| POST | `/api/v1/labor-packages` | 571–607 |
+| PUT | `/api/v1/labor-packages/:id` | 609–659 |
+| POST | `/api/v1/labor-packages/:id/retire` | 661–689 |
+| POST | `/api/v1/labor-packages/from-estimate` | 694–785 |
+| POST | `/api/v1/estimates/:id/apply-labor-package` | 797–992 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `validation` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 54–56 |
-| `todayIn` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 58–62 |
-| `packageCode` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 64–70 |
-| `decimal` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 72–82 |
-| `optionalDecimal` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 84–86 |
-| `parsePackageLine` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 116–163 |
-| `parsePackage` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 165–184 |
-| `mapPackage` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 194–208 |
-| `mapPackageLine` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 231–245 |
-| `replacePackageLines` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 247–275 |
-| `parseApplyOverride` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 294–315 |
-| `registerLaborPackageRoutes` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 317–838 |
+| `validation` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 60–62 |
+| `todayIn` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 64–68 |
+| `packageCode` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 70–76 |
+| `decimal` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 78–88 |
+| `optionalDecimal` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 90–92 |
+| `parsePackageLine` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 122–169 |
+| `parsePackage` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 171–190 |
+| `mapPackage` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 200–214 |
+| `mapPackageLine` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 237–251 |
+| `replacePackageLines` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 253–281 |
+| `parseApplyOverride` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 300–321 |
+| `registerLaborPackageRoutes` | [backend-node/src/routes/labor-packages.ts](<../../../backend-node/src/routes/labor-packages.ts>) | 323–993 |
 
 ## Direct local dependencies
 
@@ -43,11 +44,12 @@ Evidence: source snapshot `5eb9231a`; generated, do not edit. [backend-node/src/
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/labor-master.ts](<../../../backend-node/src/labor-master.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
+- [backend-node/src/standard-labor-cost-masters.ts](<../../../backend-node/src/standard-labor-cost-masters.ts>)
 - [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.engineering_rates`, `dbo.estimate_erp_mappings`, `dbo.estimates`, `dbo.labor_package_lines`, `dbo.labor_packages`, `dbo.manhour_lines`, `dbo.module_templates`, `dbo.users`
+`dbo.engineering_rates`, `dbo.estimate_erp_mappings`, `dbo.estimates`, `dbo.labor_package_lines`, `dbo.labor_packages`, `dbo.manhour_lines`, `dbo.module_template_lines`, `dbo.module_templates`, `dbo.users`
 
 ## Change boundary
 

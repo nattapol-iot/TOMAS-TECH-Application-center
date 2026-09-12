@@ -1200,6 +1200,35 @@ export const listEstimates = (values: {
 }) =>
   apiRequest<PagedResult<EstimateSummary>>(`/api/v1/estimates/${queryString(values)}`);
 
+export type CostItemLookupField = "itemCode" | "description" | "brand" | "supplier";
+export type CostItemLookupRecord = {
+  key: string;
+  sourceKind: "Estimate" | "Historical Purchase";
+  sourceNumber: string;
+  projectName: string;
+  categoryCode: string;
+  category: string;
+  subcategory: string;
+  module: string;
+  itemCode: string;
+  description: string;
+  brand: string;
+  model: string;
+  specification: string | null;
+  supplierId: number | null;
+  supplierName: string | null;
+  unit: string;
+  unitCost: number;
+  priceSource: string;
+  referenceNumber: string | null;
+  referenceProject: string | null;
+  priceDate: string | null;
+  uses: number;
+};
+/** Type-ahead over every current-revision cost line and the imported purchase history; one row per distinct part. */
+export const lookupCostItems = (values: { q: string; field?: CostItemLookupField; limit?: number }, signal?: AbortSignal) =>
+  apiRequest<{ items: CostItemLookupRecord[] }>(`/api/v1/estimates/cost-item-lookup${queryString(values)}`, signal ? { signal } : undefined);
+
 export const listSupplierPriceHistory = (values: { page?: number; pageSize?: number; search?: string; supplierId?: number } = {}) =>
   apiRequest<PagedResult<SupplierPriceHistoryRecord>>(`/api/v1/pricing/history${queryString(values)}`);
 

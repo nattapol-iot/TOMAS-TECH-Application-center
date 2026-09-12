@@ -3,6 +3,8 @@ import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
 import { Children, cloneElement, isValidElement, type ComponentProps, type ReactNode } from "react";
 import type { BootstrapData, CostItemInput } from "../api-client";
+import type { CostItemLookupPatch } from "../../../lib/cost-item-lookup";
+import { CostItemLookupInput, SupplierLookupInput } from "./CostItemLookup";
 import { Field } from "../ui";
 export const COST_CATEGORIES = [
   ["01", "Hardware"], ["02", "Software"], ["03", "Electrical"], ["04", "Mechanical"], ["05", "Robot"],
@@ -25,9 +27,12 @@ export const COST_ITEM_TABLE_COLUMNS = [
   { title: "Price source / Date", labels: ["Price source *", "Price date"] },
   { title: "Remark", labels: ["Remark"] },
 ];
-export function CostItemFields({ form, onChange, suppliers, allowedCategories = COST_CATEGORIES, perSet = false, layout = "form", moduleField, ownerField, referenceNumberField, referenceProjectField, statusField }: {
+export function CostItemFields({ form, onChange, onLookupPick, suppliers, allowedCategories = COST_CATEGORIES, perSet = false, layout = "form", moduleField, ownerField, referenceNumberField, referenceProjectField, statusField }: {
   form: CostItemFieldsValue;
   onChange: (patch: Partial<CostItemFieldsValue>) => void;
+  /* When given, Item code / Description / Brand search previously priced parts and Supplier becomes a
+     filtered combobox; a pick hands the whole reference line (incl. reference number/project) back here. */
+  onLookupPick?: (patch: CostItemLookupPatch) => void;
   suppliers: BootstrapData["suppliers"];
   allowedCategories?: ReadonlyArray<readonly [string, string]>;
   perSet?: boolean;
@@ -39,12 +44,12 @@ export function CostItemFields({ form, onChange, suppliers, allowedCategories = 
       <Field label="Category *"><select value={form.categoryCode} onChange={(event) => { const selected = COST_CATEGORIES.find(([code]) => code === event.target.value); onChange({ categoryCode: event.target.value, category: selected?.[1] ?? form.category }); }}>{allowedCategories.map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>)}</select></Field>
       <Field label="Subcategory"><input maxLength={100} value={form.subcategory ?? ""} onChange={(event) => update("subcategory", event.target.value)} /></Field>
       {moduleField}
-      <Field label="Item code *"><input required maxLength={100} value={form.itemCode} onChange={(event) => update("itemCode", event.target.value)} /></Field>
-      <Field label="Description *" span={2}><input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} /></Field>
-      <Field label="Brand"><input maxLength={100} value={form.brand ?? ""} onChange={(event) => update("brand", event.target.value)} /></Field>
+      <Field label="Item code *" hint={onLookupPick ? "พิมพ์เพื่อค้นหารายการที่เคยประเมิน" : undefined}>{onLookupPick ? <CostItemLookupInput field="itemCode" required maxLength={100} value={form.itemCode} onChange={(text) => update("itemCode", text)} onPick={onLookupPick} suppliers={suppliers} /> : <input required maxLength={100} value={form.itemCode} onChange={(event) => update("itemCode", event.target.value)} />}</Field>
+      <Field label="Description *" span={2}>{onLookupPick ? <CostItemLookupInput field="description" required maxLength={500} value={form.description} onChange={(text) => update("description", text)} onPick={onLookupPick} suppliers={suppliers} /> : <input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} />}</Field>
+      <Field label="Brand">{onLookupPick ? <CostItemLookupInput field="brand" maxLength={100} value={form.brand ?? ""} onChange={(text) => update("brand", text)} onPick={onLookupPick} suppliers={suppliers} /> : <input maxLength={100} value={form.brand ?? ""} onChange={(event) => update("brand", event.target.value)} />}</Field>
       <Field label="Model"><input maxLength={200} value={form.model ?? ""} onChange={(event) => update("model", event.target.value)} /></Field>
       <Field label="Specification" span={2}><textarea maxLength={20000} rows={3} value={form.specification ?? ""} onChange={(event) => update("specification", event.target.value)} /></Field>
-      <Field label="Supplier"><select value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"No supplier"} /></option>{form.supplierId && !suppliers.some((supplier) => supplier.id === form.supplierId) ? <option value={form.supplierId}><LocalizedText text={"Supplier #"} />{form.supplierId} <LocalizedText text={"(inactive)"} /></option> : null}{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field>
+      <Field label="Supplier" hint={onLookupPick ? "พิมพ์ชื่อหรือรหัสแล้วเลือกจากรายการ" : undefined}>{onLookupPick ? <SupplierLookupInput suppliers={suppliers} value={form.supplierId} onChange={(supplierId) => update("supplierId", supplierId)} placeholder="ค้นหา supplier…" /> : <select value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"No supplier"} /></option>{form.supplierId && !suppliers.some((supplier) => supplier.id === form.supplierId) ? <option value={form.supplierId}><LocalizedText text={"Supplier #"} />{form.supplierId} <LocalizedText text={"(inactive)"} /></option> : null}{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select>}</Field>
       {ownerField}
       <Field label={perSet ? "Quantity / 1 set *" : "Quantity *"}><input type="number" min="0.0001" required max="999999999.9999" step="0.0001" value={Number.isFinite(form.quantity) ? form.quantity : ""} onChange={(event) => update("quantity", event.target.valueAsNumber)} /></Field>
       <Field label="Unit *"><select value={form.unit} onChange={(event) => update("unit", event.target.value)}>{!UNITS.includes(form.unit) && form.unit ? <option>{form.unit}</option> : null}{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></Field>
