@@ -1,3 +1,4 @@
+import { ESTIMATE_OVERHEAD_ENABLED } from "../feature-flags.js";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { AppConfig } from "../config.js";
@@ -86,9 +87,9 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       WHERE r.estimate_id=@id ORDER BY r.revision DESC,r.id DESC;
 
       SELECT code,message,entity_type,entity_id,CAST(N'Error' AS nvarchar(20)) severity FROM dbo.fn_estimate_validation(@id)
-      UNION ALL SELECT N'overhead_policy_missing',N'No overhead policy is applied. The total excludes overhead.',N'Estimate',e.id,N'Warning'
+      ${ESTIMATE_OVERHEAD_ENABLED ? `UNION ALL SELECT N'overhead_policy_missing',N'No overhead policy is applied. The total excludes overhead.',N'Estimate',e.id,N'Warning'
         FROM dbo.estimates e WHERE e.id=@id AND e.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM dbo.estimate_overhead_snapshots overhead
-          WHERE overhead.estimate_id=e.id AND overhead.revision=e.revision)
+          WHERE overhead.estimate_id=e.id AND overhead.revision=e.revision)` : ""}
       UNION ALL SELECT N'cost_reference_missing',N'Cost item "'+ci.item_code+N'" has no reference number.',N'CostItem',ci.id,N'Warning'
         FROM dbo.cost_items ci INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
         WHERE ci.estimate_id=@id AND ci.deleted_at IS NULL AND NULLIF(LTRIM(RTRIM(ci.reference_no)),N'') IS NULL

@@ -85,14 +85,26 @@ test("ERP reconciliation tolerates one satang and preserves mapping provenance",
   assert.equal(summary.lines[0]?.copiedFromRevision, 2);
 });
 
-test("ERP export remains blocked until the overhead policy is resolved", () => {
+test("ERP export remains blocked until the overhead policy is resolved while the overhead feature is on", () => {
   const summary = buildErpSummary(
     { ...header, overhead_state: "Missing", overhead_total: null },
     [line({})],
     true,
+    { overheadEnabled: true },
   );
   assert.equal(summary.reconciled, true);
   assert.equal(summary.capabilities.canExport, false);
+});
+
+test("ERP export ignores the missing overhead policy while the overhead feature is switched off", () => {
+  const summary = buildErpSummary(
+    { ...header, overhead_state: "Missing", overhead_total: null },
+    [line({})],
+    true,
+    { overheadEnabled: false },
+  );
+  assert.equal(summary.capabilities.canExport, true);
+  assert.equal(summary.overhead.amount, 0, "overhead stays reported as zero so the reconciliation footer is unchanged");
 });
 
 test("zero contingency is omitted and does not create a false unmapped blocker", () => {

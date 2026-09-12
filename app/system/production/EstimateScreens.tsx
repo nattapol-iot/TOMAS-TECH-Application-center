@@ -2,6 +2,7 @@
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
+import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
 import { LaborPackageMaster } from "./LaborPackageMaster";
@@ -595,7 +596,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       ["Severity", "Code", "Message", "Entity type", "Entity ID"],
       ...workspace.validationIssues.map((issue) => [issue.severity, issue.code, issue.message, issue.entityType, issue.entityId]),
       [], ["TOTALS"],
-      ["Overhead state", header.overhead?.state ?? "Missing"], ["Overhead policy version", header.overhead?.policyVersion ?? null], ["Overhead hourly rate", header.overhead?.hourlyRate ?? null], ["Overhead eligible hours", header.overhead?.eligibleDirectHours ?? null], ["Overhead", totals.overhead ?? null],
+      ...(ESTIMATE_OVERHEAD_ENABLED ? [["Overhead state", header.overhead?.state ?? "Missing"], ["Overhead policy version", header.overhead?.policyVersion ?? null], ["Overhead hourly rate", header.overhead?.hourlyRate ?? null], ["Overhead eligible hours", header.overhead?.eligibleDirectHours ?? null], ["Overhead", totals.overhead ?? null]] : []),
       ["Material", numberOf(totals.material)], ["Engineering", numberOf(totals.engineering)], ["Outsource", numberOf(totals.outsource)], ["Transportation", numberOf(totals.transportation)], ["Accommodation", numberOf(totals.accommodation)], ["Other", numberOf(totals.other)], [`Contingency ${formatNumber(header.contingencyRate)}%`, numberOf(totals.contingency)], ["TOTAL ESTIMATED COST", numberOf(totals.total)],
     ];
     exportXlsx(rows, `${header.number}_${revisionCode(header.revision)}_${header.status.replaceAll(" ", "-")}_EstimateCost.xlsx`);
@@ -635,7 +636,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel key={`erp-${header.rowVersion}`} workspace={workspace} notify={notify} onChanged={afterMutation} /><EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /><EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel key={`erp-${header.rowVersion}`} workspace={workspace} notify={notify} onChanged={afterMutation} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} onFocusModule={(key) => { setCostFocus(key); setTab("cost"); }} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION } from "../../../lib/erp-estimate-workbook";
 import { filterErpLines, groupErpLines, suggestErpCategory } from "../../../lib/erp-category-suggest";
+import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import {
   loadEstimateErpSummary,
   recordEstimateErpExport,
@@ -83,7 +84,8 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify }: {
   const internalOptions = useMemo(() => [...new Set(scopeLines.map((line) => line.internalCategory))].sort((a, b) => a.localeCompare(b)), [scopeLines]);
   const suggestions = useMemo(() => Object.fromEntries((summary?.lines ?? []).map((line) => [sourceKey(line), suggestErpCategory(line)])), [summary]);
   const classifiedLineCount = summary?.categories.reduce((total, category) => total + category.lineCount, 0) ?? 0;
-  const approvedOverhead = summary?.overhead.state === "Applied" || summary?.overhead.state === "Zero";
+  // With the overhead feature switched off the export is not gated on an overhead policy.
+  const approvedOverhead = !ESTIMATE_OVERHEAD_ENABLED || summary?.overhead.state === "Applied" || summary?.overhead.state === "Zero";
   const overheadAmount = Number(summary?.overhead.amount ?? 0);
   const canEdit = Boolean(summary?.capabilities.canEditMappings) && !busy;
   const visibleKeys = visibleLines.map(sourceKey);
@@ -237,7 +239,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify }: {
       </table></div>
       <div className={`info-strip ${summary.unmapped.lineCount ? "amber" : summary.reconciled ? "green" : "red"}`}>
         <Icon name={!summary.unmapped.lineCount && summary.reconciled ? "checkCircle" : "alertTriangle"} />
-        <span><strong>{summary.unmapped.lineCount ? copy(`ยังไม่ได้จัดหมวด ${summary.unmapped.lineCount} รายการ`, `${summary.unmapped.lineCount} line(s) are not mapped`, `${summary.unmapped.lineCount}件が未分類です`) : summary.reconciled ? copy("ยอด ERP ตรงกับ Estimate", "ERP total matches the Estimate", "ERP合計は見積と一致しています") : copy(`ยอดต่างกัน ${money(summary.difference)}`, `Difference ${money(summary.difference)}`, `差額 ${money(summary.difference)}`)}</strong><br />{copy("7 หมวด", "7 categories", "7分類")} {money(summary.classifiedTotal)} + {unmappedLabel} {money(summary.unmapped.amount)} + Overhead {money(overheadAmount)} · Estimate {money(summary.canonicalTotal)}</span>
+        <span><strong>{summary.unmapped.lineCount ? copy(`ยังไม่ได้จัดหมวด ${summary.unmapped.lineCount} รายการ`, `${summary.unmapped.lineCount} line(s) are not mapped`, `${summary.unmapped.lineCount}件が未分類です`) : summary.reconciled ? copy("ยอด ERP ตรงกับ Estimate", "ERP total matches the Estimate", "ERP合計は見積と一致しています") : copy(`ยอดต่างกัน ${money(summary.difference)}`, `Difference ${money(summary.difference)}`, `差額 ${money(summary.difference)}`)}</strong><br />{copy("7 หมวด", "7 categories", "7分類")} {money(summary.classifiedTotal)} + {unmappedLabel} {money(summary.unmapped.amount)}{ESTIMATE_OVERHEAD_ENABLED ? ` + Overhead ${money(overheadAmount)}` : ""} · Estimate {money(summary.canonicalTotal)}</span>
       </div>
 
       <div className="toolbar erp-toolbar">

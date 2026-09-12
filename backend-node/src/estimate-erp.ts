@@ -1,3 +1,4 @@
+import { ESTIMATE_OVERHEAD_ENABLED } from "./feature-flags.js";
 import { ApiError } from "./errors.js";
 
 export const ERP_CATEGORIES = [
@@ -65,6 +66,7 @@ export function buildErpSummary(
   header: ErpHeaderRow,
   rows: ErpLineRow[],
   canEditMappings: boolean,
+  options: { overheadEnabled: boolean } = { overheadEnabled: ESTIMATE_OVERHEAD_ENABLED },
 ) {
   const round = (value: number) => Math.round((value + Number.EPSILON) * 10000) / 10000;
   const lines = rows.filter((row) => row.source_type !== "Contingency" || Math.abs(Number(row.amount)) > 0.005).map((row) => ({
@@ -114,7 +116,7 @@ export function buildErpSummary(
     reconciled,
     capabilities: {
       canEditMappings,
-      canExport: header.overhead_state !== "Missing" && unmapped.lineCount === 0 && reconciled,
+      canExport: (!options.overheadEnabled || header.overhead_state !== "Missing") && unmapped.lineCount === 0 && reconciled,
     },
     lines,
   };
