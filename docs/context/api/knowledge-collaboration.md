@@ -2,7 +2,7 @@
 
 [Module](../modules/knowledge.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `1e58594b`; generated, do not edit. [backend-node/src/routes/knowledge-collaboration.ts](<../../../backend-node/src/routes/knowledge-collaboration.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `84fdd5bc`; generated, do not edit. [backend-node/src/routes/knowledge-collaboration.ts](<../../../backend-node/src/routes/knowledge-collaboration.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

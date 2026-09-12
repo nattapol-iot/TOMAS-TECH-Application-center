@@ -24,7 +24,7 @@ Shared by Claude Code (via `CLAUDE.md` → `@AGENTS.md`) and Codex. This is the 
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — IoT Team Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `1e58594b` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `84fdd5bc` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 

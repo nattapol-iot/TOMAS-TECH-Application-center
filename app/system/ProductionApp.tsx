@@ -5,6 +5,7 @@ import { TeamActivityScreen } from "./production/TeamActivityScreen";
 import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { useActivityPresence } from "./use-activity-presence";
+import { restoredView, viewStorageKey } from "../../lib/remembered-view";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
@@ -303,6 +304,27 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setBootstrap(await loadBootstrap());
   };
 
+  const restoreWorkspace = useCallback((data: BootstrapData) => {
+    const allowed: View[] = NAV.flatMap(section => section.items)
+      .filter(item => (!item.permission || data.permissions.includes(item.permission))
+        && (!item.permissions || item.permissions.every(permission => data.permissions.includes(permission))))
+      .map(item => item.view);
+    allowed.push("profile", "signature");
+    if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
+    if (data.permissions.includes("master.read")) allowed.push("customers", "rates");
+    let saved: string | null = null;
+    try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
+    catch { /* Storage may be disabled; normal navigation still works. */ }
+    setViewState(restoredView(saved, allowed, window.location.hash, initialVerifyCode, "dashboard"));
+    setBootstrap(data);
+  }, [initialVerifyCode]);
+
+  useEffect(() => {
+    if (!bootstrap) return;
+    try { window.sessionStorage.setItem(viewStorageKey(bootstrap.user.id), view); }
+    catch { /* Remembering the page is optional when browser storage is blocked. */ }
+  }, [bootstrap, view]);
+
   useEffect(() => {
     if (!IS_AUTH_CONFIGURED) {
       return;
@@ -321,7 +343,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           }
           const data = await loadBootstrap();
           if (!cancelled) {
-            setBootstrap(data);
+            restoreWorkspace(data);
             setBusy(false);
             setRestoringSession(false);
           }
@@ -330,7 +352,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         const hasSession = IS_TEAM_TEST_MODE ? Boolean(getTeamTestSession()) : Boolean(await restoreAccount());
         if (hasSession && !cancelled) {
           const data = await loadBootstrap();
-          if (!cancelled) setBootstrap(data);
+          if (!cancelled) restoreWorkspace(data);
         }
         if (!cancelled) {
           setBusy(false);
@@ -346,7 +368,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     };
     void restore();
     return () => { cancelled = true; };
-  }, []);
+  }, [restoreWorkspace]);
 
   useEffect(() => {
     let cancelled = false;
@@ -422,7 +444,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       }
       if (IS_TEAM_TEST_MODE) {
         saveTeamTestSession(teamTestEmail ?? "", teamTestAccessCode ?? "");
-        setBootstrap(await loadBootstrap());
+        restoreWorkspace(await loadBootstrap());
       } else {
         // Navigates away to Microsoft's login page -- restoreAccount() picks the
         // session back up (and loads bootstrap data) once the redirect returns.
@@ -438,6 +460,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 
   const signOut = async () => {
     if (!confirmReportNavigation()) return;
+    try { if (bootstrap) window.sessionStorage.removeItem(viewStorageKey(bootstrap.user.id)); }
+    catch { /* Sign-out must also work when browser storage is blocked. */ }
     setBusy(true); setAuthError("");
     try {
       if (IS_TMT_ID_MODE) {

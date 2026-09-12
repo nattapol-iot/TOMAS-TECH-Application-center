@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import * as rememberedView from "../lib/remembered-view.ts";
 
 const source = readFileSync(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
@@ -36,6 +37,9 @@ function createHarness({
   restoreAccount = async () => null,
   loadTmtIdSession = async () => ({ status: "signed-out" }),
   loadBootstrap = async () => bootstrap,
+  savedView = null,
+  hash = "",
+  storageBlocked = false,
 }) {
   const states = [];
   let cursor = 0;
@@ -68,6 +72,7 @@ function createHarness({
     get: (_target, property) => property === "default" ? "MockDefaultComponent" : String(property),
   });
   const modules = {
+    "../../lib/remembered-view": rememberedView,
     react,
     "react/jsx-runtime": jsxRuntime,
     "./auth-client": {
@@ -138,7 +143,12 @@ function createHarness({
       removeItem: (key) => storage.delete(key),
       setItem: (key, value) => storage.set(key, String(value)),
     },
-    location: { hash: "", pathname: "/", search: "" },
+    sessionStorage: {
+      getItem: () => { if (storageBlocked) throw new Error("Storage blocked"); return savedView; },
+      setItem: () => {},
+      removeItem: () => {},
+    },
+    location: { hash, pathname: "/", search: "" },
     removeEventListener: () => {},
     scrollTo: () => {},
     setInterval: () => 1,
@@ -310,5 +320,36 @@ test("unconfigured authentication renders Login immediately without attempting r
     assert.equal(restoreCalls, 0);
   } finally {
     harness.cleanup();
+  }
+});
+
+test("authenticated refresh restores Estimate Cost in every sign-in mode", async (t) => {
+  for (const mode of ["tmt-id", "team-test", "entra"]) {
+    await t.test(mode, async () => {
+      const harness = createHarness({ mode, savedView: "estimates",
+        restoreAccount: async () => ({}), loadTmtIdSession: async () => ({ status: "signed-in" }),
+        loadBootstrap: async () => ({ ...bootstrap, permissions: ["estimate.read"] }),
+      });
+      try {
+        harness.render(); harness.runMountEffects();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.ok(findNode(harness.render(), node => node.type === "ProductionEstimates"));
+      } finally { harness.cleanup(); }
+    });
+  }
+});
+
+test("refresh falls back safely for revoked permissions or blocked storage", async (t) => {
+  for (const storageBlocked of [false, true]) {
+    await t.test(String(storageBlocked), async () => {
+      const harness = createHarness({ mode: "team-test", savedView: "estimates", storageBlocked });
+      try {
+        harness.render(); harness.runMountEffects();
+        await new Promise(resolve => setImmediate(resolve));
+        const tree = harness.render();
+        assert.ok(findNode(tree, node => node.type === "ProductionDashboard"));
+        assert.equal(findNode(tree, node => node.type === "ProductionEstimates"), undefined);
+      } finally { harness.cleanup(); }
+    });
   }
 });

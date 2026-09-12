@@ -31,6 +31,8 @@ flowchart LR
 
 ## Request and change boundaries
 
+Navigation refresh: `ProductionApp.restoreWorkspace` restores the last top-level view after authentication/bootstrap, using per-tab `sessionStorage` keyed by user ID. `lib/remembered-view.ts` prioritizes explicit support/activity/certificate links and validates remembered views against current permissions. Unknown or disallowed views fall back to Dashboard; logout clears the stored view. Storage denial must not block login. Nested tabs, selected records and unsaved forms are not restored. Regression coverage: `tests/remembered-view.test.mjs` and `tests/auth-restoration.test.mjs`.
+
 1. A production screen calls a function in api-client.ts. Navigation may use the ProductionApp view state, so routes.ts alone is not the active-menu inventory.
 2. Fastify applies authentication and configured middleware. Route handlers resolve current user permissions and record scope; visible menus do not confer write authorization.
 3. Business helpers validate inputs, workflow and monetary invariants. Writes may use transactions, rowVersion and audit. Inspect the selected path rather than assuming every endpoint enforces identical rules.

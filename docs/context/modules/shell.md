@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `1e58594b`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `84fdd5bc`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,11 +17,11 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 169–670 |
-| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 672–719 |
-| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 721–723 |
-| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 725–736 |
-| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 738–745 |
+| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 170–694 |
+| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 696–743 |
+| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 745–747 |
+| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 749–760 |
+| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 762–769 |
 | `initials` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 25–27 |
 | `permissionVerb` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 29–32 |
 | `ProductionProfile` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 34–133 |
@@ -39,6 +39,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/production/ExecutiveDashboard.tsx](<../../../app/system/production/ExecutiveDashboard.tsx>)
 - [backend-node/src/executive-dashboard-model.ts](<../../../backend-node/src/executive-dashboard-model.ts>)
 - [app/system/use-activity-presence.ts](<../../../app/system/use-activity-presence.ts>)
+- [lib/remembered-view.ts](<../../../lib/remembered-view.ts>)
 - [app/system/Brand.tsx](<../../../app/system/Brand.tsx>)
 - [app/system/auth-client.ts](<../../../app/system/auth-client.ts>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)
@@ -74,6 +75,8 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
 
 ## Candidate regression tests
+
+- [tests/remembered-view.test.mjs](<../../../tests/remembered-view.test.mjs>)
 
 - [tests/auth-restoration.test.mjs](<../../../tests/auth-restoration.test.mjs>)
 - [backend-node/tests/auth.test.ts](<../../../backend-node/tests/auth.test.ts>)
