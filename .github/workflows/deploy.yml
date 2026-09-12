@@ -37,4 +37,6 @@ jobs:
         # rsync --exclude .env in the script). No sudo needed: the colima socket
         # lives under the tomastc home directory.
         # See docs/MACMINI_HANDOFF.md § "Bringing this repo up".
+        env:
+          DEV_NAS_USERNAME: ${{ secrets.NAS_USERNAME }}
         run: scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"

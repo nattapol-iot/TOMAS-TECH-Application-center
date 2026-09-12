@@ -38,7 +38,7 @@ docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context 
 DOCUMENT_MODE="$(grep -E '^DEV_DOCUMENT_STORAGE_MODE=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
 if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
   log "Verifying the NAS mount on the Mac host"
-  DEV_NAS_USERNAME="$(grep -E '^DEV_NAS_USERNAME=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
+  DEV_NAS_USERNAME="${DEV_NAS_USERNAME:-$(grep -E '^DEV_NAS_USERNAME=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)}"
   [[ -n "$DEV_NAS_USERNAME" ]] || die "NAS mode is enabled but DEV_NAS_USERNAME is missing."
   DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
 fi
