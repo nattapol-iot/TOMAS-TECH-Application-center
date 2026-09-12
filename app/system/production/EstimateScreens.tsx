@@ -14,6 +14,7 @@ import { CostItemLookupInput, SupplierLookupInput } from "./CostItemLookup";
 import type { CostItemLookupPatch } from "../../../lib/cost-item-lookup";
 import { validCostItemNumbers } from "../../../lib/cost-item-validation";
 import { estimateApplyOwnerId, estimateIssueTab, estimateNextAction, estimateUxCopy, estimateIssueMessage, moduleTemplateApplyBlocker } from "../../../lib/estimate-ux";
+import { buildEstimateModuleSummary, estimateCostModuleKey, estimateOtherCostSectionCode, estimateWorkPackageKey, type EstimateModuleSummary } from "../../../lib/estimate-module-summary";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -34,6 +35,7 @@ import {
   createModuleTemplateFromEstimate,
   listModuleTemplates,
   loadEstimateCostWorkspace,
+  loadEstimateErpSummary,
   loadModuleTemplate,
   removeCostItem,
   removeEstimateExpense,
@@ -64,6 +66,7 @@ import {
   type EstimateOtherCostLine,
   type EstimateRevision,
   type EstimateSummary,
+  type EstimateErpSummary,
   type ModuleTemplateDetail,
   type ModuleTemplateSummary,
   type InquirySummary,
@@ -639,8 +642,8 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
-    {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} onOpenModule={(module) => { if (module.focusKey) setCostFocus(module.focusKey); setTab(module.targetTab); }} onSubmit={() => setWorkflowAction("submit")} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "cost" ? <><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode); if (group) setCostFocus(group.key); }} /><EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
       let rowVersion = workspace.header.rowVersion;
@@ -689,7 +692,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
         return true;
       } catch (requestError) { await mutationError(requestError); return false; }
       finally { setBusy(false); }
-    }} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /> : null}
+    }} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /></> : null}
     {tab === "manhour" ? <EstimateManhourTab
       bootstrap={bootstrap}
       workspace={workspace}
@@ -796,13 +799,11 @@ type CostModuleGroup = {
 };
 
 const MATERIAL_CODES = ["01", "02", "03", "04", "05"];
-const moduleKeyOf = (categoryCode: string, module: string) => `${categoryCode}::${module}`;
-
 function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   const groups = new Map<string, CostModuleGroup>();
   for (const line of lines) {
     const moduleName = line.module.trim() || "Unassigned";
-    const key = moduleKeyOf(line.categoryCode, moduleName);
+    const key = estimateCostModuleKey(line.categoryCode, moduleName);
     let group = groups.get(key);
     if (!group) {
       group = { key, module: moduleName, categoryCode: line.categoryCode, category: line.category, lines: [], total: 0, needPrice: 0, needSupplier: 0 };
@@ -837,25 +838,98 @@ function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorks
   </Panel>;
 }
 
-function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace }) {
+function EstimateSummaryTab({ workspace, onOpenModule, onSubmit }: { workspace: EstimateCostWorkspace; onOpenModule: (module: EstimateModuleSummary) => void; onSubmit: () => void }) {
   const uiText = useUiText();
-  const { header, costItems, manhourLines, expenseLines, otherCostLines } = workspace;
+  const { header, costItems, manhourLines, expenseLines, assignments, capabilities } = workspace;
+  const erpRequestKey = `${header.id}:${header.rowVersion}`;
+  const [erpReload, setErpReload] = useState(0);
+  const [erpState, setErpState] = useState<{ key: string; summary: EstimateErpSummary | null; error: boolean }>({ key: "", summary: null, error: false });
+  useEffect(() => {
+    let active = true;
+    void loadEstimateErpSummary(header.id)
+      .then((result) => { if (active) setErpState({ key: erpRequestKey, summary: result, error: false }); })
+      .catch(() => { if (active) setErpState({ key: erpRequestKey, summary: null, error: true }); });
+    return () => { active = false; };
+  }, [header.id, erpRequestKey, erpReload]);
+
+  const erpSummary = erpState.key === erpRequestKey ? erpState.summary : null;
+  const erpError = erpState.key === erpRequestKey && erpState.error;
+
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
   const warningCount = workspace.validationIssues.length - criticalCount;
-  const validationTone = criticalCount ? "error" : warningCount ? "warning" : "pass";
-  const validationIcon = criticalCount ? "alertCircle" : warningCount ? "alertTriangle" : "checkCircle";
-  const modules = costModuleGroups(costItems);
-  const openLines = modules.reduce((sum, group) => sum + group.needPrice + group.needSupplier, 0);
+  const modules = useMemo(() => buildEstimateModuleSummary(workspace, erpSummary), [workspace, erpSummary]);
+  const materialModules = costModuleGroups(costItems);
+  const openLines = materialModules.reduce((sum, group) => sum + group.needPrice + group.needSupplier, 0);
   const manDays = manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
+  const incompleteAssignments = assignments.filter((assignment) => !["Completed", "Reviewed"].includes(assignment.status)).length;
+  const erpMappingReady = Boolean(erpSummary && !erpSummary.unmapped.lineCount && erpSummary.reconciled);
+  const erpExportReady = Boolean(erpSummary?.capabilities.canExport);
+  const locked = Boolean(header.lockedAt) || ["Approved", "Locked"].includes(header.status);
+
+  const readiness = [
+    { label: "Assignment status", value: assignments.length ? `${assignments.length - incompleteAssignments}/${assignments.length} complete` : "No assignment", ok: assignments.length > 0 && incompleteAssignments === 0, warning: assignments.length === 0 },
+    { label: "Cost item status", value: `${costItems.length} lines · ${openLines ? `${openLines} need update` : "prices complete"}`, ok: costItems.length > 0 && openLines === 0, warning: openLines > 0 || !costItems.length },
+    { label: "Engineering labor status", value: `${formatNumber(manDays)} man-day · ${manhourLines.length + expenseLines.length} lines`, ok: manhourLines.length > 0, warning: !manhourLines.length },
+    { label: "ERP mapping status", value: erpError ? "Could not load" : !erpSummary ? "Checking…" : erpMappingReady ? "Mapping complete" : `${erpSummary.unmapped.lineCount} unmapped`, ok: erpMappingReady, warning: Boolean(erpSummary) && !erpMappingReady },
+    { label: "Validation status", value: criticalCount ? `${criticalCount} blocking error(s)` : warningCount ? `${warningCount} advisory warning(s)` : "Passed", ok: !criticalCount && !warningCount, warning: warningCount > 0 },
+    { label: "Revision status", value: `${revisionCode(header.revision)} · ${locked ? "Locked" : header.status}`, ok: !criticalCount, warning: false },
+  ];
+
   return <>
-    <section className="grid-2">
-      <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง"><ul className="check-list">
-        <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>
-        <li className={`check-item ${manhourLines.length ? "pass" : "warning"}`}><Icon name={manhourLines.length ? "checkCircle" : "alertTriangle"} /><div><strong>{formatNumber(manDays)} <LocalizedText text={"man-days"} /></strong><p>{manhourLines.length} <LocalizedText text={"man-hour line ·"} /> {expenseLines.length + otherCostLines.length} <LocalizedText text={"project cost line"} /></p></div></li>
-        <li className={`check-item ${validationTone}`}><Icon name={validationIcon} /><div><strong>{workspace.validationIssues.length ? `${criticalCount} error · ${warningCount} warning` : "Server validation passed"}</strong><p>{criticalCount ? "Critical error ปิดกั้นการ submit และ approve" : warningCount ? "Warning เป็นคำเตือน ไม่ปิดกั้น workflow" : "ตรวจกับ revision ปัจจุบันแล้ว"}</p></div></li>
-      </ul></Panel>
-      <Panel title="Revision information"><dl className="def-list one"><div><dt><LocalizedText text={"Revision"} /></dt><dd><strong>{revisionCode(header.revision)}</strong></dd></div><div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{header.status}</Badge></dd></div><div><dt><LocalizedText text={"Last updated"} /></dt><dd>{formatDateTime(header.updatedAt)}</dd></div><div><dt><LocalizedText text={"Lock"} /></dt><dd>{header.lockedAt ? `${formatDateTime(header.lockedAt)} · ${header.lockedByName ?? "—"}` : "Not locked"}</dd></div></dl></Panel>
-    </section>
+    <Panel title={uiText("Estimate Readiness")} subtitle="สถานะสำคัญของ revision นี้ก่อนส่งตรวจ">
+      <div className="estimate-readiness-grid">
+        {readiness.map((item) => <div className={`estimate-readiness-item ${item.ok ? "pass" : item.warning ? "warning" : "neutral"}`} key={item.label}>
+          <Icon name={item.ok ? "checkCircle" : item.warning ? "alertTriangle" : "clock"} />
+          <span><small><LocalizedText text={item.label} /></small><strong><LocalizedText text={item.value} /></strong></span>
+        </div>)}
+      </div>
+      {erpError ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>ERP readiness could not be loaded.</span><span className="spacer" /><button className="btn ghost sm" type="button" onClick={() => setErpReload((value) => value + 1)}>Try again</button></div> : null}
+    </Panel>
+
+    <Panel title={`Module Summary · ${modules.length} work package(s)`} subtitle="หนึ่งการ์ดต่อหนึ่ง Module / Work Package · เปิดรายละเอียดเมื่อต้องการแก้ Cost Items">
+      {modules.length ? <div className="estimate-module-list">
+        {modules.map((module, index) => {
+          const issueCount = module.errorCount + module.warningCount;
+          const erpTone = module.erpStatus === "Mapped" ? "green" : module.erpStatus === "Loading" ? undefined : "amber";
+          return <article className="estimate-module-card" key={module.key}>
+            <header>
+              <span className="estimate-module-number">{index + 1}</span>
+              <div className="estimate-module-title"><strong>{module.moduleName}</strong><span>{module.section} · {module.disciplines.join(", ") || "—"}</span></div>
+              <div className="estimate-module-amount"><strong>{formatMoney(module.amount)}</strong><span>{formatNumber(module.share, 1)}% of total estimate</span></div>
+            </header>
+            <div className="estimate-module-metrics">
+              <div><span>Cost type</span><strong>{module.costTypes.join(", ") || "—"}</strong></div>
+              <div><span>In-house</span><strong>{formatMoney(module.inHouseAmount)}</strong></div>
+              <div><span>Outsourced</span><strong>{formatMoney(module.outsourcedAmount)}</strong></div>
+              <div><span>Needs classification</span><strong>{module.unclassifiedAmount ? formatMoney(module.unclassifiedAmount) : "—"}</strong></div>
+              <div><span>Cost lines</span><strong>{module.lineCount}</strong></div>
+              <div><span>Responsible engineer</span><strong>{module.responsibleEngineers.join(", ") || "Unassigned"}</strong></div>
+              <div><span>Last updated</span><strong>{formatDate(module.lastUpdated)}</strong></div>
+            </div>
+            <footer>
+              <div className="estimate-module-status">
+                <Badge tone={erpTone}>{module.erpStatus === "Mapped" && module.erpCategories.length ? `ERP · ${module.erpCategories.join(", ")}` : `ERP · ${module.erpStatus}`}</Badge>
+                {module.errorCount ? <Badge tone="red">{module.errorCount} blocker(s)</Badge> : issueCount ? <Badge tone="amber">{module.warningCount} warning(s)</Badge> : <Badge tone="green">No line-level warning</Badge>}
+              </div>
+              <button className="btn default sm" type="button" onClick={() => onOpenModule(module)}>{module.targetTab === "cost" ? "View cost items" : "Open module"}<Icon name="arrowRight" /></button>
+            </footer>
+          </article>;
+        })}
+      </div> : <EmptyState icon="layers" title="No module or work package" message="Add a module in Cost Items or an engineering work package to start the estimate." />}
+      {numberOf(header.totals.contingency) > 0 || numberOf(header.totals.overhead) > 0 ? <p className="muted small estimate-module-note">Module shares use Total Estimated Cost as the denominator. Estimate-level overhead and contingency remain in the cost summary above.</p> : null}
+    </Panel>
+
+    <Panel title="Review Summary" subtitle="ผลตรวจสำหรับ Engineer และ Manager ก่อนดำเนินการขั้นถัดไป">
+      <div className="estimate-review-summary">
+        <div><span>Blocking errors</span><strong className={criticalCount ? "red-text" : undefined}>{criticalCount}</strong></div>
+        <div><span>Advisory warnings</span><strong>{warningCount}</strong></div>
+        <div><span>ERP export readiness</span><Badge tone={erpExportReady ? "green" : "amber"}>{erpExportReady ? "Ready" : erpMappingReady ? "Unavailable" : "Needs mapping"}</Badge></div>
+        <div><span>Revision lock</span><Badge tone={locked ? "green" : undefined}>{locked ? "Locked" : "Editable"}</Badge></div>
+        <span className="spacer" />
+        {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={criticalCount > 0} onClick={onSubmit}><Icon name="send" />Submit for Review</button> : null}
+      </div>
+      {!erpExportReady && erpSummary ? <p className="muted small">ERP export remains unavailable until the server confirms mapping, reconciliation, overhead policy and export permission.</p> : null}
+    </Panel>
   </>;
 }
 
@@ -908,7 +982,7 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
   const shareOf = (value: number) => total ? Math.round(value / total * 100) : 0;
   const isCollapsed = (key: string) => collapsed.includes(key);
   const toggleModule = (key: string) => setCollapsed((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
-  const pendingKey = pendingModule ? moduleKeyOf(pendingModule.categoryCode, pendingModule.module) : null;
+  const pendingKey = pendingModule ? estimateCostModuleKey(pendingModule.categoryCode, pendingModule.module) : null;
   const showPending = Boolean(pendingModule && pendingKey && !groups.some((group) => group.key === pendingKey) && (category === "all" || category === pendingModule?.categoryCode));
 
   /* The module the summary asked for wins over whatever was folded before. */
@@ -1089,7 +1163,7 @@ function EstimateCostItemsTab({ onExcelImported, bootstrap, workspace, busy, foc
     if (!pending.module) return;
     setCategory("all");
     setPendingModule(pending);
-    startQuickRow({ key: moduleKeyOf(pending.categoryCode, pending.module), ...pending });
+    startQuickRow({ key: estimateCostModuleKey(pending.categoryCode, pending.module), ...pending });
   }} /> : null}
   </>;
 }
@@ -1166,7 +1240,7 @@ function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { works
     const costs = sourceWorkspace.costItems.filter((line) => line.categoryCode === code).length;
     const manhour = code === "06" && ledgers.manhour ? sourceWorkspace.manhourLines.length : 0;
     const expenses = ledgers.expenses ? sourceWorkspace.expenseLines.filter((line) => EXPENSE_SECTION_BY_TYPE[line.expenseType] === code).length : 0;
-    const other = ledgers.otherCosts ? sourceWorkspace.otherCostLines.filter((line) => OTHER_COST_SECTION_BY_CATEGORY[line.category] === code).length : 0;
+    const other = ledgers.otherCosts ? sourceWorkspace.otherCostLines.filter((line) => estimateOtherCostSectionCode(line.category) === code).length : 0;
     return costs + manhour + expenses + other;
   };
   const totalLines = COST_CATEGORIES.reduce((sum, [code]) => sum + (selected.includes(code) && allowedSection(code) ? sectionCounts(code) : 0), 0);
@@ -1189,8 +1263,6 @@ function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { works
     </> : null}
   </Modal>;
 }
-
-const OTHER_COST_SECTION_BY_CATEGORY: Record<string, string> = { Outsource: "07", Transportation: "08", Accommodation: "09", "Other Cost": "10" };
 
 const normalizedHeader = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9ก-๙]+/g, "");
 const spreadsheetValue = (row: SpreadsheetRow, aliases: string[]) => {
@@ -1414,8 +1486,8 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
   const canAddManhour = workspace.capabilities.canEditManhour;
   const canAddExpense = workspace.capabilities.canEditExpenses;
   const groupKeys = [...new Set([
-    ...workspace.manhourLines.map((line) => `${line.costType}\u0000${line.package}`),
-    ...workspace.expenseLines.map((line) => `${line.costType}\u0000${line.package}`),
+    ...workspace.manhourLines.map((line) => estimateWorkPackageKey(line.costType, line.package)),
+    ...workspace.expenseLines.map((line) => estimateWorkPackageKey(line.costType, line.package)),
   ])];
   const groups = groupKeys.map((key) => {
     const [groupCostType, packageName] = key.split("\u0000") as [EstimateManhourInput["costType"], string];

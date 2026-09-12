@@ -207,9 +207,11 @@ Use existing Inquiry and Estimate navigation. Add My work / Team / Unassigned vi
 
 ### Estimate Cost addition
 
-Retain all nine existing tabs and their order: Summary, Cost Items, Engineering Man-hour, Other Project Cost, Assignment, Validation, Revision History, Compare Revision and Engineering Review. Keep Summary as first-open default, the eight summary tiles, toolbar and current editing modals. Do not consolidate navigation, move Validation into a drawer, or collapse the cost breakdown by default. The scoped brief now documents the existing structure and a bounded investigation plan.
+Retain all nine existing tabs and their order: Summary, Cost Items, Engineering Man-hour, Other Project Cost, Assignment, Validation, Revision History, Compare Revision and Engineering Review. Keep Summary as first-open default, the eight summary tiles, toolbar and current editing modals. Do not consolidate navigation or move Validation into a drawer.
 
-The 2026-09-11 ERP requirement extends Summary without replacing the internal breakdown. Summary must provide a distinct ERP Cost Summary for the seven company ERP categories and identify unmapped amounts. ERP export remains unavailable while any cost-bearing line is unmapped or the ERP total does not equal the canonical Estimate total. Exact workbook sheet names, columns, category codes and required metadata are governed by the real ERP import template, which is not yet present in this repository.
+Summary and Cost Items have separate decision purposes. Summary is the Engineer/Manager overview and stops at Module / Work Package granularity: next action, readiness, eight cost totals, one card per module, and review readiness. It never renders individual item descriptions by default. Each module card aggregates internal section, discipline, cost type, in-house/outsource split, line count, amount/share, validation state, ERP mapping state, owner and last update, with one link to the editing tab.
+
+Cost Items is the Engineer working surface. It owns the detailed cost-line ledger and ERP Category Summary: seven ERP category totals plus Unmapped, mapped state, filters, suggestions, bulk mapping, expanded line detail and ERP export. ERP export remains unavailable while any cost-bearing line is unmapped or the ERP total does not equal the canonical Estimate total. This presentation split does not change canonical totals, validation, audit, revision locking, or the ERP workbook contract.
 
 ### KPI pilot
 
