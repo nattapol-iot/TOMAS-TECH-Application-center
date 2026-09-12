@@ -44,6 +44,7 @@ Navigation refresh: `ProductionApp.restoreWorkspace` restores the last top-level
 - Estimate section/discipline, source ledger, ERP category and assigned owner are separate concepts. Do not merge these into one enum or infer access from department alone.
 - Copy Estimate is transactional, preserves source data and existing target assignments, and resolves internal labor against the live rate master. Start at [copy](modules/estimate-copy.md).
 - ERP classifications are revision-scoped. Summary/export must reconcile all contributing ledgers and overhead. Start at [ERP](modules/estimate-erp.md).
+- ERP mapping UI: [EstimateErpSummary.tsx](../../app/system/production/EstimateErpSummary.tsx) supports selection/bulk drafts, search and filters, grouped subtotals and discard. Suggestions from [erp-category-suggest.ts](../../lib/erp-category-suggest.ts) require review and an explicit save; OtherCostLine and Contingency always stay manual. Export remains blocked while drafts are unsaved. Check [suggestion tests](../../tests/erp-category-suggest.test.mjs) and [workbook tests](../../tests/erp-estimate-workbook.test.mjs) for changes here.
 - Labor package defaults are reusable inputs; applying them is not permission to copy historical internal rates. Start at [labor](modules/labor.md).
 - Signing, resource task workflow and report approval overlap but have distinct identity and state rules. Read both module cards when changing the handoff.
 

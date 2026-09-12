@@ -35,6 +35,11 @@ test("manhour and expense lines follow their cost type", () => {
 test("other cost and contingency stay manual", () => {
   assert.equal(suggestErpCategory({ sourceType: "OtherCostLine", internalCategory: "Other", description: "Misc" }), null);
   assert.equal(suggestErpCategory({ sourceType: "Contingency", internalCategory: "Contingency", description: "Contingency 5%" }), null);
+  for (const sourceType of ["OtherCostLine", "Contingency"]) {
+    for (const description of ["Software license", "Operator training", "Maintenance reserve"]) {
+      assert.equal(suggestErpCategory({ sourceType, internalCategory: "Other", description }), null);
+    }
+  }
 });
 
 const lines = [

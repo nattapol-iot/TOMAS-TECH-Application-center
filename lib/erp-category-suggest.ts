@@ -32,6 +32,7 @@ const DESCRIPTION_RULES: Array<{ pattern: RegExp; category: ErpCostCategory }> =
  * Returns null when the line needs a human decision (OtherCostLine, Contingency, unknown module).
  */
 export function suggestErpCategory(line: ErpSuggestibleLine): ErpCostCategory | null {
+  if (line.sourceType === "OtherCostLine" || line.sourceType === "Contingency") return null;
   const description = line.description ?? "";
   for (const rule of DESCRIPTION_RULES) if (rule.pattern.test(description)) return rule.category;
   const internal = (line.internalCategory ?? "").trim();
