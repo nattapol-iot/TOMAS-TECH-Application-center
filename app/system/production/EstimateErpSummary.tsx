@@ -19,8 +19,16 @@ import { currentLocale } from "../i18n";
 import { EmptyState, Icon, Panel, SearchInput } from "../ui";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 
-/* Line-level ERP classification belongs to the Cost Items workspace. The Estimate
-   Summary consumes only aggregated module totals and never renders this ledger. */
+/*
+ * One list for the estimate's cost and its ERP classification.
+ *
+ * The numbered sections (cost categories, man-hour, expenses, other project cost)
+ * are the "main list" and start collapsed — the summary page shows sections and
+ * their totals only. Opening a section shows its lines in the ERP quotation layout
+ * (1-1, 1-2 …, qty, unit, in-house / outsourced, unit cost, amount) with the ERP
+ * category of each line editable in the last column, so there is no second list
+ * for ERP mapping. Internal engineering cost only; no selling figures exist here.
+ */
 
 type ErpLine = EstimateErpSummary["lines"][number];
 type DraftCategory = EstimateErpCategory | "Unmapped";
@@ -337,7 +345,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     <span><strong>{summary.unmapped.lineCount ? copy(`ยังไม่ได้จัดหมวด ERP ${summary.unmapped.lineCount} รายการ`, `${summary.unmapped.lineCount} line(s) are not mapped to an ERP category`, `${summary.unmapped.lineCount}件がERP未分類です`) : summary.reconciled ? copy("ยอด ERP ตรงกับ Estimate", "ERP total matches the Estimate", "ERP合計は見積と一致しています") : copy(`ยอดต่างกัน ${money(summary.difference)}`, `Difference ${money(summary.difference)}`, `差額 ${money(summary.difference)}`)}</strong><br />{copy("7 หมวด", "7 categories", "7分類")} {money(summary.classifiedTotal)} + {unmappedLabel} {money(summary.unmapped.amount)}{ESTIMATE_OVERHEAD_ENABLED ? ` + Overhead ${money(overheadAmount)}` : ""} · Estimate {money(summary.canonicalTotal)}</span>
   </div> : null;
 
-  return <Panel title={copy("สรุปหมวด ERP", "ERP Category Summary", "ERP分類サマリー")} subtitle={copy(`${sections.length} หมวด · ${lineCount} รายการ · จัดหมวด ERP ที่ระดับรายการต้นทุน`, `${sections.length} section(s) · ${lineCount} line(s) · map ERP categories at cost-line level`, `${sections.length}区分 · ${lineCount}明細 · 原価明細ごとにERP分類を設定`)} flush>
+  return <Panel title={copy("รายการต้นทุนและหมวด ERP", "Cost list & ERP categories", "原価明細とERP分類")} subtitle={copy(`${sections.length} หมวด · ${lineCount} รายการ · กดหมวดเพื่อดูรายการ · ต้นทุนภายในเท่านั้น`, `${sections.length} section(s) · ${lineCount} line(s) · open a section to see its lines · internal cost only`, `${sections.length}区分 · ${lineCount}明細 · 区分をクリックで明細表示 · 内部原価のみ`)} flush>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span><button className="btn ghost" type="button" onClick={() => { void load(); }}><LocalizedText text={"Try again"} /></button></div> : null}
     {statusStrip}
     {summary ? <div className="erp-tiles">

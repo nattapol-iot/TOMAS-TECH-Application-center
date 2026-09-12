@@ -574,7 +574,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /className="cost-inline-sheet cost-sheet"/);
   assert.match(estimateScreen, /Cost item created · press Enter to continue adding rows/);
   assert.match(estimateScreen, /aria-label=\{uiText\("Item code"\)\}/);
-  assert.match(estimateScreen, /workspace\.expenseLines\.map\(\(line\) => estimateWorkPackageKey\(line\.costType, line\.package\)\)/);
+  assert.match(estimateScreen, /workspace\.expenseLines\.map\(\(line\) => `\$\{line\.costType\}\\u0000\$\{line\.package\}`\)/);
   assert.match(estimateScreen, /setManhourSeed\(seed\)/);
   assert.match(estimateScreen, /setExpenseSeed\(seed\)/);
   assert.match(estimateScreen, /EXPENSE_SECTION_BY_TYPE\[expenseType\]/);

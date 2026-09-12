@@ -29,14 +29,6 @@ type CostInput = {
   supplierId: number | null; quantity: number; unit: string; unitCost: number; priceSource: string;
   referenceNumber: string | null; referenceProject: string | null; priceDate: string | null; remark: string | null; ownerId: number;
 };
-type ModuleLineVersion = { id: number; rowVersion: Buffer };
-type ModuleUpdateInput = {
-  estimateRowVersion: Buffer; currentCategoryCode: string; currentModule: string;
-  module: string; lines: ModuleLineVersion[];
-};
-type CostModuleRow = Record<string, unknown> & {
-  id: number | string; category_code: string; owner_id: number | string; row_version: Buffer;
-};
 
 function decimal(value: unknown, minimum: number, maximum: number, scale: number, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) {
@@ -76,28 +68,6 @@ function parseCostInput(request: FastifyRequest, requireLineVersion: boolean): C
     referenceProject: optionalBodyText(body.referenceProject, 200, "Reference project"),
     priceDate: parseDateOnly(body.priceDate, "Price date", true), remark: optionalBodyText(body.remark, 20_000, "Remark"),
     ownerId: requiredInteger(body.ownerId, "Owner", 1),
-  };
-}
-
-function parseModuleUpdateInput(request: FastifyRequest): ModuleUpdateInput {
-  const body = bodyObject(request.body);
-  const currentCategoryCode = requiredText(body.currentCategoryCode, 2, "Current category code").toUpperCase();
-  if (!categoryNames[currentCategoryCode]) throw new ApiError(400, "validation_failed", "Category code is not allowed.");
-  if (!Array.isArray(body.lines) || body.lines.length === 0 || body.lines.length > 10_000) {
-    throw new ApiError(400, "validation_failed", "Module lines must contain between 1 and 10000 cost lines.");
-  }
-  const seen = new Set<number>();
-  const lines = body.lines.map((value, index) => {
-    const line = bodyObject(value);
-    const id = requiredInteger(line.id, `Module line ${index + 1}`, 1);
-    if (seen.has(id)) throw new ApiError(400, "validation_failed", "Module line ids must be unique.");
-    seen.add(id);
-    return { id, rowVersion: parseRowVersion(line.rowVersion) };
-  });
-  return {
-    estimateRowVersion: parseRowVersion(body.estimateRowVersion), currentCategoryCode,
-    currentModule: requiredText(body.currentModule, 200, "Current module"),
-    module: requiredText(body.module, 200, "Module"), lines,
   };
 }
 
@@ -148,17 +118,6 @@ export function elevated(actor: CurrentUser, estimate: EditableEstimate): boolea
 }
 export function assigned(actor: CurrentUser, assignees: EstimateAssignees): boolean {
   return assignees.has(actor.id);
-}
-
-function moduleRowSnapshot(row: CostModuleRow): Record<string, unknown> {
-  const { row_version, ...values } = row;
-  return { ...values, rowVersion: row_version.toString("base64") };
-}
-
-export function assertCostItemIdentityUnchanged(before: Record<string, unknown>, categoryCode: string, module: string): void {
-  if (String(before.category_code) !== categoryCode || String(before.module) !== module) {
-    throw new ApiError(409, "module_identity_change_forbidden", "Use Edit module to rename a complete Module. A single cost item cannot change its Module or category.");
-  }
 }
 
 async function costSnapshot(transaction: TransactionType, estimateId: number, revision: number, lineId: number, expected: Buffer, includeDeleted: boolean): Promise<Record<string, unknown>> {
@@ -234,7 +193,6 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     return database.transaction(async (transaction) => {
       const estimate = await lockEditableEstimate(transaction, id, input.estimateRowVersion); await validateReferences(transaction, input.ownerId, input.supplierId);
       const before = await costSnapshot(transaction, id, estimate.revision, lineId, input.lineRowVersion!, false);
-      assertCostItemIdentityUnchanged(before, input.categoryCode, input.module);
       if (!elevated(actor, estimate)) {
         if (!assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) throw new ApiError(403, "cost_line_forbidden", "You may update a cost line only while a section of this estimate is assigned to you.");
         if (input.ownerId !== Number(before.owner_id)) throw new ApiError(403, "cost_owner_forbidden", "Only the estimate owner, an engineering manager or an administrator can reassign a cost line.");
@@ -252,74 +210,6 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await costSnapshot(transaction, id, estimate.revision, lineId, row.row_version, false);
       await insertAudit(transaction, actor.id, "CostItem", lineId, estimate.estimate_no, "Updated", before, after);
       return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") };
-    });
-  });
-
-  app.put("/api/v1/estimates/:id/cost-modules", async (request) => {
-    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
-    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
-    const input = parseModuleUpdateInput(request);
-    return database.transaction(async (transaction) => {
-      const estimate = await lockEditableEstimate(transaction, id, input.estimateRowVersion);
-      const select = new sql.Request(transaction); select.input("estimate_id", sql.BigInt, id); select.input("revision", sql.Int, estimate.revision);
-      select.input("current_category_code", sql.Char(2), input.currentCategoryCode); select.input("current_module", sql.NVarChar(200), input.currentModule);
-      const beforeRows = (await select.query<CostModuleRow>(`
-        SELECT id,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,
-          unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,deleted_at,row_version
-        FROM dbo.cost_items WITH (UPDLOCK,HOLDLOCK)
-        WHERE estimate_id=@estimate_id AND revision=@revision AND category_code=@current_category_code
-          AND module=@current_module AND deleted_at IS NULL ORDER BY id;
-      `)).recordset;
-      const expectedVersions = new Map(input.lines.map((line) => [line.id, line.rowVersion]));
-      const selectionMatches = beforeRows.length === input.lines.length && beforeRows.every((row) => {
-        const expected = expectedVersions.get(Number(row.id));
-        return !!expected && row.row_version.equals(expected);
-      });
-      if (!selectionMatches) {
-        throw new ApiError(409, "concurrency_conflict", "This module or one of its cost lines changed. Reload and try again.");
-      }
-      if (!elevated(actor, estimate) && !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) {
-        throw new ApiError(403, "cost_line_forbidden", "You may update a module only while a section of this estimate is assigned to you.");
-      }
-      if (input.currentModule.toLowerCase() !== input.module.toLowerCase()) {
-        const collision = new sql.Request(transaction); collision.input("estimate_id", sql.BigInt, id); collision.input("revision", sql.Int, estimate.revision);
-        collision.input("category_code", sql.Char(2), input.currentCategoryCode); collision.input("module", sql.NVarChar(200), input.module);
-        const exists = (await collision.query<{ present: number }>(`
-          SELECT CASE WHEN EXISTS(
-            SELECT 1 FROM dbo.cost_items WITH (UPDLOCK,HOLDLOCK)
-            WHERE estimate_id=@estimate_id AND revision=@revision AND category_code=@category_code AND module=@module AND deleted_at IS NULL
-          ) THEN 1 ELSE 0 END present;
-        `)).recordset[0];
-        if (Number(exists?.present ?? 0) === 1) {
-          throw new ApiError(409, "module_name_conflict", "A module with this name already exists in the selected discipline.");
-        }
-      }
-      const update = new sql.Request(transaction); update.input("estimate_id", sql.BigInt, id); update.input("revision", sql.Int, estimate.revision);
-      update.input("current_category_code", sql.Char(2), input.currentCategoryCode); update.input("current_module", sql.NVarChar(200), input.currentModule);
-      update.input("module", sql.NVarChar(200), input.module); update.input("actor", sql.BigInt, actor.id);
-      await update.query(`UPDATE dbo.cost_items SET module=@module,updated_by=@actor,updated_at=SYSUTCDATETIME()
-        WHERE estimate_id=@estimate_id AND revision=@revision AND category_code=@current_category_code
-          AND module=@current_module AND deleted_at IS NULL;`);
-      const afterRead = new sql.Request(transaction); afterRead.input("estimate_id", sql.BigInt, id); afterRead.input("revision", sql.Int, estimate.revision);
-      afterRead.input("category_code", sql.Char(2), input.currentCategoryCode); afterRead.input("module", sql.NVarChar(200), input.module);
-      const afterRows = (await afterRead.query<CostModuleRow>(`
-        SELECT id,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,
-          unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,deleted_at,row_version
-        FROM dbo.cost_items WITH (UPDLOCK,HOLDLOCK)
-        WHERE estimate_id=@estimate_id AND revision=@revision AND category_code=@category_code
-          AND module=@module AND deleted_at IS NULL ORDER BY id;
-      `)).recordset;
-      if (afterRows.length !== beforeRows.length) {
-        throw new ApiError(409, "concurrency_conflict", "The module could not be updated. Reload and try again.");
-      }
-      const afterById = new Map(afterRows.map((row) => [Number(row.id), row]));
-      const estimateVersion = await touchEstimate(transaction, id, actor.id);
-      for (const before of beforeRows) {
-        const lineId = Number(before.id); const after = afterById.get(lineId);
-        if (!after) throw new ApiError(409, "concurrency_conflict", "The module could not be updated. Reload and try again.");
-        await insertAudit(transaction, actor.id, "CostItem", lineId, estimate.estimate_no, "Updated", moduleRowSnapshot(before), moduleRowSnapshot(after));
-      }
-      return { estimateRowVersion: estimateVersion.toString("base64"), lines: afterRows.length };
     });
   });
 

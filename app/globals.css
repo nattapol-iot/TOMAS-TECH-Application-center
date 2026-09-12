@@ -4766,9 +4766,50 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   flex: none;
 }
 .module-row .group-action { opacity: 0; transition: opacity 0.12s ease; }
-.module-row .group-action.module-edit-action { opacity: 1; }
 .module-row:hover .group-action, .module-row:focus-within .group-action, .module-row .group-action:focus-visible { opacity: 1; }
 @media (hover: none) { .module-row .group-action { opacity: 1; } }
+
+/* The same compact Module overview is used on Summary and Cost Items. */
+.estimate-module-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.estimate-module-overview-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.estimate-module-overview-card header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.estimate-module-overview-card header > div { min-width: 0; }
+.estimate-module-overview-card header strong { display: block; color: var(--ink); }
+.estimate-module-overview-card header small { display: block; margin-top: 3px; color: var(--muted); }
+.estimate-module-overview-total { text-align: right; white-space: nowrap; }
+.estimate-module-overview-card dl {
+  display: grid;
+  grid-template-columns: 90px minmax(120px, 1fr) 110px;
+  gap: 8px;
+  margin: 0;
+}
+.estimate-module-overview-card dl div { min-width: 0; padding: 8px; border-radius: var(--r-md); background: var(--n-50); }
+.estimate-module-overview-card dt { font-size: var(--fs-2xs); color: var(--muted); }
+.estimate-module-overview-card dd { margin: 3px 0 0; overflow: hidden; color: var(--ink); font-size: var(--fs-xs); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.estimate-module-overview-card footer { display: flex; align-items: center; gap: 8px; }
+.estimate-module-overview-card footer .btn { margin-left: auto; }
+@media (max-width: 1100px) { .estimate-module-overview-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .estimate-module-overview-card dl { grid-template-columns: 1fr; }
+  .estimate-module-overview-card footer { align-items: stretch; flex-direction: column; }
+  .estimate-module-overview-card footer .btn { margin-left: 0; }
+}
 
 /* Group headings own expansion; leaf destinations remain independently accessible. */
 .nav-subitems { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--blue-line); }
@@ -4826,98 +4867,6 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .erp-tiles .summary-tile.green strong { color: var(--green-text); }
 .erp-tiles .summary-tile.amber { background: var(--amber-soft); }
 .erp-tiles .summary-tile.amber strong { color: var(--amber-text); }
-
-/* Estimate Summary is an overview: compact readiness and one card per module.
-   Item-level ERP mapping remains in Cost Items. */
-.estimate-readiness-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.estimate-readiness-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-}
-.estimate-readiness-item .icon { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--muted); }
-.estimate-readiness-item > span { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-.estimate-readiness-item small { color: var(--muted); }
-.estimate-readiness-item strong { overflow-wrap: anywhere; }
-.estimate-readiness-item.pass { border-color: var(--green-line); background: var(--green-soft); }
-.estimate-readiness-item.pass .icon { color: var(--green-text); }
-.estimate-readiness-item.warning { border-color: var(--amber-line); background: var(--amber-soft); }
-.estimate-readiness-item.warning .icon { color: var(--amber-text); }
-
-.estimate-module-list { display: grid; gap: 10px; }
-.estimate-module-card {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-}
-.estimate-module-card > header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--n-50);
-  border-bottom: 1px solid var(--line);
-}
-.estimate-module-number {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--blue-text);
-  background: var(--blue-soft);
-  font-weight: 700;
-}
-.estimate-module-title, .estimate-module-amount { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-.estimate-module-title strong { font-size: var(--fs-md); overflow-wrap: anywhere; }
-.estimate-module-title span, .estimate-module-amount span { color: var(--muted); font-size: var(--fs-xs); }
-.estimate-module-amount { text-align: right; }
-.estimate-module-amount strong { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
-.estimate-module-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 8px;
-  padding: 12px 16px;
-}
-.estimate-module-metrics > div { display: flex; flex-direction: column; min-width: 0; gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--n-50); }
-.estimate-module-metrics span { color: var(--muted); font-size: var(--fs-2xs); }
-.estimate-module-metrics strong { font-size: var(--fs-xs); overflow-wrap: anywhere; }
-.estimate-module-card > footer { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--line); }
-.estimate-module-status { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.estimate-module-card > footer .btn { margin-left: auto; flex: none; }
-.estimate-module-card > footer .btn + .btn { margin-left: 0; }
-.estimate-module-list.compact { grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); }
-.estimate-module-list.compact .estimate-module-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.estimate-module-editor-context { margin: 12px 0; }
-.estimate-module-note { margin: 12px 2px 0; }
-.estimate-review-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
-.estimate-review-summary > div { display: flex; flex-direction: column; gap: 4px; }
-.estimate-review-summary > div > span { color: var(--muted); font-size: var(--fs-2xs); }
-.estimate-review-summary > div > strong { font-size: var(--fs-md); }
-
-@media (max-width: 1200px) {
-  .estimate-readiness-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 720px) {
-  .estimate-readiness-grid { grid-template-columns: 1fr; }
-  .estimate-module-card > header { grid-template-columns: auto minmax(0, 1fr); }
-  .estimate-module-amount { grid-column: 2; text-align: left; }
-  .estimate-module-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .estimate-module-card > footer { align-items: flex-start; flex-direction: column; }
-  .estimate-module-card > footer .btn { margin-left: 0; width: 100%; justify-content: center; }
-  .estimate-module-list.compact { grid-template-columns: 1fr; }
-}
 .cost-breakdown tfoot tr.cb-unmapped td { background: var(--amber-soft); }
 .cost-breakdown tr.cb-empty td { padding: 14px 12px; color: var(--muted); font-size: var(--fs-xs); text-align: center; background: var(--n-25); }
 .cost-breakdown tr.cb-empty .btn { margin-left: 10px; }

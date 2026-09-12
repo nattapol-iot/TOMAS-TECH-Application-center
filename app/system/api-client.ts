@@ -631,14 +631,6 @@ export type EstimateCostItem = {
   rowVersion: string;
 };
 
-export type EstimateCostModuleUpdateInput = {
-  currentCategoryCode: string;
-  currentModule: string;
-  module: string;
-  estimateRowVersion: string;
-  lines: Array<{ id: number; rowVersion: string }>;
-};
-
 export type EstimateManhourLine = {
   id: number;
   package: string;
@@ -1389,9 +1381,6 @@ export const createCostItem = (estimateId: number, input: CostItemInput) =>
 
 export const updateCostItem = (estimateId: number, lineId: number, input: CostItemInput) =>
   apiRequest<{ id: number; rowVersion: string; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/cost-items/${lineId}`, { method: "PUT", body: JSON.stringify(input) });
-
-export const updateEstimateCostModule = (estimateId: number, input: EstimateCostModuleUpdateInput) =>
-  apiRequest<{ estimateRowVersion: string; lines: number }>(`/api/v1/estimates/${estimateId}/cost-modules`, { method: "PUT", body: JSON.stringify(input) });
 
 export const removeCostItem = (estimateId: number, lineId: number, estimateRowVersion: string, lineRowVersion: string, reason = "") =>
   apiRequest<{ id: number; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/cost-items/${lineId}/remove`, {
