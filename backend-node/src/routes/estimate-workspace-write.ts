@@ -6,20 +6,19 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import type { EmailRecipient, EmailService, EstimateAssignmentEmail } from "../email.js";
 import { ApiError } from "../errors.js";
+import { ESTIMATE_ASSIGNMENT_SECTION_CODES, ESTIMATE_ASSIGNMENT_SECTIONS } from "../estimate-sections.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, dateOnly, oneOf, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
+import { assigned, estimateAssignees } from "./estimate-cost-write.js";
 
 const editableStatuses = ["Draft", "Engineering Input", "Revision Required"];
 const assignmentStatuses = ["Not Started", "In Progress", "Waiting Information", "Waiting Supplier", "Completed", "Reviewed"];
 const expenseTypes = ["Travel", "Accommodation", "Per Diem", "Transportation", "Equipment Rental", "Other"];
 const otherCategories = ["Outsource", "Transportation", "Accommodation", "Other Cost"];
-const estimateSections = [
-  ["01", "Hardware"], ["02", "Software"], ["03", "Electrical"], ["04", "Mechanical"], ["05", "Robot"],
-  ["06", "Engineering"], ["07", "Outsource"], ["08", "Transportation"], ["09", "Accommodation"], ["10", "Other Cost"],
-] as const;
-const estimateSectionCodes = estimateSections.map(([code]) => code);
+// Assignments are per discipline (Electrical / Mechanical / Software); any assignee may edit every cost ledger.
+const estimateSectionCodes = ESTIMATE_ASSIGNMENT_SECTION_CODES;
 
 export type EstimateContext = { estimate_no: string; project_name: string; revision: number; status: string; owner_id: number | string; due_date: Date | string };
 
@@ -66,29 +65,21 @@ export function elevated(actor: CurrentUser, estimate: EstimateContext): boolean
   return actor.id === Number(estimate.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
 }
 
-async function hasSection(transaction: TransactionType, estimateId: number, revision: number, section: string, actorId: number): Promise<boolean> {
-  const request = new sql.Request(transaction); request.input("estimate_id", sql.BigInt, estimateId); request.input("revision", sql.Int, revision);
-  request.input("section", sql.NVarChar(2), section); request.input("actor", sql.BigInt, actorId);
-  return Boolean((await request.query<{ allowed: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.estimate_assignments a WITH (UPDLOCK,HOLDLOCK)
-    INNER JOIN dbo.estimates e WITH (UPDLOCK,HOLDLOCK) ON e.id=a.estimate_id AND e.revision=@revision AND e.deleted_at IS NULL
-    WHERE a.estimate_id=@estimate_id AND (a.section=@section OR (LEFT(a.section,2)=@section AND SUBSTRING(a.section,3,1)=N' '))
-      AND (a.owner_id=@actor OR a.support_id=@actor)) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)).recordset[0]?.allowed);
-}
-
+/* `section` names the cost ledger the line lives in (06 man-hour, 08–10 expenses). It is kept for
+   the error message only: since assignments are per discipline, any assignee may write any ledger. */
 export async function demandNewSection(transaction: TransactionType, estimateId: number, estimate: EstimateContext, actor: CurrentUser, section: string, ownerId: number): Promise<void> {
   if (elevated(actor, estimate)) return;
-  if (ownerId !== actor.id || !await hasSection(transaction, estimateId, estimate.revision, section, actor.id)) {
-    throw new ApiError(403, "estimate_section_forbidden", `You may add this estimate line only when section ${section} is assigned to you, and the new line must remain assigned to you.`);
+  if (ownerId !== actor.id || !assigned(actor, await estimateAssignees(transaction, estimateId, estimate.revision))) {
+    throw new ApiError(403, "estimate_section_forbidden", `You may add this estimate line (section ${section}) only while a section of this estimate is assigned to you, and the new line must remain in your name.`);
   }
 }
 
 async function demandExistingSection(transaction: TransactionType, estimateId: number, estimate: EstimateContext, actor: CurrentUser,
-  existingSection: string, targetSection: string, existingOwnerId: number, targetOwnerId: number): Promise<void> {
+  _existingSection: string, _targetSection: string, existingOwnerId: number, targetOwnerId: number): Promise<void> {
   if (elevated(actor, estimate)) return;
-  const assignedExisting = await hasSection(transaction, estimateId, estimate.revision, existingSection, actor.id);
-  const assignedTarget = existingSection === targetSection || await hasSection(transaction, estimateId, estimate.revision, targetSection, actor.id);
-  if (existingOwnerId !== actor.id || targetOwnerId !== existingOwnerId || !assignedExisting || !assignedTarget) {
-    throw new ApiError(403, "estimate_line_forbidden", "You may update or remove only your own line while its controlled estimate section is assigned to you.");
+  const isAssignee = assigned(actor, await estimateAssignees(transaction, estimateId, estimate.revision));
+  if (existingOwnerId !== actor.id || targetOwnerId !== existingOwnerId || !isAssignee) {
+    throw new ApiError(403, "estimate_line_forbidden", "You may update or remove only your own line while a section of this estimate is assigned to you.");
   }
 }
 
@@ -404,7 +395,7 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
         OUTPUT inserted.id,inserted.row_version VALUES(@estimate,@section,@owner,@support,@due,N'Not Started',0,@comment);`)).recordset[0]!;
       const assignmentId = Number(row.id); const newEstimateVersion = await touchEstimate(transaction, id, actor.id);
       const recipients = await assignmentRecipients(transaction, [ownerId, ...(supportId === null ? [] : [supportId])]);
-      const sectionName = estimateSections.find(([code]) => code === section)?.[1] ?? section;
+      const sectionName = ESTIMATE_ASSIGNMENT_SECTIONS.find(([code]) => code === section)?.[1] ?? section;
       await insertAudit(transaction, actor.id, "EstimateAssignment", assignmentId, estimate.estimate_no, "Assigned", null,
         { section, ownerId, supportId, dueDate, status: "Not Started", progress: 0, comment });
       return {

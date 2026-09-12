@@ -19,16 +19,9 @@ function shiftDays(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10);
 }
 
-function sectionCode(section: string): string | null {
-  const value = section.trim().slice(0, 2); return /^\d{2}$/.test(value) && Number(value) >= 1 && Number(value) <= 10 ? value : null;
-}
-
-function expenseSection(expenseType: string): string | null {
-  if (expenseType === "Travel" || expenseType === "Transportation") return "08";
-  if (expenseType === "Accommodation" || expenseType === "Per Diem") return "09";
-  if (expenseType === "Equipment Rental" || expenseType === "Other") return "10";
-  return null;
-}
+/* Cost ledgers the UI filters by (`capabilities.editableSections`). An assignee of any
+   discipline section may write all of them, so the list is all-or-nothing. */
+const ALL_LEDGER_SECTIONS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"] as const;
 
 export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
   app.get("/api/v1/estimates/:id/cost-workspace", async (request) => {
@@ -144,10 +137,10 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     const permissionRow = (result.recordsets[1] as unknown as Array<{ can_write: boolean; can_approve: boolean }>)[0] ?? { can_write: false, can_approve: false };
     const assignmentRows = result.recordsets[2] as unknown as Array<Record<string, unknown>>;
     const elevated = actor.id === header.ownerId || actor.role === "Engineering Manager" || actor.role === "Admin";
-    const editable = EDITABLE.has(header.status); const assignedSections = new Set<string>();
-    for (const row of assignmentRows) if (number(row.owner_id) === actor.id || nullableNumber(row.support_id) === actor.id) {
-      const code = sectionCode(String(row.section)); if (code) assignedSections.add(code);
-    }
+    const editable = EDITABLE.has(header.status);
+    // Assignments are per discipline: owning or supporting any section unlocks every cost ledger of the estimate.
+    const isAssignee = assignmentRows.some((row) => number(row.owner_id) === actor.id || nullableNumber(row.support_id) === actor.id);
+    const assignedSections = new Set<string>(isAssignee ? ALL_LEDGER_SECTIONS : []);
     const assignments = assignmentRows.map((row) => ({ id: number(row.id), section: row.section, ownerId: number(row.owner_id),
       ownerName: row.owner_name, supportId: nullableNumber(row.support_id), supportName: row.support_name,
       dueDate: dateOnly(row.due_date as Date | string), status: row.status, progress: number(row.progress), comment: row.comment,
@@ -160,7 +153,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       unitCost: number(row.unit_cost), lineTotal: number(row.line_total), priceSource: row.price_source,
       referenceNumber: row.reference_no, referenceProject: row.reference_project, priceDate: row.price_date ? dateOnly(row.price_date as Date | string) : null,
       remark: row.remark, ownerId: number(row.owner_id), ownerName: row.owner_name, status: row.status, updatedAt: row.updated_at,
-      rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated || assignedSections.has(String(row.category_code))) }));
+      rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated || isAssignee) }));
     const manhourLines = (result.recordsets[4] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), package: row.package,
       activity: row.activity, department: row.department, level: row.level, costType: row.cost_type, provider: row.provider,
       supplierId: nullableNumber(row.supplier_id), supplierName: row.supplier_name, quotationNumber: row.quotation_no,
@@ -168,13 +161,13 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       hoursPerDay: number(row.hours_per_day), dailyRate: number(row.daily_rate), manHours: number(row.engineers) * number(row.man_days) * number(row.hours_per_day),
       lineCost: number(row.line_cost), ownerId: number(row.owner_id), ownerName: row.owner_name, remark: row.remark, updatedAt: row.updated_at,
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable
-        && (elevated || (assignedSections.has("06") && number(row.owner_id) === actor.id)) }));
+        && (elevated || (isAssignee && number(row.owner_id) === actor.id)) }));
     const expenseLines = (result.recordsets[5] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), package: row.package,
       expenseType: row.expense_type, description: row.description, costType: row.cost_type, supplierId: nullableNumber(row.supplier_id),
       supplierName: row.supplier_name, referenceNumber: row.reference_no, quantity: number(row.qty), unit: row.unit, unitCost: number(row.unit_cost),
       lineTotal: number(row.line_total), ownerId: number(row.owner_id), ownerName: row.owner_name, remark: row.remark, updatedAt: row.updated_at,
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated
-        || (assignedSections.has(expenseSection(String(row.expense_type)) ?? "") && number(row.owner_id) === actor.id)) }));
+        || (isAssignee && number(row.owner_id) === actor.id)) }));
     const canEditOther = permissionRow.can_write && editable && elevated;
     const otherCostLines = (result.recordsets[6] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), category: row.category,
       description: row.description, quantity: number(row.qty), unit: row.unit, unitCost: number(row.unit_cost), lineTotal: number(row.line_total),
@@ -185,9 +178,9 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       status: row.status, total: number(row.total) }));
     const validationIssues = (result.recordsets[8] as unknown as Array<Record<string, unknown>>).map((row) => ({ code: row.code, message: row.message,
       entityType: row.entity_type, entityId: number(row.entity_id), severity: row.severity }));
-    const canEditCostItems = permissionRow.can_write && editable && (elevated || assignedSections.size > 0);
-    const canEditManhour = permissionRow.can_write && editable && (elevated || assignedSections.has("06"));
-    const canEditExpenses = permissionRow.can_write && editable && (elevated || ["08", "09", "10"].some((code) => assignedSections.has(code)));
+    const canEditCostItems = permissionRow.can_write && editable && (elevated || isAssignee);
+    const canEditManhour = permissionRow.can_write && editable && (elevated || isAssignee);
+    const canEditExpenses = permissionRow.can_write && editable && (elevated || isAssignee);
     const capabilities = { canEdit: canEditCostItems || canEditManhour || canEditExpenses || canEditOther,
       canEditAllSections: permissionRow.can_write && editable && elevated, editableSections: [...assignedSections].sort(),
       canSubmit: permissionRow.can_write && editable && elevated,

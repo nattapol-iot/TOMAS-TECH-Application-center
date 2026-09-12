@@ -6,15 +6,15 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import {
-  allocateItemCode, copiedLineOwnerId, expenseSectionCode, isEstimateSectionCode, MANHOUR_SECTION_CODE,
+  allocateItemCode, expenseSectionCode, isEstimateSectionCode, MANHOUR_SECTION_CODE,
   otherCostSectionCode, requestedSections, resolveCopiedSupplier, touchedSections,
-  type EstimateSectionCode, type SupplierState,
+  type SupplierState,
 } from "../estimate-copy-plan.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 import {
-  assigned, categoryAssignment, elevated, lockEditableEstimate, touchEstimate, validateReferences,
+  assigned, elevated, estimateAssignees, lockEditableEstimate, touchEstimate, validateReferences,
   type EditableEstimate,
 } from "./estimate-cost-write.js";
 
@@ -73,22 +73,6 @@ async function readSource(transaction: TransactionType, sourceId: number, target
     FROM dbo.estimates WHERE id=@source_id AND deleted_at IS NULL;`)).recordset[0];
   if (!row) throw new ApiError(404, "source_estimate_not_found", "The estimate to copy from was not found.");
   return { ...row, id: Number(row.id), revision: Number(row.revision) };
-}
-
-/* A copy must not move somebody else's section onto a new owner, so an existing
-   assignment is left exactly as it stands — owner, support, due date, status and
-   progress. Only a section nobody owns yet gets one, and it starts 'Not Started'
-   because copying content is not starting the work. */
-async function ensureSectionAssignment(
-  transaction: TransactionType, estimateId: number, section: EstimateSectionCode, ownerId: number, dueDate: Date | string,
-): Promise<void> {
-  const request = new sql.Request(transaction);
-  request.input("estimate_id", sql.BigInt, estimateId); request.input("section", sql.NVarChar(100), section);
-  request.input("owner_id", sql.BigInt, ownerId); request.input("due_date", sql.Date, dueDate);
-  await request.query(`IF NOT EXISTS(SELECT 1 FROM dbo.estimate_assignments WITH (UPDLOCK,HOLDLOCK)
-      WHERE estimate_id=@estimate_id AND (section=@section OR (LEFT(section,2)=@section AND SUBSTRING(section,3,1)=N' ')))
-    INSERT INTO dbo.estimate_assignments(estimate_id,section,owner_id,support_id,due_date,status,progress,comment)
-      VALUES(@estimate_id,@section,@owner_id,NULL,@due_date,N'Not Started',0,NULL);`);
 }
 
 /* Internal man-hour never carries a stored rate across: the man-hour write route
@@ -206,31 +190,19 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
       if (!total) throw new ApiError(409, "nothing_to_copy", `${source.estimate_no} has no line in the selected section(s) to copy.`);
       if (total > MAX_COPIED_LINES) throw new ApiError(400, "validation_failed", `A single copy cannot exceed ${MAX_COPIED_LINES} lines.`);
 
-      const writes = touchedSections({
-        costCategoryCodes: costRows.map((row) => row.category_code),
-        manhourLineCount: manhourRows.length,
-        expenseTypes: expenseRows.map((row) => row.expense_type),
-        otherCostCategories: otherRows.map((row) => row.category),
-      });
-
-      /* One permission decision per section, before the first insert, exactly as
-         apply-template does — a copy can never write a line the engineer could
-         not have typed. */
-      const sectionOwners = new Map<EstimateSectionCode, number>();
-      for (const section of writes) {
-        if (elevated(actor, estimate)) await ensureSectionAssignment(transaction, targetId, section, ownerId, estimate.due_date);
-        const assignment = await categoryAssignment(transaction, targetId, estimate.revision, section);
-        if (!elevated(actor, estimate)) {
-          if (!assigned(actor, assignment)) {
-            throw new ApiError(403, "estimate_section_forbidden", `You may copy lines only into an estimate section assigned to you (${section}).`);
-          }
-          if (ownerId !== Number(assignment!.owner_id) && ownerId !== Number(assignment!.support_id)) {
-            throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a copied line to a user outside your assigned section.");
-          }
+      /* One permission decision before the first insert, exactly as apply-template
+         does — a copy can never write a line the engineer could not have typed.
+         Assignments are per discipline, so any assignee may copy into every ledger;
+         copying never creates or rewrites an assignment. */
+      if (!elevated(actor, estimate)) {
+        const assignees = await estimateAssignees(transaction, targetId, estimate.revision);
+        if (!assigned(actor, assignees)) {
+          throw new ApiError(403, "estimate_section_forbidden", "You may copy lines only into an estimate that has a section assigned to you.");
         }
-        sectionOwners.set(section, copiedLineOwnerId(assignment ? Number(assignment.owner_id) : null, ownerId));
+        if (!assignees.has(ownerId)) {
+          throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a copied line to a user who is not assigned to this estimate.");
+        }
       }
-      const ownerFor = (section: EstimateSectionCode) => sectionOwners.get(section) ?? ownerId;
 
       const renamedItemCodes: Array<{ original: string; applied: string }> = [];
       const droppedSuppliers: Array<{ line: string; supplierId: number }> = [];
@@ -239,7 +211,7 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
       for (const row of costRows) {
         const section = row.category_code;
         if (!isEstimateSectionCode(section)) continue;
-        const lineOwnerId = ownerFor(section);
+        const lineOwnerId = ownerId;
         const supplier = resolveCopiedSupplier(row.supplier_id === null ? null : Number(row.supplier_id), row.supplier_state, false);
         if (supplier.dropped) droppedSuppliers.push({ line: row.item_code, supplierId: Number(row.supplier_id) });
         await validateReferences(transaction, lineOwnerId, supplier.supplierId);
@@ -270,7 +242,7 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
       }
 
       for (const row of manhourRows) {
-        const lineOwnerId = ownerFor(MANHOUR_SECTION_CODE);
+        const lineOwnerId = ownerId;
         const isSupplier = row.provider === "Supplier";
         const supplier = resolveCopiedSupplier(row.supplier_id === null ? null : Number(row.supplier_id), row.supplier_state, isSupplier);
         if (supplier.blocked) {
@@ -303,8 +275,7 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
       }
 
       for (const row of expenseRows) {
-        const section = expenseSectionCode(row.expense_type)!;
-        const lineOwnerId = ownerFor(section);
+        const lineOwnerId = ownerId;
         const supplier = resolveCopiedSupplier(row.supplier_id === null ? null : Number(row.supplier_id), row.supplier_state, false);
         if (supplier.dropped) droppedSuppliers.push({ line: row.description, supplierId: Number(row.supplier_id) });
         await validateReferences(transaction, lineOwnerId, supplier.supplierId);
@@ -343,6 +314,13 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
 
       await assertEstimateTotals(transaction, targetId);
       const estimateVersion = await touchEstimate(transaction, targetId, actor.id);
+      // Report the cost ledgers the copy actually wrote into (informational; no longer a permission boundary).
+      const writes = touchedSections({
+        costCategoryCodes: costRows.map((row) => row.category_code),
+        manhourLineCount: manhourRows.length,
+        expenseTypes: expenseRows.map((row) => row.expense_type),
+        otherCostCategories: otherRows.map((row) => row.category),
+      });
       const result = {
         sourceEstimateId: source.id, sourceNumber: source.estimate_no, sourceRevision: source.revision,
         sourceProjectName: source.project_name, sections: writes,

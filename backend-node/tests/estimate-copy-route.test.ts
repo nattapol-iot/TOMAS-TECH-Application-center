@@ -74,7 +74,7 @@ function installSqlMock(t: TestContext, answer: (statement: string, params: Reco
 }
 
 /** Default answers for a copy that has something to copy in every ledger. */
-function defaultAnswer(assignmentFor: (section: unknown) => unknown[]) {
+function defaultAnswer(assignmentFor: (params: Record<string, unknown>) => unknown[]) {
   let insertedId = 900;
   return (statement: string, params: Record<string, unknown>): Answer | undefined => {
     if (statement.includes("FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK)")) return { recordset: [targetHeader] };
@@ -82,7 +82,7 @@ function defaultAnswer(assignmentFor: (section: unknown) => unknown[]) {
     if (statement.includes("FROM dbo.cost_items c WITH (HOLDLOCK)")) {
       return { recordsets: [costRows, manhourRows, expenseRows, otherRows, takenCodes] };
     }
-    if (statement.includes("SELECT TOP(1) a.owner_id,a.support_id")) return { recordset: assignmentFor(params.section) };
+    if (statement.includes("SELECT a.owner_id,a.support_id FROM dbo.estimate_assignments")) return { recordset: assignmentFor(params) };
     if (statement.includes("owner_valid")) return { recordset: [{ owner_valid: true, supplier_valid: true }] };
     if (statement.includes("FROM dbo.engineering_rates")) return { recordset: [{ rate: 4500 }] };
     if (statement.includes("OUTPUT inserted.id INTO @created")) { insertedId += 1; return { recordset: [{ id: insertedId }] }; }
@@ -112,7 +112,7 @@ const mutating = (statement: string) => /\b(INSERT|UPDATE|DELETE|MERGE)\b/.test(
 
 test("one copy writes every ledger of the target in a single transaction and leaves the source untouched", async (t) => {
   const { app, transactions, answer } = harness({ id: 7, role: "Engineer" },
-    defaultAnswer((section) => (section === "01" ? [{ owner_id: 9, support_id: null }] : [])));
+    defaultAnswer(() => [{ owner_id: 9, support_id: 7 }]));
   const statements = installSqlMock(t, answer);
   try {
     const response = await app.inject({ method: "POST", url: `/api/v1/estimates/${TARGET_ID}/copy-from`, payload });
@@ -151,22 +151,17 @@ test("a duplicate item code is renumbered instead of aborting the copy", async (
   } finally { await app.close(); }
 });
 
-test("copying never reassigns a section that already belongs to somebody", async (t) => {
+test("copying never creates or rewrites a discipline assignment, and copied lines take the requested owner", async (t) => {
   const { app, answer } = harness({ id: 7, role: "Engineer" },
-    defaultAnswer((section) => (section === "01" ? [{ owner_id: 9, support_id: null }] : [])));
+    defaultAnswer(() => [{ owner_id: 9, support_id: 7 }]));
   const statements = installSqlMock(t, answer);
   try {
     assert.equal((await app.inject({ method: "POST", url: `/api/v1/estimates/${TARGET_ID}/copy-from`, payload })).statusCode, 201);
     const assignmentWrites = statements.filter((entry) => entry.statement.includes("dbo.estimate_assignments") && mutating(entry.statement));
-    assert.ok(assignmentWrites.length > 0);
-    for (const entry of assignmentWrites) {
-      assert.match(entry.statement, /IF NOT EXISTS/);
-      assert.match(entry.statement, /N'Not Started'/);
-      assert.doesNotMatch(entry.statement, /UPDATE dbo\.estimate_assignments/);
-    }
-    // The section already owned by user 9 keeps producing lines owned by user 9.
+    assert.deepEqual(assignmentWrites, [], "assignments are made explicitly per discipline, never as a side effect of a copy");
+    // The support engineer (7) copies in their own name; the section owner (9) is not touched.
     const costOwners = statements.filter((entry) => entry.statement.includes("INSERT INTO dbo.cost_items")).map((entry) => entry.params.owner_id);
-    assert.deepEqual(costOwners, [9, 9]);
+    assert.deepEqual(costOwners, [7, 7]);
   } finally { await app.close(); }
 });
 
@@ -230,7 +225,7 @@ test("a failure anywhere in the copy rolls the whole transaction back", async (t
   } finally { await app.close(); }
 });
 
-test("an engineer cannot copy into a section that is not assigned to them", async (t) => {
+test("an engineer cannot copy into an estimate that has no section assigned to them", async (t) => {
   const { app, transactions, answer } = harness({ id: 42, role: "Engineer" }, defaultAnswer(() => []));
   installSqlMock(t, answer);
   try {
@@ -241,7 +236,7 @@ test("an engineer cannot copy into a section that is not assigned to them", asyn
   } finally { await app.close(); }
 });
 
-test("an assigned engineer may not park a copied line on somebody outside their section", async (t) => {
+test("an assigned engineer may not park a copied line on somebody who is not assigned to the estimate", async (t) => {
   const { app, answer } = harness({ id: 42, role: "Engineer" },
     defaultAnswer(() => [{ owner_id: 42, support_id: null }]));
   installSqlMock(t, answer);

@@ -59,10 +59,11 @@ test("a copy carries provenance and classification but never approval state or a
   for (const table of ["estimate_revisions", "estimate_erp_export_events", "estimate_overhead_snapshots"]) {
     assert.ok(!route.includes(table), table);
   }
-  // Section assignments are only ever created, never rewritten, and never start the work.
-  assert.match(route, /IF NOT EXISTS\(SELECT 1 FROM dbo\.estimate_assignments WITH \(UPDLOCK,HOLDLOCK\)/);
-  assert.match(route, /N'Not Started',0,NULL\);/);
+  // Assignments are per discipline (Electrical / Mechanical / Software) and are made explicitly:
+  // a copy never creates, rewrites or starts one.
+  assert.doesNotMatch(route, /INSERT INTO dbo\.estimate_assignments/);
   assert.doesNotMatch(route, /UPDATE dbo\.estimate_assignments/);
+  assert.match(route, /estimateAssignees\(transaction, targetId, estimate\.revision\)/);
   // ERP provenance columns stay null because the constraint describes a later revision of the same estimate.
   assert.doesNotMatch(route, /INSERT INTO dbo\.estimate_erp_mappings[\s\S]{0,400}copied_from_mapping_id/);
 });

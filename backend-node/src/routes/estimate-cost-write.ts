@@ -21,7 +21,8 @@ const allowedPriceSources = [
 ];
 
 export type EditableEstimate = { estimate_no: string; revision: number; owner_id: number | string; due_date: Date | string };
-export type CategoryAssignment = { owner_id: number | string; support_id: number | string | null };
+/** User ids that own or support any discipline section of the estimate's current revision. */
+export type EstimateAssignees = Set<number>;
 type CostInput = {
   estimateRowVersion: Buffer; lineRowVersion: Buffer | null; categoryCode: string; subcategory: string;
   module: string; itemCode: string; description: string; brand: string; model: string; specification: string | null;
@@ -97,32 +98,26 @@ export async function validateReferences(transaction: TransactionType, ownerId: 
   if (!row.supplier_valid) throw new ApiError(400, "validation_failed", "The selected supplier is inactive or does not exist.");
 }
 
-export async function categoryAssignment(transaction: TransactionType, estimateId: number, revision: number, categoryCode: string): Promise<CategoryAssignment | null> {
+/* Assignments are per discipline (Electrical / Mechanical / Software), so the permission
+   question is simply "does this person own or support any section of the estimate?".
+   The rows are locked for the transaction so an assignment cannot be moved away mid-write. */
+export async function estimateAssignees(transaction: TransactionType, estimateId: number, revision: number): Promise<EstimateAssignees> {
   const request = new sql.Request(transaction); request.input("estimate_id", sql.BigInt, estimateId); request.input("revision", sql.Int, revision);
-  request.input("section", sql.NVarChar(100), categoryCode);
-  return (await request.query<CategoryAssignment>(`
-    SELECT TOP(1) a.owner_id,a.support_id FROM dbo.estimate_assignments a WITH (UPDLOCK,HOLDLOCK)
+  const rows = (await request.query<{ owner_id: number | string; support_id: number | string | null }>(`
+    SELECT a.owner_id,a.support_id FROM dbo.estimate_assignments a WITH (UPDLOCK,HOLDLOCK)
     INNER JOIN dbo.estimates e WITH (UPDLOCK,HOLDLOCK) ON e.id=a.estimate_id AND e.revision=@revision AND e.deleted_at IS NULL
-    WHERE a.estimate_id=@estimate_id AND (a.section=@section OR (LEFT(a.section,2)=@section AND SUBSTRING(a.section,3,1)=N' '));
-  `)).recordset[0] ?? null;
-}
-
-async function upsertCategoryAssignment(transaction: TransactionType, estimateId: number, categoryCode: string, ownerId: number, dueDate: Date | string): Promise<void> {
-  const request = new sql.Request(transaction); request.input("estimate_id", sql.BigInt, estimateId); request.input("section", sql.NVarChar(100), categoryCode);
-  request.input("owner_id", sql.BigInt, ownerId); request.input("due_date", sql.Date, dueDate);
-  await request.query(`UPDATE dbo.estimate_assignments SET progress=CASE WHEN owner_id=@owner_id THEN progress ELSE 0 END,
-    status=CASE WHEN owner_id=@owner_id THEN status ELSE N'In Progress' END,owner_id=@owner_id,
-    support_id=CASE WHEN support_id=@owner_id THEN NULL ELSE support_id END,due_date=@due_date
-    WHERE estimate_id=@estimate_id AND section=@section;
-    IF @@ROWCOUNT=0 INSERT INTO dbo.estimate_assignments(estimate_id,section,owner_id,support_id,due_date,status,progress,comment)
-      VALUES(@estimate_id,@section,@owner_id,NULL,@due_date,N'In Progress',0,NULL);`);
+    WHERE a.estimate_id=@estimate_id;
+  `)).recordset;
+  const assignees: EstimateAssignees = new Set();
+  for (const row of rows) { assignees.add(Number(row.owner_id)); if (row.support_id !== null) assignees.add(Number(row.support_id)); }
+  return assignees;
 }
 
 export function elevated(actor: CurrentUser, estimate: EditableEstimate): boolean {
   return actor.id === Number(estimate.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
 }
-export function assigned(actor: CurrentUser, assignment: CategoryAssignment | null): boolean {
-  return !!assignment && (actor.id === Number(assignment.owner_id) || actor.id === Number(assignment.support_id));
+export function assigned(actor: CurrentUser, assignees: EstimateAssignees): boolean {
+  return assignees.has(actor.id);
 }
 
 async function costSnapshot(transaction: TransactionType, estimateId: number, revision: number, lineId: number, expected: Buffer, includeDeleted: boolean): Promise<Record<string, unknown>> {
@@ -169,12 +164,12 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     const created = await database.transaction(async (transaction) => {
       const estimate = await lockEditableEstimate(transaction, id, input.estimateRowVersion); await validateReferences(transaction, input.ownerId, input.supplierId);
       if (!elevated(actor, estimate)) {
-        const assignment = await categoryAssignment(transaction, id, estimate.revision, input.categoryCode);
-        if (!assigned(actor, assignment)) throw new ApiError(403, "estimate_section_forbidden", "You may add cost lines only to an estimate section assigned to you.");
-        if (input.ownerId !== Number(assignment!.owner_id) && input.ownerId !== Number(assignment!.support_id)) {
-          throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a cost line to a user outside your assigned section.");
+        const assignees = await estimateAssignees(transaction, id, estimate.revision);
+        if (!assigned(actor, assignees)) throw new ApiError(403, "estimate_section_forbidden", "You may add cost lines only to an estimate that has a section assigned to you.");
+        if (!assignees.has(input.ownerId)) {
+          throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a cost line to a user who is not assigned to this estimate.");
         }
-      } else await upsertCategoryAssignment(transaction, id, input.categoryCode, input.ownerId, estimate.due_date);
+      }
       const insert = new sql.Request(transaction); bindCost(insert, id, estimate.revision, input, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
         INSERT INTO dbo.cost_items(estimate_id,revision,category_code,category,
@@ -199,13 +194,9 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       const estimate = await lockEditableEstimate(transaction, id, input.estimateRowVersion); await validateReferences(transaction, input.ownerId, input.supplierId);
       const before = await costSnapshot(transaction, id, estimate.revision, lineId, input.lineRowVersion!, false);
       if (!elevated(actor, estimate)) {
-        const current = await categoryAssignment(transaction, id, estimate.revision, String(before.category_code));
-        if (!assigned(actor, current)) throw new ApiError(403, "cost_line_forbidden", "You may update a cost line only while its current category is assigned to you.");
+        if (!assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) throw new ApiError(403, "cost_line_forbidden", "You may update a cost line only while a section of this estimate is assigned to you.");
         if (input.ownerId !== Number(before.owner_id)) throw new ApiError(403, "cost_owner_forbidden", "Only the estimate owner, an engineering manager or an administrator can reassign a cost line.");
-        if (String(before.category_code) !== input.categoryCode && !assigned(actor, await categoryAssignment(transaction, id, estimate.revision, input.categoryCode))) {
-          throw new ApiError(403, "estimate_section_forbidden", "You cannot move a line to an estimate section that is not assigned to you.");
-        }
-      } else await upsertCategoryAssignment(transaction, id, input.categoryCode, input.ownerId, estimate.due_date);
+      }
       const update = new sql.Request(transaction); bindCost(update, id, estimate.revision, input, actor.id); update.input("line_id", sql.BigInt, lineId);
       update.input("line_version", sql.VarBinary(8), input.lineRowVersion);
       const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8));
@@ -231,8 +222,8 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     return database.transaction(async (transaction) => {
       const estimate = await lockEditableEstimate(transaction, id, estimateRowVersion);
       const before = await costSnapshot(transaction, id, estimate.revision, lineId, lineRowVersion, false);
-      if (!elevated(actor, estimate) && !assigned(actor, await categoryAssignment(transaction, id, estimate.revision, String(before.category_code)))) {
-        throw new ApiError(403, "cost_line_forbidden", "You may remove a cost line only while its current category is assigned to you.");
+      if (!elevated(actor, estimate) && !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) {
+        throw new ApiError(403, "cost_line_forbidden", "You may remove a cost line only while a section of this estimate is assigned to you.");
       }
       const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("line_id", sql.BigInt, lineId);
       update.input("estimate_id", sql.BigInt, id); update.input("revision", sql.Int, estimate.revision); update.input("line_version", sql.VarBinary(8), lineRowVersion);
@@ -280,16 +271,14 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       if (!lines.length) throw new ApiError(409, "module_template_empty", "This template has no lines to apply.");
       const reference = `${template.code} R${String(template.revision).padStart(2, "0")}`;
       const disciplines = [...new Set(lines.map((line) => line.category_code))];
-      for (const discipline of disciplines) {
-        if (!elevated(actor, estimate)) {
-          const assignment = await categoryAssignment(transaction, id, estimate.revision, discipline);
-          if (!assigned(actor, assignment)) {
-            throw new ApiError(403, "estimate_section_forbidden", `You may add cost lines only to an estimate section assigned to you (${discipline}).`);
-          }
-          if (ownerId !== Number(assignment!.owner_id) && ownerId !== Number(assignment!.support_id)) {
-            throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a cost line to a user outside your assigned section.");
-          }
-        } else await upsertCategoryAssignment(transaction, id, discipline, ownerId, estimate.due_date);
+      if (!elevated(actor, estimate)) {
+        const assignees = await estimateAssignees(transaction, id, estimate.revision);
+        if (!assigned(actor, assignees)) {
+          throw new ApiError(403, "estimate_section_forbidden", `You may add cost lines (${disciplines.join(", ")}) only to an estimate that has a section assigned to you.`);
+        }
+        if (!assignees.has(ownerId)) {
+          throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a cost line to a user who is not assigned to this estimate.");
+        }
       }
       let created = 0;
       const renamedItemCodes: Array<{ original: string; applied: string }> = [];
