@@ -9,8 +9,10 @@ import {
   ApiClientError,
   apiRequest,
   createSupplierQuotation,
+  deleteSupplierQuotation,
   downloadSupplierQuotation,
   findOrCreateSupplier,
+  updateSupplierQuotation,
   listAllQuotationLinesForPriceLibrary,
   listEstimates,
   listMyEstimateAssignments,
@@ -1686,7 +1688,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   onClose: () => void;
   onCreated: (quotationNumber: string) => Promise<void>;
 }) {
-  const [supplierId, setSupplierId] = useState(String(bootstrap.suppliers[0]?.id ?? ""));
+  const [supplierId, setSupplierId] = useState("");
   const [supplierReference, setSupplierReference] = useState("");
   const [receivedDate, setReceivedDate] = useState(isoToday());
   const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
@@ -1700,6 +1702,55 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [error, setError] = useState("");
   const [parseWarning, setParseWarning] = useState("");
   const [lines, setLines] = useState<QuotationLineItem[]>([]);
+  const [confidence, setConfidence] = useState<Record<string, "high" | "low" | "none">>({});
+  // Editable new-supplier name — pre-filled from PDF extraction, user can correct before Upload
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const [showPdf, setShowPdf] = useState(false);
+  const pdfObjectUrlRef = useRef<string | null>(null);
+
+  const hasParsed = Object.keys(confidence).length > 0;
+
+  const selectFile = (selectedFile: File | null) => {
+    if (pdfObjectUrlRef.current) URL.revokeObjectURL(pdfObjectUrlRef.current);
+
+    setFile(selectedFile);
+    if (selectedFile?.name.toLowerCase().endsWith(".pdf")) {
+      const url = URL.createObjectURL(selectedFile);
+      pdfObjectUrlRef.current = url;
+      setPdfObjectUrl(url);
+      setShowPdf(true);
+      return;
+    }
+
+    pdfObjectUrlRef.current = null;
+    setPdfObjectUrl(null);
+    setShowPdf(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (pdfObjectUrlRef.current) URL.revokeObjectURL(pdfObjectUrlRef.current);
+    };
+  }, []);
+
+  // Left-border colour per confidence level — applied as wrapper div style
+  const confWrap = (key: string): React.CSSProperties => {
+    if (!hasParsed) return {};
+    const c = confidence[key];
+    if (c === "high") return { borderLeft: "3px solid #22c55e", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+    if (c === "low")  return { borderLeft: "3px solid #f59e0b", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+    return               { borderLeft: "3px solid #ef4444",  paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+  };
+
+  // hint string shown under each field (Field label prop only accepts string)
+  const confHint = (key: string): string | undefined => {
+    if (!hasParsed) return undefined;
+    const c = confidence[key];
+    if (c === "high") return "✓ อ่านได้";
+    if (c === "low")  return "⚠ ควรตรวจสอบ";
+    return "ไม่พบใน PDF — กรอกเอง";
+  };
 
   useEffect(() => {
     let active = true;
@@ -1711,39 +1762,52 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     return () => { active = false; };
   }, []);
 
-  const parsePdf = async () => {
-    if (!file || !file.name.toLowerCase().endsWith(".pdf")) return;
-    setParsing(true); setParseWarning(""); setError("");
+  // Accept File directly so we can call from onChange before state updates
+  const parsePdf = async (targetFile: File) => {
+    if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
+    setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setNewSupplierName("");
+    // Reset header fields so stale values from a previous PDF don't persist
+    setSupplierReference("");
+    setReceivedDate(isoToday());
+    setValidUntil(addIsoDays(isoToday(), 30));
+    setCurrency("THB");
+    setAmount("");
+    setLines([]);
     try {
-      // Use Python-backed OCR service via Node backend proxy
-      const result: ParsedQuotationResult = await parsePdfViaBackend(file);
+      const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
 
-      if (result.requiresOcr && result.lines.length === 0 && !result.supplierName) {
-        setParseWarning("PDF เป็นไฟล์สแกนที่อ่านยาก OCR ได้บางส่วน — กรุณาตรวจสอบและกรอกข้อมูลเพิ่มเติม");
-      }
+      setConfidence(result.confidence ?? {});
 
       if (result.quotationNumber) setSupplierReference(result.quotationNumber);
       if (result.receivedDate) setReceivedDate(result.receivedDate);
       if (result.validUntil) setValidUntil(result.validUntil);
       if (result.currency) setCurrency(result.currency);
       if (result.totalAmount > 0) setAmount(String(result.totalAmount));
-      if (result.lines.length > 0) setLines(result.lines);
 
-      // Auto-match supplier by name from extracted text
+      // Auto-match supplier: try exact/substring match against master data first;
+      // fall back to pre-filling the new-supplier text box so user can confirm.
       if (result.supplierName) {
-        try {
-          const found = await findOrCreateSupplier({ name: result.supplierName, taxId: result.supplierTaxId });
-          setSupplierId(String(found.id));
-          if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
-        } catch { /* use current supplierId */ }
+        const normalizedParsed = result.supplierName.toLowerCase().trim();
+        const matched = bootstrap.suppliers.find(
+          (s) => s.name.toLowerCase() === normalizedParsed
+            || s.name.toLowerCase().includes(normalizedParsed)
+            || normalizedParsed.includes(s.name.toLowerCase()),
+        );
+        if (matched) {
+          setSupplierId(String(matched.id));
+          setNewSupplierName("");
+        } else {
+          setNewSupplierName(result.supplierName);
+        }
       }
 
-      const missing: string[] = [];
-      if (!result.receivedDate) missing.push("วันที่");
-      if (!result.quotationNumber) missing.push("เลขที่ใบเสนอราคา");
-      if (result.lines.length === 0) missing.push("รายการสินค้า");
-      if (missing.length && !result.requiresOcr) {
-        setParseWarning(`อ่าน PDF ได้บางส่วน ตรวจสอบ: ${missing.join(", ")}`);
+      // Auto-populate line items extracted from the PDF
+      if (result.lines?.length > 0) {
+        setLines(result.lines.map((l, i) => ({ ...l, lineNo: i + 1, currency: l.currency || result.currency })));
+      }
+
+      if (result.requiresOcr) {
+        setParseWarning("PDF เป็นไฟล์สแกน — ระบบอ่านได้บางส่วน กรุณาตรวจสอบทุก field");
       }
     } catch (e) {
       setError(`Parse PDF ไม่สำเร็จ: ${String(e instanceof Error ? e.message : e)}`);
@@ -1760,15 +1824,36 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     setLines((prev) => [...prev, { lineNo: prev.length + 1, itemCode: "", description: "", brand: "", model: "", qty: 1, unit: "EA", unitPrice: 0, currency, remark: "" }]);
 
   const parsedAmount = Number(amount);
-  const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
+  const hasSupplier = !!supplierId || !!newSupplierName.trim();
+  const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
+
+  // Warn when manual line items total doesn't match declared amount (>1% diff)
+  const linesTotal = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
+    && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
 
   const submit = async () => {
     if (invalid || !file) return;
     setBusy(true); setError("");
     try {
+      // Resolve supplier:
+      //   1. User selected from dropdown → use that ID directly
+      //   2. PDF extracted a name → find-or-create in Master Data
+      //   3. User typed a name manually → find-or-create in Master Data
+      let resolvedSupplierId = supplierId ? Number(supplierId) : 0;
+
+      if (!resolvedSupplierId) {
+        const nameToUse = newSupplierName.trim();
+        if (!nameToUse) throw new Error("กรุณาเลือกหรือกรอกชื่อ Supplier");
+        const found = await findOrCreateSupplier({ name: nameToUse, taxId: "" });
+        resolvedSupplierId = found.id;
+        setSupplierId(String(found.id));
+        if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
+      }
+
       const created = await createSupplierQuotation({
-        file, supplierId: Number(supplierId),
+        file, supplierId: resolvedSupplierId,
         supplierReference: supplierReference.trim(), receivedDate, validUntil,
         inquiryId: inquiryId ? Number(inquiryId) : undefined, currency, amount: parsedAmount,
       });
@@ -1785,9 +1870,15 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
 
   const isPdf = file?.name.toLowerCase().endsWith(".pdf") ?? false;
 
+  // Summary counts for the parse-result banner
+  const confValues = Object.values(confidence);
+  const highCount = confValues.filter((v) => v === "high").length;
+  const lowCount  = confValues.filter((v) => v === "low").length;
+  const noneCount = confValues.filter((v) => v === "none").length;
+
   return <Modal
     title="Upload supplier quotation"
-    subtitle="ระบบออกเลข SQ-YYMM-XXXX · Parse PDF เพื่อดึงข้อมูลอัตโนมัติ"
+    subtitle="เลือกไฟล์ PDF · ดู PDF ต้นฉบับด้านขวา · กรอก Supplier + Line items ด้านซ้าย"
     size="xl"
     onClose={onClose}
     footer={<>
@@ -1800,88 +1891,294 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Error"} /></strong> {error}</span></div> : null}
     {parseWarning ? <div className="callout warning"><Icon name="alertTriangle" /><span>{parseWarning}</span></div> : null}
 
-    {/* File selector + Parse button */}
-    <div className="form-grid two" style={{ marginBottom: 16 }}>
-      <Field label="Quotation file *" hint="PDF, Excel, CSV, JPG or PNG · maximum 50 MB" span={2}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
-            onChange={(event) => { setFile(event.target.files?.[0] ?? null); setLines([]); setParseWarning(""); }} />
-          {isPdf && <button className="btn ghost sm" type="button" disabled={parsing || busy} onClick={() => { void parsePdf(); }} style={{ whiteSpace: "nowrap" }}>
-            {parsing ? <><span className="spinner" /> Parsing…</> : <><Icon name="eye" /> Parse PDF</>}
-          </button>}
+    {/* Parse result summary banner */}
+    {hasParsed && !parseWarning && (
+      <div className="callout" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+        <Icon name="check" />
+        <span>
+          <strong>อ่าน PDF แล้ว</strong> · Supplier / วันที่ / ยอดรวม / สกุลเงิน / รายการสินค้า ถูก fill อัตโนมัติ
+          {highCount > 0 && <> · <span style={{ color: "#15803d" }}>●</span> {highCount} field มั่นใจ</>}
+          {lowCount > 0  && <> · <span style={{ color: "#a16207" }}>●</span> {lowCount} field ควรตรวจสอบ</>}
+          {noneCount > 0 && <> · <span style={{ color: "#dc2626" }}>●</span> {noneCount} field ดูจาก PDF</>}
+        </span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {isPdf && (
+            <button className="btn ghost sm" type="button" disabled={parsing || busy}
+              onClick={() => { if (file) void parsePdf(file); }}
+              style={{ whiteSpace: "nowrap" }}>
+              {parsing ? <><span className="spinner" /> กำลังอ่าน…</> : <><Icon name="refresh" /> อ่านใหม่</>}
+            </button>
+          )}
         </div>
-      </Field>
-    </div>
-
-    {/* Header form */}
-    <div className="form-grid two">
-      <Field label="System quotation no." hint="Generated automatically after upload">
-        <input value="SQ-YYMM-XXXX" readOnly />
-      </Field>
-      <Field label="Supplier *">
-        <select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Supplier quotation / reference">
-        <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
-      </Field>
-      <Field label="Related inquiry">
-        <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
-          <option value="">Not linked</option>
-          {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
-        </select>
-      </Field>
-      <Field label="Received date *">
-        <input type="date" value={receivedDate} onChange={(event) => {
-          setReceivedDate(event.target.value);
-          if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
-        }} />
-      </Field>
-      <Field label="Valid until *">
-        <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
-      </Field>
-      <Field label="Currency *">
-        <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
-          <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
-        </select>
-      </Field>
-      <Field label="Quotation amount *">
-        <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
-      </Field>
-    </div>
-
-    {/* Line items table */}
-    <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <strong style={{ fontSize: 13 }}>Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ</strong>
-        <button className="btn ghost sm" type="button" onClick={addLine}><Icon name="plus" /> Add line</button>
       </div>
-      {lines.length > 0 ? <div className="table-wrap">
-        <table style={{ fontSize: 12, minWidth: 900 }}>
-          <thead><tr>
-            <th style={{ width: 36 }}>#</th><th>Item code</th><th>Description *</th><th style={{ width: 60 }}>Qty</th>
-            <th style={{ width: 60 }}>Unit</th><th style={{ width: 110 }}>Unit price</th><th style={{ width: 70 }}>Cur.</th>
-            <th style={{ width: 32 }}></th>
-          </tr></thead>
-          <tbody>{lines.map((line, idx) => <tr key={idx}>
-            <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
-            <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
-            <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
-            <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
-            <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
-            <td><input type="number" style={{ width: "100%" }} value={line.unitPrice} min="0" step="0.01" onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })} /></td>
-            <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
-              <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
-            </select></td>
-            <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
-          </tr>)}</tbody>
-        </table>
-      </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>ยังไม่มี line items — กด &quot;Parse PDF&quot; หรือ &quot;Add line&quot; เพื่อเพิ่ม</div>}
-    </div>
+    )}
+    {linesTotalMismatch && (
+      <div className="callout warning" style={{ marginBottom: 12 }}>
+        <Icon name="alertTriangle" />
+        <span>ผลรวม line items ({number(linesTotal, 2)}) ไม่ตรงกับยอด Quotation ({number(parsedAmount, 2)}) — กรุณาตรวจสอบ</span>
+      </div>
+    )}
 
-    {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}
+    {/* Main layout: form on left, PDF viewer on right when showPdf */}
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+
+      {/* ── Left: form content ── */}
+      <div style={{ flex: "1 1 0", minWidth: 0 }}>
+
+        {/* File selector — auto-parses PDF on select */}
+        <div className="form-grid two" style={{ marginBottom: 16 }}>
+          <Field label="Quotation file *" hint="PDF → อ่านอัตโนมัติ · Excel, CSV, JPG, PNG · maximum 50 MB" span={2}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
+                onChange={(event) => {
+                  const f = event.target.files?.[0] ?? null;
+                  selectFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName(""); setLines([]);
+                  if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
+                }} />
+              {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
+              {isPdf && !parsing && !hasParsed && (
+                <button className="btn ghost sm" type="button" disabled={busy}
+                  onClick={() => { if (file) void parsePdf(file); }} style={{ whiteSpace: "nowrap" }}>
+                  <Icon name="eye" /> Parse PDF
+                </button>
+              )}
+            </div>
+          </Field>
+        </div>
+
+        {/* Header form — fields tinted by confidence */}
+        <div className="form-grid two">
+          <Field label="System quotation no." hint="Generated automatically after upload">
+            <input value="SQ-YYMM-XXXX" readOnly />
+          </Field>
+          <div>
+            <Field label="Supplier *">
+              <select value={supplierId} onChange={(event) => {
+                setSupplierId(event.target.value);
+                setNewSupplierName("");
+              }}>
+                <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
+                {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
+              </select>
+              {!supplierId && (
+                <div style={{ marginTop: 6 }}>
+                  <input
+                    placeholder="ชื่อ Supplier ใหม่..."
+                    value={newSupplierName}
+                    onChange={(e) => setNewSupplierName(e.target.value)}
+                    maxLength={200}
+                    style={{ width: "100%" }}
+                  />
+                  <div style={{ fontSize: 12, color: newSupplierName.trim() ? "var(--accent)" : "var(--text-muted)", marginTop: 3 }}>
+                    {newSupplierName.trim()
+                      ? `จะสร้าง Supplier ใหม่ "${newSupplierName.trim()}" ใน Master Data เมื่อกด Upload`
+                      : "กรอกชื่อ Supplier ใหม่ หรือเลือกจากรายการด้านบน"}
+                  </div>
+                </div>
+              )}
+            </Field>
+          </div>
+          <div style={confWrap("quotationNumber")}>
+            <Field label="Supplier quotation / reference" hint={confHint("quotationNumber")}>
+              <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
+            </Field>
+          </div>
+          <Field label="Related inquiry">
+            <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
+              <option value="">Not linked</option>
+              {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
+            </select>
+          </Field>
+          <div style={confWrap("receivedDate")}>
+            <Field label="Received date *" hint={confHint("receivedDate")}>
+              <input type="date" value={receivedDate} onChange={(event) => {
+                setReceivedDate(event.target.value);
+                if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
+              }} />
+            </Field>
+          </div>
+          <div style={confWrap("validUntil")}>
+            <Field label="Valid until *" hint={confHint("validUntil")}>
+              <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+            </Field>
+          </div>
+          <Field label="Currency *">
+            <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
+              <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
+            </select>
+          </Field>
+          <div style={confWrap("totalAmount")}>
+            <Field label="Quotation amount *" hint={confHint("totalAmount")}>
+              <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
+            </Field>
+          </div>
+        </div>
+
+        {/* Line items table */}
+        <div style={{ marginTop: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <strong style={{ fontSize: 13 }}>Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ</strong>
+            <button className="btn ghost sm" type="button" onClick={addLine}><Icon name="plus" /> Add line</button>
+          </div>
+          {lines.length > 0 ? <div className="table-wrap">
+            <table style={{ fontSize: 12, minWidth: showPdf ? 600 : 900 }}>
+              <thead><tr>
+                <th style={{ width: 36 }}>#</th><th>Item code</th><th>Description *</th><th style={{ width: 60 }}>Qty</th>
+                <th style={{ width: 60 }}>Unit</th><th style={{ width: 110 }}>Unit price</th><th style={{ width: 70 }}>Cur.</th>
+                <th style={{ width: 32 }}></th>
+              </tr></thead>
+              <tbody>{lines.map((line, idx) => (
+                <tr key={idx}>
+                  <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
+                  <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
+                  <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
+                  <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
+                  <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
+                  <td><input type="number" style={{ width: "100%" }} value={line.unitPrice} min="0" step="0.01"
+                    onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })} /></td>
+                  <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
+                    <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
+                  </select></td>
+                  <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>
+            {parsing ? "กำลังอ่าน PDF…" : hasParsed ? "ไม่พบรายการสินค้าใน PDF — กด \"Add line\" เพื่อเพิ่มเอง" : "เลือกไฟล์ PDF เพื่ออ่านรายการสินค้าอัตโนมัติ หรือกด \"Add line\" เพื่อกรอกเอง"}
+          </div>}
+        </div>
+
+        {/* Legend */}
+        {hasParsed && <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
+          <span><span style={{ color: "#22c55e" }}>●</span> มั่นใจ</span>
+          <span><span style={{ color: "#f59e0b" }}>●</span> ควรตรวจสอบ</span>
+          <span><span style={{ color: "#ef4444" }}>●</span> ไม่พบ — กรอกเอง</span>
+        </div>}
+
+        {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}
+      </div>
+
+      {/* ── Right: PDF viewer (sticky — stays in view while scrolling the form) ── */}
+      {showPdf && pdfObjectUrl && (
+        <div style={{ width: 480, flexShrink: 0, position: "sticky", top: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>PDF ต้นฉบับ</span>
+            <button className="btn ghost sm" type="button" onClick={() => setShowPdf(false)} style={{ padding: "2px 8px" }}>
+              <Icon name="x" /> ซ่อน
+            </button>
+          </div>
+          <iframe
+            src={pdfObjectUrl}
+            title="PDF Preview"
+            style={{ width: "100%", height: 680, border: "1px solid #e5e7eb", borderRadius: 6, display: "block" }}
+          />
+        </div>
+      )}
+
+    </div>
   </Modal>;
+}
+
+function EditQuotationModal({
+  record,
+  bootstrap,
+  onClose,
+  onSaved,
+}: {
+  record: SupplierQuotationRecord;
+  bootstrap: BootstrapData;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [supplierId, setSupplierId] = useState(String(record.supplierId));
+  const [supplierReference, setSupplierReference] = useState(record.supplierReference);
+  const [receivedDate, setReceivedDate] = useState(record.receivedDate);
+  const [validUntil, setValidUntil] = useState(record.validUntil);
+  const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>(record.currency);
+  const [amount, setAmount] = useState(String(record.amount));
+  const [inquiryId, setInquiryId] = useState(record.inquiryId ? String(record.inquiryId) : "");
+  const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void listInquiries({ page: 1, pageSize: 100 }).then((r) =>
+      setInquiries(r.items.map((i) => ({ id: i.id, number: i.number, projectName: i.projectName, customerName: i.customerName })))
+    ).catch(() => undefined);
+  }, []);
+
+  const parsedAmount = Number(amount);
+  const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
+    || !Number.isFinite(parsedAmount) || parsedAmount <= 0;
+
+  const submit = async () => {
+    if (invalid) return;
+    setBusy(true); setError("");
+    try {
+      await updateSupplierQuotation(record.id, {
+        supplierId: Number(supplierId),
+        supplierReference: supplierReference.trim(),
+        receivedDate,
+        validUntil,
+        currency,
+        amount: parsedAmount,
+        inquiryId: inquiryId ? Number(inquiryId) : null,
+        rowVersion: record.rowVersion,
+      });
+      onSaved();
+    } catch (e) {
+      setError(toError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={`Edit ${record.quotationNumber}`}
+      size="lg"
+      onClose={onClose}
+      footer={<>
+        <button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
+          <Icon name="check" />{busy ? "Saving…" : "Save changes"}
+        </button>
+      </>}
+    >
+      {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+      <div className="form-grid two">
+        <Field label="Supplier *">
+          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">— เลือก Supplier —</option>
+            {bootstrap.suppliers.map((s) => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Supplier reference">
+          <input maxLength={200} value={supplierReference} onChange={(e) => setSupplierReference(e.target.value)} placeholder="e.g. QT-2609-001" />
+        </Field>
+        <Field label="Received date *">
+          <input type="date" value={receivedDate} onChange={(e) => { setReceivedDate(e.target.value); if (e.target.value && validUntil < e.target.value) setValidUntil(addIsoDays(e.target.value, 30)); }} />
+        </Field>
+        <Field label="Valid until *">
+          <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+        </Field>
+        <Field label="Currency *">
+          <select value={currency} onChange={(e) => setCurrency(e.target.value as SupplierQuotationRecord["currency"])}>
+            <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
+          </select>
+        </Field>
+        <Field label="Amount *">
+          <input type="number" min="0.0001" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+        </Field>
+        <Field label="Related inquiry" span={2}>
+          <select value={inquiryId} onChange={(e) => setInquiryId(e.target.value)}>
+            <option value="">Not linked</option>
+            {inquiries.map((i) => <option key={i.id} value={i.id}>{i.number} · {i.projectName} · {i.customerName}</option>)}
+          </select>
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
 export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPlanningProps) {
@@ -1900,6 +2197,8 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
   const [showUpload, setShowUpload] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingRecord, setEditingRecord] = useState<SupplierQuotationRecord | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -1951,6 +2250,20 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
     }
   };
 
+  const deleteQuotation = async (record: SupplierQuotationRecord) => {
+    if (!window.confirm(`ลบ ${record.quotationNumber} (${record.supplierName}) ใช่หรือไม่?\nการลบไม่สามารถย้อนกลับได้`)) return;
+    setDeletingId(record.id);
+    try {
+      await deleteSupplierQuotation(record.id);
+      setRefreshKey((v) => v + 1);
+      notify(`ลบ ${record.quotationNumber} แล้ว`);
+    } catch (e) {
+      notify("ลบไม่สำเร็จ: " + toError(e));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return <>
     <PageHeader
       eyebrow="SUPPLIER SOURCING"
@@ -1997,7 +2310,24 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
             <td><div className="cell-primary"><strong>{record.uploadedByName}</strong><span>{dateTime(record.uploadedAt)}</span></div></td>
             <td><Badge>{record.status}</Badge></td>
             <td><div className="cell-primary"><strong>{quotationFileKind(record.fileName)}</strong><span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span></div></td>
-            <td><button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}><Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button></td>
+            <td>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}>
+                  <Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}
+                </button>
+                {canUpload && (
+                  <button className="btn ghost sm" type="button" onClick={() => setEditingRecord(record)}>
+                    <Icon name="edit" />Edit
+                  </button>
+                )}
+                {canUpload && (
+                  <button className="btn ghost sm" type="button" disabled={deletingId === record.id} onClick={() => { void deleteQuotation(record); }}
+                    style={{ color: "#dc2626" }}>
+                    <Icon name="trash" />{deletingId === record.id ? "Deleting…" : "Delete"}
+                  </button>
+                )}
+              </div>
+            </td>
           </tr>)}</tbody>
         </table>
       </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading supplier quotations…"} /></div> : <EmptyState icon="quote" title="No supplier quotation found" message="อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก" action={canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : undefined} />}
@@ -2009,6 +2339,18 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
       setRefreshKey((value) => value + 1);
       notify("Supplier quotation " + quotationNumber + " uploaded");
     }} /> : null}
+    {editingRecord ? (
+      <EditQuotationModal
+        record={editingRecord}
+        bootstrap={bootstrap}
+        onClose={() => setEditingRecord(null)}
+        onSaved={() => {
+          setEditingRecord(null);
+          setRefreshKey((v) => v + 1);
+          notify("Quotation updated");
+        }}
+      />
+    ) : null}
   </>;
 }
 

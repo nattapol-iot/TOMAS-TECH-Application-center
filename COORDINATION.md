@@ -100,6 +100,10 @@ so we never merge-conflict.
 
 ## Active claims
 
+| 2026-09-11 | Claude | Add Edit+Delete UI to PlanningPricingScreens.tsx (ProductionSupplierQuotations + EditQuotationModal) and CoreScreens.tsx (SupplierMasterTab + SupplierEditModal), plus 4 new api-client.ts exports (updateSupplierQuotation, deleteSupplierQuotation, updateSupplier, deleteSupplier). Editing api-client.ts, PlanningPricingScreens.tsx, CoreScreens.tsx only. | released — typecheck clean — Claude, 2026-09-11 |
+
+| 2026-09-11 | Claude | Add PATCH + DELETE routes to backend-node/src/routes/supplier-quotations.ts and PUT + DELETE routes to backend-node/src/routes/master.ts. No other files touched. | released — typecheck clean — Claude, 2026-09-11 |
+
 | 2026-09-08 | Claude-CoordFix | Fix slide dims W=6858000/H=9906000, slide2 textboxes, slide11 signoff, remove opPhoto border | released — typecheck clean — Claude, 2026-09-08 |
 
 | 2026-09-08 | Claude-PptxFix | Fix PPTX visual fidelity: remove logo from slide master (was on every slide), fix DARK_BLUE to 1B3A6B, remove broken rId3 image rel from master rels. Editing inspection-report-pptx.ts + inspection-report-template.ts only. | released — typecheck clean — Claude, 2026-09-08 |
@@ -182,6 +186,10 @@ Resource Plan verification note — Codex, 2026-09-05: current full Node typeche
 | 2026-09-05 | Codex | Restore Team Test frontend after a generic build changed the served client to Entra mode; rebuild using the existing Team Test launcher and verify the login page | done — PID 28184, login page and existing account verified |
 
 | 2026-09-05 | Codex | User-reported API loading failure: trailing-slash routing compatibility in `backend-node/src/app.ts`, new routing regression test, and API release only | done — release 20260905-095826, 11/11 Node tests; seven authenticated collection requests pass |
+
+| 2026-09-11 | Claude | Auto-fill supplier name + line items from PDF parse result in SupplierQuotationUploadModal. Editing PlanningPricingScreens.tsx only — activate result.supplierName (auto-match existing supplier or pre-fill new-supplier text box) and result.lines (populate line items table). No backend, migration, or other files. | released — typecheck clean — Claude, 2026-09-11 |
+
+| 2026-09-11 | Claude | Quotation NAS folder restructure: add quotationStorageKey() to document-storage.ts, update supplier-quotations.ts upload handler to use Quotations/{SupplierName}/{YYYY}/{uuid} path, add scripts/migrate-quotation-paths.mjs to migrate existing files. No migration SQL, no other files. | released — frontend typecheck clean, backend new functions verified — Claude, 2026-09-11 |
 
 Add a row before you start. Remove it — or set Status to `done` — when you finish.
 

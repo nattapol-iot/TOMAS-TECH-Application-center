@@ -7,9 +7,9 @@ import {
   deleteStoredFile,
   DOCUMENT_EXTENSIONS,
   multipartText,
+  quotationStorageKey,
   readMultipartUpload,
   sendStoredFile,
-  storageKey,
   SUPPLIER_QUOTATION_EXTENSIONS,
   uploadedFileName,
   validateFileExtension,
@@ -120,7 +120,7 @@ export function registerSupplierQuotationRoutes(
     `, (bind) => { bind.input("supplier", sql.BigInt, supplierId); bind.input("inquiry", sql.BigInt, inquiryId); });
     if (!references.recordset[0]) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
 
-    const key = storageKey("supplier-quotations", extension);
+    const key = quotationStorageKey(references.recordset[0]!.supplier_name, extension, receivedDate);
     const write = await writeStoredFile(config.documentStorage, key, upload.file.filepath);
     try {
       const created = await database.transaction(async (transaction) => {
@@ -309,6 +309,113 @@ export function registerSupplierQuotationRoutes(
 
     const result = await response.json() as Record<string, unknown>;
     return reply.status(200).send(result);
+  });
+
+  // ── Header edit and delete ─────────────────────────────────────────────
+
+  app.patch("/api/v1/supplier-quotations/:id", async (request, reply) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Supplier quotation id");
+    const body = bodyObject(request.body);
+    // parse fields
+    const supplierReference = optionalText(body.supplierReference, 200, "Supplier reference") ?? "";
+    const supplierId = body.supplierId !== undefined ? positiveLong(body.supplierId, "Supplier id") : null;
+    const receivedDate = body.receivedDate !== undefined ? parseDateOnly(String(body.receivedDate), "Received date") : null;
+    const validUntil = body.validUntil !== undefined ? parseDateOnly(String(body.validUntil), "Valid until") : null;
+    const currency = body.currency !== undefined ? String(body.currency).toUpperCase() : null;
+    if (currency !== null && !["THB", "JPY", "USD", "EUR"].includes(currency)) throw new ApiError(400, "validation_failed", "Currency is invalid.");
+    const amountValue = body.amount !== undefined ? Number(body.amount) : null;
+    if (amountValue !== null && (!Number.isFinite(amountValue) || amountValue <= 0)) throw new ApiError(400, "validation_failed", "Amount must be greater than zero.");
+    const inquiryId = body.inquiryId === null ? null : body.inquiryId !== undefined ? positiveLong(body.inquiryId, "Inquiry id") : undefined;
+    const rowVersionStr = optionalText(body.rowVersion, 50, "Row version") ?? null;
+    const rowVersion = rowVersionStr ? Buffer.from(rowVersionStr, "base64") : null;
+
+    const updated = await database.transaction(async (transaction) => {
+      const req = new sql.Request(transaction);
+      req.input("id", sql.BigInt, id);
+      const current = (await req.query<Record<string, unknown> & { row_version: Buffer }>(`
+        SELECT supplier_id, supplier_reference, received_date, valid_until, currency, amount, inquiry_id, row_version
+        FROM dbo.supplier_quotations WITH (UPDLOCK, HOLDLOCK) WHERE id=@id;
+      `)).recordset[0];
+      if (!current) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
+      if (rowVersion && !current.row_version.equals(rowVersion)) throw new ApiError(409, "conflict", "Quotation was modified by another user. Please refresh.");
+
+      const newSupplierId = supplierId ?? Number(current.supplier_id);
+      const newReference = body.supplierReference !== undefined ? supplierReference : String(current.supplier_reference ?? "");
+      const newReceived = (receivedDate ?? dateOnly(current.received_date as Date | string))!;
+      const newValid = (validUntil ?? dateOnly(current.valid_until as Date | string))!;
+      const newCurrency = currency ?? String(current.currency);
+      const newAmount = amountValue ?? Number(current.amount);
+      const newInquiryId = inquiryId === undefined ? (current.inquiry_id === null ? null : Number(current.inquiry_id)) : (inquiryId ?? null);
+
+      if (newValid < newReceived) throw new ApiError(400, "validation_failed", "Valid until cannot be before received date.");
+
+      // validate supplier and optional inquiry
+      const validate = new sql.Request(transaction);
+      validate.input("supplier", sql.BigInt, newSupplierId);
+      validate.input("inquiry", sql.BigInt, newInquiryId);
+      const ref = (await validate.query<{ supplier_name: string }>(`
+        SELECT s.name supplier_name FROM dbo.suppliers s
+        WHERE s.id=@supplier AND s.is_active=1 AND s.deleted_at IS NULL
+          AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=@inquiry AND i.deleted_at IS NULL));
+      `)).recordset[0];
+      if (!ref) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
+
+      const upd = new sql.Request(transaction);
+      upd.input("id", sql.BigInt, id);
+      upd.input("supplier", sql.BigInt, newSupplierId);
+      upd.input("reference", sql.NVarChar(200), newReference);
+      upd.input("received", sql.Date, newReceived);
+      upd.input("valid", sql.Date, newValid);
+      upd.input("currency", sql.Char(3), newCurrency);
+      upd.input("amount", sql.Decimal(19, 4), newAmount);
+      upd.input("inquiry", sql.BigInt, newInquiryId);
+      upd.input("actor", sql.BigInt, actor.id);
+      const row = (await upd.query<{ row_version: Buffer }>(`
+        UPDATE dbo.supplier_quotations SET
+          supplier_id=@supplier, supplier_reference=@reference, received_date=@received,
+          valid_until=@valid, currency=@currency, amount=@amount, inquiry_id=@inquiry, updated_by=@actor
+        OUTPUT inserted.row_version WHERE id=@id;
+      `)).recordset[0]!;
+
+      const audit = new sql.Request(transaction);
+      audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, id);
+      audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId: newSupplierId, supplierName: ref.supplier_name, amount: newAmount, currency: newCurrency }));
+      await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,action,after_json,reason)
+        VALUES(@actor,N'SupplierQuotation',@id,N'Updated',@after,N'Header fields updated');`);
+
+      return { rowVersion: row.row_version.toString("base64") };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+
+    return reply.status(200).send(updated);
+  });
+
+  app.delete("/api/v1/supplier-quotations/:id", async (request, reply) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Supplier quotation id");
+
+    const row = (await database.query<{ storage_key: string; quotation_no: string }>(
+      "SELECT storage_key, quotation_no FROM dbo.supplier_quotations WHERE id=@id;",
+      (bind) => bind.input("id", sql.BigInt, id),
+    )).recordset[0];
+    if (!row) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
+
+    await database.transaction(async (transaction) => {
+      const del = new sql.Request(transaction);
+      del.input("id", sql.BigInt, id);
+      await del.query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
+      await del.query("DELETE FROM dbo.supplier_quotations WHERE id=@id;");
+      const audit = new sql.Request(transaction);
+      audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, id);
+      audit.input("no", sql.NVarChar(50), row.quotation_no);
+      await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,reason)
+        VALUES(@actor,N'SupplierQuotation',@id,@no,N'Deleted',N'Supplier quotation deleted by user');`);
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+
+    await deleteStoredFile(config.documentStorage, row.storage_key).catch(() => undefined);
+    return reply.status(204).send();
   });
 
   // All quotation lines for Price Library — joined with supplier + quotation header

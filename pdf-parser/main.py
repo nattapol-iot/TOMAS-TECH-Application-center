@@ -2,11 +2,13 @@
 PDF Parser Service for TOMAS TECH Supplier Quotations
 ======================================================
 Tier 1  pymupdf4llm  → Markdown → column-aware table parser
-         (knows WHICH column is description / qty / price / amount from the header)
 Tier 2  pdfplumber   → raw table cells → heuristic cell matcher
-         (fallback when Markdown tables are empty)
 Tier 3  text regex   → last-resort line-pattern matching
 Tier 4  PyMuPDF + Tesseract OCR → for scanned / image-only PDFs
+
+v2.2.0 — pdfplumber plain text primary for field extraction,
+         supplier name exclusion set, Month DD YYYY date format,
+         THB-first currency detection, more total/quotation-no patterns.
 """
 
 from __future__ import annotations
@@ -27,13 +29,12 @@ from PIL import Image
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("pdf-parser")
 
-app = FastAPI(title="TOMAS PDF Parser", version="2.0.0")
+app = FastAPI(title="TOMAS PDF Parser", version="2.2.0")
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
 OCR_LANG = "tha+eng+jpn"
 OCR_DPI = 300
-# Count only real content chars (strip Markdown markup) before triggering OCR
 TEXT_THRESHOLD = 80
 
 UNIT_TOKENS = {
@@ -46,6 +47,8 @@ MONTH_TH: dict[str, int] = {
     "มกราคม": 1, "กุมภาพันธ์": 2, "มีนาคม": 3, "เมษายน": 4,
     "พฤษภาคม": 5, "มิถุนายน": 6, "กรกฎาคม": 7, "สิงหาคม": 8,
     "กันยายน": 9, "ตุลาคม": 10, "พฤศจิกายน": 11, "ธันวาคม": 12,
+    "ม.ค.": 1, "ก.พ.": 2, "มี.ค.": 3, "เม.ย.": 4, "พ.ค.": 5, "มิ.ย.": 6,
+    "ก.ค.": 7, "ส.ค.": 8, "ก.ย.": 9, "ต.ค.": 10, "พ.ย.": 11, "ธ.ค.": 12,
     "ม.ค": 1, "ก.พ": 2, "มี.ค": 3, "เม.ย": 4, "พ.ค": 5, "มิ.ย": 6,
     "ก.ค": 7, "ส.ค": 8, "ก.ย": 9, "ต.ค": 10, "พ.ย": 11, "ธ.ค": 12,
 }
@@ -58,7 +61,7 @@ MONTH_EN: dict[str, int] = {
     "november": 11, "december": 12,
 }
 
-SKIP_PAT = re.compile(r"sub\s*total|grand\s*total|ภาษี|vat|discount", re.I)
+SKIP_PAT = re.compile(r"sub\s*total|grand\s*total|ภาษี|vat|discount|shipping|ค่าขนส่ง", re.I)
 
 # ── Date helpers ───────────────────────────────────────────────────────────
 
@@ -68,19 +71,40 @@ def be_to_ce(y: int) -> int:
 
 def parse_date(raw: str) -> str:
     raw = raw.strip()
+    # DD/MM/YYYY or DD-MM-YYYY
     m = re.fullmatch(r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", raw)
     if m:
         d, mo = m.group(1).zfill(2), m.group(2).zfill(2)
         yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
         return f"{be_to_ce(yr)}-{mo}-{d}"
+    # YYYY/MM/DD
     m = re.fullmatch(r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", raw)
     if m:
         return f"{be_to_ce(int(m.group(1)))}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+    # DD MonthName YYYY  (Thai or English, space-separated)
     m = re.fullmatch(r"(\d{1,2})\s+([^\d\s]{2,20})\s+(\d{2,4})", raw)
     if m:
         d = m.group(1).zfill(2)
-        key = m.group(2).lower().replace(".", "")
-        mo = MONTH_TH.get(m.group(2)) or MONTH_TH.get(key) or MONTH_EN.get(key) or 1
+        raw_mo = m.group(2)
+        key = raw_mo.lower().rstrip(".")
+        mo = (MONTH_TH.get(raw_mo) or MONTH_TH.get(raw_mo.rstrip("."))
+              or MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1)
+        yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
+        return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
+    # DD-MonthName-YYYY  (dash-separated, e.g. "09-Jul-2026" from Keyence-style docs)
+    m = re.fullmatch(r"(\d{1,2})-([A-Za-z]{3,15})-(\d{2,4})", raw)
+    if m:
+        d = m.group(1).zfill(2)
+        key = m.group(2).lower()
+        mo = MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1
+        yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
+        return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
+    # Month DD, YYYY  (e.g. "September 11, 2026")
+    m = re.fullmatch(r"([A-Za-z]{3,15})\s+(\d{1,2}),?\s+(\d{2,4})", raw)
+    if m:
+        key = m.group(1).lower()
+        mo = MONTH_EN.get(key) or MONTH_EN.get(key[:3]) or 1
+        d = m.group(2).zfill(2)
         yr = int(m.group(3)) if len(m.group(3)) == 4 else int(f"20{m.group(3)}")
         return f"{be_to_ce(yr)}-{str(mo).zfill(2)}-{d}"
     return ""
@@ -88,18 +112,43 @@ def parse_date(raw: str) -> str:
 
 def find_date(text: str, keywords: list[str]) -> str:
     for kw in keywords:
+        # keyword followed by "Month DD, YYYY" (e.g. "Date: September 11, 2026")
+        pat3 = re.escape(kw) + r"[:\s]*([A-Za-z]{3,15}\s+\d{1,2},?\s+\d{2,4})"
+        m = re.search(pat3, text, re.IGNORECASE)
+        if m:
+            d = parse_date(m.group(1).strip())
+            if d:
+                return d
+        # keyword followed by Thai/English date with month name
         pat = re.escape(kw) + r"[:\s]*(\d{1,2}[\s/\-][^\d\n\r]{2,15}[\s/\-]\d{2,4})"
         m = re.search(pat, text, re.IGNORECASE)
         if m:
             d = parse_date(m.group(1).strip())
             if d:
                 return d
+        # keyword followed by numeric date
+        pat2 = re.escape(kw) + r"[:\s]*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})"
+        m = re.search(pat2, text, re.IGNORECASE)
+        if m:
+            d = parse_date(m.group(1).strip())
+            if d:
+                return d
+    # fallback 1: bare DD-Mon-YYYY (e.g. "09-Jul-2026" without preceding keyword)
+    m = re.search(r"\b(\d{1,2}-[A-Za-z]{3,15}-\d{4})\b", text)
+    if m:
+        d = parse_date(m.group(1))
+        if d:
+            return d
+    # fallback 2: bare numeric date
     m = re.search(r"\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b", text)
     return parse_date(m.group(1)) if m else ""
 
 # ── Field extraction helpers ───────────────────────────────────────────────
 
 def detect_currency(text: str) -> str:
+    # Check THB first — explicit marker beats default
+    if re.search(r"\bTHB\b|฿|\bBaht\b|\bบาท\b", text, re.I):
+        return "THB"
     if re.search(r"\bJPY\b|\bYEN\b|¥", text, re.I):
         return "JPY"
     if re.search(r"\bUSD\b|\bUS\$|\$\d", text, re.I):
@@ -109,143 +158,365 @@ def detect_currency(text: str) -> str:
     return "THB"
 
 
-def extract_tax_id(text: str) -> str:
-    m = re.search(r"\b(\d{13})\b", text) or re.search(
-        r"(\d{1}-\d{4}-\d{5}-\d{1,2}-\d{1})", text
-    )
-    return m.group(1).replace("-", "") if m else ""
-
-
-def extract_quotation_number(text: str) -> str:
-    m = re.search(
-        r"(?:quotation\s*(?:no\.?|number:?)|invoice\s*no\.?|"
-        r"ใบเสนอราคา(?:เลขที่)?|เลขที่ใบเสนอราคา|"
-        r"QT(?:NO)?|BT\s*NO|SQ\s*NO)[:\s#\/]*([A-Z0-9][A-Z0-9\-\/]{3,})",
-        text, re.I,
-    )
+def extract_tax_id(text: str, top_lines: Optional[list[str]] = None) -> str:
+    # Search in supplier letterhead (top lines) first to avoid picking up the buyer's tax ID.
+    # Build a combined search text: supplier section first, then full text as fallback.
+    search_text = "\n".join((top_lines or [])[:30]) + "\n" + text if top_lines else text
+    # Thai 13-digit tax ID — may be formatted with dashes
+    m = re.search(r"(?:เลขประจำตัวผู้เสียภาษี|tax\s*id|taxpayer)[:\s]*(\d[\d\-]{12,16})", search_text, re.I)
     if m:
-        return m.group(1).strip()
-    m = re.search(
-        r"\b(QT[\-\d]{4,}|QT\d{4}[-\d]+|SQ[\d\-]{4,}|BT\d{2}[-\d]{5,}|"
-        r"OTP\d{6,}|TMTS\d{2}-\d+|FA\d+[A-Z]+|QCA\d+|Q\d{6,}|"
-        r"INV\d+|WIV\d+|[A-Z]{2,}\d{4,}[-\w]*)",
-        text,
-    )
+        return re.sub(r"\D", "", m.group(1))[:13]
+    m = re.search(r"\b(\d{13})\b", search_text)
     if m:
-        candidate = m.group(1)
-        if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", candidate):
-            return candidate
-    for pat in [
-        r"(?:No\.|NO\.)\s*:\s*([A-Z0-9][A-Z0-9\-\/]{4,19})",
-        r"เลขที่[:\s]*([A-Z0-9\-\/]{5,20})",
-    ]:
-        m = re.search(pat, text, re.I)
-        if m:
-            candidate = m.group(1).strip()
-            if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", candidate):
-                return candidate
+        return m.group(1)
+    m = re.search(r"(\d{1}-\d{4}-\d{5}-\d{1,2}-\d{1})", search_text)
+    if m:
+        return m.group(1).replace("-", "")
     return ""
 
 
-def extract_supplier_name(lines: list[str]) -> str:
-    for line in lines[:25]:
+def extract_quotation_number(text: str) -> str:
+    # Labeled patterns first (most reliable)
+    labeled = re.search(
+        r"(?:quotation\s*(?:no\.?|number:?|no:)|invoice\s*(?:no\.?|number:?)|"
+        r"ใบเสนอราคา(?:เลขที่|ที่)?|เลขที่ใบเสนอราคา|เลขที่เอกสาร|เลขที่ใบ|เลขที่\s*:|"
+        r"QT\s*(?:NO\.?|:)|BT\s*NO\.?|SQ\s*NO\.?|"
+        r"doc(?:ument)?\s*(?:no\.?|number)|"
+        r"REF\s*(?:NO\.?|:)|REFERENCE\s*(?:NO\.?|:)|"
+        r"PO\s*(?:NO\.?|:)|order\s*(?:no\.?|number:?)|"
+        r"document\s*no\.?)"
+        r"[:\s#\/]*([A-Z0-9][A-Z0-9\-\/\.]{3,29})",
+        text, re.I,
+    )
+    if labeled:
+        return labeled.group(1).strip()
+    # Known document-number patterns
+    known = re.search(
+        r"\b(QT[\-\d]{4,}|QT\d{4}[-\d]+|SQ[\d\-]{4,}|BT\d{2}[-\d]{5,}|"
+        r"OTP\d{6,}|TMTS\d{2}-\d+|FA\d+[A-Z]+|QCA\d+|Q\d{6,}|"
+        r"INV[\-\d]{4,}|WIV\d+|[A-Z]{2,4}\d{4,}[-\w]*)",
+        text,
+    )
+    if known:
+        c = known.group(1)
+        if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", c):  # not a phone number
+            return c
+    # Generic "No. : XXXX" pattern
+    for pat in [
+        r"(?:No\.|NO\.)\s*[:\-]\s*([A-Z0-9][A-Z0-9\-\/\.]{4,24})",
+        r"เลขที่[:\s]*([A-Z0-9\-\/]{5,24})",
+    ]:
+        m = re.search(pat, text, re.I)
+        if m:
+            c = m.group(1).strip()
+            if not re.fullmatch(r"0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}", c):
+                return c
+    # Pure numeric doc reference: 6-10 digit number immediately followed by a date
+    # e.g. "11244565 09-Jul-2026 1 / 1"  (Keyence/MISUMI style)
+    m = re.search(r"\b(\d{6,10})\s+\d{1,2}[-/][A-Za-z\d]{2,3}[-/]\d{4}\b", text)
+    if m:
+        c = m.group(1)
+        if len(c) != 13:          # not a tax ID
+            return c
+    return ""
+
+
+def extract_supplier_name(lines: list[str], metadata: Optional[dict] = None) -> str:
+    # Buyer-section markers — the supplier name only appears ABOVE these lines.
+    # Everything from "To:", "Bill To:", "เรียน:", etc. onward is the buyer section
+    # where our own company name (TOMAS TECH) will appear and must be ignored.
+    BUYER_SECTION_PAT = re.compile(
+        r"^(?:to\s*:|bill\s*to\s*:|ship\s*to\s*:|attention\s*:|attn\s*:|เรียน\s*:|ถึง\s*:|ที่\s*:|"
+        r"quotation\s+to\s*:|customer\s*:|sold\s*to\s*:)",
+        re.I,
+    )
+
+    def is_garbled(t: str) -> bool:
+        # Thai consonant immediately adjacent to an ASCII letter (OCR artefact)
+        if re.search(r"[ก-ฮ][A-Za-z]|[A-Za-z][ก-ฮ]", t):
+            return True
+        # Short string of bare Thai consonants with no vowels/tone marks
+        # (real Thai words always carry vowel characters U+0E30-U+0E4E)
+        if len(t) <= 12 and not re.search(r"[ะ-๎]", t):
+            pure_consonants = re.sub(r"[^ก-ฮ]", "", t)
+            if len(pure_consonants) >= 3:
+                return True
+        return False
+
+    def eng_ratio(s: str) -> float:
+        alpha = [c for c in s if c.isalpha()]
+        if not alpha:
+            return 0.0
+        return sum(1 for c in alpha if c.isascii()) / len(alpha)
+
+    def clean_name(t: str) -> str:
+        # Strip Thai company-type prefix words
+        t = re.sub(r"^(?:บริษัท|หจก\.|ห้างหุ้นส่วน(?:จำกัด)?)\s*", "", t).strip()
+        # Strip everything from address indicators onward
+        t = re.sub(r"\s+(?:ที่อยู่|ที่อยู|no\.\s*\d|no\s+\d|\d{1,3}\s*[,/]|soi\b|road\b|rd\.\b|floor\b|fl[,\s]|tower\b)", " ", t, flags=re.I)
+        t = re.sub(r"\s{2,}", " ", t).strip()
+        t = t.rstrip(".,; ").strip()
+        # Remove corrupted/non-printable characters
+        t = re.sub(r"[^\x20-\x7E฀-๿()/.,'&\-]", "", t).strip()
+        return t
+
+    # Words that identify the document type, not the supplier — excluded from Pass 2
+    DOCUMENT_TYPE_WORDS = {
+        "QUOTATION", "TAX INVOICE", "INVOICE", "PURCHASE ORDER", "DELIVERY NOTE",
+        "RECEIPT", "PROFORMA", "CREDIT NOTE", "DEBIT NOTE", "PACKING LIST",
+        "STATEMENT", "PROPOSAL", "OFFER", "ESTIMATE", "ORDER CONFIRMATION",
+    }
+    _doc_type_nospace = {w.replace(" ", "") for w in DOCUMENT_TYPE_WORDS}
+
+    # Cut off search window at the buyer section — supplier letterhead is always above it
+    search_lines: list[str] = []
+    for line in lines[:60]:
+        if BUYER_SECTION_PAT.match(line.strip()):
+            break
+        search_lines.append(line)
+
+    # Metadata check — PDF author/creator fields often contain the supplier company name
+    if metadata:
+        for key in ("author", "creator"):
+            val = (metadata.get(key) or "").strip()
+            if 5 <= len(val) <= 100 and not is_garbled(val) and eng_ratio(val) >= 0.5:
+                if re.search(r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b", val, re.I):
+                    return clean_name(val)
+
+    # Pass 1: line with explicit English company suffix (CO.,LTD. / INC. / CORP. etc.)
+    for line in search_lines:
         t = line.strip()
-        if len(t) < 5:
+        if len(t) < 5 or len(t) > 250:
             continue
-        if re.search(r"co\.,?\s*ltd|จำกัด|company|corporation|inc\.|gmbh|co\.th|บริษัท", t, re.I):
-            return t
-    for line in lines[:12]:
+        if is_garbled(t):
+            continue
+        if re.search(r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b|\bpte\.\s*ltd", t, re.I):
+            name = clean_name(t)
+            # Must be at least half English characters — reject Thai-only names
+            if len(name) >= 5 and eng_ratio(name) >= 0.5:
+                return name
+
+    # Pass 2: short all-caps English line (letterhead / logo text)
+    # Skip lines that are document-type words (e.g. "QUOTATION", "INVOICE")
+    for line in search_lines[:20]:
         t = line.strip()
-        if len(t) >= 5 and t == t.upper() and re.search(r"[A-Z]", t):
-            return t
+        if 5 <= len(t) <= 70 and t == t.upper() and re.search(r"[A-Z]{3}", t):
+            if not re.search(r"\d{5,}|@|http|[฀-๿]", t):
+                if t.upper() in DOCUMENT_TYPE_WORDS:
+                    continue
+                if t.upper().replace(" ", "") in _doc_type_nospace:
+                    continue
+                return t
+
     return ""
 
 
 def extract_total(text: str) -> float:
     patterns = [
         r"(?:grand\s*total|total\s*net|net\s*total|ยอดรวมทั้งหมด|ยอดสุทธิ|รวมทั้งสิ้น)[^\d\n]*([\d,]+\.?\d*)",
-        r"(?:total\s*amount|total)[^\d\n]*([\d,]+\.?\d*)",
+        r"(?:net\s*amount|net\s*total|total\s*net)[^\d\n]*([\d,]+\.?\d*)",
+        r"(?:รวมเงิน|ราคารวม|มูลค่ารวม|ยอดชำระ|ยอดสุทธิ)[^\d\n]*([\d,]+\.?\d*)",
+        r"(?:total\s*amount|amount\s*due)[^\d\n]*([\d,]+\.?\d*)",
+        r"(?:total)[^\d\n]*([\d,]+\.?\d*)",
         r"(?:รวม)[^\d\n]*([\d,]+\.?\d*)",
     ]
+    best = 0.0
     for pat in patterns:
-        m = re.search(pat, text, re.I)
-        if m:
+        for m in re.finditer(pat, text, re.I):
             raw = m.group(1).replace(",", "").strip()
             try:
-                v = float(raw) if raw else 0.0
+                v = float(raw)
+                if v > best:
+                    best = v
+                    break   # take first match per pattern, largest wins across patterns
             except ValueError:
                 continue
-            if v > 0:
-                return v
-    return 0.0
+    return best
 
 # ── Numeric helpers ────────────────────────────────────────────────────────
 
 def is_numeric(s: Optional[str]) -> bool:
-    return bool(s and re.fullmatch(r"[\d,]+\.?\d*\s*[฿¥€$]?", s.strip()))
+    if not s:
+        return False
+    return bool(re.fullmatch(r"[\d,]+\.?\d*\s*[฿¥€$]?", s.strip()))
 
 
 def clean_num(s: str) -> float:
-    return float(re.sub(r"[,฿¥€$\s]", "", s))
+    cleaned = re.sub(r"[,฿¥€$\s]", "", s)
+    return float(cleaned) if cleaned else 0.0
 
-# ── Tier 1: Markdown table parser (column-aware) ───────────────────────────
+# ── Tier 1: pymupdf4llm Markdown table parser (column-aware) ──────────────
 
-def _find_col(headers: list[str], keywords: list[str]) -> Optional[int]:
-    """Return first header index whose text contains any keyword (case-insensitive)."""
-    for i, h in enumerate(headers):
-        h_norm = re.sub(r"\s+", " ", h.lower())
-        for kw in keywords:
-            if kw.lower() in h_norm:
+def _find_col(headers: list[str], keywords: list[str],
+              exclude: Optional[set[int]] = None) -> Optional[int]:
+    """Return the first column whose header contains any keyword, checked in keyword-priority
+    order so that more-specific keywords (earlier in the list) win over generic ones.
+    Columns in `exclude` are skipped (used for conflict resolution)."""
+    for kw in keywords:
+        kw_l = kw.lower()
+        for i, h in enumerate(headers):
+            if exclude and i in exclude:
+                continue
+            h_norm = re.sub(r"\s+", " ", h.lower().strip())
+            if kw_l in h_norm:
                 return i
     return None
 
 
+def _detect_columns(header: list[str]) -> dict:
+    """
+    Detect column roles from header cells with conflict resolution.
+
+    Priority rules:
+    - Most-specific keywords first (e.g. "item description" beats "item")
+    - desc/code conflict: if both map to same col, try to find alternative for code
+    - unit vs unit-price: exact "unit" match only, never substring of "unit price"
+    - Covers EN / TH / JP / CN / common abbreviation variants
+    """
+    # ── Description ─────────────────────────────────────────────
+    DESC_KW = [
+        "item description", "product description", "goods description",
+        "description", "descriptions",
+        "detail", "details",
+        "product name", "product",
+        "material description", "material",
+        "รายการสินค้า", "ชื่อสินค้า", "รายละเอียดสินค้า",
+        "รายการ", "รายละเอียด", "ชื่อ", "สินค้า",
+        "goods", "commodity",
+        "品名", "商品名", "規格", "品目",
+        "名称",
+    ]
+    # ── Item code / part number ──────────────────────────────────
+    CODE_KW = [
+        "part number", "part no.", "part no",
+        "item number", "item no.", "item no",
+        "item code", "product code", "goods code",
+        "model number", "model no.", "model no",
+        "code", "part", "item",
+        "รหัสสินค้า", "รหัส", "รุ่น",
+        "model", "sku", "ref", "cat no", "catalog no",
+        "品番", "型番", "品名コード",
+    ]
+    # ── Quantity ────────────────────────────────────────────────
+    QTY_KW = [
+        "quantity", "จำนวน",
+        "qty", "pcs", "pieces", "count", "数量", "個数",
+    ]
+    # ── Unit price ──────────────────────────────────────────────
+    PRICE_KW = [
+        "unit price", "price per unit", "price/unit", "price / unit",
+        "unitprice", "unit\nprice", "rate",
+        "ราคาต่อหน่วย", "ราคา/หน่วย",
+        "単価", "单价",
+        "price", "ราคา",
+    ]
+    # ── Line total / amount ──────────────────────────────────────
+    AMOUNT_KW = [
+        "line total", "line amount", "extended price", "ext price", "ext. price",
+        "total price", "total amount",
+        "amount", "total",
+        "ยอดรวม", "รวมเงิน", "รวม", "ยอด",
+        "金額", "合計", "小計",
+        "ext",
+    ]
+    # ── Unit of measure ─────────────────────────────────────────
+    UOM_KW = ["uom", "u/m", "หน่วย", "単位", "单位"]
+
+    desc_col   = _find_col(header, DESC_KW)
+    qty_col    = _find_col(header, QTY_KW)
+    price_col  = _find_col(header, PRICE_KW)
+    amount_col = _find_col(header, AMOUNT_KW)
+    code_col   = _find_col(header, CODE_KW)
+
+    # Exact-match "unit" / "uom" only — prevent "Unit Price" being picked as UOM
+    unit_col: Optional[int] = None
+    for i, h in enumerate(header):
+        hn = h.strip().lower()
+        if hn in ("unit", "uom", "u/m", "u.m.", "หน่วย"):
+            unit_col = i
+            break
+    if unit_col is None:
+        unit_col = _find_col(header, UOM_KW)
+
+    # ── Conflict resolution ──────────────────────────────────────
+    # If desc and code point at the same column, the match was ambiguous.
+    # Re-run code search excluding desc_col; if nothing found, leave code=None.
+    if code_col is not None and code_col == desc_col:
+        code_col = _find_col(header, CODE_KW, exclude={desc_col})
+
+    # price_col must not equal amount_col (e.g. single "Total" column table).
+    # In that case prefer amount_col and leave price_col=None.
+    if price_col is not None and price_col == amount_col:
+        price_col = _find_col(header, PRICE_KW, exclude={amount_col})
+
+    return {
+        "desc": desc_col, "qty": qty_col, "price": price_col,
+        "amount": amount_col, "code": code_col, "unit": unit_col,
+    }
+
+
 def parse_markdown_table(md: str, currency: str) -> list[dict]:
-    """
-    Parse line items from Markdown tables produced by pymupdf4llm.
-    Uses column headers to identify fields — no position guessing.
-    """
     items: list[dict] = []
     seen_desc: set[str] = set()
     line_no = 1
 
+    # Remember column positions from the last valid table — used for continuation
+    # tables on page 2+ that lack headers (common in multi-page PDFs).
+    last_col_map: Optional[dict] = None
+    last_n_cols: int = 0
+
     lines = md.split("\n")
     i = 0
     while i < len(lines):
-        # Find a Markdown table row (starts and ends with |)
         if not (lines[i].strip().startswith("|") and lines[i].strip().endswith("|")):
             i += 1
             continue
 
-        # Collect all contiguous table rows
         table_lines: list[str] = []
         while i < len(lines) and lines[i].strip().startswith("|"):
             table_lines.append(lines[i].strip())
             i += 1
 
-        # Need: header | separator | ≥1 data row
-        if len(table_lines) < 3:
-            continue
-        if not re.match(r"^\|[-: |]+\|$", table_lines[1]):
+        if len(table_lines) < 2:
             continue
 
-        header = [c.strip() for c in table_lines[0].split("|")[1:-1]]
-        n_cols = len(header)
+        has_separator = len(table_lines) >= 2 and re.match(r"^\|[-: |]+\|$", table_lines[1])
 
-        # Identify columns by keyword
-        desc_col   = _find_col(header, ["description", "detail", "product", "item", "รายการ", "ชื่อ", "name", "สินค้า"])
-        qty_col    = _find_col(header, ["qty", "quantity", "จำนวน", "pcs", "pieces"])
-        price_col  = _find_col(header, ["unit price", "unit\nprice", "price/unit", "unitprice",
-                                        "ราคา/หน่วย", "ราคาต่อหน่วย", "price", "ราคา"])
-        amount_col = _find_col(header, ["amount", "total", "รวม", "ยอด", "line total"])
-        code_col   = _find_col(header, ["code", "part no", "part number", "model no", "รหัส", "no.", "item no", "model"])
-        unit_col   = _find_col(header, ["unit", "หน่วย", "uom"])
+        if has_separator:
+            # Normal table with header row
+            header = [c.strip() for c in table_lines[0].split("|")[1:-1]]
+            n_cols = len(header)
+            data_rows = table_lines[2:]
 
-        # Skip tables with no usable columns
-        if desc_col is None and price_col is None and amount_col is None:
-            continue
+            col_map = _detect_columns(header)
+            desc_col   = col_map["desc"]
+            qty_col    = col_map["qty"]
+            price_col  = col_map["price"]
+            amount_col = col_map["amount"]
+            code_col   = col_map["code"]
+            unit_col   = col_map["unit"]
 
-        for row_text in table_lines[2:]:
+            if desc_col is None and price_col is None and amount_col is None:
+                continue
+
+            # Save column map for continuation tables (page 2+)
+            last_col_map = col_map
+            last_n_cols = n_cols
+        else:
+            # No separator → headerless continuation table from a later page
+            # Try to reuse column positions from the previous table if column count matches
+            n_cols = len(table_lines[0].split("|")) - 2
+            if last_col_map is None or n_cols != last_n_cols:
+                continue
+            desc_col   = last_col_map["desc"]
+            qty_col    = last_col_map["qty"]
+            price_col  = last_col_map["price"]
+            amount_col = last_col_map["amount"]
+            code_col   = last_col_map["code"]
+            unit_col   = last_col_map["unit"]
+            data_rows  = table_lines
+
+        for row_text in data_rows:
             cells = [c.strip() for c in row_text.split("|")[1:-1]]
             while len(cells) < n_cols:
                 cells.append("")
@@ -254,6 +525,9 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             # Description
             if desc_col is not None and desc_col < len(cells):
                 desc = cells[desc_col]
+            elif code_col is not None and code_col < len(cells):
+                # Supplier has no separate description column — use the code column as desc
+                desc = cells[code_col]
             else:
                 desc = max(
                     (c for c in cells if c and not is_numeric(c) and len(c) > 2),
@@ -265,10 +539,8 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 continue
             if SKIP_PAT.search(desc):
                 continue
-            # Skip column-header repeats
-            if re.match(r"^(?:no\.?|#|ลำดับ|item|description|รายการ|qty|จำนวน|price|ราคา)$", desc, re.I):
+            if re.match(r"^(?:no\.?|#|ลำดับ|item|description|รายการ|qty|จำนวน|price|ราคา|amount|unit)$", desc, re.I):
                 continue
-            # Skip address lines
             if re.search(r"ซอย|ถนน|แขวง|เขต|\bSoi\b|\bRoad\b", desc):
                 continue
 
@@ -292,7 +564,7 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                     except ValueError:
                         pass
 
-            # Fallback: last-two-numerics in row
+            # Fallback: pick last two positive numbers in the row
             if unit_price == 0 and amount == 0:
                 nums = []
                 for c in cells:
@@ -333,27 +605,30 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 c = cells[code_col]
                 if c and not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
                     item_code = re.sub(r"\s+", "", c)[:40]
+            # No separate description column → code is also the description
+            if desc_col is None and item_code:
+                desc = item_code
 
             # Unit
             unit = "EA"
             if unit_col is not None and unit_col < len(cells):
-                u = cells[unit_col]
+                u = cells[unit_col].strip()
                 if u.lower().rstrip("s") in UNIT_TOKENS:
                     unit = u.upper()
 
             if desc not in seen_desc:
                 seen_desc.add(desc)
                 items.append({
-                    "lineNo": line_no,
-                    "itemCode": item_code,
+                    "lineNo":      line_no,
+                    "itemCode":    item_code,
                     "description": desc,
-                    "brand": "",
-                    "model": item_code,
-                    "qty": qty,
-                    "unit": unit,
-                    "unitPrice": effective_price,
-                    "currency": currency,
-                    "remark": "",
+                    "brand":       "",
+                    "model":       item_code,
+                    "qty":         qty,
+                    "unit":        unit,
+                    "unitPrice":   effective_price,
+                    "currency":    currency,
+                    "remark":      "",
                 })
                 line_no += 1
 
@@ -378,7 +653,9 @@ def row_to_line(row: list[Optional[str]], currency: str, line_no: int) -> Option
 
     desc_cells = [c for c in cells if c and not is_numeric(c) and len(c) > 2]
     description = max(desc_cells, key=len) if desc_cells else ""
-    if not description:
+    if not description or len(description) < 3:
+        return None
+    if SKIP_PAT.search(description):
         return None
     if len(description) < 50 and re.fullmatch(
         r"^(?:description|item\s*(?:no|code)?|qty|quantity|amount|unit\s*price|ลำดับ|รายการ|จำนวน)$",
@@ -432,7 +709,7 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
         if SKIP_PAT.search(raw):
             continue
 
-        # MISUMI-style: no  CODE  qty  unit  price  amount
+        # MISUMI-style:  no  CODE  qty  unit  price  amount
         m = re.match(
             r"^\s*(\d+)\s{2,}([A-Z0-9\-]{5,40})\s{2,}(\d[\d,]*)\s{1,6}(\w{1,10})"
             r"\s{2,}([\d,]+\.?\d*)\s{2,}([\d,]+\.?\d*)\s*$", raw
@@ -451,14 +728,14 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
             line_no += 1
             continue
 
-        # Generic: number  desc  price  amount
+        # Generic:  no  description  unit_price  amount
         m = re.match(r"^\s*(\d{1,4})\s+(.{3,70}?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$", raw)
         if m:
             price = clean_num(m.group(3))
             amount = clean_num(m.group(4))
             qty = round(amount / price, 4) if price > 0 and amount >= price else 1.0
             desc = m.group(2).strip()
-            if len(desc) >= 3 and (price > 0 or amount > 0):
+            if len(desc) >= 3 and (price > 0 or amount > 0) and not SKIP_PAT.search(desc):
                 results.append({
                     "lineNo": line_no, "itemCode": "", "description": desc,
                     "brand": "", "model": "", "qty": qty, "unit": "EA",
@@ -467,7 +744,7 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
                 line_no += 1
                 continue
 
-        # Single-price format: number  desc  price  (Thai quotations)
+        # Single-price Thai:  no  description  price
         m = re.match(r"^\s*(\d{1,4})\s+(.{5,80}?)\s+([\d,]+\.?\d{2})\s*$", raw)
         if m:
             price = clean_num(m.group(3))
@@ -484,28 +761,150 @@ def lines_to_items(text_lines: list[str], currency: str) -> list[dict]:
 
 # ── Main PDF processing ────────────────────────────────────────────────────
 
+def extract_supplier_from_layout(pdf_bytes: bytes) -> str:
+    """
+    Coordinate-based supplier name extraction using pymupdf text blocks.
+
+    Strategy: on page 1, collect text blocks in the top 35% of the page.
+    The supplier name is typically the largest-font or topmost prominent
+    English text before any 'To:' / buyer section appears.
+
+    Returns the best candidate or "" if nothing found.
+    """
+    SELF_PAT = re.compile(r"tomas\s*tech|tomastc|โทมัสเทค", re.I)
+    BUYER_KW  = re.compile(
+        r"^(?:to\s*:|bill\s*to|ship\s*to|attention:|attn:|เรียน|ถึง:|customer:)",
+        re.I,
+    )
+    DOC_TYPE = {
+        "QUOTATION","INVOICE","TAX INVOICE","PURCHASE ORDER","RECEIPT",
+        "PROFORMA","DELIVERY NOTE","PACKING LIST","STATEMENT","PROPOSAL",
+        "OFFER","ESTIMATE","ORDER CONFIRMATION","CREDIT NOTE","DEBIT NOTE",
+    }
+
+    def _eng_ratio(s: str) -> float:
+        alpha = [c for c in s if c.isalpha()]
+        return sum(1 for c in alpha if c.isascii()) / len(alpha) if alpha else 0.0
+
+    def _is_garbled(t: str) -> bool:
+        if re.search(r"[ก-ฮ][A-Za-z]|[A-Za-z][ก-ฮ]", t):
+            return True
+        if len(t) <= 12 and not re.search(r"[ะ-๎]", t):
+            if len(re.sub(r"[^ก-ฮ]", "", t)) >= 3:
+                return True
+        return False
+
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[0]
+        page_h = page.rect.height
+        cutoff_y = page_h * 0.40   # look only in top 40% of first page
+
+        # Collect (y0, font_size, text) for blocks in the header area
+        candidates: list[tuple[float, float, str]] = []
+        for block in page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]:
+            if block.get("type") != 0:   # 0 = text block
+                continue
+            block_y0 = block["bbox"][1]
+            if block_y0 > cutoff_y:
+                break
+            for line in block.get("lines", []):
+                line_text = " ".join(
+                    span["text"] for span in line.get("spans", [])
+                ).strip()
+                if not line_text or len(line_text) < 3:
+                    continue
+                if BUYER_KW.match(line_text):
+                    # Reached the buyer section — stop collecting
+                    doc.close()
+                    candidates.sort()   # sort by y position
+                    return _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled)
+                avg_size = (
+                    sum(s["size"] for s in line.get("spans", []) if s.get("size"))
+                    / max(len(line.get("spans", [])), 1)
+                )
+                candidates.append((block_y0, avg_size, line_text))
+
+        doc.close()
+
+        # Sort by y position (top → bottom) and pick the best candidate
+        candidates.sort(key=lambda x: x[0])
+        return _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled)
+
+    except Exception as exc:
+        log.warning("Layout-based supplier extraction failed: %s", exc)
+        return ""
+
+
+def _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled) -> str:
+    """Pick the best supplier name from (y0, font_size, text) candidates."""
+    COMPANY_KW = re.compile(
+        r"\bco\.,?\s*ltd\.?|\binc\.|\bcorp\.|\blimited\b|\bpte\.\s*ltd|"
+        r"จำกัด|บริษัท|หจก\.",
+        re.I,
+    )
+
+    def _clean(t: str) -> str:
+        t = re.sub(r"^(?:บริษัท|หจก\.|ห้างหุ้นส่วน(?:จำกัด)?)\s*", "", t).strip()
+        t = re.sub(
+            r"\s+(?:ที่อยู่|no\.\s*\d|no\s+\d|\d{1,3}\s*[,/]|soi\b|road\b|rd\.\b|floor\b|fl[,\s]|tower\b)",
+            "", t, flags=re.I,
+        )
+        t = re.sub(r"\s{2,}", " ", t).strip().rstrip(".,; ")
+        return t
+
+    # Pass A: line with explicit English company suffix, good eng_ratio
+    for _, _size, text in candidates:
+        if SELF_PAT.search(text) or _is_garbled(text):
+            continue
+        if COMPANY_KW.search(text):
+            name = _clean(text)
+            if len(name) >= 5 and _eng_ratio(name) >= 0.5:
+                return name
+
+    # Pass B: short all-caps line that looks like a brand / company (not a doc-type word)
+    for _, _size, text in candidates[:15]:
+        t = text.strip()
+        if SELF_PAT.search(t) or _is_garbled(t):
+            continue
+        if 5 <= len(t) <= 70 and t == t.upper() and re.search(r"[A-Z]{3}", t):
+            if not re.search(r"\d{5,}|@|http|[฀-๿]", t):
+                if t.upper() not in DOC_TYPE and t.upper().replace(" ", "") not in {
+                    w.replace(" ", "") for w in DOC_TYPE
+                }:
+                    return t
+
+    return ""
+
+
 def process_pdf(pdf_bytes: bytes) -> dict:
     md_text = ""
     table_rows: list[list] = []
     all_text = ""
+    plumber_text = ""
+    pdf_meta: dict = {}
     requires_ocr = False
 
     # ── Tier 1: pymupdf4llm → Markdown ────────────────────────────────────
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pdf_meta = doc.metadata or {}
         md_text = pymupdf4llm.to_markdown(doc, show_progress=False)
         doc.close()
         all_text = md_text
-        log.info("pymupdf4llm: %d chars of Markdown", len(md_text))
+        log.info("pymupdf4llm: %d chars", len(md_text))
     except Exception as exc:
         log.warning("pymupdf4llm failed: %s", exc)
 
     # ── Tier 2: pdfplumber → table rows + plain text backup ───────────────
+    plumber_text = ""
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             for page in pdf.pages:
+                page_text = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
+                plumber_text += page_text + "\n"
                 if not all_text:
-                    all_text += (page.extract_text(x_tolerance=3, y_tolerance=3) or "") + "\n"
+                    all_text += page_text + "\n"
                 for table in page.extract_tables():
                     table_rows.extend(row for row in table if row)
     except Exception as exc:
@@ -530,28 +929,41 @@ def process_pdf(pdf_bytes: bytes) -> dict:
     # Strip Markdown markup for field-extraction regexes
     plain_text = re.sub(r"(?m)^#{1,6}\s+", "", all_text)
     plain_text = re.sub(r"[*`]", "", plain_text)
-    text_lines = [ln for ln in plain_text.split("\n") if ln.strip()]
-    currency = detect_currency(plain_text)
+
+    # Use pdfplumber plain text for field extraction (cleaner than markdown — no | or # noise).
+    # Fall back to stripped markdown text if pdfplumber returned nothing.
+    extraction_text = plumber_text.strip() if plumber_text.strip() else plain_text
+    text_lines = [ln for ln in extraction_text.split("\n") if ln.strip()]
+    currency = detect_currency(extraction_text)
 
     # ── Header fields ──────────────────────────────────────────────────────
-    supplier_name     = extract_supplier_name(text_lines)
-    supplier_tax_id   = extract_tax_id(plain_text)
-    quotation_number  = extract_quotation_number(plain_text)
-    received_date     = find_date(plain_text, ["วันที่", "date", "Quotation Date", "Date:", "issued", "ออกเมื่อ"])
-    valid_until       = find_date(plain_text, ["valid until", "valid to", "Valid Until", "expiration",
-                                               "expire", "หมดอายุ", "expiry", "ใช้ได้ถึง"])
-    total_amount      = extract_total(plain_text)
+    # Pass 0: coordinate-based layout extraction (most reliable for digital PDFs)
+    supplier_name = extract_supplier_from_layout(pdf_bytes)
+    log.info("Layout supplier: %r", supplier_name)
+    # Pass 1+: regex/metadata fallback when layout extraction returns nothing
+    if not supplier_name:
+        supplier_name = extract_supplier_name(text_lines, metadata=pdf_meta)
+        log.info("Regex supplier: %r", supplier_name)
+    supplier_tax_id   = extract_tax_id(extraction_text, top_lines=text_lines)
+    quotation_number  = extract_quotation_number(extraction_text)
+    received_date     = find_date(extraction_text, [
+        "วันที่", "date", "Quotation Date", "Issue Date", "Date:", "issued", "ออกเมื่อ",
+    ])
+    valid_until       = find_date(extraction_text, [
+        "valid until", "valid to", "Valid Until",
+        "Expire Date", "expiry date", "expiration date", "expiration", "expire",
+        "หมดอายุ", "expiry", "ใช้ได้ถึง", "validity",
+    ])
+    total_amount      = extract_total(extraction_text)
 
-    # ── Line items: try each tier until we get results ─────────────────────
+    # ── Line items: try each tier until results appear ─────────────────────
     items: list[dict] = []
 
-    # Tier 1 — Markdown column-aware
     if md_text:
         items = parse_markdown_table(md_text, currency)
         if items:
             log.info("Tier 1 (Markdown): %d line items", len(items))
 
-    # Tier 2 — pdfplumber cell heuristic
     if not items and table_rows:
         seen: set[str] = set()
         ln = 1
@@ -564,24 +976,20 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         if items:
             log.info("Tier 2 (pdfplumber): %d line items", len(items))
 
-    # Tier 3 — text regex
     if not items:
         items = lines_to_items(text_lines, currency)
         if items:
             log.info("Tier 3 (text regex): %d line items", len(items))
 
     # ── Confidence ────────────────────────────────────────────────────────
-    def conf(val: str, strong: bool, weak: bool = False) -> str:
-        return "high" if strong else ("low" if weak else "none")
-
     confidence = {
-        "supplierName":   conf(supplier_name,    len(supplier_name) > 5,      bool(supplier_name)),
-        "supplierTaxId":  conf(supplier_tax_id,  len(supplier_tax_id) == 13,  bool(supplier_tax_id)),
-        "quotationNumber":conf(quotation_number, len(quotation_number) >= 5,  bool(quotation_number)),
-        "receivedDate":   "high" if received_date else "none",
-        "validUntil":     "high" if valid_until  else "none",
-        "totalAmount":    "high" if total_amount > 0 else "none",
-        "lines":          "high" if items else ("low" if not requires_ocr else "none"),
+        "supplierName":    "high" if len(supplier_name) > 5 else ("low" if supplier_name else "none"),
+        "supplierTaxId":   "high" if len(supplier_tax_id) == 13 else ("low" if supplier_tax_id else "none"),
+        "quotationNumber": "high" if len(quotation_number) >= 5 else ("low" if quotation_number else "none"),
+        "receivedDate":    "high" if received_date else "none",
+        "validUntil":      "high" if valid_until else "none",
+        "totalAmount":     "high" if total_amount > 0 else "none",
+        "lines":           "high" if items else ("low" if not requires_ocr else "none"),
     }
 
     return {
@@ -593,7 +1001,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         "currency":        currency,
         "totalAmount":     total_amount,
         "lines":           items,
-        "rawText":         plain_text[:8000],
+        "rawText":         extraction_text[:8000],
         "requiresOcr":     requires_ocr,
         "confidence":      confidence,
     }
@@ -602,7 +1010,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "pdf-parser", "version": "2.0.0"}
+    return {"status": "ok", "service": "pdf-parser", "version": "2.2.0"}
 
 
 @app.post("/parse")
