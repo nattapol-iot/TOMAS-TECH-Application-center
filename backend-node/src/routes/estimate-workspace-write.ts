@@ -315,8 +315,10 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
     const created = await database.transaction(async (transaction) => { const estimate = await lockEstimate(transaction, id, input.estimateVersion);
       await demandNewSection(transaction, id, estimate, actor, expenseSection(input.expenseType), input.ownerId); await validateOwnerSupplier(transaction, input.ownerId, input.supplierId);
       const insert = new sql.Request(transaction); bindExpense(insert, id, estimate.revision, input, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.expense_lines(estimate_id,revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by)
-        OUTPUT inserted.id,inserted.row_version VALUES(@estimate,@revision,@package,@expense_type,@description,@cost_type,@supplier,@reference,@qty,@unit,@unit_cost,@owner,@remark,@actor,@actor);`)).recordset[0]!;
+      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
+        INSERT INTO dbo.expense_lines(estimate_id,revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by)
+        OUTPUT inserted.id,inserted.row_version INTO @created VALUES(@estimate,@revision,@package,@expense_type,@description,@cost_type,@supplier,@reference,@qty,@unit,@unit_cost,@owner,@remark,@actor,@actor);
+        SELECT id,row_version FROM @created;`)).recordset[0]!;
       const lineId = Number(row.id); const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await snapshot(transaction, "dbo.expense_lines", expenseColumns, id, estimate.revision, lineId, row.row_version, false, "This expense line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "ExpenseLine", lineId, estimate.estimate_no, "Created", null, after); return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") }; });
     return reply.status(201).header("Location", `/api/v1/estimates/${id}/expense-lines/${created.id}`).send(created);
@@ -328,9 +330,9 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       await demandExistingSection(transaction, id, estimate, actor, expenseSection(String(before.expense_type)), expenseSection(input.expenseType), Number(before.owner_id), input.ownerId);
       await validateOwnerSupplier(transaction, input.ownerId, input.supplierId); const update = new sql.Request(transaction); bindExpense(update, id, estimate.revision, input, actor.id);
       update.input("line", sql.BigInt, lineId); update.input("version", sql.VarBinary(8), input.lineVersion);
-      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.expense_lines SET package=@package,expense_type=@expense_type,description=@description,cost_type=@cost_type,
+      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8)); UPDATE dbo.expense_lines SET package=@package,expense_type=@expense_type,description=@description,cost_type=@cost_type,
         supplier_id=@supplier,reference_no=@reference,qty=@qty,unit=@unit,unit_cost=@unit_cost,owner_id=@owner,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
-        OUTPUT inserted.row_version WHERE id=@line AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
+        OUTPUT inserted.row_version INTO @updated WHERE id=@line AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @updated;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This expense line changed or was removed. Reload and try again."); const estimateVersion = await touchEstimate(transaction, id, actor.id);
       const after = await snapshot(transaction, "dbo.expense_lines", expenseColumns, id, estimate.revision, lineId, row.row_version, false, "This expense line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "ExpenseLine", lineId, estimate.estimate_no, "Updated", before, after); return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") }; });
@@ -348,8 +350,10 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const input = parseOther(request, false);
     const created = await database.transaction(async (transaction) => { const estimate = await lockEstimate(transaction, id, input.estimateVersion);
       if (!elevated(actor, estimate)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can add other project costs.");
-      const insert = new sql.Request(transaction); bindOther(insert, id, estimate.revision, input, actor.id); const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.other_cost_lines(estimate_id,revision,category,description,qty,unit,unit_cost,remark,created_by,updated_by)
-        OUTPUT inserted.id,inserted.row_version VALUES(@estimate,@revision,@category,@description,@qty,@unit,@unit_cost,@remark,@actor,@actor);`)).recordset[0]!;
+      const insert = new sql.Request(transaction); bindOther(insert, id, estimate.revision, input, actor.id); const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
+        INSERT INTO dbo.other_cost_lines(estimate_id,revision,category,description,qty,unit,unit_cost,remark,created_by,updated_by)
+        OUTPUT inserted.id,inserted.row_version INTO @created VALUES(@estimate,@revision,@category,@description,@qty,@unit,@unit_cost,@remark,@actor,@actor);
+        SELECT id,row_version FROM @created;`)).recordset[0]!;
       const lineId = Number(row.id); const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await snapshot(transaction, "dbo.other_cost_lines", otherColumns, id, estimate.revision, lineId, row.row_version, false, "This other-cost line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "OtherCostLine", lineId, estimate.estimate_no, "Created", null, after); return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") }; });
     return reply.status(201).header("Location", `/api/v1/estimates/${id}/other-cost-lines/${created.id}`).send(created);
@@ -360,8 +364,8 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       if (!elevated(actor, estimate)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can update other project costs.");
       const before = await snapshot(transaction, "dbo.other_cost_lines", otherColumns, id, estimate.revision, lineId, input.lineVersion!, false, "This other-cost line changed or was removed. Reload and try again.");
       const update = new sql.Request(transaction); bindOther(update, id, estimate.revision, input, actor.id); update.input("line", sql.BigInt, lineId); update.input("version", sql.VarBinary(8), input.lineVersion);
-      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.other_cost_lines SET category=@category,description=@description,qty=@qty,unit=@unit,unit_cost=@unit_cost,remark=@remark,updated_by=@actor
-        OUTPUT inserted.row_version WHERE id=@line AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
+      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8)); UPDATE dbo.other_cost_lines SET category=@category,description=@description,qty=@qty,unit=@unit,unit_cost=@unit_cost,remark=@remark,updated_by=@actor
+        OUTPUT inserted.row_version INTO @updated WHERE id=@line AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @updated;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This other-cost line changed or was removed. Reload and try again."); const estimateVersion = await touchEstimate(transaction, id, actor.id);
       const after = await snapshot(transaction, "dbo.other_cost_lines", otherColumns, id, estimate.revision, lineId, row.row_version, false, "This other-cost line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "OtherCostLine", lineId, estimate.estimate_no, "Updated", before, after); return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") }; });

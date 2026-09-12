@@ -156,3 +156,15 @@ test("migration locks mappings to a revision and records copy provenance", async
   assert.match(revisionWorkflow, /INNER JOIN @copiedExpenses/);
   assert.match(revisionWorkflow, /INNER JOIN @copiedOtherCosts/);
 });
+
+test("writes to triggered estimate tables route OUTPUT into a table variable", async () => {
+  // SQL Server rejects OUTPUT without INTO on any table with an enabled trigger (error 334), which the API surfaces as a bare 503.
+  const triggered = ["estimate_erp_mappings", "cost_items", "manhour_lines", "expense_lines", "other_cost_lines", "estimate_revisions"];
+  const routes = await Promise.all(["estimate-erp", "estimate-workspace-write", "estimate-cost-write", "estimates"].map((name) =>
+    readFile(new URL(`../src/routes/${name}.ts`, import.meta.url), "utf8")));
+  // Stay inside one template literal so an OUTPUT from a later statement is never attributed to an earlier write.
+  const pattern = new RegExp(`(?:UPDATE|INSERT(?: INTO)?) dbo\\.(${triggered.join("|")})\\b[^\`]*?OUTPUT inserted\\.[^\\n]*`, "g");
+  const writes = routes.flatMap((source) => source.match(pattern) ?? []);
+  assert.ok(writes.some((write) => write.includes("dbo.estimate_erp_mappings")), "expected mapping writes to be covered");
+  for (const write of writes) assert.match(write, /OUTPUT inserted\.[\w.,]+ INTO @\w+/, `OUTPUT without INTO fails with SQL error 334 on a triggered table:\n${write}`);
+});

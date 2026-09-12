@@ -221,17 +221,22 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         mutation.input("erp_category", sql.NVarChar(30), mapping.erpCategory);
         mutation.input("actor", sql.BigInt, actor.id);
         mutation.input("mapping_version", sql.VarBinary(8), mapping.mappingRowVersion);
+        // dbo.estimate_erp_mappings has an AFTER trigger, so OUTPUT must target a table variable (SQL error 334 otherwise).
         const row = (await mutation.query<{ id: number | string }>(mapping.mappingRowVersion ? `
+          DECLARE @changed TABLE(id bigint);
           UPDATE dbo.estimate_erp_mappings SET erp_category=@erp_category,updated_by=@actor,updated_at=SYSUTCDATETIME()
-          OUTPUT inserted.id WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
+          OUTPUT inserted.id INTO @changed(id) WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
             AND ((source_id=@source_id) OR (source_id IS NULL AND @source_id IS NULL)) AND row_version=@mapping_version;
+          SELECT id FROM @changed;
         ` : `
+          DECLARE @changed TABLE(id bigint);
           INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
-          OUTPUT inserted.id
+          OUTPUT inserted.id INTO @changed(id)
           SELECT @estimate_id,@revision,@source_type,@source_id,@erp_category,@actor,@actor
           WHERE NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings WITH(UPDLOCK,HOLDLOCK)
             WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
               AND ((source_id=@source_id) OR (source_id IS NULL AND @source_id IS NULL)));
+          SELECT id FROM @changed;
         `)).recordset[0];
         if (!row) throw new ApiError(409, "concurrency_conflict", "An ERP mapping changed. Reload and try again.");
       }

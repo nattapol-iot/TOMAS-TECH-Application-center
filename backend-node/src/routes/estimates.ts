@@ -135,9 +135,11 @@ async function snapshotRevision(transaction: TransactionType, estimateId: number
           (mapping.source_type=N'Contingency' AND EXISTS(SELECT 1 FROM dbo.v_estimate_totals totals WHERE totals.estimate_id=e.id AND ABS(totals.contingency_total)>0.005))
         ) ORDER BY mapping.source_type,mapping.source_id FOR JSON PATH)) erpMappings
       FROM dbo.estimates e WHERE e.id=@estimate_id AND e.revision=@revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+    DECLARE @created TABLE(id bigint);
     INSERT INTO dbo.estimate_revisions(estimate_id,revision,reason,description,created_by,reviewed_by,reviewed_at,status,total)
-    OUTPUT inserted.id SELECT e.id,e.revision,@reason,@snapshot,@actor,@actor,SYSUTCDATETIME(),@snapshot_status,t.total
+    OUTPUT inserted.id INTO @created SELECT e.id,e.revision,@reason,@snapshot,@actor,@actor,SYSUTCDATETIME(),@snapshot_status,t.total
     FROM dbo.estimates e INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@estimate_id AND e.revision=@revision;
+    SELECT id FROM @created;
   `);
   if (!result.recordset[0]) throw new ApiError(409, "revision_snapshot_failed", "The current estimate revision could not be snapshotted.");
 }
