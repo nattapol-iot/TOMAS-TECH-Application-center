@@ -123,6 +123,23 @@ Engineer, estimate owner, reviewer/manager and authorized Sales users retain the
 
 ## Information architecture
 
+### Labor package library — implemented locally, 2026-09-12
+
+Evidence: user's production screenshot, LaborPackageMaster.tsx, LaborPackagePicker.tsx, labor-package-master.ts and existing API types. The old page splits space equally between a code-first table and an initially empty detail panel, repeats Refresh, and mixes Thai text into English mode. Redesign keeps the existing list/detail and draft/publish/copy APIs.
+
+- Use a compact name-first library (280–340 px) and a wider detail editor. Each full card is a keyboard-accessible selection button with status, code, revision and activity count. On first load select the first returned package; later filtering does not discard the current editor.
+- Status filters use plain labels: All, Ready to use (Active), Draft and Retired. Result count describes the filtered list, not global totals. Hide pagination for a single page. Distinguish an empty library from empty filtered results.
+- Show a collapsible three-step guide: save a package from an existing estimate work package, review/publish it, then select it in an estimate's labor package picker. Do not add a nonfunctional Create or Apply button where the required estimate context is absent.
+- Show published/retired content as readable text instead of a disabled form. Drafts expose labelled fields; retain all hidden write fields and concurrency tokens through the existing mapping helper. Separate package information, scope, activity defaults and actions.
+- Explain the next permitted action. Active packages can be copied to Draft; copies cannot publish directly. Keep estimate.write for draft editing and both estimate.write/master.write for publishing. Internal rates remain authoritative in the rate master, not invented package totals.
+- Reuse existing UI controls and brand tokens with scoped labor-package-master.css. Collapse to a stacked layout on narrower screens; confine wide activity-table scrolling to its own region. Use local TH/EN/JP copy, native buttons, explicit form labels, status/error announcements and visible focus.
+- Confirm discard on package switch, embedded close and copy/draft cancellation; warn on browser unload when dirty. Sidebar navigation is still owned by the application shell and is not newly guarded by this page-only change.
+- The standard Excel-derived library is installed only by an authorized master-data editor and is idempotent by master code; an existing master is never overwritten. Store labor as total person-days. Split Engineering and Installation because the live rate master prices them differently. Internal lines resolve the current effective `Lead Engineer / IoT Engineer Dept.` rate when applied; the workbook's 3,500 rate remains reference evidence only.
+- Keep transportation, accommodation, tools and Safety Cost out of labor packages. Install them as companion Module Templates with their original quantities, units and reference prices so they are visible and editable as costs rather than people. Safety Cost values from the workbook remain fixed 10% reference amounts with a clear recalculation note until the product has a reusable percentage-formula master.
+- Omit the cropped, incomplete Mechanical out-site group rather than inventing missing rows or totals. Zero-day Standby is also omitted because an active package line must have positive effort; estimators add or copy the activity when it is actually needed.
+
+Verification: mapping and component-harness tests cover first selection, read-only/publish permissions, filters, copy preservation, rowVersion, empty state and declined cancellation. Authenticated visual review of the redesigned page remains pending. This is local work; deployment is not implied.
+
 ### Administration navigation regrouping — Implemented locally, 2026-09-12
 
 Scope: the administration sidebar shown by the user. The sidebar grouping and direct destinations are implemented locally; deployment and authenticated visual acceptance are not claimed. Evidence: `ProductionApp.tsx` NAV; `CoreScreens.tsx` ProductionMasterData; `AdminAnalyticsScreens.tsx` ProductionSettings/ProductionEngineeringRates; the user's sidebar screenshot. No new browser/accessibility verification was performed.

@@ -33,6 +33,12 @@ import {
 } from "../labor-master.js";
 import type { CurrentUserService } from "../users.js";
 import {
+  STANDARD_LABOR_PACKAGES,
+  STANDARD_LABOR_SOURCE,
+  STANDARD_LABOR_SOURCE_DATE,
+  STANDARD_SUPPORT_COST_TEMPLATES,
+} from "../standard-labor-cost-masters.js";
+import {
   demandNewSection,
   lockEstimate,
   resolveInternalDailyRate,
@@ -384,6 +390,155 @@ export function registerLaborPackageRoutes(
       pageSize,
       total: Number(totalResult.recordset[0]?.total ?? 0),
     };
+  });
+
+  /* Install the company starter library without a schema migration. This is an
+     explicit master-data action and is idempotent by code: existing packages
+     are never overwritten. Labor is stored in labor_packages; travel,
+     accommodation, tools and safety references go to module_templates so they
+     cannot be mistaken for person-days or repriced as engineering effort. */
+  app.post("/api/v1/labor-packages/install-standard-library", async (request, reply) => {
+    await users.demandPermission(request, "estimate.write");
+    await users.demandPermission(request, "master.write");
+    await demandTables();
+    const actor = await users.required(request);
+
+    const moduleTables = (await database.query<{ present: number }>(`
+      SELECT CASE WHEN OBJECT_ID('dbo.module_templates', 'U') IS NOT NULL
+                    AND OBJECT_ID('dbo.module_template_lines', 'U') IS NOT NULL
+                  THEN 1 ELSE 0 END AS present;
+    `)).recordset[0];
+    if (Number(moduleTables?.present ?? 0) !== 1) {
+      throw new ApiError(503, "module_templates_unavailable",
+        "The standard labor library also needs module templates for travel, accommodation, tools and safety costs.");
+    }
+
+    const installed = await database.transaction(async (transaction) => {
+      const createdLabor: string[] = [];
+      const skippedLabor: string[] = [];
+      const createdSupport: string[] = [];
+      const skippedSupport: string[] = [];
+
+      for (const pkg of STANDARD_LABOR_PACKAGES) {
+        const lookup = new sql.Request(transaction);
+        lookup.input("code", sql.NVarChar(40), pkg.code);
+        const existing = (await lookup.query<{ id: number | string }>(
+          "SELECT id FROM dbo.labor_packages WITH(UPDLOCK,HOLDLOCK) WHERE code=@code;",
+        )).recordset[0];
+        if (existing) {
+          skippedLabor.push(pkg.code);
+          continue;
+        }
+
+        const header = new sql.Request(transaction);
+        header.input("code", sql.NVarChar(40), pkg.code);
+        header.input("name", sql.NVarChar(200), pkg.name);
+        header.input("cost_type", sql.NVarChar(30), pkg.costType);
+        header.input("department", sql.NVarChar(100), "IoT Engineer Dept.");
+        header.input("project_type", sql.NVarChar(50), "Industrial Automation");
+        header.input("description", sql.NVarChar(1000), pkg.description);
+        header.input("actor", sql.BigInt, actor.id);
+        const created = (await header.query<{ id: number | string }>(`
+          DECLARE @created TABLE(id bigint NOT NULL);
+          INSERT INTO dbo.labor_packages(code,name,cost_type,department,project_type,description,status,created_by,updated_by)
+          OUTPUT inserted.id INTO @created(id)
+          VALUES(@code,@name,@cost_type,@department,@project_type,@description,N'Active',@actor,@actor);
+          SELECT id FROM @created;
+        `)).recordset[0]!;
+        const packageId = Number(created.id);
+
+        for (const [index, line] of pkg.lines.entries()) {
+          const insert = new sql.Request(transaction);
+          insert.input("package_id", sql.BigInt, packageId);
+          insert.input("sort_order", sql.Int, index);
+          insert.input("activity", sql.NVarChar(300), line.activity);
+          insert.input("department", sql.NVarChar(100), "IoT Engineer Dept.");
+          insert.input("level", sql.NVarChar(100), "Lead Engineer");
+          insert.input("cost_type", sql.NVarChar(30), pkg.costType);
+          insert.input("provider", sql.NVarChar(30), line.provider);
+          insert.input("engineers", sql.Decimal(9, 2), line.engineers);
+          insert.input("man_days", sql.Decimal(9, 2), line.manDays);
+          insert.input("reference_rate", sql.Decimal(19, 4), line.referenceDailyRate);
+          insert.input("erp_category", sql.NVarChar(30), line.erpCategory);
+          insert.input("remark", sql.NVarChar(sql.MAX), line.remark ?? `${STANDARD_LABOR_SOURCE}; quantity is total person-days.`);
+          await insert.query(`
+            INSERT INTO dbo.labor_package_lines(package_id,sort_order,activity,department,level,cost_type,provider,
+              rate_id,rate_basis,default_engineers,default_man_days,default_hours,default_hours_per_day,
+              reference_daily_rate,default_erp_category,remark)
+            VALUES(@package_id,@sort_order,@activity,@department,@level,@cost_type,@provider,
+              NULL,N'Daily',@engineers,@man_days,NULL,8,@reference_rate,@erp_category,@remark);
+          `);
+        }
+        await insertAudit(transaction, actor.id, "LaborPackage", packageId, pkg.code, "Standard library installed", null, {
+          source: STANDARD_LABOR_SOURCE, sourceDate: STANDARD_LABOR_SOURCE_DATE,
+          status: "Active", lines: pkg.lines.length,
+        });
+        createdLabor.push(pkg.code);
+      }
+
+      for (const template of STANDARD_SUPPORT_COST_TEMPLATES) {
+        const lookup = new sql.Request(transaction);
+        lookup.input("code", sql.NVarChar(40), template.code);
+        const existing = (await lookup.query<{ id: number | string }>(
+          "SELECT id FROM dbo.module_templates WITH(UPDLOCK,HOLDLOCK) WHERE code=@code;",
+        )).recordset[0];
+        if (existing) {
+          skippedSupport.push(template.code);
+          continue;
+        }
+
+        const header = new sql.Request(transaction);
+        header.input("code", sql.NVarChar(40), template.code);
+        header.input("name", sql.NVarChar(200), template.name);
+        header.input("project_type", sql.NVarChar(50), "Industrial Automation");
+        header.input("description", sql.NVarChar(1000), template.description);
+        header.input("actor", sql.BigInt, actor.id);
+        const created = (await header.query<{ id: number | string }>(`
+          DECLARE @created TABLE(id bigint NOT NULL);
+          INSERT INTO dbo.module_templates(code,name,category_code,project_type,description,status,created_by,updated_by)
+          OUTPUT inserted.id INTO @created(id)
+          VALUES(@code,@name,N'10',@project_type,@description,N'Active',@actor,@actor);
+          SELECT id FROM @created;
+        `)).recordset[0]!;
+        const templateId = Number(created.id);
+
+        for (const [index, line] of template.lines.entries()) {
+          const insert = new sql.Request(transaction);
+          insert.input("template_id", sql.BigInt, templateId);
+          insert.input("sort_order", sql.Int, index);
+          insert.input("category_code", sql.Char(2), line.categoryCode);
+          insert.input("item_code", sql.NVarChar(100), line.itemCode);
+          insert.input("description", sql.NVarChar(500), line.description);
+          insert.input("quantity", sql.Decimal(19, 4), line.quantity);
+          insert.input("unit", sql.NVarChar(50), line.unit);
+          insert.input("unit_cost", sql.Decimal(19, 4), line.unitCost);
+          insert.input("price_date", sql.Date, STANDARD_LABOR_SOURCE_DATE);
+          insert.input("remark", sql.NVarChar(sql.MAX), line.remark ?? `Reference from ${STANDARD_LABOR_SOURCE}.`);
+          await insert.query(`
+            INSERT INTO dbo.module_template_lines(template_id,sort_order,category_code,subcategory,item_code,description,
+              brand,model,specification,supplier_id,qty_per_module,unit,ref_unit_cost,ref_price_source,ref_price_date,remark)
+            VALUES(@template_id,@sort_order,@category_code,N'Labor support',@item_code,@description,
+              N'',N'',NULL,NULL,@quantity,@unit,@unit_cost,N'Approved Excel example',@price_date,@remark);
+          `);
+        }
+        await insertAudit(transaction, actor.id, "ModuleTemplate", templateId, template.code, "Standard labor support installed", null, {
+          source: STANDARD_LABOR_SOURCE, sourceDate: STANDARD_LABOR_SOURCE_DATE,
+          status: "Active", lines: template.lines.length,
+        });
+        createdSupport.push(template.code);
+      }
+
+      return { createdLabor, skippedLabor, createdSupport, skippedSupport };
+    });
+
+    const createdCount = installed.createdLabor.length + installed.createdSupport.length;
+    return reply.status(createdCount > 0 ? 201 : 200).send({
+      ...installed,
+      laborPackages: STANDARD_LABOR_PACKAGES.length,
+      supportTemplates: STANDARD_SUPPORT_COST_TEMPLATES.length,
+      source: STANDARD_LABOR_SOURCE,
+      sourceDate: STANDARD_LABOR_SOURCE_DATE,
+    });
   });
 
   app.get("/api/v1/labor-packages/:id", async (request) => {

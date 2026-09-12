@@ -3378,6 +3378,22 @@ export const loadLaborPackage = (id: number) =>
 export const createLaborPackage = (input: LaborPackageInput) =>
   apiRequest<{ id: number; code: string }>("/api/v1/labor-packages", { method: "POST", body: JSON.stringify(input) });
 
+export type StandardLaborLibraryInstallResult = {
+  createdLabor: string[];
+  skippedLabor: string[];
+  createdSupport: string[];
+  skippedSupport: string[];
+  laborPackages: number;
+  supportTemplates: number;
+  source: string;
+  sourceDate: string;
+};
+
+export const installStandardLaborLibrary = () =>
+  apiRequest<StandardLaborLibraryInstallResult>("/api/v1/labor-packages/install-standard-library", {
+    method: "POST",
+  });
+
 export const updateLaborPackage = (id: number, input: LaborPackageInput & { rowVersion: string }) =>
   apiRequest<{ id: number; revision: number; rowVersion: string }>(`/api/v1/labor-packages/${id}`, { method: "PUT", body: JSON.stringify(input) });
 
