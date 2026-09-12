@@ -80,14 +80,17 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     // Document signing (DSN-TC-005). "My signature" is deliberately not here:
     // a specimen is a preference, reached from the user menu, because putting it
     // in the sidebar would imply the image is what authorises.
-    "Sign Inbox", "Signed Documents",
-    "Team Activity", "KPI & Growth", "Reports", "Support Center", "Employee Manual", "Master Data", "Module Templates", "Labor Package Master",
-    "Company Stamps", "Audit Log", "Visit Master Data", "Settings",
+    "Operational Reports", "Sign Inbox", "Signed Documents", "Company Stamps",
+    "Team Activity & Workload", "KPI & Growth", "Summary Reports",
+    "Customers", "Suppliers", "Employees", "Inventory items", "Site Visit Reference Data",
+    "Module Templates", "Labor Packages", "Engineering rates",
+    "User Accounts & Permissions", "Audit Log", "System Settings",
+    "Employee Manual", "Report & Track Issues",
   ];
   for (const label of menuLabels) {
-    assert.match(navSource, new RegExp(`label: ["']${label}["']`));
+    assert.ok(navSource.includes(`label: "${label}"`) || navSource.includes(`"label":"${label}"`), label);
   }
-  assert.equal((navSource.match(/label:\s*["'][^"']+["']/g) ?? []).length, menuLabels.length);
+  assert.equal((navSource.match(/(?:"label"|label)\s*:\s*["'][^"']+["']/g) ?? []).length, menuLabels.length);
   assert.doesNotMatch(navSource, /label: ["']Sales Intake["']/);
   assert.match(productionApp, /openVisit=\{openSiteVisit\}/);
   for (const banned of ["data", "calc", "store", "matstore", "session"]) {
