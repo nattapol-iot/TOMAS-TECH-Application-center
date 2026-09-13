@@ -148,3 +148,5 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Client contract lookup
 
 Search the selected API path or function in [app/system/api-client.ts](<../../../app/system/api-client.ts>); follow its screen callers. Common UI/language changes require [app/system/ui.tsx](<../../../app/system/ui.tsx>) and [app/system/i18n.ts](<../../../app/system/i18n.ts>). For SQL changes use [schema map](../SCHEMA.md).
+
+- Cost Items drag: right-side handle inserts before/after a row or appends to an existing (including collapsed) module header. Uses full ledger ordering, including filtered rows. PUT line-order accepts optional move {lineId,targetLineId}, reads destination module/category from locked current revision, and persists membership/order together with audit. Price, quantities, owner, source and explicit ERP mapping are retained. No new migration for drag. Pending empty modules require first item before becoming a drop target. Local only; SQL/browser acceptance pending.

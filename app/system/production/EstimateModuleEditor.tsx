@@ -8,6 +8,8 @@ export function EstimateModuleEditor({ workspace, moduleKey, initialTitle, onClo
   workspace: EstimateCostWorkspace; moduleKey: string; initialTitle: string;
   onClose: () => void; onSaved: () => Promise<void>;
 }) {
+  const summaryNote = moduleKey === "summary";
+  const [descriptionRows, setDescriptionRows] = useState<string[]>([]);
   const [title, setTitle] = useState(initialTitle);
   const [remark, setRemark] = useState("");
   const [busy, setBusy] = useState(true);
@@ -18,7 +20,7 @@ export function EstimateModuleEditor({ workspace, moduleKey, initialTitle, onClo
     void loadEstimateModuleDetails(workspace.header.id).then(rows => {
       if (!active) return;
       const saved = rows.find(row => row.moduleKey === moduleKey);
-      if (saved) { setTitle(saved.title); setRemark(saved.remark ?? ""); }
+      if (saved) { setTitle(saved.title); setRemark(saved.remark ?? ""); setDescriptionRows(saved.descriptionRows ?? []); }
       setLoaded(true);
     }).catch(error => { if (active) setError(error instanceof Error ? error.message : "Could not load module details"); })
       .finally(() => { if (active) setBusy(false); });
@@ -27,17 +29,24 @@ export function EstimateModuleEditor({ workspace, moduleKey, initialTitle, onClo
   const save = async () => {
     setBusy(true); setError("");
     try {
-      await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey, title: title.trim(), remark: remark.trim() || null });
+      await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey, title: title.trim(), remark: summaryNote ? remark.trim() || null : null, descriptionRows: descriptionRows.map(row => row.trim()).filter(Boolean) });
       await onSaved(); onClose();
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save module details"); }
     finally { setBusy(false); }
   };
-  return <Modal title="แก้ไข Main Module / Edit Main Module" onClose={onClose} footer={<>
-    <button className="btn default" disabled={busy} onClick={onClose}>Cancel</button>
-    <button className="btn primary" disabled={busy || !loaded || !title.trim()} onClick={() => void save()}>Save</button>
+  return <Modal title={summaryNote ? "หมายเหตุรวม / Summary Remark" : "แก้ไข Main Module / Edit Main Module"} onClose={onClose} footer={<>
+    <button type="button" className="btn default" disabled={busy} onClick={onClose}>Cancel</button>
+    <button type="button" className="btn primary" disabled={busy || !loaded || !title.trim()} onClick={() => void save()}>Save</button>
   </>}>
     {error ? <div role="alert" className="callout danger">{error}</div> : null}
-    <Field label="Main Module"><input value={title} maxLength={200} disabled={busy} onChange={event => setTitle(event.target.value)} /></Field>
-    <Field label="Remark"><textarea value={remark} maxLength={2000} rows={4} disabled={busy} onChange={event => setRemark(event.target.value)} /></Field>
+    {summaryNote ? <Field label="Summary Remark"><textarea value={remark} maxLength={2000} rows={5} disabled={busy} onChange={event => setRemark(event.target.value)} /></Field> : <>
+      <Field label="Main Module"><input value={title} maxLength={200} disabled={busy} onChange={event => setTitle(event.target.value)} /></Field>
+      <p className="muted">รายละเอียดทุกบรรทัดอยู่ในโมดูลเดียวกัน ไม่เพิ่มยอดต้นทุน</p>
+      {descriptionRows.map((row, index) => <div className="module-description-editor" key={index}>
+        <Field label={"รายละเอียด / Detail " + (index + 1)}><textarea value={row} maxLength={500} rows={2} disabled={busy} onChange={event => setDescriptionRows(current => current.map((value, position) => position === index ? event.target.value : value))} /></Field>
+        <button type="button" className="btn default" disabled={busy} aria-label={"Remove detail " + (index + 1)} onClick={() => setDescriptionRows(current => current.filter((_, position) => position !== index))}>ลบ</button>
+      </div>)}
+      <button type="button" className="btn default" disabled={busy || descriptionRows.length >= 20} onClick={() => setDescriptionRows(current => [...current, ""])}>+ เพิ่มบรรทัดรายละเอียด / Add detail row</button>
+    </>}
   </Modal>;
 }

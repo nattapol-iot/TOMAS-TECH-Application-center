@@ -4863,3 +4863,38 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cost-order-actions { justify-content: flex-end; gap: 3px; flex-wrap: nowrap; }
 .cost-order-actions .icon-btn { width: 26px; height: 26px; min-width: 26px; padding: 3px; }
 .cost-module-controls { text-align: right; }
+
+/* Estimate module actions stay on the same baseline at the right edge. */
+.cost-breakdown .cb-module-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; }
+.cost-breakdown .cb-module-controls select { min-width: 0; flex: 1; }
+.cost-breakdown .cb-module-controls .row-actions { display: inline-flex; flex-wrap: nowrap; flex: none; gap: 2px; }
+.cost-breakdown .cb-module-controls .icon-btn { width: 26px; height: 26px; padding: 0; }
+.module-name-edit { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.module-name-edit:hover { color: var(--blue); }
+.module-name-edit:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.estimate-summary-note { padding: 16px; border-top: 1px solid var(--line); }
+.estimate-summary-note p { margin: 8px 0 0; }
+.module-description-editor { display: flex; gap: 8px; align-items: center; }
+.module-description-editor > :first-child { flex: 1; min-width: 0; }
+
+.effort-edit-controls { display: flex; align-items: center; gap: 4px; }
+.effort-edit-controls > input { min-width: 56px; flex: 1; }
+.effort-edit-controls .row-actions { flex: none; flex-wrap: nowrap; }
+
+/* Revision snapshots must never determine the table width. */
+.estimate-revision-table { table-layout: fixed; width: 100%; }
+.estimate-revision-table th, .estimate-revision-table td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.estimate-revision-table th:nth-child(1) { width: 6%; }
+.estimate-revision-table th:nth-child(3) { width: 30%; }
+.revision-description-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.revision-description-text.collapsed { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.revision-description-text.expanded { max-height: 24rem; overflow-y: auto; }
+.revision-description .link-btn { margin-top: 6px; }
+
+.cost-drag-handle { cursor: grab; }
+.cost-drag-handle:active { cursor: grabbing; }
+.cost-drop-before > td { box-shadow: inset 0 3px #007bff; }
+.cost-drop-after > td { box-shadow: inset 0 -3px #007bff; }
+.cost-drop-module > td { box-shadow: inset 0 0 0 2px #007bff; }
+.cost-drag-help { margin: 8px 14px; font-size: var(--fs-xs); color: var(--muted); }

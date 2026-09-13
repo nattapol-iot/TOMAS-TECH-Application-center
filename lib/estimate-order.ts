@@ -16,4 +16,12 @@ export function moveModule<T>(values: readonly T[], keyOf: (line: T) => string, 
 }
 
 export type EstimateOrderSource = "CostItem" | "ManhourLine" | "ExpenseLine" | "OtherCostLine";
-export type ReorderEstimate = (sourceType: EstimateOrderSource, orderedIds: number[]) => Promise<void>;
+export type ReorderEstimate = (sourceType: EstimateOrderSource, orderedIds: number[], move?: { lineId: number; targetLineId: number }) => Promise<void>;
+
+/** Insert relative to an existing line; preserve hidden rows and do not mutate the source. */
+export function insertCostLine(ids: readonly number[], lineId: number, targetId: number, after: boolean): number[] {
+  if (lineId === targetId || !ids.includes(lineId) || !ids.includes(targetId)) return [...ids];
+  const next = ids.filter(id => id !== lineId);
+  next.splice(next.indexOf(targetId) + (after ? 1 : 0), 0, lineId);
+  return next;
+}

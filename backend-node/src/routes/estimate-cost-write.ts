@@ -1,3 +1,4 @@
+import { parseModuleDescriptionRows } from "../estimate-module-details.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
@@ -161,11 +162,11 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
   app.get("/api/v1/estimates/:id/module-details", async request => {
     await users.demandPermission(request, "estimate.read");
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
-    const result = await database.query<{ moduleKey: string; title: string; remark: string | null }>(`
-      SELECT d.module_key moduleKey,d.title,d.remark FROM dbo.estimate_module_details d
+    const result = await database.query<{ moduleKey: string; title: string; remark: string | null; descriptionRows: string }>(`
+      SELECT d.module_key moduleKey,d.title,d.remark,d.description_rows descriptionRows FROM dbo.estimate_module_details d
       INNER JOIN dbo.estimates e ON e.id=d.estimate_id AND e.revision=d.revision
       WHERE e.id=@id AND e.deleted_at IS NULL;`, query => { query.input("id", sql.BigInt, id); });
-    return result.recordset;
+    return result.recordset.map(row => ({ ...row, descriptionRows: JSON.parse(row.descriptionRows) as string[] }));
   });
   app.put("/api/v1/estimates/:id/module-details", async request => {
     await users.demandPermission(request, "estimate.write");
@@ -175,18 +176,21 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     const moduleKey = requiredText(body.moduleKey, 250, "Module key");
     const title = requiredText(body.title, 200, "Module name");
     const remark = optionalBodyText(body.remark, 2000, "Remark");
+    const descriptionRows = parseModuleDescriptionRows(body.descriptionRows);
+    const workPackage = /^package:(Engineering|Installation):(.+)$/.exec(moduleKey);
     const cost = /^category:(\d{2}):(.+)$/.exec(moduleKey);
-    if (!cost && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
+    if (!cost && !workPackage && moduleKey !== "summary" && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
       throw new ApiError(400, "invalid_module", "Choose an existing main module.");
     return database.transaction(async transaction => {
       const estimate = await lockEditableEstimate(transaction, id, parseRowVersion(body.estimateRowVersion));
-      if (!elevated(actor, estimate) && (!cost || !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))))
+      if (!elevated(actor, estimate) && ((!cost && !workPackage) || !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))))
         throw new ApiError(403, "module_forbidden", "You cannot edit this module.");
       const query = new sql.Request(transaction);
       query.input("id", sql.BigInt, id); query.input("revision", sql.Int, estimate.revision);
       query.input("key", sql.NVarChar(250), moduleKey); query.input("title", sql.NVarChar(200), title);
+      query.input("description_rows", sql.NVarChar(sql.MAX), descriptionRows === undefined ? null : JSON.stringify(descriptionRows));
       query.input("remark", sql.NVarChar(2000), remark); query.input("actor", sql.BigInt, actor.id);
-      const before = (await query.query(`SELECT module_key,title,remark FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
+      const before = (await query.query(`SELECT module_key,title,remark,description_rows FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
         WHERE estimate_id=@id AND revision=@revision AND module_key=@key;`)).recordset[0] ?? null;
       let savedKey = moduleKey;
       if (cost) {
@@ -205,13 +209,38 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
           savedKey = "category:" + cost[1] + ":" + title;
         }
       }
+      if (workPackage) {
+        query.input("cost_type", sql.NVarChar(30), workPackage[1]); query.input("package", sql.NVarChar(200), workPackage[2]);
+        const members = (await query.query<{ id: number; owner_id: number }>(`SELECT id,owner_id FROM dbo.manhour_lines WITH(UPDLOCK,HOLDLOCK)
+          WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND cost_type=@cost_type
+            AND package COLLATE Latin1_General_100_BIN2=@package
+          UNION ALL SELECT id,owner_id FROM dbo.expense_lines WITH(UPDLOCK,HOLDLOCK)
+          WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND cost_type=@cost_type
+            AND package COLLATE Latin1_General_100_BIN2=@package;`)).recordset;
+        if (!members.length) throw new ApiError(409, "module_changed", "This work package changed. Reload and try again.");
+        if (!elevated(actor, estimate) && members.some(line => Number(line.owner_id) !== actor.id))
+          throw new ApiError(403, "module_forbidden", "You may rename a work package only when all its lines are editable by you.");
+        if (title !== workPackage[2]) {
+          const collision = (await query.query(`SELECT TOP(1) id FROM (
+            SELECT id FROM dbo.manhour_lines WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND cost_type=@cost_type AND package COLLATE Latin1_General_100_BIN2=@title
+            UNION ALL SELECT id FROM dbo.expense_lines WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND cost_type=@cost_type AND package COLLATE Latin1_General_100_BIN2=@title
+          ) members;`)).recordset[0];
+          if (collision) throw new ApiError(409, "module_name_exists", "Another work package already uses this name.");
+          await query.query(`UPDATE dbo.manhour_lines SET package=@title,updated_by=@actor,updated_at=SYSUTCDATETIME()
+            WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND cost_type=@cost_type AND package COLLATE Latin1_General_100_BIN2=@package;
+            UPDATE dbo.expense_lines SET package=@title,updated_by=@actor,updated_at=SYSUTCDATETIME()
+            WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND cost_type=@cost_type AND package COLLATE Latin1_General_100_BIN2=@package;`);
+          savedKey = "package:" + workPackage[1] + ":" + title;
+        }
+      }
       query.input("saved_key", sql.NVarChar(250), savedKey);
-      // Preserve old metadata for audit; upsert the renamed key without deleting history.
-      await query.query(`UPDATE dbo.estimate_module_details SET title=@title,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
+      // Audit retains the old identity; move its metadata to the current module name.
+      await query.query(`UPDATE dbo.estimate_module_details SET title=@title,remark=CASE WHEN @key=N'summary' THEN @remark ELSE remark END,description_rows=COALESCE(@description_rows,description_rows),updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE estimate_id=@id AND revision=@revision AND module_key=@saved_key;
-        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by)
-          VALUES(@id,@revision,@saved_key,@title,@remark,@actor);`);
-      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before }, { moduleKey: savedKey, title, remark });
+        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows)
+          VALUES(@id,@revision,@saved_key,@title,CASE WHEN @key=N'summary' THEN @remark END,@actor,COALESCE(@description_rows,N'[]'));
+        DELETE dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key=@key AND @key<>@saved_key;`);
+      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before }, { moduleKey: savedKey, title, ...(moduleKey === "summary" ? { remark } : {}), descriptionRows });
       const version = await touchEstimate(transaction, id, actor.id);
       return { estimateRowVersion: version.toString("base64") };
     });

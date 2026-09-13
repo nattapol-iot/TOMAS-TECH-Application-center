@@ -8,7 +8,7 @@ import type { CurrentUserService } from "../src/users.js";
 import { registerErrorHandler } from "../src/errors.js";
 import { registerEstimateCostWriteRoutes } from "../src/routes/estimate-cost-write.js";
 const version=Buffer.from("0000000000000001","hex");
-for(const scenario of ["labor", "rename", "collision", "approved", "stale", "unassigned", "audit failure"]) {
+for(const scenario of ["labor", "summary", "package", "rename", "collision", "approved", "stale", "unassigned", "audit failure"]) {
  test("module details: "+scenario, async t=>{
   let committed=false, writes=0, audits=0;
   t.mock.method(sql.Request.prototype,"query",async function(this:sql.Request, statement:string){
@@ -16,9 +16,11 @@ for(const scenario of ["labor", "rename", "collision", "approved", "stale", "una
    if(statement.includes("FROM dbo.estimate_assignments")) return {recordset:[]};
    if(statement.includes("SELECT module_key,title,remark")) return {recordset:[]};
    if(statement.includes("SELECT id FROM dbo.cost_items")) return {recordset:[{id:1}]};
+   if(statement.includes("SELECT id,owner_id FROM dbo.manhour_lines")) return {recordset:[{id:1,owner_id:7},{id:2,owner_id:7}]};
+   if(statement.includes("UPDATE dbo.manhour_lines SET package")) {writes++;assert.match(statement,/UPDATE dbo.expense_lines SET package/);assert.doesNotMatch(statement,/daily_rate=/);return {recordset:[]};}
    if(statement.includes("SELECT TOP(1) id")) return {recordset:scenario==="collision"?[{id:2}]:[]};
    if(statement.includes("UPDATE dbo.cost_items")) {writes++; assert.match(statement,/revision=@revision AND deleted_at IS NULL/); return {recordset:[]};}
-   if(statement.includes("UPDATE dbo.estimate_module_details")) {writes++; assert.equal(this.parameters.revision!.value,2);assert.equal(this.parameters.remark!.value,"Visible remark");return {recordset:[]};}
+   if(statement.includes("UPDATE dbo.estimate_module_details")) {writes++; assert.equal(this.parameters.revision!.value,2);assert.equal(this.parameters.remark!.value,"Visible remark");assert.equal(this.parameters.description_rows!.value,'["First detail","Second detail"]');assert.match(statement,/CASE WHEN @key=N'summary' THEN @remark/);return {recordset:[]};}
    if(statement.includes("audit_log")) {audits++;if(scenario==="audit failure")throw Error("Audit unavailable");return {recordset:[]};}
    if(statement.includes("activity_events")||statement.includes("assert_estimate_totals"))return {recordset:[]};
    if(statement.includes("UPDATE dbo.estimates"))return {recordset:[{row_version:version}]};
@@ -28,9 +30,9 @@ for(const scenario of ["labor", "rename", "collision", "approved", "stale", "una
   const users={async demandPermission(){},async required(){return {id:scenario==="unassigned"?8:7,role:"Engineer"};}} as unknown as CurrentUserService;
   const app=Fastify();registerErrorHandler(app);registerEstimateCostWriteRoutes(app,db,users);
   try{
-   const response=await app.inject({method:"PUT",url:"/api/v1/estimates/1/module-details",payload:{moduleKey:["rename","collision"].includes(scenario)?"category:01:Original":"labor:Software",title:"Updated module",remark:"Visible remark",estimateRowVersion:version.toString("base64")}});
-   assert.equal(response.statusCode,["labor","rename"].includes(scenario)?200:scenario==="unassigned"?403:scenario==="audit failure"?500:409);
-   assert.equal(committed,["labor","rename"].includes(scenario));
+   const response=await app.inject({method:"PUT",url:"/api/v1/estimates/1/module-details",payload:{moduleKey:scenario === "summary" ? "summary" : scenario === "package" ? "package:Engineering:Original" : ["rename","collision"].includes(scenario)?"category:01:Original":"labor:Software",title:"Updated module",remark:"Visible remark",descriptionRows:["First detail","Second detail"],estimateRowVersion:version.toString("base64")}});
+   assert.equal(response.statusCode,["labor","rename","summary","package"].includes(scenario)?200:scenario==="unassigned"?403:scenario==="audit failure"?500:409);
+   assert.equal(committed,["labor","rename","summary","package"].includes(scenario));
    if(committed){assert.equal(audits,1);assert.ok(writes>0);}
    if(["approved","stale","unassigned","collision"].includes(scenario))assert.equal(writes,0);
   }finally{await app.close();}

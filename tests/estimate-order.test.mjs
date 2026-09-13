@@ -23,3 +23,14 @@ test("Summary retains persisted module and child order instead of sorting by nam
  assert.deepEqual(breakdownModules(sections[0]).map(m=>m.title),["Z","A"]);
  assert.deepEqual(breakdownModules(sections[0])[1].lines.map(l=>l.key),["cost:3","cost:1"]);
 });
+
+ test("drag insertion supports both directions, module boundaries and hidden rows", async () => {
+  const { insertCostLine } = await import("../lib/estimate-order.ts");
+  const ids = [1,2,3,4,5];
+  assert.deepEqual(insertCostLine(ids,1,4,false),[2,3,1,4,5]);
+  assert.deepEqual(insertCostLine(ids,1,4,true),[2,3,4,1,5]);
+  assert.deepEqual(insertCostLine(ids,5,2,false),[1,5,2,3,4]);
+  assert.deepEqual(insertCostLine(ids,5,2,true),[1,2,5,3,4]);
+  for (const [source,target] of [[2,2],[9,2],[2,9]]) assert.deepEqual(insertCostLine(ids,source,target,true),ids);
+  assert.deepEqual(ids,[1,2,3,4,5]);
+ });

@@ -542,3 +542,13 @@ Item move buttons share the rightmost action cell with Edit/Delete, not the numb
 ### ERP labor modules — confirmed 2026-09-13
 
 Summary and Preview preserve Hardware modules and aggregate labor into one Main Module per Software, Service and Installation category. Installation cost type takes precedence for both providers. Engineering/Internal Software maps to Software; Electrical/Mechanical maps to Service. Unknown disciplines and other providers retain explicit ERP mappings. Modules expand to source lines; monetary lines are never duplicated. Names and remarks persist per revision. Approved revisions retain saved categories. Preview uses saved data and export remains approval-gated with the existing workbook format.
+
+### Estimate editing refinement — 2026-09-13
+
+Summary module arrows share one compact, non-wrapping rightmost control group next to ERP mapping. Main Module names open the editor directly in Cost Items and Engineering Man-hour. Module descriptions allow up to 20 text rows under the same numbered module, without new cost lines. Module-specific remarks are removed from the editor/presentation; one revision-scoped Summary Remark appears below the Summary and in Preview. Existing legacy remarks remain stored unless their module is renamed.
+
+Engineering effort Qty/Man-days/Hours per day is edited in place, saved together with Enter or the adjacent check button, cancelled with Escape; the existing daily rate/provenance is retained. Source row versions, estimate versions, permission and review/approval locks remain enforced. Work-package renaming updates labor and expense membership labels atomically. New activity rows save-and-continue like Cost Items. Schema 047 stores description rows; migration is pending deployment.
+
+- Estimate revision UX: Validation tab hidden (toolbar access and validation gates retained); Revision Control combines history and total comparison. Long descriptions collapse by default and expand as wrapped text/JSON without changing saved snapshots. Local UI change; not deployed.
+
+- Cost Items drag: right-side handle inserts before/after a row or appends to an existing (including collapsed) module header. Uses full ledger ordering, including filtered rows. PUT line-order accepts optional move {lineId,targetLineId}, reads destination module/category from locked current revision, and persists membership/order together with audit. Price, quantities, owner, source and explicit ERP mapping are retained. No new migration for drag. Pending empty modules require first item before becoming a drop target. Local only; SQL/browser acceptance pending.

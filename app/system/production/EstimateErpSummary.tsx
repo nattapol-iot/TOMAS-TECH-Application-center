@@ -124,7 +124,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const moduleDetail = (section: BreakdownSection, module: { key: string; title: string }) => {
     const key = section.kind === "manhour" && LABOR_MODULE_NAMES[section.title] ? section.key : module.key;
     const detail = moduleDetails.find(row => row.moduleKey === key);
-    return { key, title: section.kind === "cost-items" ? module.title : detail?.title ?? module.title, remark: detail?.remark };
+    return { key, title: section.kind === "cost-items" ? module.title : detail?.title ?? module.title, descriptionRows: detail?.descriptionRows ?? [] };
   };
   const erpByKey = useMemo(() => new Map((summary?.lines ?? []).map((line) => [erpKey(line), line])), [summary]);
   const erpOf = useCallback((line: BreakdownLine) => { const key = erpKeyOfBreakdown(line.key); return key ? erpByKey.get(key) : undefined; }, [erpByKey]);
@@ -356,20 +356,20 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             {canEdit && keys.length ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={"Select module " + module.title} onChange={(event) => toggleKeys(keys, event.target.checked)} /> : null}
             {section.ordinal}-{index + 1}
           </td>
-          <td>{canReorder ? <span className="row-actions">{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.title, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}<div className="cell-primary cb-desc"><strong>{detail.title}</strong>{detail.remark ? <span style={{ whiteSpace: "pre-wrap" }}>{detail.remark}</span> : null}<span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
+          <td><div className="cell-primary cb-desc"><strong>{detail.title}</strong>{detail.descriptionRows.map((row, index) => <span key={index} style={{ whiteSpace: "pre-wrap" }}>{row}</span>)}<span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
             <button type="button" className="chip" aria-expanded={openModules.has(module.key)} onClick={() => setOpenModules(current => { const next = new Set(current); if (next.has(module.key)) next.delete(module.key); else next.add(module.key); return next; })}>{openModules.has(module.key) ? "ย่อรายการ / Hide details" : "ดูรายการต้นทุน / View cost lines"}</button>
-            {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ชื่อ / Remark</button> : null}
+            {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ไขโมดูล / Edit module</button> : null}
             {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.title)}>{copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
           </td>
           <td className="num">{module.lines.length}</td><td>{copy("รายการ", "lines", "明細")}</td>
           <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
           <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : "—"}</td>
           <td className="num"><strong>{money(module.amount)}</strong></td>
-          <td className="cb-erp-col"><select disabled={!canEdit || !keys.length || keys.some(key => automaticLaborCategory(erpByKey.get(key)!))} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
+          <td className="cb-erp-col"><div className="cb-module-controls"><select disabled={!canEdit || !keys.length || keys.some(key => automaticLaborCategory(erpByKey.get(key)!))} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
             <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
             <option value="Unmapped">{unmappedLabel}</option>
             {ERP_COST_CATEGORIES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
-          </select></td>
+          </select>{canReorder ? <span className="row-actions">{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.title, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
         </tr>{openModules.has(module.key) ? module.lines.map(line => <tr key={line.key} className="cb-line">
           <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
           <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
@@ -444,6 +444,12 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     </> : <EmptyState icon="package" title={copy("ยังไม่มีรายการต้นทุน", "No cost lines yet", "原価明細がありません")} message={copy("เพิ่มรายการในแท็บ Cost Items, Man-hour หรือ Other cost แล้วรายการจะแสดงที่นี่", "Add lines in Cost Items, Man-hour or Other cost and they appear here.", "Cost Items・Man-hour・Other costタブで明細を追加するとここに表示されます。")} />}
 
     {summary ? <>
+      <div className="estimate-summary-note">
+        <div className="row"><strong>{copy("หมายเหตุรวม", "Summary Remark", "見積全体の備考")}</strong><span className="spacer" />
+          {workspace.capabilities.canEditAllSections ? <button type="button" className="btn default sm" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule({ key: "summary", title: "Summary" })}>{copy("แก้ไขหมายเหตุ", "Edit remark", "備考を編集")}</button> : null}
+        </div>
+        <p style={{ whiteSpace: "pre-wrap" }}>{moduleDetails.find(detail => detail.moduleKey === "summary")?.remark || "—"}</p>
+      </div>
       <div className="panel-actions">
         {changedLines.length ? <button className="btn ghost" type="button" disabled={busy} onClick={() => { setDrafts(Object.fromEntries(summary.lines.map((line) => [erpKey(line), line.erpCategory]))); }}>{copy("ยกเลิกที่แก้ไข", "Discard changes", "変更を破棄")}</button> : null}
         <span className="spacer" />
@@ -466,7 +472,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
               const detail = moduleDetail(section, module);
               return <details key={module.key} className="panel" style={{ padding: 12, marginBottom: 8 }}>
                 <summary style={{ cursor: "pointer" }}><strong>{detail.title}</strong> · {children.length} lines · {money(children.reduce((sum, line) => sum + line.amount, 0))}</summary>
-                {detail.remark ? <p style={{ whiteSpace: "pre-wrap" }}>{detail.remark}</p> : null}
+                {detail.descriptionRows.map((row, index) => <p key={index} style={{ whiteSpace: "pre-wrap" }}>{row}</p>)}
                 <div className="table-wrap"><table><thead><tr><th>Description</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Unit cost</th><th>Amount</th><th>Remark</th></tr></thead>
                   <tbody>{children.map(line => <tr key={erpKey(line)}><td>{line.description}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td><td>{line.remark || "—"}</td></tr>)}</tbody>
                 </table></div>
@@ -476,6 +482,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
           {!rows.length ? <p>—</p> : null}
         </section>;
       })}
+      {moduleDetails.find(detail => detail.moduleKey === "summary")?.remark ? <section className="estimate-summary-note"><strong>Summary Remark</strong><p style={{ whiteSpace: "pre-wrap" }}>{moduleDetails.find(detail => detail.moduleKey === "summary")?.remark}</p></section> : null}
       <p><strong>{copy("รวมต้นทุน", "Total estimated cost", "見積原価合計")}: {money(summary.canonicalTotal)}</strong></p>
     </Modal> : null}
     {editingModule ? <EstimateModuleEditor workspace={workspace} moduleKey={editingModule.key} initialTitle={editingModule.title} onClose={() => setEditingModule(null)} onSaved={async () => { await onChanged("Module details updated"); await load(); }} /> : null}

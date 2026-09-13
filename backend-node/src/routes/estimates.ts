@@ -94,7 +94,7 @@ async function snapshotSubmission(transaction: TransactionType, estimateId: numb
         unit,unit_cost unitCost,owner_id ownerId,remark FROM dbo.expense_lines WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,package,id FOR JSON PATH)) expenseLines,
       JSON_QUERY((SELECT category,description,qty quantity,unit,unit_cost unitCost,remark FROM dbo.other_cost_lines
         WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,category,id FOR JSON PATH)) otherCostLines,
-      JSON_QUERY((SELECT module_key moduleKey,title,remark FROM dbo.estimate_module_details
+      JSON_QUERY((SELECT module_key moduleKey,title,remark,JSON_QUERY(description_rows) descriptionRows FROM dbo.estimate_module_details
         WHERE estimate_id=e.id AND revision=e.revision FOR JSON PATH)) moduleDetails,
       JSON_QUERY((SELECT mapping.source_type sourceType,mapping.source_id sourceId,mapping.erp_category erpCategory,mapping.copied_from_revision copiedFromRevision
         FROM dbo.estimate_erp_mappings mapping WHERE mapping.estimate_id=e.id AND mapping.revision=e.revision AND (
@@ -171,8 +171,8 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
   const clone = new sql.Request(transaction); clone.input("estimate_id", sql.BigInt, estimateId); clone.input("current_revision", sql.Int, currentRevision);
   clone.input("next_revision", sql.Int, nextRevision); clone.input("actor", sql.BigInt, actorId);
   await clone.query(`
-    INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by)
-    SELECT estimate_id,@next_revision,module_key,title,remark,@actor FROM dbo.estimate_module_details
+    INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows)
+    SELECT estimate_id,@next_revision,module_key,title,remark,@actor,description_rows FROM dbo.estimate_module_details
     WHERE estimate_id=@estimate_id AND revision=@current_revision;
     DECLARE @copiedCosts TABLE(old_id bigint,new_id bigint);
     MERGE dbo.cost_items AS target

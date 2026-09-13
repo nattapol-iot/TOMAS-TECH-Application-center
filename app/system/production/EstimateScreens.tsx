@@ -1,11 +1,12 @@
 "use client";
+import { EstimateEffortCells } from "./EstimateEffortCells";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
-import { moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
+import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
 import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
 import { LaborPackageMaster } from "./LaborPackageMaster";
@@ -46,6 +47,8 @@ import {
   updateEstimateContingency,
   updateEstimateExpense,
   updateEstimateManhour,
+  updateEstimateManhourEffort,
+  type EstimateEffortInput,
   updateEstimateOtherCost,
   type BootstrapData,
   type CostItemInput,
@@ -100,7 +103,7 @@ type Props = {
   refreshBootstrap: () => Promise<void>;
 };
 
-type WorkspaceTab = "summary" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "compare" | "review";
+type WorkspaceTab = "summary" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "review";
 type ManhourSeed = Partial<Pick<EstimateManhourInput, "package" | "costType" | "provider">>;
 type ExpenseSeed = Partial<Pick<EstimateExpenseInput, "package" | "costType">>;
 type CostItemSeed = Partial<Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion">>;
@@ -526,12 +529,12 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const reorder: ReorderEstimate = async (sourceType, orderedIds) => {
+  const reorder: ReorderEstimate = async (sourceType, orderedIds, move) => {
     if (!workspace || busy) return;
     setBusy(true);
     try {
-      await apiRequest(`/api/v1/estimates/${estimateId}/line-order`, { method: "PUT", body: JSON.stringify({ sourceType, orderedIds, estimateRowVersion: workspace.header.rowVersion }) });
-      await afterMutation("บันทึกลำดับแล้ว / Order saved");
+      await apiRequest(`/api/v1/estimates/${estimateId}/line-order`, { method: "PUT", body: JSON.stringify({ sourceType, orderedIds, move, estimateRowVersion: workspace.header.rowVersion }) });
+      await afterMutation(move ? "ย้ายรายการและบันทึกลำดับแล้ว / Item moved" : "บันทึกลำดับแล้ว / Order saved");
     } catch (error) { await mutationError(error); }
     finally { setBusy(false); }
   };
@@ -658,7 +661,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       <SummaryTile label="Total Estimated Cost" value={formatMoney(totals.total)} note="Internal cost · no margin" strong />
     </section>
     <Tabs active={tab} onChange={setTab} tabs={[
-      { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
+      { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
     ]} />
 
     {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
@@ -724,6 +727,12 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
         catch (requestError) { await mutationError(requestError); return false; }
         finally { setBusy(false); }
       }}
+      onSaveEffort={async (line, effort, lineRowVersion) => {
+        setBusy(true); setError("");
+        try { await updateEstimateManhourEffort(estimateId, line.id, workspace.header.rowVersion, lineRowVersion, effort); await afterMutation("Effort updated"); return true; }
+        catch (requestError) { await mutationError(requestError); return false; }
+        finally { setBusy(false); }
+      }}
       onLaborLibraryChanged={async (message) => { await afterMutation(message); }}
       onEditManhour={(line) => { setManhourSeed({}); setManhourEditor(line); }}
       onRemoveManhour={(line) => { void removeLine("manhour", line.id, line.rowVersion); }}
@@ -749,8 +758,8 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       if (expense?.canEdit) { setExpenseSeed({}); setExpenseEditor(expense); }
       if (other && capabilities.canEditOtherCosts) setOtherEditor(other);
     }} /> : null}
-    {tab === "revision" ? <EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /> : null}
-    {tab === "compare" ? <EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /> : null}
+    {tab === "revision" ? <div className="stack"><EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
+
     {tab === "review" ? <EstimateReviewTab workspace={workspace} onWorkflow={setWorkflowAction} /> : null}
 
     {costEditor ? <CostItemEditor bootstrap={bootstrap} workspace={workspace} line={costEditor === "new" ? null : costEditor} seed={costSeed} busy={busy} onClose={() => { setCostEditor(null); setCostSeed({}); }} onSave={async (input, lineId) => {
@@ -926,6 +935,27 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   const defaultOwnerId = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const allowedCategories = COST_CATEGORIES.filter(([code]) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code));
   const groups = useMemo(() => costModuleGroups(category === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === category)), [workspace.costItems, category]);
+  const [draggedCostId, setDraggedCostId] = useState<number | null>(null);
+  const [dropMarker, setDropMarker] = useState("");
+  const clearDrag = () => { setDraggedCostId(null); setDropMarker(""); };
+  const allowDrop = (event: React.DragEvent, marker: string) => {
+    if (!canAdd || busy || quickSaving || draggedCostId === null) return;
+    event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropMarker(marker);
+  };
+  const dropCost = (event: React.DragEvent, targetId: number, after: boolean) => {
+    event.preventDefault();
+    const lineId = draggedCostId;
+    clearDrag();
+    if (!canAdd || busy || quickSaving || lineId === null || lineId === targetId) return;
+    const source = workspace.costItems.find(line => line.id === lineId);
+    const target = workspace.costItems.find(line => line.id === targetId);
+    if (!source?.canEdit || !target) return;
+    const ids = workspace.costItems.map(line => line.id);
+    const ordered = insertCostLine(ids, lineId, targetId, after);
+    const crossModule = source.categoryCode !== target.categoryCode || source.module !== target.module;
+    if (!crossModule && ordered.every((id, index) => id === ids[index])) return;
+    void onReorder("CostItem", ordered, { lineId, targetLineId: targetId });
+  };
   const moveCostModule = (group: CostModuleGroup, direction: -1 | 1) => {
     const siblings = workspace.costItems.filter(line => line.categoryCode === group.categoryCode);
     const moved = moveModule(siblings, line => moduleKeyOf(line.categoryCode, line.module.trim() || "Unassigned"), group.key, direction);
@@ -1000,13 +1030,13 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     <td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(false); }} aria-label={localizeCopy("Save cost item")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new cost item")}><Icon name="x" /></button></div></td>
   </tr> : null;
 
-  const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, ordinal: number, lineCount: number, groupTotal: number, issues: number) => <tr className="module-row" key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
+  const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, ordinal: number, lineCount: number, groupTotal: number, issues: number) => <tr className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "")} onDragOver={event => { if (lineCount) allowDrop(event, group.key); }} onDrop={event => { const target = groups.find(entry => entry.key === group.key)?.lines.at(-1); if (target) dropCost(event, target.id, true); }} key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
     <td colSpan={colCount - 1}><div className="row band">
-      <button type="button" className="module-toggle" aria-expanded={!isCollapsed(group.key)} onClick={() => toggleModule(group.key)}>
+      <button type="button" className="module-toggle" aria-label={(isCollapsed(group.key) ? "Expand " : "Collapse ") + group.module} aria-expanded={!isCollapsed(group.key)} onClick={() => toggleModule(group.key)}>
         <Icon name={isCollapsed(group.key) ? "chevronRight" : "chevronDown"} />
         <span className="module-ordinal">{ordinal}</span>
-        <strong>{group.module}</strong>
       </button>
+      {canAdd && lineCount ? <button type="button" className="module-name-edit" disabled={busy || quickSaving} title="แก้ชื่อ Main Module / Rename Main Module" onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><strong>{group.module}</strong><Icon name="edit" /></button> : <strong>{group.module}</strong>}
       <span className="pill">{group.categoryCode}</span>
       <span className="muted">{group.category} <LocalizedText text={"·"} /> {lineCount} <LocalizedText text={"item"} /></span>
       {issues ? <Badge tone="amber">{issues} <LocalizedText text={"to fix"} /></Badge> : null}
@@ -1020,7 +1050,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
         const index = siblings.findIndex(entry => entry.key === group.key);
         return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
-      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title="แก้ชื่อ / Remark" aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title="ลบ Main Module / Delete Main Module" aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
+      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title="แก้ไข Main Module / Edit Main Module" aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title="ลบ Main Module / Delete Main Module" aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
   </tr>;
 
   return <>
@@ -1043,6 +1073,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         <button type="button" className={dense ? "sheet-tool" : "sheet-tool active"} onClick={() => setDense((current) => !current)} title={dense ? "แสดง price source, reference, price date, owner, remark และ status" : "ซ่อนคอลัมน์อ้างอิงเพื่อให้ตารางพอดีจอ"}><Icon name="table" />{dense ? "All columns" : "Compact"}</button>
       </div>
     </div>
+    {canAdd ? <p className="cost-drag-help">ลากปุ่ม ⠿ เพื่อจัดลำดับหรือย้ายข้ามโมดูล • วางบนแถวเพื่อเลือกตำแหน่ง หรือบนชื่อโมดูลเพื่อย้ายไปท้ายโมดูล</p> : null}
     {groups.length || showPending ? <div className="table-wrap cost-sheet-wrap"><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
       <thead><tr>
         <th style={{ width: 48 }}><LocalizedText text={"No."} /></th>
@@ -1062,7 +1093,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
           <th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th>
           <th style={{ width: 110 }}><LocalizedText text={"Status"} /></th>
         </>}
-        <th style={{ width: 136 }} aria-label={uiText("Action")} />
+        <th style={{ width: 164 }} aria-label={uiText("Action")} />
       </tr></thead>
       <tbody>
         {groups.flatMap((group, groupIndex) => {
@@ -1070,7 +1101,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
           if (isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
           return [
             moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues),
-            ...group.lines.map((line, index) => <tr key={line.id} className="item-row">
+            ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
               <td><span className="cell-text muted mono">{`${groupIndex + 1}-${index + 1}`}</span></td>
               <td><span className="cell-text"><strong className="mono">{line.itemCode}</strong></span></td>
               <td><div className="cell-primary"><strong>{line.description}</strong>{line.specification ? <span>{line.specification}</span> : null}</div></td>
@@ -1088,7 +1119,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
                 <td><span className="cell-text">{line.remark || "—"}</span></td>
                 <td><span className="cell-text"><Badge>{line.status}</Badge></span></td>
               </>}
-              <td><div className="row-actions cost-order-actions">{canAdd ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || index + direction < 0 || index + direction >= group.lines.length} onClick={() => moveCostLine(group, index, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td>
+              <td><div className="row-actions cost-order-actions">{canAdd && line.canEdit ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || index + direction < 0 || index + direction >= group.lines.length} onClick={() => moveCostLine(group, index, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td>
             </tr>),
             draftRow(group.key),
             <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button></td></tr>,
@@ -1424,7 +1455,8 @@ function MainModuleEditor({ workspace, busy, onClose, onContinue }: { workspace:
   </Modal>;
 }
 
-function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddManhour, onQuickAddManhour, onEditManhour, onRemoveManhour, onAddExpense, onEditExpense, onRemoveExpense, onLaborLibraryChanged }: {
+function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddManhour, onQuickAddManhour, onEditManhour, onRemoveManhour, onAddExpense, onEditExpense, onRemoveExpense, onLaborLibraryChanged, onSaveEffort }: {
+  onSaveEffort: (line: EstimateManhourLine, effort: EstimateEffortInput, rowVersion: string) => Promise<boolean>;
   bootstrap: BootstrapData;
   workspace: EstimateCostWorkspace;
   busy: boolean;
@@ -1440,6 +1472,7 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
 }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
+  const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
   const [costType, setCostType] = useState("all");
   const [quickDraft, setQuickDraft] = useState<QuickManhourDraft | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
@@ -1481,17 +1514,18 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
   const visibleCost = visibleManhours.reduce((sum, line) => sum + numberOf(line.lineCost), 0) + visibleExpenses.reduce((sum, line) => sum + numberOf(line.lineTotal), 0);
   const defaultGroup = visible[0] ?? groups[0];
   const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
-  const defaultOwnerId = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
+  const defaultOwnerId = !workspace.capabilities.canEditAllSections ? bootstrap.user.id : owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const departments = [...new Set(bootstrap.team.map((member) => member.department.trim()).filter(Boolean))].sort();
   const levels = [...new Set(bootstrap.team.map((member) => member.level.trim()).filter(Boolean))].sort();
-  const startQuickRow = (group: { key: string; name: string; costType: EstimateManhourInput["costType"] }) => {
+  const startQuickRow = (group: { key: string; name: string; costType: EstimateManhourInput["costType"]; manhours?: EstimateManhourLine[] }) => {
+    const reference = group.manhours?.find(line => line.provider === "Internal");
     setQuickDraft({
       version: (quickDraft?.version ?? 0) + 1,
       groupKey: group.key,
       package: group.name,
       activity: "",
-      department: bootstrap.user.department || departments[0] || "Engineering",
-      level: bootstrap.team.find((member) => member.id === bootstrap.user.id)?.level || levels[0] || "Middle Engineer",
+      department: reference?.department || bootstrap.user.department || departments[0] || "Engineering",
+      level: reference?.level || bootstrap.team.find((member) => member.id === bootstrap.user.id)?.level || levels[0] || "Middle Engineer",
       costType: group.costType,
       engineers: 1,
       manDays: 1,
@@ -1532,6 +1566,8 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
     actions={canAddManhour ? <><button className="btn default sm" type="button" disabled={busy} onClick={addDefaultActivity}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button className="btn default sm" type="button" disabled={busy} onClick={() => setLaborLibraryOpen(true)}><Icon name="package" /><LocalizedText text={"Labor package library"} /></button><button className="btn default sm" type="button" disabled={busy} onClick={() => { setSavedLaborPackageId(undefined); setLaborMasterOpen(true); }}><Icon name="layers" />จัดการ Labor Package</button><button className="btn primary sm" type="button" disabled={busy} onClick={onNewPackage}><Icon name="layers" /><LocalizedText text={"New Work Package"} /></button></> : undefined}
     flush
   >
+    {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={() => onLaborLibraryChanged("Work package updated")} /> : null}
+    <div className="info-strip">{canAddManhour ? "แก้ Qty / Man-days / Hours ได้ในช่อง · Enter หรือ ✓ เพื่อบันทึก · เพิ่มแถวแล้วกด Enter เพื่อเพิ่มต่อเนื่อง" : "Revision นี้ไม่เปิดให้แก้ไขค่าแรงในสถานะปัจจุบัน หรือบัญชีนี้ไม่มีสิทธิ์แก้ไข"}</div>
     <div className="subtabs" role="tablist" aria-label={localizeCopy("Cost type")}>
       <button type="button" role="tab" aria-selected={costType === "all"} className={costType === "all" ? "subtab active" : "subtab"} onClick={() => setCostType("all")}><LocalizedText text={"All work"} /><em>{countOf("all")}</em></button>
       <button type="button" role="tab" aria-selected={costType === "Engineering"} className={costType === "Engineering" ? "subtab active" : "subtab"} onClick={() => setCostType("Engineering")}><Icon name="cpu" /><LocalizedText text={"Engineering cost"} /><em>{countOf("Engineering")}</em></button>
@@ -1540,18 +1576,18 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
     </div>
     <div className="table-wrap tall">
       <table className="sheet" style={{ minWidth: 2360 }}>
-        <thead><tr><th style={{ width: 44 }}><LocalizedText text={"No."} /></th><th style={{ width: 130 }}><LocalizedText text={"Type"} /></th><th style={{ width: 250 }}><LocalizedText text={"Activity / Description"} /></th><th style={{ width: 130 }}><LocalizedText text={"Department"} /></th><th style={{ width: 150 }}><LocalizedText text={"Engineer Level"} /></th><th style={{ width: 140 }}><LocalizedText text={"Cost Type"} /></th><th style={{ width: 190 }}><LocalizedText text={"Supplier"} /></th><th style={{ width: 150 }}><LocalizedText text={"Quotation No."} /></th><th className="num" style={{ width: 80 }}><LocalizedText text={"Qty"} /></th><th style={{ width: 110 }}><LocalizedText text={"Unit"} /></th><th className="num" style={{ width: 90 }}><LocalizedText text={"Man-days"} /></th><th className="num" style={{ width: 95 }}><LocalizedText text={"Hours / Day"} /></th><th className="num" style={{ width: 120 }}><LocalizedText text={"Rate"} /></th><th className="num" style={{ width: 100 }}><LocalizedText text={"Man-hours"} /></th><th className="num" style={{ width: 130 }}><LocalizedText text={"Cost"} /></th><th style={{ width: 150 }}><LocalizedText text={"Owner"} /></th><th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th><th style={{ width: 72 }} aria-label={uiText("Action")} /></tr></thead>
+        <thead><tr><th style={{ width: 44 }}><LocalizedText text={"No."} /></th><th style={{ width: 130 }}><LocalizedText text={"Type"} /></th><th style={{ width: 250 }}><LocalizedText text={"Activity / Description"} /></th><th style={{ width: 130 }}><LocalizedText text={"Department"} /></th><th style={{ width: 150 }}><LocalizedText text={"Engineer Level"} /></th><th style={{ width: 140 }}><LocalizedText text={"Cost Type"} /></th><th style={{ width: 190 }}><LocalizedText text={"Supplier"} /></th><th style={{ width: 150 }}><LocalizedText text={"Quotation No."} /></th><th className="num" style={{ width: 80 }}><LocalizedText text={"Qty"} /></th><th style={{ width: 110 }}><LocalizedText text={"Unit"} /></th><th className="num" style={{ width: 90 }}><LocalizedText text={"Man-days"} /></th><th className="num" style={{ width: 160 }}><LocalizedText text={"Hours / Day"} /></th><th className="num" style={{ width: 120 }}><LocalizedText text={"Rate"} /></th><th className="num" style={{ width: 100 }}><LocalizedText text={"Man-hours"} /></th><th className="num" style={{ width: 130 }}><LocalizedText text={"Cost"} /></th><th style={{ width: 150 }}><LocalizedText text={"Owner"} /></th><th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th><th style={{ width: 72 }} aria-label={uiText("Action")} /></tr></thead>
         <tbody>{visible.flatMap((group) => {
           const packageTotal = group.manhours.reduce((sum, line) => sum + numberOf(line.lineCost), 0) + group.expenses.reduce((sum, line) => sum + numberOf(line.lineTotal), 0);
           const packageManDays = group.manhours.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0);
           return [
-            <tr className="module-row" key={`package-${group.key}`}><td colSpan={18}><div className="row band"><span className="module-bullet"><Icon name={group.costType === "Installation" ? "truck" : "cpu"} /></span><strong>{group.name}</strong><Badge tone={group.costType === "Installation" ? "amber" : "blue"}>{group.costType === "Installation" ? "Installation & Service" : "Engineering"}</Badge><span className="muted">{formatNumber(packageManDays)} <LocalizedText text={"MD"} />{group.expenses.length ? ` · ${group.expenses.length} expense` : ""}</span><strong className="num">{formatMoney(packageTotal)}</strong>{canAddManhour ? <><button type="button" className="group-action" disabled={busy} onClick={() => startQuickRow(group)}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button type="button" className="group-action" disabled={busy} onClick={() => onAddManhour({ package: group.name, costType: group.costType, provider: "Supplier" })}><Icon name="quote" /><LocalizedText text={"Supplier man-hour"} /></button>{group.manhours.length ? <button type="button" className="group-action" disabled={busy} onClick={() => setLaborSaveTarget({ name: group.name, costType: group.costType, lineCount: group.manhours.length })}><Icon name="package" /><LocalizedText text={"Save as labor package"} /></button> : null}</> : null}{canAddExpense ? <button type="button" className="group-action" disabled={busy} onClick={() => onAddExpense({ package: group.name, costType: group.costType })}><Icon name="truck" /><LocalizedText text={"Add expense"} /></button> : null}</div></td></tr>,
-            ...group.manhours.map((line, lineIndex) => <tr key={`manhour-${line.id}`}><td><span className="cell-text muted">{lineIndex + 1}</span></td><td><span className="cell-text"><Badge tone={line.provider === "Supplier" ? "violet" : "slate"}>{line.provider === "Supplier" ? "Supplier MH" : "Own engineer"}</Badge></span></td><td><span className="cell-text"><strong>{line.activity}</strong></span></td><td><span className="cell-text">{line.department}</span></td><td><span className="cell-text">{line.level}</span></td><td><span className="cell-text"><Badge tone={line.costType === "Installation" ? "amber" : "blue"}>{line.costType}</Badge></span></td><td><span className="cell-text">{line.supplierName ?? "TOMAS TECH"}</span></td><td><span className="cell-text">{line.quotationNumber || "—"}</span></td><td><span className="cell-text num">{formatNumber(line.engineers)}</span></td><td><span className="cell-text">{line.provider === "Supplier" ? "Man" : <LocalizedText text={"Engineer"} />}</span></td><td><span className="cell-text num">{formatNumber(line.manDays)}</span></td><td><span className="cell-text num">{formatNumber(line.hoursPerDay)}</span></td><td className="computed">{formatMoney(line.dailyRate)}</td><td className="computed">{formatNumber(line.manHours)} <LocalizedText text={"HR"} /></td><td className="computed"><strong>{formatMoney(line.lineCost)}</strong></td><td><span className="cell-text">{line.ownerName}</span></td><td><span className="cell-text">{line.remark || "—"}</span></td><td><div className="row-actions">{line.canEdit ? <><button className="row-action" type="button" disabled={busy} onClick={() => onEditManhour(line)} aria-label={`Edit ${line.activity}`}><Icon name="edit" /></button><button className="row-action" type="button" disabled={busy} onClick={() => onRemoveManhour(line)} aria-label={`Remove ${line.activity}`}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td></tr>),
+            <tr className="module-row" key={`package-${group.key}`}><td colSpan={18}><div className="row band"><span className="module-bullet"><Icon name={group.costType === "Installation" ? "truck" : "cpu"} /></span>{group.manhours.every(line => line.canEdit) && group.expenses.every(line => line.canEdit) ? <button type="button" className="module-name-edit" disabled={busy || quickSaving} title="แก้ชื่อ Main Module / Rename Main Module" onClick={() => setModuleEditor({ key: "package:" + group.costType + ":" + group.name, title: group.name })}><strong>{group.name}</strong><Icon name="edit" /></button> : <strong>{group.name}</strong>}<Badge tone={group.costType === "Installation" ? "amber" : "blue"}>{group.costType === "Installation" ? "Installation & Service" : "Engineering"}</Badge><span className="muted">{formatNumber(packageManDays)} <LocalizedText text={"MD"} />{group.expenses.length ? ` · ${group.expenses.length} expense` : ""}</span><strong className="num">{formatMoney(packageTotal)}</strong>{canAddManhour ? <><button type="button" className="group-action" disabled={busy} onClick={() => startQuickRow(group)}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button type="button" className="group-action" disabled={busy} onClick={() => onAddManhour({ package: group.name, costType: group.costType, provider: "Supplier" })}><Icon name="quote" /><LocalizedText text={"Supplier man-hour"} /></button>{group.manhours.length ? <button type="button" className="group-action" disabled={busy} onClick={() => setLaborSaveTarget({ name: group.name, costType: group.costType, lineCount: group.manhours.length })}><Icon name="package" /><LocalizedText text={"Save as labor package"} /></button> : null}</> : null}{canAddExpense ? <button type="button" className="group-action" disabled={busy} onClick={() => onAddExpense({ package: group.name, costType: group.costType })}><Icon name="truck" /><LocalizedText text={"Add expense"} /></button> : null}</div></td></tr>,
+            ...group.manhours.map((line, lineIndex) => <tr key={`manhour-${line.id}`}><td><span className="cell-text muted">{lineIndex + 1}</span></td><td><span className="cell-text"><Badge tone={line.provider === "Supplier" ? "violet" : "slate"}>{line.provider === "Supplier" ? "Supplier MH" : "Own engineer"}</Badge></span></td><td><span className="cell-text"><strong>{line.activity}</strong></span></td><td><span className="cell-text">{line.department}</span></td><td><span className="cell-text">{line.level}</span></td><td><span className="cell-text"><Badge tone={line.costType === "Installation" ? "amber" : "blue"}>{line.costType}</Badge></span></td><td><span className="cell-text">{line.supplierName ?? "TOMAS TECH"}</span></td><td><span className="cell-text">{line.quotationNumber || "—"}</span></td><EstimateEffortCells line={line} busy={busy || quickSaving} money={formatMoney} number={formatNumber} onSave={(effort, rowVersion) => onSaveEffort(line, effort, rowVersion)} /><td><span className="cell-text">{line.ownerName}</span></td><td><span className="cell-text">{line.remark || "—"}</span></td><td><div className="row-actions">{line.canEdit ? <><button className="row-action" type="button" disabled={busy} onClick={() => onEditManhour(line)} aria-label={`Edit ${line.activity}`}><Icon name="edit" /></button><button className="row-action" type="button" disabled={busy} onClick={() => onRemoveManhour(line)} aria-label={`Remove ${line.activity}`}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td></tr>),
             ...group.expenses.map((line, lineIndex) => <tr key={`expense-${line.id}`} className="expense-row"><td><span className="cell-text muted">{group.manhours.length + lineIndex + 1}</span></td><td><span className="cell-text"><Badge tone="amber">{line.expenseType}</Badge></span></td><td><span className="cell-text"><strong>{line.description}</strong></span></td><td><span className="cell-text muted">—</span></td><td><span className="cell-text muted">—</span></td><td><span className="cell-text"><Badge tone="amber">{line.costType}</Badge></span></td><td><span className="cell-text">{line.supplierName ?? "Vendor"}</span></td><td><span className="cell-text">{line.referenceNumber || "—"}</span></td><td><span className="cell-text num">{formatNumber(line.quantity)}</span></td><td><span className="cell-text">{line.unit}</span></td><td><span className="cell-text muted">—</span></td><td><span className="cell-text muted">—</span></td><td className="computed">{formatMoney(line.unitCost)}</td><td><span className="cell-text muted">—</span></td><td className="computed"><strong>{formatMoney(line.lineTotal)}</strong></td><td><span className="cell-text">{line.ownerName}</span></td><td><span className="cell-text">{line.remark || "—"}</span></td><td><div className="row-actions">{line.canEdit ? <><button className="row-action" type="button" disabled={busy} onClick={() => onEditExpense(line)} aria-label={`Edit ${line.description}`}><Icon name="edit" /></button><button className="row-action" type="button" disabled={busy} onClick={() => onRemoveExpense(line)} aria-label={`Remove ${line.description}`}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td></tr>),
             quickDraft?.groupKey === group.key ? <tr className="inline-draft-row" key={`quick-${group.key}-${quickDraft.version}`} title={localizeCopy("Enter: save and create the next row · Esc: cancel")} onKeyDown={(event) => {
               if (event.key === "Escape") { event.preventDefault(); setQuickDraft(null); }
               if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void saveQuickRow(true); }
-            }}><td><span className="cell-text quick-new"><LocalizedText text={"New"} /></span></td><td><span className="cell-text"><Badge tone="slate"><LocalizedText text={"Own engineer"} /></Badge></span></td><td><input ref={quickActivityRef} required aria-label={localizeCopy("New activity")} maxLength={300} placeholder={localizeCopy("Activity *")} value={quickDraft.activity} onChange={(event) => updateQuick("activity", event.target.value)} /></td><td><select aria-label={uiText("Department")} value={quickDraft.department} onChange={(event) => updateQuick("department", event.target.value)}>{departments.map((department) => <option key={department}>{department}</option>)}</select></td><td><select aria-label={localizeCopy("Engineer level")} value={quickDraft.level} onChange={(event) => updateQuick("level", event.target.value)}>{levels.map((level) => <option key={level}>{level}</option>)}</select></td><td><span className="cell-text"><Badge tone={quickDraft.costType === "Installation" ? "amber" : "blue"}>{quickDraft.costType}</Badge></span></td><td><span className="cell-text">TOMAS TECH</span></td><td><span className="cell-text muted">—</span></td><td><input className="num" aria-label={localizeCopy("Engineer quantity")} type="number" min="0.01" max="10000" step="0.01" value={quickDraft.engineers} onChange={(event) => updateQuick("engineers", Number(event.target.value))} /></td><td><span className="cell-text"><LocalizedText text={"Engineer"} /></span></td><td><input className="num" aria-label={uiText("Man-days")} type="number" min="0.01" max="100000" step="0.01" value={quickDraft.manDays} onChange={(event) => updateQuick("manDays", Number(event.target.value))} /></td><td><input className="num" aria-label={localizeCopy("Hours per day")} type="number" min="0.01" max="24" step="0.01" value={quickDraft.hoursPerDay} onChange={(event) => updateQuick("hoursPerDay", Number(event.target.value))} /></td><td className="computed"><span className="muted"><LocalizedText text={"Rate master"} /></span></td><td className="computed">{formatNumber(quickDraft.engineers * quickDraft.manDays * quickDraft.hoursPerDay)} <LocalizedText text={"HR"} /></td><td className="computed"><span className="muted"><LocalizedText text={"On save"} /></span></td><td><select aria-label={localizeCopy("Activity owner")} value={quickDraft.ownerId} onChange={(event) => updateQuick("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></td><td><input aria-label={localizeCopy("Activity remark")} maxLength={20000} placeholder={uiText("Remark")} value={quickDraft.remark} onChange={(event) => updateQuick("remark", event.target.value)} /></td><td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(false); }} aria-label={localizeCopy("Save activity")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new activity")}><Icon name="x" /></button></div></td></tr> : null,
+            }}><td><span className="cell-text quick-new"><LocalizedText text={"New"} /></span></td><td><span className="cell-text"><Badge tone="slate"><LocalizedText text={"Own engineer"} /></Badge></span></td><td><input ref={quickActivityRef} required aria-label={localizeCopy("New activity")} maxLength={300} placeholder={localizeCopy("Activity *")} value={quickDraft.activity} onChange={(event) => updateQuick("activity", event.target.value)} /></td><td><select aria-label={uiText("Department")} value={quickDraft.department} onChange={(event) => updateQuick("department", event.target.value)}>{departments.map((department) => <option key={department}>{department}</option>)}</select></td><td><select aria-label={localizeCopy("Engineer level")} value={quickDraft.level} onChange={(event) => updateQuick("level", event.target.value)}>{levels.map((level) => <option key={level}>{level}</option>)}</select></td><td><span className="cell-text"><Badge tone={quickDraft.costType === "Installation" ? "amber" : "blue"}>{quickDraft.costType}</Badge></span></td><td><span className="cell-text">TOMAS TECH</span></td><td><span className="cell-text muted">—</span></td><td><input className="num" aria-label={localizeCopy("Engineer quantity")} type="number" min="0.01" max="10000" step="0.01" value={quickDraft.engineers} onChange={(event) => updateQuick("engineers", Number(event.target.value))} /></td><td><span className="cell-text"><LocalizedText text={"Engineer"} /></span></td><td><input className="num" aria-label={uiText("Man-days")} type="number" min="0.01" max="100000" step="0.01" value={quickDraft.manDays} onChange={(event) => updateQuick("manDays", Number(event.target.value))} /></td><td><input className="num" aria-label={localizeCopy("Hours per day")} type="number" min="0.01" max="24" step="0.01" value={quickDraft.hoursPerDay} onChange={(event) => updateQuick("hoursPerDay", Number(event.target.value))} /></td><td className="computed"><span className="muted"><LocalizedText text={"Rate master"} /></span></td><td className="computed">{formatNumber(quickDraft.engineers * quickDraft.manDays * quickDraft.hoursPerDay)} <LocalizedText text={"HR"} /></td><td className="computed"><span className="muted"><LocalizedText text={"On save"} /></span></td><td><select aria-label={localizeCopy("Activity owner")} value={quickDraft.ownerId} onChange={(event) => updateQuick("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></td><td><input aria-label={localizeCopy("Activity remark")} maxLength={20000} placeholder={uiText("Remark")} value={quickDraft.remark} onChange={(event) => updateQuick("remark", event.target.value)} /></td><td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(true); }} aria-label={localizeCopy("Save activity")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new activity")}><Icon name="x" /></button></div></td></tr> : null,
             <tr className="add-row" key={`add-activity-${group.key}`}><td colSpan={18}><button type="button" className="add-row-btn" disabled={!canAddManhour || busy} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add activity to"} /> {group.name}</span></button></td></tr>,
             <tr className="add-row" key={`add-expense-${group.key}`}><td colSpan={18}><button type="button" className="add-row-btn expense" disabled={!canAddExpense || busy} onClick={() => onAddExpense({ package: group.name, costType: group.costType })}><span><Icon name="truck" /><LocalizedText text={"Add travel, accommodation or other expense to"} /> {group.name}</span></button></td></tr>,
             <tr className="subtotal-row" key={`subtotal-${group.key}`}><td colSpan={14}>{group.name} <LocalizedText text={"subtotal"} /></td><td className="num">{formatMoney(packageTotal)}</td><td colSpan={3} /></tr>,
@@ -1620,9 +1656,23 @@ function revisionWithCurrent(revisions: EstimateRevision[], currentRevision: num
   return [...revisions, { id: -1, revision: currentRevision, code: revisionCode(currentRevision), reason: "Current revision", description: "Current live revision", createdById: 0, createdByName: "—", createdAt: "", reviewedById: null, reviewedByName: null, reviewedAt: null, status: "Active", total: currentTotal }].sort((left, right) => left.revision - right.revision);
 }
 
+function RevisionDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return <>—</>;
+  if (text.length <= 160 && !text.includes("\n")) return <span className="revision-description-text">{text}</span>;
+  let formatted = text;
+  if (expanded) {
+    try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { /* Plain descriptions retain their original text. */ }
+  }
+  return <div className="revision-description">
+    <div className={expanded ? "revision-description-text expanded" : "revision-description-text collapsed"}>{expanded ? formatted : text.slice(0, 160) + (text.length > 160 ? "…" : "")}</div>
+    <button type="button" className="link-btn" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? estimateUxCopy(currentLocale(), "ย่อรายละเอียด", "Show less", "折りたたむ") : estimateUxCopy(currentLocale(), "ขยายรายละเอียด", "Show more", "詳細を表示")}</button>
+  </div>;
+}
+
 function EstimateRevisionTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {
   const rows = revisionWithCurrent(revisions, currentRevision, currentTotal);
-  return <Panel title="Revision Control" subtitle="Revision history เป็น immutable record; เปิด revision ใหม่จากแถบคำสั่งของรายการที่ Approved หรือ Locked" flush>{rows.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th><LocalizedText text={"Reviewed"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead><tbody>{rows.map((revision) => <tr key={revision.id}><td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span></td><td><strong>{revision.reason}</strong></td><td>{revision.description}</td><td>{revision.createdByName}</td><td>{formatDateTime(revision.createdAt)}</td><td>{revision.reviewedByName ?? "—"}</td><td>{formatDateTime(revision.reviewedAt)}</td><td className="num"><strong>{formatMoney(revision.total)}</strong></td><td><Badge>{revision.revision === currentRevision ? "Current" : revision.status}</Badge></td></tr>)}</tbody></table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}</Panel>;
+  return <Panel title="Revision Control" subtitle="Revision history เป็น immutable record; เปิด revision ใหม่จากแถบคำสั่งของรายการที่ Approved หรือ Locked" flush>{rows.length ? <div className="table-wrap"><table className="estimate-revision-table"><thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th><LocalizedText text={"Reviewed"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead><tbody>{rows.map((revision) => <tr key={revision.id}><td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span></td><td><strong>{revision.reason}</strong></td><td><RevisionDescription text={revision.description} /></td><td>{revision.createdByName}</td><td>{formatDateTime(revision.createdAt)}</td><td>{revision.reviewedByName ?? "—"}</td><td>{formatDateTime(revision.reviewedAt)}</td><td className="num"><strong>{formatMoney(revision.total)}</strong></td><td><Badge>{revision.revision === currentRevision ? "Current" : revision.status}</Badge></td></tr>)}</tbody></table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}</Panel>;
 }
 
 function EstimateCompareTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {

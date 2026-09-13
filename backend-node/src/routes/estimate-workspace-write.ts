@@ -273,6 +273,37 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
     return reply.status(201).header("Location", `/api/v1/estimates/${id}/manhour-lines/${created.id}`).send(created);
   });
 
+  app.put("/api/v1/estimates/:id/manhour-lines/:lineId/effort", async request => {
+    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
+    const { id, lineId } = parseIds(request); const body = bodyObject(request.body);
+    const estimateVersion = parseRowVersion(body.estimateRowVersion), lineVersion = parseRowVersion(body.lineRowVersion);
+    const engineers = decimal(body.engineers, 0.01, 1_000_000, 2, "Engineers");
+    const manDays = decimal(body.manDays, 0.01, 1_000_000, 2, "Man-days");
+    const hoursPerDay = decimal(body.hoursPerDay, 0.01, 24, 2, "Hours per day");
+    return database.transaction(async transaction => {
+      const estimate = await lockEstimate(transaction, id, estimateVersion);
+      const before = await snapshot(transaction, "dbo.manhour_lines", manhourColumns, id, estimate.revision, lineId, lineVersion, false, "This activity changed. Reload and try again.");
+      await demandExistingSection(transaction, id, estimate, actor, "06", "06", Number(before.owner_id), Number(before.owner_id));
+      if (engineers * manDays * Number(before.daily_rate) > 999_999_999_999_999)
+        throw new ApiError(400, "validation_failed", "Man-hour line cost exceeds the supported monetary range.");
+      const update = new sql.Request(transaction);
+      update.input("estimate", sql.BigInt, id); update.input("revision", sql.Int, estimate.revision);
+      update.input("line", sql.BigInt, lineId); update.input("version", sql.VarBinary(8), lineVersion);
+      update.input("actor", sql.BigInt, actor.id); update.input("engineers", sql.Decimal(9, 2), engineers);
+      update.input("man_days", sql.Decimal(9, 2), manDays); update.input("hours", sql.Decimal(9, 2), hoursPerDay);
+      // Effort-only editing retains the quoted/imported daily rate and its provenance.
+      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8));
+        UPDATE dbo.manhour_lines SET engineers=@engineers,man_days=@man_days,hours_per_day=@hours,updated_by=@actor,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.row_version INTO @updated WHERE id=@line AND estimate_id=@estimate AND revision=@revision
+          AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @updated;`)).recordset[0];
+      if (!row) throw new ApiError(409, "concurrency_conflict", "This activity changed. Reload and try again.");
+      const version = await touchEstimate(transaction, id, actor.id);
+      const after = await snapshot(transaction, "dbo.manhour_lines", manhourColumns, id, estimate.revision, lineId, row.row_version, false, "This activity changed.");
+      await insertAudit(transaction, actor.id, "ManhourLine", lineId, estimate.estimate_no, "Updated", before, after);
+      return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: version.toString("base64") };
+    });
+  });
+
   app.put("/api/v1/estimates/:id/manhour-lines/:lineId", async (request) => { await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
     const { id, lineId } = parseIds(request); const input = parseManhour(request, true); const today = businessToday(config.businessTimeZone);
     return database.transaction(async (transaction) => { const estimate = await lockEstimate(transaction, id, input.estimateVersion);
