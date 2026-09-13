@@ -571,6 +571,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
   const criticalCount = criticalIssues.length;
   const warningCount = warningIssues.length;
   const exportWorkspace = () => {
+    if (header.status !== "Approved") return;
     const rows: (string | number | null)[][] = [
       ["ESTIMATE COST — LIVE PRODUCTION DATA"],
       ["Estimate", header.number, "Revision", revisionCode(header.revision), "Status", header.status],
@@ -613,7 +614,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
     </>} />
     <div className="workspace-bar">
       <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      <button className="btn default" type="button" onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
+      <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
       <button className="btn default" type="button" onClick={() => setTab("validation")}><Icon name="shield" /><LocalizedText text={"Validation"} />{validationCount ? <span className={`badge ${criticalCount ? "red" : "amber"}`}>{validationCount}</span> : <span className="badge green"><LocalizedText text={"OK"} /></span>}</button>
       <span className="spacer" />
       {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
@@ -639,7 +640,7 @@ function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBoo
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "validation", label: "Validation", count: validationCount }, { id: "revision", label: "Revision History", count: workspace.revisionHistory.length }, { id: "compare", label: "Compare Revision" }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");

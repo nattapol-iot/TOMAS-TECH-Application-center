@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION } from "../../../lib/erp-estimate-workbook";
 import { suggestErpCategory } from "../../../lib/erp-category-suggest";
-import { breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
+import { breakdownModules, breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import {
   loadEstimateErpSummary,
@@ -16,7 +16,7 @@ import {
 } from "../api-client";
 import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
-import { EmptyState, Icon, Panel, SearchInput } from "../ui";
+import { EmptyState, Icon, Modal, Panel, SearchInput } from "../ui";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 
 /*
@@ -24,7 +24,7 @@ import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
  *
  * The numbered sections (cost categories, man-hour, expenses, other project cost)
  * are the "main list" and start collapsed — the summary page shows sections and
- * their totals only. Opening a section shows its lines in the ERP quotation layout
+ * their totals only. Opening a section shows its main modules in the ERP quotation layout
  * (1-1, 1-2 …, qty, unit, in-house / outsourced, unit cost, amount) with the ERP
  * category of each line editable in the last column, so there is no second list
  * for ERP mapping. Internal engineering cost only; no selling figures exist here.
@@ -56,7 +56,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   onChanged: (message: string) => Promise<void>;
   notify: (message: string) => void;
   /** Opens a cost category in the Cost Items tab for editing. */
-  onOpenCategory?: (categoryCode: string) => void;
+  onOpenCategory?: (categoryCode: string, module?: string) => void;
 }) {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const unmappedLabel = copy("ยังไม่จัดหมวด", "Unmapped", "未分類");
@@ -73,6 +73,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const [summary, setSummary] = useState<EstimateErpSummary | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftCategory>>({});
   const [loading, setLoading] = useState(true);
+  const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -124,12 +125,12 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const visibleSections = useMemo(() => sections
     .map((section) => ({
       section,
-      lines: section.lines.filter((line) => {
+      lines: breakdownModules(section).filter((module) => module.lines.some((line) => {
         if (!lineMatches(line, needle)) return false;
         if (!unmappedOnly) return true;
         const erp = erpOf(line);
         return erp ? (drafts[erpKey(erp)] ?? erp.erpCategory) === "Unmapped" : false;
-      }),
+      })).flatMap((module) => module.lines),
     }))
     .filter((entry) => !filtering || entry.lines.length), [sections, needle, unmappedOnly, erpOf, drafts, filtering]);
   const isExpanded = (key: string) => filtering || expanded.has(key);
@@ -211,7 +212,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   };
 
   const exportWorkbook = async () => {
-    if (!summary) return;
+    if (!summary || workspace.header.status !== "Approved" || !summary.capabilities.canExport || changedLines.length || !approvedOverhead) return;
     setBusy(true); setError("");
     try {
       const filename = `${workspace.header.number}_R${String(workspace.header.revision).padStart(2, "0")}_ERP_EstimateCost.xlsx`;
@@ -319,22 +320,28 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
           </div>
         </td>
       </tr>
-      {open ? lines.map((line) => {
-        const erp = erpOf(line);
-        const key = erp ? erpKey(erp) : null;
-        const isSelected = key ? selected.has(key) : false;
-        return <tr key={line.key} className={`cb-line${isSelected ? " selected" : ""}`}>
+      {open ? breakdownModules(section).filter((module) => module.lines.some((line) => lines.includes(line))).map((module, index) => {
+        const keys = module.lines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
+        const categories = new Set(keys.map((key) => draftOf(erpByKey.get(key)!)));
+        const category = categories.size === 1 ? [...categories][0] : "Mixed";
+        const isSelected = keys.length > 0 && keys.every((key) => selected.has(key));
+        return <tr key={module.key} className={isSelected ? "cb-line selected" : "cb-line"}>
           <td className="cb-num-col muted">
-            {canEdit && key ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={copy(`เลือก ${line.title}`, `Select ${line.title}`, `${line.title}を選択`)} onChange={(event) => toggleKeys([key], event.target.checked)} /> : null}
-            {line.number}
+            {canEdit && keys.length ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={"Select module " + module.title} onChange={(event) => toggleKeys(keys, event.target.checked)} /> : null}
+            {section.ordinal}-{index + 1}
           </td>
-          <td><div className="cell-primary cb-desc"><strong>{line.title}</strong>{line.details.length || line.supplierName ? <span>{[...line.details, line.supplierName].filter(Boolean).join(" · ")}</span> : null}</div></td>
-          <td className="num">{quantity(line.quantity)}</td>
-          <td>{line.unit}</td>
-          <td><span className={`badge ${line.source === "outsourced" ? "amber" : "green"}`}>{line.source === "outsourced" ? outsourcedLabel : inHouseLabel}</span></td>
-          <td className="num">{line.awaitingPrice ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : money(line.unitCost)}</td>
-          <td className="num"><strong>{money(line.amount)}</strong></td>
-          <td className="cb-erp-col">{erp ? erpSelect(erp, line.title) : <span className="muted">{loading ? "…" : "—"}</span>}</td>
+          <td><div className="cell-primary cb-desc"><strong>{module.title}</strong><span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
+            {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.title)}>{copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
+          </td>
+          <td className="num">{module.lines.length}</td><td>{copy("รายการ", "lines", "明細")}</td>
+          <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
+          <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : "—"}</td>
+          <td className="num"><strong>{money(module.amount)}</strong></td>
+          <td className="cb-erp-col"><select disabled={!canEdit || !keys.length} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
+            <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
+            <option value="Unmapped">{unmappedLabel}</option>
+            {ERP_COST_CATEGORIES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+          </select></td>
         </tr>;
       }) : null}
     </tbody>;
@@ -345,7 +352,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     <span><strong>{summary.unmapped.lineCount ? copy(`ยังไม่ได้จัดหมวด ERP ${summary.unmapped.lineCount} รายการ`, `${summary.unmapped.lineCount} line(s) are not mapped to an ERP category`, `${summary.unmapped.lineCount}件がERP未分類です`) : summary.reconciled ? copy("ยอด ERP ตรงกับ Estimate", "ERP total matches the Estimate", "ERP合計は見積と一致しています") : copy(`ยอดต่างกัน ${money(summary.difference)}`, `Difference ${money(summary.difference)}`, `差額 ${money(summary.difference)}`)}</strong><br />{copy("7 หมวด", "7 categories", "7分類")} {money(summary.classifiedTotal)} + {unmappedLabel} {money(summary.unmapped.amount)}{ESTIMATE_OVERHEAD_ENABLED ? ` + Overhead ${money(overheadAmount)}` : ""} · Estimate {money(summary.canonicalTotal)}</span>
   </div> : null;
 
-  return <Panel title={copy("รายการต้นทุนและหมวด ERP", "Cost list & ERP categories", "原価明細とERP分類")} subtitle={copy(`${sections.length} หมวด · ${lineCount} รายการ · กดหมวดเพื่อดูรายการ · ต้นทุนภายในเท่านั้น`, `${sections.length} section(s) · ${lineCount} line(s) · open a section to see its lines · internal cost only`, `${sections.length}区分 · ${lineCount}明細 · 区分をクリックで明細表示 · 内部原価のみ`)} flush>
+  return <Panel title={copy("รายการต้นทุนและหมวด ERP", "Cost list & ERP categories", "原価明細とERP分類")} subtitle={copy(`${sections.length} หมวด · ${lineCount} รายการ · กดหมวดเพื่อดูโมดูล · ต้นทุนภายในเท่านั้น`, `${sections.length} section(s) · ${lineCount} line(s) · open a section to see its modules · internal cost only`, `${sections.length}区分 · ${lineCount}明細 · 区分をクリックで明細表示 · 内部原価のみ`)} flush>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span><button className="btn ghost" type="button" onClick={() => { void load(); }}><LocalizedText text={"Try again"} /></button></div> : null}
     {statusStrip}
     {summary ? <div className="erp-tiles">
@@ -409,10 +416,23 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         {changedLines.length ? <button className="btn ghost" type="button" disabled={busy} onClick={() => { setDrafts(Object.fromEntries(summary.lines.map((line) => [erpKey(line), line.erpCategory]))); }}>{copy("ยกเลิกที่แก้ไข", "Discard changes", "変更を破棄")}</button> : null}
         <span className="spacer" />
         {changedLines.length ? <button className="btn default" type="button" disabled={busy} onClick={() => { void save(); }}><Icon name="check" />{busy ? copy("กำลังบันทึก…", "Saving…", "保存中…") : copy(`บันทึก ${changedLines.length} หมวด`, `Save ${changedLines.length} mapping(s)`, `${changedLines.length}件の分類を保存`)}</button> : null}
-        <button className="btn primary" type="button" disabled={busy || changedLines.length > 0 || !summary.capabilities.canExport || !approvedOverhead} onClick={() => { void exportWorkbook(); }}><Icon name="download" />{copy("Export Excel สำหรับ ERP", "Export ERP Excel", "ERP Excelを出力")}</button>
+        <button className="btn default" type="button" onClick={() => setPreview(true)}>{copy("ดูตัวอย่างก่อน Export", "Preview export", "出力プレビュー")}</button>
+        <button className="btn primary" type="button" disabled={workspace.header.status !== "Approved" || busy || changedLines.length > 0 || !summary.capabilities.canExport || !approvedOverhead} onClick={() => { void exportWorkbook(); }}><Icon name="download" />{copy("Export Excel สำหรับ ERP", "Export ERP Excel", "ERP Excelを出力")}</button>
       </div>
+      {workspace.header.status !== "Approved" ? <div className="info-strip amber">{copy("ดูตัวอย่างได้ — ต้องอนุมัติ Estimate ก่อน Export", "Preview is available. Approve this estimate before export.", "出力前に見積を承認してください。")}</div> : null}
       {!approvedOverhead ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("ต้องกำหนดและอนุมัติ Overhead ก่อน Export ERP", "Set and approve Overhead before ERP export.", "ERP出力前に間接費を設定・承認してください。")}</span></div> : null}
       {changedLines.length ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("บันทึกหมวดที่แก้ไขก่อน Export", "Save mapping changes before export.", "エクスポート前に分類変更を保存してください。")}</span></div> : null}
     </> : null}
+    {preview && summary ? <Modal size="wide" title={copy("ตัวอย่างข้อมูล Export ERP", "ERP export data preview", "ERP出力データのプレビュー")} subtitle={workspace.header.number + " · R" + workspace.header.revision + " · " + workspace.header.status} onClose={() => setPreview(false)}>
+      <p>{workspace.header.projectName} · {workspace.header.customerName}</p>
+      <div className="info-strip amber">{copy("ตัวอย่างข้อมูลที่บันทึกแล้วสำหรับไฟล์ ERP — ไม่ใช่การส่งออก", "Preview of saved ERP workbook data — no file is exported.", "保存済みERPデータのプレビューです。")}{changedLines.length ? copy(" มีการแก้ไขที่ยังไม่ได้บันทึก", " Unsaved mapping changes are not included.", " 未保存の変更は含まれません。") : ""}</div>
+      {[...ERP_COST_CATEGORIES, "Unmapped"].map((category) => {
+        const rows = summary.lines.filter((line) => line.erpCategory === category);
+        return <section key={category}><h3>{category} · {money(rows.reduce((sum, line) => sum + line.amount, 0))}</h3>
+          {rows.length ? <div className="table-wrap"><table><thead><tr><th>{copy("รายละเอียด", "Description", "内容")}</th><th>{copy("ผู้ขาย", "Supplier", "仕入先")}</th><th>Qty</th><th>Unit</th><th>Unit cost</th><th>Amount</th></tr></thead><tbody>{rows.map((line) => <tr key={erpKey(line)}><td>{line.description}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td></tr>)}</tbody></table></div> : <p>—</p>}
+        </section>;
+      })}
+      <p><strong>{copy("รวมต้นทุน", "Total estimated cost", "見積原価合計")}: {money(summary.canonicalTotal)}</strong></p>
+    </Modal> : null}
   </Panel>;
 }

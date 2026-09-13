@@ -120,3 +120,10 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Client contract lookup
 
 Search the selected API path or function in [app/system/api-client.ts](<../../../app/system/api-client.ts>); follow its screen callers. Common UI/language changes require [app/system/ui.tsx](<../../../app/system/ui.tsx>) and [app/system/i18n.ts](<../../../app/system/i18n.ts>). For SQL changes use [schema map](../SCHEMA.md).
+
+## Summary module rows and approval-gated export (2026-09-13)
+
+- Summary keeps its existing ERP tiles and sections; breakdownModules in lib/estimate-cost-breakdown.ts aggregates whole Main modules / Work Packages and preserves child source keys for mapping.
+- EstimateErpSummaryPanel provides a read-only preview of saved ERP data; unsaved mapping edits are explicitly excluded. Preview does not download or record an export.
+- ERP canExport requires status Approved plus existing permission, reconciliation, mapping and overhead checks. The workspace Excel button also requires Approved.
+- Targeted checks: tests/estimate-cost-breakdown.test.mjs, tests/erp-estimate-workbook.test.mjs, backend-node/tests/estimate-erp.test.ts.

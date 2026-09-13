@@ -116,7 +116,7 @@ export function buildErpSummary(
     reconciled,
     capabilities: {
       canEditMappings,
-      canExport: (!options.overheadEnabled || header.overhead_state !== "Missing") && unmapped.lineCount === 0 && reconciled,
+      canExport: header.status === "Approved" && (!options.overheadEnabled || header.overhead_state !== "Missing") && unmapped.lineCount === 0 && reconciled,
     },
     lines,
   };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { breakdownLineCount, buildEstimateCostBreakdown } from "../lib/estimate-cost-breakdown.ts";
+import { breakdownModules, breakdownLineCount, buildEstimateCostBreakdown } from "../lib/estimate-cost-breakdown.ts";
 
 const labels = { manhour: "Engineering man-hour", expenses: "Project expenses", other: "Other project cost", manDayUnit: "Man-day" };
 
@@ -56,4 +56,22 @@ test("empty ledgers produce no section and an empty estimate produces nothing", 
   const sections = buildEstimateCostBreakdown({ ...input, manhourLines: [], expenseLines: [], otherCostLines: [] }, labels);
   assert.deepEqual(sections.map((section) => section.kind), ["cost-items", "cost-items"]);
   assert.deepEqual(buildEstimateCostBreakdown({ costItems: [], manhourLines: [], expenseLines: [], otherCostLines: [] }, labels), []);
+});
+
+test("Summary aggregates main modules while retaining child identities and split totals", () => {
+  const sections = buildEstimateCostBreakdown(input, labels);
+  const modules = breakdownModules(sections[0]);
+  assert.equal(modules.length, 1);
+  assert.equal(modules[0].title, "PLC");
+  assert.equal(modules[0].amount, 516000);
+  assert.equal(modules[0].outsourced, 516000);
+  assert.equal(modules[0].inHouse, 0);
+  assert.deepEqual(modules[0].lines.map(line => line.key), ["cost:12", "cost:13"]);
+  assert.deepEqual(breakdownModules(sections[2]).map(group => group.title), ["Design", "Install"]);
+  assert.equal(sections.flatMap(breakdownModules).reduce((sum, group) => sum + group.amount, 0), sections.reduce((sum, section) => sum + section.amount, 0));
+});
+test("Modules with the same name remain separate across sections; blank names never become item titles", () => {
+  const sections = buildEstimateCostBreakdown({ ...input, costItems: input.costItems.map(line => ({ ...line, module: "" })) }, labels);
+  assert.equal(breakdownModules(sections[0])[0].title, "Unassigned module");
+  assert.notEqual(breakdownModules(sections[0])[0].key, breakdownModules(sections[1])[0].key);
 });

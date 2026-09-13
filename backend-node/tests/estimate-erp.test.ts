@@ -14,7 +14,7 @@ import { parseExportEvent, parseMappings } from "../src/routes/estimate-erp.js";
 const header: ErpHeaderRow = {
   id: 42,
   revision: 3,
-  status: "Engineering Input",
+  status: "Approved",
   owner_id: 7,
   row_version: Buffer.from("12345678"),
   canonical_total: 1000,
@@ -179,4 +179,11 @@ test("writes to triggered estimate tables route OUTPUT into a table variable", a
   const writes = routes.flatMap((source) => source.match(pattern) ?? []);
   assert.ok(writes.some((write) => write.includes("dbo.estimate_erp_mappings")), "expected mapping writes to be covered");
   for (const write of writes) assert.match(write, /OUTPUT inserted\.[\w.,]+ INTO @\w+/, `OUTPUT without INTO fails with SQL error 334 on a triggered table:\n${write}`);
+});
+
+test("ERP export requires approval even when mapped and reconciled", () => {
+  for (const status of ["Draft", "Engineering Input", "Engineering Review", "Revision Required", "Locked"]) {
+    assert.equal(buildErpSummary({ ...header, status }, [line({})], false).capabilities.canExport, false, status);
+  }
+  assert.equal(buildErpSummary({ ...header, status: "Approved" }, [line({})], false).capabilities.canExport, true);
 });

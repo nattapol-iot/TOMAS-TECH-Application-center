@@ -526,3 +526,7 @@ Acceptance criteria:
 - [ ] Product owner + HR/management: decide whether phase 2 needs a private “ส่งคำชื่นชม” message with acknowledgement/history. Impact: new storage, notification, retention, and moderation requirements.
 - [ ] Backend owner: define a frozen personal-baseline snapshot before adding “ดีขึ้นจากรอบก่อน”. Impact: historical accuracy and migration/API scope.
 - [ ] Engineering/Sales managers + backend owner: define trusted structured reason/exception fields for blocked work, customer-caused delay, and reassignment. Until then, overdue cards remain neutral review prompts. Impact: future coaching specificity and false-positive prevention.
+
+### Estimate Summary clarification — 2026-09-13
+
+Preserve the f08485cf Summary layout and ERP tiles. Expanded internal sections show one Main module / Work Package row, aggregated from Cost Items and labor packages, rather than leaf item rows. Module totals and in-house/outsourced splits include all child lines under filters. Mixed ERP categories stay mixed until explicitly changed. Open module routes to the existing Cost Items editor. Preview shows saved ERP export data without downloading or recording an export. Export requires Approved status in addition to existing mapping, reconciliation, permission and overhead checks; unchanged workbook format.

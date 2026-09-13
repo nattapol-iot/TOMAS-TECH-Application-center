@@ -262,7 +262,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
     const event = parseExportEvent(request.body);
     const summary = await loadSummary(database, id, actor);
-    if (!summary.capabilities.canExport) throw new ApiError(409, "estimate_erp_export_blocked", "Resolve ERP mapping, overhead and reconciliation issues before export.");
+    if (!summary.capabilities.canExport) throw new ApiError(409, "estimate_erp_export_blocked", "Approve the estimate and resolve ERP mapping, overhead and reconciliation issues before export.");
     if (summary.estimateRowVersion !== event.estimateRowVersion.toString("base64")) {
       throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and export again.");
     }
