@@ -138,3 +138,9 @@ Search the selected API path or function in [app/system/api-client.ts](<../../..
 ## Main module removal
 
 `POST /api/v1/estimates/:id/cost-modules/remove` takes categoryCode, module and estimateRowVersion. It soft-deletes the exact category/module in the active editable revision, with per-line removal audit, totals validation and one transaction. Cost Items confirms module name/count first. No schema change. Test: backend-node/tests/estimate-module-remove.test.ts.
+
+## Main labor modules (schema 046)
+
+Summary and Preview reuse `groupErpLaborSections` to group labor into one module per Software/Service/Installation bucket, retaining source quantities and totals. `estimate-labor-category.ts` provides the SQL rule used by live ERP summary and submit/approve materialization: Installation wins, then Engineering/Internal Software → Software and Electrical/Mechanical → Service. Saved Approved/Locked mappings are preserved. Other labor uses its existing mapping.
+
+`GET/PUT /api/v1/estimates/:id/module-details` stores revision-scoped names and remarks; cost module renames also update child module membership labels, reject collisions and audit transactionally. `EstimateModuleEditor` is shared by Summary and Cost Items. Revision creation copies metadata, submission snapshots it. Apply `046_estimate_module_details.sql` before running the new API; no shared database migration was executed by the local implementation. ERP workbook columns and approval gate are unchanged.

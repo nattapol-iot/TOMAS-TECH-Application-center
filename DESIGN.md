@@ -538,3 +538,7 @@ Summary module rows and Cost Items module bands expose accessible up/down button
 ### Compact Cost Items actions — 2026-09-13
 
 Item move buttons share the rightmost action cell with Edit/Delete, not the number cell. Module move/delete controls occupy the same rightmost column. Module deletion confirms name and child count, soft-deletes its cost items in one audited transaction, and respects revision locks and scope.
+
+### ERP labor modules — confirmed 2026-09-13
+
+Summary and Preview preserve Hardware modules and aggregate labor into one Main Module per Software, Service and Installation category. Installation cost type takes precedence for both providers. Engineering/Internal Software maps to Software; Electrical/Mechanical maps to Service. Unknown disciplines and other providers retain explicit ERP mappings. Modules expand to source lines; monetary lines are never duplicated. Names and remarks persist per revision. Approved revisions retain saved categories. Preview uses saved data and export remains approval-gated with the existing workbook format.

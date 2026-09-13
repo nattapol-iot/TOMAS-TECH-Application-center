@@ -1,3 +1,4 @@
+import { laborCategorySql } from "../estimate-labor-category.js";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
@@ -61,7 +62,7 @@ const ERP_SUMMARY_SQL = `
     WHERE ci.estimate_id=@estimate_id AND ci.deleted_at IS NULL
     UNION ALL
     SELECT N'ManhourLine',l.id,l.activity,CONCAT(l.cost_type,N' / ',l.provider),l.line_cost,
-      COALESCE(m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
+      COALESCE(CASE WHEN e.status NOT IN(N'Approved',N'Locked') THEN ${laborCategorySql('l')} END,m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
       m.row_version,m.copied_from_revision,l.activity,l.level,COALESCE(s.name,l.provider),l.department,NULL,l.quotation_no,
       l.daily_rate,l.engineers*l.man_days,N'man-day',l.remark,2,l.sort_order,N'',l.package,l.id
     FROM dbo.manhour_lines l
@@ -200,6 +201,15 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       }
 
       for (const mapping of mappings) {
+        if (mapping.sourceType === "ManhourLine") {
+          const rule = new sql.Request(transaction);
+          rule.input("id", sql.BigInt, id); rule.input("revision", sql.Int, estimate.revision);
+          rule.input("line", sql.BigInt, mapping.sourceId);
+          const automatic = (await rule.query<{ category: string | null }>(`SELECT ${laborCategorySql('l')} category
+            FROM dbo.manhour_lines l WITH(UPDLOCK,HOLDLOCK) WHERE l.id=@line AND l.estimate_id=@id
+              AND l.revision=@revision AND l.deleted_at IS NULL;`)).recordset[0]?.category;
+          if (automatic && automatic !== mapping.erpCategory) throw new ApiError(400, "automatic_erp_category", "This labor category follows cost type, provider and discipline. Update the source labor instead.");
+        }
         const sourceTable = SOURCE_TABLES[mapping.sourceType];
         if (sourceTable) {
           const source = new sql.Request(transaction);

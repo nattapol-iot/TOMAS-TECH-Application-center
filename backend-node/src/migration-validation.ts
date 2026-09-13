@@ -31,6 +31,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 43, fileName: "043_estimate_erp_cost_mapping.sql", name: "Revision-scoped Estimate ERP cost classifications" },
   { version: 44, fileName: "044_estimate_labor_masters.sql", name: "Reusable labor rate masters and estimate labor packages" },
   { version: 45, fileName: "045_estimate_line_order.sql", name: "Shared estimate module and cost line ordering" },
+  { version: 46, fileName: "046_estimate_module_details.sql", name: "Revision-scoped estimate module names and remarks" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

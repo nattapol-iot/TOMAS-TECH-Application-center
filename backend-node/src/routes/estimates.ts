@@ -1,3 +1,4 @@
+import { laborCategorySql } from "../estimate-labor-category.js";
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import sql from "mssql";
@@ -93,6 +94,8 @@ async function snapshotSubmission(transaction: TransactionType, estimateId: numb
         unit,unit_cost unitCost,owner_id ownerId,remark FROM dbo.expense_lines WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,package,id FOR JSON PATH)) expenseLines,
       JSON_QUERY((SELECT category,description,qty quantity,unit,unit_cost unitCost,remark FROM dbo.other_cost_lines
         WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,category,id FOR JSON PATH)) otherCostLines,
+      JSON_QUERY((SELECT module_key moduleKey,title,remark FROM dbo.estimate_module_details
+        WHERE estimate_id=e.id AND revision=e.revision FOR JSON PATH)) moduleDetails,
       JSON_QUERY((SELECT mapping.source_type sourceType,mapping.source_id sourceId,mapping.erp_category erpCategory,mapping.copied_from_revision copiedFromRevision
         FROM dbo.estimate_erp_mappings mapping WHERE mapping.estimate_id=e.id AND mapping.revision=e.revision AND (
           (mapping.source_type=N'CostItem' AND EXISTS(SELECT 1 FROM dbo.cost_items line WHERE line.id=mapping.source_id AND line.deleted_at IS NULL)) OR
@@ -168,6 +171,9 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
   const clone = new sql.Request(transaction); clone.input("estimate_id", sql.BigInt, estimateId); clone.input("current_revision", sql.Int, currentRevision);
   clone.input("next_revision", sql.Int, nextRevision); clone.input("actor", sql.BigInt, actorId);
   await clone.query(`
+    INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by)
+    SELECT estimate_id,@next_revision,module_key,title,remark,@actor FROM dbo.estimate_module_details
+    WHERE estimate_id=@estimate_id AND revision=@current_revision;
     DECLARE @copiedCosts TABLE(old_id bigint,new_id bigint);
     MERGE dbo.cost_items AS target
     USING (SELECT * FROM dbo.cost_items WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
@@ -238,9 +244,15 @@ async function materializeErpMappings(transaction: TransactionType, estimateId: 
       AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
         WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'CostItem' AND mapping.source_id=line.id);
 
+    UPDATE mapping SET erp_category=${laborCategorySql('line')},updated_by=@actor,updated_at=SYSUTCDATETIME()
+    FROM dbo.estimate_erp_mappings mapping INNER JOIN dbo.manhour_lines line ON line.id=mapping.source_id
+      AND line.estimate_id=mapping.estimate_id AND line.revision=mapping.revision
+    WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'ManhourLine'
+      AND line.deleted_at IS NULL AND ${laborCategorySql('line')} IS NOT NULL
+      AND mapping.erp_category<>${laborCategorySql('line')};
     INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
     SELECT @estimate_id,@revision,N'ManhourLine',line.id,
-      CASE WHEN line.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END,@actor,@actor
+      COALESCE(${laborCategorySql('line')},N'Unmapped'),@actor,@actor
     FROM dbo.manhour_lines line
     WHERE line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL
       AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)

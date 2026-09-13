@@ -1,13 +1,16 @@
 "use client";
 
+import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { moveModule, type ReorderEstimate, type EstimateOrderSource } from "../../../lib/estimate-order";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION } from "../../../lib/erp-estimate-workbook";
-import { suggestErpCategory } from "../../../lib/erp-category-suggest";
-import { breakdownModules, breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
+import { automaticLaborCategory, suggestErpCategory } from "../../../lib/erp-category-suggest";
+import { LABOR_MODULE_NAMES, groupErpLaborSections, breakdownModules, breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import {
   loadEstimateErpSummary,
+  loadEstimateModuleDetails,
+  type EstimateModuleDetail,
   recordEstimateErpExport,
   updateEstimateErpMappings,
   type EstimateCostWorkspace,
@@ -76,6 +79,9 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const [summary, setSummary] = useState<EstimateErpSummary | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftCategory>>({});
   const [loading, setLoading] = useState(true);
+  const [moduleDetails, setModuleDetails] = useState<EstimateModuleDetail[]>([]);
+  const [editingModule, setEditingModule] = useState<{ key: string; title: string } | null>(null);
+  const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -91,6 +97,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     try {
       const loaded = await loadEstimateErpSummary(workspace.header.id);
       setSummary(loaded);
+      setModuleDetails(await loadEstimateModuleDetails(workspace.header.id));
       /* A refresh (this panel saved, another tab changed the estimate) must not throw away
          edits the user has not saved yet; a draft equal to the server value is simply dropped. */
       setDrafts((current) => Object.fromEntries(loaded.lines.map((line) => {
@@ -112,7 +119,13 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
 
   /* Cost lines come from the workspace (always available); the ERP column joins the
      ERP summary onto them by source type and id once it has loaded. */
-  const sections = useMemo(() => buildEstimateCostBreakdown(workspace, labels), [workspace, labels]);
+  const sections = useMemo(() => groupErpLaborSections(buildEstimateCostBreakdown(workspace, labels),
+    new Map((summary?.lines ?? []).filter(line => line.sourceType === "ManhourLine").map(line => ["manhour:" + line.sourceId, line.erpCategory]))), [workspace, labels, summary]);
+  const moduleDetail = (section: BreakdownSection, module: { key: string; title: string }) => {
+    const key = section.kind === "manhour" && LABOR_MODULE_NAMES[section.title] ? section.key : module.key;
+    const detail = moduleDetails.find(row => row.moduleKey === key);
+    return { key, title: section.kind === "cost-items" ? module.title : detail?.title ?? module.title, remark: detail?.remark };
+  };
   const erpByKey = useMemo(() => new Map((summary?.lines ?? []).map((line) => [erpKey(line), line])), [summary]);
   const erpOf = useCallback((line: BreakdownLine) => { const key = erpKeyOfBreakdown(line.key); return key ? erpByKey.get(key) : undefined; }, [erpByKey]);
   const draftOf = (erp: ErpLine) => drafts[erpKey(erp)] ?? erp.erpCategory;
@@ -168,7 +181,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   });
   const setDraftFor = (keys: string[], category: DraftCategory) => setDrafts((current) => {
     const next = { ...current };
-    for (const key of keys) next[key] = category;
+    for (const key of keys) { const line = erpByKey.get(key); if (!line || !automaticLaborCategory(line)) next[key] = category; }
     return next;
   });
   const applyBulk = () => {
@@ -334,26 +347,34 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         const categories = new Set(keys.map((key) => draftOf(erpByKey.get(key)!)));
         const category = categories.size === 1 ? [...categories][0] : "Mixed";
         const moduleIndex = breakdownModules(section).findIndex(entry => entry.key === module.key);
-        const canReorder = section.kind === "other" ? workspace.capabilities.canEditOtherCosts : section.kind === "manhour" ? workspace.capabilities.canEditManhour : section.kind === "expenses" ? workspace.capabilities.canEditExpenses : workspace.capabilities.canEditCostItems;
+        const canReorder = section.kind === "manhour" ? false : section.kind === "other" ? workspace.capabilities.canEditOtherCosts : section.kind === "expenses" ? workspace.capabilities.canEditExpenses : workspace.capabilities.canEditCostItems;
         const isSelected = keys.length > 0 && keys.every((key) => selected.has(key));
-        return <tr key={module.key} className={isSelected ? "cb-line selected" : "cb-line"}>
+        const detail = moduleDetail(section, module);
+        const canEditModule = section.kind === "cost-items" ? workspace.capabilities.canEditCostItems : section.kind === "manhour" && Boolean(LABOR_MODULE_NAMES[section.title]) && workspace.capabilities.canEditAllSections;
+        return <Fragment key={module.key}><tr className={isSelected ? "cb-line selected" : "cb-line"}>
           <td className="cb-num-col muted">
             {canEdit && keys.length ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={"Select module " + module.title} onChange={(event) => toggleKeys(keys, event.target.checked)} /> : null}
             {section.ordinal}-{index + 1}
           </td>
-          <td>{canReorder ? <span className="row-actions">{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.title, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}<div className="cell-primary cb-desc"><strong>{module.title}</strong><span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
+          <td>{canReorder ? <span className="row-actions">{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.title, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}<div className="cell-primary cb-desc"><strong>{detail.title}</strong>{detail.remark ? <span style={{ whiteSpace: "pre-wrap" }}>{detail.remark}</span> : null}<span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
+            <button type="button" className="chip" aria-expanded={openModules.has(module.key)} onClick={() => setOpenModules(current => { const next = new Set(current); if (next.has(module.key)) next.delete(module.key); else next.add(module.key); return next; })}>{openModules.has(module.key) ? "ย่อรายการ / Hide details" : "ดูรายการต้นทุน / View cost lines"}</button>
+            {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ชื่อ / Remark</button> : null}
             {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.title)}>{copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
           </td>
           <td className="num">{module.lines.length}</td><td>{copy("รายการ", "lines", "明細")}</td>
           <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
           <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : "—"}</td>
           <td className="num"><strong>{money(module.amount)}</strong></td>
-          <td className="cb-erp-col"><select disabled={!canEdit || !keys.length} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
+          <td className="cb-erp-col"><select disabled={!canEdit || !keys.length || keys.some(key => automaticLaborCategory(erpByKey.get(key)!))} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
             <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
             <option value="Unmapped">{unmappedLabel}</option>
             {ERP_COST_CATEGORIES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
           </select></td>
-        </tr>;
+        </tr>{openModules.has(module.key) ? module.lines.map(line => <tr key={line.key} className="cb-line">
+          <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
+          <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
+          <td className="num">{money(line.unitCost)}</td><td className="num">{money(line.amount)}</td><td>{erpOf(line)?.erpCategory ?? unmappedLabel}</td>
+        </tr>) : null}</Fragment>;
       }) : null}
     </tbody>;
   };
@@ -440,10 +461,23 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
       {[...ERP_COST_CATEGORIES, "Unmapped"].map((category) => {
         const rows = summary.lines.filter((line) => line.erpCategory === category);
         return <section key={category}><h3>{category} · {money(rows.reduce((sum, line) => sum + line.amount, 0))}</h3>
-          {rows.length ? <div className="table-wrap"><table><thead><tr><th>{copy("รายละเอียด", "Description", "内容")}</th><th>{copy("ผู้ขาย", "Supplier", "仕入先")}</th><th>Qty</th><th>Unit</th><th>Unit cost</th><th>Amount</th></tr></thead><tbody>{rows.map((line) => <tr key={erpKey(line)}><td>{line.description}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td></tr>)}</tbody></table></div> : <p>—</p>}
+          {sections.flatMap(section => breakdownModules(section).map(module => ({ section, module, rows: module.lines.map(erpOf).filter((line): line is ErpLine => Boolean(line) && line!.erpCategory === category) })))
+            .filter(group => group.rows.length).map(({ section, module, rows: children }) => {
+              const detail = moduleDetail(section, module);
+              return <details key={module.key} className="panel" style={{ padding: 12, marginBottom: 8 }}>
+                <summary style={{ cursor: "pointer" }}><strong>{detail.title}</strong> · {children.length} lines · {money(children.reduce((sum, line) => sum + line.amount, 0))}</summary>
+                {detail.remark ? <p style={{ whiteSpace: "pre-wrap" }}>{detail.remark}</p> : null}
+                <div className="table-wrap"><table><thead><tr><th>Description</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Unit cost</th><th>Amount</th><th>Remark</th></tr></thead>
+                  <tbody>{children.map(line => <tr key={erpKey(line)}><td>{line.description}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td><td>{line.remark || "—"}</td></tr>)}</tbody>
+                </table></div>
+              </details>;
+            })}
+          {rows.filter(line => line.sourceType === "Contingency").map(line => <p key={erpKey(line)}>{line.description} · {money(line.amount)}</p>)}
+          {!rows.length ? <p>—</p> : null}
         </section>;
       })}
       <p><strong>{copy("รวมต้นทุน", "Total estimated cost", "見積原価合計")}: {money(summary.canonicalTotal)}</strong></p>
     </Modal> : null}
+    {editingModule ? <EstimateModuleEditor workspace={workspace} moduleKey={editingModule.key} initialTitle={editingModule.title} onClose={() => setEditingModule(null)} onSaved={async () => { await onChanged("Module details updated"); await load(); }} /> : null}
   </Panel>;
 }

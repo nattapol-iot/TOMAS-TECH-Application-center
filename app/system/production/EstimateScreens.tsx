@@ -1,4 +1,5 @@
 "use client";
+import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
@@ -881,6 +882,7 @@ function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace })
 }
 
 function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
+  const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
@@ -1018,10 +1020,11 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
         const index = siblings.findIndex(entry => entry.key === group.key);
         return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
-      })}<button className="icon-btn danger" type="button" disabled={busy || quickSaving} title="ลบ Main Module / Delete Main Module" aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
+      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title="แก้ชื่อ / Remark" aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title="ลบ Main Module / Delete Main Module" aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
   </tr>;
 
   return <>
+  {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={onExcelImported} /> : null}
   <Panel title={`Estimate Cost Table · ${groups.length} module · ${visibleLines.length} item`} actions={canAdd ? <>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("price")}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("import")}><Icon name="upload" /><LocalizedText text={"Import Excel"} /></button>

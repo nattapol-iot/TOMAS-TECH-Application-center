@@ -13,6 +13,7 @@ export type BreakdownLine = {
   number: string;
   title: string;
   module?: string;
+  costType?: string;
   /** Secondary details shown under the title (item code, brand · model, package …). */
   details: string[];
   quantity: number;
@@ -50,7 +51,7 @@ export type BreakdownInput = {
     quantity: number; unit: string; unitCost: number; lineTotal: number;
   }>;
   manhourLines: ReadonlyArray<{
-    id: number; package: string; activity: string; department: string; level: string; provider: "Internal" | "Supplier";
+    id: number; package: string; activity: string; costType?: string; department: string; level: string; provider: "Internal" | "Supplier";
     supplierName: string | null; engineers: number; manDays: number; dailyRate: number; lineCost: number;
   }>;
   expenseLines: ReadonlyArray<{
@@ -112,7 +113,7 @@ export function buildEstimateCostBreakdown(input: BreakdownInput, labels: Breakd
     sections.push(finishSection({
       key: "manhour", ordinal, kind: "manhour", categoryCode: null, title: labels.manhour,
       lines: input.manhourLines.map((line, index) => ({
-        key: `manhour:${line.id}`, number: `${ordinal}-${index + 1}`, title: line.activity, module: line.package,
+        key: `manhour:${line.id}`, number: `${ordinal}-${index + 1}`, title: line.activity, module: line.package, costType: line.costType,
         details: clean([line.package, [line.department, line.level].filter(Boolean).join(" · "), `${num(line.engineers)} × ${num(line.manDays)} ${labels.manDayUnit}`]),
         quantity: num(line.engineers) * num(line.manDays), unit: labels.manDayUnit,
         source: line.provider === "Supplier" ? "outsourced" : "in-house", supplierName: line.provider === "Supplier" ? line.supplierName : null,
@@ -167,4 +168,33 @@ export function breakdownModules(section: BreakdownSection) {
     groups.set(title, group);
   }
   return [...groups.values()];
+}
+
+export const LABOR_MODULE_NAMES: Record<string, string> = {
+  Software: "Specification Design / Software Development / SAT",
+  Service: "Hardware Design Assembly / Wirring Internal Test and BuyOff Local Transportation and Packing",
+  Installation: "System implementation and Configuration Wiring and Installation ( Include Heavy Tools ) Test And Commissioning UAT",
+};
+
+/** Reuse source amounts and identities; only labor presentation changes. */
+export function groupErpLaborSections(sections: BreakdownSection[], categories: ReadonlyMap<string, string>): BreakdownSection[] {
+  const result: BreakdownSection[] = [];
+  for (const section of sections) {
+    if (section.kind !== "manhour") { result.push(section); continue; }
+    const buckets = new Map<string, BreakdownLine[]>();
+    for (const line of section.lines) {
+      const category = categories.get(line.key) ?? "Unmapped";
+      const grouped = category === "Installation" ? line.costType === "Installation" :
+        (category === "Software" || category === "Service") && line.costType === "Engineering" && line.source === "in-house";
+      const bucket = grouped ? category : "Other labor";
+      const lines = buckets.get(bucket) ?? [];
+      lines.push(grouped ? { ...line, module: LABOR_MODULE_NAMES[category] } : line);
+      buckets.set(bucket, lines);
+    }
+    for (const category of ["Software", "Service", "Installation", "Other labor"]) {
+      const lines = buckets.get(category);
+      if (lines) result.push(finishSection({ ...section, key: "labor:" + category, title: category, lines }));
+    }
+  }
+  return result.map((section, index) => ({ ...section, ordinal: index + 1 }));
 }

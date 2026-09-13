@@ -5,6 +5,7 @@ export type ErpSuggestibleLine = {
   sourceType: ErpEstimateSourceType;
   internalCategory: string;
   description: string;
+  brand?: string | null;
 };
 
 /** Internal cost module code (first two characters of `internalCategory` on CostItem lines) → ERP category. */
@@ -33,6 +34,8 @@ const DESCRIPTION_RULES: Array<{ pattern: RegExp; category: ErpCostCategory }> =
  */
 export function suggestErpCategory(line: ErpSuggestibleLine): ErpCostCategory | null {
   if (line.sourceType === "OtherCostLine" || line.sourceType === "Contingency") return null;
+  const automatic = automaticLaborCategory(line);
+  if (automatic) return automatic;
   const description = line.description ?? "";
   for (const rule of DESCRIPTION_RULES) if (rule.pattern.test(description)) return rule.category;
   const internal = (line.internalCategory ?? "").trim();
@@ -44,3 +47,13 @@ export function suggestErpCategory(line: ErpSuggestibleLine): ErpCostCategory | 
   return null;
 }
 
+
+/** The ERP API supplies the labor department in brand, as in the existing workbook. */
+export function automaticLaborCategory(line: ErpSuggestibleLine): ErpCostCategory | null {
+  if (line.sourceType !== "ManhourLine") return null;
+  const [costType, provider] = line.internalCategory.split("/").map(value => value.trim().toLowerCase());
+  if (costType === "installation") return "Installation";
+  if (costType !== "engineering" || provider !== "internal") return null;
+  const department = line.brand?.trim().toLowerCase();
+  return department === "software" ? "Software" : department === "electrical" || department === "mechanical" ? "Service" : null;
+}

@@ -75,3 +75,31 @@ test("Modules with the same name remain separate across sections; blank names ne
   assert.equal(breakdownModules(sections[0])[0].title, "Unassigned module");
   assert.notEqual(breakdownModules(sections[0])[0].key, breakdownModules(sections[1])[0].key);
 });
+
+
+test("ERP labor groups are one module per category and retain every source amount", async () => {
+  const { groupErpLaborSections, LABOR_MODULE_NAMES } = await import("../lib/estimate-cost-breakdown.ts");
+  const source = buildEstimateCostBreakdown({ ...input, manhourLines: [
+    ...input.manhourLines.map(line => ({ ...line, costType: "Engineering" })),
+    { ...input.manhourLines[0], id: 91, costType: "Engineering", package: "Another package", lineCost: 7000 },
+    { ...input.manhourLines[0], id: 92, costType: "Installation", package: "Site package", provider: "Supplier", lineCost: 9000 },
+  ] }, labels);
+  const mapping = new Map(source.find(s => s.kind === "manhour").lines.map(l => [l.key, l.key === "manhour:92" ? "Installation" : "Software"]));
+  const grouped = groupErpLaborSections(source, mapping);
+  assert.equal(grouped.reduce((n,s) => n+s.amount,0), source.reduce((n,s) => n+s.amount,0));
+  assert.deepEqual(grouped.flatMap(s => s.lines.map(l => l.key)).sort(), source.flatMap(s => s.lines.map(l => l.key)).sort());
+  for (const category of ["Software", "Installation"]) {
+    const modules = breakdownModules(grouped.find(s => s.title === category));
+    assert.equal(modules.length,1);
+    assert.equal(modules[0].title,LABOR_MODULE_NAMES[category]);
+  }
+  assert.deepEqual(grouped.filter(s => s.kind === "cost-items"), source.filter(s => s.kind === "cost-items"));
+});
+
+test("unmapped labor is retained without inventing an ERP category", async () => {
+  const { groupErpLaborSections } = await import("../lib/estimate-cost-breakdown.ts");
+  const source=buildEstimateCostBreakdown(input,labels);
+  const result=groupErpLaborSections(source,new Map());
+  assert.equal(result.reduce((sum,s)=>sum+s.amount,0),source.reduce((sum,s)=>sum+s.amount,0));
+  assert.equal(result.find(s=>s.kind === "manhour").title,"Other labor");
+});

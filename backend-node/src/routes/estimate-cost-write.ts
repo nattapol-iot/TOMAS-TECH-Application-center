@@ -158,6 +158,65 @@ export async function touchEstimate(transaction: TransactionType, id: number, ac
 }
 
 export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
+  app.get("/api/v1/estimates/:id/module-details", async request => {
+    await users.demandPermission(request, "estimate.read");
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const result = await database.query<{ moduleKey: string; title: string; remark: string | null }>(`
+      SELECT d.module_key moduleKey,d.title,d.remark FROM dbo.estimate_module_details d
+      INNER JOIN dbo.estimates e ON e.id=d.estimate_id AND e.revision=d.revision
+      WHERE e.id=@id AND e.deleted_at IS NULL;`, query => { query.input("id", sql.BigInt, id); });
+    return result.recordset;
+  });
+  app.put("/api/v1/estimates/:id/module-details", async request => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const moduleKey = requiredText(body.moduleKey, 250, "Module key");
+    const title = requiredText(body.title, 200, "Module name");
+    const remark = optionalBodyText(body.remark, 2000, "Remark");
+    const cost = /^category:(\d{2}):(.+)$/.exec(moduleKey);
+    if (!cost && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
+      throw new ApiError(400, "invalid_module", "Choose an existing main module.");
+    return database.transaction(async transaction => {
+      const estimate = await lockEditableEstimate(transaction, id, parseRowVersion(body.estimateRowVersion));
+      if (!elevated(actor, estimate) && (!cost || !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))))
+        throw new ApiError(403, "module_forbidden", "You cannot edit this module.");
+      const query = new sql.Request(transaction);
+      query.input("id", sql.BigInt, id); query.input("revision", sql.Int, estimate.revision);
+      query.input("key", sql.NVarChar(250), moduleKey); query.input("title", sql.NVarChar(200), title);
+      query.input("remark", sql.NVarChar(2000), remark); query.input("actor", sql.BigInt, actor.id);
+      const before = (await query.query(`SELECT module_key,title,remark FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
+        WHERE estimate_id=@id AND revision=@revision AND module_key=@key;`)).recordset[0] ?? null;
+      let savedKey = moduleKey;
+      if (cost) {
+        query.input("category", sql.Char(2), cost[1]); query.input("module", sql.NVarChar(200), cost[2]);
+        const current = (await query.query<{ id: number }>(`SELECT id FROM dbo.cost_items WITH(UPDLOCK,HOLDLOCK)
+          WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+          AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`)).recordset;
+        if (!current.length) throw new ApiError(409, "module_changed", "This module changed. Reload and try again.");
+        if (title !== cost[2]) {
+          const collision = (await query.query(`SELECT TOP(1) id FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision
+            AND deleted_at IS NULL AND category_code=@category AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@title;`)).recordset[0];
+          if (collision) throw new ApiError(409, "module_name_exists", "Another module already uses this name.");
+          await query.query(`UPDATE dbo.cost_items SET module=@title,updated_by=@actor,updated_at=SYSUTCDATETIME()
+            WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+              AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`);
+          savedKey = "category:" + cost[1] + ":" + title;
+        }
+      }
+      query.input("saved_key", sql.NVarChar(250), savedKey);
+      // Preserve old metadata for audit; upsert the renamed key without deleting history.
+      await query.query(`UPDATE dbo.estimate_module_details SET title=@title,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
+        WHERE estimate_id=@id AND revision=@revision AND module_key=@saved_key;
+        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by)
+          VALUES(@id,@revision,@saved_key,@title,@remark,@actor);`);
+      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before }, { moduleKey: savedKey, title, remark });
+      const version = await touchEstimate(transaction, id, actor.id);
+      return { estimateRowVersion: version.toString("base64") };
+    });
+  });
+
   app.post("/api/v1/estimates/:id/cost-items", async (request, reply) => {
     await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const input = parseCostInput(request, false);
