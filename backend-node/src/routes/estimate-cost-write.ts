@@ -239,6 +239,43 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     });
   });
 
+  app.post("/api/v1/estimates/:id/cost-modules/remove", async (request) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const categoryCode = requiredText(body.categoryCode, 2, "Category code");
+    const moduleName = requiredText(body.module, 200, "Module");
+    const expected = parseRowVersion(body.estimateRowVersion);
+    return database.transaction(async transaction => {
+      const estimate = await lockEditableEstimate(transaction, id, expected);
+      if (!elevated(actor, estimate) && !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) throw new ApiError(403, "cost_line_forbidden", "You cannot remove this module.");
+      const query = new sql.Request(transaction);
+      query.input("id", sql.BigInt, id); query.input("revision", sql.Int, estimate.revision);
+      query.input("category", sql.Char(2), categoryCode); query.input("module", sql.NVarChar(200), moduleName);
+      query.input("actor", sql.BigInt, actor.id);
+      const lines = (await query.query<{ id: number; row_version: Buffer }>(`SELECT id,row_version FROM dbo.cost_items WITH(UPDLOCK,HOLDLOCK)
+        WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+        AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module COLLATE Latin1_General_100_BIN2;`)).recordset;
+      if (!lines.length) throw new ApiError(409, "concurrency_conflict", "This module was changed or removed. Reload and try again.");
+      const before = new Map<number, Record<string, unknown>>();
+      for (const line of lines) before.set(Number(line.id), await costSnapshot(transaction, id, estimate.revision, Number(line.id), line.row_version, false));
+      const removed = (await query.query<{ id: number; row_version: Buffer }>(`DECLARE @removed TABLE(id bigint,row_version binary(8));
+        UPDATE dbo.cost_items SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.id,inserted.row_version INTO @removed
+        WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+        AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module COLLATE Latin1_General_100_BIN2;
+        SELECT id,row_version FROM @removed;`)).recordset;
+      if (removed.length !== lines.length) throw new ApiError(409, "concurrency_conflict", "Module membership changed. Reload and try again.");
+      for (const line of removed) {
+        const after = await costSnapshot(transaction, id, estimate.revision, Number(line.id), line.row_version, true);
+        await insertAudit(transaction, actor.id, "CostItem", Number(line.id), estimate.estimate_no, "Removed", { line: before.get(Number(line.id)) }, { line: after, removalReason: "Main module removed", module: moduleName, categoryCode });
+      }
+      const version = await touchEstimate(transaction, id, actor.id);
+      return { removed: removed.length, estimateRowVersion: version.toString("base64") };
+    });
+  });
+
   /* Applying a template is a bulk cost-line create, so it runs the same locks and the
      same section checks as one — a template can never write a line the engineer could
      not have typed. The whole module lands in one transaction, or none of it does. */

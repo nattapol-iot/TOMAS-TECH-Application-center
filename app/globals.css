@@ -4858,3 +4858,8 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .lookup-status { display: flex; align-items: center; gap: 8px; padding: 9px 10px; color: var(--muted); }
 .lookup-status .spinner { width: 14px; height: 14px; }
 .lookup-hint { padding: 6px 9px 3px; border-top: 1px solid var(--line-soft); color: var(--n-400); font-size: var(--fs-2xs); }
+
+/* Compact estimate order controls share the right action column. */
+.cost-order-actions { justify-content: flex-end; gap: 3px; flex-wrap: nowrap; }
+.cost-order-actions .icon-btn { width: 26px; height: 26px; min-width: 26px; padding: 3px; }
+.cost-module-controls { text-align: right; }

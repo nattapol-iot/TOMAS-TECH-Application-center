@@ -134,3 +134,7 @@ Search the selected API path or function in [app/system/api-client.ts](<../../..
 - `lib/estimate-order.ts`: sibling and module-block moves. Summary and Cost Items preserve SQL ordering. ERP and workspace export preserve order within fixed ERP categories. New revisions copy sort_order; fresh lines append to their module.
 - Apply `database/migrations/045_estimate_line_order.sql` to the target database before deploying. It adds four sort_order columns; no money or mapping changes. Runtime readiness requires schema 45.
 - Tests: estimate-order in root/backend, estimate-cost-breakdown, erp-estimate-workbook, migration-validation. Live SQL and browser verification still required after migration.
+
+## Main module removal
+
+`POST /api/v1/estimates/:id/cost-modules/remove` takes categoryCode, module and estimateRowVersion. It soft-deletes the exact category/module in the active editable revision, with per-line removal audit, totals validation and one transaction. Cost Items confirms module name/count first. No schema change. Test: backend-node/tests/estimate-module-remove.test.ts.

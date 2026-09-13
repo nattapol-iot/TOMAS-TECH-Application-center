@@ -534,3 +534,7 @@ Preserve the f08485cf Summary layout and ERP tiles. Expanded internal sections s
 ### Shared estimate ordering — 2026-09-13
 
 Summary module rows and Cost Items module bands expose accessible up/down buttons within the existing internal section. Cost Items also reorders children within a module. Boundaries and saving disable movement; Summary filters or unsaved ERP mapping edits disable movement to avoid acting on hidden rows. Ordering persists per revision in SQL, is shared by every user and reused by Preview/Excel within the fixed ERP categories. Approved/review-locked revisions cannot be reordered. Changing order never changes module membership, ERP mapping or monetary values. Schema 045 must be applied before deploying this code.
+
+### Compact Cost Items actions — 2026-09-13
+
+Item move buttons share the rightmost action cell with Edit/Delete, not the number cell. Module move/delete controls occupy the same rightmost column. Module deletion confirms name and child count, soft-deletes its cost items in one audited transaction, and respects revision locks and scope.
