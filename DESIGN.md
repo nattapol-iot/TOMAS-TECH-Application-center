@@ -530,3 +530,7 @@ Acceptance criteria:
 ### Estimate Summary clarification — 2026-09-13
 
 Preserve the f08485cf Summary layout and ERP tiles. Expanded internal sections show one Main module / Work Package row, aggregated from Cost Items and labor packages, rather than leaf item rows. Module totals and in-house/outsourced splits include all child lines under filters. Mixed ERP categories stay mixed until explicitly changed. Open module routes to the existing Cost Items editor. Preview shows saved ERP export data without downloading or recording an export. Export requires Approved status in addition to existing mapping, reconciliation, permission and overhead checks; unchanged workbook format.
+
+### Shared estimate ordering — 2026-09-13
+
+Summary module rows and Cost Items module bands expose accessible up/down buttons within the existing internal section. Cost Items also reorders children within a module. Boundaries and saving disable movement; Summary filters or unsaved ERP mapping edits disable movement to avoid acting on hidden rows. Ordering persists per revision in SQL, is shared by every user and reused by Preview/Excel within the fixed ERP categories. Approved/review-locked revisions cannot be reordered. Changing order never changes module membership, ERP mapping or monetary values. Schema 045 must be applied before deploying this code.

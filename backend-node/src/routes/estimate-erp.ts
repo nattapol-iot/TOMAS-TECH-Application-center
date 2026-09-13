@@ -52,7 +52,7 @@ const ERP_SUMMARY_SQL = `
       COALESCE(m.erp_category,CASE ci.category_code WHEN '01' THEN N'Hardware' WHEN '02' THEN N'Software' ELSE N'Unmapped' END) erp_category,
       m.row_version mapping_row_version,m.copied_from_revision,ci.item_code item,ci.model model_part_number,
       s.name supplier,ci.brand,NULL lead_time,ci.reference_no quote_revision,ci.unit_cost unit_price,ci.qty quantity,ci.unit,ci.remark,
-      1 source_order,ci.id line_order
+      1 source_order,ci.sort_order sort_order,ci.category_code group_code,ci.module group_name,ci.id line_order
     FROM dbo.cost_items ci
     INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=ci.estimate_id AND m.revision=ci.revision
@@ -63,7 +63,7 @@ const ERP_SUMMARY_SQL = `
     SELECT N'ManhourLine',l.id,l.activity,CONCAT(l.cost_type,N' / ',l.provider),l.line_cost,
       COALESCE(m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
       m.row_version,m.copied_from_revision,l.activity,l.level,COALESCE(s.name,l.provider),l.department,NULL,l.quotation_no,
-      l.daily_rate,l.engineers*l.man_days,N'man-day',l.remark,2,l.id
+      l.daily_rate,l.engineers*l.man_days,N'man-day',l.remark,2,l.sort_order,N'',l.package,l.id
     FROM dbo.manhour_lines l
     INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=l.estimate_id AND m.revision=l.revision
@@ -73,7 +73,7 @@ const ERP_SUMMARY_SQL = `
     UNION ALL
     SELECT N'ExpenseLine',l.id,l.description,CONCAT(l.expense_type,N' / ',l.cost_type),l.line_total,
       COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,l.expense_type,NULL,s.name,NULL,NULL,l.reference_no,
-      l.unit_cost,l.qty,l.unit,l.remark,3,l.id
+      l.unit_cost,l.qty,l.unit,l.remark,3,l.sort_order,N'',l.package,l.id
     FROM dbo.expense_lines l
     INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=l.estimate_id AND m.revision=l.revision
@@ -83,7 +83,7 @@ const ERP_SUMMARY_SQL = `
     UNION ALL
     SELECT N'OtherCostLine',l.id,l.description,l.category,l.line_total,
       COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,l.category,NULL,NULL,NULL,NULL,NULL,
-      l.unit_cost,l.qty,l.unit,l.remark,4,l.id
+      l.unit_cost,l.qty,l.unit,l.remark,4,l.sort_order,N'',l.category,l.id
     FROM dbo.other_cost_lines l
     INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=l.estimate_id AND m.revision=l.revision
@@ -92,13 +92,13 @@ const ERP_SUMMARY_SQL = `
     UNION ALL
     SELECT N'Contingency',NULL,N'Contingency',N'Contingency',t.contingency_total,
       COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,N'Contingency',NULL,NULL,NULL,NULL,NULL,
-      t.contingency_total,1,N'lot',NULL,5,0
+      t.contingency_total,1,N'lot',NULL,5,2147483647,N'',N'',0
     FROM dbo.estimates e INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=e.id AND m.revision=e.revision
       AND m.source_type=N'Contingency' AND m.source_id IS NULL
     WHERE e.id=@estimate_id AND e.deleted_at IS NULL
   ) lines
-  ORDER BY source_order,line_order;`;
+  ORDER BY source_order,group_code,MIN(sort_order) OVER(PARTITION BY source_order,group_code,group_name),group_name,sort_order,line_order;`;
 
 type SummaryHeader = ErpHeaderRow & { can_write: boolean; can_export: boolean };
 

@@ -58,6 +58,10 @@ rm -rf .vinext
 
 log "Building images"
 compose build
+# Apply additive schema changes before replacing the currently running API.
+# A migration failure stops deployment here, leaving the old containers running.
+log "Applying database migrations before container replacement"
+compose run --rm --no-deps api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
 log "Starting containers"
 # --force-recreate matters here: 'frontend' has no 'build:' (bind-mounted source, persistent
 # 'npm run dev' process), so its image/env/command never change between deploys and plain

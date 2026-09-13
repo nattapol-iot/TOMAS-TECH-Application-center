@@ -95,7 +95,7 @@ export function buildEstimateCostBreakdown(input: BreakdownInput, labels: Breakd
   }
   for (const entry of [...categories.values()].sort((left, right) => left.code.localeCompare(right.code))) {
     ordinal += 1;
-    const lines = [...entry.lines].sort((left, right) => left.module.localeCompare(right.module, "th") || left.id - right.id);
+    const lines = entry.lines;
     sections.push(finishSection({
       key: `category:${entry.code}`, ordinal, kind: "cost-items", categoryCode: entry.code, title: entry.name,
       lines: lines.map((line, index) => ({

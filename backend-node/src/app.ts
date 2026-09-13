@@ -25,6 +25,7 @@ import { registerEstimateRoutes } from "./routes/estimates.js";
 import { registerEstimateErpRoutes } from "./routes/estimate-erp.js";
 import { registerOverheadPolicyRoutes } from "./routes/overhead-policies.js";
 import { registerEstimateWorkspaceReadRoute } from "./routes/estimate-workspace-read.js";
+import { registerEstimateOrderRoutes } from "./routes/estimate-order.js";
 import { registerEstimateCostWriteRoutes } from "./routes/estimate-cost-write.js";
 import { registerEstimateWorkspaceWriteRoutes } from "./routes/estimate-workspace-write.js";
 import { registerEstimateCopyRoutes } from "./routes/estimate-copy.js";
@@ -162,6 +163,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);
   registerEstimateCostWriteRoutes(app, database, users);
+  registerEstimateOrderRoutes(app, database, users);
   registerEstimateExcelImportRoutes(app, database, users, config);
   registerEstimateWorkspaceWriteRoutes(app, config, database, users, email);
   registerEstimateCopyRoutes(app, config, database, users);

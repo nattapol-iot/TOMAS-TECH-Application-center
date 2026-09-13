@@ -56,23 +56,23 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
         ci.reference_no,ci.reference_project,ci.price_date,ci.remark,ci.owner_id,u.name owner_name,ci.status,ci.updated_at,ci.row_version
       FROM dbo.cost_items ci INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
       INNER JOIN dbo.users u ON u.id=ci.owner_id LEFT JOIN dbo.suppliers s ON s.id=ci.supplier_id
-      WHERE ci.estimate_id=@id AND ci.deleted_at IS NULL ORDER BY ci.category_code,ci.module,ci.id;
+      WHERE ci.estimate_id=@id AND ci.deleted_at IS NULL ORDER BY ci.category_code,MIN(ci.sort_order) OVER(PARTITION BY ci.category_code,ci.module),ci.module,ci.sort_order,ci.id;
 
       SELECT l.id,l.package,l.activity,l.department,l.level,l.cost_type,l.provider,l.supplier_id,s.name supplier_name,
         l.quotation_no,l.price_date,l.engineers,l.man_days,l.hours_per_day,l.daily_rate,l.line_cost,l.owner_id,u.name owner_name,
         l.remark,l.updated_at,l.row_version FROM dbo.manhour_lines l
       INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision INNER JOIN dbo.users u ON u.id=l.owner_id
-      LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY l.package,l.id;
+      LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.package),l.package,l.sort_order,l.id;
 
       SELECT l.id,l.package,l.expense_type,l.description,l.cost_type,l.supplier_id,s.name supplier_name,l.reference_no,
         l.qty,l.unit,l.unit_cost,l.line_total,l.owner_id,u.name owner_name,l.remark,l.updated_at,l.row_version
       FROM dbo.expense_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
       INNER JOIN dbo.users u ON u.id=l.owner_id LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id
-      WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY l.package,l.id;
+      WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.package),l.package,l.sort_order,l.id;
 
       SELECT l.id,l.category,l.description,l.qty,l.unit,l.unit_cost,l.line_total,l.remark,l.row_version
       FROM dbo.other_cost_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
-      WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY l.category,l.id;
+      WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.category),l.category,l.sort_order,l.id;
 
       SELECT r.id,r.revision,r.code,r.reason,r.description,r.created_by,creator.name created_by_name,r.created_at,
         r.reviewed_by,reviewer.name reviewed_by_name,r.reviewed_at,r.status,r.total FROM dbo.estimate_revisions r

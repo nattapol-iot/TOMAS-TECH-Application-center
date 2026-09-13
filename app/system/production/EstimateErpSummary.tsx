@@ -1,5 +1,6 @@
 "use client";
 
+import { moveModule, type ReorderEstimate, type EstimateOrderSource } from "../../../lib/estimate-order";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION } from "../../../lib/erp-estimate-workbook";
 import { suggestErpCategory } from "../../../lib/erp-category-suggest";
@@ -51,8 +52,10 @@ const bytesToBase64 = (bytes: Uint8Array) => {
 const lineMatches = (line: BreakdownLine, needle: string) => !needle
   || [line.title, line.supplierName, ...line.details].some((value) => value !== null && value.toLowerCase().includes(needle));
 
-export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCategory }: {
+export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCategory, onReorder, reorderBusy }: {
   workspace: EstimateCostWorkspace;
+  onReorder: ReorderEstimate;
+  reorderBusy: boolean;
   onChanged: (message: string) => Promise<void>;
   notify: (message: string) => void;
   /** Opens a cost category in the Cost Items tab for editing. */
@@ -139,7 +142,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const selectedShown = shownErpKeys.filter((key) => selected.has(key));
   const allShownSelected = shownErpKeys.length > 0 && selectedShown.length === shownErpKeys.length;
   const lineCount = breakdownLineCount(sections);
-  const canEdit = Boolean(summary?.capabilities.canEditMappings) && !busy;
+  const canEdit = Boolean(summary?.capabilities.canEditMappings) && !busy && !reorderBusy;
   const approvedOverhead = !ESTIMATE_OVERHEAD_ENABLED || summary?.overhead.state === "Applied" || summary?.overhead.state === "Zero";
   const overheadAmount = Number(summary?.overhead.amount ?? 0);
   const { totals, contingencyRate } = workspace.header;
@@ -290,6 +293,12 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
       : <span className="badge green"><Icon name="check" /> {copy("จัดหมวด ERP ครบ", "ERP mapped", "ERP分類済み")}</span>;
   };
 
+  const moveSummaryModule = (section: BreakdownSection, title: string, direction: -1 | 1) => {
+    const sourceType: EstimateOrderSource = section.kind === "cost-items" ? "CostItem" : section.kind === "manhour" ? "ManhourLine" : section.kind === "expenses" ? "ExpenseLine" : "OtherCostLine";
+    const moved = moveModule(section.lines, line => line.module?.trim() || "Unassigned module", title, direction);
+    const all = sections.filter(entry => entry.kind === section.kind).flatMap(entry => entry.key === section.key ? moved : entry.lines);
+    void onReorder(sourceType, all.map(line => Number(line.key.split(":")[1])));
+  };
   const renderSection = ({ section, lines }: { section: BreakdownSection; lines: BreakdownLine[] }) => {
     const open = isExpanded(section.key);
     const sectionErpKeys = lines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
@@ -324,13 +333,15 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         const keys = module.lines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
         const categories = new Set(keys.map((key) => draftOf(erpByKey.get(key)!)));
         const category = categories.size === 1 ? [...categories][0] : "Mixed";
+        const moduleIndex = breakdownModules(section).findIndex(entry => entry.key === module.key);
+        const canReorder = section.kind === "other" ? workspace.capabilities.canEditOtherCosts : section.kind === "manhour" ? workspace.capabilities.canEditManhour : section.kind === "expenses" ? workspace.capabilities.canEditExpenses : workspace.capabilities.canEditCostItems;
         const isSelected = keys.length > 0 && keys.every((key) => selected.has(key));
         return <tr key={module.key} className={isSelected ? "cb-line selected" : "cb-line"}>
           <td className="cb-num-col muted">
             {canEdit && keys.length ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={"Select module " + module.title} onChange={(event) => toggleKeys(keys, event.target.checked)} /> : null}
             {section.ordinal}-{index + 1}
           </td>
-          <td><div className="cell-primary cb-desc"><strong>{module.title}</strong><span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
+          <td>{canReorder ? <span className="row-actions">{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.title, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}<div className="cell-primary cb-desc"><strong>{module.title}</strong><span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
             {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.title)}>{copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
           </td>
           <td className="num">{module.lines.length}</td><td>{copy("รายการ", "lines", "明細")}</td>

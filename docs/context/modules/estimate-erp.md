@@ -127,3 +127,10 @@ Search the selected API path or function in [app/system/api-client.ts](<../../..
 - EstimateErpSummaryPanel provides a read-only preview of saved ERP data; unsaved mapping edits are explicitly excluded. Preview does not download or record an export.
 - ERP canExport requires status Approved plus existing permission, reconciliation, mapping and overhead checks. The workspace Excel button also requires Approved.
 - Targeted checks: tests/estimate-cost-breakdown.test.mjs, tests/erp-estimate-workbook.test.mjs, backend-node/tests/estimate-erp.test.ts.
+
+## Shared ordering (schema 045)
+
+- `PUT /api/v1/estimates/:id/line-order` receives sourceType, orderedIds (complete active revision ledger), estimateRowVersion. Requires estimate.write plus estimate owner/manager/admin or assignment; OtherCostLine is elevated-only. Locks the estimate, validates the full id set, updates sort_order and records before/after audit in one transaction.
+- `lib/estimate-order.ts`: sibling and module-block moves. Summary and Cost Items preserve SQL ordering. ERP and workspace export preserve order within fixed ERP categories. New revisions copy sort_order; fresh lines append to their module.
+- Apply `database/migrations/045_estimate_line_order.sql` to the target database before deploying. It adds four sort_order columns; no money or mapping changes. Runtime readiness requires schema 45.
+- Tests: estimate-order in root/backend, estimate-cost-breakdown, erp-estimate-workbook, migration-validation. Live SQL and browser verification still required after migration.

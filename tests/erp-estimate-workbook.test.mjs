@@ -104,3 +104,12 @@ test("accepts reconciliation differences of exactly 0.01", () => {
   input.summary.canonicalTotal = 30000.01;
   assert.doesNotThrow(() => buildErpEstimateWorkbook(input));
 });
+
+test("ERP workbook preserves saved line order within each fixed category", () => {
+ const input=fixture();
+ const hardware=input.summary.lines.find(line=>line.erpCategory==="Hardware");
+ input.summary.lines=input.summary.lines.filter(line=>line!==hardware);
+ input.summary.lines.push({...hardware,sourceId:99,description:"Z FIRST",amount:10000,quantity:1},{...hardware,sourceId:1,description:"A SECOND",amount:10000,quantity:1});
+ const xml=workbookXml(input)["xl/worksheets/sheet1.xml"];
+ assert.ok(xml.indexOf("Z FIRST") < xml.indexOf("A SECOND"));
+});
