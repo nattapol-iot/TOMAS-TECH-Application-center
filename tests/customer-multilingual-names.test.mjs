@@ -54,3 +54,22 @@ test("localized-name helper keeps each OCR language and uses English as the cano
   assert.deepEqual({ ...names }, { nameTh: "บริษัท ตัวอย่าง จำกัด", nameEn: "Example Co., Ltd.", nameJa: "サンプル株式会社" });
   assert.equal(helper.canonicalLocalizedName(names), "Example Co., Ltd.");
 });
+
+test("the people list reads a business card into the person only, never over typed values", async () => {
+  const source = await read("../app/system/production/AdminAnalyticsScreens.tsx");
+  const start = source.indexOf("function CustomerContactsModal");
+  assert.ok(start > -1);
+  const modal = source.slice(start, source.indexOf("function LocalizedNameStack", start));
+  // The scanner is offered when adding a person, not when editing one.
+  assert.match(modal, /\{creating \? <BusinessCardScanner disabled=\{busy\} onApply=\{applyBusinessCard\} \/> : null\}/);
+  // It fills the person's own fields from the card.
+  assert.match(modal, /localizedNamesFromCard\(result\.contactNames, result\.contactName\)/);
+  for (const key of ["nameTh", "nameEn", "nameJa", "department", "position", "email", "phone"]) {
+    assert.match(modal, new RegExp(`key: "${key}"`));
+  }
+  // The company is already chosen, so company name and address are ignored here.
+  assert.doesNotMatch(modal, /companyNames/);
+  assert.doesNotMatch(modal, /result\.address/);
+  // A scan never overwrites something already typed.
+  assert.match(modal, /fields\.filter\(\(field\) => field\.value && !form\[field\.key\]\.trim\(\)\)/);
+});

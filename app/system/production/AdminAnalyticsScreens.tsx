@@ -365,6 +365,27 @@ function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged 
   };
 
   const set = (key: keyof ContactFormState, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  // Only the person's own fields come off the card here. The company is already chosen,
+  // so companyName and address on the extraction are deliberately ignored.
+  const applyBusinessCard = (result: BusinessCardExtraction) => {
+    const contactNames = localizedNamesFromCard(result.contactNames, result.contactName);
+    const fields: { key: keyof ContactFormState; value: string; label: string }[] = [
+      { key: "nameTh", value: contactNames.nameTh, label: "ชื่อผู้ติดต่อ (ไทย)" },
+      { key: "nameEn", value: contactNames.nameEn, label: "Contact name (English)" },
+      { key: "nameJa", value: contactNames.nameJa, label: "担当者名 (日本語)" },
+      { key: "department", value: result.department, label: "แผนก" },
+      { key: "position", value: result.position, label: "ตำแหน่ง" },
+      { key: "email", value: result.email, label: "อีเมล" },
+      { key: "phone", value: result.phone, label: "โทรศัพท์" },
+    ];
+    const fillable = fields.filter((field) => field.value && !form[field.key].trim());
+    if (fillable.length) setForm((current) => {
+      const next = { ...current };
+      for (const field of fillable) if (!next[field.key].trim()) next[field.key] = field.value;
+      return next;
+    });
+    return fillable.map((field) => field.label);
+  };
   const resolvedName = canonicalLocalizedName({ nameTh: form.nameTh, nameEn: form.nameEn, nameJa: form.nameJa }, editing?.name);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -421,6 +442,7 @@ function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged 
       {error ? <LoadError message={error} /> : null}
       {canWrite && !creating && !editing ? <Toolbar><button className="btn primary" type="button" onClick={openCreate}><Icon name="plus" /><LocalizedText text={"Add person"} /></button></Toolbar> : null}
       {creating || editing ? <form onSubmit={(event) => { void submit(event); }}>
+        {creating ? <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} /> : null}
         <div className="form-grid two">
           <Field label="ชื่อผู้ติดต่อ (ไทย)" hint="กรอกอย่างน้อย 1 ภาษา"><input name="nameTh" maxLength={200} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} /></Field>
           <Field label="Contact name (English)"><input name="nameEn" maxLength={200} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} /></Field>
