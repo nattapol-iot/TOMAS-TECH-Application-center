@@ -76,6 +76,26 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,config:AppConfig
   const revision=query.revision===undefined?undefined:clampedInteger(query.revision,0,0,100000);
   return db.transaction(async tx=>{const r=await readReport(tx,id,revision);await requireSourcePermission(request,r);return reportDto(tx,r,actor);});
  });
+ // Creating a report immediately inserts a real DRAFT row (see the handler below) --
+ // the "New report" wizard calls this once a type + source is picked, before any real
+ // content is entered, so a preparer who restarts or picks the wrong source ends up
+ // with a stray empty draft. Let the frontend warn and offer to reopen it instead of
+ // silently accumulating clutter.
+ app.get('/api/v1/reports/workspace/existing-draft',async request=>{
+  const actor=await actorFor(request,'report.write'),q=request.query as Record<string,unknown>;
+  const type=requiredText(q.reportType,20,'Report type'),kind=requiredText(q.sourceKind,20,'Source kind'),sourceId=positiveLong(String(q.sourceId),'Source');
+  validateReportSource(type,kind);
+  const column=kind==='PROJECT'?'h.project_id':'h.inquiry_id';
+  const rows=(await db.query<{id:number;report_no:string;title:string;created_at:Date}>(`
+   SELECT h.id,h.report_no,r.title,h.created_at
+   FROM dbo.unified_reports h
+   JOIN dbo.unified_report_revisions r ON r.report_id=h.id AND r.revision=h.current_revision
+   WHERE h.report_type=@type AND ${column}=@source AND r.state='DRAFT' AND r.prepared_by=@actor
+   ORDER BY h.id DESC`,
+   s=>s.input('type',sql.NVarChar(20),type).input('source',sql.BigInt,sourceId).input('actor',sql.BigInt,actor.id),
+  )).recordset;
+  return {items:rows.map(row=>({id:Number(row.id),number:row.report_no,title:row.title,createdAt:row.created_at}))};
+ });
  app.post('/api/v1/reports/workspace',async(request,reply)=>{
   const actor=await actorFor(request,'report.write'),b=bodyObject(request.body),input=draftInput(b.templateId==null?b:{...b,body:{}}),type=requiredText(b.reportType,20,'Report type'),kind=requiredText(b.sourceKind,20,'Source kind'),sourceId=positiveLong(String(b.sourceId),'Source');
   if(b.templateId==null&&b.templateVersion!=null)throw new ApiError(400,'report_template_version','Template id and version must be supplied together.');
@@ -163,7 +183,7 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,config:AppConfig
  });
  app.post('/api/v1/reports/workspace/:id/:action',async request=>{
   const {id:rawId,action}=request.params as {id:string;action:string},id=positiveLong(rawId,'Report'),b=bodyObject(request.body);
-  if(!['submit','review','approve','return','revise','void','customer-link','revoke-customer-link'].includes(action))throw new ApiError(400,'report_action','Unknown report action.');
+  if(!['submit','review','approve','return','revise','void','discard','customer-link','revoke-customer-link'].includes(action))throw new ApiError(400,'report_action','Unknown report action.');
   const permission=action==='review'?'report.review':['approve','void'].includes(action)?'report.approve':action==='return'?'report.read':'report.write';
   const actor=await actorFor(request,permission),note=typeof b.note==='string'?b.note.trim().slice(0,2000):'';
   return db.transaction(async tx=>{
@@ -201,6 +221,13 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,config:AppConfig
    } else if(action==='void') {
     if(['COMPLETED','VOID'].includes(r.state)||Number(r.approver_id)!==actor.id||!note)throw new ApiError(409,'report_void','Assigned approver must provide a reason; completed evidence cannot be voided.');next='VOID';
     await q.query('UPDATE dbo.unified_report_customer_links SET revoked_at=SYSUTCDATETIME() WHERE revision_id=@revision AND consumed_at IS NULL AND revoked_at IS NULL');
+   } else if(action==='discard') {
+    // The preparer's own never-submitted draft: nothing signed, nothing reviewed, no
+    // customer ever saw it. Mark it VOID (same terminal state 'void' uses) rather than
+    // deleting so the audit trail stays intact, but no approver/note requirement --
+    // this is just the preparer tidying up a report they decided not to continue.
+    if(r.state!=='DRAFT'||Number(r.prepared_by)!==actor.id)throw new ApiError(409,'report_discard','Only the preparer may discard their own unsubmitted draft.');
+    next='VOID';
    } else if(action==='customer-link') {
     if(r.state!=='APPROVED'||![Number(r.prepared_by),Number(r.approver_id)].includes(actor.id))throw new ApiError(409,'report_customer_link','Only the preparer or approver may issue a link for an approved revision.');
     const token=randomBytes(32).toString('base64url'),hours=clampedInteger(b.expiresInHours,72,1,168),expiresAt=new Date(Date.now()+hours*3600000);

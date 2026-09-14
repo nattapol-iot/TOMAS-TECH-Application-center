@@ -202,7 +202,7 @@ export async function reportDto(tx:Transaction,r:ReportRow,actor:CurrentUser) {
  const frozen=r.snapshot_json?JSON.parse(r.snapshot_json) as {sourceReference:string;sourceTitle:string;customer:string;endUserCustomerId?:number|null;endUserName?:string|null;endUserCode?:string|null}:null;
  if(r.revision===r.current_revision&&!['Closed','Cancelled','Rejected'].includes(source.status)) {
   if(preparer&&permissions.has('report.write')) {
-   if(r.state==='DRAFT'){allowedActions.push('edit');if(permissions.has('signing.sign'))allowedActions.push('submit');}
+   if(r.state==='DRAFT'){allowedActions.push('edit','discard');if(permissions.has('signing.sign'))allowedActions.push('submit');}
    if(['CHANGES_REQUESTED','APPROVED','COMPLETED','VOID'].includes(r.state))allowedActions.push('revise');
   }
   if(reviewer&&r.state==='SUBMITTED'&&permissions.has('report.review'))allowedActions.push('review','return');
