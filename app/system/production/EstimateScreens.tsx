@@ -666,7 +666,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module) => { const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -834,8 +834,8 @@ const moduleKeyOf = (categoryCode: string, module: string) => `${categoryCode}::
 function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   const groups = new Map<string, CostModuleGroup>();
   for (const line of lines) {
-    const moduleName = line.module.trim() || "Unassigned";
-    const key = moduleKeyOf(line.categoryCode, moduleName);
+    const moduleName = line.module.trim();
+    const key = moduleName ? moduleKeyOf(line.categoryCode, moduleName) : `standalone:${line.id}`;
     let group = groups.get(key);
     if (!group) {
       group = { key, module: moduleName, categoryCode: line.categoryCode, category: line.category, lines: [], total: 0, needPrice: 0, needSupplier: 0 };
@@ -960,7 +960,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   };
   const moveCostModule = (group: CostModuleGroup, direction: -1 | 1) => {
     const siblings = workspace.costItems.filter(line => line.categoryCode === group.categoryCode);
-    const moved = moveModule(siblings, line => moduleKeyOf(line.categoryCode, line.module.trim() || "Unassigned"), group.key, direction);
+    const moved = moveModule(siblings, line => line.module.trim() ? moduleKeyOf(line.categoryCode, line.module.trim()) : `standalone:${line.id}`, group.key, direction);
     let offset = 0;
     const ordered = workspace.costItems.map(line => line.categoryCode === group.categoryCode ? moved[offset++] : line);
     void onReorder("CostItem", ordered.map(line => line.id));
@@ -1057,7 +1057,8 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
 
   return <>
   {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={onExcelImported} /> : null}
-  <Panel title={`Estimate Cost Table · ${groups.length} module · ${visibleLines.length} item`} actions={canAdd ? <>
+  <Panel title={`Estimate Cost Table · ${groups.filter(group => group.module).length} module · ${visibleLines.length} item`} actions={canAdd ? <>
+    <button className="btn primary sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />เพิ่มรายการเดี่ยว / Add Item</button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("price")}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("import")}><Icon name="upload" /><LocalizedText text={"Import Excel"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("copy")}><Icon name="copy" /><LocalizedText text={"Copy Previous Estimate"} /></button>
@@ -1070,7 +1071,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         {COST_CATEGORIES.map(([code, name]) => { const count = workspace.costItems.filter((line) => line.categoryCode === code).length; return count || allowedCategories.some(([allowedCode]) => allowedCode === code) ? <button key={code} type="button" className={category === code ? "subtab active" : "subtab"} onClick={() => { setCategory(code); setQuickDraft(null); }}><span className="pill">{code}</span>{name}<em>{count}</em></button> : null; })}
       </div>
       <div className="sheet-tools">
-        <button type="button" className="sheet-tool" disabled={!groups.length} onClick={() => setCollapsed(groups.map((group) => group.key))} title={localizeCopy("หุบทุกโมดูล")}><Icon name="chevronRight" /><LocalizedText text={"Collapse all"} /></button>
+        <button type="button" className="sheet-tool" disabled={!groups.length} onClick={() => setCollapsed(groups.filter(group => group.module).map((group) => group.key))} title={localizeCopy("หุบทุกโมดูล")}><Icon name="chevronRight" /><LocalizedText text={"Collapse all"} /></button>
         <button type="button" className="sheet-tool" disabled={!collapsed.length} onClick={() => setCollapsed([])} title={localizeCopy("กางทุกโมดูล")}><Icon name="chevronDown" /><LocalizedText text={"Expand all"} /></button>
         <button type="button" className={dense ? "sheet-tool" : "sheet-tool active"} onClick={() => setDense((current) => !current)} title={dense ? "แสดง price source, reference, price date, owner, remark และ status" : "ซ่อนคอลัมน์อ้างอิงเพื่อให้ตารางพอดีจอ"}><Icon name="table" />{dense ? "All columns" : "Compact"}</button>
       </div>
@@ -1100,13 +1101,13 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
       <tbody>
         {groups.flatMap((group, groupIndex) => {
           const issues = group.needPrice + group.needSupplier;
-          if (isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
+          if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
           return [
-            moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues),
+            group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues) : null,
             ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
-              <td><span className="cell-text muted mono">{`${groupIndex + 1}-${index + 1}`}</span></td>
+              <td><span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span></td>
               <td><span className="cell-text"><strong className="mono">{line.itemCode}</strong></span></td>
-              <td><div className="cell-primary"><strong>{line.description}</strong>{line.specification ? <span>{line.specification}</span> : null}</div></td>
+              <td><div className="cell-primary"><strong>{line.description}</strong>{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
               <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
               <td><span className="cell-text">{line.supplierName ?? <span className="soft-warn"><LocalizedText text={"ยังไม่เลือกผู้ขาย"} /></span>}</span></td>
               <td className="num">{formatNumber(line.quantity, 4)}</td>
@@ -1121,10 +1122,10 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
                 <td><span className="cell-text">{line.remark || "—"}</span></td>
                 <td><span className="cell-text"><Badge>{line.status}</Badge></span></td>
               </>}
-              <td><div className="row-actions cost-order-actions">{canAdd && line.canEdit ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || index + direction < 0 || index + direction >= group.lines.length} onClick={() => moveCostLine(group, index, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td>
+              <td><div className="row-actions cost-order-actions">{canAdd && line.canEdit ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td>
             </tr>),
-            draftRow(group.key),
-            <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button></td></tr>,
+            group.module ? draftRow(group.key) : null,
+            group.module ? <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button></td></tr> : null,
           ];
         })}
         {showPending && pendingModule && pendingKey ? [
@@ -1134,8 +1135,8 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
           <tr className="add-row" key={`add-${pendingKey}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow({ key: pendingKey, ...pendingModule })}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {pendingModule.module}</span></button></td></tr>,
         ] : null}
       </tbody>
-    </table></div> : <EmptyState icon="package" title={uiText("No cost item")} message={canAdd ? "สร้าง Main Module แล้วเพิ่มรายการต้นทุนแรกใน revision นี้" : "ไม่มีรายการที่บัญชีนี้อ่านได้"} action={canAdd ? <button className="btn primary" type="button" onClick={() => setTool("module")}><Icon name="layers" /><LocalizedText text={"New Main Module"} /></button> : undefined} />}
-    <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{groups.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown lines"} /></span><strong>{visibleLines.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown subtotal"} /></span><strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong></div><div className="foot-total"><span><LocalizedText text={"Total estimated cost"} /></span><strong>{formatMoney(workspace.header.totals.total)}</strong></div></div>
+    </table></div> : <EmptyState icon="package" title={uiText("No cost item")} message={canAdd ? "เพิ่มรายการเดี่ยวได้ทันที หรือสร้าง Main Module เพื่อจัดกลุ่มรายการ" : "ไม่มีรายการที่บัญชีนี้อ่านได้"} action={canAdd ? <button className="btn primary" type="button" onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />เพิ่มรายการเดี่ยว / Add Item</button> : undefined} />}
+    <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{groups.filter(group => group.module).length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown lines"} /></span><strong>{visibleLines.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown subtotal"} /></span><strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong></div><div className="foot-total"><span><LocalizedText text={"Total estimated cost"} /></span><strong>{formatMoney(workspace.header.totals.total)}</strong></div></div>
   </Panel>
   {tool === "price" ? <PriceLibraryPicker workspace={workspace} busy={busy} onClose={() => setTool(null)} onUse={async (record) => {
     const saved = await onBulkAddCost([costSeedFromLine(record.item, workspace.header.ownerId, record.sourceKind === "Historical Purchase" ? "Purchase Price" : "Price Library", record.sourceNumber, record.projectName)], "Price selected from live Price Library");
@@ -1742,10 +1743,10 @@ function CostItemEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, 
     ownerId: line?.ownerId ?? seed.ownerId ?? defaultOwner,
   }));
   const update = <K extends keyof CostItemInput>(key: K, value: CostItemInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const valid = form.categoryCode.length === 2 && form.module.trim() && form.itemCode.trim() && form.description.trim() && validCostItemNumbers(form.quantity, form.unitCost) && form.unit.trim() && form.priceSource && form.ownerId > 0;
+  const valid = form.categoryCode.length === 2 && form.itemCode.trim() && form.description.trim() && validCostItemNumbers(form.quantity, form.unitCost) && form.unit.trim() && form.priceSource && form.ownerId > 0;
   return <Modal title={line ? `Edit ${line.itemCode}` : "Add cost item"} subtitle={line ? "Save checks both estimate and line row versions" : "New line is written to the current revision and audit trail"} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create item"}</button></>}>
     <CostItemFields form={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} onLookupPick={(patch) => setForm((current) => ({ ...current, ...patch, priceDate: patch.priceDate ?? current.priceDate }))} suppliers={bootstrap.suppliers} allowedCategories={allowedCategories}
-      moduleField={<Field label="Main module *"><input required maxLength={200} value={form.module} onChange={(event) => update("module", event.target.value)} /></Field>}
+      moduleField={<Field label="Main module (optional)" hint="เว้นว่างสำหรับรายการเดี่ยวที่ไม่อยู่ใต้โมดูล / Leave blank for a standalone item"><input maxLength={200} value={form.module} onChange={(event) => update("module", event.target.value)} /></Field>}
       ownerField={<Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign a cost line" : "Line owner is protected by section permission"}><select disabled={!workspace.capabilities.canEditAllSections && Boolean(line)} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>}
       referenceNumberField={<Field label="Reference number"><input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} /></Field>}
       referenceProjectField={<Field label="Reference project"><input maxLength={200} value={form.referenceProject ?? ""} onChange={(event) => update("referenceProject", event.target.value)} /></Field>}

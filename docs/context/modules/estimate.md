@@ -166,3 +166,5 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Client contract lookup
 
 Search the selected API path or function in [app/system/api-client.ts](<../../../app/system/api-client.ts>); follow its screen callers. Common UI/language changes require [app/system/ui.tsx](<../../../app/system/ui.tsx>) and [app/system/i18n.ts](<../../../app/system/i18n.ts>). For SQL changes use [schema map](../SCHEMA.md).
+
+Standalone cost items: Add Item opens a module-optional editor; blank module stored as empty string (no schema change). Cost Items renders blank-module entries as individual top-level rows, not Unassigned modules. Summary groups these by line identity and shows actual quantity/unit/cost. Existing module grouping, source amounts, ERP export gates and assignment permissions retained. Local; not deployed.

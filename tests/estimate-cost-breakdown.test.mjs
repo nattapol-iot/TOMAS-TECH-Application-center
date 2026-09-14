@@ -70,9 +70,12 @@ test("Summary aggregates main modules while retaining child identities and split
   assert.deepEqual(breakdownModules(sections[2]).map(group => group.title), ["Design", "Install"]);
   assert.equal(sections.flatMap(breakdownModules).reduce((sum, group) => sum + group.amount, 0), sections.reduce((sum, section) => sum + section.amount, 0));
 });
-test("Modules with the same name remain separate across sections; blank names never become item titles", () => {
+test("Standalone items retain their own titles, identities and totals across sections", () => {
   const sections = buildEstimateCostBreakdown({ ...input, costItems: input.costItems.map(line => ({ ...line, module: "" })) }, labels);
-  assert.equal(breakdownModules(sections[0])[0].title, "Unassigned module");
+  assert.equal(breakdownModules(sections[0])[0].title, sections[0].lines[0].title);
+  assert.equal(breakdownModules(sections[0]).length, sections[0].lines.length);
+  assert.ok(breakdownModules(sections[0]).every(group => group.standalone && group.lines.length === 1));
+  assert.equal(breakdownModules(sections[0]).reduce((sum, group) => sum + group.amount, 0), sections[0].amount);
   assert.notEqual(breakdownModules(sections[0])[0].key, breakdownModules(sections[1])[0].key);
 });
 

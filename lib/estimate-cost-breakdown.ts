@@ -157,15 +157,17 @@ export function breakdownLineCount(sections: readonly BreakdownSection[]): numbe
 
 /** Aggregate whole modules before filtering, retaining source lines for ERP mapping. */
 export function breakdownModules(section: BreakdownSection) {
-  const groups = new Map<string, { key: string; title: string; lines: BreakdownLine[]; amount: number; inHouse: number; outsourced: number }>();
+  const groups = new Map<string, { key: string; title: string; lines: BreakdownLine[]; amount: number; inHouse: number; outsourced: number; standalone: boolean }>();
   for (const line of section.lines) {
-    const title = line.module?.trim() || "Unassigned module";
-    const group = groups.get(title) ?? { key: section.key + ":" + title, title, lines: [], amount: 0, inHouse: 0, outsourced: 0 };
+    const standalone = section.kind === "cost-items" && !line.module?.trim();
+    const title = standalone ? line.title : line.module?.trim() || "Unassigned module";
+    const key = standalone ? section.key + ":item:" + line.key : section.key + ":" + title;
+    const group = groups.get(key) ?? { key, title, standalone, lines: [], amount: 0, inHouse: 0, outsourced: 0 };
     group.lines.push(line);
     group.amount += line.amount;
     if (line.source === "in-house") group.inHouse += line.amount;
     else group.outsourced += line.amount;
-    groups.set(title, group);
+    groups.set(key, group);
   }
   return [...groups.values()];
 }

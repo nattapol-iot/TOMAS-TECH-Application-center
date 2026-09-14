@@ -61,7 +61,7 @@ function parseCostInput(request: FastifyRequest, requireLineVersion: boolean): C
   return {
     estimateRowVersion: parseRowVersion(body.estimateRowVersion), lineRowVersion, categoryCode,
     subcategory: optionalBodyText(body.subcategory, 100, "Subcategory") ?? "",
-    module: requiredText(body.module, 200, "Module"), itemCode: requiredText(body.itemCode, 100, "Item code"),
+    module: optionalBodyText(body.module, 200, "Module") ?? "", itemCode: requiredText(body.itemCode, 100, "Item code"),
     description: requiredText(body.description, 500, "Description"), brand: optionalBodyText(body.brand, 100, "Brand") ?? "",
     model: optionalBodyText(body.model, 200, "Model") ?? "", specification: optionalBodyText(body.specification, 20_000, "Specification"),
     supplierId, quantity, unit: requiredText(body.unit, 50, "Unit"), unitCost, priceSource,
