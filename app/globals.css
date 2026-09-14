@@ -4920,3 +4920,10 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .estimate-template-picker-list table { width: 100%; table-layout: fixed; }
 .estimate-template-picker-list td:first-child { white-space: normal; overflow-wrap: anywhere; }
 .estimate-template-picker-list th:last-child { width: 110px !important; }
+
+.cost-breakdown .cb-qty-col { width: 105px; }
+.cost-breakdown .cb-unit-col { width: 160px; }
+.cb-inline-quantity input { width: 100%; min-width: 70px; text-align: right; }
+.cb-inline-unit select, .cb-inline-unit input { width: 100%; min-width: 100px; }
+.cb-inline-unit small { display: block; white-space: normal; margin-top: 4px; }
+.cb-inline-save { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }

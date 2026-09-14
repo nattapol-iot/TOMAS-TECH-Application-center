@@ -1,5 +1,6 @@
 "use client";
 
+import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { moveModule, type ReorderEstimate, type EstimateOrderSource } from "../../../lib/estimate-order";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -10,6 +11,7 @@ import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import {
   loadEstimateErpSummary,
   loadEstimateModuleDetails,
+  updateEstimateModuleDetails,
   type EstimateModuleDetail,
   recordEstimateErpExport,
   updateEstimateErpMappings,
@@ -361,7 +363,15 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ไขโมดูล / Edit module</button> : null}
             {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.standalone ? undefined : module.title, module.standalone ? Number(module.lines[0].key.split(":")[1]) : undefined)}>{module.standalone ? "แก้ไขรายการ / Edit item" : copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
           </td>
-          <td className="num">{module.standalone ? quantity(module.lines[0].quantity) : quantity(detail.quantity)}</td><td>{module.standalone ? module.lines[0].unit : detail.unit}</td>
+          {canEditModule && section.kind === "cost-items" ? <EstimateModuleQuantityCells key={`${detail.key}:${detail.quantity}:${detail.unit}`} name={detail.title} quantity={detail.quantity} unit={detail.unit}
+            units={moduleDetails.map(row => row.unit ?? "Set")} disabled={busy || reorderBusy || loading || changedLines.length > 0}
+            onSave={async (nextQuantity, nextUnit) => {
+              setBusy(true);
+              try {
+                await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: detail.key, title: detail.title, remark: null, quantity: nextQuantity, unit: nextUnit });
+                await onChanged("Module quantity / unit updated"); await load();
+              } finally { setBusy(false); }
+            }} /> : <><td className="num">{module.standalone ? quantity(module.lines[0].quantity) : quantity(detail.quantity)}</td><td>{module.standalone ? module.lines[0].unit : detail.unit}</td></>}
           <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
           <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : module.standalone ? money(module.lines[0].unitCost) : money(module.amount / detail.quantity)}</td>
           <td className="num"><strong>{money(module.amount)}</strong></td>
