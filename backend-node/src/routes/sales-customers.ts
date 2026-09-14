@@ -5,7 +5,7 @@ import type { Transaction } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
-import { bodyObject, optionalBodyText, positiveLong, requiredInteger } from "../http.js";
+import { bodyObject, optionalBodyText, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
 const MAIN_SITE_NAME = "สำนักงานใหญ่ / Main office";
@@ -160,6 +160,36 @@ export async function syncPrimaryCustomerContact(transaction: Transaction, actor
   await insertAudit(transaction, actorId, "CustomerSiteContact", Number(before.id), "", "Updated", before, { ...input, siteId: site.id });
 }
 
+// A contact is always addressed through its customer, so one customer's id can never reach another's contact.
+async function activeContact(transaction: Transaction, customerId: number, contactId: number): Promise<Row> {
+  const q = new sql.Request(transaction);
+  q.input("customer", sql.BigInt, customerId); q.input("contact", sql.BigInt, contactId);
+  const row = (await q.query<Row>(`SELECT sc.id,sc.site_id,s.code site_code,s.name site_name,sc.name,sc.title_th,sc.title_en,sc.title_ja,sc.name_th,sc.name_en,sc.name_ja,sc.email,sc.phone,sc.department,sc.position,sc.is_primary,sc.row_version FROM dbo.customer_site_contacts sc WITH(UPDLOCK,HOLDLOCK)
+    INNER JOIN dbo.customer_sites s ON s.id=sc.site_id
+    WHERE sc.id=@contact AND s.customer_id=@customer AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.is_active=1 AND s.deleted_at IS NULL;`)).recordset[0];
+  if (!row) throw new ApiError(404, "contact_not_found", "The contact is unavailable. Refresh and select an active contact.");
+  return row;
+}
+
+// Renaming or replacing the MAIN primary person must carry onto the customer row, because
+// primaryCustomerContactApply joins the two on the contact name.
+async function syncCustomerHeader(transaction: Transaction, actorId: number, customerId: number, input: ContactInput): Promise<void> {
+  const q = new sql.Request(transaction);
+  q.input("customer", sql.BigInt, customerId); q.input("contact", sql.NVarChar(200), input.name);
+  q.input("email", sql.NVarChar(256), input.email); q.input("phone", sql.NVarChar(100), input.phone); q.input("actor", sql.BigInt, actorId);
+  await q.query(`UPDATE dbo.customers SET contact=@contact,email=@email,phone=@phone,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@customer AND deleted_at IS NULL;`);
+}
+
+async function assertContactUnique(transaction: Transaction, siteId: number, contactId: number, input: ContactInput): Promise<void> {
+  const q = new sql.Request(transaction);
+  q.input("site", sql.BigInt, siteId); q.input("id", sql.BigInt, contactId);
+  q.input("name", sql.NVarChar(200), input.name); q.input("email", sql.NVarChar(256), input.email);
+  q.input("name_th", sql.NVarChar(200), input.nameTh); q.input("name_en", sql.NVarChar(200), input.nameEn); q.input("name_ja", sql.NVarChar(200), input.nameJa);
+  const duplicate = (await q.query<Row>(`SELECT TOP(1) id,name FROM dbo.customer_site_contacts WITH(UPDLOCK,HOLDLOCK)
+    WHERE site_id=@site AND id<>@id AND deleted_at IS NULL
+      AND (LOWER(LTRIM(RTRIM(name)))=LOWER(@name) OR (@name_th<>N'' AND LOWER(LTRIM(RTRIM(name_th)))=LOWER(@name_th)) OR (@name_en<>N'' AND LOWER(LTRIM(RTRIM(name_en)))=LOWER(@name_en)) OR (@name_ja<>N'' AND LOWER(LTRIM(RTRIM(name_ja)))=LOWER(@name_ja)) OR (@email<>N'' AND LOWER(LTRIM(RTRIM(email)))=LOWER(@email)));`)).recordset[0];
+  if (duplicate) throw new ApiError(409, "duplicate_contact", "A contact with this name or email already exists at this site.", { id: Number(duplicate.id), siteId, name: duplicate.name });
+}
 export function registerSalesCustomerRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
   app.get("/api/v1/sales/customers/:customerId/contacts", async (request) => {
     await demandSalesCustomerPermission(users, request, false);
@@ -168,10 +198,10 @@ export function registerSalesCustomerRoutes(app: FastifyInstance, database: Data
     const customer = (await database.query<Row>(`SELECT c.contact,c.email,c.phone,COALESCE(primary_contact.department,N'') department,COALESCE(primary_contact.position,N'') position,COALESCE(primary_contact.title_th,N'') contact_title_th,COALESCE(primary_contact.title_en,N'') contact_title_en,COALESCE(primary_contact.title_ja,N'') contact_title_ja,COALESCE(primary_contact.name_th,N'') contact_name_th,COALESCE(primary_contact.name_en,N'') contact_name_en,COALESCE(primary_contact.name_ja,N'') contact_name_ja FROM dbo.customers c ${primaryCustomerContactApply} WHERE c.id=@customer AND c.is_active=1 AND c.deleted_at IS NULL;`, bind)).recordset[0];
     if (!customer) throw new ApiError(404, "customer_not_found", "The customer is unavailable.");
     const sites = (await database.query<Row>(`SELECT s.id,s.code,s.name FROM dbo.customer_sites s INNER JOIN dbo.customers c ON c.id=s.customer_id WHERE s.customer_id=@customer AND s.is_active=1 AND s.deleted_at IS NULL AND c.is_active=1 AND c.deleted_at IS NULL ORDER BY s.name;`, bind)).recordset;
-    const contacts = (await database.query<Row>(`SELECT sc.id,sc.site_id,s.name site_name,sc.name,sc.title_th,sc.title_en,sc.title_ja,sc.name_th,sc.name_en,sc.name_ja,sc.email,sc.phone,sc.department,sc.position FROM dbo.customer_site_contacts sc INNER JOIN dbo.customer_sites s ON s.id=sc.site_id INNER JOIN dbo.customers c ON c.id=s.customer_id WHERE s.customer_id=@customer AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.is_active=1 AND s.deleted_at IS NULL AND c.is_active=1 AND c.deleted_at IS NULL ORDER BY sc.is_primary DESC,sc.name;`, bind)).recordset;
+    const contacts = (await database.query<Row>(`SELECT sc.id,sc.site_id,s.code site_code,s.name site_name,sc.name,sc.title_th,sc.title_en,sc.title_ja,sc.name_th,sc.name_en,sc.name_ja,sc.email,sc.phone,sc.department,sc.position,sc.is_primary,sc.row_version FROM dbo.customer_site_contacts sc INNER JOIN dbo.customer_sites s ON s.id=sc.site_id INNER JOIN dbo.customers c ON c.id=s.customer_id WHERE s.customer_id=@customer AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.is_active=1 AND s.deleted_at IS NULL AND c.is_active=1 AND c.deleted_at IS NULL ORDER BY sc.is_primary DESC,sc.name;`, bind)).recordset;
     return {
       sites: sites.map((r) => ({ id: Number(r.id), code: r.code, name: r.name })),
-      contacts: contacts.map((r) => ({ id: Number(r.id), siteId: Number(r.site_id), siteName: r.site_name, name: r.name, titleTh: r.title_th, titleEn: r.title_en, titleJa: r.title_ja, nameTh: r.name_th, nameEn: r.name_en, nameJa: r.name_ja, email: r.email, phone: r.phone, department: r.department, position: r.position })),
+      contacts: contacts.map((r) => ({ id: Number(r.id), siteId: Number(r.site_id), siteCode: r.site_code, siteName: r.site_name, name: r.name, titleTh: r.title_th, titleEn: r.title_en, titleJa: r.title_ja, nameTh: r.name_th, nameEn: r.name_en, nameJa: r.name_ja, email: r.email, phone: r.phone, department: r.department, position: r.position, isPrimary: Boolean(r.is_primary), rowVersion: (r.row_version as Buffer).toString("base64") })),
       primaryContact: customer.contact ? { name: customer.contact, titleTh: customer.contact_title_th, titleEn: customer.contact_title_en, titleJa: customer.contact_title_ja, nameTh: customer.contact_name_th, nameEn: customer.contact_name_en, nameJa: customer.contact_name_ja, email: customer.email, phone: customer.phone, department: customer.department, position: customer.position } : null,
     };
   });
@@ -208,5 +238,66 @@ export function registerSalesCustomerRoutes(app: FastifyInstance, database: Data
       return createContact(transaction, actor.id, site, input);
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     return reply.status(201).send(created);
+  });
+
+  app.put("/api/v1/sales/customers/:customerId/contacts/:contactId", async (request) => {
+    await demandSalesCustomerPermission(users, request, true);
+    const actor = await users.required(request), body = bodyObject(request.body);
+    const customerId = positiveLong((request.params as { customerId?: string }).customerId, "Customer id");
+    const contactId = positiveLong((request.params as { contactId?: string }).contactId, "Contact id");
+    const input = salesContactInput(body), rowVersion = parseRowVersion(body.rowVersion);
+    if (body.isPrimary !== undefined && typeof body.isPrimary !== "boolean") throw new ApiError(400, "validation_failed", "Main contact must be true or false.");
+    return database.transaction(async (transaction) => {
+      await activeCustomer(transaction, customerId);
+      const before = await activeContact(transaction, customerId, contactId);
+      const siteId = Number(before.site_id), mainSite = String(before.site_code) === "MAIN";
+      await assertContactUnique(transaction, siteId, contactId, input);
+      const update = new sql.Request(transaction);
+      update.input("id", sql.BigInt, contactId); update.input("row_version", sql.VarBinary(8), rowVersion); update.input("actor", sql.BigInt, actor.id);
+      update.input("name", sql.NVarChar(200), input.name); update.input("email", sql.NVarChar(256), input.email); update.input("phone", sql.NVarChar(100), input.phone);
+      update.input("title_th", sql.NVarChar(50), input.titleTh); update.input("title_en", sql.NVarChar(50), input.titleEn); update.input("title_ja", sql.NVarChar(50), input.titleJa);
+      update.input("name_th", sql.NVarChar(200), input.nameTh); update.input("name_en", sql.NVarChar(200), input.nameEn); update.input("name_ja", sql.NVarChar(200), input.nameJa);
+      update.input("department", sql.NVarChar(200), input.department); update.input("position", sql.NVarChar(200), input.position);
+      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.customer_site_contacts SET name=@name,title_th=@title_th,title_en=@title_en,title_ja=@title_ja,
+        name_th=@name_th,name_en=@name_en,name_ja=@name_ja,email=@email,phone=@phone,department=@department,position=@position,updated_by=@actor,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)).recordset[0];
+      if (!updated) throw new ApiError(409, "concurrency_conflict", "This contact changed. Reload and try again.");
+      let isPrimary = Boolean(before.is_primary), version = updated.row_version;
+      if (body.isPrimary === true && !isPrimary) {
+        const demote = new sql.Request(transaction);
+        demote.input("site", sql.BigInt, siteId); demote.input("actor", sql.BigInt, actor.id);
+        await demote.query(`UPDATE dbo.customer_site_contacts SET is_primary=0,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE site_id=@site AND is_primary=1 AND deleted_at IS NULL;`);
+        const promote = new sql.Request(transaction);
+        promote.input("id", sql.BigInt, contactId); promote.input("actor", sql.BigInt, actor.id);
+        const promoted = (await promote.query<{ row_version: Buffer }>(`UPDATE dbo.customer_site_contacts SET is_primary=1,updated_by=@actor,updated_at=SYSUTCDATETIME()
+          OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+        if (!promoted) throw new ApiError(409, "concurrency_conflict", "This contact changed. Reload and try again.");
+        isPrimary = true; version = promoted.row_version;
+      }
+      if (isPrimary && mainSite) await syncCustomerHeader(transaction, actor.id, customerId, input);
+      const after = { id: contactId, siteId, siteName: before.site_name, isPrimary, ...input };
+      await insertAudit(transaction, actor.id, "CustomerSiteContact", contactId, "", "Updated", before, after);
+      return { ...after, rowVersion: version.toString("base64") };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+  });
+
+  app.delete("/api/v1/sales/customers/:customerId/contacts/:contactId", async (request) => {
+    await demandSalesCustomerPermission(users, request, true);
+    const actor = await users.required(request);
+    const customerId = positiveLong((request.params as { customerId?: string }).customerId, "Customer id");
+    const contactId = positiveLong((request.params as { contactId?: string }).contactId, "Contact id");
+    const rowVersion = parseRowVersion((request.query as { rowVersion?: unknown } | undefined)?.rowVersion);
+    return database.transaction(async (transaction) => {
+      await activeCustomer(transaction, customerId);
+      const before = await activeContact(transaction, customerId, contactId);
+      if (before.is_primary) throw new ApiError(409, "primary_contact_protected", "Set another person as the main contact before removing this one.");
+      const q = new sql.Request(transaction);
+      q.input("id", sql.BigInt, contactId); q.input("actor", sql.BigInt, actor.id); q.input("row_version", sql.VarBinary(8), rowVersion);
+      const removed = (await q.query<{ id: number | string }>(`UPDATE dbo.customer_site_contacts SET is_active=0,deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.id WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)).recordset[0];
+      if (!removed) throw new ApiError(409, "concurrency_conflict", "This contact changed. Reload and try again.");
+      await insertAudit(transaction, actor.id, "CustomerSiteContact", contactId, "", "Removed", before, null);
+      return { id: contactId, siteId: Number(before.site_id), removed: true };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
 }

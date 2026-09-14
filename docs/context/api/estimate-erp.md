@@ -2,27 +2,28 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `e2819388`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `056c73a4`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/erp-summary` | 173–178 |
-| PUT | `/api/v1/estimates/:id/erp-mappings` | 180–256 |
-| POST | `/api/v1/estimates/:id/erp-export-events` | 258–301 |
+| GET | `/api/v1/estimates/:id/erp-summary` | 174–179 |
+| PUT | `/api/v1/estimates/:id/erp-mappings` | 181–266 |
+| POST | `/api/v1/estimates/:id/erp-export-events` | 268–311 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `loadSummary` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 105–118 |
-| `parseMappings` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 127–151 |
-| `parseExportEvent` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 153–170 |
-| `registerEstimateErpRoutes` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 172–302 |
+| `loadSummary` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 106–119 |
+| `parseMappings` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 128–152 |
+| `parseExportEvent` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 154–171 |
+| `registerEstimateErpRoutes` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 173–312 |
 
 ## Direct local dependencies
 
+- [backend-node/src/estimate-labor-category.ts](<../../../backend-node/src/estimate-labor-category.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)

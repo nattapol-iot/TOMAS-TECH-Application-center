@@ -2,7 +2,7 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `e2819388`; generated, do not edit. [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `056c73a4`; generated, do not edit. [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -10,16 +10,16 @@ Evidence: source snapshot `e2819388`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | GET | `/api/v1/resource-tasks/commitments` | 38–42 |
 | GET | `/api/v1/resource-tasks/sources` | 44–54 |
-| GET | `/api/v1/resource-tasks` | 55–67 |
-| POST | `/api/v1/resource-tasks/preview` | 68–79 |
-| POST | `/api/v1/resource-tasks` | 80–93 |
-| POST | `/api/v1/resource-tasks/:id/:action` | 94–153 |
+| GET | `/api/v1/resource-tasks` | 55–68 |
+| POST | `/api/v1/resource-tasks/preview` | 69–80 |
+| POST | `/api/v1/resource-tasks` | 81–94 |
+| POST | `/api/v1/resource-tasks/:id/:action` | 95–154 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerResourceTaskRoutes` | [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>) | 13–154 |
+| `registerResourceTaskRoutes` | [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>) | 13–155 |
 
 ## Direct local dependencies
 

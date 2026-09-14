@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `e2819388`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `056c73a4`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -50,5 +50,8 @@ Evidence: repository migrations at `e2819388`. Highest file number is not proof 
 | [042_estimate_total_guard.sql](<../../database/migrations/042_estimate_total_guard.sql>) | Inspect migration SQL |
 | [043_estimate_erp_cost_mapping.sql](<../../database/migrations/043_estimate_erp_cost_mapping.sql>) | `dbo.estimate_erp_mappings` |
 | [044_estimate_labor_masters.sql](<../../database/migrations/044_estimate_labor_masters.sql>) | `dbo.labor_packages`, `dbo.labor_package_lines` |
+| [045_estimate_line_order.sql](<../../database/migrations/045_estimate_line_order.sql>) | Inspect migration SQL |
+| [046_estimate_module_details.sql](<../../database/migrations/046_estimate_module_details.sql>) | `dbo.estimate_module_details` |
+| [047_estimate_module_description_rows.sql](<../../database/migrations/047_estimate_module_description_rows.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

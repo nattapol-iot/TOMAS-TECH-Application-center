@@ -17,6 +17,7 @@ import {
   SITE_VISIT_PERMISSIONS,
   siteVisitAudit,
 } from "../site-visit-common.js";
+import { contactTitleInput, localizedNameInput } from "./sales-customers.js";
 import type { CurrentUserService } from "../users.js";
 
 const clean = (value: unknown, max: number, label: string): string =>
@@ -814,7 +815,9 @@ export function registerVisitMasterRoutes(
         "Site id",
       ),
       b = bodyObject(request.body),
-      name = requiredText(b.name, 200, "Contact name"),
+      names = localizedNameInput(b, "", "name", 200, "Contact name", true),
+      titles = contactTitleInput(b),
+      name = names.name,
       channel = clean(b.preferredChannel, 30, "Preferred channel") || "Email";
     if (
       ![
@@ -848,12 +851,18 @@ export function registerVisitMasterRoutes(
       q.input("phone", sql.NVarChar(100), clean(b.phone, 100, "Phone"));
       q.input("email", sql.NVarChar(256), clean(b.email, 256, "Email"));
       q.input("channel", sql.NVarChar(30), channel);
+      q.input("name_th", sql.NVarChar(200), names.nameTh);
+      q.input("name_en", sql.NVarChar(200), names.nameEn);
+      q.input("name_ja", sql.NVarChar(200), names.nameJa);
+      q.input("title_th", sql.NVarChar(50), titles.titleTh);
+      q.input("title_en", sql.NVarChar(50), titles.titleEn);
+      q.input("title_ja", sql.NVarChar(50), titles.titleJa);
       q.input("primary", sql.Bit, bool(b.isPrimary));
       q.input("active", sql.Bit, bool(b.isActive, true));
       q.input("actor", sql.BigInt, actor.id);
       const record = (
         await q.query<{ id: number | string }>(
-          `IF NOT EXISTS(SELECT 1 FROM dbo.customer_sites WHERE id=@site AND deleted_at IS NULL) THROW 51203,'The customer site does not exist.',1; IF @primary=1 UPDATE dbo.customer_site_contacts SET is_primary=0,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE site_id=@site AND is_primary=1; INSERT INTO dbo.customer_site_contacts(site_id,name,department,position,phone,email,preferred_channel,is_primary,is_active,created_by,updated_by) OUTPUT inserted.id VALUES(@site,@name,@department,@position,@phone,@email,@channel,@primary,@active,@actor,@actor);`,
+          `IF NOT EXISTS(SELECT 1 FROM dbo.customer_sites WHERE id=@site AND deleted_at IS NULL) THROW 51203,'The customer site does not exist.',1; IF EXISTS(SELECT 1 FROM dbo.customer_site_contacts WITH(UPDLOCK,HOLDLOCK) WHERE site_id=@site AND deleted_at IS NULL AND (LOWER(LTRIM(RTRIM(name)))=LOWER(@name) OR (@name_th<>N'' AND LOWER(LTRIM(RTRIM(name_th)))=LOWER(@name_th)) OR (@name_en<>N'' AND LOWER(LTRIM(RTRIM(name_en)))=LOWER(@name_en)) OR (@name_ja<>N'' AND LOWER(LTRIM(RTRIM(name_ja)))=LOWER(@name_ja)) OR (@email<>N'' AND LOWER(LTRIM(RTRIM(email)))=LOWER(@email)))) THROW 51204,'A contact with this name or email already exists at this site.',1; IF @primary=1 UPDATE dbo.customer_site_contacts SET is_primary=0,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE site_id=@site AND is_primary=1; INSERT INTO dbo.customer_site_contacts(site_id,name,name_th,name_en,name_ja,title_th,title_en,title_ja,department,position,phone,email,preferred_channel,is_primary,is_active,created_by,updated_by) OUTPUT inserted.id VALUES(@site,@name,@name_th,@name_en,@name_ja,@title_th,@title_en,@title_ja,@department,@position,@phone,@email,@channel,@primary,@active,@actor,@actor);`,
         )
       ).recordset[0]!;
       const id = Number(record.id);

@@ -2,24 +2,25 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `e2819388`; generated, do not edit. [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `056c73a4`; generated, do not edit. [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | POST | `/api/v1/estimates/:id/manhour-lines` | 259–274 |
-| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId` | 276–293 |
-| POST | `/api/v1/estimates/:id/manhour-lines/:lineId/remove` | 295–302 |
-| POST | `/api/v1/estimates/:id/expense-lines` | 304–316 |
-| PUT | `/api/v1/estimates/:id/expense-lines/:lineId` | 318–330 |
-| POST | `/api/v1/estimates/:id/expense-lines/:lineId/remove` | 332–338 |
-| POST | `/api/v1/estimates/:id/other-cost-lines` | 340–351 |
-| PUT | `/api/v1/estimates/:id/other-cost-lines/:lineId` | 353–363 |
-| POST | `/api/v1/estimates/:id/other-cost-lines/:lineId/remove` | 365–372 |
-| POST | `/api/v1/estimates/:id/assignments` | 374–409 |
-| PUT | `/api/v1/estimates/:id/assignments/:assignmentId` | 411–448 |
-| PUT | `/api/v1/estimates/:id/contingency` | 450–461 |
+| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId/effort` | 276–305 |
+| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId` | 307–324 |
+| POST | `/api/v1/estimates/:id/manhour-lines/:lineId/remove` | 326–333 |
+| POST | `/api/v1/estimates/:id/expense-lines` | 335–347 |
+| PUT | `/api/v1/estimates/:id/expense-lines/:lineId` | 349–361 |
+| POST | `/api/v1/estimates/:id/expense-lines/:lineId/remove` | 363–369 |
+| POST | `/api/v1/estimates/:id/other-cost-lines` | 371–382 |
+| PUT | `/api/v1/estimates/:id/other-cost-lines/:lineId` | 384–394 |
+| POST | `/api/v1/estimates/:id/other-cost-lines/:lineId/remove` | 396–403 |
+| POST | `/api/v1/estimates/:id/assignments` | 405–440 |
+| PUT | `/api/v1/estimates/:id/assignments/:assignmentId` | 442–479 |
+| PUT | `/api/v1/estimates/:id/contingency` | 481–492 |
 
 ## Named functions
 
@@ -49,7 +50,7 @@ Evidence: source snapshot `e2819388`; generated, do not edit. [backend-node/src/
 | `bindExpense` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 228–235 |
 | `parseOther` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 238–245 |
 | `bindOther` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 246–251 |
-| `registerEstimateWorkspaceWriteRoutes` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 253–462 |
+| `registerEstimateWorkspaceWriteRoutes` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 253–493 |
 
 ## Direct local dependencies
 

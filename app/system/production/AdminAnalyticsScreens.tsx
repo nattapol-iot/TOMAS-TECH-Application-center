@@ -4,7 +4,7 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { apiRequest, checkAdminStorage, loadNasSettings, saveNasSettings, testNasConnection, type BootstrapData, type NasConnectionTestResult, type NasSettingsInput, type NasSettingsResult, type PagedResult, type ProjectSummary, type StorageCheckResult } from "../api-client";
+import { apiRequest, checkAdminStorage, createSalesCustomerContact, listSalesCustomerContacts, loadNasSettings, removeSalesCustomerContact, saveNasSettings, testNasConnection, updateSalesCustomerContact, type BootstrapData, type NasConnectionTestResult, type NasSettingsInput, type NasSettingsResult, type PagedResult, type ProjectSummary, type SalesCustomerContact, type SalesCustomerContactPage, type StorageCheckResult } from "../api-client";
 import { canManageEngineeringRates, canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
@@ -231,6 +231,7 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
   const [pageSize, setPageSize] = useState(10);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<BootstrapData["customers"][number] | null>(null);
+  const [contactsCustomer, setContactsCustomer] = useState<BootstrapData["customers"][number] | null>(null);
   const customers = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
     if (!needle) return bootstrap.customers;
@@ -259,7 +260,7 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
       </Toolbar>
       <Panel title={`${customers.length} customers`} flush>
         {customers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
-          <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Industry"} /></th><th><LocalizedText text={"Main contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th><th><LocalizedText text={"Site"} /></th><th className="num"><LocalizedText text={"Inquiries"} /></th><th className="num"><LocalizedText text={"Open estimates"} /></th>{canWrite || onOpenInquiries ? <th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th> : null}</tr></thead>
+          <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Industry"} /></th><th><LocalizedText text={"Main contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th><th><LocalizedText text={"Site"} /></th><th className="num"><LocalizedText text={"Inquiries"} /></th><th className="num"><LocalizedText text={"Open estimates"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead>
           <tbody>{visibleCustomers.map((customer) => <tr key={customer.id}>
             <td><strong className="mono">{customer.code}</strong></td>
             <td><LocalizedNameStack names={customer} fallback={customer.name} /></td>
@@ -270,10 +271,11 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
             <td>{customer.site || "—"}</td>
             <td className="num">{customer.inquiries}</td>
             <td className="num">{customer.openEstimates}</td>
-            {canWrite || onOpenInquiries ? <td><div className="row-actions">
+            <td><div className="row-actions">
               {canWrite ? <button className="icon-btn" type="button" aria-label={`Edit ${customer.name}`} onClick={() => setEditingCustomer(customer)}><Icon name="edit" /></button> : null}
+              <button className="icon-btn" type="button" aria-label={`People at ${customer.name}`} onClick={() => setContactsCustomer(customer)}><Icon name="users" /></button>
               {onOpenInquiries ? <button className="icon-btn" type="button" aria-label={`Open inquiries for ${customer.name}`} onClick={onOpenInquiries}><Icon name="chevronRight" /></button> : null}
-            </div></td> : null}
+            </div></td>
           </tr>)}</tbody>
         </table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={customers.length} onPage={setPage} /></div> : <EmptyState icon="users" title="No customer found" message="ปรับคำค้นหา หรือเพิ่มลูกค้ารายแรกเมื่อมีสิทธิ์ master.write" />}
       </Panel>
@@ -287,10 +289,174 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
         await refreshBootstrap?.();
         notify(`${code} updated`);
       }} /> : null}
+      {contactsCustomer ? <CustomerContactsModal
+        customer={contactsCustomer}
+        canWrite={canWrite}
+        notify={notify}
+        onClose={() => setContactsCustomer(null)}
+        onChanged={async () => { await refreshBootstrap?.(); }}
+      /> : null}
     </>
   );
 }
 
+type ContactFormState = {
+  nameTh: string; nameEn: string; nameJa: string;
+  titleTh: string; titleEn: string; titleJa: string;
+  department: string; position: string; email: string; phone: string;
+};
+
+const EMPTY_CONTACT_FORM: ContactFormState = {
+  nameTh: "", nameEn: "", nameJa: "",
+  titleTh: "", titleEn: "", titleJa: "",
+  department: "", position: "", email: "", phone: "",
+};
+
+// A company keeps as many people as it needs. They belong to a site, so the form offers the
+// site list and falls back to the MAIN site the API creates for a company that has none.
+function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged }: {
+  customer: BootstrapData["customers"][number];
+  canWrite: boolean;
+  notify: (message: string) => void;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [page, setPage] = useState<SalesCustomerContactPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState<SalesCustomerContact | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState<ContactFormState>(EMPTY_CONTACT_FORM);
+  const [siteId, setSiteId] = useState("");
+  const [makePrimary, setMakePrimary] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setPage(await listSalesCustomerContacts(customer.id));
+      setError("");
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [customer.id]);
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+
+  const closeForm = () => {
+    setCreating(false); setEditing(null); setMakePrimary(false);
+    setForm(EMPTY_CONTACT_FORM); setSiteId("");
+  };
+  const openCreate = () => {
+    setEditing(null); setCreating(true); setMakePrimary(false);
+    setForm(EMPTY_CONTACT_FORM);
+    setSiteId(page?.sites[0] ? String(page.sites[0].id) : "");
+  };
+  const openEdit = (contact: SalesCustomerContact) => {
+    setCreating(false); setEditing(contact); setMakePrimary(contact.isPrimary);
+    setForm({
+      nameTh: contact.nameTh, nameEn: contact.nameEn, nameJa: contact.nameJa,
+      titleTh: contact.titleTh, titleEn: contact.titleEn, titleJa: contact.titleJa,
+      department: contact.department, position: contact.position,
+      email: contact.email, phone: contact.phone,
+    });
+    setSiteId(String(contact.siteId));
+  };
+
+  const set = (key: keyof ContactFormState, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const resolvedName = canonicalLocalizedName({ nameTh: form.nameTh, nameEn: form.nameEn, nameJa: form.nameJa }, editing?.name);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!resolvedName) { setError("กรุณาระบุชื่อผู้ติดต่ออย่างน้อยหนึ่งภาษา"); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const input = {
+        name: resolvedName,
+        nameTh: form.nameTh.trim(), nameEn: form.nameEn.trim(), nameJa: form.nameJa.trim(),
+        titleTh: form.titleTh.trim(), titleEn: form.titleEn.trim(), titleJa: form.titleJa.trim(),
+        department: form.department.trim(), position: form.position.trim(),
+        email: form.email.trim(), phone: form.phone.trim(),
+      };
+      if (editing) {
+        await updateSalesCustomerContact(customer.id, editing.id, { ...input, rowVersion: editing.rowVersion, isPrimary: makePrimary });
+        notify(`${resolvedName} updated`);
+      } else {
+        await createSalesCustomerContact(customer.id, { ...input, ...(siteId ? { siteId: Number(siteId) } : {}) });
+        notify(`${resolvedName} added`);
+      }
+      closeForm();
+      await load();
+      await onChanged();
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (contact: SalesCustomerContact) => {
+    if (!window.confirm(`ต้องการนำ ${contact.name} ออกจากรายชื่อผู้ติดต่อของ ${customer.name} หรือไม่`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await removeSalesCustomerContact(customer.id, contact.id, contact.rowVersion);
+      notify(`${contact.name} removed`);
+      closeForm();
+      await load();
+      await onChanged();
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const contacts = page?.contacts ?? [];
+  const multiSite = (page?.sites.length ?? 0) > 1;
+  return (
+    <Modal title={`People at ${customer.name}`} subtitle="ผู้ติดต่อทุกคนของบริษัทนี้ บันทึกแยกรายบุคคลพร้อม Audit trail" size="xl" onClose={onClose}>
+      {error ? <LoadError message={error} /> : null}
+      {canWrite && !creating && !editing ? <Toolbar><button className="btn primary" type="button" onClick={openCreate}><Icon name="plus" /><LocalizedText text={"Add person"} /></button></Toolbar> : null}
+      {creating || editing ? <form onSubmit={(event) => { void submit(event); }}>
+        <div className="form-grid two">
+          <Field label="ชื่อผู้ติดต่อ (ไทย)" hint="กรอกอย่างน้อย 1 ภาษา"><input name="nameTh" maxLength={200} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} /></Field>
+          <Field label="Contact name (English)"><input name="nameEn" maxLength={200} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} /></Field>
+          <Field label="担当者名 (日本語)"><input name="nameJa" maxLength={200} value={form.nameJa} onChange={(event) => set("nameJa", event.target.value)} /></Field>
+          <Field label="คำนำหน้า (ไทย)"><input name="titleTh" maxLength={50} value={form.titleTh} onChange={(event) => set("titleTh", event.target.value)} /></Field>
+          <Field label="Title (English)"><input name="titleEn" maxLength={50} value={form.titleEn} onChange={(event) => set("titleEn", event.target.value)} /></Field>
+          <Field label="敬称 (日本語)"><input name="titleJa" maxLength={50} value={form.titleJa} onChange={(event) => set("titleJa", event.target.value)} /></Field>
+          <Field label="Department"><input name="department" maxLength={200} value={form.department} onChange={(event) => set("department", event.target.value)} /></Field>
+          <Field label="Position"><input name="position" maxLength={200} value={form.position} onChange={(event) => set("position", event.target.value)} /></Field>
+          <Field label="Email"><input name="email" type="email" maxLength={256} value={form.email} onChange={(event) => set("email", event.target.value)} /></Field>
+          <Field label="Phone"><input name="phone" maxLength={100} value={form.phone} onChange={(event) => set("phone", event.target.value)} /></Field>
+          {!editing && multiSite ? <Field label="Site"><select name="siteId" value={siteId} onChange={(event) => setSiteId(event.target.value)}>{(page?.sites ?? []).map((site) => <option key={site.id} value={String(site.id)}>{site.name}</option>)}</select></Field> : null}
+          {editing ? <Field label="Main contact" hint="ผู้ติดต่อหลักของบริษัทมีได้คนเดียวต่อสถานที่"><label className="check"><input name="isPrimary" type="checkbox" checked={makePrimary} disabled={editing.isPrimary} onChange={(event) => setMakePrimary(event.target.checked)} /><span><LocalizedText text={"Set as main contact"} /></span></label></Field> : null}
+        </div>
+        <div className="modal-actions">
+          <button className="btn default" type="button" disabled={busy} onClick={closeForm}><LocalizedText text={"Cancel"} /></button>
+          <button className="btn primary" type="submit" disabled={busy || !resolvedName}><LocalizedText text={busy ? "Saving…" : "Save"} /></button>
+        </div>
+      </form> : null}
+      {loading ? <EmptyState icon="users" title="Loading…" message="กำลังโหลดรายชื่อผู้ติดต่อ" /> : contacts.length ? <div className="table-wrap"><table>
+        <thead><tr><th><LocalizedText text={"Contact"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th>{multiSite ? <th><LocalizedText text={"Site"} /></th> : null}{canWrite ? <th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th> : null}</tr></thead>
+        <tbody>{contacts.map((contact) => <tr key={contact.id}>
+          <td><LocalizedNameStack names={contact} titles={contact} fallback={contact.name} />{contact.isPrimary ? <div><Badge tone="blue">Main contact</Badge></div> : null}</td>
+          <td>{[contact.position, contact.department].filter(Boolean).join(" · ") || "—"}</td>
+          <td className="muted">{contact.email || "—"}</td>
+          <td className="mono">{contact.phone || "—"}</td>
+          {multiSite ? <td>{contact.siteName}</td> : null}
+          {canWrite ? <td><div className="row-actions">
+            <button className="icon-btn" type="button" aria-label={`Edit ${contact.name}`} disabled={busy} onClick={() => openEdit(contact)}><Icon name="edit" /></button>
+            <button className="icon-btn" type="button" aria-label={`Remove ${contact.name}`} disabled={busy || contact.isPrimary} onClick={() => { void remove(contact); }}><Icon name="trash" /></button>
+          </div></td> : null}
+        </tr>)}</tbody>
+      </table></div> : <EmptyState icon="users" title="No contact yet" message="เพิ่มผู้ติดต่อคนแรกของบริษัทนี้เมื่อมีสิทธิ์ master.write" />}
+    </Modal>
+  );
+}
 function LocalizedNameStack({ names, fallback, titles }: { names: LocalizedNames; fallback: string; titles?: ContactTitles }) {
   const lines = titles ? contactNameLines({ ...names, ...titles }, fallback) : localizedNameLines(names);
   if (!lines.length) return <strong>{fallback}</strong>;

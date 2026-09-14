@@ -8,6 +8,8 @@ import type { CurrentUserService } from "../src/users.js";
 import { demandSalesCustomerPermission, registerSalesCustomerRoutes, salesContactInput, salesCustomerInput } from "../src/routes/sales-customers.js";
 import { customerInput } from "../src/routes/master.js";
 
+const ROW_VERSION = Buffer.alloc(8).toString("base64");
+
 test("company contact roles preserve Thai, English and Japanese and require an identified person", () => {
   for (const parse of [salesCustomerInput, customerInput]) {
     const input = parse({ code: "ROLE-TEST", nameTh: "บริษัท ทดสอบ", nameEn: "Test Co., Ltd.", nameJa: "テスト株式会社", contactNameTh: "สมชาย ใจดี", contactNameEn: "Somchai Jaidee", contactNameJa: "ソムチャイ", department: "  技術部  ", position: " Sales Engineer " });
@@ -94,4 +96,51 @@ test("contact titles stay separate, optional, bounded and require a named person
   }
   const contact=salesContactInput({name:"山田",titleJa:"様"});
   assert.equal(contact.name,"山田"); assert.equal(contact.titleJa,"様");
+});
+
+test("contact edit and removal reject read-only users before any write or actor lookup", async () => {
+  let touchedDatabase = false;
+  const database = { async transaction() { touchedDatabase = true; throw new Error("Unexpected database access"); } } as unknown as Database;
+  const users = { async demandPermission() { throw new ApiError(403, "permission_denied", "Denied"); }, async required() { throw new Error("Unexpected actor lookup"); } } as unknown as CurrentUserService;
+  const app = Fastify(); registerErrorHandler(app); registerSalesCustomerRoutes(app, database, users);
+  try {
+    const edit = await app.inject({ method: "PUT", url: "/api/v1/sales/customers/1/contacts/2", payload: { name: "Jane", rowVersion: ROW_VERSION } });
+    assert.equal(edit.statusCode, 403); assert.equal(edit.json().code, "permission_denied");
+    const removal = await app.inject({ method: "DELETE", url: `/api/v1/sales/customers/1/contacts/2?rowVersion=${encodeURIComponent(ROW_VERSION)}` });
+    assert.equal(removal.statusCode, 403); assert.equal(removal.json().code, "permission_denied");
+    assert.equal(touchedDatabase, false);
+  } finally { await app.close(); }
+});
+
+test("contact edit and removal validate identity, row version and the main-contact flag before the transaction", async () => {
+  let touchedDatabase = false;
+  const database = { async transaction() { touchedDatabase = true; throw new Error("Unexpected transaction"); } } as unknown as Database;
+  const users = { async demandPermission() {}, async required() { return { id: 1 }; } } as unknown as CurrentUserService;
+  const app = Fastify(); registerErrorHandler(app); registerSalesCustomerRoutes(app, database, users);
+  try {
+    // A person must still be named in at least one language.
+    const nameless = await app.inject({ method: "PUT", url: "/api/v1/sales/customers/1/contacts/2", payload: { rowVersion: ROW_VERSION } });
+    assert.equal(nameless.statusCode, 400); assert.equal(nameless.json().code, "validation_failed");
+    // An edit without a usable row version cannot silently overwrite a concurrent change.
+    for (const rowVersion of [undefined, "", "not-base64", Buffer.alloc(4).toString("base64")]) {
+      const response = await app.inject({ method: "PUT", url: "/api/v1/sales/customers/1/contacts/2", payload: { name: "Jane", rowVersion } });
+      assert.equal(response.statusCode, 400); assert.equal(response.json().code, "invalid_row_version");
+    }
+    // Promotion is an explicit boolean, never a truthy string.
+    for (const isPrimary of ["true", 1, null]) {
+      const response = await app.inject({ method: "PUT", url: "/api/v1/sales/customers/1/contacts/2", payload: { name: "Jane", rowVersion: ROW_VERSION, isPrimary } });
+      assert.equal(response.statusCode, 400); assert.equal(response.json().code, "validation_failed");
+    }
+    // Both routes reject a contact or customer id that is not a positive integer.
+    for (const url of ["/api/v1/sales/customers/1/contacts/0", "/api/v1/sales/customers/0/contacts/2", "/api/v1/sales/customers/1/contacts/1.5"]) {
+      const edit = await app.inject({ method: "PUT", url, payload: { name: "Jane", rowVersion: ROW_VERSION } });
+      assert.equal(edit.statusCode, 400);
+      const removal = await app.inject({ method: "DELETE", url: `${url}?rowVersion=${encodeURIComponent(ROW_VERSION)}` });
+      assert.equal(removal.statusCode, 400);
+    }
+    // Removal carries the row version on the query string, so a missing one stops here.
+    const unguarded = await app.inject({ method: "DELETE", url: "/api/v1/sales/customers/1/contacts/2" });
+    assert.equal(unguarded.statusCode, 400); assert.equal(unguarded.json().code, "invalid_row_version");
+    assert.equal(touchedDatabase, false);
+  } finally { await app.close(); }
 });

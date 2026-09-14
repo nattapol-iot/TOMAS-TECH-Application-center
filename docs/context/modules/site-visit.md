@@ -4,7 +4,7 @@
 
 นัดหมาย มอบหมาย สำรวจ รายงาน และอนุมัติ
 
-Evidence: snapshot `e2819388`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `056c73a4`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -91,6 +91,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/document-number.ts](<../../../backend-node/src/document-number.ts>)
 - [backend-node/src/site-visit-operations.ts](<../../../backend-node/src/site-visit-operations.ts>)
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
+- [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)

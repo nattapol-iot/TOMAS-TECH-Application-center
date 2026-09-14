@@ -2674,6 +2674,56 @@ export const saveCustomerSiteContact = (siteId: number, input: {
   method: "POST", body: JSON.stringify(input),
 });
 
+/* ------------------------ Customer people (contacts) --------------------- */
+
+export type SalesCustomerContact = {
+  id: number; siteId: number; siteCode: string; siteName: string; name: string;
+  titleTh: string; titleEn: string; titleJa: string;
+  nameTh: string; nameEn: string; nameJa: string;
+  email: string; phone: string; department: string; position: string;
+  isPrimary: boolean; rowVersion: string;
+};
+
+export type SalesCustomerContactPage = {
+  sites: { id: number; code: string; name: string }[];
+  contacts: SalesCustomerContact[];
+  primaryContact: {
+    name: string; titleTh: string; titleEn: string; titleJa: string;
+    nameTh: string; nameEn: string; nameJa: string;
+    email: string; phone: string; department: string; position: string;
+  } | null;
+};
+
+export type SalesCustomerContactInput = {
+  name?: string; nameTh?: string; nameEn?: string; nameJa?: string;
+  titleTh?: string; titleEn?: string; titleJa?: string;
+  email?: string; phone?: string; department?: string; position?: string;
+};
+
+// The company page lists every person across every site; siteId is optional because the
+// API falls back to the MAIN site it creates for a company that has no site yet.
+export const listSalesCustomerContacts = (customerId: number) =>
+  apiRequest<SalesCustomerContactPage>(`/api/v1/sales/customers/${customerId}/contacts`);
+
+export const createSalesCustomerContact = (customerId: number, input: SalesCustomerContactInput & { siteId?: number }) =>
+  apiRequest<SalesCustomerContact>(`/api/v1/sales/customers/${customerId}/contacts`, {
+    method: "POST", body: JSON.stringify(input),
+  });
+
+export const updateSalesCustomerContact = (
+  customerId: number,
+  contactId: number,
+  input: SalesCustomerContactInput & { rowVersion: string; isPrimary?: boolean },
+) => apiRequest<SalesCustomerContact>(`/api/v1/sales/customers/${customerId}/contacts/${contactId}`, {
+  method: "PUT", body: JSON.stringify(input),
+});
+
+export const removeSalesCustomerContact = (customerId: number, contactId: number, rowVersion: string) =>
+  apiRequest<{ id: number; removed: boolean }>(
+    `/api/v1/sales/customers/${customerId}/contacts/${contactId}${queryString({ rowVersion })}`,
+    { method: "DELETE" },
+  );
+
 /* ---------------------------- Notification feed -------------------------- */
 
 export const listNotifications = (values: { unreadOnly?: boolean; limit?: number } = {}) =>
