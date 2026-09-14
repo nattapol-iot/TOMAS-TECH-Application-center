@@ -446,26 +446,8 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
         if (quantity * unitCost > 999_999_999_999_999) {
           throw new ApiError(400, "validation_failed", `Line ${line.item_code} exceeds the supported monetary range at ${modules} modules.`);
         }
-        // Item codes are unique per estimate/revision, not per module. Applying
-        // a reusable module twice must allocate another line code, not fail the
-        // whole transaction. The estimate lock serializes competing writers and
-        // SQL comparison preserves the database's own collation rules.
-        const allocate = new sql.Request(transaction);
-        allocate.input("estimate_id", sql.BigInt, id);
-        allocate.input("revision", sql.Int, estimate.revision);
-        allocate.input("base", sql.NVarChar(100), line.item_code);
-        const itemCode = (await allocate.query<{ item_code: string }>(`
-          DECLARE @candidate nvarchar(100)=@base, @suffix int=1;
-          WHILE EXISTS (SELECT 1 FROM dbo.cost_items WHERE estimate_id=@estimate_id
-            AND revision=@revision AND item_code=@candidate AND deleted_at IS NULL)
-          BEGIN
-            SET @suffix=@suffix+1;
-            SET @candidate=LEFT(@base,100-LEN(CONVERT(nvarchar(20),@suffix))-1)
-              +N'-'+CONVERT(nvarchar(20),@suffix);
-          END;
-          SELECT @candidate AS item_code;
-        `)).recordset[0]!.item_code;
-        if (itemCode !== line.item_code) renamedItemCodes.push({ original: line.item_code, applied: itemCode });
+        // Product codes may repeat; the cost line id identifies each occurrence.
+        const itemCode = line.item_code;
         const insert = new sql.Request(transaction);
         bindCost(insert, id, estimate.revision, {
           estimateRowVersion, lineRowVersion: null, categoryCode: line.category_code, subcategory: line.subcategory,

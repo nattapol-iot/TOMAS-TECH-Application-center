@@ -36,24 +36,6 @@ export function otherCostSectionCode(category: string): EstimateSectionCode | nu
   return OTHER_COST_SECTIONS[category] ?? null;
 }
 
-/**
- * Allocate a free item code inside the target revision.
- *
- * `UX_cost_items_code` is unique on (estimate_id, revision, item_code) for live
- * rows, so a source code that already exists in the target must be suffixed
- * instead of aborting the copy. The suffix rule mirrors the allocation loop that
- * `apply-template` already runs in SQL, including its 100-character ceiling.
- */
-export function allocateItemCode(base: string, taken: ReadonlySet<string>): string {
-  if (!taken.has(base)) return base;
-  for (let suffix = 2; suffix <= 100_000; suffix += 1) {
-    const tail = `-${suffix}`;
-    const candidate = base.slice(0, Math.max(0, 100 - tail.length)) + tail;
-    if (!taken.has(candidate)) return candidate;
-  }
-  throw new Error(`No free item code remains for '${base}'.`);
-}
-
 export type SupplierState = "active" | "inactive";
 
 /**

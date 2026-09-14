@@ -10,6 +10,7 @@ export type AppliedMigration = Readonly<{
 }>;
 
 export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
+  { version: 50, fileName: "050_estimate_product_codes.sql", name: "Preserve product codes across estimate modules" },
   { version: 49, fileName: "049_estimate_module_quantity.sql", name: "Estimate module quantity and unit" },
   { version: 25, fileName: "025_reports.sql", name: "Unified revisioned reports and customer acknowledgment" },
   { version: 26, fileName: "026_performance_reviews.sql", name: "Durable role-scoped KPI performance reviews" },

@@ -1,24 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  ESTIMATE_SECTION_CODES, MANHOUR_SECTION_CODE, allocateItemCode, copiedLineOwnerId, expenseSectionCode,
+  ESTIMATE_SECTION_CODES, MANHOUR_SECTION_CODE, copiedLineOwnerId, expenseSectionCode,
   otherCostSectionCode, requestedSections, resolveCopiedSupplier, touchedSections,
 } from "../src/estimate-copy-plan.js";
-
-test("a copied item code never collides with a code the target revision already holds", () => {
-  const taken = new Set(["PLC-01", "PLC-01-2", "HMI-02"]);
-  assert.equal(allocateItemCode("NEW-01", taken), "NEW-01");
-  assert.equal(allocateItemCode("PLC-01", taken), "PLC-01-3");
-  assert.equal(allocateItemCode("HMI-02", taken), "HMI-02-2");
-});
-
-test("allocation keeps the item code inside the nvarchar(100) column", () => {
-  const base = "X".repeat(100);
-  const applied = allocateItemCode(base, new Set([base]));
-  assert.equal(applied.length, 100);
-  assert.equal(applied.endsWith("-2"), true);
-  assert.notEqual(applied, base);
-});
 
 test("expense and other-cost lines resolve to the section that controls them", () => {
   for (const [type, section] of [["Travel", "08"], ["Transportation", "08"], ["Accommodation", "09"], ["Per Diem", "09"], ["Equipment Rental", "10"], ["Other", "10"]]) {

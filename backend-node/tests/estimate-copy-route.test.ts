@@ -139,15 +139,15 @@ test("one copy writes every ledger of the target in a single transaction and lea
   } finally { await app.close(); }
 });
 
-test("a duplicate item code is renumbered instead of aborting the copy", async (t) => {
+test("a duplicate product code stays unchanged when copying into another module", async (t) => {
   const { app, answer } = harness({ id: 7, role: "Engineer" }, defaultAnswer(() => []));
   const statements = installSqlMock(t, answer);
   try {
     const response = await app.inject({ method: "POST", url: `/api/v1/estimates/${TARGET_ID}/copy-from`, payload });
     assert.equal(response.statusCode, 201, response.body);
-    assert.deepEqual(response.json().renamedItemCodes, [{ original: "PLC-01", applied: "PLC-01-2" }]);
+    assert.deepEqual(response.json().renamedItemCodes, []);
     const codes = statements.filter((entry) => entry.statement.includes("INSERT INTO dbo.cost_items")).map((entry) => entry.params.item_code);
-    assert.deepEqual(codes, ["PLC-01-2", "HMI-02"]);
+    assert.deepEqual(codes, ["PLC-01", "HMI-02"]);
   } finally { await app.close(); }
 });
 

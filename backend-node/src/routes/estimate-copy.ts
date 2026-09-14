@@ -7,7 +7,7 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import {
-  allocateItemCode, expenseSectionCode, isEstimateSectionCode, MANHOUR_SECTION_CODE,
+  expenseSectionCode, isEstimateSectionCode, MANHOUR_SECTION_CODE,
   otherCostSectionCode, requestedSections, resolveCopiedSupplier, touchedSections,
   type SupplierState,
 } from "../estimate-copy-plan.js";
@@ -21,7 +21,7 @@ import {
 
 /* Copying an estimate for reuse is one transaction or none of it.
    The previous behaviour wrote the copied lines one HTTP request at a time, so
-   a collision on `UX_cost_items_code`, a deactivated supplier or the aggregate
+   a deactivated supplier or the aggregate
    guard left the target holding a partial copy that could not be retried. This
    route locks the target once, copies every requested ledger plus its ERP
    classifications, and lets SQL Server roll the whole thing back on any failure.
@@ -186,7 +186,7 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
         .filter((row) => { const section = expenseSectionCode(row.expense_type); return section !== null && sections.includes(section); });
       const otherRows = (ledgers.recordsets[3] as unknown as OtherRow[])
         .filter((row) => { const section = otherCostSectionCode(row.category); return section !== null && sections.includes(section); });
-      const takenCodes = new Set((ledgers.recordsets[4] as unknown as Array<{ item_code: string }>).map((row) => row.item_code));
+
 
       const total = costRows.length + manhourRows.length + expenseRows.length + otherRows.length;
       if (!total) throw new ApiError(409, "nothing_to_copy", `${source.estimate_no} has no line in the selected section(s) to copy.`);
@@ -218,9 +218,9 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
         const supplier = resolveCopiedSupplier(row.supplier_id === null ? null : Number(row.supplier_id), row.supplier_state, false);
         if (supplier.dropped) droppedSuppliers.push({ line: row.item_code, supplierId: Number(row.supplier_id) });
         await validateReferences(transaction, lineOwnerId, supplier.supplierId);
-        const itemCode = allocateItemCode(row.item_code, takenCodes);
-        takenCodes.add(itemCode);
-        if (itemCode !== row.item_code) renamedItemCodes.push({ original: row.item_code, applied: itemCode });
+        const itemCode = row.item_code;
+
+
         const insert = new sql.Request(transaction);
         insert.input("estimate_id", sql.BigInt, targetId); insert.input("revision", sql.Int, estimate.revision);
         insert.input("category_code", sql.Char(2), row.category_code); insert.input("category", sql.NVarChar(100), row.category);
