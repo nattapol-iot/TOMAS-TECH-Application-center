@@ -235,6 +235,21 @@ public sealed record CreateProjectRequest(
     string Site,
     string? Remark);
 
+public sealed record ProjectMemberSummary(
+    long UserId,
+    string Name,
+    string Email,
+    string Department,
+    string SystemRole,
+    string RoleOnProject,
+    bool IsManager,
+    bool IsLeadEngineer,
+    DateTimeOffset AddedAt);
+
+public sealed record AddProjectMemberRequest(
+    long UserId,
+    string? RoleOnProject);
+
 public sealed record ProjectDocumentSummary(
     long Id,
     string FileName,

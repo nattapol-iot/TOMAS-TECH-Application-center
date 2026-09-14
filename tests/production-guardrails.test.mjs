@@ -1241,3 +1241,44 @@ test("Master Data Customers table defaults to 10 rows and supports page-size sel
   assert.match(customers, /<TablePageSize value=\{pageSize\}/);
   assert.match(customers, /setPageSize\(value\); setPage\(1\)/);
 });
+
+test("project members can be managed after creation, not only assigned at creation time", async () => {
+  const [endpoints, scope, grants, apiClient, screens] = await Promise.all([
+    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ProjectEndpoints.cs", root), "utf8"),
+    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectScope.cs", root), "utf8"),
+    readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8"),
+  ]);
+
+  // Routes exist beyond the create-time-only InsertMemberAsync calls.
+  assert.match(endpoints, /MapGet\("\/\{id:long\}\/members", ListMembersAsync\)/);
+  assert.match(endpoints, /MapPost\("\/\{id:long\}\/members", AddMemberAsync\)/);
+  assert.match(endpoints, /MapDelete\("\/\{id:long\}\/members\/\{userId:long\}", RemoveMemberAsync\)/);
+
+  // Write endpoints demand project.write and project-scope visibility, not just any authenticated user.
+  assert.match(endpoints, /AddMemberAsync[\s\S]{0,400}DemandPermissionAsync\("project\.write"/);
+  assert.match(endpoints, /RemoveMemberAsync[\s\S]{0,400}DemandPermissionAsync\("project\.write"/);
+  assert.match(endpoints, /AddMemberAsync[\s\S]{0,1200}ProjectScope\.DemandAsync/);
+  assert.match(endpoints, /RemoveMemberAsync[\s\S]{0,1200}ProjectScope\.DemandAsync/);
+
+  // The project's manager/lead engineer are structural fields, not removable as a plain membership row.
+  assert.match(endpoints, /manager_id = @user_id OR lead_engineer_id = @user_id/);
+  assert.match(endpoints, /core_member/);
+
+  // dbo.project_members needs DELETE too now, not just the original INSERT from project creation.
+  assert.match(grants, /GRANT INSERT, DELETE ON OBJECT::dbo\.project_members TO \[iot_team_app_role\]/);
+
+  // ProjectScope's visibility rule (elevated OR manager OR lead engineer OR project_members row)
+  // is unchanged by this feature -- it is what the new endpoints let more people satisfy.
+  assert.match(scope, /EXISTS \(SELECT 1 FROM dbo\.project_members m WHERE m\.project_id = p\.id AND m\.user_id = @actor\)/);
+
+  assert.match(apiClient, /export const listProjectMembers/);
+  assert.match(apiClient, /export const addProjectMember/);
+  assert.match(apiClient, /export const removeProjectMember/);
+
+  assert.match(screens, /function ProjectMembersModal/);
+  assert.match(screens, /setMembersProject\(item\)/);
+  // The manager/lead engineer rows are display-only in the UI too -- no Remove button for them.
+  assert.match(screens, /canWrite && !member\.isManager && !member\.isLeadEngineer/);
+});

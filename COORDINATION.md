@@ -244,6 +244,8 @@ Add a row before you start. Remove it — or set Status to `done` — when you f
 
 | 2026-09-07 | Claude | User-reported: macmini deploy job reports success but the site never reflects new commits. Diagnosing/fixing `scripts/macos/deploy.sh` only; read `docs/MACMINI_HANDOFF.md`, `docker-compose.dev.yml`, `docker-compose.tls.yml` but did not edit them. No colima/host access from this session — reasoning from the compose files and deploy script only. | released — see Discussion 2026-09-07 (2) for the root cause and fix; `bash -n` clean, could not run against the real colima host — Claude, 2026-09-07 |
 
+| 2026-09-14 | Claude | User-reported: some users can't see a Project; asked to build a permanent "manage project members" feature. New `POST/DELETE /api/v1/projects/{id}/members` (+ existing-behavior `GET`) in `ProjectEndpoints.cs`, `ProjectMemberSummary`/`AddProjectMemberRequest` in `ApiModels.cs`, `GRANT DELETE` added to `010_application_login.sql`, `listProjectMembers`/`addProjectMember`/`removeProjectMember` in `api-client.ts`, new `ProjectMembersModal` + "Team" row action in `CoreScreens.tsx`, one new guardrail in `production-guardrails.test.mjs`. Did not touch `ProjectScope.cs`'s visibility rule itself, any migration, or any other screen/endpoint file. Left the pre-existing, unrelated uncommitted Inspection Report/PPTX changes in the working tree untouched. | released — dotnet build clean, `npm run typecheck`/`lint` clean, full `npm test` green except one pre-existing unrelated i18n failure from the uncommitted Inspection Report work already in the tree (`Operation Tests`/`Units` labels in `InspectionReportBody.tsx`, not mine) — Claude, 2026-09-14 |
+
 ---
 
 ## Needs a human decision

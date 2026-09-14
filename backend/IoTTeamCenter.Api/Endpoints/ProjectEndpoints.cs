@@ -31,6 +31,9 @@ public static class ProjectEndpoints
         var group = app.MapGroup("/api/v1/projects").RequireAuthorization();
         group.MapGet("/", ListAsync);
         group.MapPost("/", CreateAsync);
+        group.MapGet("/{id:long}/members", ListMembersAsync);
+        group.MapPost("/{id:long}/members", AddMemberAsync);
+        group.MapDelete("/{id:long}/members/{userId:long}", RemoveMemberAsync);
     }
 
     private static async Task<IResult> ListAsync(
@@ -217,7 +220,117 @@ public static class ProjectEndpoints
         }
     }
 
-    private static async Task InsertMemberAsync(SqlConnection connection, SqlTransaction transaction, long projectId, long userId, string role, long actorId, CancellationToken cancellationToken)
+    private static async Task<IResult> ListMembersAsync(
+        long id,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("project.read", cancellationToken);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await ProjectScope.DemandAsync(connection, null, id, actor, cancellationToken);
+
+        await using var command = new SqlCommand("""
+            SELECT u.id, u.name, u.email, u.department, r.code, m.role_on_project, m.created_at,
+                   CASE WHEN u.id = p.manager_id THEN 1 ELSE 0 END,
+                   CASE WHEN u.id = p.lead_engineer_id THEN 1 ELSE 0 END
+            FROM dbo.project_members m
+            INNER JOIN dbo.users u ON u.id = m.user_id
+            INNER JOIN dbo.roles r ON r.id = u.role_id
+            INNER JOIN dbo.projects p ON p.id = m.project_id
+            WHERE m.project_id = @project_id
+            ORDER BY CASE WHEN u.id = p.manager_id THEN 0 WHEN u.id = p.lead_engineer_id THEN 1 ELSE 2 END, u.name;
+            """, connection);
+        command.Parameters.AddParameter("@project_id", SqlDbType.BigInt, id);
+
+        var members = new List<ProjectMemberSummary>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            members.Add(new ProjectMemberSummary(
+                reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
+                reader.GetString(5), reader.GetBoolean(7), reader.GetBoolean(8), reader.GetFieldValue<DateTimeOffset>(6)));
+        }
+        return Results.Ok(members);
+    }
+
+    private static async Task<IResult> AddMemberAsync(
+        long id,
+        AddProjectMemberRequest request,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("project.write", cancellationToken);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+        if (request.UserId <= 0)
+            throw new ApiException(StatusCodes.Status400BadRequest, "validation_failed", "A user is required.");
+        var roleOnProject = string.IsNullOrWhiteSpace(request.RoleOnProject) ? "Member" : request.RoleOnProject.Trim();
+        InputValidation.RequiredText(roleOnProject, 100, "Role on the project");
+
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await ProjectScope.DemandAsync(connection, null, id, actor, cancellationToken);
+
+        await using (var validateUser = new SqlCommand("""
+            SELECT 1 FROM dbo.users WHERE id = @user_id AND is_active = 1 AND deleted_at IS NULL;
+            """, connection))
+        {
+            validateUser.Parameters.AddParameter("@user_id", SqlDbType.BigInt, request.UserId);
+            if (await validateUser.ExecuteScalarAsync(cancellationToken) is null)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, "invalid_reference", "User must be an active account.");
+        }
+
+        await InsertMemberAsync(connection, null, id, request.UserId, roleOnProject, actor.Id, cancellationToken);
+        var projectNo = await GetProjectNumberAsync(connection, id, cancellationToken);
+        await InquiryEndpoints.InsertAuditAsync(connection, null, actor.Id, "Project", id, projectNo, "Added project member", null, new { request.UserId, roleOnProject }, cancellationToken);
+        return Results.Created($"/api/v1/projects/{id}/members/{request.UserId}", new { userId = request.UserId, roleOnProject });
+    }
+
+    private static async Task<IResult> RemoveMemberAsync(
+        long id,
+        long userId,
+        SqlConnectionFactory connections,
+        CurrentUserService users,
+        CancellationToken cancellationToken)
+    {
+        await users.DemandPermissionAsync("project.write", cancellationToken);
+        var actor = await users.GetRequiredAsync(cancellationToken);
+        await using var connection = await connections.OpenAsync(cancellationToken);
+        await ProjectScope.DemandAsync(connection, null, id, actor, cancellationToken);
+
+        await using (var checkCore = new SqlCommand("""
+            SELECT 1 FROM dbo.projects WHERE id = @project_id AND (manager_id = @user_id OR lead_engineer_id = @user_id);
+            """, connection))
+        {
+            checkCore.Parameters.AddParameter("@project_id", SqlDbType.BigInt, id);
+            checkCore.Parameters.AddParameter("@user_id", SqlDbType.BigInt, userId);
+            if (await checkCore.ExecuteScalarAsync(cancellationToken) is not null)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, "core_member", "The project manager and lead engineer cannot be removed here; reassign their role on the project instead.");
+        }
+
+        await using var command = new SqlCommand("""
+            DELETE FROM dbo.project_members WHERE project_id = @project_id AND user_id = @user_id;
+            """, connection);
+        command.Parameters.AddParameter("@project_id", SqlDbType.BigInt, id);
+        command.Parameters.AddParameter("@user_id", SqlDbType.BigInt, userId);
+        var affected = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (affected == 0)
+            throw new ApiException(StatusCodes.Status404NotFound, "not_a_member", "That user is not a member of this project.");
+
+        var projectNo = await GetProjectNumberAsync(connection, id, cancellationToken);
+        await InquiryEndpoints.InsertAuditAsync(connection, null, actor.Id, "Project", id, projectNo, "Removed project member", new { userId }, null, cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<string> GetProjectNumberAsync(SqlConnection connection, long projectId, CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("SELECT project_no FROM dbo.projects WHERE id = @project_id;", connection);
+        command.Parameters.AddParameter("@project_id", SqlDbType.BigInt, projectId);
+        return (string)(await command.ExecuteScalarAsync(cancellationToken) ?? "");
+    }
+
+    private static async Task InsertMemberAsync(SqlConnection connection, SqlTransaction? transaction, long projectId, long userId, string role, long actorId, CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand("""
             INSERT INTO dbo.project_members (project_id, user_id, role_on_project, created_by)

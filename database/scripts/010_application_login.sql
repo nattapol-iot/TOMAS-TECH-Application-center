@@ -266,7 +266,7 @@ GRANT INSERT, UPDATE ON OBJECT::dbo.other_cost_lines TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.projects TO [iot_team_app_role];
 -- End user editing does not grant changes to commercial/project control fields.
 GRANT UPDATE (end_user_customer_id,updated_by,updated_at) ON OBJECT::dbo.projects TO [iot_team_app_role];
-GRANT INSERT ON OBJECT::dbo.project_members TO [iot_team_app_role];
+GRANT INSERT, DELETE ON OBJECT::dbo.project_members TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_folders TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.project_docs TO [iot_team_app_role];
 GRANT INSERT ON OBJECT::dbo.audit_log TO [iot_team_app_role];

@@ -5,6 +5,7 @@ import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  addProjectMember,
   createEmployee,
   createEstimate,
   createCostItem,
@@ -22,9 +23,11 @@ import {
   listInquiries,
   listInventory,
   listProjectDocuments,
+  listProjectMembers,
   listProjects,
   loadEstimateCostWorkspace,
   removeCostItem,
+  removeProjectMember,
   updateEmployee,
   updateUserRole,
   uploadProjectDocument,
@@ -46,6 +49,7 @@ import {
   type ItemBalance,
   type PagedResult,
   type ProjectDocument,
+  type ProjectMember,
   type ProjectSummary,
   type SignInbox,
 } from "../api-client";
@@ -780,6 +784,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const [createOpen, setCreateOpen] = useState(false);
   const [documentsProject, setDocumentsProject] = useState<ProjectSummary | null>(null);
   const [endUserProject, setEndUserProject] = useState<ProjectSummary | null>(null);
+  const [membersProject, setMembersProject] = useState<ProjectSummary | null>(null);
   const load = useCallback(async () => { setLoading(true); setError(""); try { setResult(await listProjects({ page, pageSize, search, status: status === "All status" ? undefined : status })); } catch (requestError) { setError(toError(requestError)); } finally { setLoading(false); } }, [page, pageSize, search, status]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
   const canWrite = bootstrap.permissions.includes("project.write");
@@ -789,12 +794,92 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     <Toolbar><SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search project, customer or end user…" /><Select label="Status" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"]} /><button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${result.total} projects`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-      {result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr><th><LocalizedText text={"Project No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"บริษัทที่รับงานด้วย / Contracting customer"} /></th><th><LocalizedText text={"End user / ผู้ใช้งานปลายทาง"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Manager"} /></th><th><LocalizedText text={"Start"} /></th><th><LocalizedText text={"Target delivery"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{result.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.name}</strong></td><td>{item.customerName}</td><td>{item.endUserName || <span className="muted"><LocalizedText text={"ยังไม่ระบุ / Not specified"} /></span>}</td><td>{item.projectType}</td><td>{item.managerName}</td><td>{formatDate(item.startDate)}</td><td>{formatDate(item.targetDelivery)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td><td><Badge>{item.status}</Badge></td><td className="muted">{formatDateTime(item.updatedAt)}</td><td>{canWrite && canEditEndUser(item.status) ? <button className="btn ghost sm" type="button" onClick={() => setEndUserProject(item)}><LocalizedText text={"แก้ไข End user / Edit"} /></button> : null}<button className="btn ghost sm" type="button" aria-label={`Documents for ${item.number}`} onClick={() => setDocumentsProject(item)}><Icon name="paperclip" /><LocalizedText text={"Documents"} /></button></td></tr>)}</tbody></table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
+      {result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr><th><LocalizedText text={"Project No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"บริษัทที่รับงานด้วย / Contracting customer"} /></th><th><LocalizedText text={"End user / ผู้ใช้งานปลายทาง"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Manager"} /></th><th><LocalizedText text={"Start"} /></th><th><LocalizedText text={"Target delivery"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{result.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.name}</strong></td><td>{item.customerName}</td><td>{item.endUserName || <span className="muted"><LocalizedText text={"ยังไม่ระบุ / Not specified"} /></span>}</td><td>{item.projectType}</td><td>{item.managerName}</td><td>{formatDate(item.startDate)}</td><td>{formatDate(item.targetDelivery)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td><td><Badge>{item.status}</Badge></td><td className="muted">{formatDateTime(item.updatedAt)}</td><td>{canWrite && canEditEndUser(item.status) ? <button className="btn ghost sm" type="button" onClick={() => setEndUserProject(item)}><LocalizedText text={"แก้ไข End user / Edit"} /></button> : null}<button className="btn ghost sm" type="button" aria-label={`Documents for ${item.number}`} onClick={() => setDocumentsProject(item)}><Icon name="paperclip" /><LocalizedText text={"Documents"} /></button><button className="btn ghost sm" type="button" aria-label={`Team for ${item.number}`} onClick={() => setMembersProject(item)}><Icon name="users" /><LocalizedText text={"Team"} /></button></td></tr>)}</tbody></table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
     </Panel>
     {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} created with folder metadata`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
     {endUserProject ? <EndUserEditModal kind="projects" record={endUserProject} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserProject(null)} onSaved={load} reloadRecord={async () => { const page = await listProjects({ search: endUserProject.number, pageSize: 100 }); const latest = page.items.find((item) => item.id === endUserProject.id); if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable"); return latest; }} /> : null}
     {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
+    {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
   </>;
+}
+
+function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: { project: ProjectSummary; bootstrap: BootstrapData; canWrite: boolean; notify: (message: string) => void; onClose: () => void }) {
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [addUserId, setAddUserId] = useState(0);
+  const [addRole, setAddRole] = useState("");
+  const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      setMembers(await listProjectMembers(project.id));
+    } catch (requestError) {
+      setLoadError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+
+  const availableToAdd = bootstrap.team.filter((employee) => !members.some((member) => member.userId === employee.id));
+
+  const add = async () => {
+    if (!addUserId) return;
+    setActionError("");
+    setAdding(true);
+    try {
+      await addProjectMember(project.id, { userId: addUserId, roleOnProject: addRole.trim() || undefined });
+      notify(`${bootstrap.team.find((employee) => employee.id === addUserId)?.name ?? "Member"} added to ${project.number}`);
+      setAddUserId(0);
+      setAddRole("");
+      await load();
+    } catch (requestError) {
+      setActionError(toError(requestError));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const remove = async (member: ProjectMember) => {
+    setActionError("");
+    setBusyUserId(member.userId);
+    try {
+      await removeProjectMember(project.id, member.userId);
+      notify(`${member.name} removed from ${project.number}`);
+      await load();
+    } catch (requestError) {
+      setActionError(toError(requestError));
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  return <Modal
+    title={`${project.number} · Team`}
+    subtitle={`${project.name} · ทุกคนในรายการนี้จะมองเห็นโปรเจกต์นี้ได้`}
+    size="lg"
+    onClose={onClose}
+    footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}
+  >
+    {canWrite ? <div className="form-grid two">
+      <label className="field"><span><LocalizedText text={"Add member *"} /></span><select value={addUserId} disabled={adding} onChange={(event) => setAddUserId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select a person"} /></option>{availableToAdd.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.department}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Role on the project"} /></span><input maxLength={100} value={addRole} disabled={adding} placeholder="e.g. Support Engineer" onChange={(event) => setAddRole(event.target.value)} /></label>
+      <div className="span-2"><button className="btn primary" type="button" disabled={adding || !addUserId} onClick={() => { void add(); }}><Icon name="plus" />{adding ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add to project"} />}</button></div>
+    </div> : <div className="info-strip" role="status"><Icon name="shield" /><span><LocalizedText text={"บัญชีนี้ดูทีมงานได้ แต่ไม่มีสิทธิ์เพิ่ม/ลบสมาชิกโปรเจกต์"} /></span></div>}
+
+    {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{actionError}</span></div> : null}
+    {loadError ? <LoadError message={loadError} retry={() => { void load(); }} /> : null}
+
+    <Panel title={`${members.length} people`} subtitle={loading ? "Loading team…" : "Everyone who can see this project"} flush>
+      {members.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Role on project"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"System role"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{members.map((member) => <tr key={member.userId}><td><strong>{member.name}</strong><small className="muted">{member.email}</small></td><td>{member.roleOnProject}{member.isManager ? <Badge tone="blue"><LocalizedText text={"Manager"} /></Badge> : null}{member.isLeadEngineer ? <Badge tone="blue"><LocalizedText text={"Lead Engineer"} /></Badge> : null}</td><td>{member.department}</td><td className="muted">{member.systemRole}</td><td>{canWrite && !member.isManager && !member.isLeadEngineer ? <button className="btn ghost sm" type="button" disabled={busyUserId !== null} aria-label={`Remove ${member.name}`} onClick={() => { void remove(member); }}><Icon name="trash" />{busyUserId === member.userId ? <LocalizedText text={"Removing…"} /> : <LocalizedText text={"Remove"} />}</button> : null}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="users" title="No team members yet" message="เพิ่มคนแรกที่ด้านบนเพื่อให้พวกเขามองเห็นโปรเจกต์นี้" /> : null}
+    </Panel>
+  </Modal>;
 }
 
 function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClose }: { project: ProjectSummary; canWrite: boolean; teamTestMode: boolean; notify: (message: string) => void; onClose: () => void }) {

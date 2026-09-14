@@ -828,7 +828,7 @@ public static class InquiryEndpoints
 
     internal static async Task InsertAuditAsync(
         SqlConnection connection,
-        SqlTransaction transaction,
+        SqlTransaction? transaction,
         long actorId,
         string entityType,
         long entityId,

@@ -1506,6 +1506,30 @@ export const createProject = (input: CreateProjectInput) =>
 export const listProjectDocuments = (projectId: number) =>
   apiRequest<ProjectDocument[]>(`/api/v1/projects/${projectId}/documents`);
 
+export type ProjectMember = {
+  userId: number;
+  name: string;
+  email: string;
+  department: string;
+  systemRole: string;
+  roleOnProject: string;
+  isManager: boolean;
+  isLeadEngineer: boolean;
+  addedAt: string;
+};
+
+export const listProjectMembers = (projectId: number) =>
+  apiRequest<ProjectMember[]>(`/api/v1/projects/${projectId}/members`);
+
+export const addProjectMember = (projectId: number, input: { userId: number; roleOnProject?: string }) =>
+  apiRequest<{ userId: number; roleOnProject: string }>(`/api/v1/projects/${projectId}/members`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+export const removeProjectMember = (projectId: number, userId: number) =>
+  apiRequest<void>(`/api/v1/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+
 export type DrawingTask = { id: number; name: string; leaderId: number | null; managerId: number | null; leaderName: string | null; managerName: string | null };
 export const listDrawingTasks = (projectId: number) => apiRequest<DrawingTask[]>(`/api/v1/projects/${projectId}/drawing-tasks`);
 
