@@ -25,6 +25,8 @@ type ProjectRow = Record<string, unknown> & {
   id: number | string; project_no: string; name: string; customer_name: string; status: string;
   project_type: string; manager_name: string; start_date: Date | string; target_delivery: Date | string;
   progress: number | string; updated_at: Date | string; row_version: Buffer; total_count: number | string;
+  manager_id: number | string; lead_engineer_id: number | string; lead_engineer_name: string;
+  po_no: string; po_date: Date | string; actual_delivery: Date | string | null; site: string; remark: string | null;
   customer_id: number | string; end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
 };
 
@@ -54,9 +56,11 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const result = await database.query<ProjectRow>(`
       SELECT p.id,p.project_no,p.name,p.customer_id,c.name AS customer_name,p.status,p.project_type,u.name AS manager_name,
         p.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
+        p.manager_id,p.lead_engineer_id,le.name AS lead_engineer_name,p.po_no,p.po_date,p.actual_delivery,p.site,p.remark,
         p.start_date,p.target_delivery,p.progress,p.updated_at,p.row_version,COUNT_BIG(*) OVER() AS total_count
       FROM dbo.projects p INNER JOIN dbo.customers c ON c.id=p.customer_id INNER JOIN dbo.users u ON u.id=p.manager_id
       LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id
+      INNER JOIN dbo.users le ON le.id=p.lead_engineer_id
       WHERE p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
         OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))
         AND (@status IS NULL OR p.status=@status)
@@ -75,6 +79,9 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         customerId: Number(row.customer_id), endUserCustomerId: row.end_user_customer_id === null ? null : Number(row.end_user_customer_id),
         endUserName: row.end_user_name, endUserCode: row.end_user_code,
         status: row.status, projectType: row.project_type, managerName: row.manager_name,
+        managerId: Number(row.manager_id), leadEngineerId: Number(row.lead_engineer_id), leadEngineerName: row.lead_engineer_name,
+        purchaseOrderNumber: row.po_no, purchaseOrderDate: dateOnly(row.po_date), actualDelivery: dateOnly(row.actual_delivery),
+        site: row.site, remark: row.remark ?? "",
         startDate: dateOnly(row.start_date), targetDelivery: dateOnly(row.target_delivery), progress: Number(row.progress),
         updatedAt: row.updated_at, rowVersion: row.row_version.toString("base64"),
       })), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),

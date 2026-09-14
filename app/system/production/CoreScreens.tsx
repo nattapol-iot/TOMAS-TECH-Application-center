@@ -899,20 +899,22 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
   const elevated = ["Admin", "Engineering Manager", "Project Manager"].includes(bootstrap.user.role);
   const current = project.status as ProjectStatus;
   const statusChoices = useMemo(() => [current, ...allowedProjectTransitions(current, elevated)], [current, elevated]);
+  // Seeded defensively: an older API build that omits one of these fields must leave the dialog
+  // usable rather than throwing while it renders.
   const [form, setForm] = useState({
-    name: project.name,
-    projectType: project.projectType,
+    name: project.name ?? "",
+    projectType: project.projectType ?? "",
     status: project.status,
-    progress: project.progress,
-    managerId: project.managerId,
-    leadEngineerId: project.leadEngineerId,
-    purchaseOrderNumber: project.purchaseOrderNumber,
+    progress: Number(project.progress ?? 0),
+    managerId: project.managerId ?? 0,
+    leadEngineerId: project.leadEngineerId ?? 0,
+    purchaseOrderNumber: project.purchaseOrderNumber ?? "",
     purchaseOrderDate: project.purchaseOrderDate ?? "",
-    startDate: project.startDate,
-    targetDelivery: project.targetDelivery,
+    startDate: project.startDate ?? "",
+    targetDelivery: project.targetDelivery ?? "",
     actualDelivery: project.actualDelivery ?? "",
-    site: project.site,
-    remark: project.remark,
+    site: project.site ?? "",
+    remark: project.remark ?? "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
