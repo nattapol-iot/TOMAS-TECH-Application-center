@@ -9,8 +9,8 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
-import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, requiredInteger, requiredText } from "../http.js";
-import { isProjectElevated } from "../project-scope.js";
+import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
 
 const STANDARD_FOLDERS = [
@@ -187,5 +187,80 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       throw error;
     }
     return reply.status(201).header("Location", `/api/v1/projects/${created.id}`).send(created);
+  });
+
+  app.get("/api/v1/projects/:id/members", async (request) => {
+    await users.demandPermission(request, "project.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    await demandProjectScope(database, actor, id);
+    const result = await database.query<{
+      id: number | string; name: string; email: string; department: string; system_role: string;
+      role_on_project: string; created_at: Date | string; is_manager: number | boolean; is_lead_engineer: number | boolean;
+    }>(`
+      SELECT u.id, u.name, u.email, u.department, r.code AS system_role, m.role_on_project, m.created_at,
+             CASE WHEN u.id = p.manager_id THEN 1 ELSE 0 END AS is_manager,
+             CASE WHEN u.id = p.lead_engineer_id THEN 1 ELSE 0 END AS is_lead_engineer
+      FROM dbo.project_members m
+      INNER JOIN dbo.users u ON u.id = m.user_id
+      INNER JOIN dbo.roles r ON r.id = u.role_id
+      INNER JOIN dbo.projects p ON p.id = m.project_id
+      WHERE m.project_id = @project_id
+      ORDER BY CASE WHEN u.id = p.manager_id THEN 0 WHEN u.id = p.lead_engineer_id THEN 1 ELSE 2 END, u.name;
+    `, (sqlRequest) => sqlRequest.input("project_id", sql.BigInt, id));
+    return result.recordset.map((row) => ({
+      userId: Number(row.id), name: row.name, email: row.email, department: row.department,
+      systemRole: row.system_role, roleOnProject: row.role_on_project,
+      isManager: Boolean(row.is_manager), isLeadEngineer: Boolean(row.is_lead_engineer),
+      addedAt: row.created_at,
+    }));
+  });
+
+  app.post("/api/v1/projects/:id/members", async (request, reply) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    const body = bodyObject(request.body);
+    const userId = requiredInteger(body.userId, "User", 1);
+    const roleOnProject = optionalBodyText(body.roleOnProject, 100, "Role on the project") ?? "Member";
+    await demandProjectScope(database, actor, id);
+    const activeCheck = await database.query<{ ok: number }>(
+      `SELECT 1 AS ok FROM dbo.users WHERE id = @user_id AND is_active = 1 AND deleted_at IS NULL;`,
+      (sqlRequest) => sqlRequest.input("user_id", sql.BigInt, userId),
+    );
+    if (!activeCheck.recordset[0]) throw new ApiError(422, "invalid_reference", "User must be an active account.");
+    await database.transaction(async (transaction) => {
+      const insert = new sql.Request(transaction);
+      insert.input("project_id", sql.BigInt, id); insert.input("user_id", sql.BigInt, userId);
+      insert.input("role", sql.NVarChar(100), roleOnProject); insert.input("actor", sql.BigInt, actor.id);
+      await insert.query(`INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@user_id,@role,@actor);`);
+      const numberLookup = new sql.Request(transaction); numberLookup.input("project_id", sql.BigInt, id);
+      const projectNo = (await numberLookup.query<{ project_no: string }>(`SELECT project_no FROM dbo.projects WHERE id = @project_id;`)).recordset[0]?.project_no ?? "";
+      await insertAudit(transaction, actor.id, "Project", id, projectNo, "Added project member", null, { userId, roleOnProject });
+    });
+    return reply.status(201).header("Location", `/api/v1/projects/${id}/members/${userId}`).send({ userId, roleOnProject });
+  });
+
+  app.delete("/api/v1/projects/:id/members/:userId", async (request, reply) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    const memberUserId = positiveLong((request.params as { userId?: string }).userId, "User id");
+    await demandProjectScope(database, actor, id);
+    const coreCheck = await database.query<{ ok: number }>(
+      `SELECT 1 AS ok FROM dbo.projects WHERE id = @project_id AND (manager_id = @user_id OR lead_engineer_id = @user_id);`,
+      (sqlRequest) => { sqlRequest.input("project_id", sql.BigInt, id); sqlRequest.input("user_id", sql.BigInt, memberUserId); },
+    );
+    if (coreCheck.recordset[0]) throw new ApiError(422, "core_member", "The project manager and lead engineer cannot be removed here; reassign their role on the project instead.");
+    await database.transaction(async (transaction) => {
+      const del = new sql.Request(transaction);
+      del.input("project_id", sql.BigInt, id); del.input("user_id", sql.BigInt, memberUserId);
+      const result = await del.query(`DELETE FROM dbo.project_members WHERE project_id = @project_id AND user_id = @user_id;`);
+      if (result.rowsAffected[0] === 0) throw new ApiError(404, "not_a_member", "That user is not a member of this project.");
+      const numberLookup = new sql.Request(transaction); numberLookup.input("project_id", sql.BigInt, id);
+      const projectNo = (await numberLookup.query<{ project_no: string }>(`SELECT project_no FROM dbo.projects WHERE id = @project_id;`)).recordset[0]?.project_no ?? "";
+      await insertAudit(transaction, actor.id, "Project", id, projectNo, "Removed project member", { userId: memberUserId }, null);
+    });
+    return reply.status(204).send();
   });
 }

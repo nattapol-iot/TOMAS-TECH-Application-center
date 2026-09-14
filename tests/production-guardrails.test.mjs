@@ -1243,13 +1243,24 @@ test("Master Data Customers table defaults to 10 rows and supports page-size sel
 });
 
 test("project members can be managed after creation, not only assigned at creation time", async () => {
-  const [endpoints, scope, grants, apiClient, screens] = await Promise.all([
+  const [endpoints, scope, grants, apiClient, screens, nodeRoutes] = await Promise.all([
     readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ProjectEndpoints.cs", root), "utf8"),
     readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectScope.cs", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
     readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/projects.ts", root), "utf8"),
   ]);
+
+  // backend-node is the API this app actually talks to in production (see
+  // docs/MACMINI_HANDOFF.md: "The API is backend-node/, not backend/IoTTeamCenter.Api") --
+  // the .NET endpoints below are kept in parity but a Node-only route gap is the real outage.
+  assert.match(nodeRoutes, /app\.get\("\/api\/v1\/projects\/:id\/members"/);
+  assert.match(nodeRoutes, /app\.post\("\/api\/v1\/projects\/:id\/members"/);
+  assert.match(nodeRoutes, /app\.delete\("\/api\/v1\/projects\/:id\/members\/:userId"/);
+  assert.match(nodeRoutes, /demandProjectScope\(database, actor, id\)/);
+  assert.match(nodeRoutes, /manager_id = @user_id OR lead_engineer_id = @user_id/);
+  assert.match(nodeRoutes, /core_member/);
 
   // Routes exist beyond the create-time-only InsertMemberAsync calls.
   assert.match(endpoints, /MapGet\("\/\{id:long\}\/members", ListMembersAsync\)/);
