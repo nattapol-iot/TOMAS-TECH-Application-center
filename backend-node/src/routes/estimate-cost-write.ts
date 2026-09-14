@@ -1,4 +1,4 @@
-import { parseModuleDescriptionRows } from "../estimate-module-details.js";
+import { parseModuleDescriptionRows, scaleModuleQuantities } from "../estimate-module-details.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
@@ -163,7 +163,7 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     await users.demandPermission(request, "estimate.read");
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
     const result = await database.query<{ moduleKey: string; title: string; remark: string | null; descriptionRows: string }>(`
-      SELECT d.module_key moduleKey,d.title,d.remark,d.description_rows descriptionRows FROM dbo.estimate_module_details d
+      SELECT d.module_key moduleKey,d.title,d.remark,d.quantity,d.unit,d.description_rows descriptionRows FROM dbo.estimate_module_details d
       INNER JOIN dbo.estimates e ON e.id=d.estimate_id AND e.revision=d.revision
       WHERE e.id=@id AND e.deleted_at IS NULL;`, query => { query.input("id", sql.BigInt, id); });
     return result.recordset.map(row => ({ ...row, descriptionRows: JSON.parse(row.descriptionRows) as string[] }));
@@ -177,6 +177,12 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     const title = requiredText(body.title, 200, "Module name");
     const remark = optionalBodyText(body.remark, 2000, "Remark");
     const descriptionRows = parseModuleDescriptionRows(body.descriptionRows);
+    const moduleQuantity = body.quantity === undefined ? undefined : Number(body.quantity);
+    if (moduleQuantity !== undefined && (!Number.isFinite(moduleQuantity) || moduleQuantity <= 0 || moduleQuantity > 1000000 || Math.abs(moduleQuantity*10000-Math.round(moduleQuantity*10000))>0.00001))
+      throw new ApiError(400, "validation_failed", "Module quantity must be positive with at most four decimal places.");
+    const moduleUnit = body.unit === undefined ? undefined : requiredText(body.unit, 30, "Module unit");
+    if ((moduleQuantity !== undefined || moduleUnit !== undefined) && !moduleKey.startsWith("category:"))
+      throw new ApiError(400, "invalid_module", "Quantity editing requires a cost module.");
     const workPackage = /^package:(Engineering|Installation):(.+)$/.exec(moduleKey);
     const cost = /^category:(\d{2}):(.+)$/.exec(moduleKey);
     if (!cost && !workPackage && moduleKey !== "summary" && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
@@ -190,15 +196,38 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       query.input("key", sql.NVarChar(250), moduleKey); query.input("title", sql.NVarChar(200), title);
       query.input("description_rows", sql.NVarChar(sql.MAX), descriptionRows === undefined ? null : JSON.stringify(descriptionRows));
       query.input("remark", sql.NVarChar(2000), remark); query.input("actor", sql.BigInt, actor.id);
-      const before = (await query.query(`SELECT module_key,title,remark,description_rows FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
+      const before = (await query.query(`SELECT module_key,title,remark,description_rows,quantity,unit FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
         WHERE estimate_id=@id AND revision=@revision AND module_key=@key;`)).recordset[0] ?? null;
       let savedKey = moduleKey;
+      const oldQuantity = Number(before?.quantity ?? 1);
+      const nextQuantity = moduleQuantity ?? oldQuantity;
+      query.input("module_quantity", sql.Decimal(19,4), nextQuantity);
+      query.input("module_unit", sql.NVarChar(30), moduleUnit ?? before?.unit ?? "Set");
+      let quantityBefore: { id: number; qty: number | string }[] = [];
+      let quantityAfter: unknown[] = [];
       if (cost) {
         query.input("category", sql.Char(2), cost[1]); query.input("module", sql.NVarChar(200), cost[2]);
         const current = (await query.query<{ id: number }>(`SELECT id FROM dbo.cost_items WITH(UPDLOCK,HOLDLOCK)
           WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
           AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`)).recordset;
         if (!current.length) throw new ApiError(409, "module_changed", "This module changed. Reload and try again.");
+        if (nextQuantity !== oldQuantity) {
+          query.input("old_quantity", sql.Decimal(19,4), oldQuantity);
+          quantityBefore = (await query.query(`SELECT id,qty,unit,unit_cost,price_set_key,is_price_set,qty_per_set FROM dbo.cost_items
+            WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+            AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`)).recordset;
+          for (const row of scaleModuleQuantities(quantityBefore, oldQuantity, nextQuantity)) {
+            const update = new sql.Request(transaction);
+            update.input("id", sql.BigInt, row.id); update.input("estimate", sql.BigInt, id);
+            update.input("revision", sql.Int, estimate.revision); update.input("actor", sql.BigInt, actor.id);
+            update.input("quantity", sql.Decimal(19,4), row.quantity);
+            await update.query(`UPDATE dbo.cost_items SET qty=@quantity,updated_by=@actor,updated_at=SYSUTCDATETIME()
+              WHERE id=@id AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL;`);
+          }
+          quantityAfter = (await query.query(`SELECT id,qty,unit,unit_cost,price_set_key,is_price_set,qty_per_set FROM dbo.cost_items
+            WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+            AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`)).recordset;
+        }
         if (title !== cost[2]) {
           const collision = (await query.query(`SELECT TOP(1) id FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision
             AND deleted_at IS NULL AND category_code=@category AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@title;`)).recordset[0];
@@ -235,12 +264,12 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       }
       query.input("saved_key", sql.NVarChar(250), savedKey);
       // Audit retains the old identity; move its metadata to the current module name.
-      await query.query(`UPDATE dbo.estimate_module_details SET title=@title,remark=CASE WHEN @key=N'summary' THEN @remark ELSE remark END,description_rows=COALESCE(@description_rows,description_rows),updated_by=@actor,updated_at=SYSUTCDATETIME()
+      await query.query(`UPDATE dbo.estimate_module_details SET quantity=@module_quantity,unit=@module_unit,title=@title,remark=CASE WHEN @key=N'summary' THEN @remark ELSE remark END,description_rows=COALESCE(@description_rows,description_rows),updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE estimate_id=@id AND revision=@revision AND module_key=@saved_key;
-        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows)
-          VALUES(@id,@revision,@saved_key,@title,CASE WHEN @key=N'summary' THEN @remark END,@actor,COALESCE(@description_rows,N'[]'));
+        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows,quantity,unit)
+          VALUES(@id,@revision,@saved_key,@title,CASE WHEN @key=N'summary' THEN @remark END,@actor,COALESCE(@description_rows,N'[]'),@module_quantity,@module_unit);
         DELETE dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key=@key AND @key<>@saved_key;`);
-      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before }, { moduleKey: savedKey, title, ...(moduleKey === "summary" ? { remark } : {}), descriptionRows });
+      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before, lines: quantityBefore }, { moduleKey: savedKey, title, quantity: nextQuantity, unit: moduleUnit ?? before?.unit ?? "Set", lines: quantityAfter, ...(moduleKey === "summary" ? { remark } : {}), descriptionRows });
       const version = await touchEstimate(transaction, id, actor.id);
       return { estimateRowVersion: version.toString("base64") };
     });

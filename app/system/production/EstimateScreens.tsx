@@ -1389,7 +1389,7 @@ function ApplyModuleTemplateModal({ workspace, currentUserId, busy, onClose, onA
     capabilities: workspace.capabilities,
   }) : null;
   const valid = Boolean(selected && moduleName.trim() && modules >= 1) && !blocker;
-  return <Modal title="Apply Master Template" subtitle="เลือกโมดูลจากคลัง ใส่จำนวนชุด แล้วดูผลก่อนลงจริง" size="lg" onClose={onClose} footer={<>
+  return <Modal title="Apply Master Template" subtitle="เลือกโมดูลจากคลัง ใส่จำนวนชุด แล้วดูผลก่อนลงจริง" size="wide" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
     <button className="btn primary" type="button" disabled={!valid || busy || saving} onClick={async () => {
       if (!selected) return;
@@ -1403,7 +1403,7 @@ function ApplyModuleTemplateModal({ workspace, currentUserId, busy, onClose, onA
       <SearchInput value={search} onChange={(value) => { setSearch(value); setTemplatePage(1); }} placeholder="ค้นหา code, ชื่อ, item, brand" />
       <FilterSelect label="Discipline" value={discipline} onChange={(value) => { setDiscipline(value); setTemplatePage(1); }} options={[{ value: "", label: "ทุก discipline" }, ...COST_CATEGORIES.map(([code, name]) => ({ value: code, label: `${code} ${name}` }))]} />
     </div>
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading templates…"} /></div> : templates.length ? <div className="table-wrap" style={{ maxHeight: 220, marginTop: 10 }}><table><thead><tr><th><LocalizedText text={"Template"} /></th><th style={{ width: 140 }}><LocalizedText text={"Discipline"} /></th><th className="num" style={{ width: 70 }}><LocalizedText text={"Lines"} /></th><th className="num" style={{ width: 140 }}><LocalizedText text={"Reference"} /></th><th style={{ width: 80 }} /></tr></thead><tbody>{templates.map((template) => <tr key={template.id} className={selected?.id === template.id ? "selected" : undefined}>
+    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading templates…"} /></div> : templates.length ? <div className="table-wrap estimate-template-picker-list"><table><thead><tr><th><LocalizedText text={"Template"} /></th><th style={{ width: 140 }}><LocalizedText text={"Discipline"} /></th><th className="num" style={{ width: 70 }}><LocalizedText text={"Lines"} /></th><th className="num" style={{ width: 140 }}><LocalizedText text={"Reference"} /></th><th style={{ width: 80 }} /></tr></thead><tbody>{templates.map((template) => <tr key={template.id} className={selected?.id === template.id ? "selected" : undefined}>
       <td><div className="cell-primary"><strong>{template.code} <LocalizedText text={"·"} /> {template.name}</strong><span>{template.description || `ใช้ไปแล้ว ${template.usageCount} ใบเสนอราคา`}</span></div></td>
       <td><span className="pill">{template.categoryCode}</span> {template.category}</td>
       <td className="num">{template.lineCount}</td>

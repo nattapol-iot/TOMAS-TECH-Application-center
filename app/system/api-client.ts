@@ -3574,7 +3574,7 @@ export const saveNasSettings = (input: NasSettingsInput) =>
 export const testNasConnection = (input: NasSettingsInput) =>
   apiRequest<NasConnectionTestResult>("/api/v1/admin/nas-settings/test", { method: "POST", body: JSON.stringify(input) });
 
-export type EstimateModuleDetail = { moduleKey: string; title: string; remark: string | null; descriptionRows?: string[] };
+export type EstimateModuleDetail = { moduleKey: string; title: string; remark: string | null; descriptionRows?: string[]; quantity?: number; unit?: string };
 export const loadEstimateModuleDetails = (id: number) => apiRequest<EstimateModuleDetail[]>(`/api/v1/estimates/${id}/module-details`);
 export const updateEstimateModuleDetails = (id: number, estimateRowVersion: string, detail: EstimateModuleDetail) =>
   apiRequest<{ estimateRowVersion: string }>(`/api/v1/estimates/${id}/module-details`, { method: "PUT", body: JSON.stringify({ estimateRowVersion, ...detail }) });

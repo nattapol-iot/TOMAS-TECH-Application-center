@@ -124,7 +124,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const moduleDetail = (section: BreakdownSection, module: { key: string; title: string }) => {
     const key = section.kind === "manhour" && LABOR_MODULE_NAMES[section.title] ? section.key : module.key;
     const detail = moduleDetails.find(row => row.moduleKey === key);
-    return { key, title: section.kind === "cost-items" ? module.title : detail?.title ?? module.title, descriptionRows: detail?.descriptionRows ?? [] };
+    return { key, title: section.kind === "cost-items" ? module.title : detail?.title ?? module.title, descriptionRows: detail?.descriptionRows ?? [], quantity: detail?.quantity ?? 1, unit: detail?.unit ?? "Set" };
   };
   const erpByKey = useMemo(() => new Map((summary?.lines ?? []).map((line) => [erpKey(line), line])), [summary]);
   const erpOf = useCallback((line: BreakdownLine) => { const key = erpKeyOfBreakdown(line.key); return key ? erpByKey.get(key) : undefined; }, [erpByKey]);
@@ -361,9 +361,9 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ไขโมดูล / Edit module</button> : null}
             {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.standalone ? undefined : module.title, module.standalone ? Number(module.lines[0].key.split(":")[1]) : undefined)}>{module.standalone ? "แก้ไขรายการ / Edit item" : copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
           </td>
-          <td className="num">{module.standalone ? quantity(module.lines[0].quantity) : module.lines.length}</td><td>{module.standalone ? module.lines[0].unit : copy("รายการ", "lines", "明細")}</td>
+          <td className="num">{module.standalone ? quantity(module.lines[0].quantity) : quantity(detail.quantity)}</td><td>{module.standalone ? module.lines[0].unit : detail.unit}</td>
           <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
-          <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : module.standalone ? money(module.lines[0].unitCost) : "—"}</td>
+          <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : module.standalone ? money(module.lines[0].unitCost) : money(module.amount / detail.quantity)}</td>
           <td className="num"><strong>{money(module.amount)}</strong></td>
           <td className="cb-erp-col"><div className="cb-module-controls"><select disabled={!canEdit || !keys.length || keys.some(key => automaticLaborCategory(erpByKey.get(key)!))} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
             <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
@@ -471,7 +471,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             .filter(group => group.rows.length).map(({ section, module, rows: children }) => {
               const detail = moduleDetail(section, module);
               return <details key={module.key} className="panel" style={{ padding: 12, marginBottom: 8 }}>
-                <summary style={{ cursor: "pointer" }}><strong>{detail.title}</strong> · {children.length} lines · {money(children.reduce((sum, line) => sum + line.amount, 0))}</summary>
+                <summary style={{ cursor: "pointer" }}><strong>{detail.title}</strong> · {module.standalone ? quantity(module.lines[0].quantity) : quantity(detail.quantity)} {module.standalone ? module.lines[0].unit : detail.unit} · {children.length} lines · {money(children.reduce((sum, line) => sum + line.amount, 0))}</summary>
                 {detail.descriptionRows.map((row, index) => <p key={index} style={{ whiteSpace: "pre-wrap" }}>{row}</p>)}
                 <div className="table-wrap"><table><thead><tr><th>Description</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Unit cost</th><th>Amount</th><th>Remark</th></tr></thead>
                   <tbody>{children.map(line => <tr key={erpKey(line)}><td>{line.description}{(() => { const header=workspace.costItems.find(item=>item.id===line.sourceId&&item.isPriceSet&&line.sourceType==="CostItem"); const components=header?workspace.costItems.filter(item=>item.priceSetKey===header.priceSetKey&&!item.isPriceSet):[]; return components.length?<details><summary>อุปกรณ์ในเซ็ต ({components.length})</summary><ul>{components.map(item=><li key={item.id}>{item.itemCode} · {item.description} · {item.quantity} {item.unit} — รวมในราคาเซ็ต</li>)}</ul></details>:null; })()}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td><td>{line.remark || "—"}</td></tr>)}</tbody>

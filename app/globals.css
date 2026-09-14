@@ -4915,3 +4915,8 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 
 .price-set-header > td { background: #eef7ff; font-weight: 600; border-top: 1px solid #b9d7f0; }
 .price-set-component .cell-primary { padding-left: 16px; }
+
+.estimate-template-picker-list { height: clamp(280px, 52vh, 620px); max-height: none; margin-top: 10px; }
+.estimate-template-picker-list table { width: 100%; table-layout: fixed; }
+.estimate-template-picker-list td:first-child { white-space: normal; overflow-wrap: anywhere; }
+.estimate-template-picker-list th:last-child { width: 110px !important; }
