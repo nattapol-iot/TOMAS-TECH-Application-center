@@ -52,6 +52,31 @@ function email(value: unknown): string {
   return result;
 }
 
+// Legal-form words carry no identity, so they are dropped before the code is built:
+// "DAIICHI JITSUGYO (THAILAND) CO., LTD." becomes DAIICHI-JITSUGYO-THAILAND, matching the
+// codes already in the customer master.
+const CODE_NOISE_WORDS = new Set([
+  "CO", "COMPANY", "LTD", "LIMITED", "CORPORATION", "CORP", "INC", "INCORPORATED",
+  "PLC", "PCL", "PUBLIC", "PVT", "PRIVATE", "LLC", "LP", "OFFICE",
+]);
+const CODE_BASE_LENGTH = 25; // leaves room for the 5-character uniqueness suffix inside nvarchar(30)
+
+export function customerCodeFromName(name: string): string {
+  const words = name.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim().split(/\s+/)
+    .filter((word) => word && !CODE_NOISE_WORDS.has(word));
+  const slug = words.join("-").slice(0, CODE_BASE_LENGTH).replace(/-+$/, "");
+  return /^[A-Z0-9]/.test(slug) ? slug : "";
+}
+
+// A name with no Latin characters cannot produce a readable code, so it keeps the opaque one.
+function generatedCustomerCode(name: string): string {
+  return customerCodeFromName(name) || `CUS-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
+}
+
+function customerCodeVariant(base: string): string {
+  const suffix = randomUUID().replaceAll("-", "").slice(0, 4).toUpperCase();
+  return `${base.slice(0, CODE_BASE_LENGTH).replace(/-+$/, "")}-${suffix}`;
+}
 export function salesCustomerInput(body: Record<string, unknown>): CustomerInput {
   const code = clean(body.code, 30, "Customer code").toUpperCase();
   if (code && !/^[A-Z0-9][A-Z0-9._/-]*$/.test(code)) throw new ApiError(400, "validation_failed", "Customer code may contain only letters, numbers, hyphen, underscore, period and slash.");
@@ -59,7 +84,7 @@ export function salesCustomerInput(body: Record<string, unknown>): CustomerInput
   const contactNames = localizedNameInput(body, "contact", "contact", 200, "Contact name", false);
   const titles = contactTitleInput(body, true);
   const input = {
-    code: code || `CUS-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`,
+    code: code || generatedCustomerCode(companyNames.name),
     ...companyNames,
     contactTitleTh: titles.titleTh, contactTitleEn: titles.titleEn, contactTitleJa: titles.titleJa,
     contact: contactNames.name, contactNameTh: contactNames.nameTh, contactNameEn: contactNames.nameEn, contactNameJa: contactNames.nameJa, email: email(body.email),
@@ -208,12 +233,33 @@ export function registerSalesCustomerRoutes(app: FastifyInstance, database: Data
 
   app.post("/api/v1/sales/customers", async (request, reply) => {
     await demandSalesCustomerPermission(users, request, true);
-    const actor = await users.required(request), input = salesCustomerInput(bodyObject(request.body));
+    const body = bodyObject(request.body);
+    const actor = await users.required(request), input = salesCustomerInput(body);
+    const codeTyped = typeof body.code === "string" && body.code.trim() !== "";
     const created = await database.transaction(async (transaction) => {
-      const q = new sql.Request(transaction); q.input("code", sql.NVarChar(30), input.code); q.input("name", sql.NVarChar(300), input.name);
-      q.input("name_th", sql.NVarChar(300), input.nameTh); q.input("name_en", sql.NVarChar(300), input.nameEn); q.input("name_ja", sql.NVarChar(300), input.nameJa);
-      const duplicate = (await q.query<Row>(`SELECT TOP(1) id,code,name FROM dbo.customers WITH(UPDLOCK,HOLDLOCK) WHERE code=@code OR (deleted_at IS NULL AND (LOWER(LTRIM(RTRIM(name)))=LOWER(@name) OR (@name_th<>N'' AND LOWER(LTRIM(RTRIM(name_th)))=LOWER(@name_th)) OR (@name_en<>N'' AND LOWER(LTRIM(RTRIM(name_en)))=LOWER(@name_en)) OR (@name_ja<>N'' AND LOWER(LTRIM(RTRIM(name_ja)))=LOWER(@name_ja))));`)).recordset[0];
+      const nameCheck = new sql.Request(transaction);
+      nameCheck.input("name", sql.NVarChar(300), input.name);
+      nameCheck.input("name_th", sql.NVarChar(300), input.nameTh); nameCheck.input("name_en", sql.NVarChar(300), input.nameEn); nameCheck.input("name_ja", sql.NVarChar(300), input.nameJa);
+      const duplicate = (await nameCheck.query<Row>(`SELECT TOP(1) id,code,name FROM dbo.customers WITH(UPDLOCK,HOLDLOCK) WHERE deleted_at IS NULL AND (LOWER(LTRIM(RTRIM(name)))=LOWER(@name) OR (@name_th<>N'' AND LOWER(LTRIM(RTRIM(name_th)))=LOWER(@name_th)) OR (@name_en<>N'' AND LOWER(LTRIM(RTRIM(name_en)))=LOWER(@name_en)) OR (@name_ja<>N'' AND LOWER(LTRIM(RTRIM(name_ja)))=LOWER(@name_ja)));`)).recordset[0];
       if (duplicate) throw new ApiError(409, "duplicate_customer", "A customer with this code or name already exists. Select the existing customer, or ask an administrator if it is inactive.", { id: Number(duplicate.id), code: duplicate.code, name: duplicate.name });
+      // The code is unique across soft-deleted rows too. A typed code is the operator's choice and
+      // conflicts; a generated one quietly takes the next free variant instead of failing the intake.
+      let code = input.code;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const codeCheck = new sql.Request(transaction);
+        codeCheck.input("code", sql.NVarChar(30), code);
+        const taken = (await codeCheck.query<Row>(`SELECT TOP(1) id,code,name FROM dbo.customers WITH(UPDLOCK,HOLDLOCK) WHERE code=@code;`)).recordset[0];
+        if (!taken) break;
+        if (codeTyped) throw new ApiError(409, "duplicate_customer", "A customer with this code or name already exists. Select the existing customer, or ask an administrator if it is inactive.", { id: Number(taken.id), code: taken.code, name: taken.name });
+        code = attempt < 4
+          ? customerCodeVariant(input.code)
+          : `CUS-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
+        if (attempt === 7) throw new ApiError(409, "duplicate_customer", "Could not allocate a free customer code. Enter one explicitly.");
+      }
+      input.code = code;
+      const q = new sql.Request(transaction);
+      q.input("code", sql.NVarChar(30), code); q.input("name", sql.NVarChar(300), input.name);
+      q.input("name_th", sql.NVarChar(300), input.nameTh); q.input("name_en", sql.NVarChar(300), input.nameEn); q.input("name_ja", sql.NVarChar(300), input.nameJa);
       q.input("contact", sql.NVarChar(200), input.contact); q.input("email", sql.NVarChar(256), input.email);
       q.input("phone", sql.NVarChar(100), input.phone); q.input("site", sql.NVarChar(300), input.site); q.input("actor", sql.BigInt, actor.id);
       const row = (await q.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.customers(code,name,name_th,name_en,name_ja,contact,email,phone,site,created_by,updated_by) OUTPUT inserted.id,inserted.row_version VALUES(@code,@name,@name_th,@name_en,@name_ja,@contact,@email,@phone,@site,@actor,@actor);`)).recordset[0]!;

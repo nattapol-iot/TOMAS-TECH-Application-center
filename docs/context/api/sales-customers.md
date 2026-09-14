@@ -2,17 +2,17 @@
 
 [Module](../modules/master.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `056c73a4`; generated, do not edit. [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/sales/customers/:customerId/contacts` | 194–207 |
-| POST | `/api/v1/sales/customers` | 209–229 |
-| POST | `/api/v1/sales/customers/:customerId/contacts` | 231–241 |
-| PUT | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 243–282 |
-| DELETE | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 284–302 |
+| GET | `/api/v1/sales/customers/:customerId/contacts` | 219–232 |
+| POST | `/api/v1/sales/customers` | 234–275 |
+| POST | `/api/v1/sales/customers/:customerId/contacts` | 277–287 |
+| PUT | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 289–328 |
+| DELETE | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 330–348 |
 
 ## Named functions
 
@@ -22,17 +22,20 @@ Evidence: source snapshot `056c73a4`; generated, do not edit. [backend-node/src/
 | `localizedNameInput` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 23–36 |
 | `contactTitleInput` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 39–45 |
 | `email` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 47–53 |
-| `salesCustomerInput` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 55–71 |
-| `salesContactInput` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 73–75 |
-| `demandSalesCustomerPermission` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 77–85 |
-| `activeCustomer` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 87–93 |
-| `contactSite` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 95–112 |
-| `createContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 114–127 |
-| `syncPrimaryCustomerContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 138–161 |
-| `activeContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 164–172 |
-| `syncCustomerHeader` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 176–181 |
-| `assertContactUnique` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 183–192 |
-| `registerSalesCustomerRoutes` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 193–303 |
+| `customerCodeFromName` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 64–69 |
+| `generatedCustomerCode` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 72–74 |
+| `customerCodeVariant` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 76–79 |
+| `salesCustomerInput` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 80–96 |
+| `salesContactInput` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 98–100 |
+| `demandSalesCustomerPermission` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 102–110 |
+| `activeCustomer` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 112–118 |
+| `contactSite` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 120–137 |
+| `createContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 139–152 |
+| `syncPrimaryCustomerContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 163–186 |
+| `activeContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 189–197 |
+| `syncCustomerHeader` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 201–206 |
+| `assertContactUnique` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 208–217 |
+| `registerSalesCustomerRoutes` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 218–349 |
 
 ## Direct local dependencies
 

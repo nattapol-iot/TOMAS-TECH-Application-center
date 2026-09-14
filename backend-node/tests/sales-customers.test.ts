@@ -5,7 +5,7 @@ import type { FastifyRequest } from "fastify";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
 import type { CurrentUserService } from "../src/users.js";
-import { demandSalesCustomerPermission, registerSalesCustomerRoutes, salesContactInput, salesCustomerInput } from "../src/routes/sales-customers.js";
+import { customerCodeFromName, demandSalesCustomerPermission, registerSalesCustomerRoutes, salesContactInput, salesCustomerInput } from "../src/routes/sales-customers.js";
 import { customerInput } from "../src/routes/master.js";
 
 const ROW_VERSION = Buffer.alloc(8).toString("base64");
@@ -25,7 +25,7 @@ test("company contact roles preserve Thai, English and Japanese and require an i
 
 test("sales company validation generates bounded unique codes and requires contact identity", () => {
   const first = salesCustomerInput({ name: "  Tomas   Tech  " });
-  assert.match(first.code, /^CUS-[A-F0-9]{12}$/);
+  assert.equal(first.code, "TOMAS-TECH");
   assert.notEqual(first.code, salesCustomerInput({ name: "Other" }).code);
   assert.equal(first.name, "Tomas Tech");
   assert.equal(salesCustomerInput({ name: "Client", code: "cus-01", contact: "Jane", email: "Jane@Example.com" }).email, "jane@example.com");
@@ -143,4 +143,27 @@ test("contact edit and removal validate identity, row version and the main-conta
     assert.equal(unguarded.statusCode, 400); assert.equal(unguarded.json().code, "invalid_row_version");
     assert.equal(touchedDatabase, false);
   } finally { await app.close(); }
+});
+
+test("a generated customer code reads like the ones already in the master", () => {
+  // Legal-form words are dropped; the rest of the name survives in order.
+  assert.equal(customerCodeFromName("DAISO SIAM INTERNATIONAL CO.,LTD."), "DAISO-SIAM-INTERNATIONAL");
+  assert.equal(customerCodeFromName("DAIICHI JITSUGYO (THAILAND) CO., LTD."), "DAIICHI-JITSUGYO-THAILAND");
+  assert.equal(customerCodeFromName("DAIICHI JITSUGYO INDIA PVT. LTD."), "DAIICHI-JITSUGYO-INDIA");
+  assert.equal(customerCodeFromName("CIMTOPS CORPORATION THAILAND"), "CIMTOPS-THAILAND");
+  // A long name is cut to 25 characters so a uniqueness suffix still fits nvarchar(30).
+  const long = customerCodeFromName("CIMTOPS CORPORATION THAILAND REPRESENTATIVE OFFICE");
+  assert.equal(long, "CIMTOPS-THAILAND-REPRESEN");
+  assert.ok(long.length <= 25);
+  // Every generated code passes the same validation a typed one must pass.
+  for (const name of ["DAISO SIAM INTERNATIONAL CO.,LTD.", "3M (Thailand) Limited", "A.N.I. LOGISTICS, LTD."]) {
+    assert.match(salesCustomerInput({ name }).code, /^[A-Z0-9][A-Z0-9._/-]*$/);
+    assert.ok(salesCustomerInput({ name }).code.length <= 30);
+  }
+  // A name with no Latin characters cannot make a readable code, so the opaque one remains.
+  assert.equal(customerCodeFromName("ไดโซ สยาม อินเตอร์เนชั่นแนล จำกัด"), "");
+  assert.match(salesCustomerInput({ nameTh: "ไดโซ สยาม" }).code, /^CUS-[A-F0-9]{12}$/);
+  assert.match(salesCustomerInput({ nameJa: "株式会社サンプル" }).code, /^CUS-[A-F0-9]{12}$/);
+  // A name that is only legal-form words leaves nothing to build from.
+  assert.equal(customerCodeFromName("CO., LTD."), "");
 });
