@@ -51,7 +51,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       INNER JOIN dbo.users owner_user ON owner_user.id=a.owner_id LEFT JOIN dbo.users support_user ON support_user.id=a.support_id
       WHERE a.estimate_id=@id ORDER BY a.section,a.id;
 
-      SELECT ci.id,ci.category_code,ci.category,ci.subcategory,ci.module,ci.item_code,ci.description,ci.brand,ci.model,
+      SELECT ci.price_set_key,ci.is_price_set,ci.qty_per_set,ci.id,ci.category_code,ci.category,ci.subcategory,ci.module,ci.item_code,ci.description,ci.brand,ci.model,
         ci.specification,ci.supplier_id,s.name supplier_name,ci.qty,ci.unit,ci.unit_cost,ci.line_total,ci.price_source,
         ci.reference_no,ci.reference_project,ci.price_date,ci.remark,ci.owner_id,u.name owner_name,ci.status,ci.updated_at,ci.row_version
       FROM dbo.cost_items ci INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
@@ -150,6 +150,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       categoryCode: row.category_code, category: row.category, subcategory: row.subcategory, module: row.module, itemCode: row.item_code,
       description: row.description, brand: row.brand, model: row.model, specification: row.specification,
       supplierId: nullableNumber(row.supplier_id), supplierName: row.supplier_name, quantity: number(row.qty), unit: row.unit,
+      priceSetKey: row.price_set_key ?? null, isPriceSet: Boolean(row.is_price_set), quantityPerSet: nullableNumber(row.qty_per_set),
       unitCost: number(row.unit_cost), lineTotal: number(row.line_total), priceSource: row.price_source,
       referenceNumber: row.reference_no, referenceProject: row.reference_project, priceDate: row.price_date ? dateOnly(row.price_date as Date | string) : null,
       remark: row.remark, ownerId: number(row.owner_id), ownerName: row.owner_name, status: row.status, updatedAt: row.updated_at,

@@ -308,7 +308,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
 
   const moveSummaryModule = (section: BreakdownSection, title: string, direction: -1 | 1) => {
     const sourceType: EstimateOrderSource = section.kind === "cost-items" ? "CostItem" : section.kind === "manhour" ? "ManhourLine" : section.kind === "expenses" ? "ExpenseLine" : "OtherCostLine";
-    const moved = moveModule(section.lines, line => section.kind === "cost-items" && !line.module?.trim() ? section.key + ":item:" + line.key : section.key + ":" + (line.module?.trim() || "Unassigned module"), title, direction);
+    const moved = moveModule(section.lines, line => section.kind === "cost-items" && !line.module?.trim() ? (line.priceSetKey ? section.key + ":set:" + line.priceSetKey : section.key + ":item:" + line.key) : section.key + ":" + (line.module?.trim() || "Unassigned module"), title, direction);
     const all = sections.filter(entry => entry.kind === section.kind).flatMap(entry => entry.key === section.key ? moved : entry.lines);
     void onReorder(sourceType, all.map(line => Number(line.key.split(":")[1])));
   };
@@ -373,7 +373,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         </tr>{openModules.has(module.key) ? module.lines.map(line => <tr key={line.key} className="cb-line">
           <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
           <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
-          <td className="num">{money(line.unitCost)}</td><td className="num">{money(line.amount)}</td><td>{erpOf(line)?.erpCategory ?? unmappedLabel}</td>
+          <td className="num">{line.priceSetKey && !line.isPriceSet ? "รวมในราคาเซ็ต" : money(line.unitCost)}</td><td className="num">{line.priceSetKey && !line.isPriceSet ? "—" : money(line.amount)}</td><td>{line.priceSetKey && !line.isPriceSet ? "รวมในราคาเซ็ต" : erpOf(line)?.erpCategory ?? unmappedLabel}</td>
         </tr>) : null}</Fragment>;
       }) : null}
     </tbody>;
@@ -474,7 +474,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
                 <summary style={{ cursor: "pointer" }}><strong>{detail.title}</strong> · {children.length} lines · {money(children.reduce((sum, line) => sum + line.amount, 0))}</summary>
                 {detail.descriptionRows.map((row, index) => <p key={index} style={{ whiteSpace: "pre-wrap" }}>{row}</p>)}
                 <div className="table-wrap"><table><thead><tr><th>Description</th><th>Supplier</th><th>Qty</th><th>Unit</th><th>Unit cost</th><th>Amount</th><th>Remark</th></tr></thead>
-                  <tbody>{children.map(line => <tr key={erpKey(line)}><td>{line.description}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td><td>{line.remark || "—"}</td></tr>)}</tbody>
+                  <tbody>{children.map(line => <tr key={erpKey(line)}><td>{line.description}{(() => { const header=workspace.costItems.find(item=>item.id===line.sourceId&&item.isPriceSet&&line.sourceType==="CostItem"); const components=header?workspace.costItems.filter(item=>item.priceSetKey===header.priceSetKey&&!item.isPriceSet):[]; return components.length?<details><summary>อุปกรณ์ในเซ็ต ({components.length})</summary><ul>{components.map(item=><li key={item.id}>{item.itemCode} · {item.description} · {item.quantity} {item.unit} — รวมในราคาเซ็ต</li>)}</ul></details>:null; })()}</td><td>{line.supplier || "—"}</td><td>{line.quantity ?? "—"}</td><td>{line.unit || "—"}</td><td>{line.unitPrice == null ? "—" : money(line.unitPrice)}</td><td>{money(line.amount)}</td><td>{line.remark || "—"}</td></tr>)}</tbody>
                 </table></div>
               </details>;
             })}

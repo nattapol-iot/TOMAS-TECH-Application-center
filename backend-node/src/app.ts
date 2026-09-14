@@ -1,3 +1,4 @@
+import { registerEstimatePriceSetRoutes } from "./routes/estimate-price-sets.js";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import { registerExecutiveDashboardRoutes } from "./routes/executive-dashboard.js";
@@ -164,6 +165,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateWorkspaceReadRoute(app, config, database, users);
   registerEstimateCostWriteRoutes(app, database, users);
   registerEstimateOrderRoutes(app, database, users);
+  registerEstimatePriceSetRoutes(app, database, users);
   registerEstimateExcelImportRoutes(app, database, users, config);
   registerEstimateWorkspaceWriteRoutes(app, config, database, users, email);
   registerEstimateCopyRoutes(app, config, database, users);

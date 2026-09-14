@@ -1,4 +1,5 @@
 "use client";
+import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
 import { EstimateEffortCells } from "./EstimateEffortCells";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { useT as useStaticCopy } from "../i18n";
@@ -666,7 +667,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { if (line.priceSetKey) setCostFocus(`price-set:${line.priceSetKey}`); else setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -835,7 +836,7 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   const groups = new Map<string, CostModuleGroup>();
   for (const line of lines) {
     const moduleName = line.module.trim();
-    const key = moduleName ? moduleKeyOf(line.categoryCode, moduleName) : `standalone:${line.id}`;
+    const key = moduleName ? moduleKeyOf(line.categoryCode, moduleName) : (line.priceSetKey ? `set:${line.priceSetKey}` : `standalone:${line.id}`);
     let group = groups.get(key);
     if (!group) {
       group = { key, module: moduleName, categoryCode: line.categoryCode, category: line.category, lines: [], total: 0, needPrice: 0, needSupplier: 0 };
@@ -843,8 +844,13 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
     }
     group.lines.push(line);
     group.total += numberOf(line.lineTotal);
-    if (numberOf(line.unitCost) <= 0) group.needPrice += 1;
+    if (numberOf(line.unitCost) <= 0 && (!line.priceSetKey || line.isPriceSet)) group.needPrice += 1;
     else if (!line.supplierId && MATERIAL_CODES.includes(line.categoryCode)) group.needSupplier += 1;
+  }
+  for (const group of groups.values()) {
+    const ordered: EstimateCostItem[] = []; const seen = new Set<string>();
+    for (const line of group.lines) { if (!line.priceSetKey) ordered.push(line); else if (!seen.has(line.priceSetKey)) { seen.add(line.priceSetKey); ordered.push(...group.lines.filter(item => item.priceSetKey === line.priceSetKey).sort((a,b) => Number(Boolean(b.isPriceSet))-Number(Boolean(a.isPriceSet)))); } }
+    group.lines=ordered;
   }
   return [...groups.values()].sort((left, right) => left.categoryCode.localeCompare(right.categoryCode));
 }
@@ -893,6 +899,14 @@ function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace })
 }
 
 function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
+  const [setSelection,setSetSelection]=useState<number[]>([]);
+  const [setEditor,setSetEditor]=useState<{members:EstimateCostItem[];header?:EstimateCostItem}|null>(null);
+  const [setError,setSetError]=useState("");
+  const [setBusy,setSetBusy]=useState(false);
+  const detachSetItem=async(line:EstimateCostItem)=>{
+    if(!window.confirm("นำรายการออกจากเซ็ต? ราคาต่อชิ้นจะเป็นรอราคา และต้องตรวจราคาใหม่ หากเป็นชิ้นสุดท้าย เซ็ตจะถูกลบด้วย"))return;
+    setSetBusy(true);setSetError("");try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/price-set-detach`,{method:"POST",body:JSON.stringify({lineId:line.id,estimateRowVersion:workspace.header.rowVersion})});await onExcelImported();}catch(error){setSetError(toError(error));}finally{setSetBusy(false);}
+  };
   const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
@@ -983,12 +997,13 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     if (!focusModuleKey) return;
     const timer = window.setTimeout(() => {
       setCategory("all");
+      if (focusModuleKey.startsWith("price-set:")) { const key=focusModuleKey.slice(10);const header=workspace.costItems.find(line=>line.priceSetKey===key&&line.isPriceSet);if(header)setSetEditor({header,members:workspace.costItems.filter(line=>line.priceSetKey===key&&!line.isPriceSet)}); }
       setCollapsed((current) => current.filter((key) => key !== focusModuleKey));
       bandRefs.current[focusModuleKey]?.scrollIntoView({ block: "center" });
       onFocusHandled();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [focusModuleKey, onFocusHandled]);
+  }, [focusModuleKey, onFocusHandled, workspace.costItems]);
 
   const startQuickRow = (group: { key: string; categoryCode: string; category: string; module: string }) => {
     const prior = workspace.costItems.find((line) => line.categoryCode === group.categoryCode && line.module === group.module) ?? workspace.costItems.find((line) => line.categoryCode === group.categoryCode);
@@ -1057,7 +1072,10 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
 
   return <>
   {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={onExcelImported} /> : null}
-  <Panel title={`Estimate Cost Table · ${groups.filter(group => group.module).length} module · ${visibleLines.length} item`} actions={canAdd ? <>
+  {setError ? <div role="alert" className="info-strip red">{setError}</div> : null}
+  {setEditor ? <EstimatePriceSetEditor workspace={workspace} bootstrap={bootstrap} members={setEditor.members} header={setEditor.header} onClose={()=>setSetEditor(null)} onSaved={async()=>{setSetSelection([]);await onExcelImported();}}/> : null}
+  <Panel title={`Estimate Cost Table · ${groups.filter(group => group.module).length} module · ${visibleLines.filter(line=>!line.isPriceSet).length} item`} actions={canAdd ? <>
+    <button type="button" className="btn default sm" disabled={busy||setBusy||!setSelection.length} onClick={()=>setSetEditor({members:workspace.costItems.filter(line=>setSelection.includes(line.id)&&!line.priceSetKey)})}>รวมเป็นเซ็ต / Set Price ({setSelection.length})</button>
     <button className="btn primary sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />เพิ่มรายการเดี่ยว / Add Item</button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("price")}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("import")}><Icon name="upload" /><LocalizedText text={"Import Excel"} /></button>
@@ -1104,16 +1122,16 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
           if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
           return [
             group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues) : null,
-            ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
+            ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
               <td><span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span></td>
-              <td><span className="cell-text"><strong className="mono">{line.itemCode}</strong></span></td>
-              <td><div className="cell-primary"><strong>{line.description}</strong>{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
+              <td><span className="cell-text">{canAdd && line.canEdit && !line.priceSetKey ? <input type="checkbox" aria-label={"Select for price set " + line.itemCode} checked={setSelection.includes(line.id)} onChange={event=>setSetSelection(current=>event.target.checked?[...current,line.id]:current.filter(id=>id!==line.id))}/> : null}<strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong></span></td>
+              <td><div className="cell-primary"><strong>{line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}{line.description}</strong>{line.priceSetKey && !line.isPriceSet ? <span>{line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต</span> : null}{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
               <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
               <td><span className="cell-text">{line.supplierName ?? <span className="soft-warn"><LocalizedText text={"ยังไม่เลือกผู้ขาย"} /></span>}</span></td>
               <td className="num">{formatNumber(line.quantity, 4)}</td>
               <td><span className="cell-text">{line.unit}</span></td>
-              <td className="num">{numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
-              <td className="num"><strong>{formatMoney(line.lineTotal)}</strong></td>
+              <td className="num">{line.priceSetKey && !line.isPriceSet ? <span className="muted">รวมในราคาเซ็ต</span> : numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
+              <td className="num"><strong>{line.priceSetKey && !line.isPriceSet ? "—" : formatMoney(line.lineTotal)}</strong></td>
               {dense ? null : <>
                 <td><span className="cell-text">{line.priceSource}</span></td>
                 <td><div className="cell-primary"><strong>{line.referenceNumber || "—"}</strong>{line.referenceProject ? <span>{line.referenceProject}</span> : null}</div></td>
@@ -1122,7 +1140,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
                 <td><span className="cell-text">{line.remark || "—"}</span></td>
                 <td><span className="cell-text"><Badge>{line.status}</Badge></span></td>
               </>}
-              <td><div className="row-actions cost-order-actions">{canAdd && line.canEdit ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td>
+              <td><div className="row-actions cost-order-actions">{line.canEdit && line.isPriceSet ? <button type="button" className="btn default sm" disabled={busy||setBusy} onClick={()=>setSetEditor({header:line,members:workspace.costItems.filter(item=>item.priceSetKey===line.priceSetKey&&!item.isPriceSet)})}>Edit set</button> : line.canEdit && line.priceSetKey ? <button type="button" className="icon-btn" disabled={busy||setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={()=>void detachSetItem(line)}>↗</button> : null}{canAdd && line.canEdit && !line.priceSetKey ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd && !line.priceSetKey ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit && !line.priceSetKey ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : line.priceSetKey ? null : <Icon name="lock" />}</div></td>
             </tr>),
             group.module ? draftRow(group.key) : null,
             group.module ? <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><div className="cost-inline-add-actions"><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow({ ...group, key: `standalone-after:${group.key}`, module: "" })}><span><Icon name="plus" />เพิ่มรายการเดี่ยว / Add standalone item</span></button></div></td></tr> : null,

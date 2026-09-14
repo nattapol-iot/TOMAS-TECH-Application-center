@@ -87,7 +87,7 @@ async function snapshotSubmission(transaction: TransactionType, estimateId: numb
         FROM dbo.estimate_overhead_snapshots snapshot WHERE snapshot.estimate_id=e.id AND snapshot.revision=e.revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER)) overheadPolicy,
       JSON_QUERY((SELECT category_code categoryCode,category,subcategory,module,item_code itemCode,description,brand,model,specification,supplier_id supplierId,
         qty quantity,unit,unit_cost unitCost,price_source priceSource,reference_no referenceNumber,reference_project referenceProject,price_date priceDate,
-        remark,owner_id ownerId,status FROM dbo.cost_items WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,category_code,module,id FOR JSON PATH)) costItems,
+        remark,price_set_key priceSetKey,is_price_set isPriceSet,qty_per_set quantityPerSet,owner_id ownerId,status FROM dbo.cost_items WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,category_code,module,id FOR JSON PATH)) costItems,
       JSON_QUERY((SELECT package,activity,department,level,cost_type costType,provider,supplier_id supplierId,quotation_no quotationNumber,price_date priceDate,
         engineers,man_days manDays,hours_per_day hoursPerDay,daily_rate dailyRate,owner_id ownerId,remark FROM dbo.manhour_lines
         WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,package,id FOR JSON PATH)) manhourLines,
@@ -178,8 +178,8 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
     DECLARE @copiedCosts TABLE(old_id bigint,new_id bigint);
     MERGE dbo.cost_items AS target
     USING (SELECT * FROM dbo.cost_items WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
-    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by,sort_order)
-    VALUES(source.estimate_id,@next_revision,source.category_code,source.category,source.subcategory,source.module,source.item_code,source.description,source.brand,source.model,source.specification,source.supplier_id,source.qty,source.unit,source.unit_cost,source.price_source,source.reference_no,source.reference_project,source.price_date,source.remark,source.owner_id,source.status,@actor,@actor,source.sort_order)
+    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by,sort_order,price_set_key,is_price_set,qty_per_set)
+    VALUES(source.estimate_id,@next_revision,source.category_code,source.category,source.subcategory,source.module,source.item_code,source.description,source.brand,source.model,source.specification,source.supplier_id,source.qty,source.unit,source.unit_cost,source.price_source,source.reference_no,source.reference_project,source.price_date,source.remark,source.owner_id,source.status,@actor,@actor,source.sort_order,source.price_set_key,source.is_price_set,source.qty_per_set)
     OUTPUT source.id,inserted.id INTO @copiedCosts;
     DECLARE @copiedManhours TABLE(old_id bigint,new_id bigint);
     MERGE dbo.manhour_lines AS target

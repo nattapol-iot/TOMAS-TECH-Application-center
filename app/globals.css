@@ -4912,3 +4912,6 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 
 .cost-inline-add-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
 .cost-inline-add-actions .add-row-btn { width: auto; }
+
+.price-set-header > td { background: #eef7ff; font-weight: 600; border-top: 1px solid #b9d7f0; }
+.price-set-component .cell-primary { padding-left: 16px; }

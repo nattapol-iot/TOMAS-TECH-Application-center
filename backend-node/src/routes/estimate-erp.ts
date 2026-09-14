@@ -52,14 +52,14 @@ const ERP_SUMMARY_SQL = `
       ci.description,CONCAT(ci.category_code,N' ',ci.category) internal_category,ci.line_total amount,
       COALESCE(m.erp_category,CASE ci.category_code WHEN '01' THEN N'Hardware' WHEN '02' THEN N'Software' ELSE N'Unmapped' END) erp_category,
       m.row_version mapping_row_version,m.copied_from_revision,ci.item_code item,ci.model model_part_number,
-      s.name supplier,ci.brand,NULL lead_time,ci.reference_no quote_revision,ci.unit_cost unit_price,ci.qty quantity,ci.unit,ci.remark,
+      s.name supplier,ci.brand,NULL lead_time,ci.reference_no quote_revision,ci.unit_cost unit_price,ci.qty quantity,ci.unit,CASE WHEN ci.is_price_set=1 THEN CONCAT(ci.remark,N' Included: ',(SELECT STRING_AGG(CONVERT(nvarchar(max),CONCAT(child.item_code,N' - ',child.description,N' x ',child.qty,N' ',child.unit)),N'; ') FROM dbo.cost_items child WHERE child.estimate_id=ci.estimate_id AND child.revision=ci.revision AND child.price_set_key=ci.price_set_key AND child.is_price_set=0 AND child.deleted_at IS NULL)) ELSE ci.remark END remark,
       1 source_order,ci.sort_order sort_order,ci.category_code group_code,ci.module group_name,ci.id line_order
     FROM dbo.cost_items ci
     INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=ci.estimate_id AND m.revision=ci.revision
       AND m.source_type=N'CostItem' AND m.source_id=ci.id
     LEFT JOIN dbo.suppliers s ON s.id=ci.supplier_id
-    WHERE ci.estimate_id=@estimate_id AND ci.deleted_at IS NULL
+    WHERE ci.estimate_id=@estimate_id AND ci.deleted_at IS NULL AND (ci.price_set_key IS NULL OR ci.is_price_set=1)
     UNION ALL
     SELECT N'ManhourLine',l.id,l.activity,CONCAT(l.cost_type,N' / ',l.provider),l.line_cost,
       COALESCE(CASE WHEN e.status NOT IN(N'Approved',N'Locked') THEN ${laborCategorySql('l')} END,m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),

@@ -8,6 +8,8 @@
 export type BreakdownSource = "in-house" | "outsourced";
 
 export type BreakdownLine = {
+  priceSetKey?: string | null;
+  isPriceSet?: boolean;
   key: string;
   /** "1-3" — section ordinal and line ordinal. */
   number: string;
@@ -46,7 +48,7 @@ export type BreakdownSection = {
 
 export type BreakdownInput = {
   costItems: ReadonlyArray<{
-    id: number; categoryCode: string; category: string; module: string; itemCode: string; description: string;
+    priceSetKey?: string | null; isPriceSet?: boolean; id: number; categoryCode: string; category: string; module: string; itemCode: string; description: string;
     brand: string; model: string; specification: string | null; supplierName: string | null;
     quantity: number; unit: string; unitCost: number; lineTotal: number;
   }>;
@@ -100,10 +102,10 @@ export function buildEstimateCostBreakdown(input: BreakdownInput, labels: Breakd
     sections.push(finishSection({
       key: `category:${entry.code}`, ordinal, kind: "cost-items", categoryCode: entry.code, title: entry.name,
       lines: lines.map((line, index) => ({
-        key: `cost:${line.id}`, number: `${ordinal}-${index + 1}`, title: line.description, module: line.module,
+        priceSetKey: line.priceSetKey, isPriceSet: line.isPriceSet, key: `cost:${line.id}`, number: `${ordinal}-${index + 1}`, title: line.description, module: line.module,
         details: clean([line.module, line.itemCode, [line.brand, line.model].filter((value) => value?.trim()).join(" · "), line.specification]),
         quantity: num(line.quantity), unit: line.unit, source: line.supplierName ? "outsourced" : "in-house",
-        supplierName: line.supplierName, unitCost: num(line.unitCost), amount: num(line.lineTotal), awaitingPrice: num(line.unitCost) <= 0,
+        supplierName: line.supplierName, unitCost: num(line.unitCost), amount: num(line.lineTotal), awaitingPrice: num(line.unitCost) <= 0 && (!line.priceSetKey || Boolean(line.isPriceSet)),
       })),
     }));
   }
@@ -160,8 +162,8 @@ export function breakdownModules(section: BreakdownSection) {
   const groups = new Map<string, { key: string; title: string; lines: BreakdownLine[]; amount: number; inHouse: number; outsourced: number; standalone: boolean }>();
   for (const line of section.lines) {
     const standalone = section.kind === "cost-items" && !line.module?.trim();
-    const title = standalone ? line.title : line.module?.trim() || "Unassigned module";
-    const key = standalone ? section.key + ":item:" + line.key : section.key + ":" + title;
+    const title = standalone ? (line.priceSetKey ? section.lines.find(item=>item.priceSetKey===line.priceSetKey&&item.isPriceSet)?.title ?? line.title : line.title) : line.module?.trim() || "Unassigned module";
+    const key = standalone ? (line.priceSetKey ? section.key + ":set:" + line.priceSetKey : section.key + ":item:" + line.key) : section.key + ":" + title;
     const group = groups.get(key) ?? { key, title, standalone, lines: [], amount: 0, inHouse: 0, outsourced: 0 };
     group.lines.push(line);
     group.amount += line.amount;
@@ -169,6 +171,7 @@ export function breakdownModules(section: BreakdownSection) {
     else group.outsourced += line.amount;
     groups.set(key, group);
   }
+  for (const group of groups.values()) if (group.standalone && group.lines.some(line=>line.isPriceSet)) group.lines.sort((a,b)=>Number(Boolean(b.isPriceSet))-Number(Boolean(a.isPriceSet)));
   return [...groups.values()];
 }
 

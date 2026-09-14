@@ -106,3 +106,11 @@ test("unmapped labor is retained without inventing an ERP category", async () =>
   assert.equal(result.reduce((sum,s)=>sum+s.amount,0),source.reduce((sum,s)=>sum+s.amount,0));
   assert.equal(result.find(s=>s.kind === "manhour").title,"Other labor");
 });
+
+test("supplier set counts price once and never marks included components as missing price",()=>{
+ const base=input.costItems[0];
+ const costItems=[{...base,id:501,module:"",description:"Vision Set A",priceSetKey:"set-a",isPriceSet:true,quantity:2,unit:"Set",unitCost:620000,lineTotal:1240000},
+ ...Array.from({length:8},(_,index)=>({...base,id:502+index,module:"",description:"Component "+index,priceSetKey:"set-a",isPriceSet:false,quantity:2,unit:"Pcs",unitCost:0,lineTotal:0}))];
+ const sections=buildEstimateCostBreakdown({...input,costItems,manhourLines:[],expenseLines:[],otherCostLines:[]},labels);
+ const groups=breakdownModules(sections[0]);assert.equal(groups.length,1);assert.equal(groups[0].amount,1240000);assert.equal(groups[0].lines.length,9);assert.equal(groups[0].title,"Vision Set A");assert.equal(groups[0].lines[0].unit,"Set");assert.ok(groups[0].lines.every(line=>!line.awaitingPrice));
+});

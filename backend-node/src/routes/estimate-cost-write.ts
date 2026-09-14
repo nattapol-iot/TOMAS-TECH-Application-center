@@ -125,7 +125,7 @@ async function costSnapshot(transaction: TransactionType, estimateId: number, re
   const request = new sql.Request(transaction); request.input("line_id", sql.BigInt, lineId); request.input("estimate_id", sql.BigInt, estimateId);
   request.input("revision", sql.Int, revision); request.input("include_deleted", sql.Bit, includeDeleted);
   const row = (await request.query<Record<string, unknown> & { row_version: Buffer }>(`
-    SELECT id,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,
+    SELECT id,category_code,category,subcategory,module,item_code,description,brand,model,specification,supplier_id,qty,unit,price_set_key,is_price_set,qty_per_set,
       unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,deleted_at,row_version
     FROM dbo.cost_items WITH (UPDLOCK,HOLDLOCK) WHERE id=@line_id AND estimate_id=@estimate_id AND revision=@revision
       AND (@include_deleted=1 OR deleted_at IS NULL);
@@ -281,6 +281,7 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     return database.transaction(async (transaction) => {
       const estimate = await lockEditableEstimate(transaction, id, input.estimateRowVersion); await validateReferences(transaction, input.ownerId, input.supplierId);
       const before = await costSnapshot(transaction, id, estimate.revision, lineId, input.lineRowVersion!, false);
+      if (before.price_set_key) throw new ApiError(409, "price_set_member", "Edit the price set or remove this component from its set before changing it.");
       if (!elevated(actor, estimate)) {
         if (!assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) throw new ApiError(403, "cost_line_forbidden", "You may update a cost line only while a section of this estimate is assigned to you.");
         if (input.ownerId !== Number(before.owner_id)) throw new ApiError(403, "cost_owner_forbidden", "Only the estimate owner, an engineering manager or an administrator can reassign a cost line.");
@@ -310,6 +311,7 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     return database.transaction(async (transaction) => {
       const estimate = await lockEditableEstimate(transaction, id, estimateRowVersion);
       const before = await costSnapshot(transaction, id, estimate.revision, lineId, lineRowVersion, false);
+      if (before.price_set_key) throw new ApiError(409, "price_set_member", "Edit the price set or remove this component from its set before changing it.");
       if (!elevated(actor, estimate) && !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))) {
         throw new ApiError(403, "cost_line_forbidden", "You may remove a cost line only while a section of this estimate is assigned to you.");
       }

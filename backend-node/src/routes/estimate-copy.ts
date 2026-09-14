@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
@@ -31,6 +32,7 @@ const MAX_COPIED_LINES = 2000;
 type SourceEstimate = { id: number; estimate_no: string; revision: number; project_name: string; status: string };
 
 type CostRow = {
+  price_set_key?: string | null; is_price_set?: boolean; qty_per_set?: number | string | null;
   id: number | string; category_code: string; category: string; subcategory: string; module: string; item_code: string;
   description: string; brand: string; model: string; specification: string | null; supplier_id: number | string | null;
   supplier_state: SupplierState | null; qty: number | string; unit: string; unit_cost: number | string;
@@ -145,7 +147,7 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
       read.input("want_cost", sql.Bit, include.costItems); read.input("want_manhour", sql.Bit, include.manhour && sections.includes(MANHOUR_SECTION_CODE));
       read.input("want_expense", sql.Bit, include.expenses); read.input("want_other", sql.Bit, include.otherCosts);
       const ledgers = await read.query<Record<string, unknown>>(`
-        SELECT c.id,c.category_code,c.category,c.subcategory,c.module,c.item_code,c.description,c.brand,c.model,c.specification,
+        SELECT c.price_set_key,c.is_price_set,c.qty_per_set,c.id,c.category_code,c.category,c.subcategory,c.module,c.item_code,c.description,c.brand,c.model,c.specification,
           c.supplier_id,CASE WHEN c.supplier_id IS NULL THEN NULL WHEN s.id IS NULL THEN N'inactive' ELSE N'active' END supplier_state,
           c.qty,c.unit,c.unit_cost,c.price_source,c.reference_no,c.reference_project,c.price_date,c.remark,m.erp_category
         FROM dbo.cost_items c WITH (HOLDLOCK)
@@ -208,6 +210,7 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
       const droppedSuppliers: Array<{ line: string; supplierId: number }> = [];
       let erpCategories = 0;
 
+      const setKeys = new Map<string, string>();
       for (const row of costRows) {
         const section = row.category_code;
         if (!isEstimateSectionCode(section)) continue;
@@ -231,12 +234,16 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
         insert.input("reference_no", sql.NVarChar(200), row.reference_no); insert.input("reference_project", sql.NVarChar(200), row.reference_project);
         insert.input("price_date", sql.Date, dateInput(row.price_date)); insert.input("remark", sql.NVarChar(sql.MAX), row.remark);
         insert.input("owner_id", sql.BigInt, lineOwnerId); insert.input("actor", sql.BigInt, actor.id);
+        if (row.price_set_key && !setKeys.has(String(row.price_set_key))) setKeys.set(String(row.price_set_key), randomUUID());
+        insert.input("set_key", sql.UniqueIdentifier, row.price_set_key ? setKeys.get(String(row.price_set_key)) : null);
+        insert.input("set_header", sql.Bit, Boolean(row.is_price_set));
+        insert.input("per_set", sql.Decimal(19,4), row.qty_per_set == null ? null : Number(row.qty_per_set));
         const created = (await insert.query<{ id: number | string }>(`DECLARE @created TABLE(id bigint);
           INSERT INTO dbo.cost_items(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,
-            specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by)
+            specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by,price_set_key,is_price_set,qty_per_set)
           OUTPUT inserted.id INTO @created(id)
           VALUES(@estimate_id,@revision,@category_code,@category,@subcategory,@module,@item_code,@description,@brand,@model,
-            @specification,@supplier_id,@qty,@unit,@unit_cost,@price_source,@reference_no,@reference_project,@price_date,@remark,@owner_id,N'Active',@actor,@actor);
+            @specification,@supplier_id,@qty,@unit,@unit_cost,@price_source,@reference_no,@reference_project,@price_date,@remark,@owner_id,N'Active',@actor,@actor,@set_key,@set_header,@per_set);
           SELECT id FROM @created;`)).recordset[0]!;
         if (include.erpCategories && await copyErpCategory(transaction, targetId, estimate.revision, "CostItem", Number(created.id), row.erp_category, actor.id)) erpCategories += 1;
       }

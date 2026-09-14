@@ -41,9 +41,10 @@ export function registerEstimateOrderRoutes(app: FastifyInstance, database: Data
       query.input("id", sql.BigInt, id); query.input("revision", sql.Int, estimate.revision);
       query.input("actor", sql.BigInt, actor.id); query.input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids));
       const table = tables[sourceType];
-      const before = (await query.query<{ id: number; sort_order: number }>(`SELECT id,sort_order${sourceType === "CostItem" ? ",category_code,category,module" : ""} FROM dbo.${table} WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL;`)).recordset;
+      const before = (await query.query<{ id: number; sort_order: number; price_set_key?: string | null }>(`SELECT id,sort_order${sourceType === "CostItem" ? ",category_code,category,module,price_set_key" : ""} FROM dbo.${table} WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL;`)).recordset;
       assertCompleteOrder(ids, before.map(line => Number(line.id)));
       if (move) {
+        if (before.find(row => Number(row.id) === move.lineId)?.price_set_key) throw new ApiError(409, "price_set_member", "Move the whole module or remove the item from its price set first.");
         query.input("moving_id", sql.BigInt, move.lineId);
         query.input("target_id", sql.BigInt, move.targetLineId);
         // Destination identity is read from locked current-revision rows, never trusted from the browser.

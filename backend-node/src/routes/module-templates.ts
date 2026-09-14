@@ -245,7 +245,7 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
     const row = header.recordset[0];
     if (!row) throw new ApiError(404, "module_template_not_found", "Module template not found.");
     const lines = await database.query<{
-      id: number | string; sort_order: number; category_code: string; subcategory: string; item_code: string;
+      id: number | string; sort_order: number; price_set_key?: string | null; category_code: string; subcategory: string; item_code: string;
       description: string; brand: string; model: string; specification: string | null;
       supplier_id: number | string | null; supplier_name: string | null; qty_per_module: number | string;
       unit: string; ref_unit_cost: number | string; ref_price_source: string; ref_price_date: Date | string | null;
@@ -398,17 +398,19 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
       read.input("module", sql.NVarChar(200), moduleName);
       read.input("category_code", sql.Char(2), discipline);
       const source = (await read.query<{
+        price_set_key?: string | null;
         category_code: string; subcategory: string; item_code: string; description: string; brand: string;
         model: string; specification: string | null; supplier_id: number | string | null; qty: number | string;
         unit: string; unit_cost: number | string; price_source: string; price_date: Date | string | null; remark: string | null;
       }>(`
-        SELECT c.category_code, c.subcategory, c.item_code, c.description, c.brand, c.model, c.specification,
+        SELECT c.price_set_key, c.category_code, c.subcategory, c.item_code, c.description, c.brand, c.model, c.specification,
                c.supplier_id, c.qty, c.unit, c.unit_cost, c.price_source, c.price_date, c.remark
         FROM dbo.cost_items c
         INNER JOIN dbo.estimates e ON e.id = c.estimate_id AND e.revision = c.revision AND e.deleted_at IS NULL
         WHERE c.estimate_id = @estimate_id AND c.module = @module AND c.category_code = @category_code AND c.deleted_at IS NULL
         ORDER BY c.id;
       `)).recordset;
+      if (source.some(line => line.price_set_key)) throw validation("This module contains supplier price sets. Use Copy Previous Estimate to preserve the set and its components.");
       if (!source.length) throw new ApiError(404, "module_not_found", "That module has no cost lines in the current revision.");
       if (source.length > MAXIMUM_LINES) throw validation(`A template cannot hold more than ${MAXIMUM_LINES} lines.`);
       const lines: TemplateLineInput[] = source.map((line) => ({

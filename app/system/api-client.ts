@@ -602,6 +602,9 @@ export type EmployeeInput = {
 };
 
 export type EstimateCostItem = {
+  priceSetKey?: string | null;
+  isPriceSet?: boolean;
+  quantityPerSet?: number | null;
   id: number;
   categoryCode: string;
   category: string;
