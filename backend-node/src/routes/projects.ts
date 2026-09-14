@@ -9,7 +9,8 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
-import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -262,5 +263,105 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       await insertAudit(transaction, actor.id, "Project", id, projectNo, "Removed project member", { userId: memberUserId }, null);
     });
     return reply.status(204).send();
+  });
+
+  app.put("/api/v1/projects/:id", async (request) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    const body = bodyObject(request.body);
+    const rowVersion = parseRowVersion(body.rowVersion);
+    const elevated = isProjectElevated(actor);
+    // Being on the project is what grants the edit, not the permission alone.
+    await demandProjectScope(database, actor, id);
+    const given = <T>(key: string, read: () => T, fallback: T): T => (body[key] === undefined ? fallback : read());
+    return database.transaction(async (transaction) => {
+      const lookup = new sql.Request(transaction);
+      lookup.input("id", sql.BigInt, id);
+      const before = (await lookup.query<Record<string, unknown>>(`SELECT id,project_no,name,project_type,status,progress,manager_id,lead_engineer_id,
+        po_no,po_date,start_date,target_delivery,actual_delivery,site,remark FROM dbo.projects WITH(UPDLOCK,HOLDLOCK)
+        WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+      if (!before) throw new ApiError(404, "project_not_found", "Project not found.");
+      const currentStatus = String(before.status) as ProjectStatus;
+
+      const statusValue = given("status", () => {
+        if (!isProjectStatus(body.status)) throw new ApiError(400, "validation_failed", "Project status is not one of the allowed values.");
+        return body.status;
+      }, currentStatus);
+      // Only the people answerable for the project move it along the lifecycle.
+      if (statusValue !== currentStatus && !elevated
+        && Number(before.manager_id) !== actor.id && Number(before.lead_engineer_id) !== actor.id) {
+        throw new ApiError(403, "project_status_forbidden", "Only the project manager, the lead engineer or a manager can change the project status.");
+      }
+
+      const input = {
+        name: given("name", () => requiredText(body.name, 300, "Project name"), String(before.name)),
+        projectType: given("projectType", () => requiredText(body.projectType, 100, "Project type"), String(before.project_type)),
+        managerId: given("managerId", () => requiredInteger(body.managerId, "Manager", 1), Number(before.manager_id)),
+        leadEngineerId: given("leadEngineerId", () => requiredInteger(body.leadEngineerId, "Lead engineer", 1), Number(before.lead_engineer_id)),
+        purchaseOrderNumber: given("purchaseOrderNumber", () => requiredText(body.purchaseOrderNumber, 100, "Purchase order number"), String(before.po_no)),
+        purchaseOrderDate: given("purchaseOrderDate", () => parseDateOnly(body.purchaseOrderDate, "Purchase order date")!, dateOnly(before.po_date as Date)!),
+        startDate: given("startDate", () => parseDateOnly(body.startDate, "Start date")!, dateOnly(before.start_date as Date)!),
+        targetDelivery: given("targetDelivery", () => parseDateOnly(body.targetDelivery, "Target delivery")!, dateOnly(before.target_delivery as Date)!),
+        actualDelivery: given("actualDelivery", () => parseDateOnly(body.actualDelivery, "Actual delivery", true), dateOnly(before.actual_delivery as Date | null)),
+        site: given("site", () => requiredText(body.site, 300, "Project site"), String(before.site)),
+        remark: given("remark", () => optionalBodyText(body.remark, 20_000, "Remark"), (before.remark as string | null) ?? null),
+        progress: given("progress", () => {
+          const value = typeof body.progress === "number" ? body.progress : Number.NaN;
+          if (!Number.isFinite(value) || value < 0 || value > 100) throw new ApiError(400, "validation_failed", "Progress must be a number between 0 and 100.");
+          return Math.round(value * 100) / 100;
+        }, Number(before.progress)),
+      };
+
+      if (input.targetDelivery < input.startDate) {
+        throw new ApiError(400, "validation_failed", "Target delivery cannot be earlier than the start date.");
+      }
+      if (input.actualDelivery && input.actualDelivery < input.startDate) {
+        throw new ApiError(400, "validation_failed", "Actual delivery cannot be earlier than the start date.");
+      }
+
+      const transition = checkProjectTransition({ current: currentStatus, next: statusValue, elevated, actualDelivery: input.actualDelivery });
+      if (!transition.ok) throw new ApiError(409, "invalid_status_transition", transition.reason);
+      const progress = progressForStatus(statusValue, input.progress);
+
+      const people = new sql.Request(transaction);
+      people.input("manager_id", sql.BigInt, input.managerId); people.input("lead_id", sql.BigInt, input.leadEngineerId);
+      const staff = (await people.query<{ found: number | string }>(`SELECT COUNT_BIG(*) found FROM dbo.users
+        WHERE id IN (@manager_id,@lead_id) AND is_active=1 AND deleted_at IS NULL;`)).recordset[0];
+      const distinct = input.managerId === input.leadEngineerId ? 1 : 2;
+      if (Number(staff?.found ?? 0) !== distinct) throw new ApiError(422, "invalid_reference", "The manager and the lead engineer must both be active users.");
+
+      const update = new sql.Request(transaction);
+      update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion); update.input("actor", sql.BigInt, actor.id);
+      update.input("name", sql.NVarChar(300), input.name); update.input("project_type", sql.NVarChar(100), input.projectType);
+      update.input("status", sql.NVarChar(50), statusValue); update.input("progress", sql.Decimal(5, 2), progress);
+      update.input("manager_id", sql.BigInt, input.managerId); update.input("lead_id", sql.BigInt, input.leadEngineerId);
+      update.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber); update.input("po_date", sql.Date, input.purchaseOrderDate);
+      update.input("start_date", sql.Date, input.startDate); update.input("target_delivery", sql.Date, input.targetDelivery);
+      update.input("actual_delivery", sql.Date, input.actualDelivery); update.input("site", sql.NVarChar(300), input.site);
+      update.input("remark", sql.NVarChar(sql.MAX), input.remark);
+      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.projects SET name=@name,project_type=@project_type,status=@status,progress=@progress,
+        manager_id=@manager_id,lead_engineer_id=@lead_id,po_no=@po_no,po_date=@po_date,start_date=@start_date,target_delivery=@target_delivery,
+        actual_delivery=@actual_delivery,site=@site,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)).recordset[0];
+      if (!updated) throw new ApiError(409, "concurrency_conflict", "This project changed. Reload and try again.");
+
+      // Project access is read from project_members, so a new manager or lead must appear there or
+      // they would lose sight of the project they were just handed.
+      const membership = new sql.Request(transaction);
+      membership.input("project_id", sql.BigInt, id); membership.input("actor", sql.BigInt, actor.id);
+      membership.input("manager_id", sql.BigInt, input.managerId); membership.input("lead_id", sql.BigInt, input.leadEngineerId);
+      await membership.query(`IF NOT EXISTS(SELECT 1 FROM dbo.project_members WHERE project_id=@project_id AND user_id=@manager_id)
+          INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES(@project_id,@manager_id,N'Project Manager',@actor);
+        IF NOT EXISTS(SELECT 1 FROM dbo.project_members WHERE project_id=@project_id AND user_id=@lead_id)
+          INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES(@project_id,@lead_id,N'Lead Engineer',@actor);`);
+
+      const after = { ...input, status: statusValue, progress };
+      await insertAudit(transaction, actor.id, "Project", id, String(before.project_no), transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
+      return {
+        id, number: String(before.project_no), ...after,
+        rowVersion: updated.row_version.toString("base64"),
+      };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
 }

@@ -412,8 +412,16 @@ export type ProjectSummary = {
   status: string;
   projectType: string;
   managerName: string;
+  managerId: number;
+  leadEngineerId: number;
+  leadEngineerName: string;
+  purchaseOrderNumber: string;
+  purchaseOrderDate: string | null;
   startDate: string;
   targetDelivery: string;
+  actualDelivery: string | null;
+  site: string;
+  remark: string;
   progress: number;
   updatedAt: string;
   rowVersion: string;
@@ -1502,6 +1510,29 @@ export const listProjects = (values: { page?: number; pageSize?: number; search?
 
 export const createProject = (input: CreateProjectInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/projects/", { method: "POST", body: JSON.stringify(input) });
+
+export type UpdateProjectInput = {
+  rowVersion: string;
+  name?: string;
+  projectType?: string;
+  status?: string;
+  progress?: number;
+  managerId?: number;
+  leadEngineerId?: number;
+  purchaseOrderNumber?: string;
+  purchaseOrderDate?: string;
+  startDate?: string;
+  targetDelivery?: string;
+  actualDelivery?: string | null;
+  site?: string;
+  remark?: string;
+};
+
+// Omitted fields keep their saved value, so a screen can send only what it changed.
+export const updateProject = (projectId: number, input: UpdateProjectInput) =>
+  apiRequest<ProjectSummary & { number: string }>(`/api/v1/projects/${projectId}`, {
+    method: "PUT", body: JSON.stringify(input),
+  });
 
 export const listProjectDocuments = (projectId: number) =>
   apiRequest<ProjectDocument[]>(`/api/v1/projects/${projectId}/documents`);
