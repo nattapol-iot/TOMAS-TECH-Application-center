@@ -4909,3 +4909,6 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .engineering-scope-row > button { margin-top: 24px; }
 .engineering-scope-row:last-of-type { margin-bottom: 16px; }
 @media (max-width: 600px) { .engineering-module-heading { padding: 12px; } .engineering-scope-row { gap: 6px; grid-template-columns: 24px minmax(0, 1fr) auto; } }
+
+.cost-inline-add-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+.cost-inline-add-actions .add-row-btn { width: auto; }
