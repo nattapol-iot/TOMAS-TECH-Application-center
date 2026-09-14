@@ -34,12 +34,12 @@ export function EstimateModuleEditor({ workspace, moduleKey, initialTitle, onClo
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save module details"); }
     finally { setBusy(false); }
   };
-  return <Modal title={summaryNote ? "หมายเหตุรวม / Summary Remark" : "แก้ไข Main Module / Edit Main Module"} onClose={onClose} footer={<>
+  return <Modal size={summaryNote ? "lg" : "md"} title={summaryNote ? "หมายเหตุรวม / Summary Remark" : "แก้ไข Main Module / Edit Main Module"} onClose={onClose} footer={<>
     <button type="button" className="btn default" disabled={busy} onClick={onClose}>Cancel</button>
     <button type="button" className="btn primary" disabled={busy || !loaded || !title.trim()} onClick={() => void save()}>Save</button>
   </>}>
     {error ? <div role="alert" className="callout danger">{error}</div> : null}
-    {summaryNote ? <Field label="Summary Remark"><textarea value={remark} maxLength={2000} rows={5} disabled={busy} onChange={event => setRemark(event.target.value)} /></Field> : <>
+    {summaryNote ? <Field label="Summary Remark"><textarea style={{ height: "min(45vh, 420px)", minHeight: 180 }} value={remark} maxLength={2000} rows={14} disabled={busy} onChange={event => setRemark(event.target.value)} /></Field> : <>
       <Field label="Main Module"><input value={title} maxLength={200} disabled={busy} onChange={event => setTitle(event.target.value)} /></Field>
       <p className="muted">รายละเอียดทุกบรรทัดอยู่ในโมดูลเดียวกัน ไม่เพิ่มยอดต้นทุน</p>
       {descriptionRows.map((row, index) => <div className="module-description-editor" key={index}>
