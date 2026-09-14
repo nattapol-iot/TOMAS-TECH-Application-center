@@ -328,7 +328,8 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
   const [status, setStatus] = useState("All status");
   const [customerId, setCustomerId] = useState("All customers");
   const [projectType, setProjectType] = useState("All project types");
-  const [ownerId, setOwnerId] = useState(() => canOwnEstimate(bootstrap.user.role) ? String(bootstrap.user.id) : "All owners");
+  const [mine, setMine] = useState(() => canOwnEstimate(bootstrap.user.role));
+  const [ownerId, setOwnerId] = useState("All owners");
   const [department, setDepartment] = useState("All departments");
   const [revision, setRevision] = useState("All revisions");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
@@ -347,6 +348,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
         status: status === "All status" ? undefined : status,
         customerId: customerId === "All customers" ? undefined : Number(customerId),
         projectType: projectType === "All project types" ? undefined : projectType,
+        mine,
         ownerId: ownerId === "All owners" ? undefined : Number(ownerId),
         department: department === "All departments" ? undefined : department,
         revision: revision === "All revisions" ? undefined : Number(revision),
@@ -356,7 +358,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     } finally {
       setLoading(false);
     }
-  }, [customerId, department, ownerId, page, pageSize, projectType, revision, search, status]);
+  }, [customerId, department, mine, ownerId, page, pageSize, projectType, revision, search, status]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 200);
@@ -391,8 +393,8 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     <Toolbar>
       <SearchInput value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
       {canOwnEstimate(bootstrap.user.role) ? <>
-        <button className={ownerId === String(bootstrap.user.id) ? "btn primary" : "btn default"} type="button" onClick={() => { setOwnerId(String(bootstrap.user.id)); resetPage(); }}><Icon name="user" /><LocalizedText text={"My estimates"} /></button>
-        <button className={ownerId === "All owners" ? "btn primary" : "btn default"} type="button" onClick={() => { setOwnerId("All owners"); resetPage(); }}><Icon name="users" /><LocalizedText text={"All estimates"} /></button>
+        <button className={mine ? "btn primary" : "btn default"} type="button" onClick={() => { setMine(true); setOwnerId("All owners"); resetPage(); }}><Icon name="user" /><LocalizedText text={"My estimates"} /></button>
+        <button className={!mine && ownerId === "All owners" ? "btn primary" : "btn default"} type="button" onClick={() => { setMine(false); setOwnerId("All owners"); resetPage(); }}><Icon name="users" /><LocalizedText text={"All estimates"} /></button>
       </> : null}
       <Select label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "Draft", "Engineering Input", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Revision Required", "Approved", "Locked"]} />
       <button className={advancedFiltersOpen ? "btn default active" : "btn default"} type="button" aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((current) => !current)}><Icon name="filter" /><LocalizedText text={"Advanced filters"} /></button>
@@ -401,7 +403,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     {advancedFiltersOpen ? <Toolbar>
       <FilterSelect label="Customer" value={customerId} onChange={(value) => { setCustomerId(value); resetPage(); }} options={[{ value: "All customers", label: "All customers" }, ...bootstrap.customers.map((customer) => ({ value: String(customer.id), label: `${customer.code} — ${customer.name}` }))]} />
       <Select label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...PROJECT_TYPES]} />
-      <FilterSelect label="Owner" value={ownerId} onChange={(value) => { setOwnerId(value); resetPage(); }} options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]} />
+      <FilterSelect label="Owner" value={ownerId} onChange={(value) => { setMine(false); setOwnerId(value); resetPage(); }} options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]} />
       <Select label="Department" value={department} onChange={(value) => { setDepartment(value); resetPage(); }} options={["All departments", ...departments]} />
       <FilterSelect label="Revision" value={revision} onChange={(value) => { setRevision(value); resetPage(); }} options={[{ value: "All revisions", label: "All revisions" }, ...Array.from({ length: 11 }, (_, index) => ({ value: String(index), label: revisionCode(index) }))]} />
     </Toolbar> : null}

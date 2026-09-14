@@ -1,3 +1,4 @@
+import { booleanQuery } from "../http.js";
 import { laborCategorySql } from "../estimate-labor-category.js";
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -363,6 +364,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const customerId = optionalPositiveLong(query.customerId, "Customer id"); const projectType = optionalText(query.projectType, 100, "Project type");
     const ownerId = optionalPositiveLong(query.ownerId, "Owner id"); const department = optionalText(query.department, 100, "Department");
     const revision = optionalNonnegativeInteger(query.revision, "Revision");
+    const mineId = booleanQuery(query.mine) ? (await users.required(request)).id : null;
     const result = await database.query<EstimateRow>(`
       SELECT e.id,e.estimate_no,i.inquiry_no,e.customer_id,c.name customer_name,e.project_name,e.project_type,
         e.owner_id,u.name owner_name,e.revision,e.due_date,e.status,e.progress,t.material_total,t.engineering_total,
@@ -372,13 +374,16 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       INNER JOIN dbo.users u ON u.id=e.owner_id INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
       WHERE e.deleted_at IS NULL AND (@status IS NULL OR e.status=@status) AND (@customer_id IS NULL OR e.customer_id=@customer_id)
         AND (@project_type IS NULL OR e.project_type=@project_type) AND (@owner_id IS NULL OR e.owner_id=@owner_id)
+        AND (@mine_id IS NULL OR e.owner_id=@mine_id OR EXISTS (
+          SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id
+            AND (a.owner_id=@mine_id OR a.support_id=@mine_id)))
         AND (@department IS NULL OR u.department=@department) AND (@revision IS NULL OR e.revision=@revision)
         AND (@search IS NULL OR e.estimate_no LIKE N'%'+@search+N'%' OR i.inquiry_no LIKE N'%'+@search+N'%'
           OR e.project_name LIKE N'%'+@search+N'%' OR c.name LIKE N'%'+@search+N'%')
       ORDER BY e.updated_at DESC,e.id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
     `, (sqlRequest) => { sqlRequest.input("status", sql.NVarChar(50), status); sqlRequest.input("search", sql.NVarChar(200), search);
       sqlRequest.input("customer_id", sql.BigInt, customerId); sqlRequest.input("project_type", sql.NVarChar(100), projectType);
-      sqlRequest.input("owner_id", sql.BigInt, ownerId); sqlRequest.input("department", sql.NVarChar(100), department);
+      sqlRequest.input("mine_id", sql.BigInt, mineId); sqlRequest.input("owner_id", sql.BigInt, ownerId); sqlRequest.input("department", sql.NVarChar(100), department);
       sqlRequest.input("revision", sql.Int, revision); sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize); });
     return { items: result.recordset.map((row) => ({ id: Number(row.id), number: row.estimate_no, inquiryNumber: row.inquiry_no,
       customerId: Number(row.customer_id), customerName: row.customer_name, projectName: row.project_name, projectType: row.project_type,

@@ -1186,6 +1186,7 @@ export async function downloadInquiryAttachment(id: number, attachmentId: number
 }
 
 export const listEstimates = (values: {
+  mine?: boolean;
   page?: number;
   pageSize?: number;
   search?: string;
