@@ -4,7 +4,7 @@
 
 บทความ เอกสาร collaboration workflow และ sales materials
 
-Evidence: snapshot `32e38249`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `9ed694e3`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

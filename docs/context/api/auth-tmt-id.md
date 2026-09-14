@@ -2,7 +2,7 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `9ed694e3`; generated, do not edit. [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

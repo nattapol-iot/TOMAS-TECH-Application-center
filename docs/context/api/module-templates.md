@@ -2,7 +2,7 @@
 
 [Module](../modules/templates.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `9ed694e3`; generated, do not edit. [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -13,7 +13,7 @@ Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/
 | POST | `/api/v1/module-templates` | 278–307 |
 | PUT | `/api/v1/module-templates/:id` | 309–351 |
 | POST | `/api/v1/module-templates/:id/retire` | 355–380 |
-| POST | `/api/v1/module-templates/from-estimate` | 384–443 |
+| POST | `/api/v1/module-templates/from-estimate` | 384–445 |
 
 ## Named functions
 
@@ -29,7 +29,7 @@ Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/
 | `replaceLines` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 122–149 |
 | `dateOnlyText` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 159–162 |
 | `mapTemplate` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 164–175 |
-| `registerModuleTemplateRoutes` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 194–444 |
+| `registerModuleTemplateRoutes` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 194–446 |
 
 ## Direct local dependencies
 

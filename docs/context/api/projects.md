@@ -2,22 +2,26 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `9ed694e3`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects` | 45–81 |
-| POST | `/api/v1/projects` | 83–190 |
+| GET | `/api/v1/projects` | 46–82 |
+| POST | `/api/v1/projects` | 84–191 |
+| GET | `/api/v1/projects/:id/members` | 193–218 |
+| POST | `/api/v1/projects/:id/members` | 220–243 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 245–266 |
+| PUT | `/api/v1/projects/:id` | 268–366 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 30–34 |
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 36–41 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 43–191 |
+| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 31–35 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 37–42 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 44–367 |
 
 ## Direct local dependencies
 
@@ -31,6 +35,7 @@ Evidence: source snapshot `32e38249`; generated, do not edit. [backend-node/src/
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/end-user.ts](<../../../backend-node/src/end-user.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/project-lifecycle.ts](<../../../backend-node/src/project-lifecycle.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 
