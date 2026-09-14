@@ -10,6 +10,8 @@ for (const mine of [true,false]) test("estimate list mine="+mine,async()=>{
  const app=Fastify();let checked=false;
  const database={async query(statement:string,bind:(request:sql.Request)=>void){
   const request=new sql.Request();bind(request);
+  assert.ok(request.parameters.mine_id);
+  assert.ok(request.parameters.owner_id);
   assert.equal(request.parameters.mine_id.value,mine?17:null);
   assert.equal(request.parameters.owner_id.value,null);
   assert.match(statement,/e.owner_id=@mine_id OR EXISTS/);
