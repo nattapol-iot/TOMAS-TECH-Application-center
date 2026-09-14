@@ -8,10 +8,11 @@ import { ApiError } from '../errors.js';
 import { bodyObject, clampedInteger, oneOf, positiveLong, requiredInteger, requiredText } from '../http.js';
 import { contentTypeFor, deleteStoredFile, DOCUMENT_DOWNLOAD_RATE_LIMIT, DOCUMENT_UPLOAD_RATE_LIMIT, multipartText, readMultipartUpload, sendStoredFile, storageKey, uploadedFileName, validateFileExtension, writeStoredFile } from '../document-storage.js';
 import { insertAudit } from '../audit.js';
+import type { EmailService } from '../email.js';
 import { nextSupportStatus, recognitionInput, requestKey, SUPPORT_CATEGORIES, SUPPORT_MAX_FILE, SUPPORT_STATUSES, supportContext, supportHash, supportText, validateSupportFile } from '../support-rules.js';
 import { checkVersion, isOperator, isStaff, readSupport, replaySupport, supportActor, supportAssignee, supportDetail, supportEvent, supportSummary, ticketSelect, type TicketRow } from '../support-service.js';
 
-export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Database,users:CurrentUserService) {
+export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Database,users:CurrentUserService,email:EmailService) {
  const actorFor=async(request:Parameters<CurrentUserService['required']>[0])=>supportActor(db,await users.required(request));
  app.get('/api/v1/support/bootstrap',async request=>{
   const actor=await actorFor(request);
@@ -56,15 +57,18 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
   const actor=await actorFor(request),body=bodyObject(request.body),key=requestKey(body.requestKey);
   const input={category:oneOf(requiredText(body.category,30,'Category'),'Category',SUPPORT_CATEGORIES),subject:supportText(body.subject,5,160,'Subject'),description:supportText(body.description,10,5000,'Description'),impact:oneOf(requiredText(body.impact,20,'Impact'),'Impact',['CanWork','PartlyBlocked','Blocked']),context:supportContext(body.context)};
   const hash=supportHash(input);
-  const ticket=await db.transaction(async tx=>{
+  const {ticket,recipients}=await db.transaction(async tx=>{
    const q=new sql.Request(tx).input('actor',sql.BigInt,actor.id).input('key',sql.UniqueIdentifier,key);
    const prior=(await q.query<{id:number;request_hash:string}>(`SELECT id,request_hash FROM dbo.support_tickets WITH(UPDLOCK,HOLDLOCK) WHERE reporter_id=@actor AND request_key=@key`)).recordset[0];
-   if(prior){if(prior.request_hash!==hash)throw new ApiError(409,'support_retry_changed','The request ID was already used for different data.');return supportDetail(tx,await readSupport(tx,Number(prior.id),actor),actor);}
+   if(prior){if(prior.request_hash!==hash)throw new ApiError(409,'support_retry_changed','The request ID was already used for different data.');return {ticket:await supportDetail(tx,await readSupport(tx,Number(prior.id),actor),actor),recipients:null};}
    q.input('category',sql.NVarChar(30),input.category).input('subject',sql.NVarChar(160),input.subject).input('description',sql.NVarChar(sql.MAX),input.description).input('impact',sql.NVarChar(20),input.impact).input('context',sql.NVarChar(2000),JSON.stringify(input.context)).input('hash',sql.Char(64),hash);
    const id=Number((await q.query<{id:number}>(`INSERT dbo.support_tickets(reporter_id,category_code,subject,description,impact,context_json,request_key,request_hash) OUTPUT inserted.id VALUES(@actor,@category,@subject,@description,@impact,@context,@key,@hash)`)).recordset[0]!.id);
    await new sql.Request(tx).input('id',sql.BigInt,id).query(`UPDATE dbo.support_tickets SET ticket_no=CONCAT(N'SUP-',YEAR(SYSUTCDATETIME()),N'-',FORMAT(id,'00000')) WHERE id=@id`);
-   const row=await readSupport(tx,id,actor);await supportEvent(tx,row,actor,'Created','',false,{},key,hash);return supportDetail(tx,await readSupport(tx,id,actor),actor);
-  });return reply.status(201).send(ticket);
+   const row=await readSupport(tx,id,actor);const eventRecipients=await supportEvent(tx,row,actor,'Created','',false,{},key,hash);
+   return {ticket:await supportDetail(tx,await readSupport(tx,id,actor),actor),recipients:eventRecipients};
+  });
+  if(recipients?.length)await email.sendSupportTicketUpdate({ticketId:ticket.id,ticketNumber:ticket.ticketNo,subject:ticket.subject,actorName:actor.name,summary:`New ticket reported: ${ticket.subject}`,recipients});
+  return reply.status(201).send(ticket);
  });
  app.get('/api/v1/support/tickets/:id',async request=>{
   const actor=await actorFor(request),id=positiveLong((request.params as {id:string}).id,'Ticket');
@@ -72,19 +76,19 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
  });
  for(const action of ['comments','assign','transition','recognition','recognition/adjust'] as const)app.post(`/api/v1/support/tickets/:id/${action}`,async request=>{
   const actor=await actorFor(request),id=positiveLong((request.params as {id:string}).id,'Ticket'),body=bodyObject(request.body),key=requestKey(body.requestKey),hash=supportHash({action,...body,requestKey:undefined,rowVersion:undefined});
-  return db.transaction(async tx=>{
+  const {ticket,recipients,summary}=await db.transaction(async tx=>{
    let row=await readSupport(tx,id,actor,true);
-   if(await replaySupport(tx,row,actor,key,hash))return supportDetail(tx,row,actor);
+   if(await replaySupport(tx,row,actor,key,hash))return {ticket:await supportDetail(tx,row,actor),recipients:null,summary:''};
    checkVersion(row,body.rowVersion);
    const own=Number(row.reporter_id)===actor.id,staff=isStaff(actor,row),operator=isOperator(actor,row);
    const q=new sql.Request(tx).input('id',sql.BigInt,id);
-   let kind:string=action,note='',internal=false,details:Record<string,unknown>={};
+   let kind:string=action,note='',internal=false,details:Record<string,unknown>={},summary='';
    if(action==='comments') {
     if(['Closed','Cancelled'].includes(row.status))throw new ApiError(409,'support_closed','Reopen the ticket before replying.');
     note=supportText(body.message,1,5000,'Message');internal=body.internal===true;
     if(internal&&(!staff||own))throw new ApiError(403,'support_internal','Internal notes are available only to support staff for another reporter.');
     if(own&&row.status==='WaitingForReporter'){await q.query(`UPDATE dbo.support_tickets SET status=N'InProgress' WHERE id=@id`);details.status='InProgress';}
-    kind='Comment';
+    kind='Comment';summary=`New reply from ${actor.name}`;
    }else if(action==='assign') {
     const category=body.category===undefined?row.category_code:oneOf(requiredText(body.category,30,'Category'),'Category',SUPPORT_CATEGORIES);
     const assignee=body.assigneeId===null?null:requiredInteger(body.assigneeId,'Assignee',1);
@@ -97,11 +101,16 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
     q.input('assignee',sql.BigInt,assignee).input('category',sql.NVarChar(30),category).input('priority',sql.NVarChar(20),priority);
     await q.query(`UPDATE dbo.support_tickets SET assignee_id=@assignee,category_code=@category,priority=@priority,status=CASE WHEN status=N'New' AND @assignee IS NOT NULL THEN N'Acknowledged' ELSE status END WHERE id=@id`);
     kind='Assigned';details={category,assigneeId:assignee,priority};
+    if(assignee!==null)summary=`Assigned to a support member by ${actor.name}`;
    }else if(action==='transition') {
     note=supportText(body.reason,1,5000,'Reason');const target=nextSupportStatus(row.status,body.status,own,operator,actor.manage,note);
     if(target==='Acknowledged'&&row.assignee_id===null)throw new ApiError(409,'support_assignee','Assign a responsible person first.');
     if(body.duplicateOf!==undefined&&body.duplicateOf!==null){if(!actor.manage||target!=='Cancelled')throw new ApiError(403,'support_permission','Only support administrators can link a cancelled duplicate.');const duplicate=requiredInteger(body.duplicateOf,'Duplicate ticket',1);if(duplicate===id)throw new ApiError(400,'support_duplicate','A ticket cannot duplicate itself.');await readSupport(tx,duplicate,actor);q.input('duplicate',sql.BigInt,duplicate);await q.query(`UPDATE dbo.support_tickets SET duplicate_of=@duplicate WHERE id=@id`);}
     q.input('status',sql.NVarChar(30),target);await q.query(`UPDATE dbo.support_tickets SET status=@status,resolved_at=CASE WHEN @status=N'Resolved' THEN SYSUTCDATETIME() WHEN @status=N'InProgress' THEN NULL ELSE resolved_at END,closed_at=CASE WHEN @status=N'Closed' THEN SYSUTCDATETIME() WHEN @status=N'InProgress' THEN NULL ELSE closed_at END WHERE id=@id`);kind='StatusChanged';details={from:row.status,to:target};
+    // Only the two outcomes the reporter actually cares about get an email; every
+    // other status hop (Acknowledged, InProgress, WaitingForReporter, ...) still
+    // gets the existing in-app notification only.
+    if(target==='Resolved')summary=`Ticket resolved by ${actor.name}`;else if(target==='Closed')summary=`Ticket closed by ${actor.name}`;
    }else {
     const adjust=action==='recognition/adjust';
     if(own||!staff||!(actor.manage||actor.awardCategories.includes(row.category_code))||adjust&&!actor.adjust)throw new ApiError(403,'support_recognition_permission','You cannot award or adjust points for this reporter.');
@@ -114,8 +123,11 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
     else await q.query(`INSERT dbo.support_recognition(ticket_id,evaluator_id,useful,detailed,actionable,points,message) VALUES(@id,@actor,@useful,@detailed,@actionable,@points,@message)`);
     note=input.message;kind=adjust?'RecognitionAdjusted':'Recognition';details={...input,previousPoints:old?.points??0,delta:input.points-(old?.points??0),policyVersion:1,...(adjust?{reason:body.reason}:{})};
    }
-   row=await readSupport(tx,id,actor);await supportEvent(tx,row,actor,kind,note,internal,details,key,hash);return supportDetail(tx,await readSupport(tx,id,actor),actor);
+   row=await readSupport(tx,id,actor);const eventRecipients=await supportEvent(tx,row,actor,kind,note,internal,details,key,hash);
+   return {ticket:await supportDetail(tx,await readSupport(tx,id,actor),actor),recipients:summary?eventRecipients:null,summary};
   });
+  if(recipients?.length&&summary)await email.sendSupportTicketUpdate({ticketId:ticket.id,ticketNumber:ticket.ticketNo,subject:ticket.subject,actorName:actor.name,summary,recipients});
+  return ticket;
  });
  app.post('/api/v1/support/tickets/:id/attachments',{config:{rateLimit:DOCUMENT_UPLOAD_RATE_LIMIT}},async(request,reply)=>{
   const actor=await actorFor(request),id=positiveLong((request.params as {id:string}).id,'Ticket');

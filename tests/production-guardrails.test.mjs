@@ -1318,3 +1318,41 @@ test("preparers can discard their own never-submitted report draft, and duplicat
   assert.match(screens, /onOpenExisting/);
   assert.match(screens, /\["discard", "Discard draft"\]/);
 });
+
+test("Support tickets email on creation, reply, assignment, and resolved/closed -- same audience as the in-app notification", async () => {
+  const [email, service, routes, appTs, compose] = await Promise.all([
+    readFile(new URL("backend-node/src/email.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/support-service.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/support.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/app.ts", root), "utf8"),
+    readFile(new URL("docker-compose.dev.yml", root), "utf8"),
+  ]);
+
+  assert.match(email, /sendSupportTicketUpdate/);
+  // Both email methods now share one Graph sendMail call so the two message shapes
+  // can never drift into two different delivery/error-handling paths.
+  assert.match(email, /private async sendMail\(/);
+
+  // supportEvent returns the same recipient set the in-app notification insert uses --
+  // not a second, hand-written recipient rule that could quietly diverge from it.
+  assert.match(service, /Promise<\{name:string;email:string\}\[\]>/);
+  assert.match(service, /return recipients;/);
+
+  assert.match(routes, /registerSupportRoutes\(app:FastifyInstance,config:AppConfig,db:Database,users:CurrentUserService,email:EmailService\)/);
+  // Creating a ticket only emails on a genuine new ticket, never on an idempotent retry replay.
+  assert.match(routes, /recipients:null/);
+  assert.match(routes, /New ticket reported/);
+  assert.match(routes, /New reply from/);
+  assert.match(routes, /Assigned to a support member by/);
+  // Every other status hop (Acknowledged, InProgress, WaitingForReporter, ...) stays
+  // in-app-only; only the two outcomes the reporter actually asked about email them.
+  assert.match(routes, /target==='Resolved'\)summary=`Ticket resolved by/);
+  assert.match(routes, /target==='Closed'\)summary=`Ticket closed by/);
+
+  assert.match(appTs, /registerSupportRoutes\(app, config, database, users, email\)/);
+
+  // Email__* was never wired into the container at all before this -- setting it in
+  // .env alone would have done nothing without this.
+  assert.match(compose, /Email__Mode: \$\{Email__Mode:-Disabled\}/);
+  assert.match(compose, /Email__ClientSecret: \$\{Email__ClientSecret:-\}/);
+});

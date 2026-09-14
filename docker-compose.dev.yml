@@ -21,6 +21,14 @@ services:
       TMT_ID_DEFAULT_ROLE_CODE: ${TMT_ID_DEFAULT_ROLE_CODE:-}
       MASTER_DATA_URL: ${MASTER_DATA_URL:-}
       MASTER_DATA_API_KEY: ${MASTER_DATA_API_KEY:-}
+      # Stays Disabled (the config default) unless every Microsoft Graph value below is
+      # set in .env -- see backend-node/.env.example for what each one needs.
+      Email__Mode: ${Email__Mode:-Disabled}
+      Email__TenantId: ${Email__TenantId:-}
+      Email__ClientId: ${Email__ClientId:-}
+      Email__ClientSecret: ${Email__ClientSecret:-}
+      Email__SenderUser: ${Email__SenderUser:-}
+      Email__ApplicationBaseUrl: ${Email__ApplicationBaseUrl:-}
       ConnectionStrings__IoTTeamCenter: ${DEV_SQL_CONNECTION_STRING:?set this in .env, copied from .env.dev.example}
       DocumentStorage__Mode: ${DEV_DOCUMENT_STORAGE_MODE:-Local}
       DocumentStorage__RootPath: /app/App_Data/project-documents

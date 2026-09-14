@@ -2,26 +2,26 @@
 
 [Module](../modules/support.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `9ed694e3`; generated, do not edit. [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `dff9a24`; generated, do not edit. [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/support/bootstrap` | 16–21 |
-| POST | `/api/v1/support/members` | 22–37 |
-| GET | `/api/v1/support/tickets` | 38–47 |
-| GET | `/api/v1/me/support-contributions` | 48–54 |
-| POST | `/api/v1/support/tickets` | 55–68 |
-| GET | `/api/v1/support/tickets/:id` | 69–72 |
-| POST | `/api/v1/support/tickets/:id/attachments` | 120–144 |
-| GET | `/api/v1/support/tickets/:id/attachments/:attachmentId/content` | 145–149 |
+| GET | `/api/v1/support/bootstrap` | 17–22 |
+| POST | `/api/v1/support/members` | 23–38 |
+| GET | `/api/v1/support/tickets` | 39–48 |
+| GET | `/api/v1/me/support-contributions` | 49–55 |
+| POST | `/api/v1/support/tickets` | 56–72 |
+| GET | `/api/v1/support/tickets/:id` | 73–76 |
+| POST | `/api/v1/support/tickets/:id/attachments` | 132–156 |
+| GET | `/api/v1/support/tickets/:id/attachments/:attachmentId/content` | 157–161 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerSupportRoutes` | [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>) | 14–150 |
+| `registerSupportRoutes` | [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>) | 15–162 |
 
 ## Direct local dependencies
 
@@ -32,6 +32,7 @@ Evidence: source snapshot `9ed694e3`; generated, do not edit. [backend-node/src/
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
+- [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/support-rules.ts](<../../../backend-node/src/support-rules.ts>)
 - [backend-node/src/support-service.ts](<../../../backend-node/src/support-service.ts>)
 

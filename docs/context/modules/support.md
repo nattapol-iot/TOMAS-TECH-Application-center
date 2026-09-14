@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ และคู่มือ
 
-Evidence: snapshot `9ed694e3`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `dff9a24`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -31,6 +31,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Domain helpers / direct dependencies
 
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
+- [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/support-rules.ts](<../../../backend-node/src/support-rules.ts>)
 - [backend-node/src/support-service.ts](<../../../backend-node/src/support-service.ts>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)

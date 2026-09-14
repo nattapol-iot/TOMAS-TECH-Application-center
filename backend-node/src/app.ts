@@ -206,7 +206,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerUnifiedReportRoutes(app, config, database, users);
   registerReportTemplateRoutes(app, database, users);
   registerPerformanceRoutes(app, database, users);
-  registerSupportRoutes(app, config, database, users);
+  registerSupportRoutes(app, config, database, users, email);
   registerActivityRoutes(app, database, users);
   app.addHook("onClose", async () => database.close());
   return { app, database };

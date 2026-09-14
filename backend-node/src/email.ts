@@ -16,6 +16,15 @@ export type EstimateAssignmentEmail = {
   recipients: EmailRecipient[];
 };
 
+export type SupportTicketEmail = {
+  ticketId: number;
+  ticketNumber: string;
+  subject: string;
+  summary: string;
+  actorName: string;
+  recipients: EmailRecipient[];
+};
+
 type FetchLike = typeof fetch;
 
 function escapeHtml(value: string): string {
@@ -43,7 +52,30 @@ export class EmailService {
   ) {}
 
   async sendEstimateAssignment(message: EstimateAssignmentEmail): Promise<EmailDeliveryResult> {
-    const recipients = normalizedRecipients(message.recipients);
+    return this.sendMail(message.recipients, `[IoT Team Center] Assigned: ${message.estimateNumber} · ${message.section}`, (appUrl) =>
+      `<p>คุณได้รับมอบหมายงาน Estimate Cost / You have been assigned an Estimate Cost section.</p>`
+      + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)}</td></tr>`
+      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Section</strong></td><td>${escapeHtml(message.section)}</td></tr>`
+      + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
+      + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
+      + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Estimate Cost หมายเลข ${escapeHtml(message.estimateNumber)}</p>`);
+  }
+
+  // Fires for a ticket being created, commented on, (re)assigned, or changing status --
+  // support.ts computes the same audience the in-app notification goes to and passes it
+  // here, so email recipients are always the same set (never a second, drifting rule).
+  async sendSupportTicketUpdate(message: SupportTicketEmail): Promise<EmailDeliveryResult> {
+    return this.sendMail(message.recipients, `[IoT Team Center] Support ${message.ticketNumber}: ${message.summary}`, (appUrl) =>
+      `<p>${escapeHtml(message.summary)}</p>`
+      + `<table><tr><td><strong>Ticket</strong></td><td>${escapeHtml(message.ticketNumber)}</td></tr>`
+      + `<tr><td><strong>Subject</strong></td><td>${escapeHtml(message.subject)}</td></tr>`
+      + `<tr><td><strong>By</strong></td><td>${escapeHtml(message.actorName)}</td></tr></table>`
+      + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Support Center หมายเลข ${escapeHtml(message.ticketNumber)}</p>`);
+  }
+
+  private async sendMail(rawRecipients: EmailRecipient[], subject: string, htmlBody: (appUrl: string) => string): Promise<EmailDeliveryResult> {
+    const recipients = normalizedRecipients(rawRecipients);
     if (this.config.mode === "Disabled") return { status: "disabled", recipients: recipients.map((recipient) => recipient.email) };
     if (recipients.length === 0) return { status: "sent", recipients: [] };
     try {
@@ -55,17 +87,8 @@ export class EmailService {
         signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({
           message: {
-            subject: `[IoT Team Center] Assigned: ${message.estimateNumber} · ${message.section}`,
-            body: {
-              contentType: "HTML",
-              content: `<p>คุณได้รับมอบหมายงาน Estimate Cost / You have been assigned an Estimate Cost section.</p>`
-                + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)}</td></tr>`
-                + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
-                + `<tr><td><strong>Section</strong></td><td>${escapeHtml(message.section)}</td></tr>`
-                + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
-                + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
-                + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Estimate Cost หมายเลข ${escapeHtml(message.estimateNumber)}</p>`,
-            },
+            subject,
+            body: { contentType: "HTML", content: htmlBody(appUrl) },
             toRecipients: recipients.map((recipient) => ({ emailAddress: { address: recipient.email, name: recipient.name } })),
           },
         }),
