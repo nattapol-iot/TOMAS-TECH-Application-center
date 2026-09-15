@@ -2,27 +2,27 @@
 
 [Module](../modules/performance.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/performance/overview` | 121–203 |
-| GET | `/api/v1/performance/evidence/:employeeId` | 205–315 |
-| POST | `/api/v1/performance/cycles` | 317–341 |
-| PUT | `/api/v1/performance/assessments/:employeeId` | 343–414 |
-| POST | `/api/v1/performance/assessments/:employeeId/complete` | 416–449 |
+| GET | `/api/v1/performance/overview` | 120–202 |
+| GET | `/api/v1/performance/evidence/:employeeId` | 204–314 |
+| POST | `/api/v1/performance/cycles` | 316–340 |
+| PUT | `/api/v1/performance/assessments/:employeeId` | 342–413 |
+| POST | `/api/v1/performance/assessments/:employeeId/complete` | 415–448 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `invalid` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 78–78 |
-| `cycleDto` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 79–83 |
-| `performanceScores` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 85–101 |
-| `targetRow` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 103–118 |
-| `registerPerformanceRoutes` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 120–450 |
+| `invalid` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 77–77 |
+| `cycleDto` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 78–82 |
+| `performanceScores` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 84–100 |
+| `targetRow` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 102–117 |
+| `registerPerformanceRoutes` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 119–449 |
 
 ## Direct local dependencies
 
@@ -31,7 +31,6 @@ Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
-- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/performance-evidence.ts](<../../../backend-node/src/performance-evidence.ts>)
 - [backend-node/src/performance-framework.ts](<../../../backend-node/src/performance-framework.ts>)
@@ -39,7 +38,7 @@ Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.employees`, `dbo.estimates`, `dbo.inquiries`, `dbo.inquiry_meetings`, `dbo.kpi_assessment_scores`, `dbo.kpi_assessments`, `dbo.kpi_review_cycles`, `dbo.project_members`, `dbo.projects`, `dbo.resource_tasks`, `dbo.roles`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_totals`
+`dbo.employees`, `dbo.estimates`, `dbo.inquiries`, `dbo.inquiry_meetings`, `dbo.kpi_assessment_scores`, `dbo.kpi_assessments`, `dbo.kpi_review_cycles`, `dbo.project_members`, `dbo.projects`, `dbo.resource_tasks`, `dbo.roles`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.users`, `dbo.v_estimate_totals`
 
 ## Change boundary
 

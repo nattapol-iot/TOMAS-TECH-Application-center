@@ -2,14 +2,14 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/resource-planning` | 46–68 |
-| PUT | `/api/v1/resource-planning/:kind/:id` | 69–165 |
+| GET | `/api/v1/resource-planning` | 46–69 |
+| PUT | `/api/v1/resource-planning/:kind/:id` | 70–166 |
 
 ## Named functions
 
@@ -17,7 +17,7 @@ Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `map` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 16–25 |
 | `decimal` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 26–40 |
-| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 41–166 |
+| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 41–167 |
 
 ## Direct local dependencies
 
@@ -29,7 +29,7 @@ Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.user_effective_permissions`
+`dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.permissions`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.role_permissions`, `dbo.roles`
 
 ## Change boundary
 

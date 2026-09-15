@@ -36,6 +36,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 46, fileName: "046_estimate_module_details.sql", name: "Revision-scoped estimate module names and remarks" },
   { version: 48, fileName: "048_estimate_price_sets.sql", name: "Estimate supplier price sets" },
   { version: 47, fileName: "047_estimate_module_description_rows.sql", name: "Estimate module description rows and summary notes" },
+  { version: 51, fileName: "051_support_email_notification.sql", name: "Support member email notification preference" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

@@ -16,7 +16,7 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
  const actorFor=async(request:Parameters<CurrentUserService['required']>[0])=>supportActor(db,await users.required(request));
  app.get('/api/v1/support/bootstrap',async request=>{
   const actor=await actorFor(request);
-  const result=await db.query(`SELECT u.id,u.name,m.category_code,m.can_award FROM dbo.support_members m JOIN dbo.users u ON u.id=m.user_id WHERE u.is_active=1 AND u.deleted_at IS NULL AND(@manage=1 OR m.category_code IN(SELECT category_code FROM dbo.support_members WHERE user_id=@actor));
+  const result=await db.query(`SELECT u.id,u.name,m.category_code,m.can_award,m.notify_email FROM dbo.support_members m JOIN dbo.users u ON u.id=m.user_id WHERE u.is_active=1 AND u.deleted_at IS NULL AND(@manage=1 OR m.category_code IN(SELECT category_code FROM dbo.support_members WHERE user_id=@actor));
    SELECT u.id,u.name,CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.role_permissions rp JOIN dbo.permissions p ON p.id=rp.permission_id WHERE rp.role_id=u.role_id AND p.code=N'support.manage') THEN 1 ELSE 0 END) canManage FROM dbo.users u WHERE u.is_active=1 AND u.deleted_at IS NULL AND(@manage=1 OR EXISTS(SELECT 1 FROM dbo.role_permissions rp JOIN dbo.permissions p ON p.id=rp.permission_id WHERE rp.role_id=u.role_id AND p.code=N'support.manage')) ORDER BY u.name;`,q=>q.input('manage',sql.Bit,actor.manage).input('actor',sql.BigInt,actor.id));
   return {userId:actor.id,categories:SUPPORT_CATEGORIES,manage:actor.manage,queue:actor.manage||actor.categories.length>0,categoryScope:actor.categories,members:result.recordsets[0],users:result.recordsets[1],maxFileBytes:Math.min(SUPPORT_MAX_FILE,config.documentStorage.maxFileSizeBytes)};
  });
@@ -24,16 +24,19 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
   const actor=await actorFor(request);if(!actor.manage)throw new ApiError(403,'support_permission','Support administrator permission is required.');
   const body=bodyObject(request.body),category=oneOf(requiredText(body.category,30,'Category'),'Category',SUPPORT_CATEGORIES),userId=requiredInteger(body.userId,'User',1);
   if(typeof body.enabled!=='boolean'||typeof body.canAward!=='boolean')throw new ApiError(400,'support_validation','Membership flags are required.');
+  // Defaults true (opt-out) so existing members keep getting emailed exactly as they
+  // did before this flag existed; new callers can turn it off per member/category.
+  const notifyEmail=typeof body.notifyEmail==='boolean'?body.notifyEmail:true;
   await db.transaction(async tx=>{
-   const q=new sql.Request(tx).input('user',sql.BigInt,userId).input('category',sql.NVarChar(30),category).input('award',sql.Bit,body.canAward).input('actor',sql.BigInt,actor.id);
+   const q=new sql.Request(tx).input('user',sql.BigInt,userId).input('category',sql.NVarChar(30),category).input('award',sql.Bit,body.canAward).input('notify',sql.Bit,notifyEmail).input('actor',sql.BigInt,actor.id);
    const found=(await q.query(`SELECT id FROM dbo.users WHERE id=@user AND is_active=1 AND deleted_at IS NULL`)).recordset[0];if(!found)throw new ApiError(400,'support_validation','Choose an active user.');
-   if(body.enabled)await q.query(`UPDATE dbo.support_members SET can_award=@award,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE user_id=@user AND category_code=@category;IF @@ROWCOUNT=0 INSERT dbo.support_members(category_code,user_id,can_award,updated_by) VALUES(@category,@user,@award,@actor);`);
+   if(body.enabled)await q.query(`UPDATE dbo.support_members SET can_award=@award,notify_email=@notify,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE user_id=@user AND category_code=@category;IF @@ROWCOUNT=0 INSERT dbo.support_members(category_code,user_id,can_award,notify_email,updated_by) VALUES(@category,@user,@award,@notify,@actor);`);
    else {
     const assigned=(await q.query(`SELECT TOP(1) id FROM dbo.support_tickets WHERE category_code=@category AND assignee_id=@user AND status NOT IN(N'Closed',N'Cancelled')`)).recordset[0];
     if(assigned)throw new ApiError(409,'support_member_assigned','Reassign open tickets before removing this member.');
     await q.query(`DELETE dbo.support_members WHERE user_id=@user AND category_code=@category`);
    }
-   await insertAudit(tx,actor.id,'SupportMember',userId,category,'Membership changed',null,{enabled:body.enabled,canAward:body.canAward});
+   await insertAudit(tx,actor.id,'SupportMember',userId,category,'Membership changed',null,{enabled:body.enabled,canAward:body.canAward,notifyEmail});
   });return {saved:true};
  });
  app.get('/api/v1/support/tickets',async request=>{

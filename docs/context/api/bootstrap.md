@@ -2,20 +2,20 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/me` | 23–23 |
-| GET | `/api/v1/bootstrap` | 25–116 |
+| GET | `/api/v1/bootstrap` | 25–125 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 22–117 |
+| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 22–126 |
 
 ## Direct local dependencies
 
@@ -26,7 +26,7 @@ Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customers`, `dbo.employees`, `dbo.estimates`, `dbo.inquiries`, `dbo.projects`, `dbo.roles`, `dbo.suppliers`, `dbo.user_effective_permissions`, `dbo.users`
+`dbo.customers`, `dbo.employees`, `dbo.estimates`, `dbo.inquiries`, `dbo.permissions`, `dbo.projects`, `dbo.role_permissions`, `dbo.roles`, `dbo.suppliers`, `dbo.user_signing_permissions`, `dbo.users`
 
 ## Change boundary
 

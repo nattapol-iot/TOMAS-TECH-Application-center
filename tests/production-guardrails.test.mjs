@@ -1363,3 +1363,35 @@ test("Support tickets email on creation, reply, assignment, and resolved/closed 
   assert.match(compose, /Email__Mode: \$\{Email__Mode:-Disabled\}/);
   assert.match(compose, /Email__ClientSecret: \$\{Email__ClientSecret:-\}/);
 });
+
+test("support member email notifications are configurable per member through the existing Support members UI", async () => {
+  const [migration, manifest, service, routes, client, screens] = await Promise.all([
+    readFile(new URL("database/migrations/051_support_email_notification.sql", root), "utf8"),
+    readFile(new URL("backend-node/src/migration-validation.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/support-service.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/support.ts", root), "utf8"),
+    readFile(new URL("app/system/support-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/SupportScreens.tsx", root), "utf8"),
+  ]);
+
+  assert.match(migration, /ALTER TABLE dbo\.support_members ADD notify_email bit NOT NULL/);
+  assert.match(migration, /INSERT dbo\.schema_versions\(version,name\) VALUES\(51,/);
+  // REQUIRED_SCHEMA_VERSION reads the array's *last* element, not the max version --
+  // this entry has to be the literal last one or the required-version check silently
+  // stays behind (see the 47/48/49/50 ordering already in this file).
+  assert.match(manifest, /\{ version: 51, fileName: "051_support_email_notification\.sql"[\s\S]*?\},\s*\]\s*as const;/);
+
+  // The email-recipient query (not the in-app one) now also requires notify_email=1 --
+  // a member can be on the team (can operate/award) without being emailed about it.
+  const recipientsQuery = service.slice(service.indexOf("const recipients="), service.indexOf("await q.query(`INSERT dbo.notifications"));
+  assert.match(recipientsQuery, /m\.notify_email=1/);
+  const notificationsInsert = service.slice(service.indexOf("await q.query(`INSERT dbo.notifications"), service.indexOf("await insertAudit"));
+  assert.doesNotMatch(notificationsInsert, /notify_email/);
+
+  assert.match(routes, /m\.notify_email/);
+  assert.match(routes, /notifyEmail/);
+
+  assert.match(client, /notify_email:boolean/);
+  assert.match(screens, /Receive email notifications/);
+  assert.match(screens, /m\.notify_email/);
+});
