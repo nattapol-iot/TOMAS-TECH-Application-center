@@ -82,7 +82,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   });
   const database = new Database(config.database);
   const users = new CurrentUserService(database);
-  const email = new EmailService(config.email, fetch, (error) => app.log.error({ error }, "Assignment email delivery failed"));
+  const email = new EmailService(config.email, fetch, (error) => app.log.error({ error }, "Email delivery failed"));
 
   registerErrorHandler(app);
   await app.register(multipart, {
