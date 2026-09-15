@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `3e4a891`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `4e44d2e`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -56,6 +56,7 @@ Evidence: repository migrations at `3e4a891`. Highest file number is not proof o
 | [048_estimate_price_sets.sql](<../../database/migrations/048_estimate_price_sets.sql>) | Inspect migration SQL |
 | [049_estimate_module_quantity.sql](<../../database/migrations/049_estimate_module_quantity.sql>) | Inspect migration SQL |
 | [050_estimate_product_codes.sql](<../../database/migrations/050_estimate_product_codes.sql>) | Inspect migration SQL |
-| [051_support_email_notification.sql](<../../database/migrations/051_support_email_notification.sql>) | Inspect migration SQL |
+| [051_additional_application_roles.sql](<../../database/migrations/051_additional_application_roles.sql>) | `dbo.user_effective_roles`, `dbo.user_effective_permissions` |
+| [052_support_email_notification.sql](<../../database/migrations/052_support_email_notification.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

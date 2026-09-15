@@ -2,7 +2,7 @@
 
 [Module](../modules/templates.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4e44d2e`; generated, do not edit. [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -10,10 +10,10 @@ Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/r
 |---|---|---|
 | GET | `/api/v1/module-templates` | 195–237 |
 | GET | `/api/v1/module-templates/:id` | 239–276 |
-| POST | `/api/v1/module-templates` | 278–307 |
-| PUT | `/api/v1/module-templates/:id` | 309–351 |
-| POST | `/api/v1/module-templates/:id/retire` | 355–380 |
-| POST | `/api/v1/module-templates/from-estimate` | 384–445 |
+| POST | `/api/v1/module-templates` | 278–306 |
+| PUT | `/api/v1/module-templates/:id` | 308–349 |
+| POST | `/api/v1/module-templates/:id/retire` | 353–378 |
+| POST | `/api/v1/module-templates/from-estimate` | 382–443 |
 
 ## Named functions
 
@@ -29,7 +29,7 @@ Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/r
 | `replaceLines` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 122–149 |
 | `dateOnlyText` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 159–162 |
 | `mapTemplate` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 164–175 |
-| `registerModuleTemplateRoutes` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 194–446 |
+| `registerModuleTemplateRoutes` | [backend-node/src/routes/module-templates.ts](<../../../backend-node/src/routes/module-templates.ts>) | 194–444 |
 
 ## Direct local dependencies
 

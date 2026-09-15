@@ -2,25 +2,25 @@
 
 [Module](../modules/labor.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4e44d2e`; generated, do not edit. [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/labor-rates` | 180–217 |
-| POST | `/api/v1/master/engineering-rates/:id/supersede` | 230–370 |
-| POST | `/api/v1/master/engineering-rates/:id/retire` | 381–465 |
+| GET | `/api/v1/labor-rates` | 181–218 |
+| POST | `/api/v1/master/engineering-rates/:id/supersede` | 231–371 |
+| POST | `/api/v1/master/engineering-rates/:id/retire` | 382–466 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `validation` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 39–41 |
-| `todayIn` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 43–47 |
-| `rateAmount` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 49–58 |
-| `rateQuery` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 89–112 |
-| `registerLaborRateRoutes` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 114–466 |
+| `validation` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 40–42 |
+| `todayIn` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 44–48 |
+| `rateAmount` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 50–59 |
+| `rateQuery` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 90–113 |
+| `registerLaborRateRoutes` | [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>) | 115–467 |
 
 ## Direct local dependencies
 
@@ -28,6 +28,7 @@ Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/r
 - [backend-node/src/config.ts](<../../../backend-node/src/config.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/labor-master.ts](<../../../backend-node/src/labor-master.ts>)

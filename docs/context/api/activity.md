@@ -2,41 +2,42 @@
 
 [Module](../modules/performance.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4e44d2e`; generated, do not edit. [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/activity/presence` | 35–57 |
-| GET | `/api/v1/activity/meta` | 58–66 |
-| GET | `/api/v1/activity/overview` | 67–89 |
-| GET | `/api/v1/activity/members/:id` | 90–97 |
-| POST | `/api/v1/activity/rules` | 98–111 |
-| POST | `/api/v1/activity/rules/:id/stop` | 112–122 |
-| POST | `/api/v1/activity/reports` | 123–136 |
-| POST | `/api/v1/activity/exceptions` | 137–147 |
-| POST | `/api/v1/activity/quality` | 148–166 |
-| POST | `/api/v1/activity/clarifications` | 167–170 |
-| POST | `/api/v1/activity/cycle-policy` | 171–181 |
+| POST | `/api/v1/activity/presence` | 36–58 |
+| GET | `/api/v1/activity/meta` | 59–67 |
+| GET | `/api/v1/activity/overview` | 68–90 |
+| GET | `/api/v1/activity/members/:id` | 91–98 |
+| POST | `/api/v1/activity/rules` | 99–112 |
+| POST | `/api/v1/activity/rules/:id/stop` | 113–123 |
+| POST | `/api/v1/activity/reports` | 124–137 |
+| POST | `/api/v1/activity/exceptions` | 138–148 |
+| POST | `/api/v1/activity/quality` | 149–167 |
+| POST | `/api/v1/activity/clarifications` | 168–171 |
+| POST | `/api/v1/activity/cycle-policy` | 172–182 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `positiveId` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 13–13 |
-| `invalid` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 14–14 |
-| `missing` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 15–15 |
-| `textDate` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 16–16 |
-| `periodDays` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 17–17 |
-| `uuid` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 18–18 |
-| `registerActivityRoutes` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 21–182 |
+| `positiveId` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 14–14 |
+| `invalid` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 15–15 |
+| `missing` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 16–16 |
+| `textDate` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 17–17 |
+| `periodDays` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 18–18 |
+| `uuid` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 19–19 |
+| `registerActivityRoutes` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 22–183 |
 
 ## Direct local dependencies
 
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/activity-rules.ts](<../../../backend-node/src/activity-rules.ts>)

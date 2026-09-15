@@ -2,46 +2,47 @@
 
 [Module](../modules/master.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4e44d2e`; generated, do not edit. [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/master/employees` | 168–223 |
-| POST | `/api/v1/master/employees` | 225–244 |
-| PUT | `/api/v1/master/employees/:id` | 246–276 |
-| POST | `/api/v1/master/customers` | 278–295 |
-| PUT | `/api/v1/master/customers/:id` | 297–340 |
-| POST | `/api/v1/master/suppliers` | 342–371 |
-| POST | `/api/v1/master/inventory-items` | 373–420 |
-| POST | `/api/v1/master/engineering-rates` | 422–480 |
-| POST | `/api/v1/master/suppliers/find-or-create` | 484–533 |
-| PUT | `/api/v1/master/suppliers/:id` | 535–569 |
-| DELETE | `/api/v1/master/suppliers/:id` | 571–596 |
+| GET | `/api/v1/master/employees` | 169–222 |
+| POST | `/api/v1/master/employees` | 224–243 |
+| PUT | `/api/v1/master/employees/:id` | 245–275 |
+| POST | `/api/v1/master/customers` | 277–294 |
+| PUT | `/api/v1/master/customers/:id` | 296–339 |
+| POST | `/api/v1/master/suppliers` | 341–372 |
+| POST | `/api/v1/master/inventory-items` | 374–421 |
+| POST | `/api/v1/master/engineering-rates` | 423–481 |
+| POST | `/api/v1/master/suppliers/find-or-create` | 485–534 |
+| PUT | `/api/v1/master/suppliers/:id` | 536–570 |
+| DELETE | `/api/v1/master/suppliers/:id` | 572–597 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `validation` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 40–42 |
-| `requiredCode` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 44–50 |
-| `email` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 52–58 |
-| `booleanBody` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 60–63 |
-| `nonnegativeDecimal` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 65–73 |
-| `normalizedBrands` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 75–86 |
-| `employeeInput` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 88–112 |
-| `bindEmployee` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 114–123 |
-| `syncEmployeeDirectoryUser` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 125–134 |
-| `customerInput` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 136–157 |
-| `bindCustomer` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 159–165 |
-| `registerMasterRoutes` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 167–597 |
+| `validation` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 41–43 |
+| `requiredCode` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 45–51 |
+| `email` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 53–59 |
+| `booleanBody` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 61–64 |
+| `nonnegativeDecimal` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 66–74 |
+| `normalizedBrands` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 76–87 |
+| `employeeInput` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 89–113 |
+| `bindEmployee` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 115–124 |
+| `syncEmployeeDirectoryUser` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 126–135 |
+| `customerInput` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 137–158 |
+| `bindCustomer` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 160–166 |
+| `registerMasterRoutes` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 168–598 |
 
 ## Direct local dependencies
 
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
@@ -49,7 +50,7 @@ Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/r
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customers`, `dbo.employees`, `dbo.engineering_rates`, `dbo.mat_items`, `dbo.permissions`, `dbo.role_permissions`, `dbo.roles`, `dbo.supplier_quotations`, `dbo.suppliers`, `dbo.sync_employee_directory_user`, `dbo.user_business_roles`, `dbo.users`
+`dbo.customers`, `dbo.employees`, `dbo.engineering_rates`, `dbo.mat_items`, `dbo.roles`, `dbo.supplier_quotations`, `dbo.suppliers`, `dbo.sync_employee_directory_user`, `dbo.user_business_roles`, `dbo.user_effective_permissions`, `dbo.users`
 
 ## Change boundary
 

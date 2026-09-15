@@ -4,7 +4,7 @@
 
 สร้าง revision รายการต้นทุน ค่าใช้จ่าย validation และ workflow
 
-Evidence: snapshot `3e4a891`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `4e44d2e`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -100,6 +100,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 - [backend-node/src/estimate-labor-category.ts](<../../../backend-node/src/estimate-labor-category.ts>)
 - [backend-node/src/document-number.ts](<../../../backend-node/src/document-number.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/overhead.ts](<../../../backend-node/src/overhead.ts>)
 - [backend-node/src/feature-flags.ts](<../../../backend-node/src/feature-flags.ts>)

@@ -2,14 +2,14 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4e44d2e`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/resource-planning` | 46–69 |
-| PUT | `/api/v1/resource-planning/:kind/:id` | 70–166 |
+| GET | `/api/v1/resource-planning` | 46–68 |
+| PUT | `/api/v1/resource-planning/:kind/:id` | 69–165 |
 
 ## Named functions
 
@@ -17,7 +17,7 @@ Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/r
 |---|---|---|
 | `map` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 16–25 |
 | `decimal` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 26–40 |
-| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 41–167 |
+| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 41–166 |
 
 ## Direct local dependencies
 
@@ -29,7 +29,7 @@ Evidence: source snapshot `3e4a891`; generated, do not edit. [backend-node/src/r
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.permissions`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.role_permissions`, `dbo.roles`
+`dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.user_effective_permissions`
 
 ## Change boundary
 

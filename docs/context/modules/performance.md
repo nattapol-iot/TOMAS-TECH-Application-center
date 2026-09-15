@@ -4,7 +4,7 @@
 
 ประเมิน performance หลักฐาน insights และ activity
 
-Evidence: snapshot `3e4a891`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `4e44d2e`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -52,6 +52,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 - [backend-node/src/activity-service.ts](<../../../backend-node/src/activity-service.ts>)
 - [backend-node/src/activity-rules.ts](<../../../backend-node/src/activity-rules.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/performance-evidence.ts](<../../../backend-node/src/performance-evidence.ts>)
 - [backend-node/src/performance-framework.ts](<../../../backend-node/src/performance-framework.ts>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
