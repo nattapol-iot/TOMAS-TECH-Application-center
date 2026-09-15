@@ -2,14 +2,15 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `dff9a24`; generated, do not edit. [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/estimates/:id/price-sets` | 22–53 |
-| POST | `/api/v1/estimates/:id/price-set-detach` | 54–67 |
+| POST | `/api/v1/estimates/:id/price-sets` | 22–68 |
+| PUT | `/api/v1/estimates/:id/cost-items/:lineId/quantity` | 69–90 |
+| POST | `/api/v1/estimates/:id/price-set-detach` | 91–104 |
 
 ## Named functions
 
@@ -17,7 +18,7 @@ Evidence: source snapshot `dff9a24`; generated, do not edit. [backend-node/src/r
 |---|---|---|
 | `setNumber` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 10–13 |
 | `validateSetMembers` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 15–20 |
-| `registerEstimatePriceSetRoutes` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 21–68 |
+| `registerEstimatePriceSetRoutes` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 21–105 |
 
 ## Direct local dependencies
 

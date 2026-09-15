@@ -1319,7 +1319,7 @@ test("preparers can discard their own never-submitted report draft, and duplicat
   assert.match(screens, /\["discard", "Discard draft"\]/);
 });
 
-test("Support tickets email on creation, reply, assignment, and resolved/closed -- same audience as the in-app notification", async () => {
+test("Support tickets email on creation, reply, assignment, and resolved/closed -- narrower audience than the in-app notification", async () => {
   const [email, service, routes, appTs, compose] = await Promise.all([
     readFile(new URL("backend-node/src/email.ts", root), "utf8"),
     readFile(new URL("backend-node/src/support-service.ts", root), "utf8"),
@@ -1333,10 +1333,17 @@ test("Support tickets email on creation, reply, assignment, and resolved/closed 
   // can never drift into two different delivery/error-handling paths.
   assert.match(email, /private async sendMail\(/);
 
-  // supportEvent returns the same recipient set the in-app notification insert uses --
-  // not a second, hand-written recipient rule that could quietly diverge from it.
+  // supportEvent's email recipient query is deliberately narrower than the in-app
+  // notification insert right below it: it must NOT fall back to every user who
+  // merely holds support.manage (e.g. every Admin) when a ticket is unassigned --
+  // only the category's actual support_members roster. The in-app insert keeps that
+  // broader fallback (it's a badge count, not an inbox).
   assert.match(service, /Promise<\{name:string;email:string\}\[\]>/);
   assert.match(service, /return recipients;/);
+  const recipientsQuery = service.slice(service.indexOf("const recipients="), service.indexOf("await q.query(`INSERT dbo.notifications"));
+  assert.doesNotMatch(recipientsQuery, /support\.manage/);
+  const notificationsInsert = service.slice(service.indexOf("await q.query(`INSERT dbo.notifications"), service.indexOf("await insertAudit"));
+  assert.match(notificationsInsert, /support\.manage/);
 
   assert.match(routes, /registerSupportRoutes\(app:FastifyInstance,config:AppConfig,db:Database,users:CurrentUserService,email:EmailService\)/);
   // Creating a ticket only emails on a genuine new ticket, never on an idempotent retry replay.

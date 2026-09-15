@@ -34,12 +34,15 @@ export async function supportEvent(tx:Transaction,row:TicketRow,actor:SupportAct
  // In-app notifications are durable queue rows committed atomically with the event.
  // Keep their text generic so revoked category access cannot expose ticket content.
  q.input('event',sql.BigInt,event.id).input('reporter',sql.BigInt,row.reporter_id).input('owner',sql.BigInt,row.assignee_id).input('category',sql.NVarChar(30),row.category_code);
- // Same recipient rule as the notifications insert below; callers use this to email
- // the same audience outside the transaction (reporter unless internal, the
- // assignee, or the category queue/support.manage staff when unassigned).
+ // Narrower than the in-app notification below on purpose: email only the reporter
+ // (unless internal), the assignee, or -- when unassigned -- the category's actual
+ // support_members roster. Anyone who merely holds support.manage (e.g. every Admin)
+ // is deliberately left out of email; that blanket rule stays for the in-app queue
+ // below, where it's just a badge count, not an inbox. Whoever manages "Support
+ // members" per category is therefore the real control for who gets emailed.
  const recipients=(await q.query<{name:string;email:string}>(`SELECT u.name,u.email FROM dbo.users u WHERE u.is_active=1 AND u.deleted_at IS NULL AND u.id<>@actor AND (
  (@internal=0 AND u.id=@reporter) OR u.id=@owner OR
- (@owner IS NULL AND (EXISTS(SELECT 1 FROM dbo.support_members m WHERE m.user_id=u.id AND m.category_code=@category) OR EXISTS(SELECT 1 FROM dbo.role_permissions rp JOIN dbo.permissions p ON p.id=rp.permission_id WHERE rp.role_id=u.role_id AND p.code=N'support.manage'))))
+ (@owner IS NULL AND EXISTS(SELECT 1 FROM dbo.support_members m WHERE m.user_id=u.id AND m.category_code=@category)))
  AND NOT(@internal=1 AND u.id=@reporter);`)).recordset;
  await q.query(`INSERT dbo.notifications(user_id,kind,title,detail,entity_type,entity_id,dedupe_key)
  SELECT u.id,CASE WHEN @kind IN(N'Recognition',N'RecognitionAdjusted') THEN N'SUPPORT_RECOGNITION' ELSE N'SUPPORT_UPDATE' END,N'Support Center',N'Open Support Center to view the update.',N'SupportTicket',@ticket,CONCAT(N'support:',@event)
