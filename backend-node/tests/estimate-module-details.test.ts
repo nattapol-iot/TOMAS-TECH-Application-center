@@ -43,10 +43,11 @@ for(const scenario of ["labor", "summary", "package", "rename", "collision", "ap
 
 import { scaleModuleQuantities } from "../src/estimate-module-details.js";
 test("module quantity scales set header and all components without changing per-set counts", () => {
- const rows=[{id:1,qty:1},{id:2,qty:3},{id:3,qty:0.5}];
+ const rows=[{id:1,qty:1},{id:2,qty:3},{id:3,qty:2}];
  const doubled=scaleModuleQuantities(rows,1,2);
- assert.deepEqual(doubled.map(row=>row.quantity),[2,6,1]);
- assert.deepEqual(scaleModuleQuantities(doubled.map(row=>({id:row.id,qty:row.quantity})),2,1).map(row=>row.quantity),[1,3,0.5]);
+ assert.deepEqual(doubled.map(row=>row.quantity),[2,6,4]);
+ assert.deepEqual(scaleModuleQuantities(doubled.map(row=>({id:row.id,qty:row.quantity})),2,1).map(row=>row.quantity),[1,3,2]);
  assert.throws(()=>scaleModuleQuantities([{id:1,qty:1}],3,1),/four decimal/);
+ assert.throws(()=>scaleModuleQuantities([{id:1,qty:1}],2,1),/fractional/);
  assert.throws(()=>scaleModuleQuantities([{id:1,qty:0.0001}],2,1),/four decimal/);
 });

@@ -169,3 +169,5 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Client contract lookup
 
 Search the selected API path or function in [app/system/api-client.ts](<../../../app/system/api-client.ts>); follow its screen callers. Common UI/language changes require [app/system/ui.tsx](<../../../app/system/ui.tsx>) and [app/system/i18n.ts](<../../../app/system/i18n.ts>). For SQL changes use [schema map](../SCHEMA.md).
+
+Cost quantities: QTY and Unit can be edited inline in Cost Items through PUT cost-items/:lineId/quantity with both row versions, assignment/lock checks and audit. Cost item writes, module count and set quantities require positive integers; scaling cannot create fractional items. For included components inline QTY is total quantity and must divide evenly by set count. Set Price editor supports editable per-set quantity/unit plus new item rows saved atomically; set total stays price times set count and included rows remain zero monetary cost. No migration; historical fractional rows are not silently rounded.

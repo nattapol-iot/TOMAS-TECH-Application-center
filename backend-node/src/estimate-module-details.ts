@@ -21,6 +21,7 @@ export function scaleModuleQuantities(rows: { id: number; qty: number | string }
     if (oldTicks <= 0n || numerator % oldTicks !== 0n)
       throw new ApiError(400, "quantity_precision", "This quantity would require more than four decimal places for a component.");
     const result = numerator / oldTicks;
+    if (result % 10000n !== 0n) throw new ApiError(400, "quantity_integer", "Changing module quantity would create a fractional item quantity. Adjust the item quantities first.");
     if (result <= 0n || result > BigInt(Number.MAX_SAFE_INTEGER))
       throw new ApiError(400, "quantity_range", "A component quantity is outside the supported range.");
     return { id: row.id, quantity: Number(result) / 10000 };

@@ -48,7 +48,7 @@ function parseCostInput(request: FastifyRequest, requireLineVersion: boolean): C
   if (!categoryNames[categoryCode]) throw new ApiError(400, "validation_failed", "Category code is not allowed.");
   const priceSource = requiredText(body.priceSource, 100, "Price source");
   if (!allowedPriceSources.includes(priceSource)) throw new ApiError(400, "validation_failed", "Price source is not allowed.");
-  const quantity = decimal(body.quantity, 0.0001, 1_000_000_000, 4, "Quantity");
+  const quantity = requiredInteger(body.quantity, "Quantity", 1, 1_000_000_000);
   const unitCost = decimal(body.unitCost, 0, 1_000_000_000, 4, "Unit cost");
   if (quantity * unitCost > 999_999_999_999_999) {
     throw new ApiError(400, "validation_failed", "Line total exceeds the supported monetary range.");
@@ -178,7 +178,7 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     const remark = optionalBodyText(body.remark, 2000, "Remark");
     const descriptionRows = parseModuleDescriptionRows(body.descriptionRows);
     const moduleQuantity = body.quantity === undefined ? undefined : Number(body.quantity);
-    if (moduleQuantity !== undefined && (!Number.isFinite(moduleQuantity) || moduleQuantity <= 0 || moduleQuantity > 1000000 || Math.abs(moduleQuantity*10000-Math.round(moduleQuantity*10000))>0.00001))
+    if (moduleQuantity !== undefined && (!Number.isFinite(moduleQuantity) || !Number.isInteger(moduleQuantity) || moduleQuantity <= 0 || moduleQuantity > 1000000 || Math.abs(moduleQuantity*10000-Math.round(moduleQuantity*10000))>0.00001))
       throw new ApiError(400, "validation_failed", "Module quantity must be positive with at most four decimal places.");
     const moduleUnit = body.unit === undefined ? undefined : requiredText(body.unit, 30, "Module unit");
     if ((moduleQuantity !== undefined || moduleUnit !== undefined) && !moduleKey.startsWith("category:"))

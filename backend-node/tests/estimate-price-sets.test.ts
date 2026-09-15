@@ -24,6 +24,8 @@ for(const scenario of ["create","edit","approved","stale","unassigned","audit fa
   if(statement.includes("FROM dbo.estimate_assignments"))return {recordset:[]};
   if(statement.includes("owner_valid"))return {recordset:[{owner_valid:true,supplier_valid:true}]};
   if(statement.includes("SELECT * FROM dbo.cost_items WITH"))return {recordset:scenario==="edit"?[{...member,price_set_key:key,qty:2,qty_per_set:1},{...member,id:2,price_set_key:key,is_price_set:true}]:[member]};
+  if(statement.includes("INSERT dbo.cost_items")&&this.parameters.per_set){assert.equal(this.parameters.total!.value,6);assert.equal(this.parameters.code!.value,"NEW-ITEM");assert.match(statement,/is_price_set=1/);return {recordset:[]};}
+  if(statement.includes("SET qty_per_set=@per_set")){assert.equal(this.parameters.per_set!.value,4);assert.equal(this.parameters.total!.value,8);assert.match(statement,/price_set_key=@key AND is_price_set=0/);return {recordset:[]};}
   if(statement.includes("INSERT dbo.cost_items")||statement.includes("SET description=@name")){headers++;assert.equal(this.parameters.price!.value,620000);assert.equal(this.parameters.qty!.value,2);assert.match(statement,/revision/);return {recordset:[]};}
   if(statement.includes("SET price_set_key=@key")){children++;assert.match(statement,/unit_cost=0/);assert.ok(statement.includes((scenario==="edit"?"qty_per_set":"qty")+"*@qty"));return {recordset:[]};}
   if(statement.includes("SELECT * FROM dbo.cost_items"))return {recordset:[]};
@@ -35,7 +37,7 @@ for(const scenario of ["create","edit","approved","stale","unassigned","audit fa
  const database={async transaction(action:(transaction:object)=>Promise<unknown>){const result=await action({});committed=true;return result;}}as unknown as Database;
  const users={async demandPermission(){},async required(){return {id:scenario==="unassigned"?8:7,role:"Engineer"};}}as unknown as CurrentUserService;
  const app=Fastify();registerErrorHandler(app);registerEstimatePriceSetRoutes(app,database,users);
- try{const response=await app.inject({method:"POST",url:"/api/v1/estimates/1/price-sets",payload:{estimateRowVersion:version.toString("base64"),lineIds:[1],setKey:scenario==="edit"?key:undefined,name:"Vision Set A",quantity:2,unitCost:620000,supplierId:4,referenceNumber:"Q-123"}});assert.equal(response.statusCode,["create","edit"].includes(scenario)?200:scenario==="unassigned"?403:scenario==="audit failure"?500:409,response.body);assert.equal(committed,["create","edit"].includes(scenario));assert.equal(headers,committed||scenario==="audit failure"?1:0);assert.equal(children,headers);}finally{await app.close();}
+ try{const response=await app.inject({method:"POST",url:"/api/v1/estimates/1/price-sets",payload:{estimateRowVersion:version.toString("base64"),lineIds:[1],...(scenario==="edit"?{components:[{id:1,quantityPerSet:4,unit:"Pcs"}],newItems:[{itemCode:"NEW-ITEM",description:"Additional component",quantityPerSet:3,unit:"Pcs"}]}:{}),setKey:scenario==="edit"?key:undefined,name:"Vision Set A",quantity:2,unitCost:620000,supplierId:4,referenceNumber:"Q-123"}});assert.equal(response.statusCode,["create","edit"].includes(scenario)?200:scenario==="unassigned"?403:scenario==="audit failure"?500:409,response.body);assert.equal(committed,["create","edit"].includes(scenario));assert.equal(headers,committed||scenario==="audit failure"?1:0);assert.equal(children,headers);}finally{await app.close();}
 });
 
 for(const failsAudit of [false,true]) test("detach component resets price with audit, failure="+failsAudit,async t=>{
@@ -54,4 +56,27 @@ for(const failsAudit of [false,true]) test("detach component resets price with a
  const users={async demandPermission(){},async required(){return {id:7,role:"Engineer"};}}as unknown as CurrentUserService;
  const app=Fastify();registerErrorHandler(app);registerEstimatePriceSetRoutes(app,database,users);
  try{const response=await app.inject({method:"POST",url:"/api/v1/estimates/1/price-set-detach",payload:{lineId:1,estimateRowVersion:version.toString("base64")}});assert.equal(response.statusCode,failsAudit?500:200);assert.ok(detached);assert.equal(committed,!failsAudit);}finally{await app.close();}
+});
+for(const scenario of ["normal","header","component","fraction","indivisible","stale","locked","audit-failure"])test("inline quantity "+scenario,async t=>{
+ const key="11111111-1111-1111-1111-111111111111";let committed=false;let writes=0;
+ const isMember=["component","indivisible"].includes(scenario),isHeader=scenario==="header";
+ const target={...member,price_set_key:isMember||isHeader?key:null,is_price_set:isHeader,row_version:scenario==="stale"?Buffer.alloc(8):version,qty:2};
+ t.mock.method(sql.Request.prototype,"query",async function(this:sql.Request,statement:string){
+  if(statement.includes("FROM dbo.estimates WITH"))return {recordset:[{estimate_no:"EST-1",revision:0,owner_id:7,status:scenario==="locked"?"Locked":"Draft",row_version:version}]};
+  if(statement.includes("SELECT * FROM dbo.cost_items WITH")&&statement.includes("id=@line"))return {recordset:[target]};
+  if(statement.includes("SELECT * FROM dbo.cost_items WITH"))return {recordset:[{...member,id:2,price_set_key:key,is_price_set:true,qty:2},{...member,price_set_key:key,is_price_set:false,qty:6,qty_per_set:3}]};
+  if(statement.includes("SET qty=qty_per_set*@qty")){writes++;assert.equal(this.parameters.qty!.value,4);return {recordset:[]};}
+  if(statement.includes("SET qty=@qty")){writes++;assert.equal(this.parameters.qty!.value,4);assert.equal(this.parameters.unit!.value,"Set");assert.equal(this.parameters.per_set!.value,isMember?2:null);assert.doesNotMatch(statement,/unit_cost=/);return {recordset:[]};}
+  if(statement.includes("SELECT * FROM dbo.cost_items"))return {recordset:[]};
+  if(statement.includes("audit_log")){if(scenario==="audit-failure")throw Error("Audit unavailable");return {recordset:[]};}
+  if(statement.includes("activity_events")||statement.includes("assert_estimate_totals"))return {recordset:[]};
+  if(statement.includes("UPDATE dbo.estimates"))return {recordset:[{row_version:version}]};
+  throw Error("Unexpected SQL "+statement);
+ });
+ const database={async transaction(action:(tx:object)=>Promise<unknown>){const result=await action({});committed=true;return result;}} as unknown as Database;
+ const users={async demandPermission(){},async required(){return {id:7,role:"Engineer"};}}as unknown as CurrentUserService;
+ const app=Fastify();registerErrorHandler(app);registerEstimatePriceSetRoutes(app,database,users);
+ try{const response=await app.inject({method:"PUT",url:"/api/v1/estimates/1/cost-items/1/quantity",payload:{estimateRowVersion:version.toString("base64"),lineRowVersion:version.toString("base64"),quantity:scenario==="fraction"?1.0001:scenario==="indivisible"?3:4,unit:"Set"}});
+ const success=["normal","header","component"].includes(scenario);assert.equal(response.statusCode,success?200:scenario==="audit-failure"?500:["stale","locked"].includes(scenario)?409:400,response.body);assert.equal(committed,success);if(success)assert.equal(writes,isHeader?2:1);
+ }finally{await app.close();}
 });

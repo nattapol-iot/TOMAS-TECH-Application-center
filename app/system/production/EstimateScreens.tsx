@@ -1,4 +1,5 @@
 "use client";
+import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
 import { EstimateEffortCells } from "./EstimateEffortCells";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
@@ -1013,7 +1014,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   const updateQuick = <K extends keyof QuickCostDraft>(key: K, value: QuickCostDraft[K]) => setQuickDraft((current) => current ? { ...current, [key]: value } : current);
   /* A pick from the type-ahead lands the whole reference line; the date only moves when the reference carries one. */
   const applyQuickLookup = (patch: CostItemLookupPatch) => setQuickDraft((current) => current ? { ...current, ...patch, module: current.module, priceDate: patch.priceDate ?? current.priceDate } : current);
-  const quickValid = Boolean(quickDraft && quickDraft.categoryCode.length === 2 && quickDraft.itemCode.trim() && quickDraft.description.trim() && quickDraft.quantity > 0 && quickDraft.unit.trim() && quickDraft.unitCost >= 0 && quickDraft.quantity * quickDraft.unitCost <= MAX_LEDGER_LINE_TOTAL && quickDraft.priceSource && quickDraft.ownerId > 0);
+  const quickValid = Boolean(quickDraft && quickDraft.categoryCode.length === 2 && quickDraft.itemCode.trim() && quickDraft.description.trim() && Number.isInteger(quickDraft.quantity) && quickDraft.quantity > 0 && quickDraft.unit.trim() && quickDraft.unitCost >= 0 && quickDraft.quantity * quickDraft.unitCost <= MAX_LEDGER_LINE_TOTAL && quickDraft.priceSource && quickDraft.ownerId > 0);
   const saveQuickRow = async (continueAdding: boolean) => {
     if (!quickDraft || !quickValid || busy || quickSaving) return;
     setQuickSaving(true);
@@ -1032,7 +1033,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     <td><div className="inline-stack"><CostItemLookupInput field="description" required aria-label={uiText("Description")} maxLength={500} placeholder={localizeCopy("Description *")} value={quickDraft.description} onChange={(text) => updateQuick("description", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /><input aria-label={uiText("Specification")} maxLength={20000} placeholder={uiText("Specification")} value={quickDraft.specification ?? ""} onChange={(event) => updateQuick("specification", event.target.value)} /></div></td>
     <td><div className="inline-stack"><CostItemLookupInput field="brand" aria-label={uiText("Brand")} maxLength={100} placeholder={uiText("Brand")} value={quickDraft.brand ?? ""} onChange={(text) => updateQuick("brand", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /><input aria-label={uiText("Model")} maxLength={200} placeholder={uiText("Model")} value={quickDraft.model ?? ""} onChange={(event) => updateQuick("model", event.target.value)} /></div></td>
     <td><SupplierLookupInput suppliers={bootstrap.suppliers} aria-label={uiText("Supplier")} placeholder={uiText("Supplier")} value={quickDraft.supplierId} onChange={(supplierId) => updateQuick("supplierId", supplierId)} /></td>
-    <td><input className="num" aria-label={uiText("Quantity")} type="number" min="0.0001" max="1000000000" step="0.0001" value={quickDraft.quantity} onChange={(event) => updateQuick("quantity", Number(event.target.value))} /></td>
+    <td><input className="num" aria-label={uiText("Quantity")} type="number" min="1" max="1000000000" step="1" value={quickDraft.quantity} onChange={(event) => updateQuick("quantity", Number(event.target.value))} /></td>
     <td><select aria-label={uiText("Unit")} value={quickDraft.unit} onChange={(event) => updateQuick("unit", event.target.value)}>{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></td>
     <td><input className="num" aria-label={uiText("Unit cost")} type="number" min="0" max="1000000000" step="0.0001" value={quickDraft.unitCost} onChange={(event) => updateQuick("unitCost", Number(event.target.value))} /></td>
     <td className="quick-computed"><strong>{formatMoney(quickDraft.quantity * quickDraft.unitCost)}</strong></td>
@@ -1102,8 +1103,8 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         <th style={{ width: 300 }}><LocalizedText text={"Description / Specification"} /></th>
         <th style={{ width: 160 }}><LocalizedText text={"Brand / Model"} /></th>
         <th style={{ width: 180 }}><LocalizedText text={"Supplier"} /></th>
-        <th className="num" style={{ width: 80 }}><LocalizedText text={"Qty"} /></th>
-        <th style={{ width: 90 }}><LocalizedText text={"Unit"} /></th>
+        <th className="num" style={{ width: 100 }}><LocalizedText text={"Qty"} /></th>
+        <th style={{ width: 140 }}><LocalizedText text={"Unit"} /></th>
         <th className="num" style={{ width: 120 }}><LocalizedText text={"Unit cost"} /></th>
         <th className="num" style={{ width: 130 }}><LocalizedText text={"Total"} /></th>
         {dense ? null : <>
@@ -1128,8 +1129,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
               <td><div className="cell-primary"><strong>{line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}{line.description}</strong>{line.priceSetKey && !line.isPriceSet ? <span>{line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต</span> : null}{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
               <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
               <td><span className="cell-text">{line.supplierName ?? <span className="soft-warn"><LocalizedText text={"ยังไม่เลือกผู้ขาย"} /></span>}</span></td>
-              <td className="num">{formatNumber(line.quantity, 4)}</td>
-              <td><span className="cell-text">{line.unit}</span></td>
+              {line.canEdit ? <EstimateModuleQuantityCells key={line.id+":"+line.rowVersion} name={line.itemCode} quantity={line.quantity} unit={line.unit} units={workspace.costItems.map(item=>item.unit)} showCostRatio={!line.priceSetKey||Boolean(line.isPriceSet)} disabled={busy||setBusy} onSave={async (quantity,unit)=>{setSetBusy(true);try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/cost-items/${line.id}/quantity`,{method:"PUT",body:JSON.stringify({estimateRowVersion:workspace.header.rowVersion,lineRowVersion:line.rowVersion,quantity,unit})});await onExcelImported();}finally{setSetBusy(false);}}}/> : <><td className="num">{formatNumber(line.quantity, 0)}</td><td><span className="cell-text">{line.unit}</span></td></>}
               <td className="num">{line.priceSetKey && !line.isPriceSet ? <span className="muted">รวมในราคาเซ็ต</span> : numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
               <td className="num"><strong>{line.priceSetKey && !line.isPriceSet ? "—" : formatMoney(line.lineTotal)}</strong></td>
               {dense ? null : <>
@@ -1762,7 +1762,7 @@ function CostItemEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, 
     ownerId: line?.ownerId ?? seed.ownerId ?? defaultOwner,
   }));
   const update = <K extends keyof CostItemInput>(key: K, value: CostItemInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const valid = form.categoryCode.length === 2 && form.itemCode.trim() && form.description.trim() && validCostItemNumbers(form.quantity, form.unitCost) && form.unit.trim() && form.priceSource && form.ownerId > 0;
+  const valid = form.categoryCode.length === 2 && form.itemCode.trim() && form.description.trim() && Number.isInteger(form.quantity) && validCostItemNumbers(form.quantity, form.unitCost) && form.unit.trim() && form.priceSource && form.ownerId > 0;
   return <Modal title={line ? `Edit ${line.itemCode}` : "Add cost item"} subtitle={line ? "Save checks both estimate and line row versions" : "New line is written to the current revision and audit trail"} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create item"}</button></>}>
     <CostItemFields form={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} onLookupPick={(patch) => setForm((current) => ({ ...current, ...patch, priceDate: patch.priceDate ?? current.priceDate }))} suppliers={bootstrap.suppliers} allowedCategories={allowedCategories}
       moduleField={<Field label="Main module (optional)" hint="เว้นว่างสำหรับรายการเดี่ยวที่ไม่อยู่ใต้โมดูล / Leave blank for a standalone item"><input maxLength={200} value={form.module} onChange={(event) => update("module", event.target.value)} /></Field>}
