@@ -14,13 +14,13 @@ test("engineering rate master is hidden and API-protected below management level
   const createRoute = masterRoute.match(/app\.post\("\/api\/v1\/master\/engineering-rates"[\s\S]*?\n {2}\}\);/)?.[0] ?? "";
 
   assert.match(listRoute, /demandPermission\(request, "master\.read"\)/);
-  assert.match(listRoute, /canViewEngineeringRates\(actor\.role\)/);
+  assert.match(listRoute, /rolesOf\(actor\)\.some\(canViewEngineeringRates\)/);
   assert.match(createRoute, /demandPermission\(request, "master\.write"\)/);
-  assert.match(createRoute, /canManageEngineeringRates\(actor\.role\)/);
-  assert.match(masterScreen, /canViewRates = canViewEngineeringRates\(bootstrap\.user\.role\)/);
+  assert.match(createRoute, /rolesOf\(actor\)\.some\(canManageEngineeringRates\)/);
+  assert.match(masterScreen, /canViewRates = bootstrap\.user\.roles\.some\(canViewEngineeringRates\)/);
   assert.match(masterScreen, /canViewRates \? \[\{ id: "rates"/);
-  assert.match(ratesScreen, /canRead = bootstrap\.permissions\.includes\("master\.read"\) && canViewEngineeringRates\(bootstrap\.user\.role\)/);
-  assert.match(ratesScreen, /canWrite = bootstrap\.permissions\.includes\("master\.write"\) && canManageEngineeringRates\(bootstrap\.user\.role\)/);
+  assert.match(ratesScreen, /canRead = bootstrap\.permissions\.includes\("master\.read"\) && bootstrap\.user\.roles\.some\(canViewEngineeringRates\)/);
+  assert.match(ratesScreen, /canWrite = bootstrap\.permissions\.includes\("master\.write"\) && bootstrap\.user\.roles\.some\(canManageEngineeringRates\)/);
 });
 
 test("estimate editing uses a limited rate-option endpoint instead of the management master endpoint", () => {

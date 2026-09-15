@@ -4,7 +4,7 @@
 
 จัดหมวด ERP สรุปยอด export และ import workbook
 
-Evidence: snapshot `6b6809b`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `09f9bd3c`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -84,6 +84,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Domain helpers / direct dependencies
 
 - [backend-node/src/estimate-labor-category.ts](<../../../backend-node/src/estimate-labor-category.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/estimate-erp.ts](<../../../backend-node/src/estimate-erp.ts>)
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [backend-node/src/estimate-workbook.ts](<../../../backend-node/src/estimate-workbook.ts>)

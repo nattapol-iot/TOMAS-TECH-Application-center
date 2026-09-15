@@ -25,7 +25,10 @@ export type CurrentUser = {
   entraObjectId: string;
   email: string;
   name: string;
+  /** The primary role on dbo.users. Audit stamps and workflow routing use this one value. */
   role: string;
+  /** Primary role plus every additional role granted through dbo.user_business_roles. */
+  roles: string[];
   department: string;
   isActive: boolean;
 };

@@ -4,6 +4,7 @@ import type { Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import { bodyObject, optionalBodyText, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { demandProjectScope, isMyWorkElevated } from "../project-scope.js";
 import { networkDays } from "../schedule-calculator.js";
@@ -73,7 +74,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const baselines = await readBaselines(transaction, projectId);
   return { projectId, projectNo: project.projectNo, projectName: project.name, managerId: project.managerId, projectStatus: project.status,
     scheduleVersion: (await currentScheduleVersion(transaction, projectId))?.toString("base64") ?? null,
-    canPlan: canPlanPermission && project.status !== "Closed" && (project.managerId === actor.id || actor.role === "Engineering Manager" || actor.role === "Admin"),
+    canPlan: canPlanPermission && project.status !== "Closed" && (project.managerId === actor.id || hasRole(actor, "Engineering Manager", "Admin")),
     canUpdateProgress: canProgressPermission && project.status !== "Closed",
     summary: { planStart: starts[0] ?? null, planFinish: finishes.at(-1) ?? null,
       workDays: networkDays(starts[0] ?? null, finishes.at(-1) ?? null, holidays), percentComplete: progress,
@@ -87,7 +88,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
   app.get("/api/v1/projects/:projectId/schedule", async (request) => {
     await users.demandPermission(request, "schedule.read"); const actor = await users.required(request);
     const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id");
-    const [canPlan, canProgress] = await Promise.all([permissionFor(database, actor.role, "schedule.plan"), permissionFor(database, actor.role, "schedule.progress")]);
+    const [canPlan, canProgress] = await Promise.all([permissionFor(database, actor.id, "schedule.plan"), permissionFor(database, actor.id, "schedule.progress")]);
     return database.transaction((transaction) => projectSchedule(transaction, database, actor, projectId, canPlan, canProgress), sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
 

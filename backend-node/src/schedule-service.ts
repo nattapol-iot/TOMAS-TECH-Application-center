@@ -2,6 +2,7 @@ import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "./db.js";
 import { ApiError } from "./errors.js";
+import { hasRole } from "./user-roles.js";
 import { bodyObject, optionalBodyText, parseDateOnly, parseRowVersion, requiredInteger, requiredText } from "./http.js";
 import { dateOnly } from "./http.js";
 import { resolveSchedule, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
@@ -131,7 +132,7 @@ export async function readProject(transaction: TransactionType, projectId: numbe
 export async function demandPlanOwner(transaction: TransactionType, projectId: number, actor: CurrentUser): Promise<ProjectRow> {
   const project = await readProject(transaction, projectId, true);
   if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
-  if (project.managerId !== actor.id && actor.role !== "Engineering Manager" && actor.role !== "Admin") throw new ApiError(403, "schedule_plan_owner_required", "Only this project's manager, an Engineering Manager, or an Admin can change its plan.");
+  if (project.managerId !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) throw new ApiError(403, "schedule_plan_owner_required", "Only this project's manager, an Engineering Manager, or an Admin can change its plan.");
   return project;
 }
 export async function readHolidays(transaction: TransactionType): Promise<Set<string>> {
@@ -209,4 +210,4 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
 export function resolveTasks(tasks: TaskRow[], holidays: Set<string>) { return resolveSchedule(scheduleCalculation(tasks), holidays); }
 export function concurrency(): ApiError { return new ApiError(409, "concurrency_conflict", "The schedule changed. Reload it and try again."); }
 export function calendarDays(start: string | null, finish: string | null): number { return !start || !finish || finish < start ? 0 : Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1; }
-export async function permissionFor(database: Database, role: string, permission: string): Promise<boolean> { const result = await database.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.roles r INNER JOIN dbo.role_permissions rp ON rp.role_id=r.id INNER JOIN dbo.permissions p ON p.id=rp.permission_id WHERE r.code=@role AND p.code=@permission) THEN 1 ELSE 0 END AS bit) allowed;`, (request) => { request.input("role", sql.NVarChar(50), role); request.input("permission", sql.NVarChar(100), permission); }); return Boolean(result.recordset[0]?.allowed); }
+export async function permissionFor(database: Database, userId: number, permission: string): Promise<boolean> { const result = await database.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@user_id AND code=@permission) THEN 1 ELSE 0 END AS bit) allowed;`, (request) => { request.input("user_id", sql.BigInt, userId); request.input("permission", sql.NVarChar(100), permission); }); return Boolean(result.recordset[0]?.allowed); }

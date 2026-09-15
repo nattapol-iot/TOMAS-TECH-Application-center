@@ -50,14 +50,13 @@ export function registerResourcePlanningRoutes(
       `
       SELECT * FROM dbo.resource_capacity;
       SELECT e.* FROM dbo.resource_effort e
-      WHERE EXISTS(SELECT 1 FROM dbo.roles r JOIN dbo.role_permissions rp ON rp.role_id=r.id
-        JOIN dbo.permissions p ON p.id=rp.permission_id WHERE r.code=@role
+      WHERE EXISTS(SELECT 1 FROM dbo.user_effective_permissions p WHERE p.user_id=@actor_user
         AND p.code=CASE e.entity_type WHEN N'Inquiry' THEN N'inquiry.read' ELSE N'estimate.read' END)
       AND ((e.entity_type=N'Inquiry' AND EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=e.entity_id AND i.deleted_at IS NULL))
         OR (e.entity_type=N'Estimate' AND EXISTS(SELECT 1 FROM dbo.estimates i WHERE i.id=e.entity_id AND i.deleted_at IS NULL)));
       SELECT holiday_date FROM dbo.holidays;
     `,
-      (q) => q.input("role", sql.NVarChar(50), actor.role),
+      (q) => q.input("actor_user", sql.BigInt, actor.id),
     );
     return {
       capacities: (result.recordsets[0] as Row[]).map(map),

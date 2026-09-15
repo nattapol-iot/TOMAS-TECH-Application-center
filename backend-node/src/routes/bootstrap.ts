@@ -26,11 +26,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     const user = await users.required(request);
     const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow>(`
       ;WITH granted AS (
-        SELECT permission.code
-        FROM dbo.users permission_user
-        INNER JOIN dbo.role_permissions rp ON rp.role_id = permission_user.role_id
-        INNER JOIN dbo.permissions permission ON permission.id = rp.permission_id
-        WHERE permission_user.id = @user_id
+        SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id
       )
       SELECT
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'inquiry.read')
@@ -76,12 +72,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         AND app_user.is_active = 1 AND app_user.deleted_at IS NULL
       ORDER BY employee.employee_no;
 
-      SELECT p.code FROM dbo.role_permissions rp
-      INNER JOIN dbo.permissions p ON p.id = rp.permission_id
-      INNER JOIN dbo.users u ON u.role_id = rp.role_id
-      WHERE u.id = @user_id
-      UNION SELECT code FROM dbo.user_signing_permissions WHERE user_id=@user_id
-      ORDER BY code;
+      SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id ORDER BY code;
     `, (sqlRequest) => sqlRequest.input("user_id", sql.BigInt, user.id));
 
     const counts = result.recordsets[0] as unknown as CountRow[];

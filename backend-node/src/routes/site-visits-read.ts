@@ -268,7 +268,7 @@ export function registerSiteVisitReadRoutes(
     await users.demandPermission(request, SITE_VISIT_PERMISSIONS.visitRead);
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Visit id"),
-      detail = await loadVisitDetail(database, id, actor.id, actor.role);
+      detail = await loadVisitDetail(database, id, actor.id, actor.id);
     if (!detail)
       throw new ApiError(404, "visit_not_found", "Site visit not found.");
     return detail;
@@ -277,13 +277,13 @@ export function registerSiteVisitReadRoutes(
     await users.demandPermission(request, SITE_VISIT_PERMISSIONS.visitRead);
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Visit id"),
-      visit = await loadVisitDetail(database, id, actor.id, actor.role);
+      visit = await loadVisitDetail(database, id, actor.id, actor.id);
     if (!visit)
       throw new ApiError(404, "visit_not_found", "Site visit not found.");
     const intake = await loadSalesIntakeDetail(
       database,
       visit.intakeId,
-      actor.role,
+      actor.id,
     );
     if (!intake)
       throw new ApiError(404, "intake_not_found", "Sales intake not found.");

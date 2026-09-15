@@ -2,28 +2,29 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/excel-imports` | 79–84 |
-| GET | `/api/v1/estimates/:id/excel-imports/:revision/:hash/content` | 85–95 |
-| POST | `/api/v1/estimates/:id/excel-import` | 96–172 |
+| GET | `/api/v1/estimates/:id/excel-imports` | 80–85 |
+| GET | `/api/v1/estimates/:id/excel-imports/:revision/:hash/content` | 86–96 |
+| POST | `/api/v1/estimates/:id/excel-import` | 97–173 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `decimal` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 16–19 |
-| `parseExcelImport` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 20–53 |
-| `validateOriginalEstimateWorkbook` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 55–71 |
-| `registerEstimateExcelImportRoutes` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 73–173 |
+| `decimal` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 17–20 |
+| `parseExcelImport` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 21–54 |
+| `validateOriginalEstimateWorkbook` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 56–72 |
+| `registerEstimateExcelImportRoutes` | [backend-node/src/routes/estimate-excel-import.ts](<../../../backend-node/src/routes/estimate-excel-import.ts>) | 74–174 |
 
 ## Direct local dependencies
 
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/config.ts](<../../../backend-node/src/config.ts>)
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)

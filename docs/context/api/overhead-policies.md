@@ -2,24 +2,24 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/overhead-policies` | 36–45 |
-| POST | `/api/v1/overhead-policies` | 47–73 |
-| POST | `/api/v1/estimates/:id/overhead/apply` | 75–100 |
+| GET | `/api/v1/overhead-policies` | 37–46 |
+| POST | `/api/v1/overhead-policies` | 48–74 |
+| POST | `/api/v1/estimates/:id/overhead/apply` | 76–101 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `todayIn` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 14–18 |
-| `mapPolicy` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 20–25 |
-| `mapSnapshot` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 27–33 |
-| `registerOverheadPolicyRoutes` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 35–101 |
+| `todayIn` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 15–19 |
+| `mapPolicy` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 21–26 |
+| `mapSnapshot` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 28–34 |
+| `registerOverheadPolicyRoutes` | [backend-node/src/routes/overhead-policies.ts](<../../../backend-node/src/routes/overhead-policies.ts>) | 36–102 |
 
 ## Direct local dependencies
 
@@ -27,6 +27,7 @@ Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/r
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/overhead.ts](<../../../backend-node/src/overhead.ts>)
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)

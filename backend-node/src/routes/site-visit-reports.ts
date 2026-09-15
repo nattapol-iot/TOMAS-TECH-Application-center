@@ -241,7 +241,7 @@ export function registerSiteVisitReportRoutes(
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Visit id");
     const body = bodyObject(request.body);
-    const permissions = await rolePermissions(database, actor.role);
+    const permissions = await rolePermissions(database, actor.id);
     return database.transaction(async (transaction) => {
       const report = await lockReport(transaction, id, body.rowVersion);
       if (!["Draft", "Revision Requested"].includes(report.status))
@@ -335,7 +335,7 @@ export function registerSiteVisitReportRoutes(
         "validation_failed",
         "Say what needs changing, so the engineer knows what to do.",
       );
-    const permissions = await rolePermissions(database, actor.role);
+    const permissions = await rolePermissions(database, actor.id);
     return database.transaction(async (transaction) => {
       const report = await lockReport(transaction, id, body.rowVersion);
       if (!["Submitted", "Under Review"].includes(report.status))
@@ -516,7 +516,7 @@ export function registerSiteVisitReportRoutes(
     const id = positiveLong((request.params as { id?: string }).id, "Visit id");
     const body = bodyObject(request.body);
     const reason = requiredText(body.reason, 1000, "Reason");
-    const permissions = await rolePermissions(database, actor.role);
+    const permissions = await rolePermissions(database, actor.id);
     return database.transaction(async (transaction) => {
       const visit = await lockVisit(transaction, id, body.rowVersion);
       requireTransition(

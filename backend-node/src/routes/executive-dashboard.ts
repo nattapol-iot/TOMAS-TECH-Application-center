@@ -3,6 +3,8 @@ import sql from "mssql";
 import type { Database } from "../db.js";
 import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
+import { rolesOf } from "../user-roles.js";
 import { dateOnly } from "../http.js";
 import { taskRow, resolveTasks } from "../schedule-service.js";
 import { DASHBOARD_ROLES, overdueTask, type ExecutiveData, type ExecutiveTask } from "../executive-dashboard-model.js";
@@ -15,29 +17,31 @@ const d = (r: Row, key: string) => dateOnly(r[key] as Date | string | null) ?? n
 export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService) {
   app.get("/api/v1/dashboard/management", async request => {
     const actor = await users.required(request);
-    if (!DASHBOARD_ROLES.includes(actor.role)) throw new ApiError(403, "dashboard_forbidden", "Management dashboard access is required.");
-    // This endpoint grants reporting only. Additional signing roles never expand reporting scope.
-    const executive = ["Management", "CEO", "Admin"].includes(actor.role);
+    if (!rolesOf(actor).some((role) => DASHBOARD_ROLES.includes(role))) throw new ApiError(403, "dashboard_forbidden", "Management dashboard access is required.");
+    // Since migration 051 an additional role carries its full permission set, so the
+    // reporting scope below reads every role the account holds, not only the primary one.
+    const executive = hasRole(actor, "Management", "CEO", "Admin");
     const result = await db.query<Row>(`
       SET NOCOUNT ON;
+      DECLARE @roles TABLE(code nvarchar(50) PRIMARY KEY);
+      INSERT @roles SELECT code FROM dbo.user_effective_roles WHERE user_id=@actor;
       DECLARE @granted TABLE(code nvarchar(100));
-      INSERT @granted SELECT p.code FROM dbo.users u JOIN dbo.role_permissions rp ON rp.role_id=u.role_id JOIN dbo.permissions p ON p.id=rp.permission_id WHERE u.id=@actor;
-      INSERT @granted SELECT code FROM dbo.user_signing_permissions WHERE user_id=@actor;
+      INSERT @granted SELECT code FROM dbo.user_effective_permissions WHERE user_id=@actor;
       DECLARE @projects TABLE(id bigint PRIMARY KEY);
       INSERT @projects SELECT p.id FROM dbo.projects p
       WHERE p.deleted_at IS NULL AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'project.read'))
       AND (@executive=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
-        OR (@role=N'Engineering Manager' AND @department<>N'' AND EXISTS(SELECT 1 FROM dbo.users u WHERE u.department=@department AND u.deleted_at IS NULL
+        OR (EXISTS(SELECT 1 FROM @roles WHERE code =N'Engineering Manager') AND @department<>N'' AND EXISTS(SELECT 1 FROM dbo.users u WHERE u.department=@department AND u.deleted_at IS NULL
           AND (u.id=p.manager_id OR u.id=p.lead_engineer_id OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=u.id))))
-        OR (@role=N'Sales Manager' AND @department<>N'' AND EXISTS(SELECT 1 FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id JOIN dbo.users u ON u.id=i.created_by
+        OR (EXISTS(SELECT 1 FROM @roles WHERE code =N'Sales Manager') AND @department<>N'' AND EXISTS(SELECT 1 FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id JOIN dbo.users u ON u.id=i.created_by
           WHERE e.id=p.estimate_id AND u.department=@department AND u.deleted_at IS NULL)));
       DECLARE @inquiries TABLE(id bigint PRIMARY KEY);
       INSERT @inquiries SELECT i.id FROM dbo.inquiries i WHERE i.deleted_at IS NULL
       AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'inquiry.read'))
       AND (@executive=1 OR i.created_by=@actor OR i.estimate_owner_id=@actor
         OR EXISTS(SELECT 1 FROM dbo.projects p JOIN @projects scope ON scope.id=p.id JOIN dbo.estimates e ON e.id=p.estimate_id WHERE e.inquiry_id=i.id)
-        OR (@role IN(N'Engineering Manager',N'Sales Manager') AND @department<>N'' AND EXISTS(SELECT 1 FROM dbo.users u WHERE u.deleted_at IS NULL AND u.department=@department
-          AND ((@role=N'Sales Manager' AND u.id=i.created_by) OR (@role=N'Engineering Manager' AND u.id=i.estimate_owner_id)))));
+        OR (EXISTS(SELECT 1 FROM @roles WHERE code IN(N'Engineering Manager',N'Sales Manager')) AND @department<>N'' AND EXISTS(SELECT 1 FROM dbo.users u WHERE u.deleted_at IS NULL AND u.department=@department
+          AND ((EXISTS(SELECT 1 FROM @roles WHERE code =N'Sales Manager') AND u.id=i.created_by) OR (EXISTS(SELECT 1 FROM @roles WHERE code =N'Engineering Manager') AND u.id=i.estimate_owner_id)))));
       DECLARE @estimates TABLE(id bigint PRIMARY KEY);
       INSERT @estimates SELECT e.id FROM dbo.estimates e WHERE e.deleted_at IS NULL AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'estimate.read'))
       AND EXISTS(SELECT 1 FROM @inquiries i WHERE i.id=e.inquiry_id);
@@ -59,7 +63,7 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
         COALESCE((SELECT SUM(line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) value,
         CONVERT(decimal(19,4),0) open_value,0 held,
         CAST(CASE WHEN pr.status=N'In Approval' AND pr.requested_by<>@actor AND EXISTS(SELECT 1 FROM @granted WHERE code=N'procurement.approve') AND EXISTS(
-          SELECT 1 FROM dbo.mat_pr_approval_steps st WHERE st.pr_id=pr.id AND st.status=N'Current' AND (st.approver_id=@actor OR (st.approver_id IS NULL AND st.approver_role=@role))) THEN 1 ELSE 0 END AS bit) waiting_me
+          SELECT 1 FROM dbo.mat_pr_approval_steps st WHERE st.pr_id=pr.id AND st.status=N'Current' AND (st.approver_id=@actor OR (st.approver_id IS NULL AND st.approver_role IN(SELECT code FROM @roles)))) THEN 1 ELSE 0 END AS bit) waiting_me
       FROM dbo.mat_prs pr JOIN @projects scope ON scope.id=pr.project_id JOIN dbo.users u ON u.id=pr.requested_by WHERE pr.deleted_at IS NULL
         AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'procurement.read'))
       UNION ALL
@@ -77,7 +81,7 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       WHERE @executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'inventory.read');
       SELECT u.id,u.name,u.department,cap.days_per_week capacity FROM dbo.users u LEFT JOIN dbo.resource_capacity cap ON cap.user_id=u.id
       WHERE u.is_active=1 AND u.deleted_at IS NULL AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'schedule.read'))
-      AND (@executive=1 OR u.id=@actor OR (@role IN(N'Engineering Manager',N'Sales Manager') AND @department<>N'' AND u.department=@department)
+      AND (@executive=1 OR u.id=@actor OR (EXISTS(SELECT 1 FROM @roles WHERE code IN(N'Engineering Manager',N'Sales Manager')) AND @department<>N'' AND u.department=@department)
         OR EXISTS(SELECT 1 FROM dbo.project_members m JOIN @projects p ON p.id=m.project_id WHERE m.user_id=u.id)
         OR EXISTS(SELECT 1 FROM dbo.projects p JOIN @projects scope ON scope.id=p.id WHERE p.manager_id=u.id OR p.lead_engineer_id=u.id));
       SELECT N'Inquiry' kind,i.id,i.estimate_owner_id owner_id,COALESCE(e.start_date,i.inquiry_date) start_date,COALESCE(e.end_date,i.due_date) end_date,e.man_days
@@ -97,7 +101,7 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       LEFT JOIN dbo.estimates de ON de.id=doc.estimate_id
       WHERE st.state=N'PENDING' AND rq.state IN(N'PENDING_SIGN',N'PARTIALLY_SIGNED') AND st.required_mark<>N'PAPER'
         AND EXISTS(SELECT 1 FROM @granted WHERE code=N'signing.read')
-        AND (st.assignee_user_id=@actor OR (st.assignee_user_id IS NULL AND st.assignee_role_id=(SELECT id FROM dbo.roles WHERE code=@role)))
+        AND (st.assignee_user_id=@actor OR (st.assignee_user_id IS NULL AND st.assignee_role_id IN(SELECT role_id FROM dbo.user_effective_roles WHERE user_id=@actor)))
         AND ((doc.project_id IS NULL AND de.inquiry_id IS NULL) OR EXISTS(SELECT 1 FROM @projects p WHERE p.id=doc.project_id) OR EXISTS(SELECT 1 FROM @inquiries i WHERE i.id=de.inquiry_id))
       UNION ALL
       SELECT CONCAT(N'PLAN-',t.id),CONCAT(N'TASK-',t.id),t.title,u.name,N'Plan review',N'resources',t.project_id,t.inquiry_id,t.plan_end,t.created_at,NULL
@@ -109,16 +113,16 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       SELECT u.id,u.name,u.department FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id
       WHERE r.code=N'Project Manager' AND u.is_active=1 AND u.deleted_at IS NULL
         AND (@executive=1 OR u.id=@actor
-          OR (@role IN(N'Engineering Manager',N'Sales Manager') AND @department<>N'' AND u.department=@department)
+          OR (EXISTS(SELECT 1 FROM @roles WHERE code IN(N'Engineering Manager',N'Sales Manager')) AND @department<>N'' AND u.department=@department)
           OR EXISTS(SELECT 1 FROM dbo.projects p JOIN @projects scope ON scope.id=p.id WHERE p.manager_id=u.id))
       ORDER BY u.name,u.id;
-    `, q => q.input("actor", sql.BigInt, actor.id).input("role", sql.NVarChar(50), actor.role)
+    `, q => q.input("actor", sql.BigInt, actor.id)
       .input("department", sql.NVarChar(100), actor.department.trim()).input("executive", sql.Bit, executive));
     const rows = (index: number) => result.recordsets[index] as Row[];
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     const holidays = new Set(rows(5).map(r => d(r,"holiday_date")!));
     const data: ExecutiveData = {
-      asOf: new Date().toISOString(), today, mode: executive ? "executive" : "manager", scope: executive ? "Company" : actor.role === "Project Manager" ? "Managed projects" : actor.department || "Assigned records",
+      asOf: new Date().toISOString(), today, mode: executive ? "executive" : "manager", scope: executive ? "Company" : hasRole(actor, "Project Manager") ? "Managed projects" : actor.department || "Assigned records",
       projects: rows(0).map(r => ({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),managerId:n(r,"manager_id"),manager:s(r,"manager"),status:s(r,"status"),start:d(r,"start_date")!,due:d(r,"target_delivery")!,progress:n(r,"progress"),budget:r.budget==null?null:n(r,"budget"),materialBudget:r.material_budget==null?null:n(r,"material_budget"),forecast:null,overdue:0,blocked:0,taskCount:0,unknownSchedule:false,plannedProgress:null})),
       inquiries:rows(1).map(r=>({id:n(r,"id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),ownerId:n(r,"owner_id"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!,probability:n(r,"probability")})),
       estimates:rows(2).map(r=>({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),department:s(r,"department"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!,cost:n(r,"cost")})),

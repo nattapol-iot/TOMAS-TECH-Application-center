@@ -9,6 +9,7 @@ import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, clampedInteger, dateOnly, firstQueryValue, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import type { CurrentUser } from "../types.js";
@@ -51,12 +52,12 @@ function percentage(value: unknown, label: string): number {
 }
 
 function managerOverride(actor: CurrentUser): boolean {
-  return actor.role === "Engineering Manager" || actor.role === "Admin";
+  return hasRole(actor, "Engineering Manager", "Admin");
 }
 
 /** Only the Admin role may approve or send back an estimate it owns itself. */
-export function adminSelfDecision(actor: { role: string }): boolean {
-  return actor.role === "Admin";
+export function adminSelfDecision(actor: { roles: string[] }): boolean {
+  return actor.roles.includes("Admin");
 }
 
 async function validationIssues(database: Database, estimateId: number, transaction?: TransactionType): Promise<Array<{ code: string; message: string; entityType: string; entityId: number }>> {

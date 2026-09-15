@@ -2,7 +2,7 @@
 
 [Module](../modules/master.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

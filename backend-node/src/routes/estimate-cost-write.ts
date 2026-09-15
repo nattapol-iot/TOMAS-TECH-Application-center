@@ -5,6 +5,7 @@ import type { Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUser } from "../types.js";
@@ -115,7 +116,7 @@ export async function estimateAssignees(transaction: TransactionType, estimateId
 }
 
 export function elevated(actor: CurrentUser, estimate: EditableEstimate): boolean {
-  return actor.id === Number(estimate.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
+  return actor.id === Number(estimate.owner_id) || hasRole(actor, "Engineering Manager", "Admin");
 }
 export function assigned(actor: CurrentUser, assignees: EstimateAssignees): boolean {
   return assignees.has(actor.id);

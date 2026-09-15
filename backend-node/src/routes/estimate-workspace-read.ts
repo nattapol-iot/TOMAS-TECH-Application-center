@@ -4,6 +4,7 @@ import sql from "mssql";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import { dateOnly, positiveLong } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -44,7 +45,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
 
       SELECT CONVERT(bit,COALESCE(MAX(CASE WHEN p.code=N'estimate.write' THEN 1 ELSE 0 END),0)) can_write,
         CONVERT(bit,COALESCE(MAX(CASE WHEN p.code=N'estimate.approve' THEN 1 ELSE 0 END),0)) can_approve
-      FROM dbo.roles r LEFT JOIN dbo.role_permissions rp ON rp.role_id=r.id LEFT JOIN dbo.permissions p ON p.id=rp.permission_id WHERE r.code=@role;
+      FROM dbo.user_effective_permissions p WHERE p.user_id=@actor_user;
 
       SELECT a.id,a.section,a.owner_id,owner_user.name owner_name,a.support_id,support_user.name support_name,
         a.due_date,a.status,a.progress,a.comment,a.row_version FROM dbo.estimate_assignments a
@@ -109,7 +110,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
         AND NOT EXISTS(SELECT 1 FROM dbo.expense_lines x WHERE x.estimate_id=e.id AND x.revision=e.revision
           AND x.expense_type IN(N'Accommodation',N'Per Diem') AND x.deleted_at IS NULL)
       ORDER BY severity,code,entity_id;
-    `, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("role", sql.NVarChar(50), actor.role);
+    `, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("actor_user", sql.BigInt, actor.id);
       sqlRequest.input("stale_before", sql.Date, shiftDays(today, -180)); });
     const headerRow = (result.recordsets[0] as unknown as Array<Record<string, unknown>>)[0];
     if (!headerRow) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
@@ -136,7 +137,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     };
     const permissionRow = (result.recordsets[1] as unknown as Array<{ can_write: boolean; can_approve: boolean }>)[0] ?? { can_write: false, can_approve: false };
     const assignmentRows = result.recordsets[2] as unknown as Array<Record<string, unknown>>;
-    const elevated = actor.id === header.ownerId || actor.role === "Engineering Manager" || actor.role === "Admin";
+    const elevated = actor.id === header.ownerId || hasRole(actor, "Engineering Manager", "Admin");
     const editable = EDITABLE.has(header.status);
     // Assignments are per discipline: owning or supporting any section unlocks every cost ledger of the estimate.
     const isAssignee = assignmentRows.some((row) => number(row.owner_id) === actor.id || nullableNumber(row.support_id) === actor.id);
@@ -186,8 +187,8 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       canEditAllSections: permissionRow.can_write && editable && elevated, editableSections: [...assignedSections].sort(),
       canSubmit: permissionRow.can_write && editable && elevated,
       // Admin may decide its own estimate (mirrors adminSelfDecision in routes/estimates.ts); other owners need a second approver.
-      canApprove: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || actor.role === "Admin"),
-      canRequestRevision: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || actor.role === "Admin"),
+      canApprove: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || hasRole(actor, "Admin")),
+      canRequestRevision: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || hasRole(actor, "Admin")),
       canCreateRevision: permissionRow.can_write && elevated && ["Approved", "Locked"].includes(header.status),
       canManageAssignments: permissionRow.can_write && editable && elevated, canUpdateContingency: permissionRow.can_write && editable && elevated,
       canEditCostItems, canEditManhour, canEditExpenses, canEditOtherCosts: canEditOther };

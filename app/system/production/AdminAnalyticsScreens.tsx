@@ -775,8 +775,8 @@ export function ProductionEngineeringRates({ bootstrap, notify, refreshBootstrap
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const canRead = bootstrap.permissions.includes("master.read") && canViewEngineeringRates(bootstrap.user.role);
-  const canWrite = bootstrap.permissions.includes("master.write") && canManageEngineeringRates(bootstrap.user.role);
+  const canRead = bootstrap.permissions.includes("master.read") && bootstrap.user.roles.some(canViewEngineeringRates);
+  const canWrite = bootstrap.permissions.includes("master.write") && bootstrap.user.roles.some(canManageEngineeringRates);
   const load = useCallback(async () => {
     if (!canRead) return;
     setLoading(true);

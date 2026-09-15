@@ -30,6 +30,10 @@ import {
   removeProjectMember,
   updateEmployee,
   updateUserRole,
+  listUserRoles,
+  grantUserRole,
+  revokeUserRole,
+  type UserAdditionalRole,
   uploadProjectDocument,
   apiRequest,
   loadSignInbox,
@@ -58,6 +62,9 @@ import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
+import { BusinessCardScanner } from "./BusinessCardScanner";
+import type { BusinessCardExtraction } from "../../../lib/business-card";
+import { supplierCodeFromName } from "../../../lib/supplier-code";
 import "./master-data.css";
 import {
   Badge,
@@ -1163,7 +1170,7 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
   const [localTab, setTab] = useState<MasterTab>("customers");
   const tab = destination ?? localTab;
   const canWrite = bootstrap.permissions.includes("master.write");
-  const canViewRates = canViewEngineeringRates(bootstrap.user.role);
+  const canViewRates = bootstrap.user.roles.some(canViewEngineeringRates);
   const tabs: { id: MasterTab; label: string; count?: number }[] = [
     { id: "customers", label: "Customers", count: bootstrap.customers.length },
     { id: "suppliers", label: "Suppliers", count: bootstrap.suppliers.length },
@@ -1183,7 +1190,7 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
     {!destination ? <Tabs tabs={tabs} active={tab} onChange={setTab} /> : null}
     <div className="master-data-content">
       {tab === "customers" ? <ProductionCustomers embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} onOpenInquiries={onOpenInquiries} /> : null}
-      {tab === "suppliers" ? <SupplierMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
+      {tab === "suppliers" ? <SupplierMasterTab bootstrap={bootstrap} canWrite={canWrite} canCreate={canWrite || bootstrap.permissions.includes("estimate.write")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
       {tab === "employees" ? <EmployeeMasterTab canWrite={canWrite} notify={notify} /> : null}
       {tab === "inventory" ? <InventoryItemMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
       {tab === "rates" && canViewRates ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
@@ -1231,7 +1238,7 @@ function MasterFormError({ message }: { message: string }) {
   return <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"โปรดตรวจสอบรายการนี้"} /></strong>{message}</span></div>;
 }
 
-function SupplierMasterTab({ bootstrap, canWrite, notify, refreshBootstrap }: MasterTabProps) {
+function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBootstrap }: MasterTabProps & { canCreate: boolean }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -1259,7 +1266,7 @@ function SupplierMasterTab({ bootstrap, canWrite, notify, refreshBootstrap }: Ma
   };
   return <>
     <Toolbar><SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search supplier code, name or category…" />
-      {canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add supplier"} /></button> : null}
+      {canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add supplier"} /></button> : null}
     </Toolbar>
     <Panel title={suppliers.length + " suppliers"} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
       {suppliers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
@@ -1346,41 +1353,67 @@ function SupplierEditModal({
   );
 }
 
+const BLANK_SUPPLIER = { code: "", name: "", category: "", contact: "", email: "", phone: "", brands: "" };
+
 function SupplierCreateForm({ notify, refreshBootstrap }: Pick<CommonProps, "notify" | "refreshBootstrap">) {
   const localizeCopy = useStaticCopy();
   const { busy, error, submit } = useMasterForm(refreshBootstrap, notify);
+  // Controlled so a scanned card can fill the blanks the person has not typed yet.
+  const [form, setForm] = useState({ ...BLANK_SUPPLIER });
+  const update = <K extends keyof typeof BLANK_SUPPLIER>(key: K, value: string) =>
+    setForm((current) => ({ ...current, [key]: value }));
+
+  // A card never carries a supplier code or a category, so the code is suggested from
+  // the company name and the category is left for the person to choose.
+  const applyBusinessCard = (result: BusinessCardExtraction) => {
+    const fields: { key: keyof typeof BLANK_SUPPLIER; value: string; label: string }[] = [
+      { key: "name", value: result.companyName, label: "ชื่อผู้ขาย" },
+      { key: "code", value: supplierCodeFromName(result.companyName), label: "รหัสผู้ขาย" },
+      { key: "contact", value: result.contactName, label: "ผู้ติดต่อ" },
+      { key: "email", value: result.email, label: "อีเมล" },
+      { key: "phone", value: result.phone, label: "โทรศัพท์" },
+    ];
+    const fillable = fields.filter((field) => field.value && !form[field.key].trim());
+    if (fillable.length) setForm((current) => {
+      const next = { ...current };
+      for (const field of fillable) if (!next[field.key].trim()) next[field.key] = field.value;
+      return next;
+    });
+    return fillable.map((field) => field.label);
+  };
+
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const brands = formText(data, "brands").split(",").map((brand) => brand.trim()).filter(Boolean);
+    const element = event.currentTarget;
+    const brands = form.brands.split(",").map((brand) => brand.trim()).filter(Boolean);
     const input: CreateSupplierInput = {
-      code: formText(data, "code"),
-      name: formText(data, "name"),
-      category: formText(data, "category"),
-      contact: optionalFormText(data, "contact"),
-      email: optionalFormText(data, "email"),
-      phone: optionalFormText(data, "phone"),
+      code: form.code.trim(),
+      name: form.name.trim(),
+      category: form.category.trim(),
+      contact: form.contact.trim() || undefined,
+      email: form.email.trim() || undefined,
+      phone: form.phone.trim() || undefined,
       brands,
     };
-    void submit(form, async () => {
+    void submit(element, async () => {
       if (brands.length > 100) throw new Error("Brands ใส่ได้ไม่เกิน 100 รายการ");
       if (brands.some((brand) => brand.length > 100)) throw new Error("Brand แต่ละรายการต้องยาวไม่เกิน 100 ตัวอักษร");
       await createSupplier(input);
-    }, `Supplier ${input.code.toUpperCase()} created`);
+    }, `Supplier ${input.code.toUpperCase()} created`, () => setForm({ ...BLANK_SUPPLIER }));
   };
 
   return <Panel title="Add supplier" subtitle="ใช้ใน Cost item และ Preferred supplier">
     <form onSubmit={onSubmit}>
       <MasterFormError message={error} />
+      <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} />
       <div className="form-grid two">
-        <label className="field"><span><LocalizedText text={"Supplier code *"} /></span><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="SUP-001" /></label>
-        <label className="field"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" required maxLength={300} autoComplete="organization" /></label>
-        <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" required maxLength={100} placeholder={localizeCopy("Automation equipment")} /></label>
-        <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" maxLength={200} autoComplete="name" /></label>
-        <label className="field"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={256} autoComplete="email" /></label>
-        <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" type="tel" maxLength={100} autoComplete="tel" /></label>
-        <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" maxLength={10099} placeholder="Siemens, Omron, SMC" /><small><LocalizedText text={"คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร"} /></small></label>
+        <label className="field"><span><LocalizedText text={"Supplier code *"} /></span><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="SUP-001" value={form.code} onChange={(event) => update("code", event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" required maxLength={300} autoComplete="organization" value={form.name} onChange={(event) => update("name", event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" required maxLength={100} placeholder={localizeCopy("Automation equipment")} value={form.category} onChange={(event) => update("category", event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" maxLength={200} autoComplete="name" value={form.contact} onChange={(event) => update("contact", event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" type="tel" maxLength={100} autoComplete="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></label>
+        <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" maxLength={10099} placeholder="Siemens, Omron, SMC" value={form.brands} onChange={(event) => update("brands", event.target.value)} /><small><LocalizedText text={"คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร"} /></small></label>
       </div>
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}><button className="btn primary" type="submit" disabled={busy}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create supplier"}</button></div>
     </form>
@@ -1616,7 +1649,10 @@ function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap 
     <Panel title={`${bootstrap.team.length} ${t("active user accounts")}`} subtitle={t("System accounts and permission roles, separate from the employee register in Employees")} flush>
       {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th>{canManageRoles ? <th><span className="sr-only">{t("Actions")}</span></th> : null}</tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><div className="user-account-cell"><strong>{member.name}</strong>{member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}</div></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td>{canManageRoles ? <td className="master-row-action"><button className="btn ghost sm" type="button" aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}><Icon name="edit" />{t("Edit role")}</button></td> : null}</tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
     </Panel>
-    {editing ? <UserRoleModal member={editing} isCurrentAccount={editing.id === bootstrap.user.id} onClose={() => setEditing(null)} onSaved={async (role) => {
+    {editing ? <UserRoleModal member={editing} isCurrentAccount={editing.id === bootstrap.user.id} onClose={() => setEditing(null)} onRolesChanged={async (message) => {
+      await refreshBootstrap();
+      notify(message);
+    }} onSaved={async (role) => {
       await refreshBootstrap();
       notify(t("Application role updated to {role}").replace("{role}", role));
       setEditing(null);
@@ -1624,7 +1660,7 @@ function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap 
   </>;
 }
 
-function UserRoleModal({ member, isCurrentAccount, onClose, onSaved }: { member: TeamMember; isCurrentAccount: boolean; onClose: () => void; onSaved: (role: string) => Promise<void> }) {
+function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChanged }: { member: TeamMember; isCurrentAccount: boolean; onClose: () => void; onSaved: (role: string) => Promise<void>; onRolesChanged: (message: string) => Promise<void> }) {
   const t = useUiText();
   const [roles, setRoles] = useState<AccessRole[]>([]);
   const [roleCode, setRoleCode] = useState(member.role);
@@ -1632,13 +1668,25 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved }: { member:
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [additional, setAdditional] = useState<UserAdditionalRole[]>([]);
+  const [extraCode, setExtraCode] = useState("");
+  const [extraReason, setExtraReason] = useState("");
+  const [extraError, setExtraError] = useState("");
+  const [extraBusy, setExtraBusy] = useState("");
+
+  const loadAdditional = useCallback(async () => {
+    const result = await listUserRoles(member.id);
+    setAdditional(result.additional);
+  }, [member.id]);
+
   useEffect(() => {
     let active = true;
-    void listAccessRoles().then((result) => { if (active) { setRoles(result.items); setError(""); } })
+    void Promise.all([listAccessRoles(), listUserRoles(member.id)])
+      .then(([roleList, assignment]) => { if (active) { setRoles(roleList.items); setAdditional(assignment.additional); setError(""); } })
       .catch((requestError) => { if (active) setError(toError(requestError)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [member.id]);
   const selectedRole = roles.find((role) => role.code === roleCode);
   const submit = async () => {
     setBusy(true); setError("");
@@ -1649,6 +1697,32 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved }: { member:
     } catch (requestError) { setError(toError(requestError)); }
     finally { setBusy(false); }
   };
+
+  // An additional role carries its whole permission set, so every grant records why.
+  const grantExtra = async () => {
+    if (!extraCode || !extraReason.trim()) return;
+    setExtraBusy(extraCode); setExtraError("");
+    try {
+      await grantUserRole(member.id, { roleCode: extraCode, reason: extraReason.trim() });
+      const granted = extraCode;
+      setExtraCode(""); setExtraReason("");
+      await loadAdditional();
+      await onRolesChanged(`${member.name}: + ${granted}`);
+    } catch (requestError) { setExtraError(toError(requestError)); }
+    finally { setExtraBusy(""); }
+  };
+
+  const revokeExtra = async (code: string) => {
+    setExtraBusy(code); setExtraError("");
+    try {
+      await revokeUserRole(member.id, code);
+      await loadAdditional();
+      await onRolesChanged(`${member.name}: − ${code}`);
+    } catch (requestError) { setExtraError(toError(requestError)); }
+    finally { setExtraBusy(""); }
+  };
+
+  const grantable = roles.filter((role) => role.code !== member.role && !additional.some((held) => held.code === role.code));
   return <Modal title={t("Edit application role")} subtitle={t("Role changes update system permissions, not employee profile data")} size="md" onClose={() => { if (!busy) onClose(); }} footer={<>
     <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
     <button className="btn primary" type="button" disabled={loading || busy || saved || roleCode === member.role || !selectedRole} onClick={() => { void submit(); }}><Icon name="shield" />{busy ? t("Saving…") : t("Save role")}</button>
@@ -1663,6 +1737,25 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved }: { member:
       </select>
       {selectedRole ? <small className="role-option-description">{selectedRole.description || selectedRole.code}</small> : null}
     </Field>
+    <Panel title={t("Additional roles")} subtitle={t("Each additional role grants that role's full permissions on top of the primary role")} flush>
+      {additional.length ? <ul className="role-grant-list">{additional.map((role) => <li key={role.code}>
+        <div><Badge tone={role.code === "Admin" ? "violet" : "blue"}>{role.code}</Badge><small className="muted">{role.reason}</small></div>
+        <button className="btn ghost sm" type="button" disabled={busy || saved || extraBusy !== ""} onClick={() => { void revokeExtra(role.code); }}><Icon name="trash" />{extraBusy === role.code ? t("Removing…") : t("Remove role")}</button>
+      </li>)}</ul> : <p className="muted">{t("This account holds its primary role only.")}</p>}
+      <div className="form-grid two">
+        <Field label={t("Add another role")}>
+          <select disabled={loading || busy || saved || extraBusy !== ""} value={extraCode} onChange={(event) => setExtraCode(event.target.value)}>
+            <option value="">{t("Select a role")}</option>
+            {grantable.map((role) => <option key={role.id} value={role.code}>{role.name}{role.name !== role.code ? ` (${role.code})` : ""}</option>)}
+          </select>
+        </Field>
+        <Field label={t("Reason")}>
+          <input maxLength={1000} value={extraReason} disabled={loading || busy || saved || extraBusy !== ""} onChange={(event) => setExtraReason(event.target.value)} />
+        </Field>
+      </div>
+      <button className="btn default" type="button" disabled={loading || busy || saved || !extraCode || !extraReason.trim() || extraBusy !== ""} onClick={() => { void grantExtra(); }}><Icon name="plus" />{extraBusy && extraBusy === extraCode ? t("Saving…") : t("Grant role")}</button>
+      {extraError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{extraError}</span></div> : null}
+    </Panel>
     <div className="info-strip amber" role="note"><Icon name="alertTriangle" /><span>{isCurrentAccount ? t("Changing your own role refreshes your navigation and permissions immediately after saving.") : t("The employee will receive the new permissions on their next request.")}</span></div>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
   </Modal>;

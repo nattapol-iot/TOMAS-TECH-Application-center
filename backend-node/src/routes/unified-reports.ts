@@ -43,7 +43,7 @@ export function registerUnifiedReportRoutes(app:FastifyInstance,config:AppConfig
    await reportSource(tx,actor,kind,sourceId);const rows=(await new sql.Request(tx).query<{id:number;name:string;role:string}>('SELECT u.id,u.name,r.code role FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.is_active=1 AND u.deleted_at IS NULL ORDER BY u.name')).recordset;
    const items=[];for(const row of rows) {
     const p=await reportPermissions(tx,Number(row.id));if(!p.has('report.review')&&!p.has('report.approve'))continue;
-    try{await reportSource(tx,{id:Number(row.id),role:row.role} as CurrentUser,kind,sourceId);}catch(error){if(error instanceof ApiError&&error.statusCode===403)continue;throw error;}
+    try{await reportSource(tx,{id:Number(row.id),role:row.role,roles:[row.role]} as CurrentUser,kind,sourceId);}catch(error){if(error instanceof ApiError&&error.statusCode===403)continue;throw error;}
     items.push({id:Number(row.id),name:row.name,...reportSignerCapabilities(p)});
    }return {items};
   });

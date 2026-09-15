@@ -4,6 +4,7 @@ import { insertAudit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { canManageEngineeringRates } from "../engineering-rate-access.js";
+import { rolesOf } from "../user-roles.js";
 import { ApiError } from "../errors.js";
 import {
   bodyObject,
@@ -230,7 +231,7 @@ export function registerLaborRateRoutes(
   app.post("/api/v1/master/engineering-rates/:id/supersede", async (request, reply) => {
     await users.demandPermission(request, "master.write");
     const actor = await users.required(request);
-    if (!canManageEngineeringRates(actor.role)) {
+    if (!rolesOf(actor).some(canManageEngineeringRates)) {
       throw new ApiError(403, "engineering_rate_management_required",
         "Engineering Manager or Admin access is required to change engineering rates.");
     }
@@ -381,7 +382,7 @@ export function registerLaborRateRoutes(
   app.post("/api/v1/master/engineering-rates/:id/retire", async (request) => {
     await users.demandPermission(request, "master.write");
     const actor = await users.required(request);
-    if (!canManageEngineeringRates(actor.role)) {
+    if (!rolesOf(actor).some(canManageEngineeringRates)) {
       throw new ApiError(403, "engineering_rate_management_required",
         "Engineering Manager or Admin access is required to change engineering rates.");
     }

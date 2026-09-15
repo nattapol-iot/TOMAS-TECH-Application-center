@@ -5,6 +5,7 @@ import sql from "mssql";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import {
   buildErpSummary,
   parseErpCategory,
@@ -30,16 +31,10 @@ const SOURCE_TABLES: Partial<Record<ErpSourceType, string>> = {
 const ERP_SUMMARY_SQL = `
   SELECT e.id,e.revision,e.status,e.owner_id,e.row_version,t.total canonical_total,t.overhead_total,t.overhead_state,
     CONVERT(bit,CASE WHEN EXISTS(
-      SELECT 1 FROM dbo.role_permissions rp
-      INNER JOIN dbo.roles r ON r.id=rp.role_id
-      INNER JOIN dbo.permissions p ON p.id=rp.permission_id
-      WHERE r.code=@role AND p.code=N'estimate.write'
+      SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor_user AND code=N'estimate.write'
     ) THEN 1 ELSE 0 END) can_write,
     CONVERT(bit,CASE WHEN EXISTS(
-      SELECT 1 FROM dbo.role_permissions rp
-      INNER JOIN dbo.roles r ON r.id=rp.role_id
-      INNER JOIN dbo.permissions p ON p.id=rp.permission_id
-      WHERE r.code=@role AND p.code=N'report.read'
+      SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor_user AND code=N'report.read'
     ) THEN 1 ELSE 0 END) can_export
   FROM dbo.estimates e
   INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
@@ -106,12 +101,12 @@ type SummaryHeader = ErpHeaderRow & { can_write: boolean; can_export: boolean };
 async function loadSummary(database: Database, estimateId: number, actor: CurrentUser) {
   const result = await database.query<SummaryHeader>(ERP_SUMMARY_SQL, (request) => {
     request.input("estimate_id", sql.BigInt, estimateId);
-    request.input("role", sql.NVarChar(50), actor.role);
+    request.input("actor_user", sql.BigInt, actor.id);
   });
   const recordsets = result.recordsets as unknown as [SummaryHeader[], ErpLineRow[]];
   const header = recordsets[0]?.[0];
   if (!header) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
-  const elevated = actor.id === Number(header.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
+  const elevated = actor.id === Number(header.owner_id) || hasRole(actor, "Engineering Manager", "Admin");
   const canEdit = Boolean(header.can_write) && elevated && EDITABLE.has(header.status);
   const summary = buildErpSummary(header, recordsets[1] ?? [], canEdit);
   summary.capabilities.canExport = summary.capabilities.canExport && Boolean(header.can_export);
@@ -196,7 +191,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       if (!estimate) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
       if (!estimate.row_version.equals(estimateVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and try again.");
       if (!EDITABLE.has(estimate.status)) throw new ApiError(409, "estimate_locked", `ERP mappings cannot be changed while the estimate is '${estimate.status}'.`);
-      if (actor.id !== Number(estimate.owner_id) && actor.role !== "Engineering Manager" && actor.role !== "Admin") {
+      if (actor.id !== Number(estimate.owner_id) && !hasRole(actor, "Engineering Manager", "Admin")) {
         throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can update ERP mappings.");
       }
 

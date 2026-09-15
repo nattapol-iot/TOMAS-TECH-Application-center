@@ -30,7 +30,9 @@ export type ApiUser = {
   entraObjectId: string;
   email: string;
   name: string;
+  /** The primary role. Use `roles` for any decision a second role should satisfy. */
   role: string;
+  roles: string[];
   department: string;
   isActive: boolean;
 };
@@ -40,6 +42,22 @@ export type AccessRole = {
   code: string;
   name: string;
   description: string;
+};
+
+/** One additional role held alongside the account's primary role. */
+export type UserAdditionalRole = {
+  code: string;
+  name: string;
+  description: string;
+  grantedAt: string;
+  grantedByName: string;
+  reason: string;
+};
+
+export type UserRoleAssignment = {
+  primaryRole: string;
+  rowVersion: string;
+  additional: UserAdditionalRole[];
 };
 
 export type BootstrapData = {
@@ -1619,6 +1637,18 @@ export const updateEmployee = (id: number, input: EmployeeInput & { rowVersion: 
 
 export const listAccessRoles = () =>
   apiRequest<{ items: AccessRole[] }>("/api/v1/admin/roles");
+
+export const listUserRoles = (id: number) =>
+  apiRequest<UserRoleAssignment>(`/api/v1/admin/users/${id}/roles`);
+
+export const grantUserRole = (id: number, input: { roleCode: string; reason: string }) =>
+  apiRequest<{ userId: number; roleCode: string }>(`/api/v1/admin/users/${id}/roles`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+export const revokeUserRole = (id: number, roleCode: string) =>
+  apiRequest<void>(`/api/v1/admin/users/${id}/roles/${encodeURIComponent(roleCode)}`, { method: "DELETE" });
 
 export const updateUserRole = (id: number, input: { roleCode: string; rowVersion: string }) =>
   apiRequest<{ id: number; role: string; rowVersion: string }>(`/api/v1/admin/users/${id}/role`, {

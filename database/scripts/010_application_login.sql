@@ -183,11 +183,20 @@ GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_effort TO [iot_team_app_rol
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.resource_tasks TO [iot_team_app_role];
 GRANT SELECT, INSERT ON OBJECT::dbo.resource_task_sources TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.module_templates TO [iot_team_app_role];
--- Additional signing-role assignments remain read-only to the API.
+-- Additional application roles are granted and revoked through the Admin API
+-- (migration 051). Rows are never deleted; revoking stamps revoked_at instead.
 IF OBJECT_ID(N'dbo.user_business_roles',N'U') IS NOT NULL
+BEGIN
  GRANT SELECT ON dbo.user_business_roles TO iot_team_app_role;
+ GRANT INSERT ON OBJECT::dbo.user_business_roles TO iot_team_app_role;
+ GRANT UPDATE (granted_by, granted_at, reason, revoked_at) ON OBJECT::dbo.user_business_roles TO iot_team_app_role;
+END;
 IF OBJECT_ID(N'dbo.user_signing_permissions',N'V') IS NOT NULL
  GRANT SELECT ON dbo.user_signing_permissions TO iot_team_app_role;
+IF OBJECT_ID(N'dbo.user_effective_roles',N'V') IS NOT NULL
+ GRANT SELECT ON dbo.user_effective_roles TO iot_team_app_role;
+IF OBJECT_ID(N'dbo.user_effective_permissions',N'V') IS NOT NULL
+ GRANT SELECT ON dbo.user_effective_permissions TO iot_team_app_role;
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.module_template_lines TO [iot_team_app_role];
 
 -- Normalize prior runs before applying the minimal write set below.

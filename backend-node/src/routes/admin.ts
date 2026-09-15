@@ -8,6 +8,7 @@ import type { AppConfig } from "../config.js";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { canViewEngineeringRates } from "../engineering-rate-access.js";
+import { rolesOf } from "../user-roles.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalText, parseRowVersion, positiveLong, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
@@ -116,6 +117,10 @@ async function storageCheck(storage: AppConfig["documentStorage"]) {
 
 type AccessRoleRow = { id: number | string; code: string; name: string; description: string };
 type UserRoleRow = { id: number | string; name: string; email: string; role: string; row_version: Buffer };
+type AdditionalRoleRow = {
+  code: string; name: string; description: string; granted_at: Date | string;
+  granted_by_name: string; reason: string;
+};
 
 export function registerAdminRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void;
 export function registerAdminRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void;
@@ -258,10 +263,113 @@ export function registerAdminRoutes(
     });
   });
 
+  app.get("/api/v1/admin/users/:id/roles", async (request) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const id = positiveLong((request.params as { id?: string }).id, "User id");
+    const account = await database.query<{ role: string; row_version: Buffer }>(`
+      SELECT role.code AS role, app_user.row_version
+      FROM dbo.users app_user
+      INNER JOIN dbo.roles role ON role.id=app_user.role_id
+      WHERE app_user.id=@id AND app_user.is_active=1 AND app_user.deleted_at IS NULL;
+    `, (sqlRequest) => sqlRequest.input("id", sql.BigInt, id));
+    const row = account.recordset[0];
+    if (!row) throw new ApiError(404, "user_not_found", "The active user account was not found.");
+    const extra = await database.query<AdditionalRoleRow>(`
+      SELECT role.code,role.name,role.description,grant_row.granted_at,granter.name AS granted_by_name,grant_row.reason
+      FROM dbo.user_business_roles grant_row
+      INNER JOIN dbo.roles role ON role.id=grant_row.role_id
+      INNER JOIN dbo.users granter ON granter.id=grant_row.granted_by
+      WHERE grant_row.user_id=@id AND grant_row.revoked_at IS NULL AND role.is_active=1
+      ORDER BY role.name,role.code;
+    `, (sqlRequest) => sqlRequest.input("id", sql.BigInt, id));
+    return {
+      primaryRole: row.role,
+      rowVersion: row.row_version.toString("base64"),
+      additional: extra.recordset.map((item) => ({
+        code: item.code, name: item.name, description: item.description,
+        grantedAt: item.granted_at, grantedByName: item.granted_by_name, reason: item.reason,
+      })),
+    };
+  });
+
+  app.post("/api/v1/admin/users/:id/roles", async (request, reply) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "User id");
+    const body = bodyObject(request.body);
+    const roleCode = requiredText(body.roleCode, 50, "Role");
+    const reason = requiredText(body.reason, 1000, "Reason");
+    return database.transaction(async (transaction) => {
+      const accountRequest = new sql.Request(transaction);
+      accountRequest.input("id", sql.BigInt, id);
+      const account = (await accountRequest.query<{ name: string; email: string; role: string }>(`
+        SELECT app_user.name,app_user.email,role.code AS role
+        FROM dbo.users app_user WITH (UPDLOCK,HOLDLOCK)
+        INNER JOIN dbo.roles role ON role.id=app_user.role_id
+        WHERE app_user.id=@id AND app_user.is_active=1 AND app_user.deleted_at IS NULL;
+      `)).recordset[0];
+      if (!account) throw new ApiError(404, "user_not_found", "The active user account was not found.");
+
+      const roleRequest = new sql.Request(transaction);
+      roleRequest.input("role", sql.NVarChar(50), roleCode);
+      const role = (await roleRequest.query<AccessRoleRow>(`
+        SELECT id,code,name,description FROM dbo.roles WITH (UPDLOCK,HOLDLOCK) WHERE code=@role AND is_active=1;
+      `)).recordset[0];
+      if (!role) throw new ApiError(422, "invalid_role", "Select an active application role.");
+      if (account.role === role.code) throw new ApiError(422, "already_primary_role", "That is already this account's primary role.");
+
+      const grant = new sql.Request(transaction);
+      grant.input("id", sql.BigInt, id); grant.input("role_id", sql.BigInt, Number(role.id));
+      grant.input("actor", sql.BigInt, actor.id); grant.input("reason", sql.NVarChar(1000), reason);
+      const applied = await grant.query<{ applied: number }>(`
+        DECLARE @revived int;
+        UPDATE dbo.user_business_roles
+        SET revoked_at=NULL,granted_by=@actor,granted_at=SYSUTCDATETIME(),reason=@reason
+        WHERE user_id=@id AND role_id=@role_id AND revoked_at IS NOT NULL;
+        SET @revived=@@ROWCOUNT;
+        DECLARE @inserted int=0;
+        IF @revived=0 AND NOT EXISTS(SELECT 1 FROM dbo.user_business_roles WHERE user_id=@id AND role_id=@role_id)
+        BEGIN
+          INSERT dbo.user_business_roles(user_id,role_id,granted_by,reason) VALUES(@id,@role_id,@actor,@reason);
+          SET @inserted=@@ROWCOUNT;
+        END;
+        SELECT @revived+@inserted AS applied;
+      `);
+      if (Number(applied.recordset[0]?.applied ?? 0) === 0) {
+        throw new ApiError(409, "role_already_granted", "This account already holds that additional role.");
+      }
+      await insertAudit(transaction, actor.id, "UserAccount", id, String(id), "Additional role granted",
+        null, { name: account.name, email: account.email, roleCode: role.code, reason });
+      return reply.status(201).send({ userId: id, roleCode: role.code });
+    });
+  });
+
+  app.delete("/api/v1/admin/users/:id/roles/:roleCode", async (request, reply) => {
+    await users.demandPermission(request, "admin.manage_roles");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "User id");
+    const roleCode = requiredText((request.params as { roleCode?: string }).roleCode, 50, "Role");
+    await database.transaction(async (transaction) => {
+      const revoke = new sql.Request(transaction);
+      revoke.input("id", sql.BigInt, id); revoke.input("role", sql.NVarChar(50), roleCode);
+      revoke.input("actor", sql.BigInt, actor.id);
+      const result = await revoke.query(`
+        UPDATE grant_row SET revoked_at=SYSUTCDATETIME()
+        FROM dbo.user_business_roles grant_row
+        INNER JOIN dbo.roles role ON role.id=grant_row.role_id
+        WHERE grant_row.user_id=@id AND role.code=@role AND grant_row.revoked_at IS NULL;
+      `);
+      if (result.rowsAffected[0] === 0) throw new ApiError(404, "role_not_granted", "This account does not hold that additional role.");
+      await insertAudit(transaction, actor.id, "UserAccount", id, String(id), "Additional role revoked",
+        { roleCode }, null);
+    });
+    return reply.status(204).send();
+  });
+
   app.get("/api/v1/admin/engineering-rates", async (request) => {
     await users.demandPermission(request, "master.read");
     const actor = await users.required(request);
-    if (!canViewEngineeringRates(actor.role)) {
+    if (!rolesOf(actor).some(canViewEngineeringRates)) {
       throw new ApiError(403, "engineering_rate_management_required", "Management-level access is required to view engineering rates.");
     }
     const query = request.query as Record<string, unknown>;

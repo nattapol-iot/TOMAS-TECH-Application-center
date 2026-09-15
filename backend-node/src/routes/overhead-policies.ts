@@ -4,6 +4,7 @@ import type { AppConfig } from "../config.js";
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import { bodyObject, dateOnly, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { OVERHEAD_METHOD, overheadDecimal, snapshotOverheadPolicy, validateOverheadRate, type OverheadSnapshotRow } from "../overhead.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
@@ -46,7 +47,7 @@ export function registerOverheadPolicyRoutes(app: FastifyInstance, config: AppCo
 
   app.post("/api/v1/overhead-policies", async (request, reply) => {
     await users.demandPermission(request, "master.write"); const actor = await users.required(request);
-    if (actor.role !== "Engineering Manager" && actor.role !== "Admin") throw new ApiError(403, "overhead_manager_required", "Only an engineering manager or administrator can create an overhead policy.");
+    if (!hasRole(actor, "Engineering Manager", "Admin")) throw new ApiError(403, "overhead_manager_required", "Only an engineering manager or administrator can create an overhead policy.");
     const body = bodyObject(request.body); const monthlyBudget = overheadDecimal(body.monthlyBudget, 0, 999_999_999_999, "Monthly overhead budget");
     const normalDirectHours = overheadDecimal(body.normalDirectHours, 0.0001, 1_000_000, "Normal direct hours");
     validateOverheadRate(monthlyBudget,normalDirectHours);
@@ -84,7 +85,7 @@ export function registerOverheadPolicyRoutes(app: FastifyInstance, config: AppCo
       if (!estimate) throw new ApiError(404,"estimate_not_found","Estimate not found.");
       if (!estimate.row_version.equals(rowVersion)) throw new ApiError(409,"concurrency_conflict","This estimate was changed by another user. Reload and try again.");
       if (!EDITABLE.has(estimate.status)) throw new ApiError(409,"estimate_locked","Overhead can be applied only to an editable estimate revision.");
-      if (Number(estimate.owner_id)!==actor.id && actor.role!=="Engineering Manager" && actor.role!=="Admin") throw new ApiError(403,"estimate_owner_required","Only the estimate owner, an engineering manager or an administrator can apply overhead.");
+      if (Number(estimate.owner_id)!==actor.id && !hasRole(actor, "Engineering Manager", "Admin")) throw new ApiError(403,"estimate_owner_required","Only the estimate owner, an engineering manager or an administrator can apply overhead.");
       const snapshot = await snapshotOverheadPolicy(transaction,id,estimate.revision,actor.id,today,policyId);
       if (!snapshot) throw new ApiError(409,"overhead_policy_missing","No overhead policy is effective yet. Create a policy before applying overhead.");
       await assertEstimateTotals(transaction, id);

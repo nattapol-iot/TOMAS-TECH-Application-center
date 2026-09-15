@@ -2,55 +2,55 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `09f9bd3c`; generated, do not edit. [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/estimates/:id/manhour-lines` | 259–274 |
-| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId/effort` | 276–305 |
-| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId` | 307–324 |
-| POST | `/api/v1/estimates/:id/manhour-lines/:lineId/remove` | 326–333 |
-| POST | `/api/v1/estimates/:id/expense-lines` | 335–347 |
-| PUT | `/api/v1/estimates/:id/expense-lines/:lineId` | 349–361 |
-| POST | `/api/v1/estimates/:id/expense-lines/:lineId/remove` | 363–369 |
-| POST | `/api/v1/estimates/:id/other-cost-lines` | 371–382 |
-| PUT | `/api/v1/estimates/:id/other-cost-lines/:lineId` | 384–394 |
-| POST | `/api/v1/estimates/:id/other-cost-lines/:lineId/remove` | 396–403 |
-| POST | `/api/v1/estimates/:id/assignments` | 405–440 |
-| PUT | `/api/v1/estimates/:id/assignments/:assignmentId` | 442–479 |
-| PUT | `/api/v1/estimates/:id/contingency` | 481–492 |
+| POST | `/api/v1/estimates/:id/manhour-lines` | 260–275 |
+| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId/effort` | 277–306 |
+| PUT | `/api/v1/estimates/:id/manhour-lines/:lineId` | 308–325 |
+| POST | `/api/v1/estimates/:id/manhour-lines/:lineId/remove` | 327–334 |
+| POST | `/api/v1/estimates/:id/expense-lines` | 336–348 |
+| PUT | `/api/v1/estimates/:id/expense-lines/:lineId` | 350–362 |
+| POST | `/api/v1/estimates/:id/expense-lines/:lineId/remove` | 364–370 |
+| POST | `/api/v1/estimates/:id/other-cost-lines` | 372–383 |
+| PUT | `/api/v1/estimates/:id/other-cost-lines/:lineId` | 385–395 |
+| POST | `/api/v1/estimates/:id/other-cost-lines/:lineId/remove` | 397–404 |
+| POST | `/api/v1/estimates/:id/assignments` | 406–441 |
+| PUT | `/api/v1/estimates/:id/assignments/:assignmentId` | 443–480 |
+| PUT | `/api/v1/estimates/:id/contingency` | 482–493 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `businessToday` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 25–29 |
-| `decimal` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 31–40 |
-| `optionalId` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 42–44 |
-| `optionalLineVersion` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 46–50 |
-| `lockEstimate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 52–62 |
-| `elevated` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 64–66 |
-| `demandNewSection` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 70–75 |
-| `demandExistingSection` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 77–84 |
-| `validateOwnerSupplier` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 86–95 |
-| `assignmentRecipients` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 97–108 |
-| `deliverAssignmentEmail` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 110–114 |
-| `touchEstimate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 116–123 |
-| `snapshot` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 125–135 |
-| `softDelete` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 137–146 |
-| `removeBody` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 148–151 |
-| `parseManhour` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 157–172 |
-| `resolveInternalDailyRate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 177–190 |
-| `resolveRate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 192–195 |
-| `bindManhour` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 197–207 |
-| `parseExpense` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 212–221 |
-| `expenseSection` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 223–226 |
-| `bindExpense` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 228–235 |
-| `parseOther` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 238–245 |
-| `bindOther` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 246–251 |
-| `registerEstimateWorkspaceWriteRoutes` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 253–493 |
+| `businessToday` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 26–30 |
+| `decimal` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 32–41 |
+| `optionalId` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 43–45 |
+| `optionalLineVersion` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 47–51 |
+| `lockEstimate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 53–63 |
+| `elevated` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 65–67 |
+| `demandNewSection` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 71–76 |
+| `demandExistingSection` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 78–85 |
+| `validateOwnerSupplier` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 87–96 |
+| `assignmentRecipients` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 98–109 |
+| `deliverAssignmentEmail` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 111–115 |
+| `touchEstimate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 117–124 |
+| `snapshot` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 126–136 |
+| `softDelete` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 138–147 |
+| `removeBody` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 149–152 |
+| `parseManhour` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 158–173 |
+| `resolveInternalDailyRate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 178–191 |
+| `resolveRate` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 193–196 |
+| `bindManhour` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 198–208 |
+| `parseExpense` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 213–222 |
+| `expenseSection` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 224–227 |
+| `bindExpense` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 229–236 |
+| `parseOther` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 239–246 |
+| `bindOther` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 247–252 |
+| `registerEstimateWorkspaceWriteRoutes` | [backend-node/src/routes/estimate-workspace-write.ts](<../../../backend-node/src/routes/estimate-workspace-write.ts>) | 254–494 |
 
 ## Direct local dependencies
 
@@ -59,6 +59,7 @@ Evidence: source snapshot `6b6809b`; generated, do not edit. [backend-node/src/r
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/estimate-sections.ts](<../../../backend-node/src/estimate-sections.ts>)
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)

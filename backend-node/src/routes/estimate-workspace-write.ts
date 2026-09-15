@@ -6,6 +6,7 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import type { EmailRecipient, EmailService, EstimateAssignmentEmail } from "../email.js";
 import { ApiError } from "../errors.js";
+import { hasRole } from "../user-roles.js";
 import { ESTIMATE_ASSIGNMENT_SECTION_CODES, ESTIMATE_ASSIGNMENT_SECTIONS } from "../estimate-sections.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, dateOnly, oneOf, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
@@ -62,7 +63,7 @@ export async function lockEstimate(transaction: TransactionType, id: number, exp
 }
 
 export function elevated(actor: CurrentUser, estimate: EstimateContext): boolean {
-  return actor.id === Number(estimate.owner_id) || actor.role === "Engineering Manager" || actor.role === "Admin";
+  return actor.id === Number(estimate.owner_id) || hasRole(actor, "Engineering Manager", "Admin");
 }
 
 /* `section` names the cost ledger the line lives in (06 man-hour, 08–10 expenses). It is kept for

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Database } from '../db.js';
 import type { CurrentUserService } from '../users.js';
 import { ApiError } from '../errors.js';
+import { hasRole } from '../user-roles.js';
 import { bodyObject,dateOnly,parseDateOnly,positiveLong,requiredInteger,requiredText,parseRowVersion } from '../http.js';
 import { insertAudit } from '../audit.js';
 import { activityDay,disciplineScore } from '../activity-rules.js';
@@ -22,7 +23,7 @@ export function registerActivityRoutes(app:FastifyInstance,db:Database,users:Cur
  const actorFor=async(request:Parameters<CurrentUserService['required']>[0])=>{await users.demandPermission(request,'activity.read');return users.required(request);};
  const targetFor=async(scope:ActivityScope,id:number)=>{const user=(await activityRoster(db,scope)).find(u=>u.id===id);if(!user)throw missing();return user;};
  const canManage=(scope:ActivityScope)=>scope.all||Boolean(scope.department)||scope.projects.length>0;
- const reviewTarget=async(actor:CurrentUser,scope:ActivityScope,id:number)=>{const user=await targetFor(scope,id);if(actor.id===id||!fullMember(scope,user)||!['Admin','Engineering Manager','Sales Manager'].includes(actor.role))throw new ApiError(403,'activity_review_scope','A different department review manager must review this employee.');return user;};
+ const reviewTarget=async(actor:CurrentUser,scope:ActivityScope,id:number)=>{const user=await targetFor(scope,id);if(actor.id===id||!fullMember(scope,user)||!hasRole(actor,'Admin','Engineering Manager','Sales Manager'))throw new ApiError(403,'activity_review_scope','A different department review manager must review this employee.');return user;};
  const sources=async(userId:number,scope:ActivityScope)=>{
   const user=await targetFor(scope,userId),full=fullMember(scope,user);
   const rows=(await db.query<Row>(`SELECT N'Schedule Task' source_type,t.id source_id,t.project_id,t.name title FROM dbo.schedule_tasks t
@@ -61,7 +62,7 @@ export function registerActivityRoutes(app:FastifyInstance,db:Database,users:Cur
   SELECT c.id,c.code,c.name,c.period_start,c.period_end,c.status,COALESCE(p.mode,N'TRIAL') mode,CASE WHEN p.cycle_id IS NULL THEN 0 ELSE 1 END configured FROM dbo.kpi_review_cycles c LEFT JOIN dbo.activity_cycle_policies p ON p.cycle_id=c.id ORDER BY c.period_end DESC;
   SELECT started_at FROM dbo.activity_settings;`,q=>q.input('all',sql.Bit,scope.all).input('actor',sql.BigInt,actor.id).input('department',sql.NVarChar(100),scope.department));
   const sets=data.recordsets as unknown as Row[][];
-  return {members,canManage:canManage(scope),canConfigure:scope.all,canReview:['Admin','Engineering Manager','Sales Manager'].includes(actor.role),selfId:actor.id,startedAt:iso(sets[2]![0]!.started_at),
+  return {members,canManage:canManage(scope),canConfigure:scope.all,canReview:hasRole(actor,'Admin','Engineering Manager','Sales Manager'),selfId:actor.id,startedAt:iso(sets[2]![0]!.started_at),
    projects:sets[0]!.map(r=>({id:Number(r.id),name:`${r.project_no} · ${r.name}`})),cycles:sets[1]!.map(r=>({id:Number(r.id),code:String(r.code),name:String(r.name),periodStart:dateOnly(r.period_start as Date)!,periodEnd:dateOnly(r.period_end as Date)!,status:String(r.status),mode:String(r.mode),configured:Boolean(r.configured)}))};
  });
  app.get('/api/v1/activity/overview',async request=>{
@@ -169,7 +170,7 @@ export function registerActivityRoutes(app:FastifyInstance,db:Database,users:Cur
   return db.transaction(async tx=>{await assertActivityReviewOpen(db,tx,actor.id,cycleId);await queryActivity(db,tx,'INSERT dbo.activity_clarifications(cycle_id,user_id,note) VALUES(@cycle,@user,@note)',q=>q.input('cycle',sql.BigInt,cycleId).input('user',sql.BigInt,actor.id).input('note',sql.NVarChar(2000),note));return {cycleId};});
  });
  app.post('/api/v1/activity/cycle-policy',async request=>{
-  const actor=await actorFor(request);if(actor.role!=='Admin')throw new ApiError(403,'activity_admin','Only Admin can publish a cycle policy.');const b=bodyObject(request.body),cycleId=positiveId(b.cycleId,'Cycle'),mode=requiredText(b.mode,10,'Mode');if(!['TRIAL','ACTIVE'].includes(mode))throw invalid('Unknown policy mode.');
+  const actor=await actorFor(request);if(!hasRole(actor,'Admin'))throw new ApiError(403,'activity_admin','Only Admin can publish a cycle policy.');const b=bodyObject(request.body),cycleId=positiveId(b.cycleId,'Cycle'),mode=requiredText(b.mode,10,'Mode');if(!['TRIAL','ACTIVE'].includes(mode))throw invalid('Unknown policy mode.');
   return db.transaction(async tx=>{
    const row=(await queryActivity<Row>(db,tx,'SELECT * FROM dbo.kpi_review_cycles WITH(UPDLOCK,HOLDLOCK) WHERE id=@id',q=>q.input('id',sql.BigInt,cycleId))).recordset[0];if(!row)throw missing();
    if(dateOnly(row.period_start as Date)!<=activityDay()||row.status!=='OPEN')throw new ApiError(409,'activity_policy_locked','Publish the policy before the review period starts. Current and past cycles stay in trial mode.');

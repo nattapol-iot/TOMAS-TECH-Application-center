@@ -4,6 +4,7 @@ import { ApiError } from './errors.js';
 import { dateOnly } from './http.js';
 import type { CurrentUser } from './types.js';
 import { readTasks, readPics, readHolidays, resolveTasks, readProject, validatePics, permissionFor } from './schedule-service.js';
+import { hasRole } from './user-roles.js';
 import { planDates, workloadImpact, workDates, type TaskPlan, type Allocation } from './resource-task-math.js';
 import type { Database } from './db.js';
 
@@ -16,7 +17,7 @@ export type WorkRow = {
  created_by: number; created_at: unknown; updated_at: unknown; row_version: Buffer;
  actual_start: Date|null; actual_end: Date|null;
 };
-export const elevated = (actor: CurrentUser) => ['Admin','Engineering Manager'].includes(actor.role);
+export const elevated = (actor: CurrentUser) => hasRole(actor,'Admin','Engineering Manager');
 export async function sourceAccess(tx: Transaction, actor: CurrentUser, kind: string, sourceId: number, write=false, planner=false) {
   if(!['Inquiry','Project'].includes(kind)) throw new ApiError(400,'invalid_source','Select Inquiry or Project.');
   const q=new sql.Request(tx); q.input('source',sql.BigInt,sourceId).input('actor',sql.BigInt,actor.id).input('elevated',sql.Bit,elevated(actor));
@@ -51,7 +52,7 @@ export async function taskDto(tx:Transaction,r:WorkRow,actor:CurrentUser,db:Data
   }
   const q=new sql.Request(tx);q.input('id',sql.BigInt,r.assignee_id);
   const assignee=(await q.query<{name:string}>('SELECT name FROM dbo.users WHERE id=@id')).recordset[0]?.name??'';
-  const canPlan=source.can_plan&&await permissionFor(db,actor.role,'schedule.plan');
+  const canPlan=source.can_plan&&await permissionFor(db,actor.id,'schedule.plan');
   const closed=['Closed','Cancelled','Rejected'].includes(source.status)||r.state==='Closed'||status==='Done'||status==='Unavailable';
   return {
     id:Number(r.id),sourceKind:kind,sourceId,reference:source.reference,sourceTitle:source.title,
@@ -66,7 +67,7 @@ export async function taskDto(tx:Transaction,r:WorkRow,actor:CurrentUser,db:Data
     canClose:canPlan&&status==='Done'&&r.state==='Approved'&&!r.pending_plan,
     canPlan:canPlan&&!['Closed','Cancelled','Rejected'].includes(source.status)&&r.state!=='Closed',
     canPropose:!closed&&(canPlan||Number(r.assignee_id)===actor.id||Number(r.created_by)===actor.id),
-    canRespond:!closed&&Number(r.assignee_id)===actor.id&&await permissionFor(db,actor.role,'schedule.progress'),
+    canRespond:!closed&&Number(r.assignee_id)===actor.id&&await permissionFor(db,actor.id,'schedule.progress'),
   };
 }
 

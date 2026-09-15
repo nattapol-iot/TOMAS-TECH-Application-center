@@ -279,7 +279,6 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
     await users.demandPermission(request, "estimate.write");
     const actor = await users.required(request);
     const input = parseTemplate(request);
-    if (input.status === "Active") await users.demandPermission(request, "master.write");
     const created = await database.transaction(async (transaction) => {
       await assertSuppliersUsable(transaction, input.lines);
       const insert = new sql.Request(transaction);
@@ -312,7 +311,6 @@ export function registerModuleTemplateRoutes(app: FastifyInstance, database: Dat
     const id = positiveLong((request.params as { id?: string }).id, "Template id");
     const expected = parseRowVersion(bodyObject(request.body).rowVersion);
     const input = parseTemplate(request);
-    if (input.status === "Active") await users.demandPermission(request, "master.write");
     return database.transaction(async (transaction) => {
       const lock = new sql.Request(transaction);
       lock.input("id", sql.BigInt, id);

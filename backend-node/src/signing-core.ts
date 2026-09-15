@@ -433,7 +433,6 @@ export async function resolveStampAuthority(
   request.input("stamp_id", sql.BigInt, companyStampId);
   request.input("doc_class", sql.NVarChar(30), documentClass);
   request.input("actor", sql.BigInt, actor.id);
-  request.input("role", sql.NVarChar(50), actor.role);
   const row = (await request.query<{ id: number }>(`
     DECLARE @today date = CONVERT(date, SYSUTCDATETIME());
     SELECT TOP (1) a.id
@@ -444,7 +443,7 @@ export async function resolveStampAuthority(
       AND a.revoked_at IS NULL
       AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today)
       AND (a.doc_class IS NULL OR a.doc_class = @doc_class)
-      AND (a.user_id = @actor OR r.code = @role)
+      AND (a.user_id = @actor OR r.code IN (SELECT code FROM dbo.user_effective_roles WHERE user_id = @actor))
       AND s.status = N'ACTIVE'
       AND s.valid_from <= @today AND (s.valid_to IS NULL OR s.valid_to >= @today)
       AND EXISTS (SELECT 1 FROM OPENJSON(s.scope_json) scope WHERE scope.value = @doc_class)

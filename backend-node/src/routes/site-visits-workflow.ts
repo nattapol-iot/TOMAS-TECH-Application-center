@@ -102,7 +102,7 @@ export function registerSiteVisitWorkflowRoutes(
       ),
       after = Math.min(1440, Math.max(0, Number(b.travelMinutesAfter) || 0)),
       count = Math.min(20, Math.max(1, Number(b.requiredEngineerCount) || 1)),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     const created = await database.transaction(async (t) => {
       const lock = new sql.Request(t);
       lock.input("id", sql.BigInt, intakeId);
@@ -262,7 +262,7 @@ export function registerSiteVisitWorkflowRoutes(
       b = bodyObject(request.body),
       target = requiredText(b.status, 50, "Status"),
       reason = optionalBodyText(b.reason, 4000, "Reason"),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     return database.transaction(async (t) => {
       const visit = await lockVisit(t, id, b.rowVersion);
       requireTransition(
@@ -491,7 +491,7 @@ export function registerSiteVisitWorkflowRoutes(
         1000,
         "Override reason",
       ),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     if (
       override &&
       (!permissions.has(SITE_VISIT_PERMISSIONS.visitOverride) ||
@@ -661,7 +661,7 @@ export function registerSiteVisitWorkflowRoutes(
         proposedEnd = b.proposedEnd
           ? stamp(b.proposedEnd, "Proposed end")
           : null,
-        actorPermissions = await rolePermissions(database, actor.role);
+        actorPermissions = await rolePermissions(database, actor.id);
       if (
         (["Declined", "Information Requested"].includes(response) && !note) ||
         (response === "New Time Proposed" &&
@@ -842,7 +842,7 @@ export function registerSiteVisitWorkflowRoutes(
         party === "Customer"
           ? requiredText(b.confirmedByName, 200, "Confirmed by")
           : clean(b.confirmedByName, 200, "Confirmed by") || actor.name,
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     if (
       !permissions.has(SITE_VISIT_PERMISSIONS.visitSchedule) &&
       !permissions.has(SITE_VISIT_PERMISSIONS.intakeWrite)
@@ -922,7 +922,7 @@ export function registerSiteVisitWorkflowRoutes(
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Visit id"),
       b = bodyObject(request.body),
-      permissions = await rolePermissions(database, actor.role),
+      permissions = await rolePermissions(database, actor.id),
       consent = b.locationConsentGiven === true,
       latitude = consent && b.latitude != null ? Number(b.latitude) : null,
       longitude = consent && b.longitude != null ? Number(b.longitude) : null;
@@ -1006,7 +1006,7 @@ export function registerSiteVisitWorkflowRoutes(
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Visit id"),
       b = bodyObject(request.body),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     return database.transaction(async (t) => {
       const visit = await lockVisit(t, id, b.rowVersion);
       await demandAssignedEngineer(t, id, actor.id);
@@ -1289,7 +1289,7 @@ export function registerSiteVisitWorkflowRoutes(
         "Cancelled",
       ]),
       ownerId = optionalId(b.ownerId, "Owner"),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     if (
       !permissions.has(SITE_VISIT_PERMISSIONS.visitReport) &&
       !permissions.has(SITE_VISIT_PERMISSIONS.visitSchedule)

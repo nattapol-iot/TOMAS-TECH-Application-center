@@ -233,7 +233,7 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
       template={editor.template}
       duplicate={editor.mode === "copy"}
       suppliers={bootstrap.suppliers}
-      canPublish={canRetire}
+      canPublish={canEdit}
       onClose={() => setEditor(null)}
       onSave={async (values) => {
         let savedId: number;

@@ -4,6 +4,7 @@ import type { Request as SqlRequestType, Transaction as TransactionType } from "
 import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { canManageEngineeringRates } from "../engineering-rate-access.js";
+import { rolesOf } from "../user-roles.js";
 import { ApiError } from "../errors.js";
 import {
   bodyObject,
@@ -173,10 +174,8 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const activeOnly = booleanQuery(query.activeOnly, false);
     const result = await database.query<EmployeeRow>(`
       DECLARE @include_private bit=CASE WHEN EXISTS(
-        SELECT 1 FROM dbo.users permission_user
-        INNER JOIN dbo.role_permissions rp ON rp.role_id=permission_user.role_id
-        INNER JOIN dbo.permissions p ON p.id=rp.permission_id
-        WHERE permission_user.id=@actor AND p.code=N'master.write') THEN 1 ELSE 0 END;
+        SELECT 1 FROM dbo.user_effective_permissions
+        WHERE user_id=@actor AND code=N'master.write') THEN 1 ELSE 0 END;
       SELECT employee.id,employee.employee_no,employee.name_en,employee.name_th,employee.department,employee.job_title,
         CASE WHEN @include_private=1 THEN employee.mobile ELSE N'' END AS mobile, employee.email,employee.nickname,
         CASE WHEN @include_private=1 THEN employee.birth_date ELSE NULL END AS birth_date,
@@ -340,7 +339,9 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
   });
 
   app.post("/api/v1/master/suppliers", async (request, reply) => {
-    await users.demandPermission(request, "master.write");
+    // Adding a supplier is part of pricing an estimate; changing or removing one
+    // afterwards is master-data work and still requires master.write below.
+    await users.demandPermission(request, "estimate.write");
     const actor = await users.required(request);
     const body = bodyObject(request.body);
     const input = {
@@ -422,7 +423,7 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
   app.post("/api/v1/master/engineering-rates", async (request, reply) => {
     await users.demandPermission(request, "master.write");
     const actor = await users.required(request);
-    if (!canManageEngineeringRates(actor.role)) {
+    if (!rolesOf(actor).some(canManageEngineeringRates)) {
       throw new ApiError(403, "engineering_rate_management_required", "Engineering Manager or Admin access is required to change engineering rates.");
     }
     const body = bodyObject(request.body);

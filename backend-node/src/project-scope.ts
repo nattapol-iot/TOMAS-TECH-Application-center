@@ -3,16 +3,17 @@ import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "./db.js";
 import { ApiError } from "./errors.js";
 import type { CurrentUser } from "./types.js";
+import { rolesOf } from "./user-roles.js";
 
 const ELEVATED_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager", "Purchasing", "Warehouse", "Inventory Controller"]);
 const MY_WORK_ELEVATED_ROLES = new Set(["Admin", "Engineering Manager"]);
 
 export function isProjectElevated(user: CurrentUser): boolean {
-  return ELEVATED_ROLES.has(user.role);
+  return rolesOf(user).some((role) => ELEVATED_ROLES.has(role));
 }
 
 export function isMyWorkElevated(user: CurrentUser): boolean {
-  return MY_WORK_ELEVATED_ROLES.has(user.role);
+  return rolesOf(user).some((role) => MY_WORK_ELEVATED_ROLES.has(role));
 }
 
 export async function demandProjectScope(

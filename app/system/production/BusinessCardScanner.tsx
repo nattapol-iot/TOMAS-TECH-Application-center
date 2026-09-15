@@ -2,7 +2,7 @@
 import { useT as useStaticCopy } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import type { Worker as TesseractWorker } from "tesseract.js";
 import { countBusinessCardFields, parseBusinessCard, type BusinessCardExtraction } from "../../../lib/business-card";
 import { Icon } from "../ui";
@@ -80,6 +80,7 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
   const [result, setResult] = useState<BusinessCardExtraction | null>(null);
   const [applied, setApplied] = useState<string[]>([]);
   const [needsNameReview, setNeedsNameReview] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [companyChoice, setCompanyChoice] = useState("");
   const [contactChoice, setContactChoice] = useState("");
 
@@ -190,9 +191,40 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
     clearPicker(event);
   };
 
-  return <section className="business-card-scanner" aria-labelledby="business-card-title">
+  // Dropping a card is the same path as picking one; the browser only offers the
+  // file list, so the first image in it is the card.
+  const dropped = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    if (disabled || busy) return;
+    const file = [...(event.dataTransfer?.files ?? [])].find((item) => item.type.startsWith("image/"));
+    if (!file) { setError("ลากไฟล์รูปนามบัตรมาวาง (JPEG, PNG หรือ WebP)"); return; }
+    void scan(file);
+  };
+
+  const dragOver = (event: DragEvent<HTMLElement>) => {
+    if (disabled || busy) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    setDragging(true);
+  };
+
+  // A drag that crosses a child element fires leave on the parent, so only a leave
+  // that actually exits the section clears the highlight.
+  const dragLeave = (event: DragEvent<HTMLElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setDragging(false);
+  };
+
+  return <section
+    className={dragging ? "business-card-scanner is-dragging" : "business-card-scanner"}
+    aria-labelledby="business-card-title"
+    onDragOver={dragOver}
+    onDragLeave={dragLeave}
+    onDrop={dropped}
+  >
     <div className="business-card-heading">
-      <div><strong id="business-card-title"><LocalizedText text={"สแกนนามบัตร"} /></strong><small>อ่านภาษาไทย อังกฤษ และญี่ปุ่นบนเครื่องนี้ แล้วเติมช่องว่างให้ตรวจแก้ก่อนบันทึก</small></div>
+      <div><strong id="business-card-title"><LocalizedText text={"สแกนนามบัตร"} /></strong><small>อ่านภาษาไทย อังกฤษ และญี่ปุ่นบนเครื่องนี้ แล้วเติมช่องว่างให้ตรวจแก้ก่อนบันทึก · ลากรูปมาวางตรงนี้ได้</small></div>
       <span className="business-card-private"><Icon name="lock" /><LocalizedText text={"ไม่อัปโหลดรูป"} /></span>
     </div>
     <div className="business-card-actions">

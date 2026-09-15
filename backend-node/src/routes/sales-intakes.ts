@@ -531,7 +531,7 @@ function mapVisitSummary(r: Row) {
 export async function loadSalesIntakeDetail(
   database: Database,
   id: number,
-  role: string,
+  userId: number,
 ) {
   const h = (
     await database.query<Row>(
@@ -588,7 +588,7 @@ export async function loadSalesIntakeDetail(
       : Promise.resolve({ recordset: [] } as never),
     loadStatusHistory(database, "SalesIntake", id),
     loadTraceabilityLinks(database, "SalesIntake", id),
-    rolePermissions(database, role),
+    rolePermissions(database, userId),
   ]);
   const readinessResult = evaluateReadiness({
     customerId: Number(h.customer_id),
@@ -846,7 +846,7 @@ export function registerSalesIntakeRoutes(
     await users.demandPermission(request, SITE_VISIT_PERMISSIONS.intakeRead);
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Intake id"),
-      result = await loadSalesIntakeDetail(database, id, actor.role);
+      result = await loadSalesIntakeDetail(database, id, actor.id);
     if (!result)
       throw new ApiError(404, "intake_not_found", "Sales intake not found.");
     return result;
@@ -975,7 +975,7 @@ export function registerSalesIntakeRoutes(
       body = bodyObject(request.body),
       target = requiredText(body.status, 50, "Status"),
       reason = optionalBodyText(body.reason, 4000, "Reason"),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     return database.transaction(async (t) => {
       const q = new sql.Request(t);
       q.input("id", sql.BigInt, id);
@@ -1110,7 +1110,7 @@ export function registerSalesIntakeRoutes(
         Math.max(15, Number(body.estimatedDurationMinutes) || 240),
       ),
       skillIds = body.skillIds == null ? null : idList(body.skillIds, "Skill"),
-      permissions = await rolePermissions(database, actor.role);
+      permissions = await rolePermissions(database, actor.id);
     if (
       ["More Information Required", "On Hold", "Cancelled"].includes(
         decision,

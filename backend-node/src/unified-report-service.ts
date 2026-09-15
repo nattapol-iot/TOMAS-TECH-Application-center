@@ -6,6 +6,7 @@ import type { FastifyRequest } from 'fastify';
 import type { Database } from './db.js';
 import type { CurrentUser } from './types.js';
 import { ApiError } from './errors.js';
+import { hasRole } from './user-roles.js';
 import { bodyObject, dateOnly, parseDateOnly, parseRowVersion, positiveLong, requiredText } from './http.js';
 import { activeSpecimenId, evaluateSigningAssurance, clientIp, clientUserAgent } from './signing-core.js';
 
@@ -13,12 +14,12 @@ export const REPORT_TYPES = ['INSTALLATION','UAT','SERVICE','INSPECTION','POC'] 
 export const CUSTOMER_CONSENT = 'I have read this exact report revision and consent to record my acknowledgment or signature, identity and date against it.';
 export const TEAM_CONSENT = 'I have reviewed this exact report revision and authorize use of my own signature specimen for this action.';
 export const reportHash = (value:string|Buffer) => createHash('sha256').update(value).digest('hex');
-export const reportElevated = (actor:CurrentUser) => ['Engineering Manager','Admin'].includes(actor.role);
+export const reportElevated = (actor:CurrentUser) => hasRole(actor,'Engineering Manager','Admin');
 // Match CurrentUserService: additional business roles grant only the signing
 // capabilities exposed by the view, never broad source access or report approval.
 export async function reportPermissions(tx:Transaction,userId:number) {
  const q=new sql.Request(tx);q.input('user',sql.BigInt,userId);
- return new Set((await q.query<{code:string}>(`SELECT p.code FROM dbo.users u JOIN dbo.role_permissions rp ON rp.role_id=u.role_id JOIN dbo.permissions p ON p.id=rp.permission_id WHERE u.id=@user UNION SELECT code FROM dbo.user_signing_permissions WHERE user_id=@user`)).recordset.map(p=>p.code));
+ return new Set((await q.query<{code:string}>(`SELECT code FROM dbo.user_effective_permissions WHERE user_id=@user`)).recordset.map(p=>p.code));
 }
 export type ReportRow = {
  id:number; report_no:string; report_type:string; inquiry_id:number|null; project_id:number|null; schedule_task_id:number|null;
@@ -155,9 +156,9 @@ export async function eligibleReportSigners(tx:Transaction,r:{project_id:number|
  for(const [id,permission] of [[reviewer,'report.review'],[approver,'report.approve']] as const) {
   if(id===null)continue;
   const q=new sql.Request(tx);q.input('id',sql.BigInt,id).input('permission',sql.NVarChar(100),permission);
-  const user=(await q.query<{id:number;role:string}>(`SELECT u.id,r.code role FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id AND u.is_active=1 AND u.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM dbo.role_permissions rp JOIN dbo.permissions p ON p.id=rp.permission_id WHERE rp.role_id=u.role_id AND p.code=@permission) OR EXISTS(SELECT 1 FROM dbo.user_signing_permissions WHERE user_id=u.id AND code=@permission))`)).recordset[0];
+  const user=(await q.query<{id:number;role:string}>(`SELECT u.id,r.code role FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id AND u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=u.id AND code=@permission)`)).recordset[0];
   if(!user || permission==='report.approve' && !reportSignerCapabilities(await reportPermissions(tx,Number(user.id))).canApprove)throw new ApiError(422,'report_signer_ineligible','Select an active eligible reviewer or approver.');
-  await reportSource(tx,{id:Number(user.id),role:user.role} as CurrentUser,r.project_id?'PROJECT':'INQUIRY',Number(r.project_id??r.inquiry_id));
+  await reportSource(tx,{id:Number(user.id),role:user.role,roles:[user.role]} as CurrentUser,r.project_id?'PROJECT':'INQUIRY',Number(r.project_id??r.inquiry_id));
  }
 }
 export function reportSnapshot(r:ReportRow,source:{reference:string;title:string;customer:string;endUserCustomerId?:number|null;endUserName?:string|null;endUserCode?:string|null}) {

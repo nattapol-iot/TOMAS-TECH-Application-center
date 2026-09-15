@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import sql from "mssql";
 import { insertAudit } from "../audit.js";
+import { hasRole } from "../user-roles.js";
 import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
 import type { AppConfig } from "../config.js";
 import { deleteStoredFile, DOCUMENT_DOWNLOAD_RATE_LIMIT, DOCUMENT_UPLOAD_RATE_LIMIT, multipartText, readMultipartUpload, sendStoredFile, storageKey, uploadedFileName, writeStoredFile } from "../document-storage.js";
@@ -107,7 +108,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
     validateOriginalEstimateWorkbook(input, await readFile(upload.file.filepath), uploadedFileName(upload.file.filename));
     const preflight = (await database.query<{ owner_id: number; revision: number; status: string }>("SELECT owner_id,revision,status FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL;", r => r.input("id", sql.BigInt, id))).recordset[0];
     if (!preflight) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
-    if (Number(preflight.owner_id) !== actor.id && !["Admin", "Engineering Manager"].includes(actor.role)) throw new ApiError(403, "import_forbidden", "Only the estimate owner or engineering manager can import a complete workbook.");
+    if (Number(preflight.owner_id) !== actor.id && !hasRole(actor, "Admin", "Engineering Manager")) throw new ApiError(403, "import_forbidden", "Only the estimate owner or engineering manager can import a complete workbook.");
     const writtenKey = storageKey(`estimates/${id}/R${preflight.revision}/originals`, ".xlsx");
     const stored = await writeStoredFile(storage, writtenKey, upload.file.filepath);
     const sourceFile = { storageKey: writtenKey, ...stored };
@@ -117,7 +118,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
       const lock = query(); lock.input("id", sql.BigInt, id);
       const e = (await lock.query<{ estimate_no: string; owner_id: number; revision: number; status: string; row_version: Buffer; due_date: Date }>(`SELECT estimate_no,owner_id,revision,status,row_version,due_date FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
       if (!e) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
-      if (Number(e.owner_id) !== actor.id && !["Admin", "Engineering Manager"].includes(actor.role)) throw new ApiError(403, "import_forbidden", "Only the estimate owner or engineering manager can import a complete workbook.");
+      if (Number(e.owner_id) !== actor.id && !hasRole(actor, "Admin", "Engineering Manager")) throw new ApiError(403, "import_forbidden", "Only the estimate owner or engineering manager can import a complete workbook.");
       const old = query(); old.input("id", sql.BigInt, id); old.input("revision", sql.Int, e.revision); old.input("hash", sql.NVarChar(64), input.sourceHash);
       const imported = (await old.query<{ after_json: string }>(`SELECT TOP(1) after_json FROM dbo.audit_log WHERE entity_type=N'Estimate' AND entity_id=@id AND action=N'Excel imported' AND JSON_VALUE(after_json,'$.sourceHash')=@hash AND TRY_CONVERT(int,JSON_VALUE(after_json,'$.revision'))=@revision;`)).recordset[0];
       if (imported) return { ...JSON.parse(imported.after_json), alreadyImported: true };

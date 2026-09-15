@@ -28,7 +28,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
     }
   });
   const actorFor=async(request:FastifyRequest)=>{await users.demandPermission(request,'schedule.read');return users.required(request);};
-  const canSubmit=async(role:string)=>{if(!await permissionFor(db,role,'schedule.plan')&&!await permissionFor(db,role,'schedule.progress'))throw new ApiError(403,'task_write','Task planning or progress permission is required.');};
+  const canSubmit=async(userId:number)=>{if(!await permissionFor(db,userId,'schedule.plan')&&!await permissionFor(db,userId,'schedule.progress'))throw new ApiError(403,'task_write','Task planning or progress permission is required.');};
   const version=(r:WorkRow,b:Record<string,unknown>)=>{if(!r.row_version.equals(parseRowVersion(b.rowVersion)))throw new ApiError(409,'concurrency_conflict','Task changed. Refresh before continuing.');};
   const scope=async(tx:Transaction,request:FastifyRequest,r:WorkRow,write=false,planner=false)=>{
     const actor=await users.required(request);await users.demandPermission(request,r.project_id?'project.read':'inquiry.read');
@@ -43,7 +43,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
 
   app.get('/api/v1/resource-tasks/sources',async request=>{
     const actor=await actorFor(request);
-    const canInquiry=await permissionFor(db,actor.role,'inquiry.read'),canProject=await permissionFor(db,actor.role,'project.read');
+    const canInquiry=await permissionFor(db,actor.id,'inquiry.read'),canProject=await permissionFor(db,actor.id,'project.read');
     const result=await db.query<{id:number;kind:string;reference:string;title:string}>(`
       SELECT i.id,N'Inquiry' kind,i.inquiry_no reference,i.project_name title FROM dbo.inquiries i WHERE @inquiry=1 AND i.deleted_at IS NULL AND i.status NOT IN(N'Closed',N'Cancelled',N'Rejected') AND (@elevated=1 OR i.estimate_owner_id=@actor OR i.created_by=@actor OR EXISTS(SELECT 1 FROM dbo.resource_tasks t WHERE t.inquiry_id=i.id AND t.assignee_id=@actor))
       UNION ALL SELECT p.id,N'Project',p.project_no,p.name FROM dbo.projects p WHERE @project=1 AND p.deleted_at IS NULL AND p.status<>N'Closed' AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))`,q=>q.input('actor',sql.BigInt,actor.id).input('elevated',sql.Bit,elevated(actor)).input('inquiry',sql.Bit,canInquiry).input('project',sql.Bit,canProject));
@@ -56,7 +56,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
     const actor=await actorFor(request),query=request.query as Record<string,unknown>;
     const page=clampedInteger(query.page,1,1,100000),pageSize=clampedInteger(query.pageSize,50,1,100);
     const projectId=query.projectId?positiveLong(query.projectId,'Project'):null;
-    const canInquiry=await permissionFor(db,actor.role,'inquiry.read'),canProject=await permissionFor(db,actor.role,'project.read');
+    const canInquiry=await permissionFor(db,actor.id,'inquiry.read'),canProject=await permissionFor(db,actor.id,'project.read');
     return db.transaction(async tx=>{
       const source=String(query.source??'all').toLowerCase();if(!['all','estimate','project','service'].includes(source))throw new ApiError(400,'invalid_source','Select a valid work source.');
       const q=new sql.Request(tx);q.input('actor',sql.BigInt,actor.id).input('elevated',sql.Bit,elevated(actor)).input('inquiry',sql.Bit,canInquiry).input('project',sql.Bit,canProject).input('mine',sql.Bit,query.mine==='true').input('issue',sql.Bit,query.issues==='true').input('source',sql.NVarChar(20),source).input('projectId',sql.BigInt,projectId).input('offset',sql.Int,(page-1)*pageSize).input('limit',sql.Int,pageSize).input('search',sql.NVarChar(200),String(query.search??'').slice(0,200)).input('filter',sql.NVarChar(30),String(query.filter??'All'));
@@ -67,7 +67,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
     },sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
   app.post('/api/v1/resource-tasks/preview',async request=>{
-    const actor=await actorFor(request);await canSubmit(actor.role);
+    const actor=await actorFor(request);await canSubmit(actor.id);
     const b=bodyObject(request.body),plan=parseTaskPlan(b.plan),kind=requiredText(b.sourceKind,20,'Source'),sourceId=requiredInteger(b.sourceId,'Source',1);
     await users.demandPermission(request,kind==='Project'?'project.read':'inquiry.read');
     return db.transaction(async tx=>{
@@ -79,7 +79,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
     },sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
   app.post('/api/v1/resource-tasks',async(request,reply)=>{
-    const actor=await actorFor(request);await canSubmit(actor.role);
+    const actor=await actorFor(request);await canSubmit(actor.id);
     const b=bodyObject(request.body),plan=parseTaskPlan(b.plan),kind=requiredText(b.sourceKind,20,'Source'),sourceId=requiredInteger(b.sourceId,'Source',1);
     await users.demandPermission(request,kind==='Project'?'project.read':'inquiry.read');
     const title=requiredText(b.title,500,'Task title'),description=typeof b.description==='string'?b.description.slice(0,4000):'',reporter=typeof b.reporter==='string'?b.reporter.slice(0,200):'';
@@ -95,7 +95,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
   app.post('/api/v1/resource-tasks/:id/:action',async request=>{
     const actor=await actorFor(request),params=request.params as {id:string;action:string},id=positiveLong(params.id,'Task'),action=params.action,b=bodyObject(request.body);
     if(!['propose','approve','reject','acknowledge','progress','close'].includes(action))throw new ApiError(400,'invalid_action','Unknown task action.');
-    if(['approve','reject','close'].includes(action))await users.demandPermission(request,'schedule.plan');else await canSubmit(actor.role);
+    if(['approve','reject','close'].includes(action))await users.demandPermission(request,'schedule.plan');else await canSubmit(actor.id);
     return db.transaction(async tx=>{
       const r=await taskRow(tx,id,true);version(r,b);
       const kind=r.project_id?'Project':'Inquiry',sourceId=Number(r.project_id??r.inquiry_id);
@@ -105,7 +105,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
       const note=typeof b.note==='string'?b.note.trim().slice(0,2000):'';q.input('note',sql.NVarChar(2000),note);
       if(action==='propose') {
         const source=await sourceAccess(tx,actor,kind,sourceId,true);
-        const planner=source.can_plan&&await permissionFor(db,actor.role,'schedule.plan');
+        const planner=source.can_plan&&await permissionFor(db,actor.id,'schedule.plan');
         if(!planner&&Number(r.assignee_id)!==actor.id&&Number(r.created_by)!==actor.id)throw new ApiError(403,'task_assignee','Only the assignee, submitter or planner can propose changes.');
         if(r.pending_plan)throw new ApiError(409,'proposal_pending','Review the pending proposal first.');
         const plan=parseTaskPlan(b.plan);if(!plan.note)throw new ApiError(400,'reason_required','Explain the requested change.');

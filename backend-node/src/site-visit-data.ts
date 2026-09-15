@@ -212,7 +212,7 @@ export async function loadVisitDetail(
   database: Database,
   id: number,
   actorId: number,
-  role: string,
+  userId: number,
 ) {
   const h = (
     await database.query<Row>(
@@ -266,7 +266,7 @@ export async function loadVisitDetail(
     loadStatusHistory(database, "SiteVisit", id),
     loadTraceabilityLinks(database, "SiteVisit", id),
     loadVisitReport(database, id),
-    rolePermissions(database, role),
+    rolePermissions(database, userId),
   ]);
   const assignments = assignmentsResult.recordset.map((r) =>
       assignment(r, required),

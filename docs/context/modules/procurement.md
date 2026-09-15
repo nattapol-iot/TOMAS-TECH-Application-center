@@ -4,7 +4,7 @@
 
 จัดซื้อ อนุมัติ และประวัติ PR
 
-Evidence: snapshot `6b6809b`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `09f9bd3c`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -63,6 +63,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/document-number.ts](<../../../backend-node/src/document-number.ts>)
 - [backend-node/src/material-audit.ts](<../../../backend-node/src/material-audit.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/procurement-rules.ts](<../../../backend-node/src/procurement-rules.ts>)
 - [backend-node/src/historical-pr.ts](<../../../backend-node/src/historical-pr.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)

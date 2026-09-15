@@ -4,6 +4,7 @@ import type { Database } from './db.js';
 import type { CurrentUser } from './types.js';
 import { dateOnly } from './http.js';
 import { ApiError } from './errors.js';
+import { hasRole } from './user-roles.js';
 import { activityDay, reportingDays, disciplineScore, type ReportingRule, type ActivityEvent } from './activity-rules.js';
 
 export type ActivityScope = {all:boolean;department:string|null;projects:number[];actorId:number};
@@ -15,7 +16,7 @@ export const queryActivity=<T extends object>(db:Database,tx:Transaction|undefin
 };
 export async function activityScope(db:Database,actor:CurrentUser):Promise<ActivityScope>{
  const projects=(await db.query<{id:number}>(`SELECT id FROM dbo.projects WHERE deleted_at IS NULL AND (manager_id=@actor OR lead_engineer_id=@actor)`,q=>q.input('actor',sql.BigInt,actor.id))).recordset.map(r=>Number(r.id));
- return {all:actor.role==='Admin',department:['Engineering Manager','Sales Manager','Management'].includes(actor.role)&&actor.department.trim()?actor.department:null,projects,actorId:actor.id};
+ return {all:hasRole(actor,'Admin'),department:hasRole(actor,'Engineering Manager','Sales Manager','Management')&&actor.department.trim()?actor.department:null,projects,actorId:actor.id};
 }
 export const fullMember=(scope:ActivityScope,user:{id:number;department:string})=>scope.all||scope.actorId===user.id||Boolean(scope.department&&scope.department===user.department);
 export const visibleProject=(scope:ActivityScope,projectId:number|null)=>projectId!==null&&scope.projects.includes(projectId);

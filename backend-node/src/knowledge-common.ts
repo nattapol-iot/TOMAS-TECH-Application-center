@@ -36,7 +36,7 @@ export function bindKnowledgeVisibility(request: InstanceType<typeof sql.Request
 }
 
 export async function canManageKnowledge(database: Database, actor: CurrentUser): Promise<boolean> {
-  return permissionFor(database, actor.role, "knowledge.manage_permissions");
+  return permissionFor(database, actor.id, "knowledge.manage_permissions");
 }
 
 export async function auditKnowledge(transaction: TransactionType, input: {

@@ -15,6 +15,46 @@ export const OPERATIONS_WORKSPACE_COPY: Record<string, { th: string; en: string;
     "en": "Current account",
     "jp": "現在のアカウント"
   },
+  "Additional roles": {
+    "th": "Role เพิ่มเติม",
+    "en": "Additional roles",
+    "jp": "追加ロール"
+  },
+  "Each additional role grants that role's full permissions on top of the primary role": {
+    "th": "Role ที่เพิ่มให้สิทธิ์ทั้งหมดของ Role นั้น เพิ่มจาก Role หลัก",
+    "en": "Each additional role grants that role's full permissions on top of the primary role",
+    "jp": "追加ロールは主ロールに加えて、そのロールの全権限を付与します"
+  },
+  "This account holds its primary role only.": {
+    "th": "บัญชีนี้มีเฉพาะ Role หลัก",
+    "en": "This account holds its primary role only.",
+    "jp": "このアカウントは主ロールのみです"
+  },
+  "Add another role": {
+    "th": "เพิ่ม Role อีกหนึ่ง",
+    "en": "Add another role",
+    "jp": "ロールを追加"
+  },
+  "Select a role": {
+    "th": "เลือก Role",
+    "en": "Select a role",
+    "jp": "ロールを選択"
+  },
+  "Grant role": {
+    "th": "ให้สิทธิ์ Role",
+    "en": "Grant role",
+    "jp": "ロールを付与"
+  },
+  "Remove role": {
+    "th": "ถอด Role",
+    "en": "Remove role",
+    "jp": "ロールを解除"
+  },
+  "Removing…": {
+    "th": "กำลังถอด…",
+    "en": "Removing…",
+    "jp": "解除中…"
+  },
   "Edit role": {
     "th": "แก้ไข Role",
     "en": "Edit role",
