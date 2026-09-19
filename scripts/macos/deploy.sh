@@ -36,12 +36,15 @@ docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context 
 if ! /usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1; then
   if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
     log "Docker daemon is unavailable; starting the isolated iot Colima profile"
-    # The VM stays alive only while Colima's limactl supervisor runs. Started as a child
-    # of this job it belongs to the job's process tree, so the Actions runner reaps it at
-    # "Cleaning up orphan processes" and the VM -- with every container in it -- dies
-    # seconds after the deploy reports success. Fork it into its own session first so the
-    # supervisor outlives the job; then poll, because the start is no longer in foreground.
-    /usr/bin/perl -MPOSIX -e 'exit 0 if fork; POSIX::setsid(); open STDIN, "<", "/dev/null"; open STDOUT, ">>", "/tmp/colima-iot-start.log"; open STDERR, ">&", \*STDOUT; exec @ARGV' \
+    # The VM stays alive only while Colima's limactl supervisor runs, and the Actions
+    # runner kills it at "Cleaning up orphan processes" -- the VM, with every container
+    # in it, then dies seconds after the deploy reports success. The runner identifies
+    # what to kill by the RUNNER_TRACKING_ID it puts in the environment of everything a
+    # step spawns, which children inherit; a new session alone does not escape it, so
+    # the variable has to be dropped before exec. Detaching as well keeps the supervisor
+    # off this job's terminal. Poll afterwards: the start no longer runs in foreground.
+    env -u RUNNER_TRACKING_ID \
+      /usr/bin/perl -MPOSIX -e 'exit 0 if fork; POSIX::setsid(); open STDIN, "<", "/dev/null"; open STDOUT, ">>", "/tmp/colima-iot-start.log"; open STDERR, ">&", \*STDOUT; exec @ARGV' \
       colima start -p iot
     log "Waiting for the iot Colima daemon (start log: /tmp/colima-iot-start.log)"
     for _ in $(seq 1 60); do
