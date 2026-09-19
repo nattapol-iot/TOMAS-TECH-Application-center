@@ -36,10 +36,20 @@ docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context 
 if ! /usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1; then
   if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
     log "Docker daemon is unavailable; starting the isolated iot Colima profile"
-    /usr/bin/perl -e 'alarm 180; exec @ARGV' colima start -p iot \
-      || die "Docker daemon behind '$DOCKER_CONTEXT' is not answering and Colima profile iot could not start."
+    # The VM stays alive only while Colima's limactl supervisor runs. Started as a child
+    # of this job it belongs to the job's process tree, so the Actions runner reaps it at
+    # "Cleaning up orphan processes" and the VM -- with every container in it -- dies
+    # seconds after the deploy reports success. Fork it into its own session first so the
+    # supervisor outlives the job; then poll, because the start is no longer in foreground.
+    /usr/bin/perl -MPOSIX -e 'exit 0 if fork; POSIX::setsid(); open STDIN, "<", "/dev/null"; open STDOUT, ">>", "/tmp/colima-iot-start.log"; open STDERR, ">&", \*STDOUT; exec @ARGV' \
+      colima start -p iot
+    log "Waiting for the iot Colima daemon (start log: /tmp/colima-iot-start.log)"
+    for _ in $(seq 1 60); do
+      /usr/bin/perl -e 'alarm 10; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 && break
+      sleep 5
+    done
     /usr/bin/perl -e 'alarm 30; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 \
-      || die "Docker daemon behind '$DOCKER_CONTEXT' is still not answering after starting Colima profile iot."
+      || die "Docker daemon behind '$DOCKER_CONTEXT' is still not answering after starting Colima profile iot; see /tmp/colima-iot-start.log."
   else
     die "Docker daemon behind '$DOCKER_CONTEXT' is not answering."
   fi
