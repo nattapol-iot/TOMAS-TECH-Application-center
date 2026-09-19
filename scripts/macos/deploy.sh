@@ -43,9 +43,19 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
   DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
   if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
     log "Checking NAS visibility inside the isolated iot VM"
-    colima ssh -p iot -- ls -ld /private/tmp /private/tmp/iot-team-center-nas || true
-    colima ssh -p iot -- readlink /private/tmp/iot-team-center-nas || true
-    awk '/^mounts:/{show=1;print;next} show && /^[a-zA-Z]/{exit} show {print}' "$HOME/.colima/iot/colima.yaml"
+    if ! /usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- test -d /private/tmp/iot-team-center-nas; then
+      # A host SMB reconnect invalidates the existing virtiofs descriptor. Only
+      # this application's VM may restart; preserve the operator's default context.
+      log "Refreshing stale NAS sharing in the isolated iot VM"
+      (
+        previous_context="$(docker context show)"
+        trap 'docker context use "$previous_context" >/dev/null' EXIT
+        /usr/bin/perl -e 'alarm 90; exec @ARGV' colima stop -p iot
+        /usr/bin/perl -e 'alarm 180; exec @ARGV' colima start -p iot
+      )
+      /usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- test -d /private/tmp/iot-team-center-nas \
+        || die "NAS is mounted on the Mac but is still unavailable in the iot VM."
+    fi
   fi
 fi
 
