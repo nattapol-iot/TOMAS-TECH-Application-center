@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { apiRequest, downloadCrmDocument, uploadCrmDocument, type BootstrapData } from "../api-client";
 import { useLanguage, useT } from "../i18n";
 import { Modal, Panel } from "../ui";
+import { CustomerModal } from "./AdminAnalyticsScreens";
 import "./crm.css";
 import { CRM_COPY } from "./crm-copy";
 
@@ -129,7 +130,7 @@ function ActivityList({bootstrap,customerId,year}:{bootstrap:BootstrapData;custo
 
 function CustomerList({bootstrap,open,refreshBootstrap}:{bootstrap:BootstrapData;refreshBootstrap?:()=>Promise<void>;open:(id:number)=>void}) {
   const t=useT(),[search,setSearch]=useState(""),[page,setPage]=useState(1),[add,setAdd]=useState(false),state=useCrmData<Page>(`/api/v1/crm/customers?${new URLSearchParams({search,page:String(page)})}`);
-  return <><div className="crm-toolbar"><input className="crm-search" aria-label={t("CRM.search")} placeholder={t("CRM.search")} value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>{bootstrap.permissions.includes("crm.contact.write")?<button className="btn primary" onClick={()=>setAdd(true)}>{t("CRM.newCustomer")}</button>:null}</div><Notice error={state.error} loading={state.loading}/><Records rows={state.data?.items??[]} columns={["name","code","industry","accountOwnerName"]} onOpen={r=>open(Number(r.id))}/><Pager page={state.data} onPage={setPage}/>{add?<Editor title="CRM.newCustomer" initial={{}} fields={[{key:"name",label:"CRM.companyName",required:true},{key:"code"},{key:"site",wide:true}]} onClose={()=>setAdd(false)} onSave={async v=>{await crmRequest("/api/v1/sales/customers","POST",v);await refreshBootstrap?.();state.refresh();}}/>:null}</>;
+  return <><div className="crm-toolbar"><input className="crm-search" aria-label={t("CRM.search")} placeholder={t("CRM.search")} value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>{bootstrap.permissions.includes("crm.contact.write")?<button className="btn primary" onClick={()=>setAdd(true)}>{t("CRM.newCustomer")}</button>:null}</div><Notice error={state.error} loading={state.loading}/><Records rows={state.data?.items??[]} columns={["name","code","industry","accountOwnerName"]} onOpen={r=>open(Number(r.id))}/><Pager page={state.data} onPage={setPage}/>{add?<CustomerModal customer={null} onClose={()=>setAdd(false)} onSaved={async()=>{setAdd(false);await refreshBootstrap?.();state.refresh();}}/>:null}</>;
 }
 function CustomerWorkspace({id,options,openOpportunity,...props}:Props&{id:number;options:CrmRecord[];openOpportunity:(id:number)=>void}) {
   const t=useT(),[tab,setTab]=useState("overview"),[year,setYear]=useState(""),[editor,setEditor]=useState<string|null>(null),[siteEdit,setSiteEdit]=useState<CrmRecord|null>(null),state=useCrmData<CustomerDetail>(`/api/v1/crm/customers/${id}${year?`?year=${year}`:""}`),opps=useCrmData<Page>(`/api/v1/crm/opportunities?customerId=${id}&pageSize=100${year?`&year=${year}`:""}`),activities=useCrmData<Page>(`/api/v1/crm/activities?customerId=${id}${year?`&year=${year}`:""}`),customer=state.data?.customer;

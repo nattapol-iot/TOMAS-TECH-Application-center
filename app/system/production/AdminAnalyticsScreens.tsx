@@ -485,7 +485,7 @@ function LocalizedNameStack({ names, fallback, titles }: { names: LocalizedNames
   return <span className="localized-name-stack">{lines.map((line) => <span key={line.language}><small>{line.language}</small><strong>{line.value}</strong></span>)}</span>;
 }
 
-function CustomerModal({ customer, onClose, onSaved }: {
+export function CustomerModal({ customer, onClose, onSaved }: {
   customer: BootstrapData["customers"][number] | null;
   onClose: () => void;
   onSaved: (code: string) => Promise<void>;
