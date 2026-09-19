@@ -33,7 +33,17 @@ done
 [[ -f "$DEPLOY_DIR/.env" ]] || die "$DEPLOY_DIR/.env is missing; see docs/MACMINI_HANDOFF.md for the keys it must carry."
 docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context '$DOCKER_CONTEXT' does not exist."
 # A context can exist while its VM is down; compose would then hang on the dead socket for minutes.
-/usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 || die "Docker daemon behind '$DOCKER_CONTEXT' is not answering; on the Mac host run: colima start -p iot"
+if ! /usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1; then
+  if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
+    log "Docker daemon is unavailable; starting the isolated iot Colima profile"
+    /usr/bin/perl -e 'alarm 180; exec @ARGV' colima start -p iot \
+      || die "Docker daemon behind '$DOCKER_CONTEXT' is not answering and Colima profile iot could not start."
+    /usr/bin/perl -e 'alarm 30; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 \
+      || die "Docker daemon behind '$DOCKER_CONTEXT' is still not answering after starting Colima profile iot."
+  else
+    die "Docker daemon behind '$DOCKER_CONTEXT' is not answering."
+  fi
+fi
 
 DOCUMENT_MODE="$(grep -E '^DEV_DOCUMENT_STORAGE_MODE=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
 if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
