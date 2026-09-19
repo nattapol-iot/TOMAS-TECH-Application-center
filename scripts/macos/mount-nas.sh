@@ -15,11 +15,22 @@ CREDENTIAL_FILE=/Users/tomastc/iot-team-center/.nas-password.b64
 [[ "$(stat -f '%Lp' "$CREDENTIAL_FILE")" == '600' ]] || { echo 'Protected NAS credential file has unsafe permissions.' >&2; exit 1; }
 password="$(base64 -d < "$CREDENTIAL_FILE")"
 [[ -n "$password" ]] || { echo 'NAS password is unavailable.' >&2; exit 1; }
-encoded_user="$(DEV_NAS_USERNAME="$DEV_NAS_USERNAME" node -e 'process.stdout.write(encodeURIComponent(process.env.DEV_NAS_USERNAME))')"
+# The self-hosted runner does not require Node on the Mac host. Encode UTF-8
+# bytes with Bash builtins and keep credentials out of external process arguments.
+url_encode() {
+  local LC_ALL=C value="$1" encoded="" char hex i
+  for ((i=0; i<${#value}; i++)); do
+    char="${value:i:1}"
+    case "$char" in
+      [a-zA-Z0-9.~_-]) encoded+="$char" ;;
+      *) printf -v hex '%%%02X' "'$char"; encoded+="$hex" ;;
+    esac
+  done
+  printf '%s' "$encoded"
+}
+encoded_user="$(url_encode "$DEV_NAS_USERNAME")"
 [[ "$password" != *$'\n'* && "$password" != *$'\r'* ]] || { echo 'NAS password contains an unsupported line break.' >&2; exit 1; }
-export NAS_MOUNT_PASSWORD="$password"
-encoded_password="$(node -e 'process.stdout.write(encodeURIComponent(process.env.NAS_MOUNT_PASSWORD))')"
-unset NAS_MOUNT_PASSWORD
+encoded_password="$(url_encode "$password")"
 unset password
 
 # Keep the command out of logs; the URL-encoded credential only exists for this bounded mount process.
