@@ -93,7 +93,7 @@ for key, value in {
     'chapter': 'บทที่ || Chapter || 第',
     'procedures': 'ขั้นตอนงาน || procedures || 操作手順',
     'screens': 'หน้าจอจริง × 3 ภาษา || real screens × 3 languages || 実画面 × 3言語',
-    'date': 'อ้างอิง 6 กันยายน 2569 || Baseline: 6 September 2026 || 基準日：2026年9月6日',
+    'date': 'เนื้อหาอ้างอิง 19 กันยายน 2569 || Content baseline: 19 September 2026 || 内容基準日：2026年9月19日',
     'offline': 'HTML ไฟล์เดียว · เปิดออฟไลน์ · พิมพ์ A4 || One HTML file · offline · A4 print || HTML 1ファイル・オフライン・A4印刷',
     'read': 'ภาษาเนื้อหาและภาพประกอบ || Content and screenshot language || 本文と画面画像の言語',
     'role': 'เริ่มตามหน้าที่ || Start by role || 役割から始める',

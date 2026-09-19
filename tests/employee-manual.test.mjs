@@ -11,7 +11,7 @@ test("employee manual is wired into the authenticated application", async () => 
     read("app/system/activity-client.ts"),
   ]);
 
-  assert.match(app, /\{ view: "manual", label: "Employee Manual", icon: "book" \}/);
+  assert.match(app, /[" ]view[" ]*:[" ]*"manual"[\s\S]{0,80}[" ]label[" ]*:[" ]*"Employee Manual"[\s\S]{0,80}[" ]icon[" ]*:[" ]*"book"/);
   assert.match(app, /view === "manual" \? <EmployeeManualScreen \/>/);
   assert.match(app, /employeeManualLabel\(language\)/);
   assert.match(screen, /\/manual\/employee-operation-manual\.html/);
@@ -34,4 +34,7 @@ test("public handbook is self-contained and identical to the generated artifact"
   assert.match(publicCopy, /pageParams\.get\('embedded'\) === '1'/);
   assert.match(publicCopy, /\['th','en','ja'\]\.includes\(requestedLanguage\)/);
   assert.match(publicCopy, /<summary>2\.3 เปิดและค้นหาในคู่มือจากแอป/);
+  assert.match(publicCopy, /<summary>5\.4 เริ่มติดตามงานขายใน CRM/);
+  assert.match(publicCopy, /5\.4 Start tracking sales work in CRM/);
+  assert.match(publicCopy, /5\.4 CRMで営業案件の追跡を始める/);
 });

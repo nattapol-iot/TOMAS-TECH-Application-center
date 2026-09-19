@@ -33,7 +33,7 @@ chapter('start', 'เริ่มใช้งานและเข้าใจ�
         'ถ้าเป็น Team Test ให้กรอก <b>Registered email</b> และ <b>Personal test access code</b> ที่ได้รับเป็นรายบุคคล ถ้าเป็น Production ให้เลือกเข้าสู่ระบบด้วยบัญชี Microsoft บริษัท',
         'รอจน Dashboard โหลด แล้วตรวจชื่อ แผนก และบทบาทของตนเองที่มุมผู้ใช้',
         'เลือก <b>TH</b> ที่แถบด้านบนเมื่อต้องการเมนูภาษาไทย หรือเลือก EN / JP ได้ตามถนัด'
-    ], 'เห็นชื่อของตนเองและเมนูที่ได้รับสิทธิ์ ไม่มีข้อความเข้าสู่ระบบผิดพลาด', 'คู่มือนี้อ้างอิงหน้าจอและเอกสารรุ่นวันที่ 6 กันยายน 2569 เมนูที่เปิดให้ใช้จริงขึ้นกับรุ่นที่องค์กรติดตั้ง สิทธิ์ และสมาชิกของแต่ละโครงการ') +
+    ], 'เห็นชื่อของตนเองและเมนูที่ได้รับสิทธิ์ ไม่มีข้อความเข้าสู่ระบบผิดพลาด', 'คู่มือนี้อ้างอิงซอร์สและเอกสารรุ่นวันที่ 19 กันยายน 2569 ส่วนภาพหน้าจอบันทึกจาก Team Test วันที่ 6 กันยายน 2569 เมนูที่เปิดให้ใช้จริงขึ้นกับรุ่นที่องค์กรติดตั้ง สิทธิ์ และสมาชิกของแต่ละโครงการ') +
     proc('1.2 ตรวจข้อมูลส่วนตัวและออกจากระบบ', [
         'เปิดเมนูชื่อผู้ใช้ → <b>My Profile</b> ตรวจรหัสพนักงาน อีเมล แผนก ตำแหน่ง และสิทธิ์',
         'เปลี่ยนภาษาจากหน้า Profile ได้ ข้อมูลที่องค์กรดูแล เช่น ชื่อและบทบาท ให้แจ้งผู้ดูแลเมื่อไม่ถูกต้อง',
@@ -112,8 +112,22 @@ chapter('customers', 'ลูกค้า ผู้ติดต่อ และ E
         'หากพบหลายชื่อ ให้เลือกชื่อบริษัทและบุคคลที่ถูกต้อง แล้วกดใช้ข้อมูลตามที่หน้าจอแสดง',
         'ตรวจทุกช่อง โดยเฉพาะชื่อภาษาญี่ปุ่น อีเมล เบอร์โทร ตำแหน่งและที่อยู่ ข้อมูลเสนอแนะเติมเฉพาะช่องว่าง',
         'แก้เองได้ก่อนกดบันทึกตามปกติ หากอ่านไม่สำเร็จให้ลองรูปใหม่หรือกรอกเอง'
-    ], 'บันทึกเกิดขึ้นเมื่อกด Save เท่านั้น และค่าที่บันทึกผ่านการตรวจด้วยตนเอง', 'ขั้นสแกนอ่านภาพในเบราว์เซอร์ ไม่อัปโหลดรูปนามบัตรหรือบันทึกลูกค้าอัตโนมัติ'),
-    'app/system/production/InquiryCustomerFields.tsx app/system/production/EndUserCompanyField.tsx app/system/production/BusinessCardScanner.tsx docs/customer-multilingual-names.md docs/customer-contact-titles.md docs/customer-contact-roles.md docs/end-user-companies.md', 'customers')
+    ], 'บันทึกเกิดขึ้นเมื่อกด Save เท่านั้น และค่าที่บันทึกผ่านการตรวจด้วยตนเอง', 'ขั้นสแกนอ่านภาพในเบราว์เซอร์ ไม่อัปโหลดรูปนามบัตรหรือบันทึกลูกค้าอัตโนมัติ') +
+    proc('5.4 เริ่มติดตามงานขายใน CRM', [
+        'เปิด <b>CRM &amp; Sales → Customers · 360°</b> แล้วค้นหาชื่อหรือรหัสบริษัทก่อนสร้างข้อมูลใหม่ เพื่อลดข้อมูลลูกค้าซ้ำ',
+        'หากยังไม่มีลูกค้า ให้ใช้ <b>New customer</b> และบันทึกบริษัท จากนั้นเพิ่ม Site และ Contact ให้ตรงกับสถานที่และบุคคลที่ติดต่อจริง',
+        'เมื่อเริ่มมีโอกาสเกิดงาน ให้เปิด <b>Opportunities → New opportunity</b> เลือกลูกค้า ชื่องาน Sales Owner และ Stage; เติม Technical Owner มูลค่าคาดการณ์และวันที่คาดว่าจะปิดเมื่อมีข้อมูลและมีสิทธิ์',
+        'เปิด Opportunity ที่บันทึกแล้วเพื่อตรวจ Customer, Stage, Owner, Customer need และ Expected scope ก่อนใช้เป็นข้อมูลติดตามร่วมกัน',
+        'ใช้ <b>Pipeline</b> เพื่อดูงานแยกตาม Stage และใช้ <b>CRM Dashboard</b> เพื่อตรวจงานเปิด งานต้องติดตาม งานเกินกำหนด งานประเมินราคาและข้อเสนอที่ส่งแล้ว'
+    ], 'ลูกค้า Contact และ Opportunity เชื่อมกัน และทีมเห็นเจ้าของงาน ขั้นปัจจุบันและข้อมูลสำคัญชุดเดียวกัน', 'ข้อมูล CRM ที่มองเห็นขึ้นกับขอบเขตและสิทธิ์ บางบทบาทไม่เห็นมูลค่าเชิงพาณิชย์ อย่าสร้างลูกค้าหรือ Opportunity ซ้ำเพียงเพราะค้นหาไม่พบจนกว่าจะตรวจตัวกรองและสิทธิ์') +
+    proc('5.5 บันทึกกิจกรรม ติดตามงาน และส่งต่อเป็น Inquiry', [
+        'หลังประชุม โทร อีเมล เยี่ยมหน้างานหรือได้รับข้อมูลใหม่ ให้เปิด <b>Activities → New activity</b> ระบุประเภท เวลา เจ้าของ Summary ผู้เข้าร่วม ข้อตกลงและ Action items ตามข้อเท็จจริง',
+        'สร้าง <b>Next Action / Follow-up</b> ใน Opportunity โดยระบุสิ่งที่ต้องทำ Owner, Due date, Priority และ Status; เมื่อทำจริงเสร็จจึงเปลี่ยนเป็น <b>Done</b>',
+        'เริ่มวันจาก <b>My Work</b> หรือ CRM Dashboard เพื่อตรวจงานเกินกำหนด งานใกล้กำหนดและงานรอลูกค้า แล้วเปิดกลับไปยัง Opportunity ต้นทางเพื่ออัปเดต',
+        'อัปเดต Stage ให้ตรงกับสถานการณ์ เช่น Requirement, Estimating, Proposal หรือ Negotiation โดยไม่ข้ามข้อเท็จจริงของงาน',
+        'เมื่อข้อมูลพร้อมส่งทีมเทคนิค ให้เปิด Opportunity แล้วใช้ <b>Create Inquiry</b> ตรวจ Customer, Owner, Due date และ Project type ก่อนบันทึก จากนั้นดำเนิน Requirement, Site Visit และ Estimate จาก Inquiry ที่เชื่อมไว้'
+    ], 'กิจกรรมล่าสุดมีหลักฐาน งานถัดไปมี Owner และกำหนดส่ง และ Inquiry ย้อนกลับไปยัง Opportunity ต้นทางได้', 'CRM ใช้ติดตามความสัมพันธ์และงานขาย ส่วน Inquiry ใช้รับงานและรวบรวมข้อกำหนดทางเทคนิค การสร้าง Inquiry ไม่ได้อนุมัติ Estimate หรือสร้าง Project โดยอัตโนมัติ'),
+    'app/system/production/InquiryCustomerFields.tsx app/system/production/EndUserCompanyField.tsx app/system/production/BusinessCardScanner.tsx app/system/production/CrmScreens.tsx docs/customer-multilingual-names.md docs/customer-contact-titles.md docs/customer-contact-roles.md docs/end-user-companies.md docs/context/modules/crm.md', 'customers crm-dashboard crm-customers crm-contacts crm-opportunities crm-activities crm-pipeline')
 
 chapter('inquiry', 'Inquiry: รับงานและรวบรวมความต้องการ', 'Inquiry', 'Sales / Estimate owner / ผู้มีสิทธิ์ Inquiry',
     proc('6.1 สร้างเรื่องหลักของลูกค้า', [
@@ -749,7 +763,7 @@ chapter('reference', 'คำศัพท์ สถานะ และราย�
     ]) + table(['สถานะที่พบบ่อย', 'สิ่งที่ผู้ใช้ต้องเข้าใจ'], [
         ['Draft', 'ร่าง ยังไม่ส่งตรวจหรือยืนยัน'], ['Submitted / Pending review', 'ส่งแล้ว รอผู้รับผิดชอบขั้นถัดไป'], ['Revision Required / Returned', 'อ่านเหตุผล แก้ตาม flow ของโมดูลและส่งใหม่'], ['Approved', 'อนุมัติในขั้นของเอกสารนั้น ไม่ได้แปลว่าทุกกระบวนการหลังจากนั้นเสร็จแล้ว'], ['Locked / Released', 'ตรึงฉบับเพื่อใช้อ้างอิงต่อ แก้ตามขั้น revision'], ['Done', 'งานทำเสร็จ อาจยังต้องตรวจรับ'], ['Completed / Closed', 'จบตามเงื่อนไขของโมดูล ตรวจหลักฐานที่เกี่ยวข้องก่อนส่งมอบ'], ['Cancelled / Superseded / Retired', 'ยกเลิก / ถูกแทนด้วยฉบับใหม่ / เลิกใช้ในคลัง โดยประวัติเดิมยังอาจต้องเก็บไว้']
     ]) + '<h3>ก่อนส่งต่อหรือจบงานแต่ละครั้ง</h3><ul class="checklist"><li>เลขเอกสาร ลูกค้า โครงการ และ revision ถูกต้อง</li><li>ข้อมูลบังคับและหลักฐานครบ บันทึกสำเร็จแล้ว</li><li>จำนวน หน่วย วันที่ และยอดรวมตรงกับข้อมูลจริง</li><li>ผู้รับผิดชอบและผู้อนุมัติถูกคน มีขั้นถัดไปชัดเจน</li><li>ไฟล์ที่ต้องส่งออกเปิดอ่านได้ และผู้รับมีสิทธิ์เข้าถึง</li><li>ประเด็นค้างมี Owner และ Due date ไม่ปิดงานเพื่อซ่อนสิ่งที่ยังไม่เสร็จ</li></ul>' +
-    note('ขอบเขตคู่มือ: ครอบคลุมเมนูปัจจุบันและหน้าที่เข้าผ่านเมนูผู้ใช้/แท็บย่อยจากการตรวจซอร์สและเอกสารวันที่ 6 กันยายน 2569 ภาพหรือข้อมูลตัวอย่างไม่ได้ใช้แทนการฝึกในระบบจริง คู่มือนี้ไม่ยืนยันว่าทุกระบบปลายทางถูกติดตั้งหรือทุกคนได้รับสิทธิ์แล้ว'),
+    note('ขอบเขตคู่มือ: ครอบคลุมเมนูปัจจุบันและหน้าที่เข้าผ่านเมนูผู้ใช้/แท็บย่อยจากการตรวจซอร์สและเอกสารวันที่ 19 กันยายน 2569 ภาพหน้าจอบันทึกวันที่ 6 กันยายน 2569 และข้อมูลตัวอย่างไม่ได้ใช้แทนการฝึกในระบบจริง คู่มือนี้ไม่ยืนยันว่าทุกระบบปลายทางถูกติดตั้งหรือทุกคนได้รับสิทธิ์แล้ว'),
     'app/system/ProductionApp.tsx docs/four-feature-completion.md docs/support-center-implementation.md')
 
 
@@ -876,7 +890,7 @@ Deliverable: [Multilingual illustrated HTML](../output/IoT-Team-Center-Employee-
 
 The former `-TH.html` path contains the same standalone multilingual edition.
 
-Content baseline: 2026-09-06. Scope: current `ProductionApp.tsx` navigation,
+Content baseline: 2026-09-19. Scope: current `ProductionApp.tsx` navigation,
 production screen implementations and feature completion notes, including local
 uncommitted features present at authoring time. This is a source-grounded employee
 manual, not a claim that every workflow has been re-tested in the deployed system.
