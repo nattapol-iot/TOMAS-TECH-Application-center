@@ -41,6 +41,12 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
   DEV_NAS_USERNAME="${DEV_NAS_USERNAME:-$(grep -E '^DEV_NAS_USERNAME=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)}"
   [[ -n "$DEV_NAS_USERNAME" ]] || die "NAS mode is enabled but DEV_NAS_USERNAME is missing."
   DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
+  if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
+    log "Checking NAS visibility inside the isolated iot VM"
+    colima ssh -p iot -- ls -ld /private/tmp /private/tmp/iot-team-center-nas || true
+    colima ssh -p iot -- readlink /private/tmp/iot-team-center-nas || true
+    awk '/^mounts:/{show=1;print;next} show && /^[a-zA-Z]/{exit} show {print}' "$HOME/.colima/iot/colima.yaml"
+  fi
 fi
 
 compose() { docker --context "$DOCKER_CONTEXT" compose -f docker-compose.dev.yml -f docker-compose.tls.yml "$@"; }
