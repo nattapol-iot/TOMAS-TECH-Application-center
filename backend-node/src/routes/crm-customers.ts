@@ -13,8 +13,8 @@ import { crmAccess, crmDto, crmId, crmText, CRM_SCOPE, bindAccess, type CrmRow }
 export function registerCrmCustomerRoutes(app: FastifyInstance,database: Database,users: CurrentUserService) {
   app.get("/api/v1/crm/customers",async request=>{
     await crmAccess(database,users,request); const query=request.query as Record<string,string>;
-    const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1,size=30;
-    const result=await database.query<CrmRow>(`SELECT c.*,u.name account_owner_name,COUNT(*) OVER() total_count FROM dbo.customers c LEFT JOIN dbo.users u ON u.id=c.account_owner_id WHERE c.deleted_at IS NULL AND (@search=N'' OR c.name LIKE @search OR c.code LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id WHERE s.customer_id=c.id AND co.name LIKE @search)) ORDER BY c.name,c.id OFFSET @offset ROWS FETCH NEXT 30 ROWS ONLY`,q=>q.input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size));
+    const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1,size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):10;
+    const result=await database.query<CrmRow>(`SELECT c.*,u.name account_owner_name,COUNT(*) OVER() total_count FROM dbo.customers c LEFT JOIN dbo.users u ON u.id=c.account_owner_id WHERE c.deleted_at IS NULL AND (@search=N'' OR c.name LIKE @search OR c.code LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id WHERE s.customer_id=c.id AND co.name LIKE @search)) ORDER BY c.name,c.id OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,q=>q.input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size).input("size",sql.Int,size));
     return {items:result.recordset.map(r=>crmDto(r)),total:Number(result.recordset[0]?.total_count??0),page,pageSize:size};
   });
   app.get("/api/v1/crm/customers/:id",async request=>{
@@ -56,9 +56,9 @@ export function registerCrmCustomerRoutes(app: FastifyInstance,database: Databas
     });
   });
   app.get("/api/v1/crm/contacts",async request=>{
-    await crmAccess(database,users,request);const query=request.query as Record<string,string>,page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1;
-    const result=await database.query<CrmRow>(`SELECT co.*,s.name site_name,s.customer_id,c.name customer_name,COUNT(*) OVER() total_count FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id JOIN dbo.customers c ON c.id=s.customer_id WHERE co.deleted_at IS NULL AND s.deleted_at IS NULL AND c.deleted_at IS NULL AND (@customer IS NULL OR c.id=@customer) AND (@search=N'' OR co.name LIKE @search OR co.email LIKE @search OR c.name LIKE @search) ORDER BY co.name,co.id OFFSET @offset ROWS FETCH NEXT 30 ROWS ONLY`,q=>q.input("customer",sql.BigInt,crmId(query.customerId,"Customer")).input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*30));
-    return {items:result.recordset.map(r=>crmDto(r)),total:Number(result.recordset[0]?.total_count??0),page,pageSize:30};
+    await crmAccess(database,users,request);const query=request.query as Record<string,string>,page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1,size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):10;
+    const result=await database.query<CrmRow>(`SELECT co.*,s.name site_name,s.customer_id,c.name customer_name,COUNT(*) OVER() total_count FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id JOIN dbo.customers c ON c.id=s.customer_id WHERE co.deleted_at IS NULL AND s.deleted_at IS NULL AND c.deleted_at IS NULL AND (@customer IS NULL OR c.id=@customer) AND (@search=N'' OR co.name LIKE @search OR co.email LIKE @search OR c.name LIKE @search) ORDER BY co.name,co.id OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,q=>q.input("customer",sql.BigInt,crmId(query.customerId,"Customer")).input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size).input("size",sql.Int,size));
+    return {items:result.recordset.map(r=>crmDto(r)),total:Number(result.recordset[0]?.total_count??0),page,pageSize:size};
   });
   app.put("/api/v1/crm/contacts/:id/metadata",async request=>{
     const actor=await crmAccess(database,users,request,"crm.contact.write"),id=positiveLong((request.params as {id:string}).id,"Contact"),body=bodyObject(request.body);
