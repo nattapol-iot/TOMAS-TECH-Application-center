@@ -38,7 +38,7 @@ These project rules guide both agents; they do not override host/system policies
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — IoT Team Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `4e44d2e` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `543450fe` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 
@@ -52,6 +52,7 @@ These project rules guide both agents; they do not override host/system policies
 
 | Module | ขอบเขต |
 |---|---|
+| [CRM / Sales](docs/context/modules/crm.md) | ลูกค้า Contact Opportunity กิจกรรมและการติดตาม เชื่อม Inquiry และ My Work |
 | [Application shell / Login / Profile](docs/context/modules/shell.md) | เมนู ภาษา session bootstrap และโปรไฟล์ |
 | [Dashboard / Executive](docs/context/modules/dashboard.md) | ภาพรวมผู้บริหารและข้อมูลทีม |
 | [Inquiry / Sales intake](docs/context/modules/inquiry.md) | รับงาน ลูกค้า end user และส่งต่อสำรวจ |
@@ -96,5 +97,5 @@ These project rules guide both agents; they do not override host/system policies
 
 Node API ที่ใช้อ้างอิงอยู่ backend-node/; backend/ (.NET), backend-php/ และ worker/ เป็นเส้นทางอีกชุด อย่าแก้โดยสมมติว่าเป็น runtime เดียวกัน. Permission, role, scope และสถานะงานต้องตรวจในโค้ดเส้นทางจริง; requirement ที่ผู้ใช้เคยขอไม่ได้ยืนยันว่า implemented แล้ว.
 
-Generated inventory: 21 modules, 57 route files, 339 literal HTTP operations. ไฟล์ที่ใช้ร่วมกันอาจปรากฏหลาย module; endpoint extraction ไม่ได้แทนการตรวจ runtime.
+Generated inventory: 22 modules, 60 route files, 360 literal HTTP operations. ไฟล์ที่ใช้ร่วมกันอาจปรากฏหลาย module; endpoint extraction ไม่ได้แทนการตรวจ runtime.
 <!-- PROJECT-CONTEXT:END -->

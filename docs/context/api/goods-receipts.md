@@ -2,7 +2,7 @@
 
 [Module](../modules/inventory.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4e44d2e`; generated, do not edit. [backend-node/src/routes/goods-receipts.ts](<../../../backend-node/src/routes/goods-receipts.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/routes/goods-receipts.ts](<../../../backend-node/src/routes/goods-receipts.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

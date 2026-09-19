@@ -61,7 +61,10 @@ import {
   canFinishWork, needsZeroProgressFinishConfirmation, parseMyWorkExpansion, sortMyWorkGroups, type MyWorkExpansion,
 } from "../../../lib/my-work";
 
+import { CrmMyWork } from "./CrmScreens";
+
 type ProductionPlanningProps = {
+  openCrmOpportunity?: (id: number) => void;
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   refreshBootstrap?: () => Promise<void>;
@@ -667,7 +670,7 @@ type MyWorkProgressInput = {
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting";
 type MyWorkSort = "priority" | "due" | "project";
 type MyWorkTab = "new" | "active" | "updates";
-type MyWorkSource = "all" | "estimate" | "project" | "service" | "personal";
+type MyWorkSource = "all" | "crm" | "estimate" | "project" | "service" | "personal";
 type ScheduleWorkGroup = {
   key: string;
   source: Exclude<MyWorkSource, "all" | "estimate" | "service">;
@@ -710,6 +713,7 @@ type EstimateWorkGroup = {
 
 const MY_WORK_SOURCE_OPTIONS: { id: MyWorkSource; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "crm", label: "CRM" },
   { id: "estimate", label: "Inquiry / Estimate" },
   { id: "project", label: "Project" },
   { id: "service", label: "Service" },
@@ -718,7 +722,7 @@ const MY_WORK_SOURCE_OPTIONS: { id: MyWorkSource; label: string }[] = [
 
 const MY_WORK_SOURCE_AVAILABILITY: Record<MyWorkTab, MyWorkSource[]> = {
   new: ["all", "estimate", "project", "service"],
-  active: ["all", "estimate", "project", "personal"],
+  active: ["all", "crm", "estimate", "project", "personal"],
   updates: ["all"],
 };
 
@@ -957,6 +961,7 @@ export function ProductionMyWork({
   onMyWorkUrgentCountChange,
   newAssignmentCount = 0,
   onNewAssignmentChanged,
+  openCrmOpportunity,
 }: ProductionPlanningProps) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
@@ -1065,7 +1070,7 @@ export function ProductionMyWork({
     const needle = taskSearch.trim().toLocaleLowerCase();
     return items.filter((item) => {
       if (item.status === "Done") return false;
-      if (sourceFilter === "estimate" || sourceFilter === "service") return false;
+      if (sourceFilter === "estimate" || sourceFilter === "service" || sourceFilter === "crm") return false;
       if (sourceFilter === "project" && item.isOwnDetail) return false;
       if (sourceFilter === "personal" && !item.isOwnDetail) return false;
       if (projectFilter !== "all" && String(item.projectId) !== projectFilter) return false;
@@ -1145,6 +1150,7 @@ export function ProductionMyWork({
   }, [saveProgress]);
 
   if (!allowed) {
+    if (bootstrap.permissions.includes("crm.read")) return <CrmMyWork openOpportunity={openCrmOpportunity} />;
     const missing = [!hasProgressPermission ? "schedule.progress" : "", !hasReadPermission ? "schedule.read" : ""].filter(Boolean).join(" + ");
     return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle={uiText("Schedule work assigned to the signed-in user")} /><PermissionNotice permission={missing} message={uiText("Ask an administrator for Schedule read and progress permissions.")} />{estimateAssignmentsPanel}</>;
   }
@@ -1189,7 +1195,7 @@ export function ProductionMyWork({
       mine
       initialFilter="Acknowledgment"
       variant="new-assignments"
-      sourceFilter={sourceFilter}
+      sourceFilter={sourceFilter === "crm" ? "all" : sourceFilter}
       isGroupExpanded={isGroupExpanded}
       onToggleGroup={toggleGroup}
       openProjectSchedule={openProjectSchedule}
@@ -1198,6 +1204,8 @@ export function ProductionMyWork({
     /> : null}
 
     {tab === "active" ? <>
+      {(sourceFilter === "all" || sourceFilter === "crm") && bootstrap.permissions.includes("crm.read") ? <CrmMyWork openOpportunity={openCrmOpportunity} /> : null}
+      {sourceFilter !== "crm" ? <>
       <Panel
         title={taskFilter === "attention" ? uiText("Needs your update") : `${activeWorkGroups.length} ${uiText("work groups")}`}
         subtitle={taskFilter === "attention" ? uiText("Late, blocked or quiet for too long — clear these first") : uiText("All work is grouped and sorted by urgency, then due date.")}
@@ -1269,6 +1277,7 @@ export function ProductionMyWork({
 
       {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !items.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} /></Panel> : null}
       {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
+      </> : null}
     </> : null}
 
     {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle={uiText("What you reported, in order")} flush>

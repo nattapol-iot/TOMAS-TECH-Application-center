@@ -1025,6 +1025,16 @@ export async function apiRequest<T>(path: string, init?: RequestInit, timeoutMs 
   return response.json() as Promise<T>;
 }
 
+export async function uploadCrmDocument(file: File, customerId: number, opportunityId?: number, activityId?: number) {
+  const body = new FormData(); body.set("file", file); body.set("customerId", String(customerId));
+  if (opportunityId) body.set("opportunityId", String(opportunityId));
+  if (activityId) body.set("activityId", String(activityId));
+  return (await authorizedFetch("/api/v1/crm/documents", { method: "POST", body }, 120_000)).json();
+}
+export async function downloadCrmDocument(id: number): Promise<Blob> {
+  return (await authorizedFetch(`/api/v1/crm/documents/${id}/content`, { headers: { Accept: "application/octet-stream" } }, 120_000)).blob();
+}
+
 export type ReportEvidenceAttachment = {
   attachmentId: number;
   attachmentName: string;

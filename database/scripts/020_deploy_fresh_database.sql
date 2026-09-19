@@ -105,11 +105,21 @@ GO
 :r database/migrations/041_user_role_management.sql
 :r database/migrations/042_estimate_total_guard.sql
 :r database/migrations/043_estimate_erp_cost_mapping.sql
+:r database/migrations/044_estimate_labor_masters.sql
+:r database/migrations/045_estimate_line_order.sql
+:r database/migrations/046_estimate_module_details.sql
+:r database/migrations/047_estimate_module_description_rows.sql
+:r database/migrations/048_estimate_price_sets.sql
+:r database/migrations/049_estimate_module_quantity.sql
+:r database/migrations/050_estimate_product_codes.sql
+:r database/migrations/051_additional_application_roles.sql
+:r database/migrations/052_support_email_notification.sql
+:r database/migrations/053_crm.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43)) <> 43
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 53) <> 53
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -133,7 +143,8 @@ IF EXISTS (
         (40, N'Immutable overhead policies and estimate revision snapshots'),
         (41, N'Admin-managed primary user roles with audited least-privilege writes'),
         (42, N'Guard estimate aggregates within supported decimal precision'),
-        (43, N'Revision-scoped Estimate ERP cost classifications')
+        (43, N'Revision-scoped Estimate ERP cost classifications'),
+        (53, N'CRM opportunities and customer follow-up')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

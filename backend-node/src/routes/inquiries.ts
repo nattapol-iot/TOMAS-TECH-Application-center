@@ -21,6 +21,7 @@ import {
   requiredText,
 } from "../http.js";
 import type { CurrentUserService } from "../users.js";
+import { crmAccess, bindAccess, scopedOpportunity } from "../crm.js";
 
 type InquiryRow = Record<string, unknown> & {
   id: number | string; inquiry_no: string; inquiry_date: Date | string; customer_id: number | string;
@@ -289,9 +290,23 @@ export function registerInquiryRoutes(
   });
 
   app.post("/api/v1/inquiries", async (request, reply) => {
-    await users.demandPermission(request, "inquiry.write");
-    const actor = await users.required(request);
     const body = bodyObject(request.body);
+    const opportunityId = body.opportunityId == null ? null : requiredInteger(body.opportunityId,"Opportunity",1);
+    const crmActor = opportunityId ? await crmAccess(database,users,request,"crm.convert") : null;
+    if (!crmActor) await users.demandPermission(request, "inquiry.write");
+    const actor = await users.required(request);
+    if (opportunityId && crmActor) {
+      const source = await database.transaction(async tx => {
+        const opportunity = await scopedOpportunity(bindAccess(new sql.Request(tx),crmActor),opportunityId);
+        if (!(opportunity.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion))) throw new ApiError(409,"concurrency_conflict","Opportunity changed. Refresh before creating an inquiry.");
+        const q=new sql.Request(tx);q.input("contact",sql.BigInt,opportunity.contact_id).input("sales",sql.BigInt,opportunity.sales_owner_id).input("site",sql.BigInt,opportunity.site_id);
+        const refs=(await q.query("SELECT (SELECT name FROM dbo.customer_site_contacts WHERE id=@contact) contact_name,(SELECT name FROM dbo.users WHERE id=@sales) sales_name,(SELECT address FROM dbo.customer_sites WHERE id=@site) site_address")).recordset[0]!;
+        return {...opportunity,...refs};
+      });
+      Object.assign(body,{customerId:Number(source.customer_id),contact:source.contact_name??"",projectName:source.name,salesOwner:source.sales_name,requirement:source.need,scopeSummary:source.scope,siteLocation:source.site_address??"",priority:source.priority});
+      if(source.technical_owner_id) body.estimateOwnerId=Number(source.technical_owner_id);
+      body.projectProbability ??= Number(source.probability??50);body.customerInterestGrade ??="B";
+    }
     const customerId = requiredInteger(body.customerId, "Customer", 1);
     const endUserId = endUserCustomerId(body.endUserCustomerId) ?? null;
     const estimateOwnerId = requiredInteger(body.estimateOwnerId, "Estimate owner", 1);
@@ -323,6 +338,8 @@ export function registerInquiryRoutes(
     }
 
     const created = await database.transaction(async (transaction) => {
+      const crmSource = opportunityId && crmActor ? await scopedOpportunity(bindAccess(new sql.Request(transaction),crmActor),opportunityId,true) : null;
+      if (crmSource && !(crmSource.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion))) throw new ApiError(409,"concurrency_conflict","Opportunity changed. Refresh before creating an inquiry.");
       const endUser = await validateEndUser(transaction, endUserId);
       const validate = new sql.Request(transaction);
       validate.input("customer_id", sql.BigInt, customerId);
@@ -368,6 +385,11 @@ export function registerInquiryRoutes(
       `);
       const row = result.recordset[0]!;
       const id = Number(row.id);
+      if (crmSource) {
+        const link=new sql.Request(transaction);link.input("id",sql.BigInt,id).input("opportunity",sql.BigInt,opportunityId).input("site",sql.BigInt,crmSource.site_id).input("contact",sql.BigInt,crmSource.contact_id);
+        await link.query("UPDATE dbo.inquiries SET opportunity_id=@opportunity,customer_site_id=@site,customer_contact_id=@contact WHERE id=@id");
+        await insertAudit(transaction,actor.id,"CrmOpportunity",Number(opportunityId),String(crmSource.opportunity_no).slice(0,50),"ConvertedToInquiry",null,{inquiryId:id,inquiryNumber:number});
+      }
       await insertAudit(transaction, actor.id, "Inquiry", id, number, "Created", null, {
         customerId, ...endUser, contact, projectName, projectType, rfqNo, salesOwner, estimateOwnerId, dueDate, priority,
         projectProbability, customerInterestGrade, qualificationNote, requirement, background, scopeSummary,

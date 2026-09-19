@@ -1,4 +1,5 @@
 "use client";
+import { CrmInquirySource } from "./CrmScreens";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
 
@@ -428,6 +429,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
 
   return <>
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
+    <CrmInquirySource inquiryId={id} enabled={bootstrap.permissions.includes("crm.read")} />
     <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
       {bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setAssignOpen(true)}><Icon name="user" /><LocalizedText text={"Assign owner"} /></button> : null}

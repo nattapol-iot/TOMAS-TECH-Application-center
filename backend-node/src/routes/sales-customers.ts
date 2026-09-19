@@ -100,7 +100,7 @@ export function salesContactInput(body: Record<string, unknown>): ContactInput {
 }
 
 export async function demandSalesCustomerPermission(users: CurrentUserService, request: FastifyRequest, write: boolean): Promise<void> {
-  const permissions = write ? ["intake.write", "master.write"] : ["inquiry.read", "intake.read", "master.read"];
+  const permissions = write ? ["intake.write", "master.write", "crm.contact.write"] : ["inquiry.read", "intake.read", "master.read", "crm.read"];
   for (const [index, permission] of permissions.entries()) {
     try { await users.demandPermission(request, permission); return; }
     catch (error) {

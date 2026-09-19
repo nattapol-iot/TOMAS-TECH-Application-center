@@ -75,7 +75,9 @@ import {
   ProductionVisitMasterData,
 } from "./production/SiteVisitScreens";
 
-type View =
+import { CrmScreen, type CrmView } from "./production/CrmScreens";
+
+type View = CrmView
   | "dashboard" | "my-work" | "inquiries" | "estimates" | "projects" | "knowledge"
   | "sales-intake" | "site-visits" | "my-assignments" | "visit-master"
   | "price" | "quotations" | "missing" | "project-timeline" | "resources"
@@ -84,7 +86,7 @@ type View =
   | "suppliers" | "employees" | "material-master" | "user-accounts" | "summary-reports"
   | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
-type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; rateAccess?: boolean };
+type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; rateAccess?: boolean };
 type MyWorkUrgencyItem = {
   status: string;
   canUpdate: boolean;
@@ -106,13 +108,19 @@ type AppNotification = {
 const NAV: { group?: string; items: NavItem[] }[] = [
   { items: [
     { view: "dashboard", label: "Dashboard", icon: "grid" },
-    { view: "my-work", label: "My Work", icon: "user", permissions: ["schedule.read", "schedule.progress"] },
+    { view: "my-work", label: "My Work", icon: "user", anyPermissions: ["schedule.progress", "crm.read"] },
     { view: "inquiries", label: "Inquiry", icon: "inbox", permission: "inquiry.read" },
     { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
     { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
     { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
   ] },
-  { group: "SALES & SITE VISIT", items: [
+  { group: "CRM & SALES", items: [
+    { view: "crm-dashboard", label: "CRM Dashboard", icon: "grid", permission: "crm.read" },
+    { view: "crm-customers", label: "CRM Customers", icon: "users", permission: "crm.read" },
+    { view: "crm-contacts", label: "CRM Contacts", icon: "user", permission: "crm.read" },
+    { view: "crm-opportunities", label: "CRM Opportunities", icon: "folder", permission: "crm.read" },
+    { view: "crm-activities", label: "CRM Activities", icon: "calendar", permission: "crm.read" },
+    { view: "crm-pipeline", label: "CRM Pipeline", icon: "chart", permission: "crm.read" },
 
     { view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit.read" },
     { view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit.read" },
@@ -198,6 +206,19 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
   const [myWorkUrgentCount, setMyWorkUrgentCount] = useState(0);
+  const [crmOpportunityId, setCrmOpportunityId] = useState<number|null>(null);
+  const [crmActionableCount, setCrmActionableCount] = useState(0);
+  useEffect(() => {
+    if(!bootstrap?.permissions.includes("crm.read")) return;
+    let cancelled=false;
+    void apiRequest<{actionable:number}>("/api/v1/crm/dashboard").then(result=>{if(!cancelled)setCrmActionableCount(Number(result.actionable));}).catch(()=>{if(!cancelled)setCrmActionableCount(0);});
+    return()=>{cancelled=true;};
+  }, [bootstrap,view]);
+  const openCrmOpportunity = useCallback((id: number) => { setCrmOpportunityId(id); setViewState("crm-opportunities"); }, []);
+  useEffect(() => {
+    const followCrm = () => { const match = window.location.hash.match(/^#crm\/(\d+)$/); if(match && bootstrap?.permissions.includes("crm.read")) openCrmOpportunity(Number(match[1])); };
+    followCrm(); window.addEventListener("hashchange",followCrm); return () => window.removeEventListener("hashchange",followCrm);
+  }, [bootstrap,openCrmOpportunity]);
   const [taskAcknowledgmentCount, setTaskAcknowledgmentCount] = useState(0);
   const [taskInboxRevision, setTaskInboxRevision] = useState(0);
   const [language, setLanguageState] = useState<Lang>("EN");
@@ -231,6 +252,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
     setCollapsedActiveGroup(null);
+    setCrmOpportunityId(null);
     setViewState(next === "master" ? "customers" : next);
     const activeGroup = NAV.find(section => section.items.some(item => item.view === next))?.group;
     if (activeGroup) setCollapsedNavGroups(groups => groups.filter(group => group !== activeGroup));
@@ -334,6 +356,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const allowed: View[] = NAV.flatMap(section => section.items)
       .filter(item => (!item.permission || data.permissions.includes(item.permission))
         && (!item.permissions || item.permissions.every(permission => data.permissions.includes(permission)))
+        && (!item.anyPermissions || item.anyPermissions.some(permission => data.permissions.includes(permission)))
         && (!item.rateAccess || canViewEngineeringRates(data.user.role)))
       .map(item => item.view);
     allowed.push("profile", "signature");
@@ -513,6 +536,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       ...section,
       items: section.items.filter((item) => (!item.permission || bootstrap?.permissions.includes(item.permission))
         && (!item.permissions || item.permissions.every((permission) => bootstrap?.permissions.includes(permission)))
+        && (!item.anyPermissions || item.anyPermissions.some((permission) => bootstrap?.permissions.includes(permission)))
         && (!item.rateAccess || canViewEngineeringRates(bootstrap?.user.role ?? ""))),
     }))
     .filter((section) => section.items.length > 0), [bootstrap]);
@@ -608,7 +632,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={label} aria-label={label} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount) ? <em>{badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)}</em> : null}</button>;
+                    return <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={label} aria-label={label} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount))}</em> : null}</button>;
                   })}
                 </div>
               </div>
@@ -666,7 +690,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             else if (id && destination === "projects") openProjectSchedule(id);
             else { setView(destination); window.scrollTo({ top: 0 }); }
           }} /> : personalDashboard : null}
-          {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
+          {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
+          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} bootstrap={bootstrap} view={view as CrmView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
           {view === "projects" ? <>
