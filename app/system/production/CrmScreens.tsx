@@ -78,7 +78,7 @@ function OpportunityList({bootstrap,mode,options,open}:{bootstrap:BootstrapData;
     {mode==="crm-dashboard"?<div className="crm-quick-filters">{["NoActivity","NoNextAction","EstimateDueSoon"].map(k=><button className="btn default" key={k} onClick={()=>{setAttention(k);setStage("");setPage(1);}}>{t(`CRM.${k}`)}</button>)}</div>:null}
     {attention?<button className="btn default" onClick={()=>setAttention("")}>{t(`CRM.${attention}`)} ×</button>:null}
     {mode==="crm-pipeline"?<div className="crm-pipeline">{stages.filter(s=>!["WON","LOST","ON_HOLD"].includes(s)).map(s=>{const stageRows=rows.filter(r=>r.stage===s);return <section key={s} data-stage={s}><header><h3>{label(s)}</h3><strong>{stageRows.length}</strong></header>{stageRows.map(card)}<button className="crm-pipeline-add">＋ {t("CRM.new")}</button></section>;})}</div>:<><div className="crm-section-head"><div><strong>{list.data?.total??0} {t("CRM Opportunities")}</strong><small>{t("CRM.attention")}</small></div></div><Records rows={rows} columns={["opportunityNo","name","customerName","stage","expectedValue","expectedClose","salesOwnerName","nextAction"]} onOpen={r=>open(Number(r.id))}/></>}
-    {!rows.length&&!list.loading?<p>{t("CRM.empty")}</p>:null}<Pager page={list.data} onPage={setPage}/></>;
+    {mode==="crm-pipeline"&&!rows.length&&!list.loading?<p className="crm-empty">{t("CRM.empty")}</p>:null}<Pager page={list.data} onPage={setPage}/></>;
 }
 
 function OpportunityEditor({bootstrap,options,initial,onClose,onSaved}:{bootstrap:BootstrapData;options:CrmRecord[];initial?:CrmRecord;onClose:()=>void;onSaved:(r:CrmRecord)=>void}) {
