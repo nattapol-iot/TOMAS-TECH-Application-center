@@ -57,6 +57,13 @@ function statusTone(status: LaborRate["status"]): string {
   return status === "Effective" ? "pill ok" : status === "Future" ? "pill" : "pill muted";
 }
 
+/* The dictionary already owns "Effective" as the date-window column header
+   ("มีผลตั้งแต่"), which does not read as a status. The badge gets its own
+   words rather than a second meaning welded onto one key. */
+const RATE_STATUS_TEXT: Record<LaborRate["status"], string> = {
+  Effective: "In effect", Future: "Starts later", Expired: "Expired", Inactive: "Inactive",
+};
+
 /**
  * Rate master search.
  *
@@ -80,6 +87,7 @@ export function LaborRatePickerModal({ costType, department, busy, onClose, onSe
   const [masterFields, setMasterFields] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const localizeCopy = useT();
 
   useEffect(() => {
     let active = true;
@@ -104,7 +112,7 @@ export function LaborRatePickerModal({ costType, department, busy, onClose, onSe
 
   return <Modal
     title="Rate master"
-    subtitle={`Search the Engineering Rate Master and fill in the ${costType.toLowerCase()} rate, level and department`}
+    subtitle="Search the rate master and fill in the rate, level and department"
     size="lg"
     onClose={onClose}
     footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}
@@ -132,7 +140,7 @@ export function LaborRatePickerModal({ costType, department, busy, onClose, onSe
         </tr></thead>
         <tbody>{rates.map((rate) => <tr key={rate.id}>
           <td><div className="cell-primary"><strong>{rateLabel(rate)}</strong><span>
-            <span className={statusTone(rate.status)}>{rate.status}</span> <LocalizedText text={"· version"} /> {rate.version}
+            <span className={statusTone(rate.status)}><LocalizedText text={RATE_STATUS_TEXT[rate.status]} /></span> <LocalizedText text={"· version"} /> {rate.version}
           </span></div></td>
           <td>{rateWindowLabel(rate)}</td>
           <td className="num">{rate.hourlyRate === null ? "—" : money(rate.hourlyRate)}</td>
@@ -142,7 +150,7 @@ export function LaborRatePickerModal({ costType, department, busy, onClose, onSe
             className="btn default sm"
             type="button"
             disabled={busy || rate.status !== "Effective"}
-            title={rate.status === "Effective" ? undefined : `A ${rate.status.toLowerCase()} rate cannot price a new line`}
+            title={rate.status === "Effective" ? undefined : localizeCopy("Only an effective rate can price a new line")}
             onClick={() => onSelect(rate)}
           ><LocalizedText text={"Use"} /></button></td>
         </tr>)}</tbody>
@@ -498,6 +506,7 @@ export function SaveLaborPackageModal({ estimateId, packageName, costType, lineC
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const localizeCopy = useT();
   const valid = Boolean(code.trim() && name.trim());
 
   const save = async () => {
@@ -519,36 +528,38 @@ export function SaveLaborPackageModal({ estimateId, packageName, costType, lineC
     }
   };
 
-  if (savedPackage) return <Modal title="บันทึก Labor Package แล้ว" size="sm" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose}>ปิด</button>
-    <button className="btn primary" type="button" onClick={() => onOpenSaved(savedPackage.id)}>เปิดรายการที่บันทึก</button>
+  if (savedPackage) return <Modal title="Saved to the labor package library" size="sm" onClose={onClose} footer={<>
+    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>
+    <button className="btn primary" type="button" onClick={() => onOpenSaved(savedPackage.id)}><Icon name="layers" /><LocalizedText text={"Open the saved package"} /></button>
   </>}>
-    <p><strong>{savedPackage.code}</strong> บันทึกเป็น Draft ใน <strong>Labor Package Master</strong> แล้ว</p>
-    <p>เปิดได้จากเมนู Administration → Labor Package Master เมื่อเผยแพร่เป็น Active แล้ว จึงเลือกนำไปใช้ใน Estimate ได้</p>
-    {error ? <p role="alert">บันทึกสำเร็จ แต่รีเฟรชข้อมูลไม่สำเร็จ: {error}</p> : null}
+    <p><strong>{savedPackage.code}</strong> <LocalizedText text={"is saved as a draft in the labor package library."} /></p>
+    <p className="muted"><LocalizedText text={"Find it under Estimating library → Labor Packages. A draft cannot be pulled into an estimate until somebody publishes it as Active."} /></p>
+    {error ? <div className="info-strip amber" role="alert"><Icon name="alertTriangle" /><span>
+      <LocalizedText text={"Saved, but the screen behind could not be refreshed:"} /> {error}
+    </span></div> : null}
   </Modal>;
 
   return <Modal
     title="Save as labor package"
-    subtitle={`${lineCount} activity line(s) in "${packageName}" become a reusable draft`}
+    subtitle={`${packageName} · ${lineCount} ${localizeCopy("activity lines")}`}
     size="sm"
     onClose={onClose}
     footer={<>
       <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
       <button className="btn primary" type="button" disabled={!valid || busy || saving} onClick={() => { void save(); }}>
-        <Icon name="layers" />{saving ? "Saving…" : "Save to library"}
+        <Icon name="layers" /><LocalizedText text={saving ? "Saving…" : "Save to library"} />
       </button>
     </>}
   >
     {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
     <div className="form-grid two">
-      <Field label="Package code *"><input required maxLength={40} value={code} onChange={(event) => setCode(event.target.value)} placeholder="e.g. LP-COMMISSIONING" /></Field>
+      <Field label="Package code *"><input required maxLength={40} value={code} onChange={(event) => setCode(event.target.value)} placeholder={localizeCopy("e.g. LP-COMMISSIONING")} /></Field>
       <Field label="Package name *"><input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></Field>
-      <Field label="Department"><input maxLength={100} value={department} onChange={(event) => setDepartment(event.target.value)} placeholder="Leave blank for every department" /></Field>
+      <Field label="Department"><input maxLength={100} value={department} onChange={(event) => setDepartment(event.target.value)} placeholder={localizeCopy("Leave blank for every department")} /></Field>
       <Field label="Cost type"><input value={costType} readOnly /></Field>
     </div>
     <Field label="Description">
-      <textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What kind of job is this package for, and what should someone know before pulling it in?" />
+      <textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={localizeCopy("What kind of job is this package for, and what should someone know before pulling it in?")} />
     </Field>
     <div className="info-strip" style={{ marginTop: 10 }}><Icon name="alertCircle" /><span>
       <LocalizedText text={"Rates are stored as a reference with the rate master row they came from. Applying the package re-reads the live rate, so an old rate card can never be copied into a new estimate. The package is saved as a draft; publishing it needs master data access."} />

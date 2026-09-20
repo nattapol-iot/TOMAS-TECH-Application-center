@@ -952,6 +952,134 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
     "th": "กิจกรรม",
     "jp": "作業"
   },
+  "Search the rate master and fill in the rate, level and department": {
+    "th": "ค้นหาใน Rate Master แล้วเติมอัตรา ระดับ และแผนก",
+    "jp": "レートマスタを検索して単価・等級・部門を入力します"
+  },
+  "Search code, level, department or role": {
+    "th": "ค้นหารหัส ระดับ แผนก หรือบทบาท",
+    "jp": "コード・等級・部門・役割で検索"
+  },
+  "Only an effective rate can price a new line": {
+    "th": "มีเพียงอัตราที่มีผลอยู่เท่านั้นที่ใช้คิดราคาแถวใหม่ได้",
+    "jp": "新しい明細に適用できるのは有効な単価だけです"
+  },
+  "In effect": {
+    "th": "ใช้งานอยู่",
+    "jp": "有効"
+  },
+  "Starts later": {
+    "th": "เริ่มภายหลัง",
+    "jp": "開始前"
+  },
+  "Expired": {
+    "th": "หมดอายุ",
+    "jp": "期限切れ"
+  },
+  "No rate found": {
+    "th": "ไม่พบอัตรา",
+    "jp": "単価が見つかりません"
+  },
+  "No engineering rate matches this search. An Engineering Manager or Admin maintains the rate master.": {
+    "th": "ไม่มีอัตราวิศวกรรมที่ตรงกับการค้นหานี้ ผู้ดูแล Rate Master คือ Engineering Manager หรือ Admin",
+    "jp": "この検索条件に一致する技術単価はありません。レートマスタはエンジニアリングマネージャーまたは管理者が管理します。"
+  },
+  "Save as labor package": {
+    "th": "บันทึกเป็นชุดงานค่าแรง",
+    "jp": "労務パッケージとして保存"
+  },
+  "Save to library": {
+    "th": "บันทึกเข้าคลัง",
+    "jp": "ライブラリに保存"
+  },
+  "activity lines": {
+    "th": "กิจกรรม",
+    "jp": "件の作業"
+  },
+  "Package code *": {
+    "th": "รหัสชุดงาน *",
+    "jp": "パッケージコード *"
+  },
+  "Package name *": {
+    "th": "ชื่อชุดงาน *",
+    "jp": "パッケージ名 *"
+  },
+  "e.g. LP-COMMISSIONING": {
+    "th": "เช่น LP-COMMISSIONING",
+    "jp": "例: LP-COMMISSIONING"
+  },
+  "Leave blank for every department": {
+    "th": "เว้นว่างไว้ถ้าใช้ได้ทุกแผนก",
+    "jp": "全部門で使う場合は空欄"
+  },
+  "What kind of job is this package for, and what should someone know before pulling it in?": {
+    "th": "ชุดงานนี้ใช้กับงานแบบไหน และคนที่จะดึงไปใช้ควรรู้อะไรก่อน",
+    "jp": "このパッケージはどんな案件向けか、取り込む前に知っておくべきことは何か"
+  },
+  "Saved to the labor package library": {
+    "th": "บันทึกเข้าคลังชุดงานค่าแรงแล้ว",
+    "jp": "労務パッケージライブラリに保存しました"
+  },
+  "is saved as a draft in the labor package library.": {
+    "th": "ถูกบันทึกเป็น Draft ในคลังชุดงานค่าแรงแล้ว",
+    "jp": "は労務パッケージライブラリに下書きとして保存されました。"
+  },
+  "Find it under Estimating library → Labor Packages. A draft cannot be pulled into an estimate until somebody publishes it as Active.": {
+    "th": "เปิดได้ที่เมนู Estimating library → Labor Packages · Draft ยังดึงเข้า Estimate ไม่ได้จนกว่าจะมีคนเผยแพร่เป็น Active",
+    "jp": "Estimating library → Labor Packages から開けます。下書きは誰かが Active として公開するまで見積に取り込めません。"
+  },
+  "Open the saved package": {
+    "th": "เปิดชุดงานที่บันทึก",
+    "jp": "保存したパッケージを開く"
+  },
+  "Saved, but the screen behind could not be refreshed:": {
+    "th": "บันทึกสำเร็จ แต่รีเฟรชหน้าจอด้านหลังไม่สำเร็จ:",
+    "jp": "保存しましたが、背面の画面を更新できませんでした:"
+  },
+  "This database has no rate code, role or ERP default yet. Rates and their amounts are correct; the extra master fields arrive with migration 044.": {
+    "th": "ฐานข้อมูลนี้ยังไม่มีรหัสอัตรา บทบาท หรือค่าตั้งต้น ERP · ตัวอัตราและจำนวนเงินถูกต้อง ส่วนฟิลด์ master ที่เหลือจะมากับ migration 044",
+    "jp": "このデータベースには単価コード・役割・ERP 既定値がまだありません。単価と金額は正しく、追加のマスタ項目は migration 044 で追加されます。"
+  },
+  "Effective today only": {
+    "th": "เฉพาะที่มีผลวันนี้",
+    "jp": "本日有効のみ"
+  },
+  "Loading rates…": {
+    "th": "กำลังโหลดอัตรา…",
+    "jp": "単価を読み込み中…"
+  },
+  "Per hour": {
+    "th": "ต่อชั่วโมง",
+    "jp": "時間あたり"
+  },
+  "Per day": {
+    "th": "ต่อวัน",
+    "jp": "日あたり"
+  },
+  "ERP": {
+    "th": "ERP",
+    "jp": "ERP"
+  },
+  "· version": {
+    "th": "· ฉบับ",
+    "jp": "· 版"
+  },
+  " · internal rates are read from the rate master when you add them, not from this package": {
+    "th": " · อัตราภายในถูกอ่านจาก Rate Master ตอนกดเพิ่ม ไม่ได้เอามาจากชุดงานนี้",
+    "jp": " · 社内単価は追加時にレートマスタから読み込まれ、このパッケージからは取りません"
+  },
+  "A supplier activity needs its own supplier, quotation number and price date before it can be added. Fill those in on the line, or leave it unticked.": {
+    "th": "กิจกรรมของผู้ขายต้องมีผู้ขาย เลขที่ใบเสนอราคา และวันที่ราคา ก่อนจึงจะเพิ่มได้ · กรอกในแถวนั้น หรือเอาเครื่องหมายถูกออก",
+    "jp": "仕入先の作業は、仕入先・見積番号・価格日付を入力しないと追加できません。行に入力するか、チェックを外してください。"
+  },
+  "activity line(s) cannot be added yet. Fix them, or untick them to leave them out.": {
+    "th": "กิจกรรมยังเพิ่มไม่ได้ · แก้ให้ถูกต้อง หรือเอาเครื่องหมายถูกออกเพื่อไม่รวม",
+    "jp": "件の作業はまだ追加できません。修正するか、チェックを外して除外してください。"
+  },
+  "Rates are stored as a reference with the rate master row they came from. Applying the package re-reads the live rate, so an old rate card can never be copied into a new estimate. The package is saved as a draft; publishing it needs master data access.": {
+    "th": "อัตราถูกเก็บไว้เป็นข้อมูลอ้างอิงพร้อมแถว Rate Master ที่มันมา · ตอนนำชุดงานไปใช้ระบบจะอ่านอัตราปัจจุบันใหม่ อัตราเก่าจึงไม่มีทางถูกคัดลอกเข้า Estimate ใหม่ · ชุดงานถูกบันทึกเป็น Draft การเผยแพร่ต้องมีสิทธิ์ master data",
+    "jp": "単価は取得元のレートマスタ行とともに参照値として保存されます。パッケージ適用時に現行単価を読み直すため、古い単価が新しい見積に複製されることはありません。パッケージは下書きとして保存され、公開にはマスタデータ権限が必要です。"
+  },
   "Add from library": {
     "th": "เพิ่มจากคลัง",
     "jp": "ライブラリから追加"
