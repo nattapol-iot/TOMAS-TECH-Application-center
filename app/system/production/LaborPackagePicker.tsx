@@ -178,12 +178,15 @@ function linePreviewShape(line: LaborPackageDetail["lines"][number]): LaborPacka
  * the estimator fixes it or skips it on purpose, rather than discovering later
  * that a line quietly went missing.
  */
-export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose, onApplied }: {
+export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose, onApplied, onManageLibrary }: {
   workspace: EstimateCostWorkspace;
   currentUserId: number;
   busy: boolean;
   onClose: () => void;
   onApplied: (message: string) => Promise<void>;
+  /* Maintaining the library is a different act on different data, so it sits
+     apart from the actions that write to this estimate. */
+  onManageLibrary?: () => void;
 }) {
   const today = estimateBusinessDate(new Date());
   const [search, setSearch] = useState("");
@@ -301,6 +304,9 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
         disabled={!selected || !summary.canApply || !workPackage.trim() || Boolean(blocker) || busy || saving}
         onClick={() => { void apply(); }}
       ><Icon name="plus" /><LocalizedText text={saving ? "Adding…" : "Add activities"} />{!saving && summary.included ? ` · ${summary.included}` : ""}</button>
+      {onManageLibrary ? <><span className="spacer" /><button className="btn ghost sm" type="button" disabled={busy || saving} onClick={onManageLibrary}>
+        <Icon name="layers" /><LocalizedText text={"Manage library"} />
+      </button></> : null}
     </>}
   >
     {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
@@ -337,7 +343,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
           </button></td>
         </tr>)}</tbody>
       </table></div>
-        : <EmptyState icon="layers" title="No published package" message="No labor package is published yet. Build one from an existing work package with Save as labor package." />}
+        : <EmptyState icon="layers" title="No published package" message="No labor package is published yet. Build one from an existing work package with Save as labor package." action={onManageLibrary ? <button className="btn default sm" type="button" onClick={onManageLibrary}><Icon name="layers" /><LocalizedText text={"Manage library"} /></button> : undefined} />}
     <Pagination
       page={page}
       pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))}

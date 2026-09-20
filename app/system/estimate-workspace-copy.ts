@@ -389,11 +389,6 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
     "th": "ซ่อนคอลัมน์",
     "jp": "列を減らす"
   },
-  "จัดการ Labor Package": {
-    "th": "จัดการ Labor Package",
-    "jp": "労務パッケージを管理",
-    "en": "Manage labor packages"
-  },
   "แก้ Qty / Man-days / Hours ได้ในช่อง · Enter หรือ ✓ เพื่อบันทึก · เพิ่มแถวแล้วกด Enter เพื่อเพิ่มต่อเนื่อง": {
     "th": "แก้ Qty / Man-days / Hours ได้ในช่อง · Enter หรือ ✓ เพื่อบันทึก · เพิ่มแถวแล้วกด Enter เพื่อเพิ่มต่อเนื่อง",
     "jp": "数量・人日・時間はセル内で編集し、Enter または ✓ で保存します。行を追加したあと Enter を押すと続けて追加できます。",
@@ -956,6 +951,14 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
   "Activities": {
     "th": "กิจกรรม",
     "jp": "作業"
+  },
+  "Add from library": {
+    "th": "เพิ่มจากคลัง",
+    "jp": "ライブラリから追加"
+  },
+  "Manage library": {
+    "th": "จัดการคลัง",
+    "jp": "ライブラリを管理"
   },
   "all departments": {
     "th": "ทุกแผนก",
