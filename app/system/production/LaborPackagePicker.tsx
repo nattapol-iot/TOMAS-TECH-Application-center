@@ -13,7 +13,7 @@ import {
   type LaborPackageSummary,
   type LaborRate,
 } from "../api-client";
-import { currentLocale } from "../i18n";
+import { currentLocale, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { EmptyState, Field, Icon, Modal, Pagination, SearchInput } from "../ui";
 import { estimateApplyOwnerId, estimateBusinessDate } from "../../../lib/estimate-ux";
@@ -199,6 +199,8 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [unavailable, setUnavailable] = useState("");
+  const [choosing, setChoosing] = useState<number | null>(null);
+  const localizeCopy = useT();
 
   useEffect(() => {
     let active = true;
@@ -228,6 +230,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
 
   const choose = async (summary: LaborPackageSummary) => {
     setError("");
+    setChoosing(summary.id);
     try {
       const detail = await loadLaborPackage(summary.id);
       setSelected(detail);
@@ -235,7 +238,11 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
       setWorkPackage(detail.name);
       await loadRates(detail);
     } catch (requestError) { setError(errorText(requestError)); }
+    finally { setChoosing(null); }
   };
+
+  /* Back to the library with the search still where they left it. */
+  const clearSelection = () => { setSelected(null); setDrafts([]); setRates([]); setWorkPackage(""); setError(""); };
 
   const masterRateFor = useCallback((line: LaborPackageDetail["lines"][number]): number | null => {
     const match = rates.find((rate) => rate.level === line.level && rate.department === line.department && rate.status === "Effective");
@@ -284,7 +291,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
   return <Modal
     title="Labor work package"
     subtitle="Pull a reusable set of activities from the library, adjust people and duration, then add them in one go"
-    size="lg"
+    size="xl"
     onClose={onClose}
     footer={<>
       <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
@@ -293,23 +300,26 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
         type="button"
         disabled={!selected || !summary.canApply || !workPackage.trim() || Boolean(blocker) || busy || saving}
         onClick={() => { void apply(); }}
-      ><Icon name="plus" />{saving ? "Adding…" : summary.included ? `Add ${summary.included} activity line(s)` : "Add activities"}</button>
+      ><Icon name="plus" /><LocalizedText text={saving ? "Adding…" : "Add activities"} />{!saving && summary.included ? ` · ${summary.included}` : ""}</button>
     </>}
   >
     {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
     {unavailable ? <EmptyState icon="alertCircle" title="Labor package library is not available on this database" message={unavailable} /> : <>
+    {selected ? null : <>
     <div className="row" style={{ gap: 8 }}>
       <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search code, name, activity or level" />
-      <label className="check-inline">
-        <select value={costType} onChange={(event) => { setCostType(event.target.value as LaborCostType | ""); setPage(1); }} aria-label="Cost type">
-          <option value="">All cost types</option>
-          <option value="Engineering">Engineering</option>
-          <option value="Installation">Installation &amp; service</option>
+      <label className="select-field">
+        <span className="sr-only">{localizeCopy("Cost type")}</span>
+        <select value={costType} onChange={(event) => { setCostType(event.target.value as LaborCostType | ""); setPage(1); }} aria-label={localizeCopy("Cost type")}>
+          <option value="">{localizeCopy("All cost types")}</option>
+          <option value="Engineering">{localizeCopy("Engineering")}</option>
+          <option value="Installation">{localizeCopy("Installation & service")}</option>
         </select>
+        <Icon name="chevronDown" />
       </label>
     </div>
     {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading packages…"} /></div>
-      : packages.length ? <div className="table-wrap" style={{ maxHeight: 200, marginTop: 10 }}><table>
+      : packages.length ? <div className="table-wrap package-list" style={{ maxHeight: 360, marginTop: 10 }}><table>
         <thead><tr>
           <th><LocalizedText text={"Package"} /></th>
           <th style={{ width: 150 }}><LocalizedText text={"Cost type"} /></th>
@@ -317,13 +327,13 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
           <th className="num" style={{ width: 90 }}><LocalizedText text={"MD"} /></th>
           <th style={{ width: 90 }} />
         </tr></thead>
-        <tbody>{packages.map((item) => <tr key={item.id} className={selected?.id === item.id ? "selected" : undefined}>
-          <td><div className="cell-primary"><strong>{item.code} · {item.name}</strong><span>{item.description || `Revision ${item.revision} · ${item.department || "all departments"}`}</span></div></td>
-          <td>{item.costType}</td>
+        <tbody>{packages.map((item) => <tr key={item.id} className="clickable" onClick={() => { if (!busy && choosing === null) void choose(item); }}>
+          <td><div className="cell-primary"><strong>{item.code} · {item.name}</strong><span>{item.description || `${localizeCopy("Revision")} ${item.revision} · ${item.department || localizeCopy("all departments")}`}</span></div></td>
+          <td><LocalizedText text={item.costType} /></td>
           <td className="num">{item.lineCount}</td>
           <td className="num">{number(item.referenceManDays)}</td>
-          <td><button className="btn default sm" type="button" disabled={busy} onClick={() => { void choose(item); }}>
-            {selected?.id === item.id ? "Selected" : "Select"}
+          <td><button className="btn default sm" type="button" disabled={busy || choosing !== null} onClick={(event) => { event.stopPropagation(); void choose(item); }}>
+            {choosing === item.id ? <span className="spinner" /> : null}<LocalizedText text={"Select"} />
           </button></td>
         </tr>)}</tbody>
       </table></div>
@@ -336,22 +346,25 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
       total={total}
       onPage={setPage}
     />
+    </>}
 
     {selected ? <>
       {blocker ? <div className="info-strip red"><Icon name="alertCircle" /><span>{blocker}</span></div> : null}
-      <div className="info-strip"><Icon name="package" /><span>
+      <div className="info-strip picker-chosen"><Icon name="package" /><span>
         {selected.code} · {selected.name} <LocalizedText text={"· revision"} /> {selected.revision}
         <LocalizedText text={" · internal rates are read from the rate master when you add them, not from this package"} />
-      </span></div>
+      </span><button className="btn ghost sm" type="button" disabled={busy || saving} onClick={clearSelection}>
+        <Icon name="chevronLeft" /><LocalizedText text={"Choose another package"} />
+      </button></div>
       <div className="form-grid two" style={{ marginTop: 12 }}>
         <Field label="Work package name in this estimate *">
           <input required maxLength={200} value={workPackage} onChange={(event) => setWorkPackage(event.target.value)} />
         </Field>
         <Field label="Rate date">
-          <input value={today} readOnly title="Internal rates are resolved on the business date the lines are added" />
+          <input value={today} readOnly title={localizeCopy("Internal rates are resolved on the business date the lines are added")} />
         </Field>
       </div>
-      <div className="table-wrap" style={{ maxHeight: 320, marginTop: 10 }}><table>
+      <div className="table-wrap" style={{ maxHeight: "44vh", marginTop: 10 }}><table>
         <thead><tr>
           <th style={{ width: 44 }}><LocalizedText text={"Use"} /></th>
           <th><LocalizedText text={"Activity"} /></th>
@@ -378,8 +391,8 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
             <td><div className="cell-primary">
               <strong>{line.activity}</strong>
               <span>
-                {line.department} · {supplier ? "Supplier man-hour" : "Own engineer"}
-                {line.rateId && line.rateStillEffective === false ? " · the rate this line was written against has been superseded" : ""}
+                {line.department} · <LocalizedText text={supplier ? "Supplier man-hour" : "Own engineer"} />
+                {line.rateId && line.rateStillEffective === false ? <> · <LocalizedText text={"the rate this line was written against has been superseded"} /></> : null}
               </span>
               {preview.blocker ? <span className="warn">{preview.blocker}</span> : null}
             </div></td>
@@ -424,14 +437,14 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
                     value={draft.dailyRate ?? 0}
                     onChange={(event) => updateDraft(index, { dailyRate: Number(event.target.value) })}
                   />
-                : <span className="computed">{masterRateFor(line) === null ? "no rate" : money(masterRateFor(line)!)}</span>}
+                : <span className="computed">{masterRateFor(line) === null ? <LocalizedText text={"no rate"} /> : money(masterRateFor(line)!)}</span>}
             </td>
             <td><select
               aria-label={`ERP category for ${line.activity}`}
               value={draft.erpCategory ?? ""}
               onChange={(event) => updateDraft(index, { erpCategory: event.target.value || null })}
             >
-              <option value="">Decide at submit</option>
+              <option value="">{localizeCopy("Decide at submit")}</option>
               {ERP_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
             </select></td>
             <td className="num"><strong>{preview.estimatedCost === null ? "—" : money(preview.estimatedCost)}</strong></td>

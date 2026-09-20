@@ -2067,6 +2067,21 @@ tbody tr.subtotal-row:hover td { background: var(--n-100); }
 .info-strip.green { background: var(--green-soft); border-color: var(--green-line); color: var(--green-text); }
 .info-strip .icon { flex: none; }
 
+/* Labor package picker.
+   The library list and the line editor are two steps of one dialog, so only
+   one is on screen at a time; the chosen package stays as a strip that carries
+   the way back to the list. */
+.picker-chosen > span { min-width: 0; }
+.picker-chosen > .btn { flex: none; margin-left: auto; }
+
+/* A package name never wraps, so with an auto layout it set the column width
+   and pushed the table past the dialog — the list scrolled sideways and clipped
+   the code the estimator is reading by. Fixed widths let the ellipsis the cell
+   already asks for do its job. */
+.package-list table { table-layout: fixed; }
+.package-list tbody td { overflow: hidden; }
+.package-list .btn .spinner { width: 12px; height: 12px; margin-right: 5px; }
+
 /* ==========================================================================
    Lists, timelines, workflow
    ========================================================================== */

@@ -880,5 +880,93 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
   "Progress %": {
     "th": "ความคืบหน้า %",
     "jp": "進捗率 %"
+  },
+  "Labor work package": {
+    "th": "ชุดงานค่าแรง",
+    "jp": "労務ワークパッケージ"
+  },
+  "Pull a reusable set of activities from the library, adjust people and duration, then add them in one go": {
+    "th": "ดึงชุดกิจกรรมที่ใช้ซ้ำได้จากคลัง ปรับจำนวนคนและระยะเวลา แล้วเพิ่มเข้า Estimate ในครั้งเดียว",
+    "jp": "ライブラリから再利用できる作業セットを取り込み、人数と期間を調整して一括で追加します"
+  },
+  "Search code, name, activity or level": {
+    "th": "ค้นหารหัส ชื่อ กิจกรรม หรือระดับ",
+    "jp": "コード・名称・作業・等級で検索"
+  },
+  "All cost types": {
+    "th": "ทุกประเภทต้นทุน",
+    "jp": "すべての原価区分"
+  },
+  "Cost type": {
+    "th": "ประเภทต้นทุน",
+    "jp": "原価区分"
+  },
+  "Package": {
+    "th": "ชุดงาน",
+    "jp": "パッケージ"
+  },
+  "Add activities": {
+    "th": "เพิ่มกิจกรรม",
+    "jp": "作業を追加"
+  },
+  "Choose another package": {
+    "th": "เลือกชุดงานอื่น",
+    "jp": "別のパッケージを選ぶ"
+  },
+  "Loading packages…": {
+    "th": "กำลังโหลดชุดงาน…",
+    "jp": "パッケージを読み込み中…"
+  },
+  "No published package": {
+    "th": "ยังไม่มีชุดงานที่เผยแพร่",
+    "jp": "公開済みパッケージがありません"
+  },
+  "No labor package is published yet. Build one from an existing work package with Save as labor package.": {
+    "th": "ยังไม่มีชุดงานค่าแรงที่เผยแพร่ สร้างได้จากชุดงานที่มีอยู่ด้วยปุ่ม บันทึกเป็น Labor Package",
+    "jp": "公開済みの労務パッケージがありません。既存のワークパッケージから「労務パッケージとして保存」で作成してください。"
+  },
+  "Labor package library is not available on this database": {
+    "th": "ฐานข้อมูลนี้ยังไม่มีคลังชุดงานค่าแรง",
+    "jp": "このデータベースでは労務パッケージライブラリを利用できません"
+  },
+  "Work package name in this estimate *": {
+    "th": "ชื่อชุดงานใน Estimate นี้ *",
+    "jp": "この見積でのワークパッケージ名 *"
+  },
+  "Rate date": {
+    "th": "วันที่ใช้อัตรา",
+    "jp": "単価基準日"
+  },
+  "Hours / day": {
+    "th": "ชั่วโมง/วัน",
+    "jp": "時間/日"
+  },
+  "Decide at submit": {
+    "th": "เลือกตอนส่งอนุมัติ",
+    "jp": "提出時に決定"
+  },
+  "no rate": {
+    "th": "ไม่มีอัตรา",
+    "jp": "単価なし"
+  },
+  "the rate this line was written against has been superseded": {
+    "th": "อัตราที่ใช้บันทึกแถวนี้ถูกแทนที่ด้วยฉบับใหม่แล้ว",
+    "jp": "この明細の基準単価は新しい版に置き換えられています"
+  },
+  "Activities": {
+    "th": "กิจกรรม",
+    "jp": "作業"
+  },
+  "all departments": {
+    "th": "ทุกแผนก",
+    "jp": "全部門"
+  },
+  "Internal rates are resolved on the business date the lines are added": {
+    "th": "อัตราภายในถูกคิดตามวันทำการที่เพิ่มแถวเข้าไป",
+    "jp": "社内単価は明細を追加した営業日で解決されます"
+  },
+  "Left out": {
+    "th": "ไม่รวม",
+    "jp": "除外"
   }
 };
