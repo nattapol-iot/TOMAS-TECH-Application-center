@@ -103,4 +103,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.withEmail","With email","มีอีเมล","メールあり"], ["CRM.withRole","With contact role","ระบุบทบาท","役割あり"],
  ["CRM.pipelineOverview","Pipeline overview","ภาพรวมไปป์ไลน์","パイプライン概要"], ["CRM.pipelineOverviewHint","Open opportunities by stage, what needs attention, and how many reached engineering. Click a stage or a count to filter the list.","โอกาสที่ยังเปิดแยกตามขั้นตอน รายการที่ต้องติดตาม และจำนวนที่ส่งถึงวิศวกรรม — คลิกขั้นตอนหรือตัวเลขเพื่อกรองรายการด้านล่าง","ステージ別の進行中商談・要対応件数・技術部門への引き継ぎ状況。ステージや件数をクリックすると一覧を絞り込めます。"],
  ["CRM.directInquiriesHint","inquiries raised without an opportunity","Inquiry ที่รับตรงโดยไม่ผ่านโอกาสขาย","商談を経ずに受け付けた引合"],
+ ["CRM.dragHint","Drag a card into another column to change its stage.","ลากการ์ดไปยังคอลัมน์อื่นเพื่อเปลี่ยนขั้นตอนได้","カードを別の列へドラッグするとステージを変更できます。"],
+ ["CRM.moveConflict","This opportunity changed while the board was open. Refresh and try the move again.","โอกาสขายนี้ถูกแก้ไขระหว่างที่เปิดกระดานอยู่ กรุณารีเฟรชแล้วลากใหม่อีกครั้ง","ボードを開いている間にこの商談が更新されました。更新してからもう一度移動してください。"],
+ ["CRM.moveFailed","The stage could not be changed. The card has been put back.","เปลี่ยนขั้นตอนไม่สำเร็จ ระบบนำการ์ดกลับที่เดิมแล้ว","ステージを変更できませんでした。カードを元の位置に戻しました。"],
 ].map(([key,en,th,jp])=>[key,{en,th,jp}]));

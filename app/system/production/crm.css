@@ -214,6 +214,14 @@
 }
 .crm-pipeline-add:hover { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
 
+/* Dragging a card between columns. The column being dropped into is the only
+   one that changes, so the eye has a single place to look for the answer. */
+.crm-pipeline > section.drop-target { border-color: var(--blue); background: var(--blue-soft); }
+.crm-pipeline > section.drop-target > header { border-bottom-color: var(--blue-line); }
+.crm-opportunity-card[draggable="true"] { cursor: grab; }
+.crm-opportunity-card[draggable="true"]:active { cursor: grabbing; }
+.crm-opportunity-card.dragging { opacity: 0.4; }
+
 /* --------------------------------------------------------------------------
    Opportunity cards (pipeline board and the links tab)
    -------------------------------------------------------------------------- */

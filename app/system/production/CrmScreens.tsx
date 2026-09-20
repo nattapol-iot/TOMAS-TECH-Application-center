@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { apiRequest, downloadCrmDocument, uploadCrmDocument, type BootstrapData } from "../api-client";
+import { ApiClientError, apiRequest, downloadCrmDocument, uploadCrmDocument, type BootstrapData } from "../api-client";
 import { useLanguage, useT } from "../i18n";
 import { Badge, EmptyState, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SummaryTile, TablePageSize, type IconName, type Tone } from "../ui";
 import { CustomerModal } from "./AdminAnalyticsScreens";
@@ -133,14 +133,35 @@ export function CrmScreen(props:Props) {
 function OpportunityList({bootstrap,mode,options,open}:{bootstrap:BootstrapData;mode:CrmView;options:CrmRecord[];open:(id:number)=>void}) {
   const t=useT(),choice=useOptions(options),[search,setSearch]=useState(""),[stage,setStage]=useState(""),[attention,setAttention]=useState(""),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(10),[owner,setOwner]=useState(""),[sort,setSort]=useState("updated"),[edit,setEdit]=useState<CrmRecord|null>(null),[createStage,setCreateStage]=useState<string|null>(null);
   const write=bootstrap.permissions.includes("crm.write");
+  const [drag,setDrag]=useState<{id:number;from:string}|null>(null),[over,setOver]=useState(""),[moved,setMoved]=useState<{id:number;stage:string}|null>(null),[moveError,setMoveError]=useState("");
   const list=useCrmData<Page>(`/api/v1/crm/opportunities?${new URLSearchParams({search,stage,attention,open:mode==="crm-dashboard"?"true":"false",ownerId:owner,page:String(page),pageSize:String(mode==="crm-pipeline"?100:pageSize),sort})}`);
   const dashboard=useCrmData<CrmRecord>("/api/v1/crm/dashboard");
   const rows=list.data?.items??[];
   const label=(s:string)=>choice("stage").find(o=>o.value===s)?.label??s;
-  const card=(r:CrmRecord)=><button className="crm-opportunity-card" key={text(r.id)} onClick={()=>open(Number(r.id))}><strong>{text(r.name)}</strong><span className="crm-card-customer">{text(r.customerName)}</span>{bootstrap.permissions.includes("crm.commercial.read")?<span className="crm-card-value">{money(r.expectedValue)}</span>:null}<span className="crm-card-value">{date(r.expectedClose)||"—"}</span><small>{text(r.nextAction)||t("CRM.NoNextAction")} {date(r.nextDue)}</small><div className="crm-flags">{(r.attention as string[]??[]).filter(a=>a!=="Scheduled").map(a=><Badge key={a} tone={toneFor(a)}>{t(`CRM.${a}`)}</Badge>)}</div></button>;
+  // The card sits in its new column from the moment it is dropped, and stays
+  // there until the refreshed list agrees — so it never snaps back and then
+  // forward again while the request is in flight.
+  const pending=moved&&!rows.some(r=>Number(r.id)===moved.id&&text(r.stage)===moved.stage)?moved:null;
+  const boardRows=pending?rows.map(r=>Number(r.id)===pending.id?{...r,stage:pending.stage}:r):rows;
+  /* Dropping a card is the same edit the dialog makes, so it takes the same
+     PUT with the row version the card was drawn from: a board left open while
+     someone else moved that opportunity is refused, never silently overwritten. */
+  const moveTo=async(row:CrmRecord,stage:string)=>{
+    const id=Number(row.id);
+    if(!write||text(row.stage)===stage)return;
+    setMoveError("");setMoved({id,stage});
+    try{
+      await crmRequest(`/api/v1/crm/opportunities/${id}`,"PUT",{stage,rowVersion:row.rowVersion});
+      list.refresh();dashboard.refresh();
+    }catch(error){
+      setMoved(null);
+      setMoveError(error instanceof ApiClientError&&error.status===409?"CRM.moveConflict":"CRM.moveFailed");
+    }
+  };
+  const card=(r:CrmRecord)=><button className={`crm-opportunity-card${drag?.id===Number(r.id)?" dragging":""}`} key={text(r.id)} draggable={write&&mode==="crm-pipeline"} onDragStart={event=>{event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",text(r.id));setDrag({id:Number(r.id),from:text(r.stage)});}} onDragEnd={()=>{setDrag(null);setOver("");}} onClick={()=>open(Number(r.id))}><strong>{text(r.name)}</strong><span className="crm-card-customer">{text(r.customerName)}</span>{bootstrap.permissions.includes("crm.commercial.read")?<span className="crm-card-value">{money(r.expectedValue)}</span>:null}<span className="crm-card-value">{date(r.expectedClose)||"—"}</span><small>{text(r.nextAction)||t("CRM.NoNextAction")} {date(r.nextDue)}</small><div className="crm-flags">{(r.attention as string[]??[]).filter(a=>a!=="Scheduled").map(a=><Badge key={a} tone={toneFor(a)}>{t(`CRM.${a}`)}</Badge>)}</div></button>;
   const dash=dashboard.data;
   return <><Notice error={dashboard.error||list.error} loading={list.loading}/>
-    <Panel title="CRM.pipelineOverview" subtitle={mode==="crm-dashboard"?"CRM.pipelineOverviewHint":undefined}>
+    <Panel title="CRM.pipelineOverview" subtitle={mode==="crm-dashboard"?"CRM.pipelineOverviewHint":mode==="crm-pipeline"&&write?"CRM.dragHint":undefined}>
       <div className="crm-overview">
         <PipelineBar counts={(dash?.stages as Record<string,number>|undefined)??{}} labelOf={label} active={stage} onPick={code=>{setStage(code);setAttention("");setPage(1);}}/>
         {mode==="crm-dashboard"?<><AttentionChips counts={dash} active={attention} onPick={key=>{setAttention(key);setStage("");setPage(1);}}/>
@@ -151,7 +172,11 @@ function OpportunityList({bootstrap,mode,options,open}:{bootstrap:BootstrapData;
 
     <div className="toolbar crm-filters"><SearchInput value={search} onChange={v=>{setSearch(v);setPage(1);}} placeholder="CRM.search"/><FilterSelect label="CRM.stage" value={stage} onChange={v=>{setStage(v);setPage(1);}} options={[{value:"",label:t("All")},...choice("stage")]}/><FilterSelect label="CRM.ownerId" value={owner} onChange={v=>{setOwner(v);setPage(1);}} options={[{value:"",label:t("All")},...teamOptions(bootstrap)]}/><FilterSelect label="CRM.sort" value={sort} onChange={setSort} options={[{value:"updated",label:t("Last updated")},{value:"close",label:t("CRM.expectedClose")}]}/><span className="spacer"/><button className="btn default" onClick={list.refresh}><Icon name="refresh"/>{t("Refresh")}</button></div>
     
-    {mode==="crm-pipeline"?<div className="crm-pipeline">{stages.filter(s=>!["WON","LOST","ON_HOLD"].includes(s)).map(s=>{const stageRows=rows.filter(r=>r.stage===s);return <section key={s} data-stage={s}><header><h3>{label(s)}</h3><strong>{stageRows.length}</strong></header>{stageRows.map(card)}{write?<button type="button" className="crm-pipeline-add" onClick={()=>setCreateStage(s)}>＋ {t("CRM.new")}</button>:null}</section>;})}</div>:<Panel flush title={`${list.data?.total??0} ${t("CRM Opportunities")}`} subtitle="CRM.attention"><Records rows={rows} columns={["opportunityNo","name","customerName","endUserName","stage","expectedValue","expectedClose","salesOwnerName","nextAction"]} onOpen={r=>open(Number(r.id))} onEdit={write?setEdit:undefined} page={list.data} onPage={setPage} onPageSize={size=>{setPageSize(size);setPage(1);}}/></Panel>}
+    {mode==="crm-pipeline"&&moveError?<div role="alert" className="alert danger">{t(moveError)}</div>:null}
+    {mode==="crm-pipeline"?<div className="crm-pipeline">{OPEN_STAGES.map(s=>{const stageRows=boardRows.filter(r=>r.stage===s);return <section key={s} data-stage={s} className={over===s&&drag&&drag.from!==s?"drop-target":undefined}
+      onDragOver={event=>{if(!drag||drag.from===s)return;event.preventDefault();event.dataTransfer.dropEffect="move";setOver(s);}}
+      onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setOver(current=>current===s?"":current);}}
+      onDrop={event=>{if(!drag)return;event.preventDefault();const row=rows.find(r=>Number(r.id)===drag.id);setOver("");setDrag(null);if(row)void moveTo(row,s);}}><header><h3>{label(s)}</h3><strong>{stageRows.length}</strong></header>{stageRows.map(card)}{write?<button type="button" className="crm-pipeline-add" onClick={()=>setCreateStage(s)}>＋ {t("CRM.new")}</button>:null}</section>;})}</div>:<Panel flush title={`${list.data?.total??0} ${t("CRM Opportunities")}`} subtitle="CRM.attention"><Records rows={rows} columns={["opportunityNo","name","customerName","endUserName","stage","expectedValue","expectedClose","salesOwnerName","nextAction"]} onOpen={r=>open(Number(r.id))} onEdit={write?setEdit:undefined} page={list.data} onPage={setPage} onPageSize={size=>{setPageSize(size);setPage(1);}}/></Panel>}
     {mode==="crm-pipeline"&&!rows.length&&!list.loading?<Panel flush><EmptyState icon="folder" title="CRM.empty" message="CRM.emptyHint"/></Panel>:null}{edit?<OpportunityEditor bootstrap={bootstrap} options={options} initial={edit} onClose={()=>setEdit(null)} onSaved={()=>list.refresh()}/>:null}{createStage?<OpportunityEditor bootstrap={bootstrap} options={options} defaultStage={createStage} onClose={()=>setCreateStage(null)} onSaved={r=>{setCreateStage(null);open(Number(r.id));}}/>:null}</>;
 }
 
