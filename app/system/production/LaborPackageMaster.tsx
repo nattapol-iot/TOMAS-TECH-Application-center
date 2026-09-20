@@ -18,10 +18,13 @@ const messageOf = (error: unknown) => error instanceof Error ? error.message : "
 const unavailableMessage = (error: unknown) => error instanceof ApiClientError && error.code === "labor_packages_unavailable" ? error.message : null;
 const statusTone = (status: string): "green" | "amber" | "slate" => status === "Active" ? "green" : status === "Draft" ? "amber" : "slate";
 
-export function LaborPackageMaster({ bootstrap, initialPackageId, onClose }: {
+export function LaborPackageMaster({ bootstrap, initialPackageId, onClose, onBack }: {
   bootstrap: BootstrapData;
   initialPackageId?: number;
   onClose?: () => void;
+  /* Set when the screen was opened from somewhere the person expects to
+     return to, rather than as a destination of its own. */
+  onBack?: () => void;
 }) {
   const { lang } = useLanguage();
   const t = useCallback((key: string) => lang === "TH" ? LABOR_PACKAGE_COPY[key]?.th ?? key : lang === "JP" ? LABOR_PACKAGE_COPY[key]?.jp ?? key : key, [lang]);
@@ -170,6 +173,7 @@ export function LaborPackageMaster({ bootstrap, initialPackageId, onClose }: {
 
 const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : value === "Retired" ? "Retired" : "Draft");
   const close = () => { if (!dirty || window.confirm(t("Discard unsaved changes?"))) onClose?.(); };
+  const back = () => { if (!dirty || window.confirm(t("Discard unsaved changes?"))) onBack?.(); };
   const help = <details className="labor-guide">
     <summary><Icon name="book" />{t("How to create and use a package")}<Icon name="chevronDown" /></summary>
     <ol>{[
@@ -184,6 +188,7 @@ const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : v
       {permission.canPublish ? <button className="btn primary" type="button" disabled={saving || installing} onClick={() => setShowInstallConfirm(true)}><Icon name="layers" />{t("Install standard library")}</button> : null}
       <button className="btn default" type="button" disabled={saving || installing || loadingDetail} onClick={refresh}><Icon name="refresh" />{t("Refresh")}</button>
     </>} /> : null}
+    {onBack ? <div className="labor-back"><button className="btn ghost sm" type="button" disabled={saving} onClick={back}><Icon name="chevronLeft" />{t("Back to the library")}</button></div> : null}
     {error ? <div className="info-strip red" role="alert"><Icon name="alertCircle" /><span>{error}</span></div> : null}
     {listError ? <div className="info-strip red" role="alert">{listError}<button type="button" className="btn ghost" onClick={refresh}>{t("Refresh")}</button></div> : null}
     {success ? <div className="info-strip green" role="status"><Icon name="checkCircle" /><span>{success}</span></div> : null}
@@ -214,7 +219,7 @@ const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : v
         {total > PAGE_SIZE ? <Pagination page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} from={total ? (page - 1) * PAGE_SIZE + 1 : 0} to={Math.min(page * PAGE_SIZE, total)} total={total} onPage={setPage} /> : null}
       </section>
       <div className="labor-detail">
-        <Panel title={copying ? t("New draft copy") : selected?.name ?? t("Package details")} actions={onClose ? <button className="btn ghost sm" type="button" disabled={saving} onClick={close}>{t("Close")}</button> : undefined}>
+        <Panel title={copying ? t("New draft copy") : selected?.name ?? t("Package details")} actions={onClose && !onBack ? <button className="btn ghost sm" type="button" disabled={saving} onClick={close}>{t("Close")}</button> : undefined}>
           {loadingDetail ? <div className="empty" role="status"><span className="spinner" />{t("Loading details…")}</div> : !draft ? <div className="labor-start"><span className="labor-start-icon"><Icon name="layers" /></span><h2>{t("Select a package to get started")}</h2><p>{t("Choose a package from the list to review its activities, edit a draft or make a copy.")}</p></div> : <>
             <div className="labor-detail-meta"><Badge tone={statusTone(copying ? "Draft" : selected?.status ?? "Draft")}>{labelStatus(copying ? "Draft" : selected?.status ?? "Draft")}</Badge><span className="mono">{draft.code}</span>{selected && !copying ? <span>{t("Revision")} {selected.revision}</span> : null}{dirty ? <span className="labor-unsaved" role="status">{t("Unsaved changes")}</span> : null}</div>
             <div className="labor-next-step"><Icon name={selected?.status === "Active" && !copying ? "checkCircle" : "alertCircle"} /><p>{t(!copying && selected?.status === "Active" ? "This package is ready to use. Make a draft copy to change it." : !copying && selected?.status === "Retired" ? "This package is retired and is available for reference only." : "Review the activities, then save your draft or publish it for the team.")}</p></div>

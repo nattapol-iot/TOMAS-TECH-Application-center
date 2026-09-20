@@ -1,75 +1,243 @@
-.labor-master { --labor-border: var(--n-200, #dfe5ed); }
-.labor-install-confirm { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 0 0 16px; padding: 16px 18px; border: 1px solid #f0c36a; border-radius: 10px; background: #fff9e8; box-shadow: var(--shadow-sm); }
-.labor-install-confirm strong { display: block; margin-bottom: 4px; color: var(--text); }
-.labor-install-confirm p { margin: 0; color: var(--muted, #64748b); line-height: 1.5; }
-.labor-install-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.labor-guide { margin: 0 0 20px; border: 1px solid var(--labor-border); border-radius: 10px; background: var(--surface, #fff); }
-.labor-guide summary { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; color: var(--navy, #173c61); font-weight: 600; list-style: none; }
+/* Labor Package Master.
+
+   A master-detail screen that also runs inside a modal, so it has to work at
+   two heights: on its own page the body scrolls, and in the dialog the two
+   panes scroll independently while the dialog itself stays put.
+
+   Everything here is a shape the shared system has no component for. Colour,
+   type and radius come from the tokens in globals.css — this module used to
+   carry its own navy, its own greys and its own px scale, which is why it read
+   as a different product from the screen that opens it. */
+
+.labor-master { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.labor-back { display: flex; }
+
+/* ---- Install the starter library ------------------------------------- */
+
+.labor-install-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  color: var(--amber-text);
+}
+.labor-install-confirm strong { display: block; margin-bottom: 3px; color: var(--ink); font-size: var(--fs-sm); }
+.labor-install-confirm p { margin: 0; font-size: var(--fs-xs); line-height: 1.55; }
+.labor-install-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* ---- The collapsible how-to ------------------------------------------ */
+
+.labor-guide { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.labor-guide summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
 .labor-guide summary::-webkit-details-marker { display: none; }
-.labor-guide summary > .icon:last-child { margin-left: auto; }
+.labor-guide summary > .icon:last-child { margin-left: auto; color: var(--muted); }
 .labor-guide[open] summary > .icon:last-child { transform: rotate(180deg); }
-.labor-guide ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; padding: 8px 18px 20px; list-style: none; }
-.labor-guide li { display: flex; gap: 12px; }
-.labor-step { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 50%; color: var(--blue); background: var(--blue-soft); font-weight: 700; }
-.labor-guide p { margin: 6px 0 0; color: var(--muted, #64748b); line-height: 1.6; }
-.labor-workspace { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
-.labor-library { background: var(--surface, #fff); border: 1px solid var(--labor-border); border-radius: 10px; overflow: hidden; }
-.labor-library-tools { padding: 16px; border-bottom: 1px solid var(--labor-border); }
+.labor-guide ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0;
+  padding: 4px 14px 16px;
+  list-style: none;
+}
+.labor-guide li { display: flex; gap: 10px; }
+.labor-guide li strong { font-size: var(--fs-sm); }
+.labor-guide p { margin: 4px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.55; }
+.labor-step {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}
+
+/* ---- Master / detail -------------------------------------------------- */
+
+.labor-workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  min-height: 0;
+}
+
+.labor-library {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+.labor-library-tools { flex: none; padding: 12px; border-bottom: 1px solid var(--line); }
 .labor-library-tools .search-field { width: 100%; min-width: 0; }
-.labor-status-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 12px; }
-.labor-status-filters button { padding: 7px 10px; border: 1px solid transparent; border-radius: 6px; background: var(--n-50, #f4f6f9); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
-.labor-status-filters button.is-active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); font-weight: 600; }
-.labor-result-count { font-size: 12px; color: var(--muted, #64748b); }
-.labor-package-list { list-style: none; padding: 10px; margin: 0; max-height: 660px; overflow-y: auto; }
-.labor-package-list li + li { margin-top: 8px; }
-.labor-package-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; width: 100%; text-align: left; border: 1px solid var(--labor-border); border-radius: 8px; background: var(--surface, #fff); color: inherit; font: inherit; cursor: pointer; }
-.labor-package-card:hover { background: var(--blue-soft); }
+.labor-status-filters { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 8px; }
+.labor-status-filters button {
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--n-50);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: 550;
+  cursor: pointer;
+}
+.labor-status-filters button:hover { background: var(--n-100); }
+.labor-status-filters button.is-active { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); font-weight: 650; }
+.labor-result-count { color: var(--muted); font-size: var(--fs-2xs); }
+
+.labor-package-list { flex: 1; list-style: none; margin: 0; padding: 8px; min-height: 0; overflow-y: auto; }
+.labor-package-list li + li { margin-top: 6px; }
+
+/* A card names one package: what state it is in, what it is called, and how
+   much work it carries. The code is the line people search by, so it stays
+   readable rather than shrinking away. */
+.labor-package-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.labor-package-card:hover { border-color: var(--n-300); background: var(--n-25); }
 .labor-package-card.is-selected { border-color: var(--blue); background: var(--blue-soft); box-shadow: inset 3px 0 var(--blue); }
-.labor-package-card:disabled { cursor: wait; opacity: .65; }
-.labor-card-top, .labor-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
-.labor-card-name { font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; color: var(--navy, #173c61); }
-.labor-card-code { font-size: 11px; color: var(--muted, #64748b); overflow-wrap: anywhere; }
-.labor-card-meta { margin-top: 5px; color: var(--muted, #64748b); }
-.labor-detail { min-width: 0; }
-.labor-detail > .panel { border-radius: 10px; }
-.labor-detail-meta, .labor-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--muted, #64748b); font-size: 12px; }
-.labor-detail-meta { margin-bottom: 16px; }
-.labor-unsaved { color: #946200; margin-left: auto; }
-.labor-next-step { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; background: var(--blue-soft); color: var(--navy, #173c61); border-radius: 8px; margin-bottom: 22px; }
-.labor-next-step .icon { flex-shrink: 0; margin-top: 3px; }
-.labor-next-step p { margin: 0; line-height: 1.6; }
-.labor-information h3, .labor-activities h3 { font-size: 14px; margin: 0 0 12px; color: var(--navy, #173c61); }
-.labor-description { line-height: 1.7; margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.labor-scope span { padding: 5px 9px; background: var(--n-50, #f4f6f9); border-radius: 5px; }
-.labor-activities { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--labor-border); }
-.labor-section-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.labor-section-heading > span { font-size: 12px; color: var(--muted, #64748b); }
-.labor-activities > p { font-size: 12px; margin: 0 0 14px; }
-.labor-activities .table-wrap { margin: 0; max-height: 520px; }
-.labor-activities table { min-width: 580px; }
-.labor-activities th:first-child { width: 42%; }
-.labor-activities th:nth-child(2) { width: 80px; }
-.labor-activities th:nth-child(3) { width: 105px; }
-.labor-activities th:last-child { width: 140px; }
-.labor-activities td { vertical-align: top; padding-block: 14px; }
-.labor-activities small { display: block; padding-top: 5px; color: var(--muted, #64748b); font-size: 11px; }
-.labor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 18px; margin-top: 20px; border-top: 1px solid var(--labor-border); }
-.labor-start { max-width: 470px; margin: auto; padding: 54px 24px 64px; text-align: center; }
-.labor-start-icon { display: inline-flex; padding: 18px; border-radius: 14px; background: var(--blue-soft); color: var(--blue); font-size: 24px; }
-.labor-start h2 { margin: 20px 0 10px; font-size: 19px; }
-.labor-start p { margin: 0; line-height: 1.7; color: var(--muted, #64748b); }
-.labor-master button:focus-visible, .labor-guide summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.labor-package-card:disabled { cursor: wait; opacity: 0.65; }
+.labor-card-top,
+.labor-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-2xs); }
+.labor-card-top { color: var(--muted); }
+.labor-card-name { color: var(--ink); font-size: var(--fs-sm); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.labor-card-code { color: var(--muted); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.labor-card-meta { margin-top: 2px; color: var(--muted); }
+.labor-card-meta .icon { flex: none; }
+
+.labor-detail { display: flex; min-width: 0; min-height: 0; }
+.labor-detail > .panel { flex: 1; min-height: 0; border-radius: var(--r-md); }
+
+.labor-detail-meta,
+.labor-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-2xs); }
+.labor-detail-meta { margin-bottom: 12px; }
+.labor-unsaved { margin-left: auto; color: var(--amber-text); font-weight: 600; }
+
+.labor-next-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-md);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-size: var(--fs-xs);
+}
+.labor-next-step .icon { flex: none; margin-top: 1px; }
+.labor-next-step p { margin: 0; line-height: 1.55; }
+
+.labor-information h3,
+.labor-activities h3 { margin: 0 0 8px; color: var(--ink); font-size: var(--fs-sm); font-weight: 650; }
+.labor-description { margin: 0 0 10px; font-size: var(--fs-sm); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.labor-scope span { padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--n-50); color: var(--ink-soft); }
+
+.labor-activities { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.labor-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.labor-section-heading > span { color: var(--muted); font-size: var(--fs-2xs); }
+.labor-activities > p { margin: 0 0 10px; font-size: var(--fs-xs); }
+.labor-activities .table-wrap { margin: 0; max-height: 46vh; border: 1px solid var(--line); border-radius: var(--r-md); }
+.labor-activities table { min-width: 560px; }
+.labor-activities th:first-child { width: auto; }
+.labor-activities th:nth-child(2) { width: 88px; }
+.labor-activities th:nth-child(3) { width: 132px; }
+.labor-activities th:last-child { width: 150px; }
+
+/* `.sheet` strips cell padding so an input can fill the cell edge to edge.
+   This table shows text far more often than it shows an input, and with no
+   horizontal padding the figures sat flat against the column rules — a number
+   in one column touching a word in the next. Padding comes back, and the input
+   loses the inset it no longer needs. */
+.labor-activities tbody td { padding: 9px 11px; vertical-align: top; }
+.labor-activities tbody td > strong { font-size: var(--fs-sm); }
+.labor-activities tbody td .cell-primary { margin-top: 2px; }
+.labor-activities tbody td .cell-primary span { font-size: var(--fs-2xs); }
+.labor-activities tbody td > input,
+.labor-activities tbody td > select { height: 28px; border-color: var(--line); border-radius: var(--r-xs); background: var(--surface); }
+/* The unit belongs to the figure above it, not to the next row. */
+.labor-activities small { display: block; padding-top: 2px; color: var(--muted); font-size: var(--fs-3xs); }
+
+.labor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.labor-actions > [role="status"] { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; color: var(--muted); font-size: var(--fs-xs); }
+
+.labor-start { max-width: 420px; margin: auto; padding: 40px 20px 48px; text-align: center; }
+.labor-start-icon { display: inline-flex; padding: 14px; border-radius: var(--r-lg); background: var(--blue-soft); color: var(--blue); font-size: 22px; }
+.labor-start h2 { margin: 14px 0 6px; font-size: var(--fs-lg); font-weight: 650; }
+.labor-start p { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.6; }
+
+.labor-master button:focus-visible,
+.labor-guide summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---- Inside the dialog ------------------------------------------------ */
+
+/* The dialog gives the screen a fixed height, so the two panes divide it and
+   scroll on their own. Without this the modal body scrolled as well and every
+   pane carried a second scrollbar inside the first. */
+.overlay-body > .labor-master { flex: 1; min-height: 0; }
+/* A floor under the two panes: when a run of strips pushes the chrome down,
+   the dialog body scrolls rather than crushing them to nothing. */
+.overlay-body > .labor-master .labor-workspace { flex: 1; min-height: 360px; align-items: stretch; }
+.overlay-body > .labor-master .labor-detail > .panel { display: flex; flex-direction: column; overflow: hidden; }
+.overlay-body > .labor-master .labor-detail > .panel > .panel-body { overflow-y: auto; }
+.overlay:has(.labor-master) .overlay-body { display: flex; flex-direction: column; }
+
 @media (max-width: 1180px) {
   .labor-workspace { grid-template-columns: minmax(0, 1fr); }
-  .labor-package-list { max-height: 330px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .labor-package-list { max-height: 320px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; align-content: start; }
   .labor-package-list li + li { margin-top: 0; }
   .labor-package-card { height: 100%; }
+  .overlay-body > .labor-master .labor-workspace { flex: none; min-height: 0; }
+  .overlay:has(.labor-master) .overlay-body { display: block; }
 }
+
 @media (max-width: 700px) {
-  .labor-install-confirm { align-items: stretch; flex-direction: column; }
+  .labor-install-confirm { flex-direction: column; align-items: stretch; }
   .labor-install-actions { justify-content: flex-end; }
-  .labor-guide ol { grid-template-columns: 1fr; gap: 16px; }
+  .labor-guide ol { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .labor-detail-meta .mono { overflow-wrap: anywhere; }
   .labor-actions > button { flex: 1 1 auto; }
-  .labor-start { padding: 30px 12px; }
+  .labor-start { padding: 28px 12px; }
 }

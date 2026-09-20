@@ -296,6 +296,10 @@ export const LABOR_PACKAGE_COPY: Record<string, { th: string; jp: string }> = {
     "th": "ข้อมูลที่กรอกยังอยู่ กดรีเฟรชเพื่อตรวจสอบฉบับล่าสุด",
     "jp": "入力内容は保持されています。更新して最新版を確認してください。"
   },
+  "Back to the library": {
+    "th": "กลับไปที่คลัง",
+    "jp": "ライブラリに戻る"
+  },
   "Copy": {
     "th": "สำเนา",
     "jp": "コピー"
