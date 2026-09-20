@@ -109,7 +109,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   { items: [
     { view: "dashboard", label: "Dashboard", icon: "grid" },
     { view: "my-work", label: "My Work", icon: "user", anyPermissions: ["schedule.progress", "crm.read"] },
-    { view: "inquiries", label: "รับ RFQ / ส่งประเมินราคา", icon: "inbox", permission: "inquiry.read" },
+    { view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" },
     { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
     { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
     { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
@@ -118,7 +118,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "crm-dashboard", label: "CRM Dashboard", icon: "grid", permission: "crm.read" },
     { view: "crm-customers", label: "CRM Customers", icon: "users", permission: "crm.read" },
     { view: "crm-contacts", label: "CRM Contacts", icon: "user", permission: "crm.read" },
-    { view: "crm-opportunities", label: "โอกาสขาย / ก่อนรับ RFQ", icon: "folder", permission: "crm.read" },
+    { view: "crm-opportunities", label: "CRM Opportunities", icon: "folder", permission: "crm.read" },
     { view: "crm-activities", label: "CRM Activities", icon: "calendar", permission: "crm.read" },
     { view: "crm-pipeline", label: "CRM Pipeline", icon: "chart", permission: "crm.read" },
 

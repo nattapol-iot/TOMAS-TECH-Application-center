@@ -42,6 +42,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Report & Track Issues": { th: "แจ้งปัญหาและติดตาม", jp: "問題の報告と追跡" },
   "Dashboard": { th: "แดชบอร์ด", jp: "ダッシュボード" },
   "Inquiry": { th: "งานสอบถามราคา", jp: "引合" },
+  "RFQ intake & estimating": { th: "รับ RFQ / ส่งประเมินราคา", jp: "RFQ受付・見積提出" },
+  "Last updated": { th: "อัปเดตล่าสุด", jp: "最終更新" },
   "Estimate Cost": { th: "ประมาณการต้นทุน", jp: "見積原価" },
   "Price Library": { th: "คลังราคา", jp: "価格ライブラリ" },
   "Supplier Quotation": { th: "ใบเสนอราคาผู้ขาย", jp: "仕入先見積" },
