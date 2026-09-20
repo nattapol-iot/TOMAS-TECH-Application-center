@@ -7,7 +7,7 @@ export function estimateIssueTab(issue: { code: string; entityType: string }): "
   return "validation";
 }
 
-export type EstimateNextActionKind = "resolve-blockers" | "add-cost" | "add-effort" | "submit-review" | "approve" | "review-warnings" | "review-summary";
+export type EstimateNextActionKind = "resolve-blockers" | "address-revision" | "add-cost" | "add-effort" | "submit-review" | "approve" | "review-warnings" | "review-summary";
 
 export function estimateNextAction(input: {
   criticalCount: number;
@@ -18,8 +18,13 @@ export function estimateNextAction(input: {
   canEditManhour: boolean;
   canSubmit: boolean;
   canApprove: boolean;
-}): { kind: EstimateNextActionKind; tab: "summary" | "cost" | "manhour" | "validation" | "review" } {
+  /* A reviewer sending an estimate back is the most specific instruction the
+     estimator can be given, and it lives in the workflow status rather than in
+     any validation rule — which is why this function could not see it before. */
+  status: string;
+}): { kind: EstimateNextActionKind; tab: "summary" | "cost" | "manhour" | "validation" | "revision" | "review" } {
   if (input.criticalCount > 0) return { kind: "resolve-blockers", tab: "validation" };
+  if (input.status === "Revision Required") return { kind: "address-revision", tab: "revision" };
   if (input.costItemCount === 0 && input.canEditCostItems) return { kind: "add-cost", tab: "cost" };
   if (input.manhourLineCount === 0 && input.canEditManhour) return { kind: "add-effort", tab: "manhour" };
   if (input.canApprove) return { kind: "approve", tab: "review" };

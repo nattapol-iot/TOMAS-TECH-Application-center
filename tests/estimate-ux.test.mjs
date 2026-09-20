@@ -11,6 +11,7 @@ const nextAction = (overrides = {}) => estimateNextAction({
   canEditManhour: true,
   canSubmit: false,
   canApprove: false,
+  status: "Engineering Input",
   ...overrides,
 });
 
@@ -34,6 +35,16 @@ test("estimate next action uses workflow capability before advisory warnings", (
   assert.deepEqual(nextAction({ warningCount: 8, canSubmit: true }), { kind: "submit-review", tab: "review" });
   assert.deepEqual(nextAction({ warningCount: 8, canApprove: true }), { kind: "approve", tab: "review" });
   assert.deepEqual(nextAction({ warningCount: 8 }), { kind: "review-warnings", tab: "validation" });
+});
+
+test("an estimate sent back points at the reviewer's note before anything else", () => {
+  // A reviewer's instruction outranks every rule the system noticed on its own,
+  // including the submit prompt that used to be identical to a clean draft's.
+  assert.deepEqual(nextAction({ status: "Revision Required", canSubmit: true }), { kind: "address-revision", tab: "revision" });
+  assert.deepEqual(nextAction({ status: "Revision Required", warningCount: 9, canSubmit: true }), { kind: "address-revision", tab: "revision" });
+  assert.deepEqual(nextAction({ status: "Revision Required", costItemCount: 0, manhourLineCount: 0 }), { kind: "address-revision", tab: "revision" });
+  // Blockers still win: they stop the submission outright.
+  assert.deepEqual(nextAction({ status: "Revision Required", criticalCount: 1 }), { kind: "resolve-blockers", tab: "validation" });
 });
 
 test("read-only estimates do not direct users to add missing lines", () => {

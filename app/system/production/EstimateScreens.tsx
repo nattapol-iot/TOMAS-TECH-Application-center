@@ -864,18 +864,32 @@ function EstimateNextSteps({ workspace, busy, onOpen, onSubmit }: { workspace: E
   const { capabilities } = workspace;
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
   const warningCount = workspace.validationIssues.length - criticalCount;
-  const action = estimateNextAction({ criticalCount, warningCount, costItemCount: workspace.costItems.length, manhourLineCount: workspace.manhourLines.length, canEditCostItems: capabilities.canEditCostItems, canEditManhour: capabilities.canEditManhour, canSubmit: capabilities.canSubmit, canApprove: capabilities.canApprove });
+  const action = estimateNextAction({ criticalCount, warningCount, costItemCount: workspace.costItems.length, manhourLineCount: workspace.manhourLines.length, canEditCostItems: capabilities.canEditCostItems, canEditManhour: capabilities.canEditManhour, status: workspace.header.status, canSubmit: capabilities.canSubmit, canApprove: capabilities.canApprove });
   const content = {
+    "address-revision": [copy("แก้ตามที่ผู้ตรวจส่งกลับ", "Address what the reviewer sent back", "差し戻し内容に対応"), copy("เปิด Revision Control เพื่ออ่านเหตุผลฉบับเต็ม", "Open Revision Control for the full note", "改訂管理で差し戻し理由を確認")],
     "resolve-blockers": [copy(`แก้ ${criticalCount} รายการที่ปิดกั้นการส่งตรวจ`, `Resolve ${criticalCount} submission blocker(s)`, `送信を妨げる${criticalCount}件を修正`), copy("เปิด Validation เพื่อไปยังรายการที่ต้องแก้", "Open Validation and go directly to the affected lines.", "Validationから対象明細を開きます。")],
     "add-cost": [copy("เพิ่มรายการต้นทุนรายการแรก", "Add the first cost item", "最初の原価明細を追加"), copy("เริ่มจากอุปกรณ์ ซอฟต์แวร์ หรือใช้ Template", "Start with equipment, software or a template.", "機器、ソフトウェア、テンプレートから開始します。")],
     "add-effort": [copy("เพิ่มค่าแรงวิศวกรรม", "Add engineering effort", "技術工数を追加"), copy("ระบุงาน จำนวนคน และวันทำงานก่อนตรวจความพร้อม", "Add the activity, staffing and work days before validation.", "作業、人数、日数を入力してから確認します。")],
-    "submit-review": [copy("ส่ง Estimate ให้ Engineering Review", "Submit for Engineering Review", "技術レビューへ送信"), copy("ไม่มีข้อผิดพลาดที่ปิดกั้น สามารถตรวจสรุปแล้วส่งได้", "No blocking errors remain. Review the totals and submit.", "重大エラーはありません。合計を確認して送信できます。")],
+    "submit-review": [copy("ส่ง Estimate ให้ Engineering Review", "Submit for Engineering Review", "技術レビューへ送信"), warningCount
+      ? copy(`มีคำเตือน ${warningCount} รายการที่ยังไม่ได้ตรวจ ซึ่งไม่ปิดกั้นการส่ง`, `${warningCount} advisory warning(s) are still open. They do not block submission.`, `未確認の注意事項が${warningCount}件あります。送信は妨げられません。`)
+      : copy("ไม่มีข้อผิดพลาดที่ปิดกั้น สามารถตรวจสรุปแล้วส่งได้", "No blocking errors remain. Review the totals and submit.", "重大エラーはありません。合計を確認して送信できます。")],
     approve: [copy("ตรวจและอนุมัติ Estimate", "Review and approve the Estimate", "見積を確認して承認"), copy("ตรวจยอดต้นทุนและคำเตือนก่อนอนุมัติ", "Review totals and advisory warnings before approval.", "承認前に合計と注意事項を確認します。")],
     "review-warnings": [copy(`ตรวจคำเตือน ${warningCount} รายการ`, `Review ${warningCount} advisory warning(s)`, `${warningCount}件の注意事項を確認`), copy("คำเตือนไม่ปิดกั้น workflow แต่ควรตรวจความถูกต้อง", "Warnings do not block workflow, but should be checked.", "注意事項は処理を妨げませんが、確認してください。")],
     "review-summary": [copy("ตรวจสรุป Estimate", "Review the Estimate summary", "見積サマリーを確認"), copy("ข้อมูลปัจจุบันไม่มีงานที่ระบบระบุว่าต้องแก้", "There is no system-identified action for the current state.", "現在、システムが要求する修正はありません。")],
   } as const;
   const [title, subtitle] = content[action.kind];
+  const sentBack = action.kind === "address-revision"
+    ? [...workspace.revisionHistory].reverse().find((entry) => entry.reason || entry.description) ?? null
+    : null;
   return <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
+    {sentBack ? <div className="info-strip amber" style={{ marginBottom: 12 }}>
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>{sentBack.reason || copy("ส่งกลับให้แก้ไข", "Sent back for revision", "差し戻し")}</strong>
+        {sentBack.description ? <> — {sentBack.description}</> : null}
+        {sentBack.reviewedByName ? <> · {sentBack.reviewedByName}</> : null}
+      </span>
+    </div> : null}
     {action.kind === "submit-review"
       ? <button className="btn primary" type="button" disabled={busy} onClick={onSubmit}><Icon name="send" />{title}</button>
       : <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}><Icon name="arrowRight" />{title}</button>}
