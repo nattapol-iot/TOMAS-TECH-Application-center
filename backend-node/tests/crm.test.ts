@@ -17,6 +17,11 @@ test("quick creation needs only customer, name and sales owner; no next action i
  const value=opportunityInput(base,true);assert.equal(value.expectedValue,null);assert.equal(value.stage,"NEW");
  for(const change of [{name:""},{customerId:0},{salesOwnerId:0}])assert.throws(()=>opportunityInput({...base,...change},true),ApiError);
 });
+test("opportunity accepts an optional end user from the shared customer master",()=>{
+ assert.equal(opportunityInput(base,true).endUserCustomerId,null);
+ assert.equal(opportunityInput({...base,endUserCustomerId:42},true).endUserCustomerId,42);
+ for(const endUserCustomerId of [0,-1,1.5,"invalid"])assert.throws(()=>opportunityInput({...base,endUserCustomerId},true),ApiError);
+});
 test("stable stages and Lost reason rules",()=>{
  for(const stage of CRM_STAGES) if(stage!=="LOST")assert.equal(opportunityInput({...base,stage},true).stage,stage);
  for(const change of [{stage:"LOST"},{stage:"LOST",lostReason:"Other"},{stage:"Unknown"}])assert.throws(()=>opportunityInput({...base,...change},true),ApiError);

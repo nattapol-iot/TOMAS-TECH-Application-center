@@ -303,7 +303,7 @@ export function registerInquiryRoutes(
         const refs=(await q.query("SELECT (SELECT name FROM dbo.customer_site_contacts WHERE id=@contact) contact_name,(SELECT name FROM dbo.users WHERE id=@sales) sales_name,(SELECT address FROM dbo.customer_sites WHERE id=@site) site_address")).recordset[0]!;
         return {...opportunity,...refs};
       });
-      Object.assign(body,{customerId:Number(source.customer_id),contact:source.contact_name??"",projectName:source.name,salesOwner:source.sales_name,requirement:source.need,scopeSummary:source.scope,siteLocation:source.site_address??"",priority:source.priority});
+      Object.assign(body,{customerId:Number(source.customer_id),endUserCustomerId:source.end_user_customer_id==null?null:Number(source.end_user_customer_id),contact:source.contact_name??"",projectName:source.name,salesOwner:source.sales_name,requirement:source.need,scopeSummary:source.scope,siteLocation:source.site_address??"",priority:source.priority});
       if(source.technical_owner_id) body.estimateOwnerId=Number(source.technical_owner_id);
       body.projectProbability ??= Number(source.probability??50);body.customerInterestGrade ??="B";
     }

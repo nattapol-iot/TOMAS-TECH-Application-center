@@ -9,7 +9,7 @@ import { ApiError } from "../errors.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredText, requiredInteger } from "../http.js";
 import { CRM_SCOPE, CRM_READ_JOINS, CRM_NEEDS_FOLLOWUP, CRM_ACTIVITY_TYPES, crmAccess, bindAccess, scopedOpportunity, crmDto, opportunityInput, validateCrmReferences, followupInput, crmAttention, crmText, crmId, crmChoice, type CrmRow } from "../crm.js";
 
-const inputFields = { name:sql.NVarChar(300), customerId:sql.BigInt, siteId:sql.BigInt, contactId:sql.BigInt, salesOwnerId:sql.BigInt, technicalOwnerId:sql.BigInt, source:sql.NVarChar(40), need:sql.NVarChar(sql.MAX), scope:sql.NVarChar(sql.MAX), expectedValue:sql.Decimal(19,4), expectedClose:sql.Date, stage:sql.NVarChar(40), probability:sql.Int, competitor:sql.NVarChar(300), priority:sql.NVarChar(20), lostReason:sql.NVarChar(40), lostDetail:sql.NVarChar(2000), internalNote:sql.NVarChar(sql.MAX) };
+const inputFields = { name:sql.NVarChar(300), customerId:sql.BigInt, endUserCustomerId:sql.BigInt, siteId:sql.BigInt, contactId:sql.BigInt, salesOwnerId:sql.BigInt, technicalOwnerId:sql.BigInt, source:sql.NVarChar(40), need:sql.NVarChar(sql.MAX), scope:sql.NVarChar(sql.MAX), expectedValue:sql.Decimal(19,4), expectedClose:sql.Date, stage:sql.NVarChar(40), probability:sql.Int, competitor:sql.NVarChar(300), priority:sql.NVarChar(20), lostReason:sql.NVarChar(40), lostDetail:sql.NVarChar(2000), internalNote:sql.NVarChar(sql.MAX) };
 const column = (name: string) => name.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 function stale(row: CrmRow, version: unknown) {
   if (!(row.row_version as Buffer).equals(parseRowVersion(version))) throw new ApiError(409,"concurrency_conflict","This record changed. Refresh before saving.");
@@ -68,10 +68,10 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
   app.get("/api/v1/crm/opportunities",async request=>{
     const actor=await crmAccess(database,users,request), query=request.query as Record<string,string>;
     const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1, size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):30;
-    const result=await database.query<CrmRow>(`SELECT o.*,c.name customer_name,c.code customer_code,s.name sales_owner_name,t.name technical_owner_name,
+    const result=await database.query<CrmRow>(`SELECT o.*,c.name customer_name,c.code customer_code,eu.name end_user_name,eu.code end_user_code,s.name sales_owner_name,t.name technical_owner_name,
       opt.quiet_days,a.last_activity,f.action next_action,f.due_date next_due,f.status next_status,f.owner_id next_owner_id,
       ed.estimate_due,COUNT(*) OVER() total_count
-      FROM dbo.crm_opportunities o JOIN dbo.customers c ON c.id=o.customer_id JOIN dbo.users s ON s.id=o.sales_owner_id
+      FROM dbo.crm_opportunities o JOIN dbo.customers c ON c.id=o.customer_id LEFT JOIN dbo.customers eu ON eu.id=o.end_user_customer_id JOIN dbo.users s ON s.id=o.sales_owner_id
       LEFT JOIN dbo.users t ON t.id=o.technical_owner_id LEFT JOIN dbo.crm_options opt ON opt.kind='stage' AND opt.code=o.stage
       OUTER APPLY(SELECT MAX(occurred_at) last_activity FROM dbo.crm_activities WHERE opportunity_id=o.id) a
       OUTER APPLY(SELECT TOP(1) action,due_date,status,owner_id FROM dbo.crm_followups WHERE opportunity_id=o.id AND status NOT IN('Done','Cancelled') ORDER BY due_date,id) f
@@ -83,7 +83,7 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
          OR (@attention='NeedsFollowup' AND ${CRM_NEEDS_FOLLOWUP}) OR (@attention='NoNextAction' AND f.action IS NULL)
          OR (@attention='NoActivity' AND a.last_activity IS NULL) OR (@attention='EstimateDueSoon' AND ed.estimate_due<=DATEADD(day,3,@today)))))
       AND (@owner IS NULL OR o.sales_owner_id=@owner OR o.technical_owner_id=@owner) AND (@year IS NULL OR YEAR(o.created_at)=@year)
-      AND (@search=N'' OR o.name LIKE @search OR o.opportunity_no LIKE @search OR c.name LIKE @search OR c.code LIKE @search OR s.name LIKE @search OR t.name LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co WHERE co.id=o.contact_id AND co.name LIKE @search))
+      AND (@search=N'' OR o.name LIKE @search OR o.opportunity_no LIKE @search OR c.name LIKE @search OR c.code LIKE @search OR eu.name LIKE @search OR eu.code LIKE @search OR s.name LIKE @search OR t.name LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co WHERE co.id=o.contact_id AND co.name LIKE @search))
       ORDER BY ${query.sort === "close" ? "o.expected_close" : "o.updated_at DESC"},o.id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,q=>{
         bindAccess(q,actor).input("customer",sql.BigInt,crmId(query.customerId,"Customer")).input("owner",sql.BigInt,crmId(query.ownerId,"Owner"))
           .input("attention",sql.NVarChar(40),query.attention??"").input("today",sql.Date,today())

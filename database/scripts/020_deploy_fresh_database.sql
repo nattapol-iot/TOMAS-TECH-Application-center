@@ -115,11 +115,12 @@ GO
 :r database/migrations/051_additional_application_roles.sql
 :r database/migrations/052_support_email_notification.sql
 :r database/migrations/053_crm.sql
+:r database/migrations/054_crm_end_user.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 53) <> 53
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 54) <> 54
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -144,7 +145,8 @@ IF EXISTS (
         (41, N'Admin-managed primary user roles with audited least-privilege writes'),
         (42, N'Guard estimate aggregates within supported decimal precision'),
         (43, N'Revision-scoped Estimate ERP cost classifications'),
-        (53, N'CRM opportunities and customer follow-up')
+        (53, N'CRM opportunities and customer follow-up'),
+        (54, N'CRM opportunity end user company')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

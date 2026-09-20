@@ -31,7 +31,7 @@ export const CRM_READ_JOINS = `FROM dbo.crm_opportunities o
 export const CRM_NEEDS_FOLLOWUP = `(o.stage NOT IN('WON','LOST','ON_HOLD') AND ((opt.quiet_days IS NOT NULL AND DATEDIFF(day,CASE WHEN o.stage='PROPOSAL' THEN o.stage_changed_at ELSE COALESCE(a.last_activity,o.created_at) END,@today)>=opt.quiet_days) OR (o.stage='ESTIMATING' AND ed.estimate_due<=DATEADD(day,3,@today))))`;
 export async function scopedOpportunity(q: sql.Request, id: number, lock = false): Promise<CrmRow> {
   q.input("id", sql.BigInt, id);
-  const row = (await q.query(`SELECT o.* FROM dbo.crm_opportunities o ${lock ? "WITH(UPDLOCK,HOLDLOCK)" : ""} WHERE o.id=@id AND ${CRM_SCOPE}`)).recordset[0];
+  const row = (await q.query(`SELECT o.*,eu.name end_user_name,eu.code end_user_code FROM dbo.crm_opportunities o ${lock ? "WITH(UPDLOCK,HOLDLOCK)" : ""} LEFT JOIN dbo.customers eu ON eu.id=o.end_user_customer_id WHERE o.id=@id AND ${CRM_SCOPE}`)).recordset[0];
   if (!row) throw new ApiError(404, "crm_not_found", "CRM record not found or unavailable.");
   return row;
 }
@@ -56,7 +56,7 @@ export function opportunityInput(body: CrmRow, commercial: boolean) {
     if (!Number.isFinite(value) || value < 0 || value > 99999999999999) throw new ApiError(400,"validation_failed","Expected value must be non-negative.");
   }
   return {
-    name: requiredText(body.name,300,"Opportunity name"), customerId: requiredInteger(body.customerId,"Customer",1),
+    name: requiredText(body.name,300,"Opportunity name"), customerId: requiredInteger(body.customerId,"Customer",1), endUserCustomerId: crmId(body.endUserCustomerId,"End user"),
     siteId: crmId(body.siteId,"Site"), contactId: crmId(body.contactId,"Contact"), salesOwnerId: requiredInteger(body.salesOwnerId,"Sales owner",1), technicalOwnerId: crmId(body.technicalOwnerId,"Technical owner"),
     source: crmText(body.source,40) || "DirectInquiry", need: crmText(body.need,20000), scope: crmText(body.scope,20000),
     expectedValue: value, expectedClose: parseDateOnly(body.expectedClose || null,"Expected close",true), stage,
@@ -88,10 +88,11 @@ export function crmAttention(row: CrmRow, today: string): string[] {
 }
 
 export async function validateCrmReferences(q: sql.Request, input: ReturnType<typeof opportunityInput>) {
-  q.input("customer",sql.BigInt,input.customerId).input("site",sql.BigInt,input.siteId).input("contact",sql.BigInt,input.contactId)
+  q.input("customer",sql.BigInt,input.customerId).input("endUser",sql.BigInt,input.endUserCustomerId).input("site",sql.BigInt,input.siteId).input("contact",sql.BigInt,input.contactId)
     .input("sales",sql.BigInt,input.salesOwnerId).input("technical",sql.BigInt,input.technicalOwnerId)
     .input("source",sql.NVarChar(40),input.source).input("lost",sql.NVarChar(40),input.lostReason);
   const r = (await q.query(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.customers WHERE id=@customer AND is_active=1 AND deleted_at IS NULL)
+ AND (@endUser IS NULL OR EXISTS(SELECT 1 FROM dbo.customers WHERE id=@endUser AND is_active=1 AND deleted_at IS NULL))
  AND (@site IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_sites WHERE id=@site AND customer_id=@customer AND is_active=1 AND deleted_at IS NULL))
  AND (@contact IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts c JOIN dbo.customer_sites s ON s.id=c.site_id WHERE c.id=@contact AND s.customer_id=@customer AND (@site IS NULL OR s.id=@site) AND c.is_active=1 AND c.deleted_at IS NULL AND s.is_active=1 AND s.deleted_at IS NULL))
  AND EXISTS(SELECT 1 FROM dbo.users WHERE id=@sales AND is_active=1 AND deleted_at IS NULL)

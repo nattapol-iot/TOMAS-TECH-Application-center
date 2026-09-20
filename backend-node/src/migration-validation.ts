@@ -39,6 +39,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 51, fileName: "051_additional_application_roles.sql", name: "Additional application roles carry their full permission set" },
   { version: 52, fileName: "052_support_email_notification.sql", name: "Support member email notification preference" },
   { version: 53, fileName: "053_crm.sql", name: "CRM opportunities and customer follow-up" },
+  { version: 54, fileName: "054_crm_end_user.sql", name: "CRM opportunity end user company" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;
