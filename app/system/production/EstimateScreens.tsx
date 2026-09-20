@@ -953,8 +953,13 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   const canAdd = workspace.capabilities.canEditCostItems;
   const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const defaultOwnerId = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
-  const allowedCategories = COST_CATEGORIES.filter(([code]) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code));
-  const groups = useMemo(() => costModuleGroups(category === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === category)), [workspace.costItems, category]);
+  const presentCategories = COST_CATEGORIES.filter(([code]) => workspace.costItems.some((line) => line.categoryCode === code));
+  /* Deleting the last item of the filtered discipline retires its chip, so the
+     filter falls back here rather than leaving an empty table behind a tab
+     that no longer exists. Derived, not stored: setting state from an effect
+     would trip react-hooks/set-state-in-effect. */
+  const activeCategory = category !== "all" && presentCategories.some(([code]) => code === category) ? category : "all";
+  const groups = useMemo(() => costModuleGroups(activeCategory === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === activeCategory)), [workspace.costItems, activeCategory]);
   const [draggedCostId, setDraggedCostId] = useState<number | null>(null);
   const [dropMarker, setDropMarker] = useState("");
   const clearDrag = () => { setDraggedCostId(null); setDropMarker(""); };
@@ -1089,8 +1094,10 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   </> : undefined} flush>
     <div className="sheet-controls">
       <div className="subtabs" role="tablist" aria-label={localizeCopy("Cost category")}>
-        <button type="button" className={category === "all" ? "subtab active" : "subtab"} onClick={() => { setCategory("all"); setQuickDraft(null); }}><LocalizedText text={"All disciplines"} /><em>{workspace.costItems.length}</em></button>
-        {COST_CATEGORIES.map(([code, name]) => { const count = workspace.costItems.filter((line) => line.categoryCode === code).length; return count || allowedCategories.some(([allowedCode]) => allowedCode === code) ? <button key={code} type="button" className={category === code ? "subtab active" : "subtab"} onClick={() => { setCategory(code); setQuickDraft(null); }}><span className="pill">{code}</span>{name}<em>{count}</em></button> : null; })}
+        {presentCategories.length ? <>
+        <button type="button" className={activeCategory === "all" ? "subtab active" : "subtab"} onClick={() => { setCategory("all"); setQuickDraft(null); }}><LocalizedText text={"All disciplines"} /><em>{workspace.costItems.length}</em></button>
+        {presentCategories.map(([code, name]) => { const count = workspace.costItems.filter((line) => line.categoryCode === code).length; return <button key={code} type="button" className={activeCategory === code ? "subtab active" : "subtab"} onClick={() => { setCategory(code); setQuickDraft(null); }}><span className="pill">{code}</span>{name}<em>{count}</em></button>; })}
+        </> : null}
       </div>
       <div className="sheet-tools">
         <button type="button" className="sheet-tool" disabled={!groups.length} onClick={() => setCollapsed(groups.filter(group => group.module).map((group) => group.key))} title={localizeCopy("หุบทุกโมดูล")}><Icon name="chevronRight" /><LocalizedText text={"Collapse all"} /></button>

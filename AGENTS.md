@@ -78,6 +78,7 @@ These project rules guide both agents; they do not override host/system policies
 ## เอกสารส่วนกลาง — เปิดตามงาน
 
 - [Architecture / boundaries](docs/context/ARCHITECTURE.md)
+- [Frontend screen work: tokens, shared components, i18n rules, known traps](.claude/skills/iot-team-center-ui/SKILL.md) — อ่านก่อนแก้อะไรใต้ `app/system/**`
 - [Change workflow / tests / update context](docs/context/WORKFLOW.md)
 - [Schema / migrations](docs/context/SCHEMA.md)
 - [Analysis and known limits](docs/context/ANALYSIS.md)
