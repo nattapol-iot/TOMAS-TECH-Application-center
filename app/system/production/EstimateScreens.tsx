@@ -878,16 +878,21 @@ function EstimateNextSteps({ workspace, busy, onOpen, onSubmit }: { workspace: E
     "review-summary": [copy("ตรวจสรุป Estimate", "Review the Estimate summary", "見積サマリーを確認"), copy("ข้อมูลปัจจุบันไม่มีงานที่ระบบระบุว่าต้องแก้", "There is no system-identified action for the current state.", "現在、システムが要求する修正はありません。")],
   } as const;
   const [title, subtitle] = content[action.kind];
+  /* `description` is the FOR JSON PATH snapshot the workflow archives with each
+     revision (estimates.ts:151), not prose — printing it puts the whole estimate
+     on screen. `reason` carries the words a person typed, and only a row whose
+     own status is "Revision Required" is a send-back: approving writes the
+     literal "Approved" into the same column (estimates.ts:350). */
   const sentBack = action.kind === "address-revision"
-    ? [...workspace.revisionHistory].reverse().find((entry) => entry.reason || entry.description) ?? null
+    ? [...workspace.revisionHistory].reverse().find((entry) => entry.status === "Revision Required") ?? null
     : null;
   return <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
     {sentBack ? <div className="info-strip amber" style={{ marginBottom: 12 }}>
       <Icon name="alertTriangle" />
       <span>
-        <strong>{sentBack.reason || copy("ส่งกลับให้แก้ไข", "Sent back for revision", "差し戻し")}</strong>
-        {sentBack.description ? <> — {sentBack.description}</> : null}
+        <strong>{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}</strong>
         {sentBack.reviewedByName ? <> · {sentBack.reviewedByName}</> : null}
+        {sentBack.reviewedAt ? <> · {formatDate(sentBack.reviewedAt)}</> : null}
       </span>
     </div> : null}
     {action.kind === "submit-review"

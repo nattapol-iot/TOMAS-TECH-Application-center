@@ -1401,3 +1401,23 @@ test("support member email notifications are configurable per member through the
   assert.match(screens, /Receive email notifications/);
   assert.match(screens, /m\.notify_email/);
 });
+
+test("the next-action note shows the reviewer's reason, never the archived snapshot", async () => {
+  // estimate_revisions.description holds the FOR JSON PATH snapshot the workflow
+  // archives with every revision, not prose. Rendering it puts the serialised
+  // estimate on the Summary tab. Only `reason` carries what a person typed, and
+  // only a row whose own status is "Revision Required" is a send-back — an
+  // approval writes the literal "Approved" into the same column.
+  const [screens, estimates] = await Promise.all([
+    readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/estimates.ts", root), "utf8"),
+  ]);
+  const panel = screens.slice(screens.indexOf("const sentBack = action.kind"), screens.indexOf("function EstimateSummaryTab"));
+  assert.match(panel, /entry\.status === "Revision Required"/);
+  assert.match(panel, /sentBack\.reason/);
+  assert.doesNotMatch(panel, /sentBack\.description/);
+  // The premise above, pinned against the writer so the two cannot drift apart.
+  assert.match(estimates, /INSERT INTO dbo\.estimate_revisions\(estimate_id,revision,reason,description/);
+  assert.match(estimates, /snapshotRevision\(transaction, id, current\.revision, "Approved", "Approved"/);
+  assert.match(estimates, /snapshotRevision\(transaction, id, current\.revision, reason, "Revision Required"/);
+});
