@@ -1413,6 +1413,11 @@ td strong { color: var(--ink); font-weight: 600; }
 .sheet tbody td { padding: 0; border-right: 1px solid var(--line-soft); }
 .sheet tbody td:last-child { border-right: none; }
 .sheet tbody td > .cell-text { display: block; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Two facts about the same thing — a department and the level within it —
+   share one cell so the arithmetic columns stay on screen. */
+.sheet tbody td > .cell-text > .cell-sub { display: block; margin-top: 1px; color: var(--muted); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; }
+.sheet tbody td > .cell-stack { display: flex; flex-direction: column; gap: 2px; padding: 3px 4px; }
+.sheet tbody td > .cell-stack select { height: 26px; border-color: var(--line); border-radius: var(--r-xs); background: var(--surface); }
 
 .sheet input,
 .sheet select {
