@@ -88,7 +88,9 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [unmappedOnly, setUnmappedOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const unmappedOnly = categoryFilter === "Unmapped";
+  const toggleCategory = (category: string) => setCategoryFilter((current) => current === category ? "" : category);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState<DraftCategory>("Hardware");
@@ -139,18 +141,18 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   }) ?? [], [drafts, summary]);
 
   const needle = search.trim().toLowerCase();
-  const filtering = needle !== "" || unmappedOnly;
+  const filtering = needle !== "" || categoryFilter !== "";
   const visibleSections = useMemo(() => sections
     .map((section) => ({
       section,
       lines: breakdownModules(section).filter((module) => module.lines.some((line) => {
         if (!lineMatches(line, needle)) return false;
-        if (!unmappedOnly) return true;
+        if (!categoryFilter) return true;
         const erp = erpOf(line);
-        return erp ? (drafts[erpKey(erp)] ?? erp.erpCategory) === "Unmapped" : false;
+        return erp ? (drafts[erpKey(erp)] ?? erp.erpCategory) === categoryFilter : false;
       })).flatMap((module) => module.lines),
     }))
-    .filter((entry) => !filtering || entry.lines.length), [sections, needle, unmappedOnly, erpOf, drafts, filtering]);
+    .filter((entry) => !filtering || entry.lines.length), [sections, needle, categoryFilter, erpOf, drafts, filtering]);
   const isExpanded = (key: string) => filtering || expanded.has(key);
   const shownLines = visibleSections.flatMap((entry) => isExpanded(entry.section.key) ? entry.lines : []);
   const shownErpKeys = shownLines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
@@ -206,7 +208,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     });
     notify(copy(`แนะนำหมวดให้ ${targets.length} รายการแล้ว — ตรวจแล้วกดบันทึก`, `Suggested categories for ${targets.length} line(s) — review and save`, `${targets.length}件に分類を提案しました — 確認して保存してください`));
   };
-  const resetFilters = () => { setSearch(""); setUnmappedOnly(false); };
+  const resetFilters = () => { setSearch(""); setCategoryFilter(""); };
 
   const save = async () => {
     if (!summary || !changedLines.length) return;
@@ -397,19 +399,53 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   return <Panel title={copy("รายการต้นทุนและหมวด ERP", "Cost list & ERP categories", "原価明細とERP分類")} subtitle={copy(`${sections.length} หมวด · ${lineCount} รายการ · กดหมวดเพื่อดูโมดูล · ต้นทุนภายในเท่านั้น`, `${sections.length} section(s) · ${lineCount} line(s) · open a section to see its modules · internal cost only`, `${sections.length}区分 · ${lineCount}明細 · 区分をクリックで明細表示 · 内部原価のみ`)} flush>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span><button className="btn ghost" type="button" onClick={() => { void load(); }}><LocalizedText text={"Try again"} /></button></div> : null}
     {statusStrip}
-    {summary ? <div className="erp-tiles">
-      {/* ERP category names are contract values for the ERP import, so they are rendered verbatim (not through the UI translator). */}
-      {ERP_COST_CATEGORIES.map((category) => {
-        const row = summary.categories.find((entry) => entry.category === category) ?? { category, amount: 0, lineCount: 0 };
-        return <div key={category} className={`summary-tile${row.lineCount ? " blue" : ""}`}><span>{category}</span><strong>{money(row.amount)}</strong><em>{row.lineCount} item</em></div>;
-      })}
-      <div className={`summary-tile ${summary.unmapped.lineCount ? "amber" : "green"}`}><span>{unmappedLabel}</span><strong>{money(summary.unmapped.amount)}</strong><em>{summary.unmapped.lineCount} item</em></div>
-    </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading ERP summary…"} /></div> : null}
+    {summary ? (() => {
+      /* ERP category names are contract values for the ERP import, so they are rendered verbatim (not through the UI translator). */
+      const rows = [
+        ...ERP_COST_CATEGORIES.map((category) => {
+          const row = summary.categories.find((entry) => entry.category === category);
+          return { category: category as string, label: category as string, amount: row?.amount ?? 0, lineCount: row?.lineCount ?? 0 };
+        }),
+        { category: "Unmapped", label: unmappedLabel, amount: summary.unmapped.amount, lineCount: summary.unmapped.lineCount },
+      ];
+      const funded = rows.filter((row) => row.lineCount > 0);
+      const total = funded.reduce((sum, row) => sum + row.amount, 0);
+      const tone = (row: typeof rows[number], index: number) => row.category === "Unmapped" ? "var(--amber)" : `var(--c${(index % 8) + 1})`;
+      return <div className="erp-distribution">
+        {/* The strip above already reconciles the total against the estimate;
+            repeating it here would be the third printing of one number. This
+            head says what the strip cannot: how many categories carry it. */}
+        <div className="erp-distribution-head">
+          <strong>{funded.length}</strong>
+          <span>{copy(`จาก ${rows.length} หมวด ERP ที่มีต้นทุน`, `of ${rows.length} ERP categories carry cost`, `/ ${rows.length} ERP区分に原価あり`)}</span>
+        </div>
+        <div className="erp-distribution-bar">
+          {funded.map((row, index) => <button
+            key={row.category}
+            type="button"
+            className={`erp-seg${categoryFilter === row.category ? " active" : ""}`}
+            style={{ flexGrow: Math.max(row.amount, total * 0.01), background: tone(row, index) }}
+            aria-pressed={categoryFilter === row.category}
+            title={`${row.label} · ${money(row.amount)} · ${row.lineCount} item`}
+            onClick={() => toggleCategory(row.category)}
+          />)}
+        </div>
+        <div className="erp-legend">
+          {funded.map((row, index) => <button
+            key={row.category}
+            type="button"
+            className={categoryFilter === row.category ? "active" : undefined}
+            aria-pressed={categoryFilter === row.category}
+            onClick={() => toggleCategory(row.category)}
+          ><i className="erp-dot" style={{ background: tone(row, index) }} />{row.label}<strong>{money(row.amount)}</strong><em>{row.lineCount}</em></button>)}
+        </div>
+      </div>;
+    })() : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading ERP summary…"} /></div> : null}
 
     {sections.length ? <>
       <div className="toolbar erp-toolbar">
         <SearchInput value={search} onChange={setSearch} placeholder={copy("ค้นหารายการ / supplier / โมดูล", "Search description / supplier / module", "品名・仕入先・モジュールで検索")} />
-        <button className={`chip${unmappedOnly ? " on" : ""}`} type="button" aria-pressed={unmappedOnly} disabled={!summary} onClick={() => setUnmappedOnly((current) => !current)}>{copy("เฉพาะที่ยังไม่จัดหมวด ERP", "Unmapped ERP only", "ERP未分類のみ")}</button>
+        <button className={`chip${unmappedOnly ? " on" : ""}`} type="button" aria-pressed={unmappedOnly} disabled={!summary} onClick={() => toggleCategory("Unmapped")}>{copy("เฉพาะที่ยังไม่จัดหมวด ERP", "Unmapped ERP only", "ERP未分類のみ")}</button>
         <button className="chip" type="button" disabled={filtering} onClick={() => setExpanded(new Set(sections.map((section) => section.key)))}><Icon name="chevronDown" /> {copy("ขยายทุกหมวด", "Expand all", "すべて開く")}</button>
         <button className="chip" type="button" disabled={filtering || !expanded.size} onClick={() => setExpanded(new Set())}><Icon name="chevronRight" /> {copy("ย่อทุกหมวด", "Collapse all", "すべて閉じる")}</button>
         <span className="spacer" />

@@ -4867,6 +4867,44 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cost-breakdown .erp-map-cell select { max-width: 130px; }
 .cost-breakdown .erp-map-cell .chip { padding: 2px 8px; white-space: nowrap; }
 .cost-breakdown tfoot td.cb-erp-col { text-align: left; }
+/* ERP distribution: one bar for the split, a legend that doubles as the
+   filter, and no tile for a category that carries nothing. */
+.erp-distribution { padding: 10px 12px; }
+.erp-distribution-head { display: flex; align-items: baseline; gap: 8px; }
+.erp-distribution-head strong { font-size: var(--fs-xl); font-weight: 660; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.erp-distribution-head span { color: var(--muted); font-size: var(--fs-xs); }
+.erp-distribution-bar { display: flex; gap: 2px; height: 10px; margin: 8px 0 9px; }
+.erp-seg {
+  min-width: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  cursor: pointer;
+}
+.erp-seg:hover { opacity: 0.78; }
+.erp-seg.active { outline-color: var(--ink); }
+.erp-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.erp-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.erp-legend button:hover,
+.erp-legend button.active { color: var(--ink); }
+.erp-legend strong { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 650; }
+.erp-legend em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+.erp-legend button.active strong { color: var(--ink); }
+.erp-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
 .erp-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; padding: 10px 12px; }
 .erp-tiles .summary-tile { min-width: 0; }
 .erp-tiles .summary-tile strong { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
