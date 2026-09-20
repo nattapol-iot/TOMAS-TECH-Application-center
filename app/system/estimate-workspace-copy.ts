@@ -381,6 +381,26 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
     "jp": "作業パッケージ→作業→原価。設計、設置、外注工数、出張費を同じ構成で管理します。",
     "en": "Work package → activity → cost: engineering, installation, supplier labor and travel share one structure."
   },
+  "จัดการ Labor Package": {
+    "th": "จัดการ Labor Package",
+    "jp": "労務パッケージを管理",
+    "en": "Manage labor packages"
+  },
+  "แก้ Qty / Man-days / Hours ได้ในช่อง · Enter หรือ ✓ เพื่อบันทึก · เพิ่มแถวแล้วกด Enter เพื่อเพิ่มต่อเนื่อง": {
+    "th": "แก้ Qty / Man-days / Hours ได้ในช่อง · Enter หรือ ✓ เพื่อบันทึก · เพิ่มแถวแล้วกด Enter เพื่อเพิ่มต่อเนื่อง",
+    "jp": "数量・人日・時間はセル内で編集し、Enter または ✓ で保存します。行を追加したあと Enter を押すと続けて追加できます。",
+    "en": "Edit Qty / Man-days / Hours in place · Enter or ✓ to save · press Enter after adding a row to keep adding."
+  },
+  "Revision นี้ไม่เปิดให้แก้ไขค่าแรงในสถานะปัจจุบัน หรือบัญชีนี้ไม่มีสิทธิ์แก้ไข": {
+    "th": "Revision นี้ไม่เปิดให้แก้ไขค่าแรงในสถานะปัจจุบัน หรือบัญชีนี้ไม่มีสิทธิ์แก้ไข",
+    "jp": "この改訂は現在の状態では労務費を編集できません。またはこのアカウントに編集権限がありません。",
+    "en": "This revision does not accept labour edits in its current state, or this account cannot edit it."
+  },
+  "แก้ชื่อ Main Module / Rename Main Module": {
+    "th": "แก้ชื่อ Main Module",
+    "jp": "メインモジュール名を変更",
+    "en": "Rename main module"
+  },
   "Installation &amp; Service cost": {
     "th": "ค่าติดตั้งและบริการ",
     "jp": "設置・サービス費"

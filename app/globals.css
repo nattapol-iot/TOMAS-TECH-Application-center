@@ -4359,6 +4359,24 @@ tbody tr.row-late:hover td { background: #fadada; }
 .cost-sheet tbody tr.item-row:hover > td:nth-child(-n+3) { background: var(--n-25); }
 .cost-sheet tbody tr.item-row.inline-draft-row > td:nth-child(-n+3) { background: #f5f9ff; }
 
+/* The man-hour sheet gets the same treatment, at its own column widths: No.,
+   Type and Activity stay put so a row keeps its name while supplier, owner and
+   remark scroll underneath. The band, add and subtotal rows span the table and
+   are deliberately left out — they have nothing to lose sideways. */
+.manhour-sheet thead th:nth-child(-n+3) { position: sticky; z-index: 4; }
+.manhour-sheet thead th:nth-child(1) { left: 0; }
+.manhour-sheet thead th:nth-child(2) { left: 44px; }
+.manhour-sheet thead th:nth-child(3) { left: 174px; }
+
+.manhour-sheet .mh-row > td:nth-child(-n+3) { position: sticky; z-index: 1; background: var(--surface); }
+.manhour-sheet .mh-row > td:nth-child(1) { left: 0; }
+.manhour-sheet .mh-row > td:nth-child(2) { left: 44px; }
+.manhour-sheet .mh-row > td:nth-child(3) { left: 174px; box-shadow: 1px 0 0 var(--line-soft); }
+.manhour-sheet tbody tr.mh-row:hover > td:nth-child(-n+3) { background: var(--n-25); }
+.manhour-sheet tbody tr.mh-row.expense-row > td:nth-child(-n+3) { background: #fcfaf5; }
+.manhour-sheet tbody tr.mh-row.expense-row:hover > td:nth-child(-n+3) { background: #faf6ee; }
+.manhour-sheet tbody tr.mh-row.inline-draft-row > td:nth-child(-n+3) { background: #f5f9ff; }
+
 /* Chevron and module name are one hit target — folding a module should not
    require aiming at a 16px icon. */
 .module-toggle {

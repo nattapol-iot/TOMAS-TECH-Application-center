@@ -571,7 +571,9 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /createCostItem\(estimateId, \{ \.\.\.seed, estimateRowVersion: rowVersion \}/);
   assert.match(estimateScreen, /Price selected from live Price Library/);
   assert.match(estimateScreen, /written to SQL Server/);
-  assert.match(estimateScreen, /className="inline-draft-row"/);
+  // The row carries sheet-specific classes alongside this one, so match the
+  // class inside the attribute rather than pinning the whole value.
+  assert.match(estimateScreen, /className="[^"]*inline-draft-row/);
   assert.match(estimateScreen, /event\.key === "Enter"/);
   assert.match(estimateScreen, /saveQuickRow\(true\)/);
   assert.match(estimateScreen, /Activity created · press Enter to continue adding rows/);
