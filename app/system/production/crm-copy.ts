@@ -73,6 +73,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.permissions","CRM permission is required","ต้องมีสิทธิ์ CRM","CRM の権限が必要です"],
  ["CRM.filesInherited","Related CRM activities and documents remain linked through the source opportunity.","กิจกรรมและเอกสาร CRM อ้างอิงผ่านโอกาสขายต้นทาง","関連する CRM 活動と文書は元の商談を通じて参照できます。"],
  ["CRM.editCustomer","Edit customer","แก้ไขข้อมูลลูกค้า","顧客情報を編集"],
+ ["CRM.searchCustomer","Search by customer code or name…","ค้นหาด้วยรหัสหรือชื่อลูกค้า…","顧客コードまたは名称で検索…"], ["CRM.selectFromList","Select a customer from the list","กรุณาเลือกลูกค้าจากรายการ","リストから顧客を選択してください"], ["CRM.showOptions","Show customer list","แสดงรายชื่อลูกค้า","顧客リストを表示"],
  ["CRM.nameTh","Name (Thai)","ชื่อภาษาไทย","名前（タイ語）"], ["CRM.nameEn","Name (English)","ชื่อภาษาอังกฤษ","名前（英語）"], ["CRM.nameJa","Name (Japanese)","ชื่อภาษาญี่ปุ่น","名前（日本語）"],
  ["CRM.accountOwnerName","Account owner","ผู้ดูแลลูกค้า","顧客担当者"], ["CRM.customerName","Customer","ลูกค้า","顧客"], ["CRM.nextAction","Next action","สิ่งที่ต้องทำถัดไป","次のアクション"], ["CRM.nextDue","Next due","กำหนดครั้งถัดไป","次回期限"],
  ["CRM.opportunityNo","Opportunity number","เลขที่โอกาสขาย","商談番号"], ["CRM.inquiryNo","Inquiry number","เลขที่ Inquiry","引合番号"], ["CRM.estimateNo","Estimate number","เลขที่ Estimate","見積番号"], ["CRM.projectNo","Project number","เลขที่โครงการ","案件番号"],
