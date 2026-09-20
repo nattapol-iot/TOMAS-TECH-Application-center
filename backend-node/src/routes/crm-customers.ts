@@ -14,7 +14,14 @@ export function registerCrmCustomerRoutes(app: FastifyInstance,database: Databas
   app.get("/api/v1/crm/customers",async request=>{
     await crmAccess(database,users,request); const query=request.query as Record<string,string>;
     const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1,size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):10;
-    const result=await database.query<CrmRow>(`SELECT c.*,u.name account_owner_name,COUNT(*) OVER() total_count FROM dbo.customers c LEFT JOIN dbo.users u ON u.id=c.account_owner_id WHERE c.deleted_at IS NULL AND (@search=N'' OR c.name LIKE @search OR c.code LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id WHERE s.customer_id=c.id AND co.name LIKE @search)) ORDER BY c.name,c.id OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,q=>q.input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size).input("size",sql.Int,size));
+    // Find matching customer IDs once; a correlated contact search under OR can
+    // rescan the contact/site join for every customer. UNION also removes repeats.
+    const matches=query.search?`WITH matches AS (
+      SELECT id FROM dbo.customers WHERE name LIKE @search OR code LIKE @search
+      UNION
+      SELECT s.customer_id FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id WHERE co.name LIKE @search
+    ) `:"";
+    const result=await database.query<CrmRow>(`${matches}SELECT c.*,u.name account_owner_name,COUNT(*) OVER() total_count FROM dbo.customers c ${query.search?"JOIN matches m ON m.id=c.id":""} LEFT JOIN dbo.users u ON u.id=c.account_owner_id WHERE c.deleted_at IS NULL ORDER BY c.name,c.id OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,q=>q.input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size).input("size",sql.Int,size));
     return {items:result.recordset.map(r=>crmDto(r)),total:Number(result.recordset[0]?.total_count??0),page,pageSize:size};
   });
   app.get("/api/v1/crm/customers/:id",async request=>{

@@ -2,23 +2,23 @@
 
 [Module](../modules/crm.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c4a8bb9b`; generated, do not edit. [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/crm/customers` | 14–19 |
-| GET | `/api/v1/crm/customers/:id` | 20–40 |
-| PUT | `/api/v1/crm/customers/:id` | 41–57 |
-| GET | `/api/v1/crm/contacts` | 58–62 |
-| PUT | `/api/v1/crm/contacts/:id/metadata` | 63–75 |
+| GET | `/api/v1/crm/customers` | 14–26 |
+| GET | `/api/v1/crm/customers/:id` | 27–47 |
+| PUT | `/api/v1/crm/customers/:id` | 48–64 |
+| GET | `/api/v1/crm/contacts` | 65–69 |
+| PUT | `/api/v1/crm/contacts/:id/metadata` | 70–82 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerCrmCustomerRoutes` | [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>) | 13–92 |
+| `registerCrmCustomerRoutes` | [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>) | 13–99 |
 
 ## Direct local dependencies
 
