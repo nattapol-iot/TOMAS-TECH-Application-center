@@ -13,6 +13,7 @@ import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, p
 import { checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
+import { syncOpportunityStageForInquiry } from "../crm.js";
 
 const STANDARD_FOLDERS = [
   ["00", "To do list"], ["01", "Concept Design and Proposal"], ["02", "Drawing"],
@@ -177,6 +178,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         projectId, Number(estimate.inquiry_id), input.estimateId, actor.id, writtenKeys);
       await insertAudit(transaction, actor.id, "Project", projectId, number, "Created from approved estimate", estimate.estimate_no,
         { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred });
+      await syncOpportunityStageForInquiry(transaction,Number(estimate.inquiry_id),"WON",actor.id);
       return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred };
     });
     } catch (error) {

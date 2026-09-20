@@ -292,6 +292,16 @@ export function registerInquiryRoutes(
     };
   });
 
+  app.get("/api/v1/inquiry-duplicates",async request=>{
+    await users.demandPermission(request,"inquiry.read");
+    const query=request.query as Record<string,unknown>,customerId=requiredInteger(Number(firstQueryValue(query.customerId)),"Customer",1),projectName=requiredText(firstQueryValue(query.projectName),300,"Project name");
+    const result=await database.query<{id:number|string;reference_no:string;project_name:string;status:string;source:string}>(`SELECT TOP(5) i.id,i.inquiry_no reference_no,i.project_name,i.status,CASE WHEN i.opportunity_id IS NULL THEN N'Direct Inquiry' ELSE N'CRM' END source
+      FROM dbo.inquiries i WHERE i.customer_id=@customer AND i.deleted_at IS NULL AND i.status NOT IN(N'Approved',N'Cancelled')
+        AND (LOWER(LTRIM(RTRIM(i.project_name)))=LOWER(LTRIM(RTRIM(@name))) OR DIFFERENCE(i.project_name,@name)>=3)
+      ORDER BY CASE WHEN LOWER(LTRIM(RTRIM(i.project_name)))=LOWER(LTRIM(RTRIM(@name))) THEN 0 ELSE 1 END,i.updated_at DESC`,q=>q.input("customer",sql.BigInt,customerId).input("name",sql.NVarChar(300),projectName));
+    return result.recordset.map(row=>({id:Number(row.id),referenceNo:row.reference_no,projectName:row.project_name,status:row.status,source:row.source}));
+  });
+
   app.post("/api/v1/inquiries", async (request, reply) => {
     const body = bodyObject(request.body);
     const opportunityId = body.opportunityId == null ? null : requiredInteger(body.opportunityId,"Opportunity",1);

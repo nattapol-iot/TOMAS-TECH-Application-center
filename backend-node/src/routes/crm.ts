@@ -32,16 +32,21 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
 
   app.get("/api/v1/crm/dashboard",async request=>{
     const actor=await crmAccess(database,users,request);
-    return (await database.query<CrmRow>(`SELECT COUNT(*) [open],
+    return (await database.query<CrmRow>(`SELECT COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') THEN 1 ELSE 0 END),0) [open],COUNT_BIG(*) total_opportunities,
       COALESCE(SUM(CASE WHEN ${CRM_NEEDS_FOLLOWUP} THEN 1 ELSE 0 END),0) NeedsFollowup,
-      COALESCE(SUM(CASE WHEN f.due_date<@today THEN 1 ELSE 0 END),0) Overdue,
-      COALESCE(SUM(CASE WHEN f.status='WaitingCustomer' THEN 1 ELSE 0 END),0) WaitingCustomer,
+      COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date<@today THEN 1 ELSE 0 END),0) Overdue,
+      COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.status='WaitingCustomer' THEN 1 ELSE 0 END),0) WaitingCustomer,
       COALESCE(SUM(CASE WHEN o.stage='REQUIREMENT' THEN 1 ELSE 0 END),0) REQUIREMENT,
       COALESCE(SUM(CASE WHEN o.stage='ESTIMATING' THEN 1 ELSE 0 END),0) ESTIMATING,
       COALESCE(SUM(CASE WHEN o.stage='PROPOSAL' THEN 1 ELSE 0 END),0) PROPOSAL,
       COALESCE(SUM(CASE WHEN o.stage='NEGOTIATION' THEN 1 ELSE 0 END),0) NEGOTIATION,
-      COALESCE(SUM(CASE WHEN f.action IS NULL OR f.due_date<=@today OR ${CRM_NEEDS_FOLLOWUP} THEN 1 ELSE 0 END),0) actionable
-      ${CRM_READ_JOINS} WHERE ${CRM_SCOPE} AND o.stage NOT IN('WON','LOST','ON_HOLD')`,q=>bindAccess(q,actor).input("today",sql.Date,today()))).recordset[0];
+      COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL) THEN 1 ELSE 0 END),0) converted_to_inquiry,
+      COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM dbo.inquiries i JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL) THEN 1 ELSE 0 END),0) converted_to_estimate,
+      COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM dbo.inquiries i JOIN dbo.projects p ON p.inquiry_id=i.id AND p.deleted_at IS NULL WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL) THEN 1 ELSE 0 END),0) converted_to_project,
+      (SELECT COUNT_BIG(*) FROM dbo.inquiries direct JOIN dbo.users direct_owner ON direct_owner.id=direct.estimate_owner_id
+        WHERE direct.opportunity_id IS NULL AND direct.deleted_at IS NULL AND (@all=1 OR direct.created_by=@actor OR direct.estimate_owner_id=@actor OR (@team=1 AND direct_owner.department=@department))) direct_inquiries,
+      COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND (f.action IS NULL OR f.due_date<=@today OR ${CRM_NEEDS_FOLLOWUP}) THEN 1 ELSE 0 END),0) actionable
+      ${CRM_READ_JOINS} WHERE ${CRM_SCOPE}`,q=>bindAccess(q,actor).input("today",sql.Date,today()))).recordset[0];
   });
 
   app.get("/api/v1/crm/options",async request=>{
@@ -110,6 +115,16 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
       if(body.nextAction) await addFollowup(tx,actor.id,Number(r.id),bodyObject(body.nextAction));
       return crmDto(r,actor.permissions.includes("crm.commercial.read"));
     }); return reply.code(201).send(row);
+  });
+
+  app.get("/api/v1/crm/opportunity-duplicates",async request=>{
+    const actor=await crmAccess(database,users,request),query=request.query as Record<string,string>;
+    const customerId=requiredInteger(Number(query.customerId),"Customer",1),name=requiredText(query.name,300,"Opportunity name");
+    return (await database.query<CrmRow>(`SELECT TOP(5) o.id,o.opportunity_no,o.name,o.stage,c.name customer_name
+      FROM dbo.crm_opportunities o JOIN dbo.customers c ON c.id=o.customer_id
+      WHERE ${CRM_SCOPE} AND o.customer_id=@customer AND o.stage NOT IN(N'WON',N'LOST')
+        AND (LOWER(LTRIM(RTRIM(o.name)))=LOWER(LTRIM(RTRIM(@name))) OR DIFFERENCE(o.name,@name)>=3)
+      ORDER BY CASE WHEN LOWER(LTRIM(RTRIM(o.name)))=LOWER(LTRIM(RTRIM(@name))) THEN 0 ELSE 1 END,o.updated_at DESC`,q=>bindAccess(q,actor).input("customer",sql.BigInt,customerId).input("name",sql.NVarChar(300),name))).recordset.map(r=>crmDto(r));
   });
 
   app.put("/api/v1/crm/opportunities/:id",async request=>{

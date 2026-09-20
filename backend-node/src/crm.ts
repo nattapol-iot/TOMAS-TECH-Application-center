@@ -3,6 +3,7 @@ import type { FastifyRequest } from "fastify";
 import type { Database } from "./db.js";
 import type { CurrentUserService } from "./users.js";
 import { ApiError } from "./errors.js";
+import { insertAudit } from "./audit.js";
 import { optionalBodyText, requiredText, requiredInteger, parseDateOnly } from "./http.js";
 
 export const CRM_STAGES = ["NEW", "QUALIFICATION", "REQUIREMENT", "ESTIMATING", "PROPOSAL", "NEGOTIATION", "WON", "LOST", "ON_HOLD"] as const;
@@ -10,6 +11,16 @@ export const CRM_ACTIVITY_TYPES = ["Meeting", "Call", "Email", "SiteVisit", "Cus
 export const TERMINAL_INQUIRY_STATUSES = ["Approved", "Cancelled"] as const;
 export function opportunityStageAfterInquiry(stage: unknown): string {
   return ["NEW", "QUALIFICATION", "REQUIREMENT"].includes(String(stage)) ? "ESTIMATING" : String(stage);
+}
+export async function syncOpportunityStageForInquiry(transaction: sql.Transaction, inquiryId: number, targetStage: "ESTIMATING"|"PROPOSAL"|"WON", actorId: number): Promise<void> {
+  const q=new sql.Request(transaction);q.input("inquiry",sql.BigInt,inquiryId).input("target",sql.NVarChar(40),targetStage).input("actor",sql.BigInt,actorId);
+  const row=(await q.query<{id:number|string;opportunity_no:string;previous_stage:string;stage:string}>(`UPDATE o SET stage=@target,stage_changed_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+    OUTPUT inserted.id,inserted.opportunity_no,deleted.stage previous_stage,inserted.stage
+    FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id
+    WHERE i.id=@inquiry AND ((@target=N'ESTIMATING' AND o.stage IN(N'NEW',N'QUALIFICATION',N'REQUIREMENT'))
+      OR (@target=N'PROPOSAL' AND o.stage IN(N'NEW',N'QUALIFICATION',N'REQUIREMENT',N'ESTIMATING'))
+      OR (@target=N'WON' AND o.stage NOT IN(N'WON',N'LOST')));`)).recordset[0];
+  if(row)await insertAudit(transaction,actorId,"CrmOpportunity",Number(row.id),row.opportunity_no.slice(0,50),`StageChanged:${row.stage}`,{stage:row.previous_stage},{stage:row.stage,sourceInquiryId:inquiryId});
 }
 export type CrmRow = Record<string, unknown>;
 export type CrmAccess = { id: number; department: string; permissions: string[] };

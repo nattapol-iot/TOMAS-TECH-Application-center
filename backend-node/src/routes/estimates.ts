@@ -9,6 +9,7 @@ import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
+import { syncOpportunityStageForInquiry } from "../crm.js";
 import { hasRole } from "../user-roles.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, clampedInteger, dateOnly, firstQueryValue, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
@@ -23,6 +24,7 @@ type EstimateRow = Record<string, unknown> & {
   engineering_total: number | string; outsource_total: number | string; transportation_total: number | string;
   accommodation_total: number | string; other_total: number | string; contingency_total: number | string;
   overhead_state: string; overhead_total: number | string | null; total: number | string; created_date: Date | string; updated_at: Date | string; row_version: Buffer; total_count: number | string;
+  site_location: string | null; target_delivery: Date | string | null;
 };
 
 function todayIn(timeZone: string): string {
@@ -347,6 +349,7 @@ async function transition(
     if (action === "Submitted") await snapshotSubmission(transaction,id,current.revision,actor.id);
     if (action === "Approved") await snapshotRevision(transaction, id, current.revision, "Approved", "Approved", actor.id);
     const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, inquiryStatus, inquiryProgress, actor.id);
+    if(action === "Approved") await syncOpportunityStageForInquiry(transaction,inquiryId,"PROPOSAL",actor.id);
     await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, action,
       { revision: current.revision, status: current.status, progress: Number(current.progress) },
       { revision: current.revision, status: targetStatus, progress: targetProgress, comment });
@@ -367,7 +370,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const revision = optionalNonnegativeInteger(query.revision, "Revision");
     const mineId = booleanQuery(query.mine) ? (await users.required(request)).id : null;
     const result = await database.query<EstimateRow>(`
-      SELECT e.id,e.estimate_no,i.inquiry_no,e.customer_id,c.name customer_name,e.project_name,e.project_type,
+      SELECT e.id,e.estimate_no,i.inquiry_no,i.site_location,i.target_delivery,e.customer_id,c.name customer_name,e.project_name,e.project_type,
         e.owner_id,u.name owner_name,e.revision,e.due_date,e.status,e.progress,t.material_total,t.engineering_total,
         t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,t.overhead_state,t.overhead_total,t.contingency_total,t.total,
         e.created_date,e.updated_at,e.row_version,COUNT_BIG(*) OVER() total_count
@@ -388,6 +391,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       sqlRequest.input("revision", sql.Int, revision); sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize); });
     return { items: result.recordset.map((row) => ({ id: Number(row.id), number: row.estimate_no, inquiryNumber: row.inquiry_no,
       customerId: Number(row.customer_id), customerName: row.customer_name, projectName: row.project_name, projectType: row.project_type,
+      siteLocation: row.site_location ?? "", targetDelivery: dateOnly(row.target_delivery),
       ownerId: Number(row.owner_id), ownerName: row.owner_name, revision: row.revision, createdDate: dateOnly(row.created_date), dueDate: dateOnly(row.due_date),
       status: row.status, progress: Number(row.progress), materialTotal: Number(row.material_total), engineeringTotal: Number(row.engineering_total),
       outsourceTotal: Number(row.outsource_total), transportationTotal: Number(row.transportation_total), accommodationTotal: Number(row.accommodation_total),

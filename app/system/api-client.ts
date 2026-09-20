@@ -291,6 +291,8 @@ export type InquirySummary = {
   endUserCode?: string | null;
   projectName: string;
   projectType: string;
+  siteLocation?: string;
+  targetDelivery?: string | null;
   salesOwner: string | null;
   estimateOwnerId: number;
   estimateOwnerName: string;
@@ -401,6 +403,8 @@ export type EstimateSummary = {
   customerName: string;
   projectName: string;
   projectType: string;
+  siteLocation?: string;
+  targetDelivery?: string | null;
   ownerId: number;
   ownerName: string;
   revision: number;

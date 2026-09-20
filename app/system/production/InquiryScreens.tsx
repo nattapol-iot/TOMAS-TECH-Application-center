@@ -12,6 +12,7 @@ import { InquiryCustomerFields } from "./InquiryCustomerFields";
 import { defaultInquiryQueueScope, inquiryNextAction, type InquiryNextAction, type InquiryQueueScope } from "../../../lib/inquiry-queue";
 import {
   assignInquiryOwner,
+  apiRequest,
   createEstimate,
   createInquiry,
   createInquiryMeeting,
@@ -278,6 +279,8 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     event.preventDefault(); setBusy(true); setError("");
     let createdInquiry: { id: number; number: string; rowVersion: string } | null = null;
     try {
+      const similar=await apiRequest<Array<{referenceNo:string;projectName:string;status:string;source:string}>>(`/api/v1/inquiry-duplicates?customerId=${form.customerId}&projectName=${encodeURIComponent(form.projectName.trim())}`);
+      if(similar.length&&!window.confirm(`พบ Inquiry ที่กำลังดำเนินการและมีชื่องานคล้ายกัน ต้องการสร้างรายการใหม่ต่อหรือไม่\n\n${similar.map(item=>`${item.referenceNo} · ${item.projectName} · ${item.source}`).join("\n")}`)){setBusy(false);return;}
       createdInquiry = await createInquiry({ ...form, targetDelivery: form.targetDelivery || undefined });
       for (const queued of files) await uploadInquiryAttachment(createdInquiry.id, queued);
       await refreshBootstrap();
@@ -297,6 +300,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
     <PageHeader eyebrow="NEW INQUIRY" title="Register customer inquiry" subtitle="หนึ่งเรื่องลูกค้า ใช้ต่อได้ทั้งการสำรวจหน้างานและการประมาณราคา" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{busy ? "Registering…" : "Register inquiry"}</button></>} />
     {error ? <LoadError message={error} retry={() => undefined} /> : null}
+    <div className="info-strip" role="note"><Icon name="shield" /><span><strong>รับเรื่องโดยตรงเมื่อมี RFQ หรือข้อมูลพร้อมประเมินราคาแล้ว</strong><br />หากยังอยู่ระหว่างติดตามลูกค้า ให้สร้างจากเมนู “โอกาสขาย / ก่อนรับ RFQ” เพื่อไม่ให้ข้อมูลซ้ำ</span></div>
     <Panel title="รับเรื่องลูกค้า" subtitle="บันทึกข้อมูลหลักก่อน แล้วเลือกทำ Estimate หรือขอเข้าหน้างาน"><div className="form-grid">
       <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
       <EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} />
