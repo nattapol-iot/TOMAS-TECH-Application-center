@@ -4377,6 +4377,20 @@ tbody tr.row-late:hover td { background: #fadada; }
 .manhour-sheet tbody tr.mh-row.expense-row:hover > td:nth-child(-n+3) { background: #faf6ee; }
 .manhour-sheet tbody tr.mh-row.inline-draft-row > td:nth-child(-n+3) { background: #f5f9ff; }
 
+/* Rows that span the table have no frozen cell of their own, so their text
+   used to slide through the pinned columns. Pinning their first cell to the
+   left edge keeps the band name, the add link and the subtotal label in place
+   and stops the bleed. The subtotal label covers only the frozen width, which
+   the Cost column never reaches at this table's maximum scroll. */
+.manhour-sheet tbody tr.module-row > td:first-child,
+.manhour-sheet tbody tr.add-row > td:first-child,
+.manhour-sheet tbody tr.subtotal-row > td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.manhour-sheet tbody tr.subtotal-row > td:first-child { background: var(--n-100); }
+
 /* Chevron and module name are one hit target — folding a module should not
    require aiming at a 16px icon. */
 .module-toggle {

@@ -381,6 +381,14 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
     "jp": "作業パッケージ→作業→原価。設計、設置、外注工数、出張費を同じ構成で管理します。",
     "en": "Work package → activity → cost: engineering, installation, supplier labor and travel share one structure."
   },
+  "More columns": {
+    "th": "แสดงคอลัมน์เพิ่ม",
+    "jp": "列を追加表示"
+  },
+  "Fewer columns": {
+    "th": "ซ่อนคอลัมน์",
+    "jp": "列を減らす"
+  },
   "จัดการ Labor Package": {
     "th": "จัดการ Labor Package",
     "jp": "労務パッケージを管理",
