@@ -2,23 +2,24 @@
 
 [Module](../modules/crm.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c4a8bb9b`; generated, do not edit. [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `0f99a814`; generated, do not edit. [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/crm/customers` | 14–26 |
-| GET | `/api/v1/crm/customers/:id` | 27–47 |
-| PUT | `/api/v1/crm/customers/:id` | 48–64 |
-| GET | `/api/v1/crm/contacts` | 65–69 |
-| PUT | `/api/v1/crm/contacts/:id/metadata` | 70–82 |
+| DELETE | `/api/v1/crm/customers/:id` | 14–42 |
+| GET | `/api/v1/crm/customers` | 43–55 |
+| GET | `/api/v1/crm/customers/:id` | 56–76 |
+| PUT | `/api/v1/crm/customers/:id` | 77–93 |
+| GET | `/api/v1/crm/contacts` | 94–98 |
+| PUT | `/api/v1/crm/contacts/:id/metadata` | 99–111 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerCrmCustomerRoutes` | [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>) | 13–99 |
+| `registerCrmCustomerRoutes` | [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>) | 13–128 |
 
 ## Direct local dependencies
 
@@ -34,7 +35,7 @@ Evidence: source snapshot `c4a8bb9b`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.crm_opportunities`, `dbo.crm_options`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_members`, `dbo.projects`, `dbo.unified_report_revisions`, `dbo.unified_reports`, `dbo.users`, `dbo.v_estimate_totals`
+`dbo.crm_activities`, `dbo.crm_documents`, `dbo.crm_opportunities`, `dbo.crm_options`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_members`, `dbo.projects`, `dbo.sales_intakes`, `dbo.unified_report_revisions`, `dbo.unified_reports`, `dbo.users`, `dbo.v_estimate_totals`
 
 ## Change boundary
 

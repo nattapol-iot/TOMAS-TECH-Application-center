@@ -2,7 +2,7 @@
 
 [Module](../modules/master.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `0f99a814`; generated, do not edit. [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -12,7 +12,7 @@ Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/
 | POST | `/api/v1/sales/customers` | 234–275 |
 | POST | `/api/v1/sales/customers/:customerId/contacts` | 277–287 |
 | PUT | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 289–328 |
-| DELETE | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 330–348 |
+| DELETE | `/api/v1/sales/customers/:customerId/contacts/:contactId` | 330–355 |
 
 ## Named functions
 
@@ -35,7 +35,7 @@ Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/
 | `activeContact` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 189–197 |
 | `syncCustomerHeader` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 201–206 |
 | `assertContactUnique` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 208–217 |
-| `registerSalesCustomerRoutes` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 218–349 |
+| `registerSalesCustomerRoutes` | [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>) | 218–356 |
 
 ## Direct local dependencies
 
@@ -47,7 +47,7 @@ Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`
+`dbo.crm_activities`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.inquiries`, `dbo.sales_intakes`
 
 ## Change boundary
 

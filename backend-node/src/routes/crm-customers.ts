@@ -11,6 +11,35 @@ import { localizedNameInput } from "./sales-customers.js";
 import { crmAccess, crmDto, crmId, crmText, CRM_SCOPE, bindAccess, type CrmRow } from "../crm.js";
 
 export function registerCrmCustomerRoutes(app: FastifyInstance,database: Database,users: CurrentUserService) {
+  app.delete("/api/v1/crm/customers/:id",async request=>{
+    const actor=await crmAccess(database,users,request,"crm.contact.write");
+    const id=positiveLong((request.params as {id:string}).id,"Customer");
+    const version=parseRowVersion((request.query as {rowVersion?:unknown}).rowVersion);
+    return database.transaction(async tx=>{
+      const q=new sql.Request(tx);q.input("id",sql.BigInt,id).input("actor",sql.BigInt,actor.id);
+      const before=(await q.query("SELECT * FROM dbo.customers WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")).recordset[0];
+      if(!before)throw new ApiError(404,"crm_not_found","Customer not found.");
+      if(!(before.row_version as Buffer).equals(version))throw new ApiError(409,"concurrency_conflict","Refresh before deleting.");
+      // Keep historical references intact, including records already archived.
+      const used=(await q.query(`SELECT CASE WHEN
+        EXISTS(SELECT 1 FROM dbo.inquiries WHERE customer_id=@id OR end_user_customer_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.estimates WHERE customer_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.projects WHERE customer_id=@id OR end_user_customer_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.sales_intakes WHERE customer_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.crm_opportunities WHERE customer_id=@id OR end_user_customer_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.crm_activities WHERE customer_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.crm_documents WHERE customer_id=@id)
+        THEN 1 ELSE 0 END in_use`)).recordset[0];
+      if(used.in_use)throw new ApiError(409,"customer_in_use","This customer has related business records and cannot be deleted.");
+      await q.query(`UPDATE co SET is_active=0,deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+        FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id
+        WHERE s.customer_id=@id AND co.deleted_at IS NULL;
+        UPDATE dbo.customer_sites SET is_active=0,deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE customer_id=@id AND deleted_at IS NULL;
+        UPDATE dbo.customers SET is_active=0,deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;`);
+      await insertAudit(tx,actor.id,"Customer",id,String(before.code),"Removed",crmDto(before),{removed:true,includesSitesAndContacts:true});
+      return {id,removed:true};
+    },sql.ISOLATION_LEVEL.SERIALIZABLE);
+  });
   app.get("/api/v1/crm/customers",async request=>{
     await crmAccess(database,users,request); const query=request.query as Record<string,string>;
     const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1,size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):10;

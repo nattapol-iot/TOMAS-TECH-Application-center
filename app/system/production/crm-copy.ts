@@ -1,4 +1,14 @@
 export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.fromEntries([
+ ["CRM.remove","Delete","ลบ","削除"],
+ ["CRM.removeCustomer","Delete customer","ลบลูกค้า","顧客を削除"],
+ ["CRM.removeContact","Delete contact","ลบผู้ติดต่อ","連絡先を削除"],
+ ["CRM.removeCustomerHint","Remove this customer and its sites and contacts from active lists? Business records block deletion. History is retained.","ลบลูกค้านี้พร้อมสาขาและผู้ติดต่อออกจากรายการใช้งานหรือไม่? หากมีงานอ้างอิงจะลบไม่ได้ โดยระบบเก็บประวัติไว้","この顧客と拠点・連絡先を一覧から削除しますか？関連業務がある場合は削除できません。履歴は保持されます。"],
+ ["CRM.removeContactHint","Remove this contact from active lists? History is retained.","ลบผู้ติดต่อนี้ออกจากรายการใช้งานหรือไม่? ระบบเก็บประวัติไว้","この連絡先を一覧から削除しますか？履歴は保持されます。"],
+ ["CRM.customer_in_use","This customer has related business records. Deletion is unavailable.","ลูกค้านี้มีงานหรือเอกสารอ้างอิงอยู่ จึงไม่สามารถลบได้","関連業務・文書があるため、この顧客は削除できません。"],
+ ["CRM.contact_in_use","This contact has related business records. Deletion is unavailable.","ผู้ติดต่อนี้มีงานอ้างอิงอยู่ จึงไม่สามารถลบได้","関連業務があるため、この連絡先は削除できません。"],
+ ["CRM.primary_contact_protected","Edit another contact at this site and set it as the main contact before deleting this one.","กรุณาแก้ไขผู้ติดต่อรายอื่นในสาขาเดียวกันให้เป็นผู้ติดต่อหลักก่อนลบรายนี้","同じ拠点の別の連絡先を主担当に設定してから削除してください。"],
+ ["CRM.concurrency_conflict","This record changed. Refresh the page before trying again.","ข้อมูลนี้มีการเปลี่ยนแปลง กรุณารีเฟรชหน้าก่อนทำรายการอีกครั้ง","情報が更新されています。ページを更新して再試行してください。"],
+ ["CRM.isPrimary","Main contact","ผู้ติดต่อหลัก","主担当者"],
  ["CRM.reportTitle","Report title","ชื่อรายงาน","報告書名"],
 
  ["CRM.serviceHistory","Existing service reports · open the source project or inquiry","ประวัติรายงาน Service เดิม · เปิดโครงการหรือ Inquiry ต้นทาง","既存サービス報告書・関連案件または引合を開く"], ["CRM.reportNo","Report no.","เลขที่รายงาน","報告書番号"], ["CRM.reportDate","Report date","วันที่รายงาน","報告日"],

@@ -339,11 +339,18 @@ export function registerSalesCustomerRoutes(app: FastifyInstance, database: Data
       if (before.is_primary) throw new ApiError(409, "primary_contact_protected", "Set another person as the main contact before removing this one.");
       const q = new sql.Request(transaction);
       q.input("id", sql.BigInt, contactId); q.input("actor", sql.BigInt, actor.id); q.input("row_version", sql.VarBinary(8), rowVersion);
+      const used = (await q.query<{ in_use: number }>(`SELECT CASE WHEN
+        EXISTS(SELECT 1 FROM dbo.sales_intakes WHERE site_contact_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.inquiries WHERE customer_contact_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.crm_opportunities WHERE contact_id=@id)
+        OR EXISTS(SELECT 1 FROM dbo.crm_activities WHERE contact_id=@id)
+        THEN 1 ELSE 0 END in_use`)).recordset[0];
+      if (used?.in_use) throw new ApiError(409, "contact_in_use", "This contact has related business records and cannot be deleted.");
       const removed = (await q.query<{ id: number | string }>(`UPDATE dbo.customer_site_contacts SET is_active=0,deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.id WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)).recordset[0];
       if (!removed) throw new ApiError(409, "concurrency_conflict", "This contact changed. Reload and try again.");
       await insertAudit(transaction, actor.id, "CustomerSiteContact", contactId, "", "Removed", before, null);
       return { id: contactId, siteId: Number(before.site_id), removed: true };
-    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+    }, sql.ISOLATION_LEVEL.SERIALIZABLE);
   });
 }
