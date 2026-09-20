@@ -200,7 +200,7 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
   };
 
   return <>
-    <PageHeader eyebrow="SALES TO ENGINEERING" title="Inquiry · รับเรื่องลูกค้า" subtitle="เริ่มเรื่องที่นี่ → ขอเข้าหน้างานเมื่อจำเป็น → ทำ Estimate จากเรื่องเดิม" actions={canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับเรื่องใหม่"} /></button> : undefined} />
+    <PageHeader eyebrow="SALES TO ENGINEERING" title="Inquiry · รับเรื่องลูกค้า" subtitle="ใช้เมื่อได้รับ RFQ หรือข้อมูลพร้อมประเมินราคาแล้ว · งานที่ยังต้องติดตามให้เริ่มจาก CRM" actions={canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับ RFQ / สร้าง Inquiry"} /></button> : undefined} />
     <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
       <Icon name="users" />
       <div className="seg-control" role="group" aria-label={queueCopy.team}>
@@ -243,7 +243,7 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
           const late = item.dueDate < today() && item.status !== "Approved" && item.status !== "Cancelled";
           const rowClass = late ? "row-late" : item.status === "Approved" || item.status === "Estimate Completed" ? "row-ok" : item.status === "Waiting Supplier Price" ? "row-wait" : "";
           return <tr key={item.id} className={`clickable ${rowClass}`} onClick={() => onOpen(item.id)}>
-            <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div></td>
+            <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo ? `จาก CRM · ${item.opportunityNo}` : "รับตรง · Direct Inquiry"}</small></td>
             <td><div className="cell-primary"><strong>{customerItem?.code ?? "—"}</strong><span>{item.customerName}</span><small><LocalizedText text={"End user:"} /> {item.endUserName || "ยังไม่ระบุ / Not specified"}</small></div></td>
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
             <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId))]}</strong></td>

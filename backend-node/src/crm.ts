@@ -7,6 +7,10 @@ import { optionalBodyText, requiredText, requiredInteger, parseDateOnly } from "
 
 export const CRM_STAGES = ["NEW", "QUALIFICATION", "REQUIREMENT", "ESTIMATING", "PROPOSAL", "NEGOTIATION", "WON", "LOST", "ON_HOLD"] as const;
 export const CRM_ACTIVITY_TYPES = ["Meeting", "Call", "Email", "SiteVisit", "CustomerUpdate", "InternalDiscussion", "MessageLINE", "Note", "Other"];
+export const TERMINAL_INQUIRY_STATUSES = ["Approved", "Cancelled"] as const;
+export function opportunityStageAfterInquiry(stage: unknown): string {
+  return ["NEW", "QUALIFICATION", "REQUIREMENT"].includes(String(stage)) ? "ESTIMATING" : String(stage);
+}
 export type CrmRow = Record<string, unknown>;
 export type CrmAccess = { id: number; department: string; permissions: string[] };
 export async function crmAccess(database: Database, users: CurrentUserService, request: FastifyRequest, permission = "crm.read"): Promise<CrmAccess> {

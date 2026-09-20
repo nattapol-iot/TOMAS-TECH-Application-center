@@ -5,7 +5,7 @@ import type { Database } from "../src/db.js";
 import type { CurrentUserService } from "../src/users.js";
 import type { AppConfig } from "../src/config.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { crmAttention, crmDto, opportunityInput, followupInput, scopedOpportunity, bindAccess, CRM_STAGES } from "../src/crm.js";
+import { crmAttention, crmDto, opportunityInput, followupInput, scopedOpportunity, bindAccess, CRM_STAGES, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../src/crm.js";
 import { registerCrmRoutes } from "../src/routes/crm.js";
 import { registerCrmCustomerRoutes } from "../src/routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "../src/routes/crm-documents.js";
@@ -26,6 +26,11 @@ test("stable stages and Lost reason rules",()=>{
  for(const stage of CRM_STAGES) if(stage!=="LOST")assert.equal(opportunityInput({...base,stage},true).stage,stage);
  for(const change of [{stage:"LOST"},{stage:"LOST",lostReason:"Other"},{stage:"Unknown"}])assert.throws(()=>opportunityInput({...base,...change},true),ApiError);
  assert.equal(opportunityInput({...base,stage:"LOST",lostReason:"Other",lostDetail:"Budget moved to next year"},true).lostReason,"Other");
+});
+test("inquiry conversion advances early CRM stages and defines terminal inquiry states",()=>{
+ for(const stage of ["NEW","QUALIFICATION","REQUIREMENT"])assert.equal(opportunityStageAfterInquiry(stage),"ESTIMATING");
+ for(const stage of ["ESTIMATING","PROPOSAL","NEGOTIATION","WON","LOST","ON_HOLD"])assert.equal(opportunityStageAfterInquiry(stage),stage);
+ assert.deepEqual(TERMINAL_INQUIRY_STATUSES,["Approved","Cancelled"]);
 });
 test("commercial values and dates validate without modifying estimate calculations",()=>{
  for(const value of [-1,Infinity,"NaN",1e18])assert.throws(()=>opportunityInput({...base,expectedValue:value},true),ApiError);

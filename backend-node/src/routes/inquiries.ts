@@ -21,7 +21,7 @@ import {
   requiredText,
 } from "../http.js";
 import type { CurrentUserService } from "../users.js";
-import { crmAccess, bindAccess, scopedOpportunity } from "../crm.js";
+import { crmAccess, bindAccess, scopedOpportunity, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../crm.js";
 
 type InquiryRow = Record<string, unknown> & {
   id: number | string; inquiry_no: string; inquiry_date: Date | string; customer_id: number | string;
@@ -31,6 +31,7 @@ type InquiryRow = Record<string, unknown> & {
   row_version: Buffer; estimate_id: number | string | null; project_probability: number;
   customer_interest_grade: string; total_count: number | string;
   end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
+  opportunity_id: number | string | null; opportunity_no: string | null;
 };
 
 type DetailSeedRow = Record<string, unknown> & {
@@ -139,10 +140,11 @@ export function registerInquiryRoutes(
         i.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
         i.project_name, i.project_type, i.sales_owner, i.estimate_owner_id, u.name AS estimate_owner_name,
         i.due_date, i.priority, i.status, i.progress, i.revision, i.updated_at, i.row_version, i.estimate_id,
-        i.project_probability, i.customer_interest_grade, COUNT_BIG(*) OVER() AS total_count
+        i.project_probability, i.customer_interest_grade, i.opportunity_id, o.opportunity_no, COUNT_BIG(*) OVER() AS total_count
       FROM dbo.inquiries i
       INNER JOIN dbo.customers c ON c.id = i.customer_id
       LEFT JOIN dbo.customers eu ON eu.id=i.end_user_customer_id
+      LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id
       INNER JOIN dbo.users u ON u.id = i.estimate_owner_id
       WHERE i.deleted_at IS NULL
         AND (@status IS NULL OR i.status = @status)
@@ -190,6 +192,7 @@ export function registerInquiryRoutes(
         projectProbability: row.project_probability, customerInterestGrade: row.customer_interest_grade.trim(),
         status: row.status, progress: Number(row.progress), revision: row.revision, updatedAt: row.updated_at,
         rowVersion: row.row_version.toString("base64"), estimateId: nullableNumber(row.estimate_id),
+        opportunityId: nullableNumber(row.opportunity_id), opportunityNo: row.opportunity_no,
       })),
       page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
     };
@@ -340,6 +343,13 @@ export function registerInquiryRoutes(
     const created = await database.transaction(async (transaction) => {
       const crmSource = opportunityId && crmActor ? await scopedOpportunity(bindAccess(new sql.Request(transaction),crmActor),opportunityId,true) : null;
       if (crmSource && !(crmSource.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion))) throw new ApiError(409,"concurrency_conflict","Opportunity changed. Refresh before creating an inquiry.");
+      if (crmSource) {
+        const duplicate = new sql.Request(transaction);
+        duplicate.input("opportunity",sql.BigInt,opportunityId).input("approved",sql.NVarChar(50),TERMINAL_INQUIRY_STATUSES[0]).input("cancelled",sql.NVarChar(50),TERMINAL_INQUIRY_STATUSES[1]);
+        const existing = (await duplicate.query<{id:number|string;inquiry_no:string}>(`SELECT TOP(1) id,inquiry_no FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
+          WHERE opportunity_id=@opportunity AND deleted_at IS NULL AND status NOT IN(@approved,@cancelled) ORDER BY id DESC`)).recordset[0];
+        if (existing) throw new ApiError(409,"crm_inquiry_exists",`This opportunity already has an active inquiry: ${existing.inquiry_no}`);
+      }
       const endUser = await validateEndUser(transaction, endUserId);
       const validate = new sql.Request(transaction);
       validate.input("customer_id", sql.BigInt, customerId);
@@ -388,6 +398,8 @@ export function registerInquiryRoutes(
       if (crmSource) {
         const link=new sql.Request(transaction);link.input("id",sql.BigInt,id).input("opportunity",sql.BigInt,opportunityId).input("site",sql.BigInt,crmSource.site_id).input("contact",sql.BigInt,crmSource.contact_id);
         await link.query("UPDATE dbo.inquiries SET opportunity_id=@opportunity,customer_site_id=@site,customer_contact_id=@contact WHERE id=@id");
+        const nextStage=opportunityStageAfterInquiry(crmSource.stage);
+        if(nextStage!==String(crmSource.stage)){const advance=new sql.Request(transaction);advance.input("id",sql.BigInt,opportunityId).input("stage",sql.NVarChar(40),nextStage).input("actor",sql.BigInt,actor.id);await advance.query("UPDATE dbo.crm_opportunities SET stage=@stage,stage_changed_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id");}
         await insertAudit(transaction,actor.id,"CrmOpportunity",Number(opportunityId),String(crmSource.opportunity_no).slice(0,50),"ConvertedToInquiry",null,{inquiryId:id,inquiryNumber:number});
       }
       await insertAudit(transaction, actor.id, "Inquiry", id, number, "Created", null, {

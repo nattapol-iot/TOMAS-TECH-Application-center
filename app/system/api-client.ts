@@ -302,6 +302,8 @@ export type InquirySummary = {
   progress: number;
   revision: number;
   estimateId: number | null;
+  opportunityId?: number | null;
+  opportunityNo?: string | null;
   updatedAt: string;
   rowVersion: string;
 };

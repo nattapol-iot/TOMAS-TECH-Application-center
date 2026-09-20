@@ -41,6 +41,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.occurredAt","Date / time","วันที่ / เวลา","日時"], ["CRM.participants","Participants","ผู้เข้าร่วม","参加者"],
  ["CRM.summary","Summary","สรุป","概要"], ["CRM.decision","Key decision","ข้อสรุปสำคัญ","主な決定"], ["CRM.actionItems","Action items","รายการดำเนินการ","対応事項"],
  ["CRM.convert","Create inquiry","สร้าง Inquiry","引合を作成"], ["CRM.projectType","Project type","ประเภทโครงการ","案件種別"],
+ ["CRM.openInquiry","Open active inquiry","เปิด Inquiry ที่กำลังดำเนินการ","進行中の引合を開く"], ["CRM.convertHint","Create the engineering Inquiry once the RFQ or requirements are ready. This opportunity can have only one active Inquiry.","สร้าง Inquiry สำหรับทีมวิศวกรรมเมื่อได้รับ RFQ หรือข้อมูลพร้อมประเมินแล้ว โดยหนึ่ง Opportunity มี Inquiry ที่กำลังดำเนินการได้เพียงหนึ่งรายการ","RFQ または要件が整ったら技術チーム向けの引合を作成します。商談ごとに進行中の引合は1件のみです。"],
  ["CRM.estimateOwnerId","Engineer","วิศวกร","エンジニア"], ["CRM.sourceOpportunity","Source opportunity","โอกาสขายต้นทาง","元の商談"],
  ["CRM.attention","Attention","งานที่ต้องติดตาม","要対応"], ["CRM.open","Open opportunities","โอกาสขายที่ยังเปิด","進行中の商談"],
  ["CRM.NoNextAction","No next action","ยังไม่มีสิ่งที่ต้องทำถัดไป","次のアクション未設定"], ["CRM.NoActivity","No activity","ยังไม่มีกิจกรรม","活動なし"],
