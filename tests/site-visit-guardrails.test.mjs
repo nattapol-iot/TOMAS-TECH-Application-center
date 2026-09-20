@@ -289,7 +289,7 @@ test("the site visit screens are API-backed and permission-filtered", async () =
   assert.match(screen, /relatedInquiryId: inquiry\?\.id/);
   assert.match(shell, /view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit\.read"/);
   assert.match(shell, /view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit\.read"/);
-  assert.match(shell, /view: "visit-master", label: "Visit Master Data", icon: "layers", permission: "visit\.read"/);
+  assert.match(shell, /"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit\.read"/);
 
   // The demo screen exists so nav parity holds, and stays a demo.
   assert.match(demo, /Demo only/);
@@ -324,7 +324,7 @@ test("the site visit module is part of deployment and of the production baseline
     read("database/scripts/920_site_visit_master_seed.sql"),
   ]);
   assert.match(deployment, /016_sales_intake_site_visit\.sql/);
-  assert.match(deployment, /14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43\)\) <> 43/);
+  assert.match(deployment, /version BETWEEN 1 AND 54\) <> 54/);
   assert.match(health, /RequiredSchemaVersion = 28/);
 
   // The application role may create and read a notification, and mark it read.

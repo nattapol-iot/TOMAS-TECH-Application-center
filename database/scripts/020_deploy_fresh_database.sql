@@ -145,6 +145,15 @@ IF EXISTS (
         (41, N'Admin-managed primary user roles with audited least-privilege writes'),
         (42, N'Guard estimate aggregates within supported decimal precision'),
         (43, N'Revision-scoped Estimate ERP cost classifications'),
+        (44, N'Reusable labor rate masters and estimate labor packages'),
+        (45, N'Shared estimate module and cost line ordering'),
+        (46, N'Revision-scoped estimate module names and remarks'),
+        (47, N'Estimate module description rows and summary notes'),
+        (48, N'Estimate supplier price sets'),
+        (49, N'Estimate module quantity and unit'),
+        (50, N'Preserve product codes across estimate modules'),
+        (51, N'Additional application roles carry their full permission set'),
+        (52, N'Support member email notification preference'),
         (53, N'CRM opportunities and customer follow-up'),
         (54, N'CRM opportunity end user company')
     ) expected(version, name)

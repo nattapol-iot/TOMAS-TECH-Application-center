@@ -5,6 +5,7 @@ import type { Database } from "../db.js";
 import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
 import { insertAudit } from "../audit.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { assigned, elevated, estimateAssignees, lockEditableEstimate, touchEstimate, validateReferences } from "./estimate-cost-write.js";
 export function setNumber(value: unknown, label: string, max=1000000000): number {
@@ -63,7 +64,7 @@ export function registerEstimatePriceSetRoutes(app:FastifyInstance,database:Data
    }
    const after=(await q.query(`SELECT * FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision AND price_set_key=@key AND deleted_at IS NULL;`)).recordset;
    await insertAudit(transaction,actor.id,"Estimate",id,estimate.estimate_no,editing?"Price set updated":"Price set created",{lines:rows},{lines:after});
-   return {setKey:key,estimateRowVersion:(await touchEstimate(transaction,id,actor.id)).toString("base64")};
+   await assertEstimateTotals(transaction,id);return {setKey:key,estimateRowVersion:(await touchEstimate(transaction,id,actor.id)).toString("base64")};
   });
  });
  app.put("/api/v1/estimates/:id/cost-items/:lineId/quantity",async request=>{
@@ -85,7 +86,7 @@ export function registerEstimatePriceSetRoutes(app:FastifyInstance,database:Data
    q.input("per_set",sql.Decimal(19,4),perSet);
    await q.query(`UPDATE dbo.cost_items SET qty=@qty,unit=@unit,qty_per_set=@per_set,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE estimate_id=@id AND revision=@revision AND id=@line AND deleted_at IS NULL;`);
    const after=(await q.query(`SELECT * FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision AND (id=@line OR price_set_key=@key) AND deleted_at IS NULL;`)).recordset;
-   await insertAudit(transaction,actor.id,"CostItem",lineId,estimate.estimate_no,"Quantity and unit updated",{lines:groupBefore},{lines:after});return {estimateRowVersion:(await touchEstimate(transaction,id,actor.id)).toString("base64")};
+   await insertAudit(transaction,actor.id,"CostItem",lineId,estimate.estimate_no,"Quantity and unit updated",{lines:groupBefore},{lines:after});await assertEstimateTotals(transaction,id);return {estimateRowVersion:(await touchEstimate(transaction,id,actor.id)).toString("base64")};
   });
  });
  app.post("/api/v1/estimates/:id/price-set-detach",async request=>{
@@ -99,7 +100,7 @@ export function registerEstimatePriceSetRoutes(app:FastifyInstance,database:Data
    await q.query(`UPDATE dbo.cost_items SET price_set_key=NULL,qty_per_set=NULL,unit_cost=0,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@line AND estimate_id=@id AND revision=@revision;
     UPDATE header SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() FROM dbo.cost_items header WHERE header.estimate_id=@id AND header.revision=@revision AND header.is_price_set=1 AND header.deleted_at IS NULL AND header.price_set_key=@key AND NOT EXISTS(SELECT 1 FROM dbo.cost_items member WHERE member.estimate_id=@id AND member.revision=@revision AND member.price_set_key=header.price_set_key AND member.is_price_set=0 AND member.deleted_at IS NULL);`);
    const groupAfter=(await q.query(`SELECT * FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision AND (price_set_key=@key OR id=@line);`)).recordset;
-   await insertAudit(transaction,actor.id,"CostItem",lineId,e.estimate_no,"Removed from price set",{lines:groupBefore},{lines:groupAfter,unitCost:0,requiresPriceReview:true});return {estimateRowVersion:(await touchEstimate(transaction,id,actor.id)).toString("base64")};
+   await insertAudit(transaction,actor.id,"CostItem",lineId,e.estimate_no,"Removed from price set",{lines:groupBefore},{lines:groupAfter,unitCost:0,requiresPriceReview:true});await assertEstimateTotals(transaction,id);return {estimateRowVersion:(await touchEstimate(transaction,id,actor.id)).toString("base64")};
   });
  });
 }
