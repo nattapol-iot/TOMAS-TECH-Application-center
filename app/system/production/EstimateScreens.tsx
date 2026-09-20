@@ -671,7 +671,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
     ]} />
 
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} onOpen={setTab} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { if (line.priceSetKey) setCostFocus(`price-set:${line.priceSetKey}`); else setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /><EstimateErpSummaryPanel onReorder={reorder} reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { if (line.priceSetKey) setCostFocus(`price-set:${line.priceSetKey}`); else setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -859,7 +859,7 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   return [...groups.values()].sort((left, right) => left.categoryCode.localeCompare(right.categoryCode));
 }
 
-function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorkspace; onOpen: (tab: WorkspaceTab) => void }) {
+function EstimateNextSteps({ workspace, busy, onOpen, onSubmit }: { workspace: EstimateCostWorkspace; busy: boolean; onOpen: (tab: WorkspaceTab) => void; onSubmit: () => void }) {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const { capabilities } = workspace;
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
@@ -876,7 +876,9 @@ function EstimateNextSteps({ workspace, onOpen }: { workspace: EstimateCostWorks
   } as const;
   const [title, subtitle] = content[action.kind];
   return <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
-    <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}><Icon name="arrowRight" />{title}</button>
+    {action.kind === "submit-review"
+      ? <button className="btn primary" type="button" disabled={busy} onClick={onSubmit}><Icon name="send" />{title}</button>
+      : <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}><Icon name="arrowRight" />{title}</button>}
   </Panel>;
 }
 
