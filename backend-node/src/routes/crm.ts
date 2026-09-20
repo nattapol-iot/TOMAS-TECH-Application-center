@@ -7,7 +7,7 @@ import { isProjectElevated, demandProjectScope } from "../project-scope.js";
 import { insertAudit } from "../audit.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredText, requiredInteger } from "../http.js";
-import { CRM_SCOPE, CRM_READ_JOINS, CRM_NEEDS_FOLLOWUP, CRM_ACTIVITY_TYPES, crmAccess, bindAccess, scopedOpportunity, crmDto, opportunityInput, validateCrmReferences, followupInput, crmAttention, crmText, crmId, crmChoice, type CrmRow } from "../crm.js";
+import { CRM_SCOPE, CRM_READ_JOINS, CRM_NEEDS_FOLLOWUP, CRM_ACTIVITY_TYPES, CRM_STAGES, crmAccess, bindAccess, scopedOpportunity, crmDto, opportunityInput, validateCrmReferences, followupInput, crmAttention, crmText, crmId, crmChoice, type CrmRow } from "../crm.js";
 
 const inputFields = { name:sql.NVarChar(300), customerId:sql.BigInt, endUserCustomerId:sql.BigInt, siteId:sql.BigInt, contactId:sql.BigInt, salesOwnerId:sql.BigInt, technicalOwnerId:sql.BigInt, source:sql.NVarChar(40), need:sql.NVarChar(sql.MAX), scope:sql.NVarChar(sql.MAX), expectedValue:sql.Decimal(19,4), expectedClose:sql.Date, stage:sql.NVarChar(40), probability:sql.Int, competitor:sql.NVarChar(300), priority:sql.NVarChar(20), lostReason:sql.NVarChar(40), lostDetail:sql.NVarChar(2000), internalNote:sql.NVarChar(sql.MAX) };
 const column = (name: string) => name.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
@@ -32,21 +32,60 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
 
   app.get("/api/v1/crm/dashboard",async request=>{
     const actor=await crmAccess(database,users,request);
-    return (await database.query<CrmRow>(`SELECT COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') THEN 1 ELSE 0 END),0) [open],COUNT_BIG(*) total_opportunities,
-      COALESCE(SUM(CASE WHEN ${CRM_NEEDS_FOLLOWUP} THEN 1 ELSE 0 END),0) NeedsFollowup,
-      COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date<@today THEN 1 ELSE 0 END),0) Overdue,
-      COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.status='WaitingCustomer' THEN 1 ELSE 0 END),0) WaitingCustomer,
-      COALESCE(SUM(CASE WHEN o.stage='REQUIREMENT' THEN 1 ELSE 0 END),0) REQUIREMENT,
-      COALESCE(SUM(CASE WHEN o.stage='ESTIMATING' THEN 1 ELSE 0 END),0) ESTIMATING,
-      COALESCE(SUM(CASE WHEN o.stage='PROPOSAL' THEN 1 ELSE 0 END),0) PROPOSAL,
-      COALESCE(SUM(CASE WHEN o.stage='NEGOTIATION' THEN 1 ELSE 0 END),0) NEGOTIATION,
-      COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL) THEN 1 ELSE 0 END),0) converted_to_inquiry,
-      COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM dbo.inquiries i JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL) THEN 1 ELSE 0 END),0) converted_to_estimate,
-      COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM dbo.inquiries i JOIN dbo.projects p ON p.inquiry_id=i.id AND p.deleted_at IS NULL WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL) THEN 1 ELSE 0 END),0) converted_to_project,
-      (SELECT COUNT_BIG(*) FROM dbo.inquiries direct JOIN dbo.users direct_owner ON direct_owner.id=direct.estimate_owner_id
-        WHERE direct.opportunity_id IS NULL AND direct.deleted_at IS NULL AND (@all=1 OR direct.created_by=@actor OR direct.estimate_owner_id=@actor OR (@team=1 AND direct_owner.department=@department))) direct_inquiries,
-      COALESCE(SUM(CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND (f.action IS NULL OR f.due_date<=@today OR ${CRM_NEEDS_FOLLOWUP}) THEN 1 ELSE 0 END),0) actionable
-      ${CRM_READ_JOINS} WHERE ${CRM_SCOPE}`,q=>bindAccess(q,actor).input("today",sql.Date,today()))).recordset[0];
+    // The attention rules are long and are needed more than once, so they are
+    // evaluated a single time per opportunity in the CTE and only counted
+    // afterwards. CRM_READ_JOINS adds no rows -- its applies are TOP(1) or
+    // aggregates -- so COUNT_BIG(*) over the CTE is the opportunity count.
+    // The stage list interpolated below is this module's own constant; no part
+    // of it comes from the caller.
+    const perStage=CRM_STAGES.map(code=>`COALESCE(SUM(CASE WHEN stage=N'${code}' THEN 1 ELSE 0 END),0) [stage_${code}]`).join(",");
+    const totals=(await database.query<CrmRow>(`WITH scoped AS (
+        SELECT o.stage,
+          CASE WHEN ${CRM_NEEDS_FOLLOWUP} THEN 1 ELSE 0 END needs_followup,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.action IS NULL THEN 1 ELSE 0 END no_next_action,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date<@today THEN 1 ELSE 0 END overdue,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date<=@today THEN 1 ELSE 0 END due_now,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.status='WaitingCustomer' THEN 1 ELSE 0 END waiting_customer,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND a.last_activity IS NULL THEN 1 ELSE 0 END no_activity,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND ed.estimate_due<=DATEADD(day,3,@today) THEN 1 ELSE 0 END estimate_due_soon
+        ${CRM_READ_JOINS} WHERE ${CRM_SCOPE})
+      SELECT COUNT_BIG(*) total,
+        COALESCE(SUM(CASE WHEN stage NOT IN('WON','LOST','ON_HOLD') THEN 1 ELSE 0 END),0) [open],
+        COALESCE(SUM(needs_followup),0) needs_followup,
+        COALESCE(SUM(no_next_action),0) no_next_action,
+        COALESCE(SUM(overdue),0) overdue,
+        COALESCE(SUM(waiting_customer),0) waiting_customer,
+        COALESCE(SUM(no_activity),0) no_activity,
+        COALESCE(SUM(estimate_due_soon),0) estimate_due_soon,
+        COALESCE(SUM(CASE WHEN needs_followup=1 OR no_next_action=1 OR due_now=1 THEN 1 ELSE 0 END),0) actionable,
+        ${perStage}
+      FROM scoped`,q=>bindAccess(q,actor).input("today",sql.Date,today()))).recordset[0]??{};
+    // How many opportunities reached each downstream record, over the same
+    // permitted set and distinct by opportunity, so two inquiries raised on one
+    // opportunity still count once.
+    const flow=(await database.query<CrmRow>(`WITH permitted AS (SELECT o.id FROM dbo.crm_opportunities o WHERE ${CRM_SCOPE})
+      SELECT (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id WHERE i.deleted_at IS NULL) converted_to_inquiry,
+        (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL WHERE i.deleted_at IS NULL) converted_to_estimate,
+        (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id JOIN dbo.projects p ON p.inquiry_id=i.id AND p.deleted_at IS NULL WHERE i.deleted_at IS NULL) converted_to_project,
+        (SELECT COUNT_BIG(*) FROM dbo.inquiries direct LEFT JOIN dbo.users direct_owner ON direct_owner.id=direct.estimate_owner_id
+          WHERE direct.opportunity_id IS NULL AND direct.deleted_at IS NULL AND (@all=1 OR direct.created_by=@actor OR direct.estimate_owner_id=@actor OR (@team=1 AND direct_owner.department=@department))) direct_inquiries`,
+      q=>bindAccess(q,actor))).recordset[0]??{};
+    // COUNT_BIG and SUM arrive as bigint-shaped values, so each one is forced
+    // to a plain number here: the response stays JSON-serialisable and the
+    // client reads one camelCase shape instead of raw column names.
+    const n=(source:CrmRow,key:string)=>Number(source[key]??0);
+    return {
+      open:n(totals,"open"),actionable:n(totals,"actionable"),
+      NeedsFollowup:n(totals,"needs_followup"),NoNextAction:n(totals,"no_next_action"),
+      Overdue:n(totals,"overdue"),WaitingCustomer:n(totals,"waiting_customer"),
+      NoActivity:n(totals,"no_activity"),EstimateDueSoon:n(totals,"estimate_due_soon"),
+      stages:Object.fromEntries(CRM_STAGES.map(code=>[code,n(totals,`stage_${code}`)])),
+      totalOpportunities:n(totals,"total"),
+      convertedToInquiry:n(flow,"converted_to_inquiry"),
+      convertedToEstimate:n(flow,"converted_to_estimate"),
+      convertedToProject:n(flow,"converted_to_project"),
+      directInquiries:n(flow,"direct_inquiries"),
+    };
   });
 
   app.get("/api/v1/crm/options",async request=>{

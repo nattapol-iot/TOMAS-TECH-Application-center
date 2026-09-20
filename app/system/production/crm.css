@@ -24,7 +24,6 @@
 /* The filter row is a shared .toolbar; this only lets the search field take
    the slack so the controls beside it keep their natural width. */
 .crm-filters .search-field { flex: 1 1 240px; min-width: 0; }
-.crm-quick-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* Inline messages. The module used .alert with no stylesheet behind it
    anywhere in the application, so an API failure rendered as bare text. */
@@ -52,22 +51,106 @@
 .crm-hero .summary-tile strong { font-size: var(--fs-sm); overflow-wrap: anywhere; }
 
 /* --------------------------------------------------------------------------
-   Tables — global `table` styles apply; this is only the scroll container
+   Overview — a distribution, the counts worth acting on, and a funnel, in the
+   space eleven KPI cards used to take
    -------------------------------------------------------------------------- */
 
-.crm-table-wrap { overflow-x: auto; min-width: 0; }
-.crm-table-wrap table { min-width: 720px; }
+.crm-overview { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.crm-overview > * + * { padding-top: 12px; border-top: 1px solid var(--line-soft); }
+
+.crm-distribution-head { display: flex; align-items: baseline; gap: 6px; }
+.crm-distribution-head strong { font-size: var(--fs-xl); font-weight: 660; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.crm-distribution-head span { color: var(--muted); font-size: var(--fs-xs); }
+
+.crm-distribution-bar { display: flex; gap: 2px; height: 10px; margin: 8px 0 9px; }
+.crm-seg {
+  min-width: 6px;
+  border: 0;
+  border-radius: var(--r-xs);
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease, outline-color 120ms ease;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.crm-seg:hover { opacity: 0.78; }
+.crm-seg.active { outline-color: var(--ink); }
+
+.crm-legend { display: flex; gap: 4px 14px; flex-wrap: wrap; }
+.crm-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 1px 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.crm-legend button:hover, .crm-legend button.active { color: var(--ink); }
+.crm-legend strong { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 650; }
+.crm-legend button.active strong { color: var(--ink); }
+.crm-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+/* The pipeline ramp runs cool to warm as a deal commits, so a glance at the
+   bar says how far along the book is, not just how it splits. */
+.crm-distribution .c0 { background: var(--c8); }
+.crm-distribution .c1 { background: var(--c2); }
+.crm-distribution .c2 { background: var(--c1); }
+.crm-distribution .c3 { background: var(--c7); }
+.crm-distribution .c4 { background: var(--c5); }
+.crm-distribution .c5 { background: var(--c4); }
+
+.crm-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.crm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: 550;
+  cursor: pointer;
+}
+.crm-chip strong { font-variant-numeric: tabular-nums; font-weight: 700; }
+.crm-chip:hover { border-color: var(--n-300); }
+.crm-chip.amber { border-color: var(--amber-line); color: var(--amber-text); }
+.crm-chip.red { border-color: var(--red-line); color: var(--red-text); }
+.crm-chip.blue { border-color: var(--blue-line); color: var(--blue-text); }
+.crm-chip.amber.active { background: var(--amber-soft); }
+.crm-chip.red.active { background: var(--red-soft); }
+.crm-chip.blue.active { background: var(--blue-soft); }
+.crm-chip.slate.active { background: var(--n-100); }
+.crm-chip.active { font-weight: 650; }
+
+.crm-funnel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }
+.crm-funnel li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.crm-funnel span:first-child { color: var(--muted); font-size: var(--fs-2xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-funnel strong { font-size: var(--fs-md); font-weight: 650; font-variant-numeric: tabular-nums; }
+.crm-funnel em { margin-left: 5px; color: var(--muted); font-size: var(--fs-2xs); font-style: normal; font-weight: 500; }
+.crm-funnel-track { display: block; height: 5px; margin-top: 3px; border-radius: var(--r-pill); background: var(--n-100); overflow: hidden; }
+.crm-funnel-track b { display: block; height: 100%; border-radius: var(--r-pill); }
+.crm-funnel .c0 { background: var(--c1); }
+.crm-funnel .c1 { background: var(--c5); }
+.crm-funnel .c2 { background: var(--c3); }
+
+/* --------------------------------------------------------------------------
+   Tables — the shared .table-wrap and global `table` styles carry these
+   -------------------------------------------------------------------------- */
+
 .crm-link {
   border: 0; background: none; padding: 0;
   color: var(--blue-text); font: inherit; font-weight: 600;
   text-align: left; cursor: pointer;
 }
 .crm-link:hover { text-decoration: underline; }
-
-/* The row of page-size + pagination under a list. */
-.crm-table-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.crm-table-footer .table-page-size { margin: 0; }
-.crm-table-footer .pagination { flex: 1; min-width: 0; }
 
 /* --------------------------------------------------------------------------
    Pipeline board
@@ -361,8 +444,8 @@ button.crm-opportunity-card:hover { border-color: var(--n-300); box-shadow: var(
   .crm-filters .select-field,
   .crm-filters .select-field select { width: 100%; }
   .crm-action { align-items: flex-start; flex-direction: column; gap: 8px; }
-  .crm-table-footer { justify-content: center; }
   .crm-end-user-actions > span { margin-right: 0; flex-basis: 100%; }
+  .crm-funnel { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
 }
 
 @media (max-width: 620px) {
