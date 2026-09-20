@@ -4915,6 +4915,16 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cost-order-actions { justify-content: flex-end; gap: 3px; flex-wrap: nowrap; }
 .cost-order-actions .icon-btn { width: 26px; height: 26px; min-width: 26px; padding: 3px; }
 .cost-module-controls { text-align: right; }
+/* The band's name is pinned to the left edge of the sheet; its actions were
+   not, so on a wide sheet rename and delete were off screen and people could
+   not find them at all. */
+.cost-sheet .module-row > td.cost-module-controls,
+.cost-sheet .group-row > td.cost-module-controls {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  box-shadow: -1px 0 0 var(--blue-line);
+}
 
 /* Estimate module actions stay on the same baseline at the right edge. */
 .cost-breakdown .cb-module-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; }

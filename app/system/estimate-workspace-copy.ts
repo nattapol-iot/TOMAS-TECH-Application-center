@@ -1080,6 +1080,26 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
     "th": "อัตราถูกเก็บไว้เป็นข้อมูลอ้างอิงพร้อมแถว Rate Master ที่มันมา · ตอนนำชุดงานไปใช้ระบบจะอ่านอัตราปัจจุบันใหม่ อัตราเก่าจึงไม่มีทางถูกคัดลอกเข้า Estimate ใหม่ · ชุดงานถูกบันทึกเป็น Draft การเผยแพร่ต้องมีสิทธิ์ master data",
     "jp": "単価は取得元のレートマスタ行とともに参照値として保存されます。パッケージ適用時に現行単価を読み直すため、古い単価が新しい見積に複製されることはありません。パッケージは下書きとして保存され、公開にはマスタデータ権限が必要です。"
   },
+  "Name the module, then add its first item to save it into this revision": {
+    "th": "ตั้งชื่อ Main Module แล้วเพิ่ม Item แรกเพื่อบันทึกลง revision ปัจจุบัน",
+    "jp": "メインモジュール名を付け、最初のアイテムを追加すると現在の版に保存されます"
+  },
+  "ขยับขึ้น / Move up": {
+    "th": "ขยับขึ้น",
+    "jp": "上へ移動"
+  },
+  "ขยับลง / Move down": {
+    "th": "ขยับลง",
+    "jp": "下へ移動"
+  },
+  "แก้ไข Main Module / Edit Main Module": {
+    "th": "แก้ไข Main Module",
+    "jp": "メインモジュールを編集"
+  },
+  "ลบ Main Module / Delete Main Module": {
+    "th": "ลบ Main Module",
+    "jp": "メインモジュールを削除"
+  },
   "Add from library": {
     "th": "เพิ่มจากคลัง",
     "jp": "ライブラリから追加"

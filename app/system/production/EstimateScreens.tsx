@@ -1075,8 +1075,8 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     </div></td><td className="cost-module-controls">{canAdd && lineCount ? <span className="row-actions cost-order-actions">{([-1, 1] as const).map(direction => {
         const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
         const index = siblings.findIndex(entry => entry.key === group.key);
-        return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
-      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title="แก้ไข Main Module / Edit Main Module" aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title="ลบ Main Module / Delete Main Module" aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
+        return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={localizeCopy(direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down")} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
+      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
   </tr>;
 
   return <>
@@ -1476,13 +1476,17 @@ function SaveModuleTemplateModal({ group, busy, onClose, onSave }: { group: Cost
 
 function MainModuleEditor({ workspace, busy, onClose, onContinue }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onContinue: (seed: CostItemSeed) => void }) {
   const localizeCopy = useStaticCopy();
-  const uiText = useUiText();
+  const nameRef = useRef<HTMLInputElement>(null);
   const allowedCategories = COST_CATEGORIES.filter(([code]) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code));
   const [categoryCode, setCategoryCode] = useState<string>(allowedCategories[0]?.[0] ?? "01");
   const [name, setName] = useState("");
   const selected = COST_CATEGORIES.find(([code]) => code === categoryCode) ?? COST_CATEGORIES[0];
-  return <Modal title={uiText("New Main Module")} subtitle="ตั้งชื่อ Main Module แล้วเพิ่ม Item แรกเพื่อบันทึกลง revision ปัจจุบัน" size="sm" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={() => onContinue({ categoryCode: selected[0], category: selected[1], module: name.trim(), priceSource: "Manual Estimate" })}><Icon name="arrowRight" /><LocalizedText text={"Continue to first item"} /></button></>}>
-    <div className="form-grid two"><Field label="Discipline *"><select value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)}>{allowedCategories.map(([code, label]) => <option key={code} value={code}>{code} — {label}</option>)}</select></Field><Field label="Main module name *"><input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder={localizeCopy("เช่น Control Panel หรือ PLC System")} /></Field></div>
+  /* jsx-a11y forbids autoFocus; the name is still the one field that must be
+     typed, so the dialog puts the caret there on open. */
+  useEffect(() => { nameRef.current?.focus(); }, []);
+  const submit = () => { if (!busy && name.trim()) onContinue({ categoryCode: selected[0], category: selected[1], module: name.trim(), priceSource: "Manual Estimate" }); };
+  return <Modal title="New Main Module" subtitle="Name the module, then add its first item to save it into this revision" size="md" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={submit}><Icon name="arrowRight" /><LocalizedText text={"Continue to first item"} /></button></>}>
+    <div className="form-grid two"><Field label="Discipline *"><select value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)}>{allowedCategories.map(([code, label]) => <option key={code} value={code}>{code} — {label}</option>)}</select></Field><Field label="Main module name *"><input required ref={nameRef} maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder={localizeCopy("เช่น Control Panel หรือ PLC System")} /></Field></div>
     <div className="info-strip" style={{ marginTop: 12 }}><Icon name="layers" /><span><LocalizedText text={"Main Module จะถูกบันทึกจริงเมื่อ Item แรกถูกสร้าง เพื่อไม่ให้เกิดโมดูลว่างในฐานข้อมูล"} /></span></div>
   </Modal>;
 }
