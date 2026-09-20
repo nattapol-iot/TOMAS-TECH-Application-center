@@ -76,7 +76,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.searchCustomer","Search by customer code or name…","ค้นหาด้วยรหัสหรือชื่อลูกค้า…","顧客コードまたは名称で検索…"], ["CRM.selectFromList","Select a customer from the list","กรุณาเลือกลูกค้าจากรายการ","リストから顧客を選択してください"], ["CRM.showOptions","Show customer list","แสดงรายชื่อลูกค้า","顧客リストを表示"],
  ["CRM.endUserCustomerId","End user (optional)","บริษัทผู้ใช้งานปลายทาง (ไม่บังคับ)","エンドユーザー（任意）"], ["CRM.endUserName","End user","ผู้ใช้งานปลายทาง","エンドユーザー"], ["CRM.searchEndUser","Search end user code or company name…","ค้นหารหัสหรือชื่อบริษัทผู้ใช้งานปลายทาง…","エンドユーザーのコードまたは会社名を検索…"],
  ["CRM.sameCustomer","Same as customer","บริษัทเดียวกับลูกค้า","顧客と同じ"], ["CRM.notSpecified","Not specified","ยังไม่ระบุ","未指定"], ["CRM.endUserHint","Uses the same company master as Estimate Cost and carries forward to Inquiry.","ใช้ข้อมูลบริษัทชุดเดียวกับ Estimate Cost และส่งต่อไปยัง Inquiry","Estimate Cost と同じ会社マスターを使用し、引合へ引き継ぎます。"],
- ["CRM.chooseEndUser","Choose End User","เลือก End User","エンドユーザーを選択"],
+ ["CRM.useCustomerAsEndUser","Use customer as End User","ใช้ลูกค้าเป็น End User","顧客をエンドユーザーに設定"],
  ["CRM.nameTh","Name (Thai)","ชื่อภาษาไทย","名前（タイ語）"], ["CRM.nameEn","Name (English)","ชื่อภาษาอังกฤษ","名前（英語）"], ["CRM.nameJa","Name (Japanese)","ชื่อภาษาญี่ปุ่น","名前（日本語）"],
  ["CRM.accountOwnerName","Account owner","ผู้ดูแลลูกค้า","顧客担当者"], ["CRM.customerName","Customer","ลูกค้า","顧客"], ["CRM.nextAction","Next action","สิ่งที่ต้องทำถัดไป","次のアクション"], ["CRM.nextDue","Next due","กำหนดครั้งถัดไป","次回期限"],
  ["CRM.salesOwnerName","Sales owner","ผู้รับผิดชอบงานขาย","営業担当者"],
