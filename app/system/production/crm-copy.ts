@@ -78,6 +78,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.sameCustomer","Same as customer","บริษัทเดียวกับลูกค้า","顧客と同じ"], ["CRM.notSpecified","Not specified","ยังไม่ระบุ","未指定"], ["CRM.endUserHint","Uses the same company master as Estimate Cost and carries forward to Inquiry.","ใช้ข้อมูลบริษัทชุดเดียวกับ Estimate Cost และส่งต่อไปยัง Inquiry","Estimate Cost と同じ会社マスターを使用し、引合へ引き継ぎます。"],
  ["CRM.nameTh","Name (Thai)","ชื่อภาษาไทย","名前（タイ語）"], ["CRM.nameEn","Name (English)","ชื่อภาษาอังกฤษ","名前（英語）"], ["CRM.nameJa","Name (Japanese)","ชื่อภาษาญี่ปุ่น","名前（日本語）"],
  ["CRM.accountOwnerName","Account owner","ผู้ดูแลลูกค้า","顧客担当者"], ["CRM.customerName","Customer","ลูกค้า","顧客"], ["CRM.nextAction","Next action","สิ่งที่ต้องทำถัดไป","次のアクション"], ["CRM.nextDue","Next due","กำหนดครั้งถัดไป","次回期限"],
+ ["CRM.salesOwnerName","Sales owner","ผู้รับผิดชอบงานขาย","営業担当者"],
  ["CRM.opportunityNo","Opportunity number","เลขที่โอกาสขาย","商談番号"], ["CRM.inquiryNo","Inquiry number","เลขที่ Inquiry","引合番号"], ["CRM.estimateNo","Estimate number","เลขที่ Estimate","見積番号"], ["CRM.projectNo","Project number","เลขที่โครงการ","案件番号"],
  ["CRM.projectName","Project name","ชื่อโครงการ","案件名"], ["CRM.revision","Revision","ฉบับแก้ไข","改訂"], ["CRM.total","Total (THB)","ยอดรวม (บาท)","合計 (THB)"], ["CRM.targetDelivery","Target delivery","กำหนดส่งมอบ","納入予定日"],
  ["CRM.uploadedByName","Uploaded by","ผู้อัปโหลด","アップロード者"], ["CRM.uploadedAt","Uploaded at","วันที่อัปโหลด","アップロード日時"], ["CRM.sizeBytes","Size (bytes)","ขนาด (ไบต์)","サイズ（バイト）"],
