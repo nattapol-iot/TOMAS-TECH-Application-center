@@ -2,23 +2,23 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/estimates/:id/price-sets` | 22–68 |
-| PUT | `/api/v1/estimates/:id/cost-items/:lineId/quantity` | 69–90 |
-| POST | `/api/v1/estimates/:id/price-set-detach` | 91–104 |
+| POST | `/api/v1/estimates/:id/price-sets` | 23–69 |
+| PUT | `/api/v1/estimates/:id/cost-items/:lineId/quantity` | 70–91 |
+| POST | `/api/v1/estimates/:id/price-set-detach` | 92–105 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `setNumber` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 10–13 |
-| `validateSetMembers` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 15–20 |
-| `registerEstimatePriceSetRoutes` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 21–105 |
+| `setNumber` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 11–14 |
+| `validateSetMembers` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 16–21 |
+| `registerEstimatePriceSetRoutes` | [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>) | 22–106 |
 
 ## Direct local dependencies
 
@@ -26,6 +26,7 @@ Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
+- [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>)
 

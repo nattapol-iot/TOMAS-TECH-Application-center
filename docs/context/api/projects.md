@@ -2,26 +2,26 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects` | 48–89 |
-| POST | `/api/v1/projects` | 91–198 |
-| GET | `/api/v1/projects/:id/members` | 200–225 |
-| POST | `/api/v1/projects/:id/members` | 227–250 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 252–273 |
-| PUT | `/api/v1/projects/:id` | 275–373 |
+| GET | `/api/v1/projects` | 49–90 |
+| POST | `/api/v1/projects` | 92–200 |
+| GET | `/api/v1/projects/:id/members` | 202–227 |
+| POST | `/api/v1/projects/:id/members` | 229–252 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 254–275 |
+| PUT | `/api/v1/projects/:id` | 277–375 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 33–37 |
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 39–44 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 46–374 |
+| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 34–38 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 40–45 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–376 |
 
 ## Direct local dependencies
 
@@ -38,6 +38,7 @@ Evidence: source snapshot `543450fe`; generated, do not edit. [backend-node/src/
 - [backend-node/src/project-lifecycle.ts](<../../../backend-node/src/project-lifecycle.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
+- [backend-node/src/crm.ts](<../../../backend-node/src/crm.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
