@@ -47,7 +47,8 @@ function workbookXml(input = fixture()) {
 test("creates one standalone Summary cost sheet with ERP-compatible headers", () => {
   const files = workbookXml();
   assert.match(files["xl/workbook.xml"], /sheet name="Summary cost"/);
-  assert.match(files["xl/workbook.xml"], /_xlnm.Print_Area[^>]*>'Summary cost'!\$C\$1:\$O\$28/);
+  const lastRow = [...files["xl/worksheets/sheet1.xml"].matchAll(/<row r="(\d+)"/g)].at(-1)[1];
+  assert.match(files["xl/workbook.xml"], new RegExp(`_xlnm.Print_Area[^>]*>'Summary cost'!\\$C\\$1:\\$O\\$${lastRow}<`));
   assert.match(files["xl/worksheets/sheet1.xml"], /<c r="C8"[^>]*>.*Item/);
   assert.match(files["xl/worksheets/sheet1.xml"], /Model\/Part Number/);
   assert.match(files["xl/worksheets/sheet1.xml"], /Discription\/Detial/);
@@ -58,21 +59,28 @@ test("creates one standalone Summary cost sheet with ERP-compatible headers", ()
   for (const merge of ["C1:O1", "F2:F6", "N2:O2", "N3:O6", "C6:D6", "C7:O7", "N8:O8"]) {
     assert.match(files["xl/worksheets/sheet1.xml"], new RegExp(`<mergeCell ref="${merge}"/>`));
   }
-  assert.match(files["xl/worksheets/sheet1.xml"], />000<\/t>/);
+  assert.match(files["xl/worksheets/sheet1.xml"], />001<\/t>/);
   assert.match(files["xl/worksheets/sheet1.xml"], />Page<\/t>/);
 });
 
 test("emits all seven category blocks in fixed ERP order and literal reconciled totals", () => {
   const sheet = workbookXml()["xl/worksheets/sheet1.xml"];
   const positions = ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"]
-    .map(category => sheet.indexOf(`>${category}</t>`));
-  assert.ok(positions.every(position => position >= 0));
+    .map(category => sheet.indexOf(`>${category} Sub Total</t>`));
+  assert.ok(positions.every(position => position >= 0), "every category keeps a block");
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+  // The category names its own block from column D, where the block has lines.
+  assert.match(sheet, /<c r="D\d+" s="10" t="inlineStr"><is><t xml:space="preserve">Hardware</);
   assert.match(sheet, />Approved Overhead<\/t>/);
   assert.match(sheet, />Sub Total<\/t>/);
   assert.match(sheet, />Grand Total<\/t>/);
   assert.match(sheet, /<v>30000<\/v>/);
-  assert.match(sheet, /<mergeCell ref="C11:K11"\/>/);
+  // Whatever row it lands on, a total spans C:K the way the form draws it.
+  for (const label of ["Hardware Sub Total", "Grand Total"]) {
+    const before = sheet.slice(0, sheet.indexOf(`>${label}</t>`));
+    const row = [...before.matchAll(/<row r="(\d+)"/g)].at(-1)[1];
+    assert.match(sheet, new RegExp(`<mergeCell ref="C${row}:K${row}"/>`), `${label} spans C:K`);
+  }
 });
 
 test("blocks unmapped rows, unapproved overhead, and totals outside the 0.01 tolerance", () => {

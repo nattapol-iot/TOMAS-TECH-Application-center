@@ -148,55 +148,80 @@ export function validateErpEstimateWorkbook(input: ErpEstimateWorkbookInput): vo
   if (issues.length) throw new ErpEstimateWorkbookValidationError(issues);
 }
 
+/*
+ * The sheet is the company's ESTIMATE COST form, filled in.
+ *
+ * Its shape is not ours to improve: the header block, the wording of every label
+ * — "Custumer", "Shot name", "Discription/Detial" — and the order of the columns
+ * are what the people downstream read and what their ERP import expects. So the
+ * form decides the layout and the estimate only supplies the values.
+ *
+ * Within it: one running item number down column C, the ERP category written once
+ * in column D where its block begins, and the lines of that block beneath. No
+ * spacer rows and no invented remarks — the form is filled to the length of the
+ * estimate, not padded to the length of the paper.
+ */
 function worksheetRows(input: ErpEstimateWorkbookInput): Cell[][] {
+  const label = (value: string) => ({ value, style: STYLE.label });
+  const boxed = (value: string | number) => ({ value, style: STYLE.headerValue });
+  const centred = (value: string) => ({ value, style: STYLE.headerCentre });
   const rows: Cell[][] = [
-    [{}, {}, { value: "ESTIMATE COST", style: 1 }],
-    [{}, {}, { value: "Project name", style: 6 }, {}, { value: input.metadata.projectName }, { value: "000" }, { value: "Rev.", style: 6 }, { value: "Discription", style: 6 }, {}, {}, { value: "Creator", style: 6 }, { value: "Date", style: 6 }, {}, { value: "Page", style: 6 }],
-    [{}, {}, { value: "Custumer", style: 6 }, {}, { value: input.metadata.customer }, {}, { value: input.metadata.revision }, { value: input.metadata.revisionDescription ?? "" }, {}, {}, { value: input.metadata.creator }, { value: input.metadata.exportDate }, {}, { value: "(1/1)" }],
-    [{}, {}, { value: "Shot name", style: 6 }, {}, { value: input.metadata.shortName ?? "" }, {}, { value: "△1" }],
-    [{}, {}, { value: "Project Number", style: 6 }, {}, { value: input.metadata.projectNumber ?? "" }, {}, { value: "△3" }],
-    [{}, {}, { value: "Page name", style: 6 }, {}, { value: "Summary cost" }, {}, { value: "△4" }],
+    [{}, {}, { value: "ESTIMATE COST", style: STYLE.title }],
+    [{}, {}, label("Project name"), {}, boxed(input.metadata.projectName), { value: "001", style: STYLE.headerItalic },
+      centred("Rev."), centred("Discription"), {}, {}, centred("Creator"), centred("Date"), {}, centred("Page")],
+    [{}, {}, label("Custumer"), {}, boxed(input.metadata.customer), {},
+      centred("△1"), boxed(input.metadata.revisionDescription ?? ""), {}, {}, boxed(input.metadata.creator), boxed(input.metadata.exportDate), {}, { value: "(1/1)", style: STYLE.headerCentreLight }],
+    [{}, {}, label("Shot name"), {}, boxed(input.metadata.shortName ?? ""), {}, centred("△2")],
+    [{}, {}, label("Project Number"), {}, boxed(input.metadata.projectNumber ?? ""), {}, centred("△3")],
+    [{}, {}, label("Page name"), {}, boxed("Summary cost"), {}, centred("△4")],
     [],
     [{}, {}, ...[
       "Item", "Model/Part Number", "Discription/Detial", "Suppier", "Brand", "Lead Time",
       "Quote Rev.", "Unit price", "Quantity", "Total (BATH)", "Unit", "Remark",
-    ].map(value => ({ value, style: 2 }))],
+    ].map(value => ({ value, style: STYLE.columnHead }))],
   ];
 
-  let sequence = 1;
+  let item = 1;
   for (const category of ERP_COST_CATEGORIES) {
-    rows.push([{}, {}, { value: category, style: 3 }]);
     const categoryRows = input.summary.lines.filter(row => row.erpCategory === category);
-    for (const row of categoryRows) {
+    categoryRows.forEach((row, index) => {
+      /* The category names its block from column D. A first line that carries a
+         part number of its own keeps it, and the name takes a line above rather
+         than displacing it — the form may not cost the sheet a real value. */
+      const partNumber = row.modelPartNumber ?? "";
+      if (index === 0 && partNumber) rows.push([{}, {}, {}, { value: category, style: STYLE.blockName }]);
       rows.push([{}, {},
-        { value: row.item ?? sequence++, style: 4 },
-        { value: row.modelPartNumber ?? "", style: 4 },
-        { value: row.description, style: 4 },
-        { value: row.supplier ?? "", style: 4 },
-        { value: row.brand ?? "", style: 4 },
-        { value: row.leadTime ?? "", style: 4 },
-        { value: row.quoteRevision ?? "", style: 4 },
-        { value: row.unitPrice ?? row.amount, style: 5 },
-        { value: row.quantity ?? 1, style: 5 },
-        { value: row.amount, style: 5 },
-        { value: row.unit ?? "", style: 4 },
-        { value: row.remark ?? "", style: 4 },
+        { value: item++, style: STYLE.text },
+        { value: index === 0 && !partNumber ? category : partNumber, style: index === 0 && !partNumber ? STYLE.blockName : STYLE.text },
+        { value: row.description, style: STYLE.text },
+        { value: row.supplier ?? "", style: STYLE.text },
+        { value: row.brand ?? "", style: STYLE.text },
+        { value: row.leadTime ?? "", style: STYLE.text },
+        { value: row.quoteRevision ?? "", style: STYLE.text },
+        { value: money(row.unitPrice ?? row.amount), style: STYLE.money },
+        { value: row.quantity ?? 1, style: STYLE.money },
+        { value: money(row.amount), style: STYLE.money },
+        { value: row.unit ?? "", style: STYLE.text },
+        { value: "", style: STYLE.text },
       ]);
-    }
+    });
     const subtotal = money(categoryRows.reduce((sum, row) => sum + row.amount, 0));
-    rows.push([{}, {}, { value: `${category} Sub Total`, style: 3 }, {}, {}, {}, {}, {}, {}, {}, {}, { value: subtotal, style: 7 }]);
+    rows.push([{}, {}, { value: `${category} Sub Total`, style: STYLE.subtotal }, {}, {}, {}, {}, {}, {}, {}, {}, { value: subtotal, style: STYLE.subtotalMoney }]);
   }
 
-  rows.push([{}, {}, { value: "Sub Total", style: 3 }, {}, {}, {}, {}, {}, {}, {}, {}, { value: input.summary.classifiedTotal, style: 7 }]);
-  rows.push([{}, {}, { value: "Approved Overhead", style: 3 }, {}, {}, {}, {}, {}, {}, {}, {}, { value: input.approvedOverhead.amount, style: 7 }]);
-  rows.push([{}, {}, { value: "Grand Total", style: 8 }, {}, {}, {}, {}, {}, {}, {}, {}, { value: input.summary.canonicalTotal, style: 9 }]);
+  rows.push([{}, {}, { value: "Sub Total", style: STYLE.subtotal }, {}, {}, {}, {}, {}, {}, {}, {}, { value: money(input.summary.classifiedTotal), style: STYLE.subtotalMoney }]);
+  rows.push([{}, {}, { value: "Approved Overhead", style: STYLE.subtotal }, {}, {}, {}, {}, {}, {}, {}, {}, { value: money(input.approvedOverhead.amount), style: STYLE.subtotalMoney }]);
+  rows.push([{}, {}, { value: "Grand Total", style: STYLE.grandTotal }, {}, {}, {}, {}, {}, {}, {}, {}, { value: money(input.summary.canonicalTotal), style: STYLE.grandTotalMoney }]);
   return rows;
 }
 
 function worksheetXml(rows: Cell[][]): string {
   const content = rows.map((row, rowIndex) => {
     const cells = row.map((cell, columnIndex) => {
-      if (cell.value === undefined || cell.value === "") return "";
+      /* A cell with a style but no value still draws its part of the grid: dropping it
+         would leave a hole in the ruled box the form is made of. */
+      const ref0 = `${columnName(columnIndex + 1)}${rowIndex + 1}`;
+      if (cell.value === undefined || cell.value === "") return cell.style === undefined ? "" : `<c r="${ref0}" s="${cell.style}"/>`;
       const ref = `${columnName(columnIndex + 1)}${rowIndex + 1}`;
       const style = cell.style ? ` s="${cell.style}"` : "";
       return typeof cell.value === "number"
@@ -216,7 +241,6 @@ function worksheetXml(rows: Cell[][]): string {
   rows.forEach((row, index) => {
     const label = row[2]?.value;
     if (typeof label !== "string") return;
-    if (ERP_COST_CATEGORIES.includes(label as ErpCostCategory)) merges.push(`C${index + 1}:N${index + 1}`);
     if (label.endsWith("Sub Total") || label === "Approved Overhead" || label === "Grand Total") {
       merges.push(`C${index + 1}:K${index + 1}`);
     }
@@ -229,7 +253,14 @@ const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Ty
 const rootRelationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
 const workbookXml = (lastRow: number) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Summary cost" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'Summary cost'!$C$1:$O$${lastRow}</definedName></definedNames></workbook>`;
 const workbookRelationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00"/></numFmts><fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="15"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFCE4D6"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="10"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0"><alignment horizontal="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="2" fillId="3" borderId="1" xfId="0"/><xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0"/><xf numFmtId="164" fontId="2" fillId="4" borderId="1" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+/** Named so a row says which part of the form it is, not which number a style got. */
+const STYLE = {
+  title: 1, columnHead: 2, label: 3, headerValue: 4, headerCentre: 5,
+  headerItalic: 6, headerCentreLight: 7, text: 8, money: 9, blockName: 10,
+  subtotal: 11, subtotalMoney: 12, grandTotal: 13, grandTotalMoney: 14,
+} as const;
+
+const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00"/></numFmts><fonts count="6"><font><sz val="10"/><name val="Arial"/></font><font><b/><i/><color rgb="FFFFFFFF"/><sz val="15"/><name val="Arial"/></font><font><b/><i/><color rgb="FFFFFFFF"/><sz val="10"/><name val="Arial"/></font><font><b/><color rgb="FFC00000"/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><i/><sz val="10"/><name val="Arial"/></font></fonts><fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00B050"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFCE4D6"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="15"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0"/><xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0"/><xf numFmtId="164" fontId="4" fillId="4" borderId="1" xfId="0"/><xf numFmtId="0" fontId="4" fillId="5" borderId="1" xfId="0"/><xf numFmtId="164" fontId="4" fillId="5" borderId="1" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 
 export function buildErpEstimateWorkbook(input: ErpEstimateWorkbookInput): Uint8Array {
   validateErpEstimateWorkbook(input);
