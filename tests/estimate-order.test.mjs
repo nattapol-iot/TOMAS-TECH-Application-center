@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { moveSibling, moveModule } from "../lib/estimate-order.ts";
+import { moveSibling, moveModule, dropModule } from "../lib/estimate-order.ts";
 import { buildEstimateCostBreakdown, breakdownModules } from "../lib/estimate-cost-breakdown.ts";
 
 test("move item swaps only adjacent siblings, without mutating source", () => {
@@ -34,3 +34,14 @@ test("Summary retains persisted module and child order instead of sorting by nam
   for (const [source,target] of [[2,2],[9,2],[2,9]]) assert.deepEqual(insertCostLine(ids,source,target,true),ids);
   assert.deepEqual(ids,[1,2,3,4,5]);
  });
+
+test("dragging a module lands it at the drop position, keeping every line and its order", () => {
+ const lines = [{ id: 1, module: "A" }, { id: 2, module: "A" }, { id: 3, module: "B" }, { id: 4, module: "C" }];
+ const keyOf = line => line.module;
+ assert.deepEqual(dropModule(lines, keyOf, "C", "A", false).map(l => l.id), [4, 1, 2, 3]);
+ assert.deepEqual(dropModule(lines, keyOf, "A", "C", true).map(l => l.id), [3, 4, 1, 2]);
+ assert.deepEqual(dropModule(lines, keyOf, "A", "B", false).map(l => l.id), [1, 2, 3, 4]);
+ // A drop on itself, on a module that is not there, or on a missing target changes nothing.
+ for (const [key, target] of [["A", "A"], ["Z", "A"], ["A", "Z"]]) assert.deepEqual(dropModule(lines, keyOf, key, target, true), lines);
+ assert.deepEqual(lines.map(l => l.id), [1, 2, 3, 4]);
+});

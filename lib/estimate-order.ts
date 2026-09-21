@@ -15,6 +15,16 @@ export function moveModule<T>(values: readonly T[], keyOf: (line: T) => string, 
   return moveSibling(keys, keys.indexOf(key), direction).flatMap(name => groups.get(name)!);
 }
 
+/** Move a whole module block to sit before or after another module. */
+export function dropModule<T>(values: readonly T[], keyOf: (line: T) => string, key: string, targetKey: string, after: boolean): T[] {
+  const groups = new Map<string, T[]>();
+  for (const line of values) { const name = keyOf(line); const group = groups.get(name) ?? []; group.push(line); groups.set(name, group); }
+  if (key === targetKey || !groups.has(key) || !groups.has(targetKey)) return [...values];
+  const keys = [...groups.keys()].filter(name => name !== key);
+  keys.splice(keys.indexOf(targetKey) + (after ? 1 : 0), 0, key);
+  return keys.flatMap(name => groups.get(name)!);
+}
+
 export type EstimateOrderSource = "CostItem" | "ManhourLine" | "ExpenseLine" | "OtherCostLine";
 export type ReorderEstimate = (sourceType: EstimateOrderSource, orderedIds: number[], move?: { lineId: number; targetLineId: number }) => Promise<void>;
 
