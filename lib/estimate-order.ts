@@ -26,7 +26,8 @@ export function dropModule<T>(values: readonly T[], keyOf: (line: T) => string, 
 }
 
 export type EstimateOrderSource = "CostItem" | "ManhourLine" | "ExpenseLine" | "OtherCostLine";
-export type ReorderEstimate = (sourceType: EstimateOrderSource, orderedIds: number[], move?: { lineId: number; targetLineId: number }) => Promise<void>;
+export type CostMove = { lineId: number; targetLineId: number } | { lineIds: number[]; targetLineId: number; keepModule: true };
+export type ReorderEstimate = (sourceType: EstimateOrderSource, orderedIds: number[], move?: CostMove) => Promise<void>;
 
 /** Insert relative to an existing line; preserve hidden rows and do not mutate the source. */
 export function insertCostLine(ids: readonly number[], lineId: number, targetId: number, after: boolean): number[] {

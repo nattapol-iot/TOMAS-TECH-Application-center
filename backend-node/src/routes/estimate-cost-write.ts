@@ -182,15 +182,21 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
     if (moduleQuantity !== undefined && (!Number.isFinite(moduleQuantity) || !Number.isInteger(moduleQuantity) || moduleQuantity <= 0 || moduleQuantity > 1000000 || Math.abs(moduleQuantity*10000-Math.round(moduleQuantity*10000))>0.00001))
       throw new ApiError(400, "validation_failed", "Module quantity must be positive with at most four decimal places.");
     const moduleUnit = body.unit === undefined ? undefined : requiredText(body.unit, 30, "Module unit");
-    if ((moduleQuantity !== undefined || moduleUnit !== undefined) && !moduleKey.startsWith("category:"))
-      throw new ApiError(400, "invalid_module", "Quantity editing requires a cost module.");
     const workPackage = /^package:(Engineering|Installation):(.+)$/.exec(moduleKey);
     const cost = /^category:(\d{2}):(.+)$/.exec(moduleKey);
-    if (!cost && !workPackage && moduleKey !== "summary" && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
+    /* Quantity and unit are how a module is written on the ERP sheet. On a cost
+       module they also rescale its items; on a labour or ledger module the amount
+       comes from its own lines, so they only change how that amount is expressed. */
+    const ledger = /^(expenses|other):(.+)$/.exec(moduleKey);
+    if (!cost && !workPackage && !ledger && moduleKey !== "summary" && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
       throw new ApiError(400, "invalid_module", "Choose an existing main module.");
+    if ((moduleQuantity !== undefined || moduleUnit !== undefined) && moduleKey === "summary")
+      throw new ApiError(400, "invalid_module", "The summary remark has no quantity.");
     return database.transaction(async transaction => {
       const estimate = await lockEditableEstimate(transaction, id, parseRowVersion(body.estimateRowVersion));
-      if (!elevated(actor, estimate) && ((!cost && !workPackage) || !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))))
+      // An assignee edits the modules of the sections they work in; the rest is owner or admin.
+      const assigneeEditable = Boolean(cost || workPackage || ledger?.[1] === "expenses");
+      if (!elevated(actor, estimate) && (!assigneeEditable || !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))))
         throw new ApiError(403, "module_forbidden", "You cannot edit this module.");
       const query = new sql.Request(transaction);
       query.input("id", sql.BigInt, id); query.input("revision", sql.Int, estimate.revision);

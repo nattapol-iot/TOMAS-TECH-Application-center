@@ -6,7 +6,7 @@ import { moveModule, dropModule, type ReorderEstimate, type EstimateOrderSource 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION } from "../../../lib/erp-estimate-workbook";
 import { automaticLaborCategory, suggestErpCategory } from "../../../lib/erp-category-suggest";
-import { LABOR_MODULE_NAMES, groupErpLaborSections, breakdownModules, breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
+import { LABOR_MODULE_NAMES, groupErpLaborSections, breakdownModules, breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection, type BreakdownSectionKind } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import {
   loadEstimateErpSummary,
@@ -94,7 +94,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState<DraftCategory>("Hardware");
-  const [draggedModule, setDraggedModule] = useState<{ section: string; key: string } | null>(null);
+  const [draggedModule, setDraggedModule] = useState<{ section: string; key: string; kind: BreakdownSectionKind; lineIds: number[] } | null>(null);
   const [moduleDropMarker, setModuleDropMarker] = useState("");
 
   const load = useCallback(async () => {
@@ -329,23 +329,43 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const canReorderAny = workspace.capabilities.canEditCostItems || workspace.capabilities.canEditExpenses || workspace.capabilities.canEditOtherCosts;
   const moduleDragReady = !busy && !reorderBusy && !loading && !filtering && changedLines.length === 0;
   const clearModuleDrag = () => { setDraggedModule(null); setModuleDropMarker(""); };
+  /* A module changes section only inside the cost ledger. A labour section is
+     derived from the ERP category of its own man-hour lines and project cost lives
+     in a different ledger, so neither can take in a module that came from elsewhere. */
+  const costSections = useMemo(() => sections.filter(section => section.kind === "cost-items"), [sections]);
+  const canDropInto = (section: BreakdownSection) => Boolean(moduleDragReady && draggedModule
+    && (draggedModule.section === section.key || (section.kind === "cost-items" && draggedModule.kind === "cost-items")));
   const allowModuleDrop = (event: React.DragEvent, section: BreakdownSection, marker: string) => {
-    if (!moduleDragReady || draggedModule?.section !== section.key) return;
+    if (!canDropInto(section)) return;
     event.preventDefault(); event.dataTransfer.dropEffect = "move"; setModuleDropMarker(marker);
   };
   const dropSummaryModule = (event: React.DragEvent, section: BreakdownSection, targetKey: string, after: boolean) => {
     event.preventDefault();
     const dragged = draggedModule;
+    const allowed = canDropInto(section);
     clearModuleDrag();
-    if (!moduleDragReady || !dragged || dragged.section !== section.key || dragged.key === targetKey) return;
-    applySummaryOrder(section, dropModule(section.lines, summaryModuleKey(section), dragged.key, targetKey, after));
+    if (!dragged || !allowed || dragged.key === targetKey) return;
+    if (dragged.section === section.key) {
+      applySummaryOrder(section, dropModule(section.lines, summaryModuleKey(section), dragged.key, targetKey, after));
+      return;
+    }
+    /* Landing in another section rewrites the order of the whole cost ledger, and
+       names the lines that change section so the API carries the module's own name
+       across with them instead of merging it into the module it was dropped on. */
+    const keyed = costSections.flatMap(entry => entry.lines.map(line => ({ line, key: summaryModuleKey(entry)(line) })));
+    const targetLineId = Number((keyed.find(entry => entry.key === targetKey)?.line.key ?? "").split(":")[1]);
+    if (!Number.isFinite(targetLineId) || !dragged.lineIds.length) return;
+    void onReorder("CostItem", dropModule(keyed, entry => entry.key, dragged.key, targetKey, after).map(entry => Number(entry.line.key.split(":")[1])),
+      { lineIds: dragged.lineIds, targetLineId, keepModule: true });
   };
   const renderSection = ({ section, lines }: { section: BreakdownSection; lines: BreakdownLine[] }) => {
     const open = isExpanded(section.key);
     const sectionErpKeys = lines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
     const sectionSelected = sectionErpKeys.length > 0 && sectionErpKeys.every((key) => selected.has(key));
     return <tbody key={section.key}>
-      <tr className={`cb-section${open ? " open" : ""}`} onClick={() => { if (!filtering) toggleSection(section.key); }} aria-expanded={open}>
+      <tr className={`cb-section${open ? " open" : ""}${moduleDropMarker === section.key ? " cost-drop-module" : ""}`} onClick={() => { if (!filtering) toggleSection(section.key); }} aria-expanded={open}
+        onDragOver={(event) => allowModuleDrop(event, section, section.key)}
+        onDrop={(event) => { const last = breakdownModules(section).at(-1); if (last) dropSummaryModule(event, section, last.key, true); }}>
         <td className="cb-num-col">
           <button type="button" className="cb-toggle" aria-label={open ? copy("ย่อหมวด", "Collapse section", "区分を閉じる") : copy("ขยายหมวด", "Expand section", "区分を開く")} disabled={filtering} onClick={(event) => { event.stopPropagation(); toggleSection(section.key); }}>
             <Icon name={open ? "chevronDown" : "chevronRight"} />
@@ -379,6 +399,13 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         const isSelected = keys.length > 0 && keys.every((key) => selected.has(key));
         const detail = moduleDetail(section, module);
         const canEditModule = !module.standalone && (section.kind === "cost-items" ? workspace.capabilities.canEditCostItems : section.kind === "manhour" && Boolean(LABOR_MODULE_NAMES[section.title]) && workspace.capabilities.canEditAllSections);
+        /* Quantity and unit are how the module is written on the ERP sheet. On a
+           cost module they also rescale its items; on the other ledgers the amount
+           comes from the lines themselves, so they only change how it is expressed. */
+        const canEditUnit = !module.standalone && (section.kind === "cost-items" ? workspace.capabilities.canEditCostItems
+          : section.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[section.title]) && workspace.capabilities.canEditAllSections
+          : section.kind === "expenses" ? workspace.capabilities.canEditExpenses
+          : workspace.capabilities.canEditOtherCosts);
         const dropping = moduleDropMarker === module.key + ":before" ? " cost-drop-before" : moduleDropMarker === module.key + ":after" ? " cost-drop-after" : "";
         return <Fragment key={module.key}><tr className={"cb-line" + (isSelected ? " selected" : "") + dropping}
           onDragOver={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); allowModuleDrop(event, section, module.key + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }}
@@ -392,7 +419,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ไขโมดูล / Edit module</button> : null}
             {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.standalone ? undefined : module.title, module.standalone ? Number(module.lines[0].key.split(":")[1]) : undefined)}>{module.standalone ? "แก้ไขรายการ / Edit item" : copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
           </td>
-          {canEditModule && section.kind === "cost-items" ? <EstimateModuleQuantityCells key={`${detail.key}:${detail.quantity}:${detail.unit}`} name={detail.title} quantity={detail.quantity} unit={detail.unit}
+          {canEditUnit ? <EstimateModuleQuantityCells key={`${detail.key}:${detail.quantity}:${detail.unit}`} name={detail.title} quantity={detail.quantity} unit={detail.unit} showCostRatio={section.kind === "cost-items"}
             units={moduleDetails.map(row => row.unit ?? "Set")} disabled={busy || reorderBusy || loading || changedLines.length > 0}
             onSave={async (nextQuantity, nextUnit) => {
               setBusy(true);
@@ -408,7 +435,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
             <option value="Unmapped">{unmappedLabel}</option>
             {ERP_COST_CATEGORIES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
-          </select>{canReorder ? <span className="row-actions"><button type="button" className="icon-btn cost-drag-handle" draggable={moduleDragReady} disabled={!moduleDragReady} title={filtering ? copy("ล้างตัวกรองก่อนจึงจะย้ายลำดับได้", "Clear the filters to reorder", "並べ替えるにはフィルターを解除してください") : copy("ลากเพื่อย้ายลำดับโมดูล", "Drag to reorder this module", "ドラッグしてモジュールを並べ替え")} aria-label={"Drag " + module.title + " to reorder"} onDragStart={(event) => { setDraggedModule({ section: section.key, key: module.key }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", module.key); }} onDragEnd={clearModuleDrag}>⠿</button>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.key, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
+          </select>{canReorder ? <span className="row-actions"><button type="button" className="icon-btn cost-drag-handle" draggable={moduleDragReady} disabled={!moduleDragReady} title={filtering ? copy("ล้างตัวกรองก่อนจึงจะย้ายลำดับได้", "Clear the filters to reorder", "並べ替えるにはフィルターを解除してください") : copy("ลากเพื่อย้ายลำดับโมดูล", "Drag to reorder this module", "ドラッグしてモジュールを並べ替え")} aria-label={"Drag " + module.title + " to reorder"} onDragStart={(event) => { setDraggedModule({ section: section.key, key: module.key, kind: section.kind, lineIds: module.lines.map(line => Number(line.key.split(":")[1])) }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", module.key); }} onDragEnd={clearModuleDrag}>⠿</button>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.key, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
         </tr>{openModules.has(module.key) ? module.lines.map(line => <tr key={line.key} className="cb-line">
           <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
           <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
@@ -514,7 +541,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
           <tr className="cb-total"><td colSpan={6} className="num"><LocalizedText text={"Total estimated cost"} /></td><td className="num"><strong>{money(Number(totals.total))}</strong></td><td /></tr>
         </tfoot>
       </table></div>
-      {canReorderAny ? <p className="cost-drag-help">{copy("ลากปุ่ม ⠿ เพื่อย้ายลำดับโมดูลภายในหมวดเดียวกัน · วางบนแถวเพื่อเลือกตำแหน่ง · ย้ายข้ามหมวดได้ที่แท็บ Cost Items", "Drag ⠿ to reorder a module inside its section · drop it on a row to choose the position · moving a module to another section is done in the Cost Items tab", "⠿をドラッグして同じ区分内でモジュールを並べ替え · 行の上にドロップして位置を指定 · 区分をまたぐ移動はCost Itemsタブで")}</p> : null}
+      {canReorderAny ? <p className="cost-drag-help">{copy("ลากปุ่ม ⠿ เพื่อย้ายลำดับโมดูล · วางบนแถวเพื่อเลือกตำแหน่ง หรือวางบนหัวหมวดเพื่อต่อท้าย · ย้ายข้ามหมวดได้เฉพาะระหว่างหมวดต้นทุน เพราะหมวดค่าแรงมาจากการจัดหมวด ERP ของบรรทัดค่าแรงเอง และค่าใช้จ่ายโครงการอยู่คนละบัญชี", "Drag ⠿ to reorder a module · drop it on a row to choose the position, or on a section heading to send it to the end · a module changes section only between cost sections, because a labour section follows the ERP category of its own man-hour lines and project cost sits in a different ledger", "⠿をドラッグしてモジュールを並べ替え · 行の上にドロップして位置を指定、区分見出しへのドロップで末尾に移動 · 区分の変更は原価区分同士のみ可能です")}</p> : null}
     </> : <EmptyState icon="package" title={copy("ยังไม่มีรายการต้นทุน", "No cost lines yet", "原価明細がありません")} message={copy("เพิ่มรายการในแท็บ Cost Items, Man-hour หรือ Other cost แล้วรายการจะแสดงที่นี่", "Add lines in Cost Items, Man-hour or Other cost and they appear here.", "Cost Items・Man-hour・Other costタブで明細を追加するとここに表示されます。")} />}
 
     {summary ? <>

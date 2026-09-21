@@ -51,3 +51,44 @@ test("module quantity scales set header and all components without changing per-
  assert.throws(()=>scaleModuleQuantities([{id:1,qty:1}],2,1),/fractional/);
  assert.throws(()=>scaleModuleQuantities([{id:1,qty:0.0001}],2,1),/four decimal/);
 });
+
+/* Quantity and unit say how a module is written on the ERP sheet. A cost module
+   also rescales its items; the ledgers that own their own amounts do not, so they
+   can carry a unit without any cost line being touched. */
+for(const moduleKey of ["other:Installation Cost","expenses:Site Work","labor:Service"]) {
+ test("module unit is stored without touching a cost line: "+moduleKey, async t=>{
+  let stored:{quantity?:unknown;unit?:unknown}|null=null, costWrites=0;
+  t.mock.method(sql.Request.prototype,"query",async function(this:sql.Request, statement:string){
+   if(statement.includes("FROM dbo.estimates WITH")) return {recordset:[{estimate_no:"EST-1",revision:2,owner_id:7,status:"Draft",row_version:version}]};
+   if(statement.includes("FROM dbo.estimate_assignments")) return {recordset:[]};
+   if(statement.includes("SELECT module_key,title,remark")) return {recordset:[]};
+   if(statement.includes("dbo.cost_items")||statement.includes("dbo.manhour_lines")||statement.includes("dbo.expense_lines")) {costWrites++;return {recordset:[]};}
+   if(statement.includes("UPDATE dbo.estimate_module_details")) {stored={quantity:this.parameters.module_quantity!.value,unit:this.parameters.module_unit!.value};return {recordset:[]};}
+   if(statement.includes("audit_log")||statement.includes("activity_events")||statement.includes("assert_estimate_totals"))return {recordset:[]};
+   if(statement.includes("UPDATE dbo.estimates"))return {recordset:[{row_version:version}]};
+   throw Error("Unexpected query: "+statement);
+  });
+  const db={async transaction(action:(transaction:object)=>Promise<unknown>){return action({});}} as unknown as Database;
+  const users={async demandPermission(){},async required(){return {id:7,role:"Engineer"};}} as unknown as CurrentUserService;
+  const app=Fastify();registerErrorHandler(app);registerEstimateCostWriteRoutes(app,db,users);
+  try{
+   const response=await app.inject({method:"PUT",url:"/api/v1/estimates/1/module-details",payload:{moduleKey,title:"Installation Cost",quantity:2,unit:"Lot",estimateRowVersion:version.toString("base64")}});
+   assert.equal(response.statusCode,200);
+   assert.deepEqual(stored,{quantity:2,unit:"Lot"});
+   assert.equal(costWrites,0);
+  }finally{await app.close();}
+ });
+}
+
+test("a quantity is refused for the summary remark and for a key that names no module", async t=>{
+ t.mock.method(sql.Request.prototype,"query",async function(){throw Error("No statement should run");});
+ const db={async transaction(){throw Error("No transaction should open");}} as unknown as Database;
+ const users={async demandPermission(){},async required(){return {id:7,role:"Engineer"};}} as unknown as CurrentUserService;
+ const app=Fastify();registerErrorHandler(app);registerEstimateCostWriteRoutes(app,db,users);
+ try{
+  for(const payload of [{moduleKey:"summary",quantity:2,unit:"Lot"},{moduleKey:"manhour:9",quantity:2,unit:"Lot"},{moduleKey:"other:",quantity:2,unit:"Lot"}]) {
+   const response=await app.inject({method:"PUT",url:"/api/v1/estimates/1/module-details",payload:{title:"Anything",estimateRowVersion:version.toString("base64"),...payload}});
+   assert.equal(response.statusCode,400);
+  }
+ }finally{await app.close();}
+});
