@@ -63,24 +63,36 @@ test("creates one standalone Summary cost sheet with ERP-compatible headers", ()
   assert.match(files["xl/worksheets/sheet1.xml"], />Page<\/t>/);
 });
 
-test("emits all seven category blocks in fixed ERP order and literal reconciled totals", () => {
+test("names each block once in column D, in fixed ERP order, and closes with the form's totals", () => {
+  /* The form has no per-category subtotal and no block for a category that carries
+     nothing: a category names its block from column D, down the side of its own
+     rows, and a category with no cost simply is not on the sheet. */
+  const input = fixture();
   const sheet = workbookXml()["xl/worksheets/sheet1.xml"];
-  const positions = ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"]
-    .map(category => sheet.indexOf(`>${category} Sub Total</t>`));
-  assert.ok(positions.every(position => position >= 0), "every category keeps a block");
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
-  // The category names its own block from column D, where the block has lines.
-  assert.match(sheet, /<c r="D\d+" s="10" t="inlineStr"><is><t xml:space="preserve">Hardware</);
-  assert.match(sheet, />Approved Overhead<\/t>/);
-  assert.match(sheet, />Sub Total<\/t>/);
-  assert.match(sheet, />Grand Total<\/t>/);
-  assert.match(sheet, /<v>30000<\/v>/);
-  // Whatever row it lands on, a total spans C:K the way the form draws it.
-  for (const label of ["Hardware Sub Total", "Grand Total"]) {
-    const before = sheet.slice(0, sheet.indexOf(`>${label}</t>`));
-    const row = [...before.matchAll(/<row r="(\d+)"/g)].at(-1)[1];
-    assert.match(sheet, new RegExp(`<mergeCell ref="C${row}:K${row}"/>`), `${label} spans C:K`);
+  const written = [...sheet.matchAll(/<c r="D(\d+)"[^>]*t="inlineStr"><is><t[^>]*>([^<]+)</g)]
+    .filter(match => Number(match[1]) > 8)  // row 8 is the column heading, not a block
+    .map(match => match[2]);
+  const expected = ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"]
+    .filter(category => input.summary.lines.some(line => line.erpCategory === category));
+  assert.deepEqual(written, expected);
+
+  // Each block's name spans the rows it covers, and covers them exactly.
+  for (const category of expected) {
+    const at = sheet.indexOf(`>${category}<`);
+    const first = Number([...sheet.slice(0, at).matchAll(/<row r="(\d+)"/g)].at(-1)[1]);
+    const lines = input.summary.lines.filter(line => line.erpCategory === category).length;
+    if (lines > 1) assert.match(sheet, new RegExp(`<mergeCell ref="D${first}:D${first + lines - 1}"/>`), `${category} spans its rows`);
   }
+
+  // The totals sit under Unit price and Total, where the form puts them.
+  for (const label of ["Sub Total", "Approved Overhead", "Grand Total"]) {
+    const at = sheet.indexOf(`>${label}<`);
+    assert.ok(at > 0, `${label} is written`);
+    const row = [...sheet.slice(0, at).matchAll(/<row r="(\d+)"/g)].at(-1)[1];
+    assert.match(sheet, new RegExp(`<c r="J${row}"[^>]*>(?:<is>)?<t[^>]*>${label}<`), `${label} sits in column J`);
+    assert.match(sheet, new RegExp(`<c r="L${row}"`), `${label} has its amount in column L`);
+  }
+  assert.match(sheet, /<v>30000<\/v>/);
 });
 
 test("blocks unmapped rows, unapproved overhead, and totals outside the 0.01 tolerance", () => {
@@ -187,7 +199,7 @@ test("a description carrying characters XML cannot hold still produces a readabl
 
 test("every row is in ascending order and every cell sits in the row that declares it", () => {
   const { sheet } = sheetOf(fixture());
-  const rows = [...sheet.matchAll(/<row r="(\d+)">(.*?)<\/row>/g)];
+  const rows = [...sheet.matchAll(/<row r="(\d+)"[^>]*>(.*?)<\/row>/g)];
   assert.ok(rows.length > 0);
   let previous = 0;
   for (const [, number, body] of rows) {
