@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
-import { erpGroupsByMember, erpKeyOfBreakdownKey, foldErpGroupLines, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
+import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, foldErpGroupLines, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { LABOR_MODULE_NAMES, breakdownModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
@@ -120,6 +120,14 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     return erp ? draftOf(erp) : "Unmapped";
   }, [erpByKey, draftOf]);
 
+  /* A merged line the export would refuse to write must not be drawn as merged
+     here, or the screen promises a line the file does not contain. It stops being
+     one line when its rows are deleted down to fewer than two, or when they stop
+     agreeing on a category — neither of which happens on this page, and both of
+     which happen in the tabs that own the cost. */
+  const { foldable, broken } = useMemo(() => classifyErpGroups(summary?.lines ?? [], groups, draftOf), [summary, groups, draftOf]);
+  const foldableByMember = useMemo(() => erpGroupsByMember(foldable), [foldable]);
+
   const unsaved = useMemo(() => (summary?.lines ?? []).filter((line) => draftOf(line) !== line.erpCategory), [summary, draftOf]);
   const canEdit = Boolean(summary?.capabilities.canEditMappings) && !busy && !loading;
   const approvedOverhead = !ESTIMATE_OVERHEAD_ENABLED || summary?.overhead.state === "Applied" || summary?.overhead.state === "Zero";
@@ -141,7 +149,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     for (const section of sections) {
       const modules = breakdownModules(section, (line) => {
         const key = erpKeyOfBreakdownKey(line.key);
-        const group = key ? groupsByMember.get(key) : undefined;
+        const group = key ? foldableByMember.get(key) : undefined;
         return group ? { id: group.id, title: group.title } : null;
       });
       for (const part of splitRowsByCategory(modules, categoryOfLine)) {
@@ -168,7 +176,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
           outsourced: rows.reduce((total, row) => total + row.outsourced, 0),
         };
       });
-  }, [sections, categoryOfLine, groupsByMember, erpByKey, addedHeadings]);
+  }, [sections, categoryOfLine, foldableByMember, erpByKey, addedHeadings]);
 
   const unusedHeadings = ERP_COST_CATEGORIES.filter((category) => !headings.some((heading) => heading.category === category));
   const rowCount = headings.reduce((total, heading) => total + heading.rows.length, 0);
@@ -178,7 +186,8 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
      categories to tidy up a name. */
   const mergeable = selectedRows.length >= 2 && !unsaved.length
     && new Set(selectedRows.map((row) => categoryOfLine(row.lines[0]))).size === 1
-    && selectedRows.every((row) => row.merged === null);
+    // A row already promised to a merged line — even a broken one — cannot join another.
+    && selectedRows.every((row) => row.merged === null && row.erpKeys.every((key) => !groupsByMember.has(key)));
 
   const classify = (erpKeys: string[], category: DraftCategory) => setDrafts((current) => {
     const next = { ...current };
@@ -429,6 +438,20 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     {reconciliation}
 
     {loading && !summary ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading the ERP sheet…"} /></div> : null}
+
+    {broken.length ? <div className="info-strip amber">
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>{copy(`มีบรรทัดรวม ${broken.length} รายการที่ใช้ไม่ได้แล้ว`, `${broken.length} merged line(s) no longer hold together`, `まとめた行 ${broken.length}件が成立しません`)}</strong>
+        <br />{copy("ไฟล์จะเขียนแยกตามรายการเดิม — แยกกลับเพื่อเก็บกวาด แล้วรวมใหม่ถ้ายังต้องการ", "The file writes their lines separately — split them to tidy up, then merge again if you still want to.", "ファイルは元の行のまま出力します。解除して、必要なら改めてまとめてください。")}
+      </span>
+      <span className="spacer" />
+      {broken.map(({ group, reason }) => <button key={group.id} className="btn ghost sm" type="button" disabled={!canEdit}
+        title={reason === "gone"
+          ? copy("รายการข้างในถูกลบจนเหลือไม่ถึงสองรายการ", "Its lines were deleted until fewer than two were left", "明細が2件未満になりました")
+          : copy("รายการข้างในอยู่คนละหมวดแล้ว", "Its lines no longer share one category", "明細の分類が揃っていません")}
+        onClick={() => { void splitMerged(group); }}><Icon name="x" />{group.title}</button>)}
+    </div> : null}
 
     {headings.length ? <>
       <div className="toolbar">

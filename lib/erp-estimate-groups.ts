@@ -84,6 +84,41 @@ type FoldableLine = {
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 /**
+ * Which merged lines are still written as one line, and which have stopped being
+ * one thing.
+ *
+ * A group breaks in exactly two ways: its lines are deleted until fewer than two
+ * are left, and it is no longer a merge; or its lines stop agreeing on an ERP
+ * category, and writing them as one line would move money between categories.
+ * Both are decided here so that what a screen draws and what the file writes can
+ * never disagree.
+ */
+export function classifyErpGroups<T extends { sourceType: string; sourceId: number | null }>(
+  lines: readonly T[],
+  groups: readonly ErpGroup[],
+  categoryOf: (line: T) => string,
+): { foldable: ErpGroup[]; broken: Array<{ group: ErpGroup; reason: "gone" | "mixed" }> } {
+  const index = erpGroupsByMember(groups);
+  const members = new Map<number, T[]>();
+  for (const line of lines) {
+    const group = index.get(erpMemberKey(line));
+    if (!group) continue;
+    const collected = members.get(group.id) ?? [];
+    collected.push(line);
+    members.set(group.id, collected);
+  }
+  const foldable: ErpGroup[] = [];
+  const broken: Array<{ group: ErpGroup; reason: "gone" | "mixed" }> = [];
+  for (const group of groups) {
+    const present = members.get(group.id) ?? [];
+    if (present.length < 2) broken.push({ group, reason: "gone" });
+    else if (new Set(present.map(categoryOf)).size !== 1) broken.push({ group, reason: "mixed" });
+    else foldable.push(group);
+  }
+  return { foldable, broken };
+}
+
+/**
  * One row per merged line, in the position of its first member.
  *
  * A group whose members no longer agree on an ERP category is left unfolded: the
@@ -94,7 +129,8 @@ const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 10
  */
 export function foldErpGroupLines<T extends FoldableLine>(lines: readonly T[], groups: readonly ErpGroup[]): T[] {
   if (!groups.length) return [...lines];
-  const index = erpGroupsByMember(groups);
+  const { foldable } = classifyErpGroups(lines, groups, (line) => line.erpCategory);
+  const index = erpGroupsByMember(foldable);
   const membersOf = new Map<number, T[]>();
   for (const line of lines) {
     const group = index.get(erpMemberKey(line));
@@ -107,13 +143,11 @@ export function foldErpGroupLines<T extends FoldableLine>(lines: readonly T[], g
   const done = new Set<number>();
   for (const line of lines) {
     const group = index.get(erpMemberKey(line));
-    const members = group ? membersOf.get(group.id) ?? [] : [];
-    if (!group || members.length < 2 || new Set(members.map((member) => member.erpCategory)).size !== 1) {
-      folded.push(line);
-      continue;
-    }
+    // Only groups that survive classifyErpGroups() reach the index, so a member here is always foldable.
+    if (!group) { folded.push(line); continue; }
     if (done.has(group.id)) continue;
     done.add(group.id);
+    const members = membersOf.get(group.id) ?? [];
     const amount = members.reduce((total, member) => total + member.amount, 0);
     folded.push({
       ...line,

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { foldErpGroupLines, erpGroupsByMember, erpMemberKey, splitRowsByCategory } from "../lib/erp-estimate-groups.ts";
+import { foldErpGroupLines, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
 import { buildEstimateCostBreakdown, breakdownModules } from "../lib/estimate-cost-breakdown.ts";
 
 const line = (id, amount, category = "Hardware", description = "Item " + id) => ({
@@ -98,4 +98,32 @@ test("every line lands under exactly one heading, and a row that disagrees is sp
   // Keys stay unique, so two parts of one row never collide in a list.
   assert.equal(new Set(split.map(part => part.key)).size, split.length);
   assert.deepEqual(splitRowsByCategory([], () => "Hardware"), []);
+});
+
+test("a merged line is drawn exactly when it will be written, and says why when it is not", () => {
+  const lines = [line(1, 1000), line(2, 250), line(3, 4000)];
+  const saved = row => row.erpCategory;
+
+  const whole = classifyErpGroups(lines, [group([1, 2])], saved);
+  assert.deepEqual(whole.foldable.map(entry => entry.id), [1]);
+  assert.deepEqual(whole.broken, []);
+
+  // One member was deleted from the revision: two lines are what makes a merge.
+  const gone = classifyErpGroups([line(1, 1000), line(3, 4000)], [group([1, 2])], saved);
+  assert.deepEqual(gone.foldable, []);
+  assert.deepEqual(gone.broken.map(entry => entry.reason), ["gone"]);
+
+  // The members stopped agreeing: writing them as one line would move money.
+  const mixed = classifyErpGroups([line(1, 1000, "Hardware"), line(2, 250, "Service")], [group([1, 2])], saved);
+  assert.deepEqual(mixed.foldable, []);
+  assert.deepEqual(mixed.broken.map(entry => entry.reason), ["mixed"]);
+  // And the export agrees with that verdict, line for line.
+  assert.deepEqual(foldErpGroupLines([line(1, 1000, "Hardware"), line(2, 250, "Service")], [group([1, 2])]).map(row => row.description), ["Item 1", "Item 2"]);
+
+  /* The screen asks about the category a person has chosen but not saved, so a
+     merge that is about to break is shown as broken before the save, not after. */
+  const draft = { "CostItem:2": "Service" };
+  const pending = classifyErpGroups(lines, [group([1, 2])], row => draft[`${row.sourceType}:${row.sourceId}`] ?? row.erpCategory);
+  assert.deepEqual(pending.broken.map(entry => entry.reason), ["mixed"]);
+  assert.deepEqual(classifyErpGroups(lines, [group([1, 2])], saved).broken, []);
 });
