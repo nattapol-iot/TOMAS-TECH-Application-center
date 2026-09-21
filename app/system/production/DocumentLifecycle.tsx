@@ -6,15 +6,22 @@ import { useT } from "../i18n";
 import { Badge, Field, Icon, Modal } from "../ui";
 
 type Kind = "inquiries" | "estimates";
-type Action = "delete-draft" | "cancel" | "cancel-linked" | "archive" | "withdraw" | "restore";
+type Action = "delete-draft" | "cancel" | "cancel-linked" | "archive" | "withdraw" | "restore" | "permanent-delete";
 type Document = { id: number; number: string; name: string; status: string; revision: number };
 type Preview = {
   document: Document; token: string; options: { action: Action; allowed: boolean; reason: string | null }[];
   linkedEstimate: Document | null; projects: { id: number; number: string; status: string }[];
+  permanentDelete: { allowed: boolean; blockers: { source: string; count: number }[] } | null;
   linkedWorkCount: number; fallbackRevision: number | null; restore: { eventId: number; reason: string | null; revision: number } | null;
 };
 const labels: Record<Action, string> = { "delete-draft": "Delete draft", cancel: "Cancel work", "cancel-linked": "Cancel inquiry and estimate",
-  archive: "Archive document", withdraw: "Withdraw review", restore: "Restore document" };
+  "permanent-delete": "Permanently delete (Admin)", archive: "Archive document", withdraw: "Withdraw review", restore: "Restore document" };
+const referenceLabels: Record<string, string> = {
+  "dbo.estimates": "Related estimate", "dbo.projects": "Related projects", "dbo.inquiry_attachments": "Inquiry attachments",
+  "dbo.inquiry_meetings": "Inquiry meetings", "dbo.sales_intakes": "Site visit requests", "dbo.resource_tasks": "Resource tasks",
+  "dbo.unified_reports": "Related reports", "dbo.supplier_quotations": "Supplier quotations", "dbo.crm_opportunities": "CRM opportunities",
+  "dbo.boms": "Bill of materials", "dbo.bom_lines": "Bill of materials", "dbo.signable_documents": "Signing documents",
+};
 const reasons = ["Created by mistake", "Duplicate document", "Customer cancelled", "Work completed", "Other reason"];
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 type Props = { kind: Kind; id: number; onChanged: () => void | Promise<void>; notify: (message: string) => void };
@@ -29,6 +36,7 @@ function LifecycleDialog({ kind, id, eventId, onChanged, notify, onClose }: Prop
   const t = useT();
   const [preview, setPreview] = useState<Preview | null>(null), [error, setError] = useState("");
   const [action, setAction] = useState<Action | null>(eventId ? "restore" : null);
+  const [confirmNumber, setConfirmNumber] = useState("");
   const [reason, setReason] = useState(""), [detail, setDetail] = useState(""), [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     setError(""); setPreview(null);
@@ -36,15 +44,16 @@ function LifecycleDialog({ kind, id, eventId, onChanged, notify, onClose }: Prop
     catch (e) { setError(errorText(e)); }
   }, [kind, id, eventId]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
-  const allowed = action === "restore" ? !!preview?.restore && !preview.restore.reason : !!preview?.options.find(o => o.action === action)?.allowed;
+  const allowed = action === "permanent-delete" ? !!preview?.permanentDelete?.allowed : action === "restore" ? !!preview?.restore && !preview.restore.reason : !!preview?.options.find(o => o.action === action)?.allowed;
   const validReason = !!reason && (reason !== "Other reason" || !!detail.trim());
+  const confirmed = action !== "permanent-delete" || (!!preview && confirmNumber === preview.document.number);
   const close = () => { if (!busy) onClose(); };
   const submit = async () => {
-    if (!preview || !action || !allowed || !validReason || busy) return;
+    if (!preview || !action || !allowed || !validReason || !confirmed || busy) return;
     setBusy(true); setError("");
     try {
       await apiRequest(`/api/v1/${kind}/${id}/lifecycle`, { method: "POST", body: JSON.stringify({ action, token: preview.token,
-        eventId, reason: `${t(reason)}${detail.trim() ? `: ${detail.trim()}` : ""}` }) });
+        eventId, confirmNumber, reason: `${t(reason)}${detail.trim() ? `: ${detail.trim()}` : ""}` }) });
       notify(t("Document changes saved"));
       onClose(); await onChanged();
     } catch (e) { setError(errorText(e)); setPreview(null); }
@@ -52,7 +61,7 @@ function LifecycleDialog({ kind, id, eventId, onChanged, notify, onClose }: Prop
   };
   return <Modal title={eventId ? "Restore document" : "Manage document"} onClose={close} size="lg"
     footer={<><button className="btn default" type="button" disabled={busy} onClick={close}>{t("Close")}</button>
-      <button className="btn primary" type="button" disabled={busy || !allowed || !validReason} onClick={() => { void submit(); }}>{busy ? "…" : t(action ? labels[action] : "Confirm action")}</button></>}>
+      <button className={action === "permanent-delete" ? "btn danger" : "btn primary"} type="button" disabled={busy || !allowed || !validReason || !confirmed} onClick={() => { void submit(); }}>{busy ? "…" : t(action ? labels[action] : "Confirm action")}</button></>}>
     <p>{t("Review related documents before confirming. A reason is required and recorded in history.")}</p>
     {error ? <div className="callout danger" role="alert">{error}</div> : null}
     {!preview ? <button className="btn default" type="button" disabled={busy} onClick={() => { void load(); }}>{t("Refresh preview")}</button> : <>
@@ -72,6 +81,16 @@ function LifecycleDialog({ kind, id, eventId, onChanged, notify, onClose }: Prop
             {o.reason ? <div className="muted">{t(o.reason)}</div> : null}
           </div>)}
         </fieldset>}
+      {preview.permanentDelete ? <div className="callout danger">
+        <label><input type="radio" name="document-action" checked={action === "permanent-delete"} disabled={busy || !preview.permanentDelete.allowed}
+          onChange={() => setAction("permanent-delete")} /> {t("Permanently delete (Admin)")}</label>
+        <p>{t("Permanent deletion removes this document and all estimate revisions and cost lines. It cannot be restored. The deletion audit is retained.")}</p>
+        {preview.permanentDelete.blockers.length ? <><p>{t("Handle linked records before deleting this document.")}</p><ul>{preview.permanentDelete.blockers.map(b => <li key={b.source}>{t(referenceLabels[b.source] ?? "Other linked work")}: {b.count}</li>)}</ul></> : null}
+        {action === "permanent-delete" ? <Field label="Type the document number to confirm permanent deletion"><strong>{preview.document.number}</strong>
+          <input className="input" aria-label={t("Type the document number to confirm permanent deletion")} value={confirmNumber} autoComplete="off" disabled={busy} onChange={e => setConfirmNumber(e.target.value)} />
+        </Field> : null}
+        {eventId && action === "permanent-delete" ? <button className="btn default" type="button" disabled={busy} onClick={() => setAction("restore")}>{t("Restore document")}</button> : null}
+      </div> : null}
       <Field label="Reason for this action"><select className="input" value={reason} disabled={busy} onChange={e => setReason(e.target.value)}>
         <option value="">—</option>{reasons.map(r => <option key={r} value={r}>{t(r)}</option>)}
       </select></Field>
@@ -106,7 +125,7 @@ function DocumentHistory({ kind, onChanged, notify, onOpen, onClose }: Omit<Prop
     {error ? <div className="callout danger" role="alert">{error}<button className="btn default" onClick={() => setRevision(v => v + 1)}>{t("Try again")}</button></div> : null}
     {loading ? <p aria-live="polite">{t("Loading")}…</p> : result.items.length ? result.items.map(row => <article key={row.eventId} className="panel" style={{ padding: 16, marginTop: 12 }}>
       <strong>{row.number} · R{String(row.revision).padStart(2, "0")} · {row.name}</strong><p>{t(labels[row.action])} · {row.actor} · {row.occurredAt.slice(0, 10)}</p><p>{row.reason}</p>
-      <button className="btn default" type="button" onClick={() => setSelected(row)}>{t("Restore document")}</button>
+      <button className="btn default" type="button" onClick={() => setSelected(row)}>{t("Manage document")}</button>
       {row.action === "archive" ? <button className="btn ghost" type="button" onClick={() => onOpen(Number(row.documentId))}>{t("View archived document")}</button> : null}
     </article>) : <p>{t("No deleted or archived documents")}</p>}
     <div className="workspace-bar"><button className="btn default" type="button" disabled={page <= 1 || loading} onClick={() => setPage(v => v - 1)}>{t("Previous")}</button>

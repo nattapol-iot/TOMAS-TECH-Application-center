@@ -149,5 +149,92 @@ try {
       assert.equal((await query(`SELECT status FROM dbo.inquiries WHERE id=${inquiryId}`))[0].status, "Estimating");
     } finally { await query("DROP TRIGGER dbo.trg_lifecycle_fixture_reject_audit;"); }
   });
+  await check("SQL Admin purge removes all revisions, preserves audit and frees inquiry", async () => {
+    const { inquiryId, estimateId } = await seed();
+    const number = (await preview("estimates", estimateId)).document.number;
+    await query(`INSERT dbo.overhead_policies(policy_version,monthly_budget,normal_direct_hours,effective_from,reason,created_by)
+      VALUES(99,1000,100,'2026-01-01',N'Fixture',${actor.id});
+      INSERT dbo.estimate_overhead_snapshots(estimate_id,revision,policy_id,policy_version,method,monthly_budget,normal_direct_hours,hourly_rate,effective_from,reason,applied_by)
+      SELECT ${estimateId},0,id,policy_version,method,monthly_budget,normal_direct_hours,hourly_rate,effective_from,reason,${actor.id} FROM dbo.overhead_policies WHERE policy_version=99;
+      INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+      SELECT ${estimateId},0,N'CostItem',id,N'Hardware',${actor.id},${actor.id} FROM dbo.cost_items WHERE estimate_id=${estimateId};
+      INSERT dbo.estimate_revisions(estimate_id,revision,reason,description,created_by,status,total)
+      VALUES(${estimateId},0,N'Fixture',N'{}',${actor.id},N'Approved',200);
+      INSERT dbo.estimate_submission_snapshots(estimate_id,revision,snapshot_json,snapshot_sha256,submitted_by) VALUES(${estimateId},0,N'{}',REPLICATE('b',64),${actor.id});
+      UPDATE dbo.estimates SET revision=1,status=N'Approved' WHERE id=${estimateId};`);
+    await assert.rejects(query(`DELETE FROM dbo.estimate_submission_snapshots WHERE estimate_id=${estimateId};`), /immutable/);
+    await assert.rejects(query(`DELETE FROM dbo.cost_items WHERE estimate_id=${estimateId};`), /current estimate revision/);
+    await act("inquiries", inquiryId, "permanent-delete", { confirmNumber: (await preview("inquiries", inquiryId)).document.number }, 409);
+    await act("estimates", estimateId, "permanent-delete", { confirmNumber: number });
+    for (const table of ["estimates", "cost_items", "estimate_revisions", "estimate_submission_snapshots", "estimate_overhead_snapshots", "estimate_erp_mappings"])
+      assert.equal((await query(`SELECT COUNT(*) n FROM dbo.${table} WHERE ${table === "estimates" ? "id" : "estimate_id"}=${estimateId}`))[0].n, 0);
+    assert.equal((await query(`SELECT estimate_id FROM dbo.inquiries WHERE id=${inquiryId}`))[0].estimate_id, null);
+    assert.equal((await query(`SELECT COUNT(*) n FROM dbo.audit_log WHERE entity_type=N'Estimate' AND entity_id=${estimateId} AND action=N'Document permanent-delete'`))[0].n, 1);
+    const missing = await app.inject({ method: "GET", url: `/api/v1/estimates/${estimateId}/lifecycle` });
+    assert.equal(missing.statusCode, 404);
+    await act("inquiries", inquiryId, "permanent-delete", { confirmNumber: (await preview("inquiries", inquiryId)).document.number });
+    assert.equal((await query(`SELECT COUNT(*) n FROM dbo.inquiries WHERE id=${inquiryId}`))[0].n, 0);
+  });
+  await check("SQL purge rollback restores ledgers when audit fails", async () => {
+    const { inquiryId, estimateId } = await seed();
+    await query(`CREATE TRIGGER dbo.trg_lifecycle_fixture_reject_purge ON dbo.audit_log AFTER INSERT AS
+      IF EXISTS(SELECT 1 FROM inserted WHERE action=N'Document permanent-delete') THROW 51999,'Fixture rollback',1;`);
+    try {
+      await act("estimates", estimateId, "permanent-delete", { confirmNumber: (await preview("estimates", estimateId)).document.number }, 503);
+      assert.equal((await query(`SELECT COUNT(*) n FROM dbo.cost_items WHERE estimate_id=${estimateId}`))[0].n, 1);
+      assert.equal(Number((await query(`SELECT estimate_id FROM dbo.inquiries WHERE id=${inquiryId}`))[0].estimate_id), estimateId);
+    } finally { await query("DROP TRIGGER dbo.trg_lifecycle_fixture_reject_purge;"); }
+  });
+  await check("SQL permanent purge from trash has no restore and keeps other documents intact", async () => {
+    const { estimateId } = await seed(); const other = await seed();
+    await act("estimates", estimateId, "delete-draft");
+    await act("estimates", estimateId, "permanent-delete", { confirmNumber: (await preview("estimates", estimateId)).document.number });
+    const list = await app.inject({ method: "GET", url: "/api/v1/estimates/lifecycle-records" });
+    assert.ok(!list.json().items.some(r => Number(r.documentId) === estimateId));
+    assert.equal((await query(`SELECT COUNT(*) n FROM dbo.estimates WHERE id=${other.estimateId}`))[0].n, 1);
+  });
+  await check("SQL unknown references to a cost line block purge without cascading", async () => {
+    const { estimateId } = await seed();
+    await query(`CREATE TABLE dbo.fixture_external_reference(line_id bigint REFERENCES dbo.cost_items(id));
+      INSERT dbo.fixture_external_reference SELECT TOP(1) id FROM dbo.cost_items WHERE estimate_id=${estimateId};`);
+    try {
+      const p = await preview("estimates", estimateId);
+      assert.equal(p.permanentDelete.allowed, false);
+      assert.ok(p.permanentDelete.blockers.some(b => b.source === "dbo.fixture_external_reference"));
+      await act("estimates", estimateId, "permanent-delete", { confirmNumber: p.document.number }, 409);
+      assert.equal((await query(`SELECT COUNT(*) n FROM dbo.cost_items WHERE estimate_id=${estimateId}`))[0].n, 1);
+    } finally { await query("DROP TABLE dbo.fixture_external_reference;"); }
+  });
+  await check("SQL ordinary app principal cannot spoof immutable deletion context", async () => {
+    const { estimateId } = await seed();
+    await query(`CREATE USER lifecycle_restricted WITHOUT LOGIN;
+      ALTER ROLE iot_team_app_role ADD MEMBER lifecycle_restricted;
+      GRANT SELECT,DELETE ON dbo.cost_items TO lifecycle_restricted;
+      GRANT SELECT ON dbo.estimates TO lifecycle_restricted;
+      UPDATE dbo.estimates SET revision=1 WHERE id=${estimateId};`);
+    const spoof = await query(`EXECUTE AS USER=N'lifecycle_restricted';
+      EXEC sys.sp_set_session_context @key=N'trial_purge_estimate',@value=${estimateId};
+      BEGIN TRY
+        DELETE FROM dbo.cost_items WHERE estimate_id=${estimateId};
+        SELECT 0 blocked;
+      END TRY BEGIN CATCH SELECT ERROR_NUMBER() blocked; END CATCH;
+      EXEC sys.sp_set_session_context @key=N'trial_purge_estimate',@value=NULL;
+      REVERT;`);
+    assert.equal(spoof[0].blocked, 51112);
+    const denied = await query(`BEGIN TRANSACTION; EXECUTE AS USER=N'lifecycle_restricted';
+      BEGIN TRY EXEC dbo.purge_trial_document N'Estimate',${estimateId},0,1; SELECT 0 blocked;
+      END TRY BEGIN CATCH SELECT ERROR_NUMBER() blocked; END CATCH;
+      IF @@TRANCOUNT>0 ROLLBACK; REVERT;`);
+    assert.equal(denied[0].blocked, 51582);
+    // Exercise the production app role's EXECUTE grant and owner scope; rollback
+    // this direct procedure probe because the API owns the audit transaction.
+    await query(`BEGIN TRANSACTION; EXECUTE AS USER=N'lifecycle_restricted';
+      EXEC dbo.purge_trial_document N'Estimate',${estimateId},${actor.id},1;
+      REVERT;
+      IF EXISTS(SELECT 1 FROM dbo.estimates WHERE id=${estimateId}) THROW 51998,'Purge did not remove fixture',1;
+      IF SESSION_CONTEXT(N'trial_purge_estimate') IS NOT NULL THROW 51998,'Purge context leaked',1;
+      ROLLBACK;`);
+    assert.equal((await query(`SELECT COUNT(*) n FROM dbo.cost_items WHERE estimate_id=${estimateId}`))[0].n, 1);
+  });
   console.log(JSON.stringify({ passed: checks.length, database: expected, checks }));
 } finally { await app.close(); await db.close(); }

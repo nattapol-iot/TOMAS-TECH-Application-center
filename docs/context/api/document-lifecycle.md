@@ -2,7 +2,7 @@
 
 [Module](../modules/inquiry.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `0cd46f67`; generated, do not edit. [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6239366b`; generated, do not edit. [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -21,16 +21,17 @@ Evidence: source snapshot `0cd46f67`; generated, do not edit. [backend-node/src/
 | `root` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 30–30 |
 | `token` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 31–31 |
 | `manager` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 32–32 |
-| `doc` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 33–36 |
-| `graph` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 39–63 |
-| `access` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 65–68 |
-| `facts` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 69–75 |
-| `eventById` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 76–82 |
-| `restoreBlock` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 83–93 |
-| `stamp` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 95–99 |
-| `restoreRow` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 100–109 |
-| `registerDocumentLifecycleRoutes` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 111–207 |
-| `guardDocumentLifecycle` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 210–218 |
+| `purge` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 33–37 |
+| `doc` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 38–41 |
+| `graph` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 44–68 |
+| `access` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 70–73 |
+| `facts` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 74–80 |
+| `eventById` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 81–87 |
+| `restoreBlock` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 88–98 |
+| `stamp` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 100–104 |
+| `restoreRow` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 105–114 |
+| `registerDocumentLifecycleRoutes` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 116–226 |
+| `guardDocumentLifecycle` | [backend-node/src/routes/document-lifecycle.ts](<../../../backend-node/src/routes/document-lifecycle.ts>) | 229–237 |
 
 ## Direct local dependencies
 
@@ -47,7 +48,7 @@ Evidence: source snapshot `0cd46f67`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.document_lifecycle_events`, `dbo.estimate_revisions`, `dbo.estimate_submission_snapshots`, `dbo.estimates`, `dbo.inquiries`, `dbo.inquiry_meetings`, `dbo.projects`, `dbo.sales_intakes`, `dbo.supplier_quotations`, `dbo.unified_reports`, `dbo.user_effective_permissions`, `dbo.users`
+`dbo.document_lifecycle_events`, `dbo.estimate_revisions`, `dbo.estimate_submission_snapshots`, `dbo.estimates`, `dbo.inquiries`, `dbo.inquiry_meetings`, `dbo.projects`, `dbo.purge_trial_document`, `dbo.sales_intakes`, `dbo.supplier_quotations`, `dbo.unified_reports`, `dbo.user_effective_permissions`, `dbo.users`
 
 ## Change boundary
 

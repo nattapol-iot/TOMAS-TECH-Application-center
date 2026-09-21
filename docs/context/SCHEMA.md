@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `0cd46f67`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `6239366b`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -63,5 +63,6 @@ Evidence: repository migrations at `0cd46f67`. Highest file number is not proof 
 | [055_estimate_erp_manual_override.sql](<../../database/migrations/055_estimate_erp_manual_override.sql>) | Inspect migration SQL |
 | [056_estimate_erp_groups.sql](<../../database/migrations/056_estimate_erp_groups.sql>) | `dbo.estimate_erp_groups` |
 | [057_document_lifecycle.sql](<../../database/migrations/057_document_lifecycle.sql>) | `dbo.document_lifecycle_events` |
+| [058_admin_document_purge.sql](<../../database/migrations/058_admin_document_purge.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

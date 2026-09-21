@@ -197,3 +197,25 @@ test("API: missing reason or preview token cannot mutate", async t => {
     assert.equal((await f.app.inject({ method: "POST", url: f.path, payload })).statusCode, 400);
   assert.equal(f.statements.length, 0);
 });
+
+
+test("API: permanent deletion is hidden and forbidden for non-admins, even owners", async t => {
+  const f = fixture(t);
+  assert.equal((await f.preview()).permanentDelete, null);
+  const result = await f.post("permanent-delete", f.path, { confirmNumber: "EST-2" });
+  assert.equal(result.statusCode, 403);
+  assert.ok(!f.statements.some(s => s.includes("EXEC dbo.purge_trial_document")));
+});
+test("API: additional Admin role permits purge but exact document confirmation is mandatory", async t => {
+  const f = fixture(t, { manager: true });
+  assert.equal((await f.preview()).permanentDelete.allowed, true);
+  assert.equal((await f.post("permanent-delete", f.path, { confirmNumber: "EST-WRONG" })).statusCode, 400);
+  assert.equal((await f.post("permanent-delete", f.path, { confirmNumber: "EST-2" })).statusCode, 200);
+  assert.ok(f.audits.some(a => String(a.after).includes('"permanentlyDeleted":true')));
+});
+test("API: permanent deletion cannot remove project-backed documents", async t => {
+  const f = fixture(t, { manager: true, projects: true });
+  assert.equal((await f.preview()).permanentDelete.allowed, false);
+  assert.equal((await f.post("permanent-delete", f.path, { confirmNumber: "EST-2" })).statusCode, 409);
+  assert.equal(f.audits.length, 0);
+});
