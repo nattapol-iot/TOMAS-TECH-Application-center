@@ -26,6 +26,34 @@ export function erpGroupsByMember(groups: readonly ErpGroup[]): Map<string, ErpG
   return index;
 }
 
+/**
+ * Put each row under the ERP category its lines belong to.
+ *
+ * A row normally has one category and comes back unchanged. When its lines
+ * disagree it comes back once per category, carrying only the lines that belong
+ * there and a key that says which — the sheet cannot write the same row in full
+ * under two headings, and dropping either part would lose real cost.
+ */
+export function splitRowsByCategory<TLine, TRow extends { key: string; lines: TLine[] }>(
+  rows: readonly TRow[],
+  categoryOf: (line: TLine) => string,
+): Array<{ row: TRow; key: string; category: string; lines: TLine[] }> {
+  const split: Array<{ row: TRow; key: string; category: string; lines: TLine[] }> = [];
+  for (const row of rows) {
+    const parts = new Map<string, TLine[]>();
+    for (const line of row.lines) {
+      const category = categoryOf(line);
+      const collected = parts.get(category) ?? [];
+      collected.push(line);
+      parts.set(category, collected);
+    }
+    for (const [category, lines] of parts) {
+      split.push({ row, category, lines, key: parts.size > 1 ? `${row.key}@${category}` : row.key });
+    }
+  }
+  return split;
+}
+
 type FoldableLine = {
   sourceType: string;
   sourceId: number | null;

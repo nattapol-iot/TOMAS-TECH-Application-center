@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { foldErpGroupLines, erpGroupsByMember, erpMemberKey } from "../lib/erp-estimate-groups.ts";
+import { foldErpGroupLines, erpGroupsByMember, erpMemberKey, splitRowsByCategory } from "../lib/erp-estimate-groups.ts";
 import { buildEstimateCostBreakdown, breakdownModules } from "../lib/estimate-cost-breakdown.ts";
 
 const line = (id, amount, category = "Hardware", description = "Item " + id) => ({
@@ -74,4 +74,28 @@ test("the summary shows one row for a merged line, whatever module its items cam
   assert.equal(modules[0].amount, 1250);
   assert.equal(modules.reduce((sum, entry) => sum + entry.amount, 0), section.amount);
   assert.deepEqual(modules.flatMap(entry => entry.lines.map(row => row.key)).sort(), ["cost:1", "cost:2", "cost:3"]);
+});
+
+test("every line lands under exactly one heading, and a row that disagrees is split", () => {
+  const rows = [
+    { key: "category:01:Rack", title: "Rack", lines: [{ key: "cost:1", amount: 1000 }, { key: "cost:2", amount: 250 }] },
+    { key: "category:01:Camera", title: "Camera", lines: [{ key: "cost:3", amount: 4000 }] },
+  ];
+  const agreed = splitRowsByCategory(rows, () => "Hardware");
+  assert.deepEqual(agreed.map(part => [part.key, part.category]), [["category:01:Rack", "Hardware"], ["category:01:Camera", "Hardware"]]);
+
+  // cost:2 was classified as Service, so the Rack row appears under both headings.
+  const split = splitRowsByCategory(rows, line => line.key === "cost:2" ? "Service" : "Hardware");
+  assert.deepEqual(split.map(part => [part.key, part.category, part.lines.map(line => line.key)]), [
+    ["category:01:Rack@Hardware", "Hardware", ["cost:1"]],
+    ["category:01:Rack@Service", "Service", ["cost:2"]],
+    ["category:01:Camera", "Hardware", ["cost:3"]],
+  ]);
+  // No line is lost and none is counted twice.
+  const placed = split.flatMap(part => part.lines.map(line => line.key));
+  assert.deepEqual(placed.sort(), ["cost:1", "cost:2", "cost:3"]);
+  assert.equal(split.reduce((sum, part) => sum + part.lines.reduce((total, line) => total + line.amount, 0), 0), 5250);
+  // Keys stay unique, so two parts of one row never collide in a list.
+  assert.equal(new Set(split.map(part => part.key)).size, split.length);
+  assert.deepEqual(splitRowsByCategory([], () => "Hardware"), []);
 });
