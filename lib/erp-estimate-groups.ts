@@ -19,6 +19,15 @@ export type ErpGroup = {
 
 export const erpMemberKey = (member: { sourceType: string; sourceId: number | null }) => `${member.sourceType}:${member.sourceId ?? ""}`;
 
+/** Breakdown keys are "cost:11" / "manhour:4"; the ERP side names the same line "CostItem:11" / "ManhourLine:4". */
+const ERP_SOURCE_BY_PREFIX: Record<string, string> = { cost: "CostItem", manhour: "ManhourLine", expense: "ExpenseLine", other: "OtherCostLine" };
+
+export function erpKeyOfBreakdownKey(key: string): string | null {
+  const [prefix, id] = key.split(":");
+  const sourceType = prefix ? ERP_SOURCE_BY_PREFIX[prefix] : undefined;
+  return sourceType && id ? sourceType + ":" + id : null;
+}
+
 /** Every merged line indexed by the members it holds. */
 export function erpGroupsByMember(groups: readonly ErpGroup[]): Map<string, ErpGroup> {
   const index = new Map<string, ErpGroup>();

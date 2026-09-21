@@ -1,5 +1,13 @@
 /** Estimate workspace interface copy. Business names, part numbers and user input stay unchanged. */
 export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en?: string}> = {
+  "ERP Sheet": {
+    "th": "ใบ ERP",
+    "jp": "ERPシート"
+  },
+  "Loading the ERP sheet…": {
+    "th": "กำลังโหลดใบ ERP…",
+    "jp": "ERPシートを読み込み中…"
+  },
   "ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate": {
     "th": "ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate",
     "jp": "条件を変更するか、見積未作成の引合から見積を作成してください。",

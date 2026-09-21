@@ -1421,3 +1421,25 @@ test("the next-action note shows the reviewer's reason, never the archived snaps
   assert.match(estimates, /snapshotRevision\(transaction, id, current\.revision, "Approved", "Approved"/);
   assert.match(estimates, /snapshotRevision\(transaction, id, current\.revision, reason, "Revision Required"/);
 });
+
+test("the ERP sheet tab classifies and writes, and never invents a selling figure", async () => {
+  // The sheet decides which heading a line sits under and how many lines are
+  // written. It must never change an amount, or the file would stop reconciling
+  // with the estimate it came from — and this application holds internal
+  // engineering cost only, so no margin, markup or selling price exists here.
+  const [sheet, screens] = await Promise.all([
+    readFile(new URL("app/system/production/EstimateErpSheet.tsx", root), "utf8"),
+    readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
+  ]);
+  assert.doesNotMatch(sheet, /markup|sellingPrice|selling price|margin|profit/i);
+  // Classification writes ERP mappings; merging writes groups. Neither writes a cost line.
+  assert.match(sheet, /updateEstimateErpMappings\(/);
+  assert.match(sheet, /createEstimateErpGroup\(/);
+  assert.doesNotMatch(sheet, /updateCostItem|createCostItem|reorderEstimate|line-order/);
+  // Merged lines have to reach the workbook, or the sheet would show one thing and export another.
+  assert.match(sheet, /lines: foldErpGroupLines\(summary\.lines, groups\)/);
+  // The tab exists in its own right and does not disturb the Summary tab beside it.
+  assert.match(screens, /\{ id: "erp", label: "ERP Sheet" \}/);
+  assert.match(screens, /tab === "erp" \? <EstimateErpSheetPanel/);
+  assert.match(screens, /tab === "summary" \? <><EstimateNextSteps/);
+});

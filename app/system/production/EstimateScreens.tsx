@@ -10,6 +10,7 @@ import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
 import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
 import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
+import { EstimateErpSheetPanel } from "./EstimateErpSheet";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
 import { LaborPackageMaster } from "./LaborPackageMaster";
 import { currentLocale, useT as useUiText } from "../i18n";
@@ -105,7 +106,7 @@ type Props = {
   refreshBootstrap: () => Promise<void>;
 };
 
-type WorkspaceTab = "summary" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "review";
+type WorkspaceTab = "summary" | "erp" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "review";
 type ManhourSeed = Partial<Pick<EstimateManhourInput, "package" | "costType" | "provider">>;
 type ExpenseSeed = Partial<Pick<EstimateExpenseInput, "package" | "costType">>;
 type CostItemSeed = Partial<Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion">>;
@@ -668,10 +669,11 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       <SummaryTile label="Total Estimated Cost" value={formatMoney(totals.total)} note="Internal cost · no margin" strong />
     </section>
     <Tabs active={tab} onChange={setTab} tabs={[
-      { id: "summary", label: "Summary" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
+      { id: "summary", label: "Summary" }, { id: "erp", label: "ERP Sheet" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
     ]} />
 
     {tab === "summary" ? <><EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /><EstimateErpSummaryPanel reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { if (line.priceSetKey) setCostFocus(`price-set:${line.priceSetKey}`); else setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
+    {tab === "erp" ? <EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} /> : null}
     {tab === "cost" ? <EstimateCostItemsTab onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
