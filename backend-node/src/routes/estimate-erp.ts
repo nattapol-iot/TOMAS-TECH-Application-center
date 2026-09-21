@@ -40,13 +40,13 @@ const ERP_SUMMARY_SQL = `
   INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
   WHERE e.id=@estimate_id AND e.deleted_at IS NULL;
 
-  SELECT source_type,source_id,description,internal_category,amount,erp_category,mapping_row_version,copied_from_revision,
+  SELECT source_type,source_id,description,internal_category,amount,erp_category,mapping_row_version,copied_from_revision,manual_override,
     item,model_part_number,supplier,brand,lead_time,quote_revision,unit_price,quantity,unit,remark
   FROM (
     SELECT CAST(N'CostItem' AS nvarchar(30)) source_type,ci.id source_id,
       ci.description,CONCAT(ci.category_code,N' ',ci.category) internal_category,ci.line_total amount,
       COALESCE(m.erp_category,CASE ci.category_code WHEN '01' THEN N'Hardware' WHEN '02' THEN N'Software' ELSE N'Unmapped' END) erp_category,
-      m.row_version mapping_row_version,m.copied_from_revision,ci.item_code item,ci.model model_part_number,
+      m.row_version mapping_row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)) manual_override,ci.item_code item,ci.model model_part_number,
       s.name supplier,ci.brand,NULL lead_time,ci.reference_no quote_revision,ci.unit_cost unit_price,ci.qty quantity,ci.unit,CASE WHEN ci.is_price_set=1 THEN CONCAT(ci.remark,N' Included: ',(SELECT STRING_AGG(CONVERT(nvarchar(max),CONCAT(child.item_code,N' - ',child.description,N' x ',child.qty,N' ',child.unit)),N'; ') FROM dbo.cost_items child WHERE child.estimate_id=ci.estimate_id AND child.revision=ci.revision AND child.price_set_key=ci.price_set_key AND child.is_price_set=0 AND child.deleted_at IS NULL)) ELSE ci.remark END remark,
       1 source_order,ci.sort_order sort_order,ci.category_code group_code,ci.module group_name,ci.id line_order
     FROM dbo.cost_items ci
@@ -57,8 +57,8 @@ const ERP_SUMMARY_SQL = `
     WHERE ci.estimate_id=@estimate_id AND ci.deleted_at IS NULL AND (ci.price_set_key IS NULL OR ci.is_price_set=1)
     UNION ALL
     SELECT N'ManhourLine',l.id,l.activity,CONCAT(l.cost_type,N' / ',l.provider),l.line_cost,
-      COALESCE(CASE WHEN e.status NOT IN(N'Approved',N'Locked') THEN ${laborCategorySql('l')} END,m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
-      m.row_version,m.copied_from_revision,l.activity,l.level,COALESCE(s.name,l.provider),l.department,NULL,l.quotation_no,
+      COALESCE(CASE WHEN e.status NOT IN(N'Approved',N'Locked') AND COALESCE(m.manual_override,0)=0 THEN ${laborCategorySql('l')} END,m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
+      m.row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)),l.activity,l.level,COALESCE(s.name,l.provider),l.department,NULL,l.quotation_no,
       l.daily_rate,l.engineers*l.man_days,N'man-day',l.remark,2,l.sort_order,N'',l.package,l.id
     FROM dbo.manhour_lines l
     INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
@@ -68,7 +68,7 @@ const ERP_SUMMARY_SQL = `
     WHERE l.estimate_id=@estimate_id AND l.deleted_at IS NULL
     UNION ALL
     SELECT N'ExpenseLine',l.id,l.description,CONCAT(l.expense_type,N' / ',l.cost_type),l.line_total,
-      COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,l.expense_type,NULL,s.name,NULL,NULL,l.reference_no,
+      COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)),l.expense_type,NULL,s.name,NULL,NULL,l.reference_no,
       l.unit_cost,l.qty,l.unit,l.remark,3,l.sort_order,N'',l.package,l.id
     FROM dbo.expense_lines l
     INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
@@ -78,7 +78,7 @@ const ERP_SUMMARY_SQL = `
     WHERE l.estimate_id=@estimate_id AND l.deleted_at IS NULL
     UNION ALL
     SELECT N'OtherCostLine',l.id,l.description,l.category,l.line_total,
-      COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,l.category,NULL,NULL,NULL,NULL,NULL,
+      COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)),l.category,NULL,NULL,NULL,NULL,NULL,
       l.unit_cost,l.qty,l.unit,l.remark,4,l.sort_order,N'',l.category,l.id
     FROM dbo.other_cost_lines l
     INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
@@ -87,7 +87,7 @@ const ERP_SUMMARY_SQL = `
     WHERE l.estimate_id=@estimate_id AND l.deleted_at IS NULL
     UNION ALL
     SELECT N'Contingency',NULL,N'Contingency',N'Contingency',t.contingency_total,
-      COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,N'Contingency',NULL,NULL,NULL,NULL,NULL,
+      COALESCE(m.erp_category,N'Unmapped'),m.row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)),N'Contingency',NULL,NULL,NULL,NULL,NULL,
       t.contingency_total,1,N'lot',NULL,5,2147483647,N'',N'',0
     FROM dbo.estimates e INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=e.id AND m.revision=e.revision
@@ -195,7 +195,13 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can update ERP mappings.");
       }
 
+      const overrides = new Set<MappingInput>();
       for (const mapping of mappings) {
+        /* Labour keeps following its cost type, provider and discipline unless a
+           person picks something else here. That choice is recorded so the next
+           read stops deriving the category over it; picking the derived value
+           again hands the line back to the rule. */
+        let manualOverride = false;
         if (mapping.sourceType === "ManhourLine") {
           const rule = new sql.Request(transaction);
           rule.input("id", sql.BigInt, id); rule.input("revision", sql.Int, estimate.revision);
@@ -203,7 +209,8 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
           const automatic = (await rule.query<{ category: string | null }>(`SELECT ${laborCategorySql('l')} category
             FROM dbo.manhour_lines l WITH(UPDLOCK,HOLDLOCK) WHERE l.id=@line AND l.estimate_id=@id
               AND l.revision=@revision AND l.deleted_at IS NULL;`)).recordset[0]?.category;
-          if (automatic && automatic !== mapping.erpCategory) throw new ApiError(400, "automatic_erp_category", "This labor category follows cost type, provider and discipline. Update the source labor instead.");
+          manualOverride = Boolean(automatic) && automatic !== mapping.erpCategory;
+          if (manualOverride) overrides.add(mapping);
         }
         const sourceTable = SOURCE_TABLES[mapping.sourceType];
         if (sourceTable) {
@@ -226,18 +233,19 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         mutation.input("erp_category", sql.NVarChar(30), mapping.erpCategory);
         mutation.input("actor", sql.BigInt, actor.id);
         mutation.input("mapping_version", sql.VarBinary(8), mapping.mappingRowVersion);
+        mutation.input("manual_override", sql.Bit, manualOverride);
         // dbo.estimate_erp_mappings has an AFTER trigger, so OUTPUT must target a table variable (SQL error 334 otherwise).
         const row = (await mutation.query<{ id: number | string }>(mapping.mappingRowVersion ? `
           DECLARE @changed TABLE(id bigint);
-          UPDATE dbo.estimate_erp_mappings SET erp_category=@erp_category,updated_by=@actor,updated_at=SYSUTCDATETIME()
+          UPDATE dbo.estimate_erp_mappings SET erp_category=@erp_category,manual_override=@manual_override,updated_by=@actor,updated_at=SYSUTCDATETIME()
           OUTPUT inserted.id INTO @changed(id) WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
             AND ((source_id=@source_id) OR (source_id IS NULL AND @source_id IS NULL)) AND row_version=@mapping_version;
           SELECT id FROM @changed;
         ` : `
           DECLARE @changed TABLE(id bigint);
-          INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+          INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,created_by,updated_by)
           OUTPUT inserted.id INTO @changed(id)
-          SELECT @estimate_id,@revision,@source_type,@source_id,@erp_category,@actor,@actor
+          SELECT @estimate_id,@revision,@source_type,@source_id,@erp_category,@manual_override,@actor,@actor
           WHERE NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings WITH(UPDLOCK,HOLDLOCK)
             WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
               AND ((source_id=@source_id) OR (source_id IS NULL AND @source_id IS NULL)));
@@ -252,7 +260,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       await touch.query(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@estimate_id;`);
       await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "ERP mappings updated", null, {
         revision: estimate.revision,
-        mappings: mappings.map((mapping) => ({ sourceType: mapping.sourceType, sourceId: mapping.sourceId, erpCategory: mapping.erpCategory })),
+        mappings: mappings.map((mapping) => ({ sourceType: mapping.sourceType, sourceId: mapping.sourceId, erpCategory: mapping.erpCategory, manualOverride: overrides.has(mapping) })),
       });
     });
 

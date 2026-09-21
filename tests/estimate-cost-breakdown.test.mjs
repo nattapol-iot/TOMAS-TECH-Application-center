@@ -99,6 +99,29 @@ test("ERP labor groups are one module per category and retain every source amoun
   assert.deepEqual(grouped.filter(s => s.kind === "cost-items"), source.filter(s => s.kind === "cost-items"));
 });
 
+test("an overridden labour category decides the section, and only for the line that was overridden", async () => {
+  const { groupErpLaborSections, LABOR_MODULE_NAMES } = await import("../lib/estimate-cost-breakdown.ts");
+  // A supplier installation line: the rule reads it as Installation, a person says Service.
+  const source = buildEstimateCostBreakdown({ ...input, manhourLines: [
+    { ...input.manhourLines[0], id: 92, costType: "Installation", package: "Site package", provider: "Supplier", lineCost: 9000 },
+    { ...input.manhourLines[0], id: 93, costType: "Installation", package: "Site package", provider: "Supplier", lineCost: 4000 },
+  ] }, labels);
+  const mapping = new Map([["manhour:92", "Service"], ["manhour:93", "Installation"]]);
+  const ruled = groupErpLaborSections(source, mapping);
+  // Without the override the rule wins: Service is not a place a supplier installation line may sit.
+  assert.equal(ruled.find(s => s.lines.some(l => l.key === "manhour:92")).title, "Other labor");
+
+  const overridden = groupErpLaborSections(source, mapping, new Set(["manhour:92"]));
+  assert.equal(overridden.find(s => s.lines.some(l => l.key === "manhour:92")).title, "Service");
+  assert.equal(overridden.find(s => s.lines.some(l => l.key === "manhour:93")).title, "Installation");
+  assert.equal(breakdownModules(overridden.find(s => s.title === "Service"))[0].title, LABOR_MODULE_NAMES.Service);
+  assert.equal(overridden.reduce((n, s) => n + s.amount, 0), source.reduce((n, s) => n + s.amount, 0));
+
+  // An override to a category with no labour section of its own changes nothing.
+  const elsewhere = groupErpLaborSections(source, new Map([["manhour:92", "Hardware"], ["manhour:93", "Installation"]]), new Set(["manhour:92"]));
+  assert.equal(elsewhere.find(s => s.lines.some(l => l.key === "manhour:92")).title, "Other labor");
+});
+
 test("unmapped labor is retained without inventing an ERP category", async () => {
   const { groupErpLaborSections } = await import("../lib/estimate-cost-breakdown.ts");
   const source=buildEstimateCostBreakdown(input,labels);

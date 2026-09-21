@@ -21,6 +21,8 @@ export type ErpLineRow = {
   erp_category: ErpCategory;
   mapping_row_version: Buffer | null;
   copied_from_revision: number | null;
+  /** True when a person chose this category instead of letting the labour rule derive it. */
+  manual_override: boolean;
   item: string | null;
   model_part_number: string | null;
   supplier: string | null;
@@ -78,6 +80,7 @@ export function buildErpSummary(
     erpCategory: row.erp_category,
     mappingRowVersion: row.mapping_row_version?.toString("base64") ?? null,
     copiedFromRevision: row.copied_from_revision === null ? null : Number(row.copied_from_revision),
+    manualOverride: Boolean(row.manual_override),
     item: row.item,
     modelPartNumber: row.model_part_number,
     supplier: row.supplier,

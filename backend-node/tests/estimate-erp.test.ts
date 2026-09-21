@@ -32,6 +32,7 @@ function line(overrides: Partial<ErpLineRow>): ErpLineRow {
     erp_category: "Hardware",
     mapping_row_version: null,
     copied_from_revision: null,
+    manual_override: false,
     item: "PLC-01",
     model_part_number: "FX5U",
     supplier: "Supplier A",

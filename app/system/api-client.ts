@@ -854,6 +854,8 @@ export type EstimateErpSummary = {
     erpCategory: EstimateErpCategory | "Unmapped";
     mappingRowVersion: string | null;
     copiedFromRevision: number | null;
+    /** True when a person chose this category instead of letting the labour rule derive it. */
+    manualOverride: boolean;
     item?: string | number | null;
     modelPartNumber?: string | null;
     supplier?: string | null;

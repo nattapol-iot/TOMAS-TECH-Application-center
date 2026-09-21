@@ -125,8 +125,15 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
 
   /* Cost lines come from the workspace (always available); the ERP column joins the
      ERP summary onto them by source type and id once it has loaded. */
-  const sections = useMemo(() => groupErpLaborSections(buildEstimateCostBreakdown(workspace, labels),
-    new Map((summary?.lines ?? []).filter(line => line.sourceType === "ManhourLine").map(line => ["manhour:" + line.sourceId, line.erpCategory]))), [workspace, labels, summary]);
+  const sections = useMemo(() => {
+    const labour = (summary?.lines ?? []).filter(line => line.sourceType === "ManhourLine");
+    /* A draft that is not saved yet still decides which section the line sits in,
+       so the row moves under the heading it will be exported beneath. */
+    const category = (line: EstimateErpSummary["lines"][number]) => drafts[erpKey(line)] ?? line.erpCategory;
+    return groupErpLaborSections(buildEstimateCostBreakdown(workspace, labels),
+      new Map(labour.map(line => ["manhour:" + line.sourceId, category(line)])),
+      new Set(labour.filter(line => line.manualOverride || category(line) !== line.erpCategory).map(line => "manhour:" + line.sourceId)));
+  }, [workspace, labels, summary, drafts]);
   const moduleDetail = (section: BreakdownSection, module: { key: string; title: string }) => {
     const key = section.kind === "manhour" && LABOR_MODULE_NAMES[section.title] ? section.key : module.key;
     const detail = moduleDetails.find(row => row.moduleKey === key);
@@ -185,9 +192,12 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     for (const key of keys) { if (on) next.add(key); else next.delete(key); }
     return next;
   });
+  /* Every selected line takes the category, labour included: the rule that derives
+     a labour category is a default, not a veto, and the count in the toast used to
+     include lines this quietly skipped. */
   const setDraftFor = (keys: string[], category: DraftCategory) => setDrafts((current) => {
     const next = { ...current };
-    for (const key of keys) { const line = erpByKey.get(key); if (!line || !automaticLaborCategory(line)) next[key] = category; }
+    for (const key of keys) if (erpByKey.has(key)) next[key] = category;
     return next;
   });
   const applyBulk = () => {
@@ -394,6 +404,11 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         const keys = module.lines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
         const categories = new Set(keys.map((key) => draftOf(erpByKey.get(key)!)));
         const category = categories.size === 1 ? [...categories][0] : "Mixed";
+        /* Labour still derives a category from cost type, provider and discipline.
+           Offering that value back as one click makes an override visible and
+           reversible, instead of a divergence nobody can see or undo. */
+        const derivedSet = new Set(keys.map((key) => automaticLaborCategory(erpByKey.get(key)!)).filter((value) => value !== null));
+        const derived = derivedSet.size === 1 ? [...derivedSet][0]! : null;
         const moduleIndex = breakdownModules(section).findIndex(entry => entry.key === module.key);
         const canReorder = section.kind === "manhour" ? false : section.kind === "other" ? workspace.capabilities.canEditOtherCosts : section.kind === "expenses" ? workspace.capabilities.canEditExpenses : workspace.capabilities.canEditCostItems;
         const isSelected = keys.length > 0 && keys.every((key) => selected.has(key));
@@ -431,11 +446,11 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
           <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
           <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : module.standalone ? money(module.lines[0].unitCost) : money(module.amount / detail.quantity)}</td>
           <td className="num"><strong>{money(module.amount)}</strong></td>
-          <td className="cb-erp-col"><div className="cb-module-controls"><select disabled={!canEdit || !keys.length || keys.some(key => automaticLaborCategory(erpByKey.get(key)!))} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
+          <td className="cb-erp-col"><div className="cb-module-controls"><select disabled={!canEdit || !keys.length} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
             <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
             <option value="Unmapped">{unmappedLabel}</option>
             {ERP_COST_CATEGORIES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
-          </select>{canReorder ? <span className="row-actions"><button type="button" className="icon-btn cost-drag-handle" draggable={moduleDragReady} disabled={!moduleDragReady} title={filtering ? copy("ล้างตัวกรองก่อนจึงจะย้ายลำดับได้", "Clear the filters to reorder", "並べ替えるにはフィルターを解除してください") : copy("ลากเพื่อย้ายลำดับโมดูล", "Drag to reorder this module", "ドラッグしてモジュールを並べ替え")} aria-label={"Drag " + module.title + " to reorder"} onDragStart={(event) => { setDraggedModule({ section: section.key, key: module.key, kind: section.kind, lineIds: module.lines.map(line => Number(line.key.split(":")[1])) }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", module.key); }} onDragEnd={clearModuleDrag}>⠿</button>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.key, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
+          </select>{derived && category !== derived ? <button type="button" className="chip" disabled={!canEdit} title={copy(`ระบบจัดหมวดนี้เป็น ${derived} จาก cost type / ผู้ให้บริการ / แผนก — กดเพื่อคืนค่าอัตโนมัติ`, `The labour rule reads this as ${derived} from cost type, provider and discipline — click to hand it back`, `労務ルールでは ${derived} です — クリックで自動に戻す`)} onClick={() => setDraftFor(keys, derived as DraftCategory)}>↺ {derived}</button> : null}{canReorder ? <span className="row-actions"><button type="button" className="icon-btn cost-drag-handle" draggable={moduleDragReady} disabled={!moduleDragReady} title={filtering ? copy("ล้างตัวกรองก่อนจึงจะย้ายลำดับได้", "Clear the filters to reorder", "並べ替えるにはフィルターを解除してください") : copy("ลากเพื่อย้ายลำดับโมดูล", "Drag to reorder this module", "ドラッグしてモジュールを並べ替え")} aria-label={"Drag " + module.title + " to reorder"} onDragStart={(event) => { setDraggedModule({ section: section.key, key: module.key, kind: section.kind, lineIds: module.lines.map(line => Number(line.key.split(":")[1])) }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", module.key); }} onDragEnd={clearModuleDrag}>⠿</button>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.key, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
         </tr>{openModules.has(module.key) ? module.lines.map(line => <tr key={line.key} className="cb-line">
           <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
           <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>

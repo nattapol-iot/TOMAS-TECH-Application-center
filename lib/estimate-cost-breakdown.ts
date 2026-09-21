@@ -181,15 +181,23 @@ export const LABOR_MODULE_NAMES: Record<string, string> = {
   Installation: "System implementation and Configuration Wiring and Installation ( Include Heavy Tools ) Test And Commissioning UAT",
 };
 
-/** Reuse source amounts and identities; only labor presentation changes. */
-export function groupErpLaborSections(sections: BreakdownSection[], categories: ReadonlyMap<string, string>): BreakdownSection[] {
+/**
+ * Reuse source amounts and identities; only labor presentation changes.
+ *
+ * A labour section is the ERP category of its own lines. The derived rule decides
+ * that for most lines, so the section only claims a line when the rule would have
+ * put it there — unless a person overrode the category on purpose, in which case
+ * the section follows their decision and the page shows what will be exported.
+ */
+export function groupErpLaborSections(sections: BreakdownSection[], categories: ReadonlyMap<string, string>, overridden: ReadonlySet<string> = new Set()): BreakdownSection[] {
   const result: BreakdownSection[] = [];
   for (const section of sections) {
     if (section.kind !== "manhour") { result.push(section); continue; }
     const buckets = new Map<string, BreakdownLine[]>();
     for (const line of section.lines) {
       const category = categories.get(line.key) ?? "Unmapped";
-      const grouped = category === "Installation" ? line.costType === "Installation" :
+      const grouped = overridden.has(line.key) ? Boolean(LABOR_MODULE_NAMES[category]) :
+        category === "Installation" ? line.costType === "Installation" :
         (category === "Software" || category === "Service") && line.costType === "Engineering" && line.source === "in-house";
       const bucket = grouped ? category : "Other labor";
       const lines = buckets.get(bucket) ?? [];
