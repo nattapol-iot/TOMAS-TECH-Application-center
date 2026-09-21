@@ -5027,5 +5027,23 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cb-inline-unit select, .cb-inline-unit input { width: 100%; min-width: 100px; }
 .cb-inline-unit small { display: block; white-space: normal; margin-top: 4px; }
 .cb-inline-save { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-.cb-line-name input { width: 100%; min-width: 180px; font-weight: 600; }
+/* The ERP sheet is typed into: an editable name reads as text until it is pointed
+   at, takes the whole name however long, and keeps the row as short as the name. */
+.cost-breakdown tr.cb-line td.cb-desc-cell { padding: 4px 4px 7px; }
+.cb-line-name > strong, .cb-line-name > textarea {
+  display: block; width: 100%; box-sizing: border-box; padding: 4px 6px;
+  font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; white-space: normal;
+}
+.cb-line-name > strong { border: 1px solid transparent; }
+.cb-line-name > textarea {
+  border: 1px solid transparent; border-radius: var(--r-sm); background: transparent;
+  color: var(--ink); font-family: inherit; resize: none; overflow: hidden;
+}
+.cb-line-name > textarea:hover:not(:disabled) { border-color: var(--line); }
+.cb-line-name > textarea:focus { border-color: var(--blue); background: var(--n-0); outline: none; }
+.cb-line-name.saving > textarea { opacity: 0.55; }
+.cb-line-name small { display: block; padding: 2px 6px 0; }
+.cb-line-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; padding: 2px 6px 0; font-size: var(--fs-2xs); color: var(--muted); }
+.cb-line-meta .cb-code { margin-left: 0; }
+.cb-line-meta .chip { padding: 1px 8px; font-size: var(--fs-2xs); }
 .estimate-summary-note textarea { width: 100%; resize: vertical; }

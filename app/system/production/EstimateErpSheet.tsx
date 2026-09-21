@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
 import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, foldErpGroupLines, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
@@ -55,35 +55,42 @@ const bytesToBase64 = (bytes: Uint8Array) => {
 /**
  * The name a line is written under, edited where it is read.
  *
- * Hardware lines are excluded by the page, not by this component: their names are
- * the purchased items themselves and belong to whoever buys them. Everywhere else
- * the name is a description of work, and the sheet is where its wording is decided.
+ * A sheet is typed into, so the field behaves the way a grid cell does: it reads
+ * as text until it is pointed at, it takes the whole name however long that is,
+ * and moving on commits it — Enter, or simply leaving for the next field. Escape
+ * puts the old name back. There are no save buttons because a page full of them
+ * is a page nobody wants to fill in.
+ *
+ * Hardware lines are excluded by the page, not here: their names are the purchased
+ * items themselves and belong to whoever buys them.
  */
 function SheetLineName({ value, onSave }: { value: string; onSave: (next: string) => Promise<void> }) {
   const say = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const changed = draft.trim() !== value.trim();
-  const cancel = () => { setDraft(value); setError(""); };
-  const save = async () => {
-    if (saving || !changed || !draft.trim()) return;
+  const committing = useRef(false);
+  // The field is as tall as the name it holds; a long scope of work is not a secret.
+  const fit = (node: HTMLTextAreaElement | null) => { if (node) { node.style.height = "auto"; node.style.height = node.scrollHeight + "px"; } };
+  const commit = async (next: string) => {
+    const wanted = next.trim();
+    if (committing.current || !wanted || wanted === value.trim()) return;
+    committing.current = true;
     setSaving(true); setError("");
-    try { await onSave(draft.trim()); }
+    try { await onSave(wanted); }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : say("บันทึกไม่สำเร็จ", "Could not be saved", "保存できませんでした")); }
-    finally { setSaving(false); }
+    finally { committing.current = false; setSaving(false); }
   };
-  return <div className="cb-line-name">
-    <input value={draft} maxLength={200} disabled={saving} aria-label={say("ชื่อบรรทัด", "Line name", "行の名前")}
-      onChange={(event) => setDraft(event.target.value)}
+  return <div className={saving ? "cb-line-name saving" : "cb-line-name"}>
+    <textarea rows={1} ref={fit} value={draft} maxLength={200} disabled={saving} spellCheck={false}
+      aria-label={say("ชื่อบรรทัด", "Line name", "行の名前")}
+      title={say("พิมพ์แก้ได้เลย · Enter หรือคลิกที่อื่นเพื่อบันทึก · Esc เพื่อคืนค่าเดิม", "Type to change it · Enter or click away to save · Esc to put it back", "そのまま入力 · Enter か他をクリックで保存 · Esc で元に戻す")}
+      onChange={(event) => { setDraft(event.target.value); fit(event.currentTarget); }}
+      onBlur={() => { void commit(draft); }}
       onKeyDown={(event) => {
-        if (event.key === "Enter") { event.preventDefault(); void save(); }
-        if (event.key === "Escape" && !saving) { event.preventDefault(); cancel(); }
+        if (event.key === "Enter") { event.preventDefault(); void commit(draft); }
+        if (event.key === "Escape" && !saving) { event.preventDefault(); setDraft(value); setError(""); }
       }} />
-    {changed ? <div className="cb-inline-save">
-      <button type="button" className="btn primary sm" disabled={saving || !draft.trim()} onClick={() => { void save(); }}>{saving ? say("กำลังบันทึก…", "Saving…", "保存中…") : say("บันทึกชื่อ", "Save the name", "名前を保存")}</button>
-      <button type="button" className="btn ghost sm" disabled={saving} onClick={cancel}>{say("ยกเลิก", "Cancel", "取消")}</button>
-    </div> : null}
     {error ? <small role="alert" className="soft-warn">{error}</small> : null}
   </div>;
 }
@@ -429,25 +436,22 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
           {canEdit && row.erpKeys.length ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={"Select " + title} onChange={(event) => toggleRow(row, event.target.checked)} /> : null}
           {heading.ordinal}-{index + 1}
         </td>
-        <td>
-          <div className="cell-primary cb-desc">
-            {nameEditable
-              ? <SheetLineName key={`${row.key}:${title}`} value={title} onSave={(next) => renameRow(row, detailKey, merged, next)} />
-              : <strong>{title}</strong>}
-            <span>
-              {merged ? <span className="badge blue">{copy("เขียนรวมเป็นบรรทัดเดียว", "Written as one line", "1行にまとめて出力")}</span> : null}
-              {/* Where the money lives. The sheet classifies the line; it does not move it. */}
-              <span className="cb-code">{row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title}</span>
-              {row.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}
-            </span>
+        <td className="cb-desc-cell">
+          {nameEditable
+            ? <SheetLineName key={`${row.key}:${title}`} value={title} onSave={(next) => renameRow(row, detailKey, merged, next)} />
+            : <div className="cb-line-name"><strong>{title}</strong></div>}
+          {/* Everything about the row that is not its name, on one line under it. */}
+          <div className="cb-line-meta">
+            {merged ? <span className="badge blue">{copy("รวมเป็นบรรทัดเดียว", "One line", "1行")}</span> : null}
+            {/* Where the money lives. The sheet classifies the line; it does not move it. */}
+            <span className="cb-code">{row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title}</span>
+            <span>{row.lines.length} {copy("รายการ", "lines", "明細")}</span>
+            <button type="button" className="chip" aria-expanded={open} onClick={() => setOpened((current) => { const next = new Set(current); if (next.has(row.key)) next.delete(row.key); else next.add(row.key); return next; })}>
+              {open ? copy("ย่อ", "Hide", "閉じる") : copy("ดูรายการ", "Lines", "明細")}
+            </button>
+            {merged && !nameEditable ? <button type="button" className="chip" disabled={!canEdit} onClick={() => setMerge({ title: merged.title, group: merged, members: [] })}>{copy("เปลี่ยนชื่อ", "Rename", "名前を変更")}</button> : null}
+            {merged ? <button type="button" className="chip" disabled={!canEdit} onClick={() => { void splitMerged(merged); }}>{copy("แยกกลับ", "Split back", "まとめを解除")}</button> : null}
           </div>
-          <button type="button" className="chip" aria-expanded={open} onClick={() => setOpened((current) => { const next = new Set(current); if (next.has(row.key)) next.delete(row.key); else next.add(row.key); return next; })}>
-            {open ? copy("ย่อรายการ", "Hide the lines", "明細を閉じる") : copy("ดูรายการข้างใน", "See the lines", "明細を見る")}
-          </button>
-          {merged ? <>
-            <button type="button" className="chip" disabled={!canEdit} onClick={() => setMerge({ title: merged.title, group: merged, members: [] })}>{copy("เปลี่ยนชื่อ", "Rename", "名前を変更")}</button>
-            <button type="button" className="chip" disabled={!canEdit} onClick={() => { void splitMerged(merged); }}>{copy("แยกกลับ", "Split back", "まとめを解除")}</button>
-          </> : null}
         </td>
         {canEditUnit || merged ? <EstimateModuleQuantityCells key={`${row.key}:${rowQuantity}:${rowUnit}`} name={title} quantity={rowQuantity} unit={rowUnit} showCostRatio={!merged && row.source.kind === "cost-items"}
           units={moduleDetails.map((entry) => entry.unit ?? "Set")} disabled={!canEdit || unsaved.length > 0}
