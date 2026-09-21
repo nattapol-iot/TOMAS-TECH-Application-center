@@ -114,10 +114,12 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   const groups = useMemo(() => summary?.groups ?? [], [summary]);
   const groupsByMember = useMemo(() => erpGroupsByMember(groups), [groups]);
   const draftOf = useCallback((line: ErpLine) => drafts[erpKey(line)] ?? line.erpCategory, [drafts]);
+  /* Null means "not a line of the sheet": a price-set component is priced inside
+     its header, so the ERP side never carries it and it follows its row. */
   const categoryOfLine = useCallback((line: BreakdownLine) => {
     const key = erpKeyOfBreakdownKey(line.key);
     const erp = key ? erpByKey.get(key) : undefined;
-    return erp ? draftOf(erp) : "Unmapped";
+    return erp ? draftOf(erp) : null;
   }, [erpByKey, draftOf]);
 
   /* A merged line the export would refuse to write must not be drawn as merged

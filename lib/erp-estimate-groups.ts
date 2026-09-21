@@ -42,20 +42,33 @@ export function erpGroupsByMember(groups: readonly ErpGroup[]): Map<string, ErpG
  * disagree it comes back once per category, carrying only the lines that belong
  * there and a key that says which — the sheet cannot write the same row in full
  * under two headings, and dropping either part would lose real cost.
+ *
+ * Not every cost line is a line of the sheet: the components of a price set are
+ * priced inside their header and the ERP side never sees them. `categoryOf`
+ * returns null for those, and they follow their row instead of inventing a
+ * heading of their own — which is what put a ghost row, holding every component
+ * and no money, under "Unmapped".
  */
 export function splitRowsByCategory<TLine, TRow extends { key: string; lines: TLine[] }>(
   rows: readonly TRow[],
-  categoryOf: (line: TLine) => string,
+  categoryOf: (line: TLine) => string | null,
+  fallback = "Unmapped",
 ): Array<{ row: TRow; key: string; category: string; lines: TLine[] }> {
   const split: Array<{ row: TRow; key: string; category: string; lines: TLine[] }> = [];
   for (const row of rows) {
     const parts = new Map<string, TLine[]>();
+    const following: TLine[] = [];
     for (const line of row.lines) {
       const category = categoryOf(line);
+      if (category === null) { following.push(line); continue; }
       const collected = parts.get(category) ?? [];
       collected.push(line);
       parts.set(category, collected);
     }
+    // A row of nothing but followers is still a row; it just has no category yet.
+    const [first] = parts.keys();
+    const home = first ?? fallback;
+    parts.set(home, [...(parts.get(home) ?? []), ...following]);
     for (const [category, lines] of parts) {
       split.push({ row, category, lines, key: parts.size > 1 ? `${row.key}@${category}` : row.key });
     }

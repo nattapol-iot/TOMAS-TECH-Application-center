@@ -180,7 +180,8 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
      belongs there, because the sheet cannot write it twice in full. */
   const headings = useMemo<ErpHeading[]>(() => {
     const collected = new Map<string, SummaryRow[]>();
-    const categoryOf = (line: BreakdownLine) => { const erp = erpOf(line); return erp ? drafts[erpKey(erp)] ?? erp.erpCategory : "Unmapped"; };
+    // Null means the ERP side has no line for it — a price-set component, priced inside its header — so it follows its row.
+    const categoryOf = (line: BreakdownLine) => { const erp = erpOf(line); return erp ? drafts[erpKey(erp)] ?? erp.erpCategory : null; };
     for (const section of sections) for (const part of splitRowsByCategory(modulesOf(section), categoryOf)) {
       const rows = collected.get(part.category) ?? [];
       rows.push({

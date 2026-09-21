@@ -127,3 +127,37 @@ test("a merged line is drawn exactly when it will be written, and says why when 
   assert.deepEqual(pending.broken.map(entry => entry.reason), ["mixed"]);
   assert.deepEqual(classifyErpGroups(lines, [group([1, 2])], saved).broken, []);
 });
+
+test("a price set stays one row: its components follow the header instead of becoming a ghost", () => {
+  /* The ERP side never carries the components of a price set — they are priced
+     inside the header — so they have no category of their own. Treating that as
+     "Unmapped" put a second row, holding every component and no money, under a
+     heading the file never writes. */
+  const rows = [{
+    key: "category:01:Master PLC", title: "Master PLC",
+    lines: [
+      { key: "cost:1", amount: 336000, header: true },
+      ...[2, 3, 4, 5, 6, 7].map(id => ({ key: `cost:${id}`, amount: 0, header: false })),
+    ],
+  }];
+  const categoryOf = line => line.header ? "Hardware" : null;
+  const split = splitRowsByCategory(rows, categoryOf);
+  assert.equal(split.length, 1);
+  assert.equal(split[0].category, "Hardware");
+  assert.equal(split[0].key, "category:01:Master PLC");
+  assert.equal(split[0].lines.length, 7);
+
+  // A row the ERP side knows nothing about at all still appears, under the fallback.
+  const orphan = splitRowsByCategory([{ key: "category:01:Spare", lines: [{ key: "cost:9", amount: 0 }] }], () => null);
+  assert.deepEqual(orphan.map(part => [part.key, part.category, part.lines.length]), [["category:01:Spare", "Unmapped", 1]]);
+
+  // A genuine disagreement still splits, and the followers stay with the first part.
+  const mixed = splitRowsByCategory([{
+    key: "category:01:Mixed",
+    lines: [{ key: "cost:1", tag: "Hardware" }, { key: "cost:2", tag: null }, { key: "cost:3", tag: "Service" }],
+  }], line => line.tag);
+  assert.deepEqual(mixed.map(part => [part.category, part.lines.map(line => line.key)]), [
+    ["Hardware", ["cost:1", "cost:2"]],
+    ["Service", ["cost:3"]],
+  ]);
+});
