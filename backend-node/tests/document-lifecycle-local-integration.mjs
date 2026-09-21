@@ -1,5 +1,7 @@
 // Run through scripts/Test-DocumentLifecycleLocal.ps1. Never targets an application database.
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
 import Fastify from "fastify";
 import { Database } from "../src/db.ts";
 import { ApiError, registerErrorHandler } from "../src/errors.ts";
@@ -45,6 +47,11 @@ async function check(name, work) { await work(); checks.push(name); console.log(
 try {
   const identity = (await query("SELECT DB_NAME() name,CAST(SERVERPROPERTY('MachineName') AS nvarchar(128)) machine;"))[0];
   assert.equal(identity.name, expected); assert.equal(identity.machine.toLowerCase(), process.env.COMPUTERNAME.toLowerCase());
+  process.env.MIGRATIONS_DIR = fileURLToPath(new URL("../../database/migrations/", import.meta.url));
+  const { runPendingMigrations } = await import("../src/migrate.ts");
+  await runPendingMigrations({ database: { connectionString: process.env.LIFECYCLE_TEST_CONNECTION, trustServerCertificate: true } });
+  // Reapply through the same driver to verify idempotency as well as RPC batching.
+  await query(await readFile(new URL("../../database/migrations/058_admin_document_purge.sql", import.meta.url), "utf8"));
   const seedIdentity = (await query(`IF NOT EXISTS(SELECT 1 FROM dbo.roles WHERE code=N'Admin') INSERT dbo.roles(code,name) VALUES(N'Admin',N'Admin');
     DECLARE @role bigint=(SELECT id FROM dbo.roles WHERE code=N'Admin');
     INSERT dbo.permissions(code) SELECT v.code FROM (VALUES(N'inquiry.read'),(N'inquiry.write'),(N'estimate.read'),(N'estimate.write'),(N'estimate.approve')) v(code)

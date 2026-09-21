@@ -26,6 +26,7 @@ try {
   $test.Open()
   Execute-Sql $test "CREATE ROLE iot_team_app_role"
   foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $repository 'database/migrations') -Filter '*.sql' | Sort-Object Name)) {
+    if ($file.Name -eq "058_admin_document_purge.sql") { continue } # Exercised by the real Node runner below.
     Write-Output "Applying $($file.Name)"
     # Older baseline scripts use sqlcmd's directive; ErrorActionPreference implements it here.
     $sqlText = [regex]::Replace([IO.File]::ReadAllText($file.FullName), '(?im)^:on error exit\s*$', '')
@@ -35,9 +36,6 @@ try {
   }
   # Rerun only this feature's migration to prove its recovery/idempotency contract.
   Execute-Sql $test ([IO.File]::ReadAllText((Join-Path $repository 'database/migrations/057_document_lifecycle.sql')))
-  foreach ($batch in ([regex]::Split([IO.File]::ReadAllText((Join-Path $repository 'database/migrations/058_admin_document_purge.sql')), '(?im)^\s*GO\s*$'))) {
-    if ($batch.Trim()) { Execute-Sql $test $batch }
-  }
   $password = "Lc1!$([Guid]::NewGuid().ToString('N'))$([Guid]::NewGuid().ToString('N'))"
   Execute-Sql $master "CREATE LOGIN [$loginName] WITH PASSWORD=N'$password',CHECK_POLICY=OFF"
   $loginCreated = $true
