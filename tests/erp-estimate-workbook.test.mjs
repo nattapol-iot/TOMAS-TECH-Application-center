@@ -113,3 +113,85 @@ test("ERP workbook preserves saved line order within each fixed category", () =>
  const xml=workbookXml(input)["xl/worksheets/sheet1.xml"];
  assert.ok(xml.indexOf("Z FIRST") < xml.indexOf("A SECOND"));
 });
+
+/*
+ * These tests read the sheet's contents. They all passed while Excel was opening
+ * the file as "[Repaired]" and throwing every row away, because none of them asked
+ * whether the package was one Excel would accept. These do.
+ */
+const CT_WORKSHEET = ["sheetPr", "dimension", "sheetViews", "sheetFormatPr", "cols", "sheetData",
+  "sheetCalcPr", "sheetProtection", "protectedRanges", "scenarios", "autoFilter", "sortState",
+  "dataConsolidate", "customSheetViews", "mergeCells", "phoneticPr", "conditionalFormatting",
+  "dataValidations", "hyperlinks", "printOptions", "pageMargins", "pageSetup", "headerFooter"];
+
+function sheetOf(input) {
+  const parts = unzipSync(buildErpEstimateWorkbook(input));
+  return { parts, sheet: decoder.decode(parts["xl/worksheets/sheet1.xml"]) };
+}
+
+test("the worksheet keeps its children in the order the format fixes for them", () => {
+  const { sheet } = sheetOf(fixture());
+  const order = [];
+  for (const match of sheet.matchAll(/<(\w+)[ />]/g)) {
+    if (CT_WORKSHEET.includes(match[1]) && order.at(-1) !== match[1]) order.push(match[1]);
+  }
+  const positions = order.map((name) => CT_WORKSHEET.indexOf(name));
+  assert.deepEqual(positions, [...positions].sort((left, right) => left - right),
+    `worksheet children out of schema order: ${order.join(" > ")}`);
+  // The pair that was wrong, named so the regression is unmistakable.
+  assert.ok(sheet.indexOf("<autoFilter") < sheet.indexOf("<mergeCells"), "autoFilter must precede mergeCells");
+});
+
+test("no two merged ranges claim the same cell, and the count matches the ranges", () => {
+  const { sheet } = sheetOf(fixture());
+  const refs = [...sheet.matchAll(/<mergeCell ref="([^"]+)"\/>/g)].map((match) => match[1]);
+  assert.equal(Number(/<mergeCells count="(\d+)"/.exec(sheet)[1]), refs.length);
+  const column = (name) => [...name].reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+  const owner = new Map();
+  for (const ref of refs) {
+    const [, left, top, right, bottom] = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(ref);
+    for (let row = Number(top); row <= Number(bottom); row += 1) {
+      for (let col = column(left); col <= column(right); col += 1) {
+        const cell = `${col}:${row}`;
+        assert.equal(owner.get(cell), undefined, `${ref} overlaps ${owner.get(cell)} at ${cell}`);
+        owner.set(cell, ref);
+      }
+    }
+  }
+});
+
+test("a description carrying characters XML cannot hold still produces a readable sheet", () => {
+  /* Descriptions arrive from imported workbooks and parsed PDFs; a stray control
+     character cannot be written in XML at all, escaped or not. */
+  const input = fixture();
+  input.summary.lines[0].description = "Master PLC\u0007 : Data \u000bgateway <A&B> \"Q\"";
+  const { sheet } = sheetOf(input);
+  for (const [, text] of sheet.matchAll(/<t xml:space="preserve">([^<]*)<\/t>/g)) {
+    for (const character of text) {
+      const code = character.charCodeAt(0);
+      assert.ok(code > 0x1f || code === 0x09 || code === 0x0a || code === 0x0d,
+        JSON.stringify(character) + " cannot be written in XML");
+    }
+  }
+  assert.match(sheet, /Master PLC : Data gateway &lt;A&amp;B&gt; &quot;Q&quot;/);
+  assert.equal((sheet.match(/&(?!amp;|lt;|gt;|quot;|apos;|#)/g) ?? []).length, 0, "every & is an entity");
+});
+
+test("every row is in ascending order and every cell sits in the row that declares it", () => {
+  const { sheet } = sheetOf(fixture());
+  const rows = [...sheet.matchAll(/<row r="(\d+)">(.*?)<\/row>/g)];
+  assert.ok(rows.length > 0);
+  let previous = 0;
+  for (const [, number, body] of rows) {
+    assert.ok(Number(number) > previous, `row ${number} follows ${previous}`);
+    previous = Number(number);
+    let column = 0;
+    for (const [, ref] of body.matchAll(/<c r="([A-Z]+\d+)"/g)) {
+      const [, letters, rowNumber] = /^([A-Z]+)(\d+)$/.exec(ref);
+      assert.equal(rowNumber, number, `${ref} sits in row ${number}`);
+      const index = [...letters].reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+      assert.ok(index > column, `${ref} comes after column ${column}`);
+      column = index;
+    }
+  }
+});

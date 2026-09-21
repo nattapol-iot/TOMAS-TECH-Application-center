@@ -88,7 +88,15 @@ type Cell = { value?: string | number; style?: number };
 const MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const RECONCILIATION_TOLERANCE = 0.01;
 
+/** Tab, newline and carriage return are the only control characters XML 1.0 admits. */
+const writableInXml = (character: string) => {
+  const code = character.charCodeAt(0);
+  return code > 0x1f || code === 0x09 || code === 0x0a || code === 0x0d;
+};
 const escapeXml = (value: string) => value
+  /* XML 1.0 cannot carry these at all, escaped or not, and one of them arriving in
+     an imported description would make the whole sheet unreadable. */
+  .split("").filter(writableInXml).join("")
   .replace(/&/g, "&amp;")
   .replace(/</g, "&lt;")
   .replace(/>/g, "&gt;")
@@ -209,12 +217,12 @@ function worksheetXml(rows: Cell[][]): string {
     const label = row[2]?.value;
     if (typeof label !== "string") return;
     if (ERP_COST_CATEGORIES.includes(label as ErpCostCategory)) merges.push(`C${index + 1}:N${index + 1}`);
-    if (label.endsWith(" Sub Total") || label === "Approved Overhead" || label === "Grand Total") {
+    if (label.endsWith("Sub Total") || label === "Approved Overhead" || label === "Grand Total") {
       merges.push(`C${index + 1}:K${index + 1}`);
     }
   });
   const mergeXml = merges.map(ref => `<mergeCell ref="${ref}"/>`).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="8" topLeftCell="C9" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="2" width="2" customWidth="1"/><col min="3" max="3" width="11.875" customWidth="1"/><col min="4" max="4" width="52.625" customWidth="1"/><col min="5" max="5" width="109.625" customWidth="1"/><col min="6" max="6" width="37.375" customWidth="1"/><col min="7" max="7" width="23.125" customWidth="1"/><col min="8" max="8" width="20" customWidth="1"/><col min="9" max="9" width="21.625" customWidth="1"/><col min="10" max="10" width="25.375" customWidth="1"/><col min="11" max="11" width="21.625" customWidth="1"/><col min="12" max="12" width="29.25" customWidth="1"/><col min="13" max="13" width="13.625" customWidth="1"/><col min="14" max="14" width="17.875" customWidth="1"/><col min="15" max="15" width="12" customWidth="1"/></cols><sheetData>${content}</sheetData><mergeCells count="${merges.length}">${mergeXml}</mergeCells><autoFilter ref="C8:N8"/><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="8" topLeftCell="C9" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="2" width="2" customWidth="1"/><col min="3" max="3" width="11.875" customWidth="1"/><col min="4" max="4" width="52.625" customWidth="1"/><col min="5" max="5" width="109.625" customWidth="1"/><col min="6" max="6" width="37.375" customWidth="1"/><col min="7" max="7" width="23.125" customWidth="1"/><col min="8" max="8" width="20" customWidth="1"/><col min="9" max="9" width="21.625" customWidth="1"/><col min="10" max="10" width="25.375" customWidth="1"/><col min="11" max="11" width="21.625" customWidth="1"/><col min="12" max="12" width="29.25" customWidth="1"/><col min="13" max="13" width="13.625" customWidth="1"/><col min="14" max="14" width="17.875" customWidth="1"/><col min="15" max="15" width="12" customWidth="1"/></cols><sheetData>${content}</sheetData><autoFilter ref="C8:N8"/><mergeCells count="${merges.length}">${mergeXml}</mergeCells><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
 }
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
