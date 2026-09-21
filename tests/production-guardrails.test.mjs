@@ -1436,8 +1436,14 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   assert.match(sheet, /updateEstimateErpMappings\(/);
   assert.match(sheet, /createEstimateErpGroup\(/);
   assert.doesNotMatch(sheet, /updateCostItem|createCostItem|reorderEstimate|line-order/);
-  // Merged lines have to reach the workbook, or the sheet would show one thing and export another.
-  assert.match(sheet, /lines: foldErpGroupLines\(summary\.lines, groups\)/);
+  /* The file is written from the sheet's own rows, so Excel receives what the page
+     shows: modules and merged lines, never the items inside them. */
+  assert.match(sheet, /summary: \{ \.\.\.summary, lines: exportRows\(\) \}/);
+  const exportBlock = sheet.slice(sheet.indexOf("const exportRows"), sheet.indexOf("const exportWorkbook"));
+  assert.match(exportBlock, /headings\.flatMap/);
+  assert.doesNotMatch(exportBlock, /foldErpGroupLines|summary\.lines\.map/);
+  // Contingency has no row on the sheet and still has to reach the file, or it stops adding up.
+  assert.match(exportBlock, /sourceType === "Contingency"/);
   // The tab exists in its own right and does not disturb the Summary tab beside it.
   assert.match(screens, /\{ id: "erp", label: "ERP Sheet" \}/);
   assert.match(screens, /tab === "erp" \? <EstimateErpSheetPanel/);

@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
-import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, foldErpGroupLines, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
+import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { LABOR_MODULE_NAMES, breakdownModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
@@ -303,6 +303,73 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     } finally { setBusy(false); }
   };
 
+  /* A row's name and the record it is stored in, in one place: the sheet and the
+     file must never disagree about which line they are talking about. */
+  const detailKeyOf = (row: SheetRow) => row.source.kind === "manhour" && LABOR_MODULE_NAMES[row.source.title] ? row.source.key : row.key;
+  const mergedOf = (row: SheetRow) => row.merged === null ? null : groups.find((group) => group.id === row.merged) ?? null;
+  const titleOf = (row: SheetRow) => {
+    const merged = mergedOf(row);
+    if (merged) return merged.title;
+    const detail = moduleDetails.find((entry) => entry.moduleKey === detailKeyOf(row));
+    return row.source.kind === "cost-items" ? row.title : detail?.title ?? row.title;
+  };
+  const ledgerOf = (row: SheetRow) => row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title;
+
+  /*
+   * The file says what the sheet says.
+   *
+   * It used to be written from the cost lines themselves, so a row the sheet shows
+   * as one module — "Master PLC : Data gateway", two sets — arrived in Excel as the
+   * seven parts inside it. The sheet is the document: one row per module or merged
+   * line, and the items behind them stay where they are maintained.
+   *
+   * A detail that belongs to a single item — its supplier, brand, lead time or
+   * quotation — is written only where every item in the row agrees on it. Anything
+   * else would be one item's fact presented as the row's.
+   */
+  const exportRows = () => {
+    const agreed = (values: Array<string | null | undefined>) => {
+      const distinct = new Set(values.map((value) => (value ?? "").trim()).filter(Boolean));
+      return distinct.size === 1 ? [...distinct][0]! : undefined;
+    };
+    const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+    const rows = headings.flatMap((heading) => heading.rows.map((row) => {
+      const merged = mergedOf(row);
+      const detail = moduleDetails.find((entry) => entry.moduleKey === detailKeyOf(row));
+      const rowQuantity = merged ? merged.quantity : row.standalone ? row.lines[0].quantity : detail?.quantity ?? 1;
+      const erpLines = row.erpKeys.map((key) => erpByKey.get(key)).filter((line): line is ErpLine => Boolean(line));
+      return {
+        sourceType: erpLines[0]?.sourceType ?? "CostItem",
+        sourceId: erpLines[0]?.sourceId ?? null,
+        description: titleOf(row),
+        internalCategory: ledgerOf(row),
+        amount: round(row.amount),
+        erpCategory: heading.category as EstimateErpCategory | "Unmapped",
+        mappingRowVersion: null,
+        copiedFromRevision: null,
+        supplier: agreed(erpLines.map((line) => line.supplier)),
+        brand: agreed(erpLines.map((line) => line.brand)),
+        leadTime: agreed(erpLines.map((line) => line.leadTime)),
+        quoteRevision: agreed(erpLines.map((line) => line.quoteRevision)),
+        unitPrice: rowQuantity > 0 ? round(row.amount / rowQuantity) : round(row.amount),
+        quantity: rowQuantity,
+        unit: merged ? merged.unit : row.standalone ? row.lines[0].unit : detail?.unit ?? "Set",
+      };
+    }));
+    /* Contingency is a figure of the estimate rather than a line of any ledger, so
+       it has no row on the sheet — and the file has to carry it or it stops adding
+       up to the estimate it came from. */
+    const contingency = (summary?.lines ?? [])
+      .filter((line) => line.sourceType === "Contingency" && Math.abs(line.amount) > 0.005)
+      .map((line) => ({
+        sourceType: line.sourceType, sourceId: line.sourceId, description: line.description,
+        internalCategory: line.internalCategory, amount: round(line.amount),
+        erpCategory: draftOf(line), mappingRowVersion: null, copiedFromRevision: null,
+        unitPrice: round(line.amount), quantity: 1, unit: line.unit ?? "lot",
+      }));
+    return [...rows, ...contingency];
+  };
+
   const exportWorkbook = async () => {
     if (!summary || workspace.header.status !== "Approved" || !summary.capabilities.canExport || unsaved.length || !approvedOverhead) return;
     setBusy(true); setError("");
@@ -319,18 +386,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
           creator: workspace.header.ownerName,
           exportDate: estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"),
         },
-        summary: {
-          ...summary,
-          // Merged lines are written as one row; the amounts behind them are unchanged.
-          lines: foldErpGroupLines(summary.lines, groups).map((line) => ({
-            ...line,
-            item: line.item ?? undefined, modelPartNumber: line.modelPartNumber ?? undefined,
-            supplier: line.supplier ?? undefined, brand: line.brand ?? undefined,
-            leadTime: line.leadTime ?? undefined, quoteRevision: line.quoteRevision ?? undefined,
-            unitPrice: line.unitPrice ?? undefined, quantity: line.quantity ?? undefined,
-            unit: line.unit ?? undefined, remark: line.remark ?? undefined,
-          })),
-        },
+        summary: { ...summary, lines: exportRows() },
         approvedOverhead: { amount: overheadAmount, approved: approvedOverhead },
       });
       const digestInput = new Uint8Array(bytes.byteLength);
@@ -364,10 +420,10 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   };
 
   const renderRow = (heading: SheetHeading, row: SheetRow, index: number) => {
-    const detailKey = row.source.kind === "manhour" && LABOR_MODULE_NAMES[row.source.title] ? row.source.key : row.key;
+    const detailKey = detailKeyOf(row);
     const detail = moduleDetails.find((entry) => entry.moduleKey === detailKey);
-    const merged = row.merged === null ? null : groups.find((group) => group.id === row.merged) ?? null;
-    const title = merged ? merged.title : row.source.kind === "cost-items" ? row.title : detail?.title ?? row.title;
+    const merged = mergedOf(row);
+    const title = titleOf(row);
     const rowQuantity = merged ? merged.quantity : row.standalone ? row.lines[0].quantity : detail?.quantity ?? 1;
     const rowUnit = merged ? merged.unit : row.standalone ? row.lines[0].unit : detail?.unit ?? "Set";
     const isSelected = row.erpKeys.length > 0 && row.erpKeys.every((key) => selected.has(key));
