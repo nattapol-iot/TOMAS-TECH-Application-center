@@ -31,7 +31,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     const result = await database.query<Record<string, unknown>>(`
       SELECT e.id,e.estimate_no,e.inquiry_id,i.inquiry_no,e.customer_id,c.code customer_code,c.name customer_name,
         e.project_name,e.project_type,e.owner_id,owner_user.name owner_name,e.revision,e.created_date,e.due_date,e.status,
-        e.progress,e.contingency_rate,e.locked_at,e.locked_by,locked_user.name locked_by_name,e.created_at,e.updated_at,e.row_version,
+        e.progress,e.contingency_rate,e.archived_at,i.archived_at inquiry_archived_at,e.locked_at,e.locked_by,locked_user.name locked_by_name,e.created_at,e.updated_at,e.row_version,
         t.material_total,t.engineering_total,t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,
         t.base_total,t.internal_direct_hours,t.overhead_state,t.overhead_policy_id,t.overhead_policy_version,t.overhead_hourly_rate,
         t.overhead_total,t.contingency_total,t.total,overhead.monthly_budget overhead_monthly_budget,
@@ -120,7 +120,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       customerId: number(headerRow.customer_id), customerCode: headerRow.customer_code, customerName: headerRow.customer_name,
       projectName: headerRow.project_name, projectType: headerRow.project_type, ownerId: number(headerRow.owner_id), ownerName: headerRow.owner_name,
       revision: number(headerRow.revision), createdDate: dateOnly(headerRow.created_date as Date | string), dueDate: dateOnly(headerRow.due_date as Date | string),
-      status: headerRow.status as string, progress: number(headerRow.progress), contingencyRate: number(headerRow.contingency_rate),
+      archived: !!headerRow.archived_at, status: headerRow.status as string, progress: number(headerRow.progress), contingencyRate: number(headerRow.contingency_rate),
       lockedAt: headerRow.locked_at, lockedBy: nullableNumber(headerRow.locked_by), lockedByName: headerRow.locked_by_name,
       createdAt: headerRow.created_at, updatedAt: headerRow.updated_at, rowVersion: (headerRow.row_version as Buffer).toString("base64"),
       totals: { material: number(headerRow.material_total), engineering: number(headerRow.engineering_total), outsource: number(headerRow.outsource_total),
@@ -138,7 +138,8 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     const permissionRow = (result.recordsets[1] as unknown as Array<{ can_write: boolean; can_approve: boolean }>)[0] ?? { can_write: false, can_approve: false };
     const assignmentRows = result.recordsets[2] as unknown as Array<Record<string, unknown>>;
     const elevated = actor.id === header.ownerId || hasRole(actor, "Engineering Manager", "Admin");
-    const editable = EDITABLE.has(header.status);
+    const open = !headerRow.archived_at && !headerRow.inquiry_archived_at;
+    const editable = open && EDITABLE.has(header.status);
     // Assignments are per discipline: owning or supporting any section unlocks every cost ledger of the estimate.
     const isAssignee = assignmentRows.some((row) => number(row.owner_id) === actor.id || nullableNumber(row.support_id) === actor.id);
     const assignedSections = new Set<string>(isAssignee ? ALL_LEDGER_SECTIONS : []);
@@ -189,7 +190,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       // Admin may decide its own estimate (mirrors adminSelfDecision in routes/estimates.ts); other owners need a second approver.
       canApprove: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || hasRole(actor, "Admin")),
       canRequestRevision: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || hasRole(actor, "Admin")),
-      canCreateRevision: permissionRow.can_write && elevated && ["Approved", "Locked"].includes(header.status),
+      canCreateRevision: open && permissionRow.can_write && elevated && ["Approved", "Locked"].includes(header.status),
       canManageAssignments: permissionRow.can_write && editable && elevated, canUpdateContingency: permissionRow.can_write && editable && elevated,
       canEditCostItems, canEditManhour, canEditExpenses, canEditOtherCosts: canEditOther };
     return { header, capabilities, costItems, manhourLines, expenseLines, otherCostLines, assignments, revisionHistory, validationIssues };

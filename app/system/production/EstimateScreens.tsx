@@ -1,4 +1,5 @@
 "use client";
+import { DocumentLifecycleButton, DocumentHistoryButton } from "./DocumentLifecycle";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
 import { EstimateEffortCells } from "./EstimateEffortCells";
@@ -391,7 +392,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
       eyebrow="ENGINEERING COST"
       title={uiText("Estimate Cost")}
       subtitle="จัดทำต้นทุน ตรวจสอบ revision และอนุมัติจากข้อมูล SQL Server ชุดเดียวกัน"
-      actions={canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New estimate from inquiry"} /></button> : undefined}
+      actions={<><DocumentHistoryButton kind="estimates" notify={notify} onOpen={setSelectedEstimateId} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New estimate from inquiry"} /></button> : null}</>}
     />
     <Toolbar>
       <SearchInput value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
@@ -644,7 +645,9 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     <PageHeader eyebrow={`${header.number} · ${revisionCode(header.revision)}`} title={header.projectName} subtitle={`${header.customerCode} — ${header.customerName} · Inquiry ${header.inquiryNumber}`} meta={<>
       <div><span><LocalizedText text={"Estimate owner"} /></span><strong>{header.ownerName}</strong></div><div><span><LocalizedText text={"Created"} /></span><strong>{formatDate(header.createdDate)}</strong></div><div><span><LocalizedText text={"Due"} /></span><strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong></div><div><span><LocalizedText text={"Status"} /></span><strong><Badge tone={["Approved", "Locked"].includes(header.status) ? "green" : header.status === "Revision Required" ? "amber" : "blue"}>{header.status}</Badge></strong></div><div><span><LocalizedText text={"Progress"} /></span><strong style={{ minWidth: 110 }}><ProgressCell value={numberOf(header.progress)} /></strong></div>
     </>} />
+    {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
     <div className="workspace-bar">
+      <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
       <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
       <button className="btn default" type="button" onClick={() => setTab("validation")}><Icon name="shield" /><LocalizedText text={"Validation"} />{validationCount ? <span className={`badge ${criticalCount ? "red" : "amber"}`}>{validationCount}</span> : <span className="badge green"><LocalizedText text={"OK"} /></span>}</button>
@@ -862,6 +865,7 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
 }
 
 function EstimateNextSteps({ workspace, busy, onOpen, onSubmit }: { workspace: EstimateCostWorkspace; busy: boolean; onOpen: (tab: WorkspaceTab) => void; onSubmit: () => void }) {
+  if (workspace.header.archived || workspace.header.status === "Cancelled") return null;
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const { capabilities } = workspace;
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;

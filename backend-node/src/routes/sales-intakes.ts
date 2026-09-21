@@ -372,12 +372,13 @@ function bindPayload(q: InstanceType<typeof sql.Request>, p: Payload): void {
   q.input("nda", sql.Bit, p.machine.ndaRequired);
 }
 
-async function validateReferences(t: Transaction, p: Payload): Promise<void> {
+async function validateReferences(t: Transaction, p: Payload, retainedInquiryId: number | null = null): Promise<void> {
   const q = new sql.Request(t);
   bindPayload(q, p);
+  q.input("retained_inquiry", sql.BigInt, retainedInquiryId);
   const r = (
     await q.query<{ valid: boolean }>(
-      `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.customers WHERE id=@customer AND is_active=1 AND deleted_at IS NULL) AND EXISTS(SELECT 1 FROM dbo.users WHERE id=@owner AND is_active=1 AND deleted_at IS NULL) AND (@site IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_sites WHERE id=@site AND customer_id=@customer AND is_active=1 AND deleted_at IS NULL)) AND (@site_contact IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts sc INNER JOIN dbo.customer_sites s ON s.id=sc.site_id WHERE sc.id=@site_contact AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.customer_id=@customer)) AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND customer_id=@customer AND deleted_at IS NULL)) AND (@project IS NULL OR EXISTS(SELECT 1 FROM dbo.projects WHERE id=@project AND deleted_at IS NULL)) THEN 1 ELSE 0 END AS bit) valid;`,
+      `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.customers WHERE id=@customer AND is_active=1 AND deleted_at IS NULL) AND EXISTS(SELECT 1 FROM dbo.users WHERE id=@owner AND is_active=1 AND deleted_at IS NULL) AND (@site IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_sites WHERE id=@site AND customer_id=@customer AND is_active=1 AND deleted_at IS NULL)) AND (@site_contact IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts sc INNER JOIN dbo.customer_sites s ON s.id=sc.site_id WHERE sc.id=@site_contact AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.customer_id=@customer)) AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK) WHERE id=@inquiry AND customer_id=@customer AND deleted_at IS NULL AND (id=@retained_inquiry OR (archived_at IS NULL AND status<>N'Cancelled')))) AND (@project IS NULL OR EXISTS(SELECT 1 FROM dbo.projects WHERE id=@project AND deleted_at IS NULL)) THEN 1 ELSE 0 END AS bit) valid;`,
     )
   ).recordset[0];
   if (!r?.valid)
@@ -919,7 +920,7 @@ export function registerSalesIntakeRoutes(
       current.input("id", sql.BigInt, id);
       const h = (
         await current.query<Row>(
-          `SELECT intake_no,status,row_version,archived_at FROM dbo.sales_intakes WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`,
+          `SELECT intake_no,status,row_version,archived_at,related_inquiry_id FROM dbo.sales_intakes WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`,
         )
       ).recordset[0];
       if (!h)
@@ -937,7 +938,7 @@ export function registerSalesIntakeRoutes(
           "intake_locked",
           `An intake in '${h.status}' cannot be edited.`,
         );
-      await validateReferences(t, p);
+      await validateReferences(t, p, h.related_inquiry_id == null ? null : Number(h.related_inquiry_id));
       const q = new sql.Request(t);
       bindPayload(q, p);
       q.input("id", sql.BigInt, id);

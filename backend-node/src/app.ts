@@ -1,3 +1,4 @@
+import { registerDocumentLifecycleRoutes, guardDocumentLifecycle } from "./routes/document-lifecycle.js";
 import { registerEstimatePriceSetRoutes } from "./routes/estimate-price-sets.js";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
@@ -161,6 +162,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerExecutiveDashboardRoutes(app, database, users);
   registerBomRoutes(app, config, database, users);
   registerPricingRoutes(app, database, users);
+  app.addHook("preHandler", request => guardDocumentLifecycle(request, database, users));
+  registerDocumentLifecycleRoutes(app, database, users, config);
   registerEstimateCostLookupRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users);
   registerEstimateErpRoutes(app, database, users);

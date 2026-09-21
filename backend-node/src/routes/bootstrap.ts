@@ -30,9 +30,9 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
       )
       SELECT
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'inquiry.read')
-             THEN (SELECT COUNT_BIG(*) FROM dbo.inquiries WHERE deleted_at IS NULL) ELSE CONVERT(bigint, 0) END AS inquiry_count,
+             THEN (SELECT COUNT_BIG(*) FROM dbo.inquiries WHERE deleted_at IS NULL AND archived_at IS NULL) ELSE CONVERT(bigint, 0) END AS inquiry_count,
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'estimate.read')
-             THEN (SELECT COUNT_BIG(*) FROM dbo.estimates WHERE deleted_at IS NULL) ELSE CONVERT(bigint, 0) END AS estimate_count,
+             THEN (SELECT COUNT_BIG(*) FROM dbo.estimates WHERE deleted_at IS NULL AND archived_at IS NULL) ELSE CONVERT(bigint, 0) END AS estimate_count,
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'project.read')
              THEN (SELECT COUNT_BIG(*) FROM dbo.projects WHERE deleted_at IS NULL AND status <> N'Closed') ELSE CONVERT(bigint, 0) END AS active_project_count,
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'estimate.approve')
@@ -54,7 +54,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         COALESCE(primary_contact.title_th,N'') contact_title_th,COALESCE(primary_contact.title_en,N'') contact_title_en,COALESCE(primary_contact.title_ja,N'') contact_title_ja,COALESCE(primary_contact.name_th,N'') contact_name_th,COALESCE(primary_contact.name_en,N'') contact_name_en,COALESCE(primary_contact.name_ja,N'') contact_name_ja,
         COALESCE(primary_contact.department,N'') department,COALESCE(primary_contact.position,N'') position,
         (SELECT COUNT_BIG(*) FROM dbo.inquiries i WHERE i.customer_id = c.id AND i.deleted_at IS NULL) AS inquiry_count,
-        (SELECT COUNT_BIG(*) FROM dbo.estimates e WHERE e.customer_id = c.id AND e.deleted_at IS NULL AND e.status NOT IN (N'Approved', N'Locked')) AS open_estimate_count,
+        (SELECT COUNT_BIG(*) FROM dbo.estimates e WHERE e.customer_id = c.id AND e.deleted_at IS NULL AND e.archived_at IS NULL AND e.status NOT IN (N'Approved', N'Locked', N'Cancelled')) AS open_estimate_count,
         c.row_version
       FROM dbo.customers c ${primaryCustomerContactApply} WHERE c.is_active = 1 AND c.deleted_at IS NULL ORDER BY c.name;
 

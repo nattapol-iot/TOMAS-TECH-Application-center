@@ -2,23 +2,23 @@
 
 [Module](../modules/inquiry.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `0cd46f67`; generated, do not edit. [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/sales-intakes/` | 760–802 |
-| GET | `/api/v1/sales-intakes/review-queue` | 803–809 |
-| GET | `/api/v1/sales-intakes/dashboard` | 810–844 |
-| GET | `/api/v1/sales-intakes/:id` | 845–853 |
-| POST | `/api/v1/sales-intakes/` | 855–908 |
-| PUT | `/api/v1/sales-intakes/:id` | 910–970 |
-| POST | `/api/v1/sales-intakes/:id/status` | 972–1085 |
-| POST | `/api/v1/sales-intakes/:id/review` | 1087–1269 |
-| POST | `/api/v1/sales-intakes/:id/attachments` | 1271–1362 |
-| GET | `/api/v1/sales-intakes/:id/attachments/:attachmentId/content` | 1363–1393 |
-| DELETE | `/api/v1/sales-intakes/:id/attachments/:attachmentId` | 1394–1436 |
+| GET | `/api/v1/sales-intakes/` | 761–803 |
+| GET | `/api/v1/sales-intakes/review-queue` | 804–810 |
+| GET | `/api/v1/sales-intakes/dashboard` | 811–845 |
+| GET | `/api/v1/sales-intakes/:id` | 846–854 |
+| POST | `/api/v1/sales-intakes/` | 856–909 |
+| PUT | `/api/v1/sales-intakes/:id` | 911–971 |
+| POST | `/api/v1/sales-intakes/:id/status` | 973–1086 |
+| POST | `/api/v1/sales-intakes/:id/review` | 1088–1270 |
+| POST | `/api/v1/sales-intakes/:id/attachments` | 1272–1363 |
+| GET | `/api/v1/sales-intakes/:id/attachments/:attachmentId/content` | 1364–1394 |
+| DELETE | `/api/v1/sales-intakes/:id/attachments/:attachmentId` | 1395–1437 |
 
 ## Named functions
 
@@ -33,13 +33,13 @@ Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/
 | `summary` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 160–189 |
 | `validatePayload` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 201–335 |
 | `bindPayload` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 338–373 |
-| `validateReferences` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 375–389 |
-| `replaceChildren` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 391–434 |
-| `readiness` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 436–474 |
-| `intakeVersion` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 476–487 |
-| `mapVisitSummary` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 489–529 |
-| `loadSalesIntakeDetail` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 531–752 |
-| `registerSalesIntakeRoutes` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 754–1437 |
+| `validateReferences` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 375–390 |
+| `replaceChildren` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 392–435 |
+| `readiness` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 437–475 |
+| `intakeVersion` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 477–488 |
+| `mapVisitSummary` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 490–530 |
+| `loadSalesIntakeDetail` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 532–753 |
+| `registerSalesIntakeRoutes` | [backend-node/src/routes/sales-intakes.ts](<../../../backend-node/src/routes/sales-intakes.ts>) | 755–1438 |
 
 ## Direct local dependencies
 

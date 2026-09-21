@@ -28,7 +28,7 @@ type InquiryRow = Record<string, unknown> & {
   customer_name: string; project_name: string; project_type: string; sales_owner: string | null;
   estimate_owner_id: number | string; estimate_owner_name: string; due_date: Date | string; priority: string;
   status: string; progress: number | string; revision: number; updated_at: Date | string;
-  row_version: Buffer; estimate_id: number | string | null; project_probability: number;
+  row_version: Buffer; estimate_id: number | string | null; estimate_status: string | null; project_probability: number;
   customer_interest_grade: string; total_count: number | string;
   end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
   opportunity_id: number | string | null; opportunity_no: string | null;
@@ -43,7 +43,7 @@ type DetailSeedRow = Record<string, unknown> & {
   revision: number; requirement: string | null; background: string | null; scope_summary: string | null;
   technical: string | null; target_delivery: Date | string | null; site_location: string | null;
   standard: string | null; special: string | null; remark: string | null; created_at: Date | string;
-  updated_at: Date | string; row_version: Buffer;
+  updated_at: Date | string; row_version: Buffer; archived_at: Date | null; deleted_estimate_id: number | string | null;
   end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
 };
 
@@ -140,13 +140,14 @@ export function registerInquiryRoutes(
         i.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
         i.project_name, i.project_type, i.sales_owner, i.estimate_owner_id, u.name AS estimate_owner_name,
         i.due_date, i.priority, i.status, i.progress, i.revision, i.updated_at, i.row_version, i.estimate_id,
+        (SELECT CASE WHEN e.deleted_at IS NOT NULL THEN N'Deleted' ELSE e.status END FROM dbo.estimates e WHERE e.inquiry_id=i.id) estimate_status,
         i.project_probability, i.customer_interest_grade, i.opportunity_id, o.opportunity_no, COUNT_BIG(*) OVER() AS total_count
       FROM dbo.inquiries i
       INNER JOIN dbo.customers c ON c.id = i.customer_id
       LEFT JOIN dbo.customers eu ON eu.id=i.end_user_customer_id
       LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id
       INNER JOIN dbo.users u ON u.id = i.estimate_owner_id
-      WHERE i.deleted_at IS NULL
+      WHERE i.deleted_at IS NULL AND i.archived_at IS NULL
         AND (@status IS NULL OR i.status = @status)
         AND (@customer_id IS NULL OR i.customer_id = @customer_id)
         AND (@project_type IS NULL OR i.project_type = @project_type)
@@ -191,7 +192,7 @@ export function registerInquiryRoutes(
         estimateOwnerName: row.estimate_owner_name, dueDate: dateOnly(row.due_date), priority: row.priority,
         projectProbability: row.project_probability, customerInterestGrade: row.customer_interest_grade.trim(),
         status: row.status, progress: Number(row.progress), revision: row.revision, updatedAt: row.updated_at,
-        rowVersion: row.row_version.toString("base64"), estimateId: nullableNumber(row.estimate_id),
+        rowVersion: row.row_version.toString("base64"), estimateId: nullableNumber(row.estimate_id), estimateStatus: row.estimate_status,
         opportunityId: nullableNumber(row.opportunity_id), opportunityNo: row.opportunity_no,
       })),
       page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
@@ -208,7 +209,8 @@ export function registerInquiryRoutes(
         u.name AS estimate_owner_name, i.due_date, i.priority, i.project_probability, i.customer_interest_grade,
         i.qualification_note, i.status, i.progress, i.revision, i.requirement, i.background, i.scope_summary,
         i.technical, i.target_delivery, i.site_location, i.standard, i.special, i.remark,
-        i.created_at, i.updated_at, i.row_version
+        i.created_at, i.updated_at, i.row_version, i.archived_at,
+        (SELECT e.id FROM dbo.estimates e WHERE e.inquiry_id=i.id AND e.deleted_at IS NOT NULL) deleted_estimate_id
       FROM dbo.inquiries i INNER JOIN dbo.customers c ON c.id=i.customer_id
       LEFT JOIN dbo.customers eu ON eu.id=i.end_user_customer_id
       INNER JOIN dbo.users u ON u.id=i.estimate_owner_id WHERE i.id=@id AND i.deleted_at IS NULL;
@@ -283,7 +285,7 @@ export function registerInquiryRoutes(
       salesOwner: seed.sales_owner, estimateOwnerId: Number(seed.estimate_owner_id),
       estimateOwnerName: seed.estimate_owner_name, dueDate: dateOnly(seed.due_date), priority: seed.priority,
       projectProbability: seed.project_probability, customerInterestGrade: seed.customer_interest_grade.trim(),
-      qualificationNote: seed.qualification_note ?? "", status: seed.status, progress: Number(seed.progress),
+      archived: !!seed.archived_at, deletedEstimateId: nullableNumber(seed.deleted_estimate_id), qualificationNote: seed.qualification_note ?? "", status: seed.status, progress: Number(seed.progress),
       revision: seed.revision, estimateId: estimate?.id ?? null, requirement: seed.requirement ?? "",
       background: seed.background ?? "", scopeSummary: seed.scope_summary ?? "", technical: seed.technical ?? "",
       targetDelivery: dateOnly(seed.target_delivery), siteLocation: seed.site_location ?? "", standard: seed.standard ?? "",
@@ -434,7 +436,7 @@ export function registerInquiryRoutes(
       currentRequest.input("id", sql.BigInt, id);
       const current = (await currentRequest.query<{ inquiry_no: string; estimate_owner_id: number | string; owner_name: string; row_version: Buffer }>(`
         SELECT i.inquiry_no,i.estimate_owner_id,u.name AS owner_name,i.row_version FROM dbo.inquiries i WITH (UPDLOCK,HOLDLOCK)
-        INNER JOIN dbo.users u ON u.id=i.estimate_owner_id WHERE i.id=@id AND i.deleted_at IS NULL;
+        INNER JOIN dbo.users u ON u.id=i.estimate_owner_id WHERE i.id=@id AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
       `)).recordset[0];
       if (!current) return null;
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
@@ -477,7 +479,7 @@ export function registerInquiryRoutes(
       currentRequest.input("id", sql.BigInt, id);
       const current = (await currentRequest.query<{ inquiry_no: string; project_probability: number; customer_interest_grade: string; qualification_note: string | null; row_version: Buffer }>(`
         SELECT inquiry_no,project_probability,customer_interest_grade,qualification_note,row_version
-        FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;
+        FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';
       `)).recordset[0];
       if (!current) return null;
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
@@ -526,7 +528,7 @@ export function registerInquiryRoutes(
         SELECT i.inquiry_no,
           CASE WHEN @owner_id IS NULL OR EXISTS(SELECT 1 FROM dbo.users WHERE id=@owner_id AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END AS owner_valid,
           CASE WHEN @attachment_id IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiry_attachments WHERE id=@attachment_id AND inquiry_id=@id AND deleted_at IS NULL) THEN 1 ELSE 0 END AS attachment_valid
-        FROM dbo.inquiries i WHERE i.id=@id AND i.deleted_at IS NULL;
+        FROM dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) WHERE i.id=@id AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
       `)).recordset[0];
       if (!reference) return null;
       if (Number(reference.owner_valid) !== 1 || Number(reference.attachment_valid) !== 1) throw new ApiError(422, "invalid_reference", "Meeting owner or attachment is invalid.");

@@ -21,7 +21,7 @@ type AssignmentRow = {
 
 /** Assignment states that are finished work, and estimate states that are closed to editing. */
 const CLOSED_ASSIGNMENT_STATUSES = ["Completed", "Reviewed"];
-const CLOSED_ESTIMATE_STATUSES = ["Approved", "Locked"];
+const CLOSED_ESTIMATE_STATUSES = ["Approved", "Locked", "Cancelled"];
 
 export function registerEstimateAssignmentReadRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
   app.get("/api/v1/me/estimate-assignments", async (request) => {
@@ -50,7 +50,7 @@ export function registerEstimateAssignmentReadRoutes(app: FastifyInstance, datab
       INNER JOIN dbo.users assignee ON assignee.id=a.owner_id
       LEFT JOIN dbo.users support ON support.id=a.support_id
       WHERE (a.owner_id=@actor OR a.support_id=@actor)
-        AND e.deleted_at IS NULL AND i.deleted_at IS NULL
+        AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL
         AND (@include_closed=1 OR (a.status NOT IN(${CLOSED_ASSIGNMENT_STATUSES.map((status) => `N'${status}'`).join(",")})
           AND e.status NOT IN(${CLOSED_ESTIMATE_STATUSES.map((status) => `N'${status}'`).join(",")})))
       ORDER BY a.due_date,e.estimate_no,a.section;`,

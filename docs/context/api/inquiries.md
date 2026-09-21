@@ -2,19 +2,19 @@
 
 [Module](../modules/inquiry.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `0cd46f67`; generated, do not edit. [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/inquiries` | 110–199 |
-| GET | `/api/v1/inquiries/:id` | 201–293 |
-| GET | `/api/v1/inquiry-duplicates` | 295–303 |
-| POST | `/api/v1/inquiries` | 305–423 |
-| PUT | `/api/v1/inquiries/:id/assignment` | 425–464 |
-| PUT | `/api/v1/inquiries/:id/qualification` | 466–501 |
-| POST | `/api/v1/inquiries/:id/meetings` | 503–553 |
+| GET | `/api/v1/inquiries` | 110–200 |
+| GET | `/api/v1/inquiries/:id` | 202–295 |
+| GET | `/api/v1/inquiry-duplicates` | 297–305 |
+| POST | `/api/v1/inquiries` | 307–425 |
+| PUT | `/api/v1/inquiries/:id/assignment` | 427–466 |
+| PUT | `/api/v1/inquiries/:id/qualification` | 468–503 |
+| POST | `/api/v1/inquiries/:id/meetings` | 505–555 |
 
 ## Named functions
 
@@ -24,7 +24,7 @@ Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/
 | `nullableNumber` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 85–87 |
 | `todayIn` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 89–95 |
 | `addYears` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 97–101 |
-| `registerInquiryRoutes` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 103–554 |
+| `registerInquiryRoutes` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 103–556 |
 
 ## Direct local dependencies
 

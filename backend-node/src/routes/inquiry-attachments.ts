@@ -60,7 +60,7 @@ export function registerInquiryAttachmentRoutes(
         const verify = new sql.Request(transaction);
         verify.input("id", sql.BigInt, id);
         const current = (await verify.query<{ inquiry_no: string }>(
-          `SELECT inquiry_no FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`,
+          `SELECT inquiry_no FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';`,
         )).recordset[0];
         if (!current) throw new ApiError(404, "inquiry_not_found", "Inquiry not found.");
         const insert = new sql.Request(transaction);

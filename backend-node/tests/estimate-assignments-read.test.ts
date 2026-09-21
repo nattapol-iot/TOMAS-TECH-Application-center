@@ -58,7 +58,8 @@ test("work that has been assigned but not started is returned, and finished work
     const { statement, params } = calls[0]!;
     assert.equal(params.include_closed, false);
     assert.match(statement, /a\.status NOT IN\(N'Completed',N'Reviewed'\)/);
-    assert.match(statement, /e\.status NOT IN\(N'Approved',N'Locked'\)/);
+    assert.match(statement, /e\.status NOT IN\(N'Approved',N'Locked',N'Cancelled'\)/);
+    assert.match(statement, /e\.archived_at IS NULL AND i\.archived_at IS NULL/);
     // Nothing may hide a not-started assignment, and nothing may change its status to reveal it.
     assert.doesNotMatch(statement, /N'Not Started'/);
     assert.doesNotMatch(statement, /\b(UPDATE|INSERT|DELETE|MERGE)\b/);

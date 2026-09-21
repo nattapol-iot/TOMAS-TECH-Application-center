@@ -57,6 +57,17 @@ function managerOverride(actor: CurrentUser): boolean {
   return hasRole(actor, "Engineering Manager", "Admin");
 }
 
+// Discarded revisions remain reserved when the active header points back to an older approval.
+async function nextEstimateRevision(transaction: TransactionType, id: number, current: number): Promise<number> {
+  const q = new sql.Request(transaction).input("id", sql.BigInt, id).input("current", sql.Int, current);
+  const row = (await q.query<{ next_revision: number }>(`SELECT MAX(revision)+1 next_revision FROM (
+    SELECT @current revision UNION ALL SELECT revision FROM dbo.estimate_revisions WHERE estimate_id=@id
+    UNION ALL SELECT TRY_CONVERT(int,JSON_VALUE(before_json,'$.estimate.revision')) FROM dbo.document_lifecycle_events
+    WHERE entity_type=N'Estimate' AND entity_id=@id
+  ) revisions;`)).recordset[0];
+  return row!.next_revision;
+}
+
 /** Only the Admin role may approve or send back an estimate it owns itself. */
 export function adminSelfDecision(actor: { roles: string[] }): boolean {
   return actor.roles.includes("Admin");
@@ -295,6 +306,18 @@ async function materializeErpMappings(transaction: TransactionType, estimateId: 
   return Number(result.recordset[0]?.unmapped_count ?? 0);
 }
 
+/** A submission snapshot is immutable and unique per revision. Withdrawal starts a new working revision. */
+export async function withdrawEstimateReview(transaction: TransactionType, id: number, revision: number, actorId: number, timeZone: string): Promise<void> {
+  await ensureRevisionSnapshot(transaction, id, revision, "Review withdrawn", "Withdrawn", actorId);
+  const next = await nextEstimateRevision(transaction, id, revision);
+  await new sql.Request(transaction).input("id", sql.BigInt, id).input("next", sql.Int, next).input("actor", sql.BigInt, actorId)
+    .query(`UPDATE dbo.estimates SET revision=@next,status=N'Revision Required',progress=75,locked_at=NULL,locked_by=NULL,
+      updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;`);
+  await snapshotOverheadPolicy(transaction, id, next, actorId, todayIn(timeZone));
+  await cloneRevisionLines(transaction, id, revision, next, actorId);
+  await assertEstimateTotals(transaction, id);
+}
+
 async function transition(
   request: FastifyRequest,
   id: number,
@@ -318,7 +341,7 @@ async function transition(
     const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; owner_id: number | string; inquiry_id: number | string; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string }>(`
       SELECT e.estimate_no,e.status,e.progress,e.revision,e.owner_id,e.inquiry_id,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress
       FROM dbo.estimates e WITH (UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH (UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
-      WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL;
+      WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
     `)).recordset[0];
     if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
     if (!allowedStatuses.some((status) => status.toLowerCase() === current.status.toLowerCase())) {
@@ -376,7 +399,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         e.created_date,e.updated_at,e.row_version,COUNT_BIG(*) OVER() total_count
       FROM dbo.estimates e INNER JOIN dbo.inquiries i ON i.id=e.inquiry_id INNER JOIN dbo.customers c ON c.id=e.customer_id
       INNER JOIN dbo.users u ON u.id=e.owner_id INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
-      WHERE e.deleted_at IS NULL AND (@status IS NULL OR e.status=@status) AND (@customer_id IS NULL OR e.customer_id=@customer_id)
+      WHERE e.deleted_at IS NULL AND e.archived_at IS NULL AND (@status IS NULL OR e.status=@status) AND (@customer_id IS NULL OR e.customer_id=@customer_id)
         AND (@project_type IS NULL OR e.project_type=@project_type) AND (@owner_id IS NULL OR e.owner_id=@owner_id)
         AND (@mine_id IS NULL OR e.owner_id=@mine_id OR EXISTS (
           SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id
@@ -409,10 +432,13 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const created = await database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, inquiryId);
       const inquiry = (await lookup.query<{ customer_id: number | string; project_name: string; project_type: string; inquiry_no: string; estimate_owner_id: number | string; status: string; estimate_id: number | string | null }>(`
-        SELECT customer_id,project_name,project_type,inquiry_no,estimate_owner_id,status,estimate_id FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;
+        SELECT customer_id,project_name,project_type,inquiry_no,estimate_owner_id,status,estimate_id FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL AND archived_at IS NULL;
       `)).recordset[0];
       if (!inquiry) throw new ApiError(404, "inquiry_not_found", "Inquiry not found.");
       if (inquiry.status !== "New" || inquiry.estimate_id !== null) throw new ApiError(409, "inquiry_not_eligible", "Only a new inquiry without an existing estimate can be converted to an estimate.");
+      const previous = (await new sql.Request(transaction).input("inquiry",sql.BigInt,inquiryId)
+        .query(`SELECT id FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK) WHERE inquiry_id=@inquiry;`)).recordset[0];
+      if (previous) throw new ApiError(409,"estimate_in_history","This inquiry already has an estimate in document history. Restore that estimate to preserve its number.");
       if (!managerOverride(actor) && Number(inquiry.estimate_owner_id) !== actor.id) throw new ApiError(403, "inquiry_owner_required", "Only the assigned inquiry owner, an engineering manager or an administrator can create its estimate.");
       const ownerRequest = new sql.Request(transaction); ownerRequest.input("owner_id", sql.BigInt, ownerId);
       const validOwner = (await ownerRequest.query<{ allowed: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
@@ -462,7 +488,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; inquiry_id: number | string; row_version: Buffer; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string; owner_id: number | string }>(`
         SELECT e.estimate_no,e.status,e.progress,e.revision,e.inquiry_id,e.row_version,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress,e.owner_id
         FROM dbo.estimates e WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
-        WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL;
+        WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
       `)).recordset[0];
       if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
@@ -470,7 +496,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (Number(current.owner_id) !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can create a revision.");
       await assertEstimateTotals(transaction, id);
       await ensureRevisionSnapshot(transaction, id, current.revision, reason, current.status, actor.id);
-      const nextRevision = current.revision + 1;
+      const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
       const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
       update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
       const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=N'Revision Required',progress=75,
@@ -499,14 +525,14 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; inquiry_id: number | string; row_version: Buffer; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string; owner_id: number | string }>(`
         SELECT e.estimate_no,e.status,e.progress,e.revision,e.inquiry_id,e.row_version,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress,e.owner_id
         FROM dbo.estimates e WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
-        WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL;
+        WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
       `)).recordset[0];
       if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       if (current.status.toLowerCase() !== "engineering review") throw new ApiError(409, "invalid_transition", `Cannot request a revision while the estimate is '${current.status}'.`);
       if (Number(current.owner_id) === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
       await assertEstimateTotals(transaction, id);
-      await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id); const nextRevision = current.revision + 1;
+      await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id); const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
       const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
       update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
       const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=N'Revision Required',progress=75,

@@ -7,6 +7,8 @@ export type InquiryNextAction =
   | "submit_review"
   | "engineering_review"
   | "handover_project"
+  | "review_cancellation"
+  | "restore_estimate"
   | "closed";
 
 const TEAM_QUEUE_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager", "Sales Manager"]);
@@ -17,7 +19,9 @@ export function defaultInquiryQueueScope(role: string): InquiryQueueScope {
 }
 
 /** Give each list row one concrete next action without treating progress as workflow state. */
-export function inquiryNextAction(status: string, hasEstimate: boolean): InquiryNextAction {
+export function inquiryNextAction(status: string, hasEstimate: boolean, estimateStatus?: string | null): InquiryNextAction {
+  if (status !== "Cancelled" && estimateStatus === "Cancelled") return "review_cancellation";
+  if (status !== "Cancelled" && estimateStatus === "Deleted") return "restore_estimate";
   switch (status) {
     case "Cancelled": return "closed";
     case "Approved": return "handover_project";

@@ -26,6 +26,16 @@ const { translate, DICTIONARY, LanguageContext, applyDocumentLanguage, currentLo
 const { LocalizedText } = load("app/system/LocalizedText.tsx");
 const { SearchInput, Select, Field, PageHeader, Badge, HBarList } = load("app/system/ui.tsx");
 const h = React.createElement;
+
+test("document lifecycle copy covers Thai, Japanese and readable English reasons", () => {
+  const { DOCUMENT_LIFECYCLE_COPY } = load("app/system/document-lifecycle-copy.ts");
+  for (const key of Object.keys(DOCUMENT_LIFECYCLE_COPY)) {
+    assert.notEqual(translate(key, "TH"), key, key);
+    assert.notEqual(translate(key, "JP"), key, key);
+    assert.ok(translate(key, "EN").length > 0, key);
+    if (key.includes("_")) assert.notEqual(translate(key, "EN"), key, key);
+  }
+});
 function render(lang, child) {
   return renderToStaticMarkup(h(LanguageContext.Provider, {
     value: { lang, setLang() {}, t: text => translate(text, lang) },

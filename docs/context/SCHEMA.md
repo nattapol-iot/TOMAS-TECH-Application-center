@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `80a5348e`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `0cd46f67`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -60,5 +60,8 @@ Evidence: repository migrations at `80a5348e`. Highest file number is not proof 
 | [052_support_email_notification.sql](<../../database/migrations/052_support_email_notification.sql>) | Inspect migration SQL |
 | [053_crm.sql](<../../database/migrations/053_crm.sql>) | `dbo.crm_options`, `dbo.crm_opportunities`, `dbo.crm_activities`, `dbo.crm_followups`, `dbo.crm_documents` |
 | [054_crm_end_user.sql](<../../database/migrations/054_crm_end_user.sql>) | Inspect migration SQL |
+| [055_estimate_erp_manual_override.sql](<../../database/migrations/055_estimate_erp_manual_override.sql>) | Inspect migration SQL |
+| [056_estimate_erp_groups.sql](<../../database/migrations/056_estimate_erp_groups.sql>) | `dbo.estimate_erp_groups` |
+| [057_document_lifecycle.sql](<../../database/migrations/057_document_lifecycle.sql>) | `dbo.document_lifecycle_events` |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

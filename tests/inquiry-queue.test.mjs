@@ -22,4 +22,7 @@ test("next action follows the recorded workflow state", () => {
   assert.equal(inquiryNextAction("Engineering Review", true), "engineering_review");
   assert.equal(inquiryNextAction("Approved", true), "handover_project");
   assert.equal(inquiryNextAction("Cancelled", false), "closed");
+  assert.equal(inquiryNextAction("Estimating", true, "Cancelled"), "review_cancellation");
+  assert.equal(inquiryNextAction("New", false, "Deleted"), "restore_estimate");
+  assert.equal(inquiryNextAction("Cancelled", true, "Cancelled"), "closed");
 });

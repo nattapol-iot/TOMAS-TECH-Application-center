@@ -18,6 +18,7 @@ import { INPUT_HINTS_COPY } from "./input-hints-copy";
 import { FINAL_WORKSPACE_COPY } from "./final-workspace-copy";
 import { LANGUAGE_COMPLETION } from "./language-completion";
 import { HISTORICAL_PR_COPY } from "./production/historical-pr-copy";
+import { DOCUMENT_LIFECYCLE_COPY } from "./document-lifecycle-copy";
 import { CRM_COPY } from "./production/crm-copy";
 
 export type Lang = "TH" | "EN" | "JP";
@@ -2229,6 +2230,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Expand navigation": { th: "ขยายเมนู", jp: "ナビゲーションを展開" },
   "Collapse navigation": { th: "ย่อเมนู", jp: "ナビゲーションを折りたたむ" },
   ...CRM_COPY,
+  ...DOCUMENT_LIFECYCLE_COPY,
 };
 
 const normalizeLabel = (text: string) => text.trim().replace(/\s+/g, " ").replace(/\s*\*$/, "").toLocaleLowerCase("en");

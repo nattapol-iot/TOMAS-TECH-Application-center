@@ -1,4 +1,5 @@
 "use client";
+import { DocumentLifecycleButton, DocumentHistoryButton } from "./DocumentLifecycle";
 import { CrmInquirySource } from "./CrmScreens";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
@@ -118,7 +119,7 @@ export function ProductionInquiries(props: Props) {
   return <InquiryList {...props} onCreate={() => setScreen({ name: "create" })} onOpen={(id) => setScreen({ name: "detail", id })} />;
 }
 
-function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => void; onOpen: (id: number) => void }) {
+function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: Props & { onCreate: () => void; onOpen: (id: number) => void }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const { lang } = useLanguage();
@@ -175,6 +176,8 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
       ? { mine: "自分の案件", team: "チーム案件", unassigned: "未割当", unavailable: "受付時に担当者を必ず選ぶため、すべての Inquiry に担当者がいます。" }
       : { mine: "My work", team: "Team work", unassigned: "Unassigned", unavailable: "Every inquiry already has an owner because ownership is required at intake." };
   const nextActionCopy: Record<InquiryNextAction, string> = lang === "TH" ? {
+    review_cancellation: "ตรวจทบทวนการยกเลิกงาน",
+    restore_estimate: "กู้คืน Estimate จากถังขยะ",
     review_inputs: "ตรวจข้อมูลและเริ่ม Estimate",
     complete_costs: "เติมต้นทุนและตรวจความพร้อม",
     follow_supplier: "ติดตามราคาจากผู้ขาย",
@@ -183,6 +186,8 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
     handover_project: "ส่งต่อเพื่อสร้าง Project",
     closed: "ปิดงานแล้ว",
   } : lang === "JP" ? {
+    review_cancellation: "作業中止を確認",
+    restore_estimate: "ゴミ箱から見積を復元",
     review_inputs: "内容確認・見積開始",
     complete_costs: "原価入力・検証",
     follow_supplier: "仕入先価格を確認",
@@ -191,6 +196,8 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
     handover_project: "プロジェクトへ引継ぎ",
     closed: "終了済み",
   } : {
+    review_cancellation: "Review work cancellation",
+    restore_estimate: "Restore estimate from trash",
     review_inputs: "Review inputs and start estimate",
     complete_costs: "Complete costs and validation",
     follow_supplier: "Follow up supplier prices",
@@ -201,7 +208,7 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
   };
 
   return <>
-    <PageHeader eyebrow="SALES TO ENGINEERING" title="Inquiry · รับเรื่องลูกค้า" subtitle="ใช้เมื่อได้รับ RFQ หรือข้อมูลพร้อมประเมินราคาแล้ว · งานที่ยังต้องติดตามให้เริ่มจาก CRM" actions={canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับ RFQ / สร้าง Inquiry"} /></button> : undefined} />
+    <PageHeader eyebrow="SALES TO ENGINEERING" title="Inquiry · รับเรื่องลูกค้า" subtitle="ใช้เมื่อได้รับ RFQ หรือข้อมูลพร้อมประเมินราคาแล้ว · งานที่ยังต้องติดตามให้เริ่มจาก CRM" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับ RFQ / สร้าง Inquiry"} /></button> : null}</>} />
     <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
       <Icon name="users" />
       <div className="seg-control" role="group" aria-label={queueCopy.team}>
@@ -247,7 +254,7 @@ function InquiryList({ bootstrap, onCreate, onOpen }: Props & { onCreate: () => 
             <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo ? `จาก CRM · ${item.opportunityNo}` : "รับตรง · Direct Inquiry"}</small></td>
             <td><div className="cell-primary"><strong>{customerItem?.code ?? "—"}</strong><span>{item.customerName}</span><small><LocalizedText text={"End user:"} /> {item.endUserName || "ยังไม่ระบุ / Not specified"}</small></div></td>
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
-            <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId))]}</strong></td>
+            <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus)]}</strong></td>
             <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
             <td><span className="row-action"><Icon name="chevronRight" /></span></td>
           </tr>;
@@ -362,8 +369,9 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   }, [id]);
   if (loading && !detail) return <div className="empty"><span className="spinner" /><LocalizedText text={"Loading inquiry from SQL Server…"} /></div>;
   if (!detail) return <><button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button><LoadError message={error || "Inquiry not found"} retry={() => { void load(); }} /></>;
-  const canWrite = bootstrap.permissions.includes("inquiry.write");
-  const canCreateEstimate = bootstrap.permissions.includes("estimate.write");
+  const closed = detail.archived || detail.status === "Cancelled";
+  const canWrite = !closed && bootstrap.permissions.includes("inquiry.write");
+  const canCreateEstimate = !closed && !detail.deletedEstimateId && detail.status === "New" && bootstrap.permissions.includes("estimate.write");
   const estimateIsReadOnly = detail.estimate ? ["Approved", "Locked"].includes(detail.estimate.status) : false;
   const flowCopy = lang === "TH"
     ? detail.estimate
@@ -435,13 +443,15 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
     <CrmInquirySource inquiryId={id} enabled={bootstrap.permissions.includes("crm.read")} />
     <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
-      {bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
+      {!closed && bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setAssignOpen(true)}><Icon name="user" /><LocalizedText text={"Assign owner"} /></button> : null}
       {canWrite && canEditEndUser(detail.status) ? <button className="btn default" type="button" onClick={() => setEndUserOpen(true)}><LocalizedText text={"End user / บริษัทผู้ใช้งานปลายทาง"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setQualificationOpen(true)}><Icon name="trendingUp" /><LocalizedText text={"Update qualification"} /></button> : null}
+      <DocumentLifecycleButton kind="inquiries" id={id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
     </>} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <div className="info-strip" role="region" aria-label={flowCopy.ariaLabel} style={{ marginBottom: 14, flexWrap: "wrap" }}>
+    {detail.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
+    {!closed && !detail.deletedEstimateId && detail.estimate?.status !== "Cancelled" ? <div className="info-strip" role="region" aria-label={flowCopy.ariaLabel} style={{ marginBottom: 14, flexWrap: "wrap" }}>
       <Icon name={estimateIsReadOnly ? "lock" : detail.estimate ? "checkCircle" : "arrowRight"} />
       <span style={{ flex: "1 1 360px" }}><strong>{flowCopy.title}</strong>{flowCopy.description}</span>
       {detail.estimate
@@ -449,7 +459,9 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
         : canCreateEstimate
           ? <button className="btn primary sm" type="button" disabled={busy} onClick={() => { void createLinkedEstimate(); }}><Icon name="plus" />{busy ? "…" : flowCopy.action}</button>
           : null}
-    </div>
+    </div> : null}
+    {!closed && detail.estimate?.status === "Cancelled" ? <div className="info-strip amber"><LocalizedText text="The estimate was cancelled. Review this inquiry and use Manage document to close the work if appropriate." /></div> : null}
+    {detail.deletedEstimateId && bootstrap.permissions.includes("estimate.read") ? <div className="info-strip amber"><span><LocalizedText text="The estimate is in the trash. Restore it to continue with the same document number." /></span><DocumentHistoryButton kind="estimates" notify={notify} onOpen={estimateId => openEstimate?.(estimateId)} onChanged={async () => { await load(); await refreshBootstrap(); }} /></div> : null}
     <Tabs active={tab} onChange={(value) => { setRequestVisit(0); setTab(value); }} tabs={[{ id: "overview", label: "Overview" }, { id: "requirement", label: "Requirement" }, ...(bootstrap.permissions.includes("intake.read") ? [{ id: "visits" as const, label: "เข้าหน้างาน / ผลสำรวจ" }] : []), { id: "meeting", label: "Meeting Log", count: detail.meetings.length }, { id: "estimate", label: "Estimate Cost", count: detail.estimate ? 1 : 0 }, { id: "attachments", label: "Attachments", count: detail.attachments.length }, { id: "activity", label: "Activity" }]} />
     <div style={{ height: 14 }} />
     {tab === "overview" ? <InquiryOverview detail={detail} openEstimate={openEstimate} /> : null}

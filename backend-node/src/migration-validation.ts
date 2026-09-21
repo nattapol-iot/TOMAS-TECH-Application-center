@@ -42,6 +42,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 54, fileName: "054_crm_end_user.sql", name: "CRM opportunity end user company" },
   { version: 55, fileName: "055_estimate_erp_manual_override.sql", name: "Manual ERP category override for labour lines" },
   { version: 56, fileName: "056_estimate_erp_groups.sql", name: "ERP export groups for merged summary lines" },
+  { version: 57, fileName: "057_document_lifecycle.sql", name: "Inquiry and estimate document lifecycle" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

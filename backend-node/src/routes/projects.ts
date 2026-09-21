@@ -130,14 +130,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, input.estimateId);
       const estimate = (await lookup.query<{ customer_id: number | string; inquiry_id: number | string; estimate_no: string; project_name: string; project_type: string }>(`
         SELECT customer_id,inquiry_id,estimate_no,project_name,project_type FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK)
-        WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL;
+        WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL AND archived_at IS NULL;
       `)).recordset[0];
       if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
       await assertEstimateTotals(transaction, input.estimateId);
       const inquiryLookup = new sql.Request(transaction);
       inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));
       const inquiry = (await inquiryLookup.query<{ end_user_customer_id: number | string | null }>(`
-        SELECT end_user_customer_id FROM dbo.inquiries WITH (HOLDLOCK) WHERE id=@inquiry_id AND deleted_at IS NULL;
+        SELECT end_user_customer_id FROM dbo.inquiries WITH (HOLDLOCK) WHERE id=@inquiry_id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';
       `)).recordset[0];
       if (!inquiry) throw new ApiError(422, "invalid_reference", "The source inquiry is no longer available.");
       const inheritedEndUserId = inquiry.end_user_customer_id === null ? null : Number(inquiry.end_user_customer_id);

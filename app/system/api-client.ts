@@ -282,6 +282,7 @@ export type SupplierQuotationRecord = {
 };
 
 export type InquirySummary = {
+  estimateStatus?: string | null;
   id: number;
   number: string;
   inquiryDate: string;
@@ -375,6 +376,8 @@ export type InquiryEstimate = {
 };
 
 export type InquiryDetail = InquirySummary & {
+  archived?: boolean;
+  deletedEstimateId?: number | null;
   customerCode: string;
   contact: string;
   rfqNo: string | null;
@@ -802,6 +805,7 @@ export type EstimateCostWorkspace = {
     status: string;
     progress: number;
     contingencyRate: number;
+    archived?: boolean;
     lockedAt: string | null;
     lockedBy: number | null;
     lockedByName: string | null;
