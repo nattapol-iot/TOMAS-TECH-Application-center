@@ -5027,3 +5027,5 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cb-inline-unit select, .cb-inline-unit input { width: 100%; min-width: 100px; }
 .cb-inline-unit small { display: block; white-space: normal; margin-top: 4px; }
 .cb-inline-save { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.cb-line-name input { width: 100%; min-width: 180px; font-weight: 600; }
+.estimate-summary-note textarea { width: 100%; resize: vertical; }

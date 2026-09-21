@@ -1443,3 +1443,20 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   assert.match(screens, /tab === "erp" \? <EstimateErpSheetPanel/);
   assert.match(screens, /tab === "summary" \? <><EstimateNextSteps/);
 });
+
+test("the ERP sheet renames the lines whose wording it owns, and leaves the purchased ones alone", async () => {
+  const sheet = await readFile(new URL("app/system/production/EstimateErpSheet.tsx", root), "utf8");
+  // A Hardware line is the purchased item; its name belongs to whoever buys it.
+  assert.match(sheet, /const nameEditable = canEdit && !unsaved\.length && heading\.category !== "Hardware"/);
+  // A standalone item has no module behind it to rename, so only modules and merged lines are offered.
+  assert.match(sheet, /\(merged !== null \|\| \(!row\.standalone/);
+  /* A rename sends no quantity and no unit, so the server keeps the ones it holds
+     — sending them would re-run the scaling path on a cost module. */
+  const rename = sheet.slice(sheet.indexOf("const renameRow"), sheet.indexOf("const saveRemark"));
+  assert.match(rename, /moduleKey: detailKey, title: next, remark: null \}\)/);
+  assert.doesNotMatch(rename, /quantity: next|unit: next/);
+  // The remark belongs to the estimate, not to a line, and the summary key takes no quantity.
+  const remark = sheet.slice(sheet.indexOf("const saveRemark"), sheet.indexOf("const splitMerged"));
+  assert.match(remark, /moduleKey: "summary"/);
+  assert.doesNotMatch(remark, /quantity|unit:/);
+});

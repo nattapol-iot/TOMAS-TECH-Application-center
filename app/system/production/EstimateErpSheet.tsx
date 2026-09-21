@@ -52,6 +52,69 @@ const bytesToBase64 = (bytes: Uint8Array) => {
   return btoa(binary);
 };
 
+/**
+ * The name a line is written under, edited where it is read.
+ *
+ * Hardware lines are excluded by the page, not by this component: their names are
+ * the purchased items themselves and belong to whoever buys them. Everywhere else
+ * the name is a description of work, and the sheet is where its wording is decided.
+ */
+function SheetLineName({ value, onSave }: { value: string; onSave: (next: string) => Promise<void> }) {
+  const say = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const changed = draft.trim() !== value.trim();
+  const cancel = () => { setDraft(value); setError(""); };
+  const save = async () => {
+    if (saving || !changed || !draft.trim()) return;
+    setSaving(true); setError("");
+    try { await onSave(draft.trim()); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : say("บันทึกไม่สำเร็จ", "Could not be saved", "保存できませんでした")); }
+    finally { setSaving(false); }
+  };
+  return <div className="cb-line-name">
+    <input value={draft} maxLength={200} disabled={saving} aria-label={say("ชื่อบรรทัด", "Line name", "行の名前")}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") { event.preventDefault(); void save(); }
+        if (event.key === "Escape" && !saving) { event.preventDefault(); cancel(); }
+      }} />
+    {changed ? <div className="cb-inline-save">
+      <button type="button" className="btn primary sm" disabled={saving || !draft.trim()} onClick={() => { void save(); }}>{saving ? say("กำลังบันทึก…", "Saving…", "保存中…") : say("บันทึกชื่อ", "Save the name", "名前を保存")}</button>
+      <button type="button" className="btn ghost sm" disabled={saving} onClick={cancel}>{say("ยกเลิก", "Cancel", "取消")}</button>
+    </div> : null}
+    {error ? <small role="alert" className="soft-warn">{error}</small> : null}
+  </div>;
+}
+
+/** The note that closes the sheet: one remark for the whole estimate, not for a line. */
+function SheetRemark({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (next: string) => Promise<void> }) {
+  const say = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const changed = draft !== value;
+  const save = async () => {
+    if (disabled || saving || !changed) return;
+    setSaving(true); setError("");
+    try { await onSave(draft); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : say("บันทึกไม่สำเร็จ", "Could not be saved", "保存できませんでした")); }
+    finally { setSaving(false); }
+  };
+  return <>
+    <textarea rows={3} value={draft} maxLength={2000} disabled={disabled || saving}
+      placeholder={say("หมายเหตุที่จะติดไปกับใบนี้", "A note that travels with this sheet", "このシートに添える備考")}
+      aria-label={say("หมายเหตุท้ายใบ", "Remark at the foot of the sheet", "シート末尾の備考")}
+      onChange={(event) => setDraft(event.target.value)} />
+    {changed ? <div className="cb-inline-save">
+      <button type="button" className="btn primary sm" disabled={disabled || saving} onClick={() => { void save(); }}>{saving ? say("กำลังบันทึก…", "Saving…", "保存中…") : say("บันทึกหมายเหตุ", "Save the remark", "備考を保存")}</button>
+      <button type="button" className="btn ghost sm" disabled={saving} onClick={() => { setDraft(value); setError(""); }}>{say("ยกเลิก", "Cancel", "取消")}</button>
+    </div> : null}
+    {error ? <small role="alert" className="soft-warn">{error}</small> : null}
+  </>;
+}
+
 export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   workspace: EstimateCostWorkspace;
   onChanged: (message: string) => Promise<void>;
@@ -74,6 +137,9 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   const [drafts, setDrafts] = useState<Record<string, DraftCategory>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  /* The sheet opens showing everything, because it is a document before it is a
+     list; folding a heading is for working through a long one. */
+  const [folded, setFolded] = useState<Set<string>>(new Set());
   /* A heading someone adds by hand holds no line, so there is nothing to store: it
      is a place to drop a row, and it lasts as long as the page is open. */
   const [addedHeadings, setAddedHeadings] = useState<string[]>([]);
@@ -236,6 +302,25 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     } finally { setBusy(false); }
   };
 
+  const renameRow = async (row: SheetRow, detailKey: string, merged: ErpGroup | null, next: string) => {
+    if (merged) await updateEstimateErpGroup(workspace.header.id, merged.id, workspace.header.rowVersion, merged.rowVersion, { title: next, quantity: merged.quantity, unit: merged.unit });
+    // Quantity and unit are left out so the server keeps the ones it already has.
+    else await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: detailKey, title: next, remark: null });
+    await onChanged(copy("เปลี่ยนชื่อบรรทัดแล้ว", "Line renamed", "行の名前を変更しました"));
+    await load();
+  };
+
+  const saveRemark = async (remark: string) => {
+    setBusy(true); setError("");
+    try {
+      await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: "summary", title: "Summary", remark: remark.trim() || null });
+      await onChanged(copy("บันทึกหมายเหตุแล้ว", "Remark saved", "備考を保存しました"));
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The remark could not be saved.");
+    } finally { setBusy(false); }
+  };
+
   const splitMerged = async (group: ErpGroup) => {
     setBusy(true); setError("");
     try {
@@ -322,6 +407,15 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     const derived = derivedSet.size === 1 ? [...derivedSet][0]! : null;
     /* Quantity and unit say how the line is written. On a cost module they also
        rescale its items; everywhere else the amount comes from the ledger below. */
+    /* Hardware lines are the purchased items themselves, so their names are not the
+       sheet's to reword. A standalone item has no module behind it to rename — its
+       description belongs to the line, and is edited in the tab that owns it. */
+    const nameEditable = canEdit && !unsaved.length && heading.category !== "Hardware"
+      && (merged !== null || (!row.standalone && (row.source.kind === "cost-items"
+        ? workspace.capabilities.canEditCostItems
+        : row.source.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[row.source.title]) && workspace.capabilities.canEditAllSections
+        : row.source.kind === "expenses" ? workspace.capabilities.canEditExpenses
+        : workspace.capabilities.canEditOtherCosts)));
     const canEditUnit = !row.standalone && (row.source.kind === "cost-items" ? workspace.capabilities.canEditCostItems
       : row.source.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[row.source.title]) && workspace.capabilities.canEditAllSections
       : row.source.kind === "expenses" ? workspace.capabilities.canEditExpenses
@@ -337,7 +431,9 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
         </td>
         <td>
           <div className="cell-primary cb-desc">
-            <strong>{title}</strong>
+            {nameEditable
+              ? <SheetLineName key={`${row.key}:${title}`} value={title} onSave={(next) => renameRow(row, detailKey, merged, next)} />
+              : <strong>{title}</strong>}
             <span>
               {merged ? <span className="badge blue">{copy("เขียนรวมเป็นบรรทัดเดียว", "Written as one line", "1行にまとめて出力")}</span> : null}
               {/* Where the money lives. The sheet classifies the line; it does not move it. */}
@@ -393,11 +489,19 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
 
   const renderHeading = (heading: SheetHeading) => {
     const empty = heading.rows.length === 0;
+    const open = !folded.has(heading.key);
     return <tbody key={heading.key}>
-      <tr className={`cb-section open${dropTarget === heading.category ? " cost-drop-module" : ""}`}
+      <tr className={`cb-section${open ? " open" : ""}${dropTarget === heading.category ? " cost-drop-module" : ""}`} aria-expanded={open}
         onDragOver={(event) => allowDrop(event, heading.category)}
         onDrop={(event) => dropInto(event, heading.category)}>
-        <td className="cb-num-col"><strong>{heading.ordinal}</strong></td>
+        <td className="cb-num-col">
+          <button type="button" className="cb-toggle" disabled={empty}
+            aria-label={open ? copy("ย่อหัวข้อ", "Collapse the heading", "見出しを閉じる") : copy("ขยายหัวข้อ", "Expand the heading", "見出しを開く")}
+            onClick={() => setFolded((current) => { const next = new Set(current); if (next.has(heading.key)) next.delete(heading.key); else next.add(heading.key); return next; })}>
+            <Icon name={open ? "chevronDown" : "chevronRight"} />
+          </button>
+          <strong>{heading.ordinal}</strong>
+        </td>
         <td>
           <strong className="cb-title">{heading.category === "Unmapped" ? unmappedLabel : heading.category}</strong>
           {empty ? <span className="muted small"> {copy("ลากรายการมาวางที่นี่", "Drag a line here", "ここに行をドラッグ")}</span> : null}
@@ -415,7 +519,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
             : null}
         </td>
       </tr>
-      {heading.rows.map((row, index) => renderRow(heading, row, index))}
+      {open ? heading.rows.map((row, index) => renderRow(heading, row, index)) : null}
     </tbody>;
   };
 
@@ -464,6 +568,10 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
             {unusedHeadings.map((category) => <option key={category} value={category}>{category}</option>)}
           </select><Icon name="chevronDown" />
         </label> : null}
+        <button className="chip" type="button" disabled={!headings.length}
+          onClick={() => setFolded((current) => current.size ? new Set() : new Set(headings.map((heading) => heading.key)))}>
+          <Icon name={folded.size ? "chevronDown" : "chevronRight"} />{folded.size ? copy("ขยายทุกหัวข้อ", "Expand all", "すべて開く") : copy("ย่อทุกหัวข้อ", "Collapse all", "すべて閉じる")}
+        </button>
         <button className="btn default" type="button" disabled={!canEdit || !mergeable}
           title={copy("เขียนบรรทัดที่เลือกเป็นบรรทัดเดียวบนใบ ERP — ต้นทุนแต่ละรายการไม่เปลี่ยน", "Write the selected lines as one line on the sheet — no cost changes", "選択行をシート上で1行にまとめます — 原価は変わりません")}
           onClick={() => setMerge({ title: selectedRows[0]?.title ?? "", group: null, members: selectedRows.flatMap((row) => row.erpKeys).map((key) => ({ sourceType: key.slice(0, key.lastIndexOf(":")) as EstimateErpSourceType, sourceId: Number(key.slice(key.lastIndexOf(":") + 1)) })) })}>
@@ -476,7 +584,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
           <button className="btn ghost" type="button" disabled={busy} onClick={() => { if (summary) setDrafts(Object.fromEntries(summary.lines.map((line) => [erpKey(line), line.erpCategory]))); }}>{copy("ยกเลิกที่แก้ไข", "Discard", "変更を破棄")}</button>
           <button className="btn primary" type="button" disabled={busy} onClick={() => { void saveClassification(); }}><Icon name="check" />{copy("บันทึกการจัดหมวด", "Save the classification", "分類を保存")}</button>
         </> : <button className="btn primary" type="button" disabled={busy || workspace.header.status !== "Approved" || !summary?.capabilities.canExport || !approvedOverhead} onClick={() => { void exportWorkbook(); }}>
-          <Icon name="download" />{copy("ส่งออกไฟล์ ERP", "Export the ERP file", "ERPファイルを出力")}
+          <Icon name="download" />{copy("Export Estimate cost to ERP", "Export Estimate cost to ERP", "Estimate cost を ERP へ出力")}
         </button>}
       </div>
 
@@ -505,6 +613,14 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
         "⠿を別の見出しにドラッグして分類を変更し保存してください · 分類やまとめでは金額は変わらないため、合計は常に見積と一致します · 見出し内の順序は元のタブに従います")}</p>
     </> : !loading ? <EmptyState icon="package" title={copy("ยังไม่มีต้นทุนให้สรุป", "Nothing to summarise yet", "集計する原価がありません")}
       message={copy("เพิ่มรายการในแท็บ Cost Items, Man-hour หรือ Other cost แล้วรายการจะมาปรากฏที่นี่", "Add lines in Cost Items, Man-hour or Other cost and they appear here.", "Cost Items・Man-hour・Other costタブで明細を追加するとここに表示されます。")} /> : null}
+
+    {summary ? <div className="estimate-summary-note">
+      <div className="row"><strong>{copy("หมายเหตุท้ายใบ", "Remark at the foot of the sheet", "シート末尾の備考")}</strong></div>
+      {workspace.capabilities.canEditAllSections
+        ? <SheetRemark key={moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark ?? ""}
+          value={moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark ?? ""} disabled={busy} onSave={saveRemark} />
+        : <p style={{ whiteSpace: "pre-wrap" }}>{moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark || "—"}</p>}
+    </div> : null}
 
     {!approvedOverhead ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("ต้องกำหนดและอนุมัติ Overhead ก่อนส่งออกไฟล์ ERP", "Set and approve Overhead before exporting the ERP file.", "ERP出力前に間接費を設定・承認してください。")}</span></div> : null}
     {workspace.header.status !== "Approved" ? <div className="info-strip"><Icon name="alertTriangle" /><span>{copy("ส่งออกไฟล์ได้เมื่อ Estimate อนุมัติแล้ว — ระหว่างนี้จัดหมวดและรวมบรรทัดไว้ก่อนได้", "The file can be exported once the estimate is approved — classify and merge in the meantime.", "見積承認後に出力できます。それまでに分類とまとめを進められます。")}</span></div> : null}
