@@ -1100,6 +1100,26 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
     "th": "ลบ Main Module",
     "jp": "メインモジュールを削除"
   },
+  "The estimator and due date come from the inquiry · contingency starts at 5%": {
+    "th": "ระบบใช้ผู้ประเมินและกำหนดส่งจาก Inquiry ให้อัตโนมัติ · Contingency เริ่มต้น 5%",
+    "jp": "見積担当と期日は引合から自動で設定され、予備費は5%から始まります"
+  },
+  "Add a standalone item": {
+    "th": "เพิ่มรายการเดี่ยว",
+    "jp": "単独明細を追加"
+  },
+  "Drag ⠿ to reorder or move a line between modules · drop it on a row to choose the position, or on a module name to send it to the end": {
+    "th": "ลากปุ่ม ⠿ เพื่อจัดลำดับหรือย้ายข้ามโมดูล · วางบนแถวเพื่อเลือกตำแหน่ง หรือบนชื่อโมดูลเพื่อย้ายไปท้ายโมดูล",
+    "jp": "⠿ をドラッグして並べ替えやモジュール間の移動ができます。行に落とすと位置を指定、モジュール名に落とすと末尾へ移動します"
+  },
+  "Included in the set price": {
+    "th": "รวมในราคาเซ็ต",
+    "jp": "セット価格に含む"
+  },
+  "standalone": {
+    "th": "เดี่ยว",
+    "jp": "単独"
+  },
   "Add from library": {
     "th": "เพิ่มจากคลัง",
     "jp": "ライブラリから追加"

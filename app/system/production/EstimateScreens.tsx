@@ -495,7 +495,7 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading inquiries…"} /></div> : inquiries.length ? <div className="form-grid two">
       <Field label="Registered inquiry *" span={2}><select value={form.inquiryId} onChange={(event) => { const inquiry = inquiries.find((item) => item.id === Number(event.target.value)); const requestedOwner = owners.find((owner) => owner.id === inquiry?.estimateOwnerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id; setForm((current) => ({ ...current, inquiryId: Number(event.target.value), ownerId: requestedOwner ?? current.ownerId, dueDate: normalizeEstimateDueDate(inquiry?.dueDate, earliestDueDate, latestDueDate) })); }}>{inquiries.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName} <LocalizedText text={"·"} /> {item.customerName}</option>)}</select></Field>
-      <div className="span-2 info-strip" role="status"><Icon name="check" /><span>ระบบใช้ผู้ประเมินและกำหนดส่งจาก Inquiry ให้อัตโนมัติ · Contingency เริ่มต้น 5%</span></div>
+      <div className="span-2 info-strip" role="status"><Icon name="check" /><span><LocalizedText text={"The estimator and due date come from the inquiry · contingency starts at 5%"} /></span></div>
       <details className="span-2"><summary><LocalizedText text={"ปรับผู้ประเมิน กำหนดส่ง หรือ Contingency"} /></summary><div className="form-grid two" style={{marginTop:12}}>
         <Field label="Estimate owner *"><select value={form.ownerId} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>
         <Field label="Due date *" hint="Today through five years"><input type="date" min={earliestDueDate} max={latestDueDate} value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} /></Field>
@@ -1057,7 +1057,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   const colCount = dense ? 10 : 16;
   const sheetWidth = dense ? 1320 : 2190;
   const draftRow = (groupKey: string) => quickDraft?.groupKey === groupKey ? <tr className="item-row inline-draft-row cost-draft-row" key={`quick-${groupKey}-${quickDraft.version}`} title={localizeCopy("Enter: save and create the next row · Esc: cancel")} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setQuickDraft(null); } if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void saveQuickRow(true); } }}>
-    <td><span className="cell-text quick-new"><LocalizedText text={"New"} />{!quickDraft.module ? <small style={{ display: "block" }}>เดี่ยว</small> : null}</span></td>
+    <td><span className="cell-text quick-new"><LocalizedText text={"New"} />{!quickDraft.module ? <small style={{ display: "block" }}><LocalizedText text={"standalone"} /></small> : null}</span></td>
     <td><CostItemLookupInput field="itemCode" inputRef={(node) => { quickItemCodeRef.current = node; }} required aria-label={uiText("Item code")} maxLength={100} placeholder={localizeCopy("Part No. *")} value={quickDraft.itemCode} onChange={(text) => updateQuick("itemCode", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /></td>
     <td><div className="inline-stack"><CostItemLookupInput field="description" required aria-label={uiText("Description")} maxLength={500} placeholder={localizeCopy("Description *")} value={quickDraft.description} onChange={(text) => updateQuick("description", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /><input aria-label={uiText("Specification")} maxLength={20000} placeholder={uiText("Specification")} value={quickDraft.specification ?? ""} onChange={(event) => updateQuick("specification", event.target.value)} /></div></td>
     <td><div className="inline-stack"><CostItemLookupInput field="brand" aria-label={uiText("Brand")} maxLength={100} placeholder={uiText("Brand")} value={quickDraft.brand ?? ""} onChange={(text) => updateQuick("brand", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /><input aria-label={uiText("Model")} maxLength={200} placeholder={uiText("Model")} value={quickDraft.model ?? ""} onChange={(event) => updateQuick("model", event.target.value)} /></div></td>
@@ -1106,7 +1106,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   {setEditor ? <EstimatePriceSetEditor workspace={workspace} bootstrap={bootstrap} members={setEditor.members} header={setEditor.header} onClose={()=>setSetEditor(null)} onSaved={async()=>{setSetSelection([]);await onExcelImported();}}/> : null}
   <Panel title={`Estimate Cost Table · ${groups.filter(group => group.module).length} module · ${visibleLines.filter(line=>!line.isPriceSet).length} item`} actions={canAdd ? <>
     <button type="button" className="btn default sm" disabled={busy||setBusy||!setSelection.length} onClick={()=>setSetEditor({members:workspace.costItems.filter(line=>setSelection.includes(line.id)&&!line.priceSetKey)})}>รวมเป็นเซ็ต / Set Price ({setSelection.length})</button>
-    <button className="btn primary sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />เพิ่มรายการเดี่ยว / Add Item</button>
+    <button className="btn primary sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" /><LocalizedText text={"Add a standalone item"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("price")}><Icon name="search" /><LocalizedText text={"Search Price Library"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("import")}><Icon name="upload" /><LocalizedText text={"Import Excel"} /></button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => setTool("copy")}><Icon name="copy" /><LocalizedText text={"Copy Previous Estimate"} /></button>
@@ -1126,7 +1126,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         <button type="button" className={dense ? "sheet-tool" : "sheet-tool active"} onClick={() => setDense((current) => !current)} title={dense ? "แสดง price source, reference, price date, owner, remark และ status" : "ซ่อนคอลัมน์อ้างอิงเพื่อให้ตารางพอดีจอ"}><Icon name="table" />{dense ? "All columns" : "Compact"}</button>
       </div>
     </div>
-    {canAdd ? <p className="cost-drag-help">ลากปุ่ม ⠿ เพื่อจัดลำดับหรือย้ายข้ามโมดูล • วางบนแถวเพื่อเลือกตำแหน่ง หรือบนชื่อโมดูลเพื่อย้ายไปท้ายโมดูล</p> : null}
+    {canAdd ? <p className="cost-drag-help"><LocalizedText text={"Drag ⠿ to reorder or move a line between modules · drop it on a row to choose the position, or on a module name to send it to the end"} /></p> : null}
     {groups.length || showPending ? <div className="table-wrap cost-sheet-wrap"><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
       <thead><tr>
         <th style={{ width: 48 }}><LocalizedText text={"No."} /></th>
@@ -1161,7 +1161,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
               <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
               <td><span className="cell-text">{line.supplierName ?? <span className="soft-warn"><LocalizedText text={"ยังไม่เลือกผู้ขาย"} /></span>}</span></td>
               {line.canEdit ? <EstimateModuleQuantityCells key={line.id+":"+line.rowVersion} name={line.itemCode} quantity={line.quantity} unit={line.unit} units={workspace.costItems.map(item=>item.unit)} showCostRatio={!line.priceSetKey||Boolean(line.isPriceSet)} disabled={busy||setBusy} onSave={async (quantity,unit)=>{setSetBusy(true);try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/cost-items/${line.id}/quantity`,{method:"PUT",body:JSON.stringify({estimateRowVersion:workspace.header.rowVersion,lineRowVersion:line.rowVersion,quantity,unit})});await onExcelImported();}finally{setSetBusy(false);}}}/> : <><td className="num">{formatNumber(line.quantity, 0)}</td><td><span className="cell-text">{line.unit}</span></td></>}
-              <td className="num">{line.priceSetKey && !line.isPriceSet ? <span className="muted">รวมในราคาเซ็ต</span> : numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
+              <td className="num">{line.priceSetKey && !line.isPriceSet ? <span className="muted"><LocalizedText text={"Included in the set price"} /></span> : numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
               <td className="num"><strong>{line.priceSetKey && !line.isPriceSet ? "—" : formatMoney(line.lineTotal)}</strong></td>
               {dense ? null : <>
                 <td><span className="cell-text">{line.priceSource}</span></td>
@@ -1174,7 +1174,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
               <td><div className="row-actions cost-order-actions">{line.canEdit && line.isPriceSet ? <button type="button" className="btn default sm" disabled={busy||setBusy} onClick={()=>setSetEditor({header:line,members:workspace.costItems.filter(item=>item.priceSetKey===line.priceSetKey&&!item.isPriceSet)})}>Edit set</button> : line.canEdit && line.priceSetKey ? <button type="button" className="icon-btn" disabled={busy||setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={()=>void detachSetItem(line)}>↗</button> : null}{canAdd && line.canEdit && !line.priceSetKey ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd && !line.priceSetKey ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit && !line.priceSetKey ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : line.priceSetKey ? null : <Icon name="lock" />}</div></td>
             </tr>),
             group.module ? draftRow(group.key) : null,
-            group.module ? <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><div className="cost-inline-add-actions"><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow({ ...group, key: `standalone-after:${group.key}`, module: "" })}><span><Icon name="plus" />เพิ่มรายการเดี่ยว / Add standalone item</span></button></div></td></tr> : null,
+            group.module ? <tr className="add-row" key={`add-${group.key}`}><td colSpan={colCount}><div className="cost-inline-add-actions"><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {group.module}</span></button><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow({ ...group, key: `standalone-after:${group.key}`, module: "" })}><span><Icon name="plus" /><LocalizedText text={"Add a standalone item"} /></span></button></div></td></tr> : null,
             draftRow(`standalone-after:${group.key}`),
           ];
         })}
@@ -1185,7 +1185,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
           <tr className="add-row" key={`add-${pendingKey}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow({ key: pendingKey, ...pendingModule })}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {pendingModule.module}</span></button></td></tr>,
         ] : null}
       </tbody>
-    </table></div> : <EmptyState icon="package" title={uiText("No cost item")} message={canAdd ? "เพิ่มรายการเดี่ยวได้ทันที หรือสร้าง Main Module เพื่อจัดกลุ่มรายการ" : "ไม่มีรายการที่บัญชีนี้อ่านได้"} action={canAdd ? <button className="btn primary" type="button" onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />เพิ่มรายการเดี่ยว / Add Item</button> : undefined} />}
+    </table></div> : <EmptyState icon="package" title={uiText("No cost item")} message={canAdd ? "เพิ่มรายการเดี่ยวได้ทันที หรือสร้าง Main Module เพื่อจัดกลุ่มรายการ" : "ไม่มีรายการที่บัญชีนี้อ่านได้"} action={canAdd ? <button className="btn primary" type="button" onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" /><LocalizedText text={"Add a standalone item"} /></button> : undefined} />}
     <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{groups.filter(group => group.module).length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown lines"} /></span><strong>{visibleLines.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown subtotal"} /></span><strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong></div><div className="foot-total"><span><LocalizedText text={"Total estimated cost"} /></span><strong>{formatMoney(workspace.header.totals.total)}</strong></div></div>
   </Panel>
   {tool === "price" ? <PriceLibraryPicker workspace={workspace} busy={busy} onClose={() => setTool(null)} onUse={async (record) => {
@@ -1532,6 +1532,19 @@ function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddMan
   const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
   const [costType, setCostType] = useState("all");
   const [showAllColumns, setShowAllColumns] = useState(false);
+  const [columnsReady, setColumnsReady] = useState(false);
+  const columnsKey = "estimate-manhour-columns";
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try { setShowAllColumns(window.localStorage.getItem(columnsKey) === "true"); } catch { /* site data blocked: start collapsed */ }
+      setColumnsReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [columnsKey]);
+  useEffect(() => {
+    if (!columnsReady) return;
+    try { window.localStorage.setItem(columnsKey, String(showAllColumns)); } catch { /* nothing to remember it with */ }
+  }, [columnsKey, showAllColumns, columnsReady]);
   const columnCount = showAllColumns ? 17 : 13;
   const [quickDraft, setQuickDraft] = useState<QuickManhourDraft | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
