@@ -1452,11 +1452,11 @@ test("the ERP sheet renames the lines whose wording it owns, and leaves the purc
   assert.match(sheet, /\(merged !== null \|\| \(!row\.standalone/);
   /* A rename sends no quantity and no unit, so the server keeps the ones it holds
      — sending them would re-run the scaling path on a cost module. */
-  const rename = sheet.slice(sheet.indexOf("const renameRow"), sheet.indexOf("const saveRemark"));
+  const rename = sheet.slice(sheet.indexOf("const renameRow"), sheet.indexOf("const splitMerged"));
   assert.match(rename, /moduleKey: detailKey, title: next, remark: null \}\)/);
   assert.doesNotMatch(rename, /quantity: next|unit: next/);
-  // The remark belongs to the estimate, not to a line, and the summary key takes no quantity.
-  const remark = sheet.slice(sheet.indexOf("const saveRemark"), sheet.indexOf("const splitMerged"));
-  assert.match(remark, /moduleKey: "summary"/);
-  assert.doesNotMatch(remark, /quantity|unit:/);
+  /* The remark belongs to the estimate, not to a line, and is written through the
+     editor the estimate already uses for it rather than a second one of our own. */
+  assert.match(sheet, /<EstimateModuleEditor workspace={workspace} moduleKey="summary"/);
+  assert.doesNotMatch(sheet, /moduleKey: "summary"/);
 });

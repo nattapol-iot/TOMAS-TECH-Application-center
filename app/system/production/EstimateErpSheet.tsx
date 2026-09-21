@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
 import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, foldErpGroupLines, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
@@ -95,33 +96,6 @@ function SheetLineName({ value, onSave }: { value: string; onSave: (next: string
   </div>;
 }
 
-/** The note that closes the sheet: one remark for the whole estimate, not for a line. */
-function SheetRemark({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (next: string) => Promise<void> }) {
-  const say = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-  const [draft, setDraft] = useState(value);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const changed = draft !== value;
-  const save = async () => {
-    if (disabled || saving || !changed) return;
-    setSaving(true); setError("");
-    try { await onSave(draft); }
-    catch (requestError) { setError(requestError instanceof Error ? requestError.message : say("บันทึกไม่สำเร็จ", "Could not be saved", "保存できませんでした")); }
-    finally { setSaving(false); }
-  };
-  return <>
-    <textarea rows={3} value={draft} maxLength={2000} disabled={disabled || saving}
-      placeholder={say("หมายเหตุที่จะติดไปกับใบนี้", "A note that travels with this sheet", "このシートに添える備考")}
-      aria-label={say("หมายเหตุท้ายใบ", "Remark at the foot of the sheet", "シート末尾の備考")}
-      onChange={(event) => setDraft(event.target.value)} />
-    {changed ? <div className="cb-inline-save">
-      <button type="button" className="btn primary sm" disabled={disabled || saving} onClick={() => { void save(); }}>{saving ? say("กำลังบันทึก…", "Saving…", "保存中…") : say("บันทึกหมายเหตุ", "Save the remark", "備考を保存")}</button>
-      <button type="button" className="btn ghost sm" disabled={saving} onClick={() => { setDraft(value); setError(""); }}>{say("ยกเลิก", "Cancel", "取消")}</button>
-    </div> : null}
-    {error ? <small role="alert" className="soft-warn">{error}</small> : null}
-  </>;
-}
-
 export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   workspace: EstimateCostWorkspace;
   onChanged: (message: string) => Promise<void>;
@@ -144,6 +118,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   const [drafts, setDrafts] = useState<Record<string, DraftCategory>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [editingRemark, setEditingRemark] = useState(false);
   /* The sheet opens showing everything, because it is a document before it is a
      list; folding a heading is for working through a long one. */
   const [folded, setFolded] = useState<Set<string>>(new Set());
@@ -315,17 +290,6 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     else await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: detailKey, title: next, remark: null });
     await onChanged(copy("เปลี่ยนชื่อบรรทัดแล้ว", "Line renamed", "行の名前を変更しました"));
     await load();
-  };
-
-  const saveRemark = async (remark: string) => {
-    setBusy(true); setError("");
-    try {
-      await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: "summary", title: "Summary", remark: remark.trim() || null });
-      await onChanged(copy("บันทึกหมายเหตุแล้ว", "Remark saved", "備考を保存しました"));
-      await load();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "The remark could not be saved.");
-    } finally { setBusy(false); }
   };
 
   const splitMerged = async (group: ErpGroup) => {
@@ -618,13 +582,17 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     </> : !loading ? <EmptyState icon="package" title={copy("ยังไม่มีต้นทุนให้สรุป", "Nothing to summarise yet", "集計する原価がありません")}
       message={copy("เพิ่มรายการในแท็บ Cost Items, Man-hour หรือ Other cost แล้วรายการจะมาปรากฏที่นี่", "Add lines in Cost Items, Man-hour or Other cost and they appear here.", "Cost Items・Man-hour・Other costタブで明細を追加するとここに表示されます。")} /> : null}
 
+    {/* Read on the sheet, written in the editor the estimate already uses for it. */}
     {summary ? <div className="estimate-summary-note">
-      <div className="row"><strong>{copy("หมายเหตุท้ายใบ", "Remark at the foot of the sheet", "シート末尾の備考")}</strong></div>
-      {workspace.capabilities.canEditAllSections
-        ? <SheetRemark key={moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark ?? ""}
-          value={moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark ?? ""} disabled={busy} onSave={saveRemark} />
-        : <p style={{ whiteSpace: "pre-wrap" }}>{moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark || "—"}</p>}
+      <div className="row"><strong>{copy("หมายเหตุท้ายใบ", "Remark at the foot of the sheet", "シート末尾の備考")}</strong><span className="spacer" />
+        {workspace.capabilities.canEditAllSections ? <button type="button" className="btn default sm" disabled={busy || unsaved.length > 0} onClick={() => setEditingRemark(true)}>{copy("แก้ไขหมายเหตุ", "Edit the remark", "備考を編集")}</button> : null}
+      </div>
+      <p style={{ whiteSpace: "pre-wrap" }}>{moduleDetails.find((entry) => entry.moduleKey === "summary")?.remark || "—"}</p>
     </div> : null}
+
+    {editingRemark ? <EstimateModuleEditor workspace={workspace} moduleKey="summary" initialTitle="Summary"
+      onClose={() => setEditingRemark(false)}
+      onSaved={async () => { setEditingRemark(false); await onChanged(copy("บันทึกหมายเหตุแล้ว", "Remark saved", "備考を保存しました")); await load(); }} /> : null}
 
     {!approvedOverhead ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("ต้องกำหนดและอนุมัติ Overhead ก่อนส่งออกไฟล์ ERP", "Set and approve Overhead before exporting the ERP file.", "ERP出力前に間接費を設定・承認してください。")}</span></div> : null}
     {workspace.header.status !== "Approved" ? <div className="info-strip"><Icon name="alertTriangle" /><span>{copy("ส่งออกไฟล์ได้เมื่อ Estimate อนุมัติแล้ว — ระหว่างนี้จัดหมวดและรวมบรรทัดไว้ก่อนได้", "The file can be exported once the estimate is approved — classify and merge in the meantime.", "見積承認後に出力できます。それまでに分類とまとめを進められます。")}</span></div> : null}
