@@ -5046,4 +5046,7 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cb-line-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; padding: 2px 6px 0; font-size: var(--fs-2xs); color: var(--muted); }
 .cb-line-meta .cb-code { margin-left: 0; }
 .cb-line-meta .chip { padding: 1px 8px; font-size: var(--fs-2xs); }
+/* The row opens the cost behind it; the fields inside it keep their own cursors. */
+.cost-breakdown tr.cb-line.cb-openable { cursor: pointer; }
+.cost-breakdown tr.cb-line.cb-openable:not(.selected):hover td { background: var(--n-50); }
 .estimate-summary-note textarea { width: 100%; resize: vertical; }

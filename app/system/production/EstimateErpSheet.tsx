@@ -16,7 +16,7 @@ import {
 } from "../api-client";
 import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
-import { EmptyState, Icon, Modal, Panel } from "../ui";
+import { Drawer, EmptyState, Icon, Modal, Panel } from "../ui";
 
 /*
  * The ERP sheet.
@@ -143,7 +143,9 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
   const [moduleDetails, setModuleDetails] = useState<EstimateModuleDetail[]>([]);
   const [drafts, setDrafts] = useState<Record<string, DraftCategory>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [opened, setOpened] = useState<Set<string>>(new Set());
+  /* One line at a time, opened in full. The sheet stays a sheet; the cost behind a
+     line is a different question, asked about one line and answered beside it. */
+  const [inspect, setInspect] = useState("");
   /* The sheet opens showing everything, because it is a document before it is a
      list; folding a heading is for working through a long one. */
   const [folded, setFolded] = useState<Set<string>>(new Set());
@@ -399,15 +401,30 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
     classify(row.erpKeys, category as DraftCategory);
   };
 
+  /* A row's name and the record it is stored in, in one place: the drawer and the
+     row itself must never disagree about which line they are talking about. */
+  const detailKeyOf = (row: SheetRow) => row.source.kind === "manhour" && LABOR_MODULE_NAMES[row.source.title] ? row.source.key : row.key;
+  const mergedOf = (row: SheetRow) => row.merged === null ? null : groups.find((group) => group.id === row.merged) ?? null;
+  const titleOf = (row: SheetRow) => {
+    const merged = mergedOf(row);
+    if (merged) return merged.title;
+    const detail = moduleDetails.find((entry) => entry.moduleKey === detailKeyOf(row));
+    return row.source.kind === "cost-items" ? row.title : detail?.title ?? row.title;
+  };
+  const ledgerOf = (row: SheetRow) => row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title;
+  // Eight headings at most, so the lookup is cheaper than remembering it.
+  const inspected = inspect
+    ? headings.flatMap((heading) => heading.rows.map((row) => ({ heading, row }))).find((entry) => entry.row.key === inspect) ?? null
+    : null;
+
   const renderRow = (heading: SheetHeading, row: SheetRow, index: number) => {
-    const detailKey = row.source.kind === "manhour" && LABOR_MODULE_NAMES[row.source.title] ? row.source.key : row.key;
+    const detailKey = detailKeyOf(row);
     const detail = moduleDetails.find((entry) => entry.moduleKey === detailKey);
-    const merged = row.merged === null ? null : groups.find((group) => group.id === row.merged) ?? null;
-    const title = merged ? merged.title : row.source.kind === "cost-items" ? row.title : detail?.title ?? row.title;
+    const merged = mergedOf(row);
+    const title = titleOf(row);
     const rowQuantity = merged ? merged.quantity : row.standalone ? row.lines[0].quantity : detail?.quantity ?? 1;
     const rowUnit = merged ? merged.unit : row.standalone ? row.lines[0].unit : detail?.unit ?? "Set";
     const isSelected = row.erpKeys.length > 0 && row.erpKeys.every((key) => selected.has(key));
-    const open = opened.has(row.key);
     /* The rule that derives a labour category is a default, not a veto. Offering it
        back as one click keeps an override visible and reversible. */
     const derivedSet = new Set(row.erpKeys.map((key) => automaticLaborCategory(erpByKey.get(key)!)).filter((value) => value !== null));
@@ -429,7 +446,9 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
       : workspace.capabilities.canEditOtherCosts);
 
     return <Fragment key={row.key}>
-      <tr className={isSelected ? "cb-line selected" : "cb-line"}
+      {/* The row opens the cost behind it, except where the click belongs to a control. */}
+      <tr className={isSelected ? "cb-line cb-openable selected" : "cb-line cb-openable"}
+        onClick={(event) => { if (!(event.target as HTMLElement).closest("input,select,textarea,button,label,a")) setInspect(row.key); }}
         onDragOver={(event) => allowDrop(event, heading.category)}
         onDrop={(event) => dropInto(event, heading.category)}>
         <td className="cb-num-col muted">
@@ -446,8 +465,8 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
             {/* Where the money lives. The sheet classifies the line; it does not move it. */}
             <span className="cb-code">{row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title}</span>
             <span>{row.lines.length} {copy("รายการ", "lines", "明細")}</span>
-            <button type="button" className="chip" aria-expanded={open} onClick={() => setOpened((current) => { const next = new Set(current); if (next.has(row.key)) next.delete(row.key); else next.add(row.key); return next; })}>
-              {open ? copy("ย่อ", "Hide", "閉じる") : copy("ดูรายการ", "Lines", "明細")}
+            <button type="button" className="chip" onClick={() => setInspect(row.key)}>
+              <Icon name="search" />{copy("ดูต้นทุน", "See the cost", "原価を見る")}
             </button>
             {merged && !nameEditable ? <button type="button" className="chip" disabled={!canEdit} onClick={() => setMerge({ title: merged.title, group: merged, members: [] })}>{copy("เปลี่ยนชื่อ", "Rename", "名前を変更")}</button> : null}
             {merged ? <button type="button" className="chip" disabled={!canEdit} onClick={() => { void splitMerged(merged); }}>{copy("แยกกลับ", "Split back", "まとめを解除")}</button> : null}
@@ -480,14 +499,6 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
             onDragEnd={() => { setDragged(null); setDropTarget(""); }}>⠿</button></span>
         </div></td>
       </tr>
-      {open ? row.lines.map((line) => <tr key={line.key} className="cb-line">
-        <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
-        <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td>
-        <td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
-        <td className="num">{line.priceSetKey && !line.isPriceSet ? copy("รวมในราคาเซ็ต", "Included in the set price", "セット価格に含む") : money(line.unitCost)}</td>
-        <td className="num">{line.priceSetKey && !line.isPriceSet ? "—" : money(line.amount)}</td>
-        <td />
-      </tr>) : null}
     </Fragment>;
   };
 
@@ -628,6 +639,45 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify }: {
 
     {!approvedOverhead ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("ต้องกำหนดและอนุมัติ Overhead ก่อนส่งออกไฟล์ ERP", "Set and approve Overhead before exporting the ERP file.", "ERP出力前に間接費を設定・承認してください。")}</span></div> : null}
     {workspace.header.status !== "Approved" ? <div className="info-strip"><Icon name="alertTriangle" /><span>{copy("ส่งออกไฟล์ได้เมื่อ Estimate อนุมัติแล้ว — ระหว่างนี้จัดหมวดและรวมบรรทัดไว้ก่อนได้", "The file can be exported once the estimate is approved — classify and merge in the meantime.", "見積承認後に出力できます。それまでに分類とまとめを進められます。")}</span></div> : null}
+
+    {inspected ? <Drawer width={760} title={"The cost behind this line"} onClose={() => setInspect("")}
+      footer={<>
+        <span className="muted small">{copy("ต้นทุนภายในเท่านั้น · แก้ไขได้ที่แท็ปต้นทาง", "Internal cost only · edited in the tab that owns it", "内部原価のみ · 元のタブで編集")}</span>
+        <span className="spacer" />
+        <button className="btn default" type="button" onClick={() => setInspect("")}><LocalizedText text={"Close"} /></button>
+      </>}>
+      <div className="cell-primary">
+        <strong>{titleOf(inspected.row)}</strong>
+        <span>{copy("หัวข้อ", "Heading", "見出し")} {inspected.heading.category === "Unmapped" ? unmappedLabel : inspected.heading.category} · {ledgerOf(inspected.row)} · {inspected.row.lines.length} {copy("รายการ", "lines", "明細")}</span>
+      </div>
+      {mergedOf(inspected.row) ? <div className="info-strip">{copy("บรรทัดนี้เขียนรวมจากรายการข้างล่างทั้งหมด", "This line is written from all of the lines below, together.", "この行は下の明細をまとめて出力します。")}</div> : null}
+      <div className="table-wrap"><table>
+        <thead><tr>
+          <th><LocalizedText text={"Description"} /></th>
+          <th className="num"><LocalizedText text={"Qty"} /></th>
+          <th><LocalizedText text={"Unit"} /></th>
+          <th>{copy("ทำเอง / จ้างภายนอก", "In-house / Outsourced", "内製 / 外注")}</th>
+          <th className="num"><LocalizedText text={"Unit cost"} /></th>
+          <th className="num"><LocalizedText text={"Amount"} /></th>
+        </tr></thead>
+        <tbody>{inspected.row.lines.map((line) => {
+          const inSet = Boolean(line.priceSetKey) && !line.isPriceSet;
+          return <tr key={line.key}>
+            <td><div className="cell-primary"><strong>{line.title}</strong>{line.details.length ? <span>{line.details.join(" · ")}</span> : null}{line.supplierName ? <span>{line.supplierName}</span> : null}</div></td>
+            <td className="num">{quantity(line.quantity)}</td>
+            <td>{line.unit}</td>
+            <td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
+            <td className="num">{line.awaitingPrice ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : inSet ? copy("รวมในราคาเซ็ต", "Included in the set price", "セット価格に含む") : money(line.unitCost)}</td>
+            <td className="num">{inSet ? "—" : money(line.amount)}</td>
+          </tr>;
+        })}</tbody>
+        <tfoot>
+          <tr><td colSpan={5} className="num">{inHouseLabel}</td><td className="num">{money(inspected.row.inHouse)}</td></tr>
+          <tr><td colSpan={5} className="num">{outsourcedLabel}</td><td className="num">{money(inspected.row.outsourced)}</td></tr>
+          <tr><td colSpan={5} className="num"><strong>{copy("รวมของบรรทัดนี้", "This line", "この行の合計")}</strong></td><td className="num"><strong>{money(inspected.row.amount)}</strong></td></tr>
+        </tfoot>
+      </table></div>
+    </Drawer> : null}
 
     {merge ? <Modal size="sm"
       title={merge.group ? copy("เปลี่ยนชื่อบรรทัด", "Rename the line", "行の名前") : copy("เขียนรวมเป็นบรรทัดเดียว", "Write as one line", "1行にまとめる")}
