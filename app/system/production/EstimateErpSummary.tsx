@@ -8,6 +8,7 @@ import { buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, ERP_COST_CA
 import { automaticLaborCategory, suggestErpCategory } from "../../../lib/erp-category-suggest";
 import { LABOR_MODULE_NAMES, groupErpLaborSections, breakdownModules, breakdownLineCount, buildEstimateCostBreakdown, type BreakdownLine, type BreakdownSection, type BreakdownSectionKind } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
+import { foldErpGroupLines, erpGroupsByMember, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import {
   loadEstimateErpSummary,
   loadEstimateModuleDetails,
@@ -15,6 +16,9 @@ import {
   type EstimateModuleDetail,
   recordEstimateErpExport,
   updateEstimateErpMappings,
+  createEstimateErpGroup,
+  updateEstimateErpGroup,
+  deleteEstimateErpGroup,
   type EstimateCostWorkspace,
   type EstimateErpCategory,
   type EstimateErpSourceType,
@@ -96,6 +100,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const [bulkCategory, setBulkCategory] = useState<DraftCategory>("Hardware");
   const [draggedModule, setDraggedModule] = useState<{ section: string; key: string; kind: BreakdownSectionKind; lineIds: number[] } | null>(null);
   const [moduleDropMarker, setModuleDropMarker] = useState("");
+  const [merge, setMerge] = useState<{ title: string; group: ErpGroup | null; members: Array<{ sourceType: EstimateErpSourceType; sourceId: number }> } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +145,17 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     return { key, title: section.kind === "cost-items" ? module.title : detail?.title ?? module.title, descriptionRows: detail?.descriptionRows ?? [], quantity: detail?.quantity ?? 1, unit: detail?.unit ?? "Set" };
   };
   const erpByKey = useMemo(() => new Map((summary?.lines ?? []).map((line) => [erpKey(line), line])), [summary]);
+  /* A merged line is how the ERP sheet is written, so it is also one row here —
+     it outranks the module its members belong to, and the members keep their own
+     amounts, categories and identities underneath. */
+  const groups = useMemo(() => summary?.groups ?? [], [summary]);
+  const groupsByMember = useMemo(() => erpGroupsByMember(groups), [groups]);
+  const groupOf = useCallback((line: BreakdownLine) => {
+    const key = erpKeyOfBreakdown(line.key);
+    const group = key ? groupsByMember.get(key) : undefined;
+    return group ? { id: group.id, title: group.title } : null;
+  }, [groupsByMember]);
+  const modulesOf = useCallback((section: BreakdownSection) => breakdownModules(section, groupOf), [groupOf]);
   const erpOf = useCallback((line: BreakdownLine) => { const key = erpKeyOfBreakdown(line.key); return key ? erpByKey.get(key) : undefined; }, [erpByKey]);
   const draftOf = (erp: ErpLine) => drafts[erpKey(erp)] ?? erp.erpCategory;
   const contingencyErp = summary?.lines.find((line) => line.sourceType === "Contingency") ?? null;
@@ -154,19 +170,33 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
   const visibleSections = useMemo(() => sections
     .map((section) => ({
       section,
-      lines: breakdownModules(section).filter((module) => module.lines.some((line) => {
+      lines: modulesOf(section).filter((module) => module.lines.some((line) => {
         if (!lineMatches(line, needle)) return false;
         if (!categoryFilter) return true;
         const erp = erpOf(line);
         return erp ? (drafts[erpKey(erp)] ?? erp.erpCategory) === categoryFilter : false;
       })).flatMap((module) => module.lines),
     }))
-    .filter((entry) => !filtering || entry.lines.length), [sections, needle, categoryFilter, erpOf, drafts, filtering]);
+    .filter((entry) => !filtering || entry.lines.length), [sections, needle, categoryFilter, erpOf, drafts, filtering, modulesOf]);
   const isExpanded = (key: string) => filtering || expanded.has(key);
   const shownLines = visibleSections.flatMap((entry) => isExpanded(entry.section.key) ? entry.lines : []);
   const shownErpKeys = shownLines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
   const selectedShown = shownErpKeys.filter((key) => selected.has(key));
   const allShownSelected = shownErpKeys.length > 0 && selectedShown.length === shownErpKeys.length;
+  /* One merged row carries one ERP category, so lines that disagree cannot be
+     merged — the sheet must not move money between categories to tidy a name. */
+  const sectionOfErpKey = useMemo(() => {
+    const index = new Map<string, string>();
+    for (const entry of visibleSections) for (const line of entry.section.lines) {
+      const key = erpKeyOfBreakdown(line.key);
+      if (key) index.set(key, entry.section.key);
+    }
+    return index;
+  }, [visibleSections]);
+  const mergeable = selectedShown.length >= 2 && changedLines.length === 0
+    && new Set(selectedShown.map((key) => draftOf(erpByKey.get(key)!))).size === 1
+    && new Set(selectedShown.map((key) => sectionOfErpKey.get(key))).size === 1
+    && selectedShown.every((key) => !groupsByMember.has(key));
   const lineCount = breakdownLineCount(sections);
   const canEdit = Boolean(summary?.capabilities.canEditMappings) && !busy && !reorderBusy;
   const approvedOverhead = !ESTIMATE_OVERHEAD_ENABLED || summary?.overhead.state === "Applied" || summary?.overhead.state === "Zero";
@@ -200,6 +230,36 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     for (const key of keys) if (erpByKey.has(key)) next[key] = category;
     return next;
   });
+  /* Merging and splitting change no cost line, so both reload rather than keep a
+     local draft: the server owns which lines a merged line holds. */
+  const saveMerge = async () => {
+    const draft = merge;
+    if (!draft || !draft.title.trim()) return;
+    setBusy(true); setError("");
+    try {
+      if (draft.group) {
+        await updateEstimateErpGroup(workspace.header.id, draft.group.id, workspace.header.rowVersion, draft.group.rowVersion,
+          { title: draft.title.trim(), quantity: draft.group.quantity, unit: draft.group.unit });
+      } else {
+        await createEstimateErpGroup(workspace.header.id, workspace.header.rowVersion, { title: draft.title.trim(), members: draft.members });
+      }
+      setMerge(null); setSelected(new Set());
+      await onChanged(draft.group ? copy("เปลี่ยนชื่อบรรทัดรวมแล้ว", "Merged line renamed", "まとめた行の名前を変更しました") : copy("รวมเป็นบรรทัดเดียวแล้ว", "Lines merged", "行をまとめました"));
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The merged line could not be saved.");
+    } finally { setBusy(false); }
+  };
+  const splitGroup = async (group: ErpGroup) => {
+    setBusy(true); setError("");
+    try {
+      await deleteEstimateErpGroup(workspace.header.id, group.id, workspace.header.rowVersion);
+      await onChanged(copy("แยกกลับเป็นรายการเดิมแล้ว", "Merged line split", "まとめを解除しました"));
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The merged line could not be split.");
+    } finally { setBusy(false); }
+  };
   const applyBulk = () => {
     if (!selectedShown.length) return;
     setDraftFor(selectedShown, bulkCategory);
@@ -261,7 +321,8 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         },
         summary: {
           ...summary,
-          lines: summary.lines.map((line) => ({
+          // Merged lines are written as one row; the amounts behind them are unchanged.
+          lines: foldErpGroupLines(summary.lines, groups).map((line) => ({
             ...line,
             item: line.item ?? undefined,
             modelPartNumber: line.modelPartNumber ?? undefined,
@@ -324,7 +385,8 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
 
   /* The key breakdownModules() groups by, so a module keeps one identity whether
      an arrow moves it or a drag does. */
-  const summaryModuleKey = (section: BreakdownSection) => (line: BreakdownLine) => section.kind === "cost-items" && !line.module?.trim() ? (line.priceSetKey ? section.key + ":set:" + line.priceSetKey : section.key + ":item:" + line.key) : section.key + ":" + (line.module?.trim() || "Unassigned module");
+  const summaryModuleKey = (section: BreakdownSection) => (line: BreakdownLine) => groupOf(line) ? "group:" + groupOf(line)!.id
+    : section.kind === "cost-items" && !line.module?.trim() ? (line.priceSetKey ? section.key + ":set:" + line.priceSetKey : section.key + ":item:" + line.key) : section.key + ":" + (line.module?.trim() || "Unassigned module");
   const applySummaryOrder = (section: BreakdownSection, moved: BreakdownLine[]) => {
     const sourceType: EstimateOrderSource = section.kind === "cost-items" ? "CostItem" : section.kind === "manhour" ? "ManhourLine" : section.kind === "expenses" ? "ExpenseLine" : "OtherCostLine";
     const all = sections.filter(entry => entry.kind === section.kind).flatMap(entry => entry.key === section.key ? moved : entry.lines);
@@ -375,7 +437,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
     return <tbody key={section.key}>
       <tr className={`cb-section${open ? " open" : ""}${moduleDropMarker === section.key ? " cost-drop-module" : ""}`} onClick={() => { if (!filtering) toggleSection(section.key); }} aria-expanded={open}
         onDragOver={(event) => allowModuleDrop(event, section, section.key)}
-        onDrop={(event) => { const last = breakdownModules(section).at(-1); if (last) dropSummaryModule(event, section, last.key, true); }}>
+        onDrop={(event) => { const last = modulesOf(section).at(-1); if (last) dropSummaryModule(event, section, last.key, true); }}>
         <td className="cb-num-col">
           <button type="button" className="cb-toggle" aria-label={open ? copy("ย่อหมวด", "Collapse section", "区分を閉じる") : copy("ขยายหมวด", "Expand section", "区分を開く")} disabled={filtering} onClick={(event) => { event.stopPropagation(); toggleSection(section.key); }}>
             <Icon name={open ? "chevronDown" : "chevronRight"} />
@@ -400,7 +462,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
           </div>
         </td>
       </tr>
-      {open ? breakdownModules(section).filter((module) => module.lines.some((line) => lines.includes(line))).map((module, index) => {
+      {open ? modulesOf(section).filter((module) => module.lines.some((line) => lines.includes(line))).map((module, index) => {
         const keys = module.lines.map((line) => erpKeyOfBreakdown(line.key)).filter((key): key is string => key !== null && erpByKey.has(key));
         const categories = new Set(keys.map((key) => draftOf(erpByKey.get(key)!)));
         const category = categories.size === 1 ? [...categories][0] : "Mixed";
@@ -409,10 +471,16 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
            reversible, instead of a divergence nobody can see or undo. */
         const derivedSet = new Set(keys.map((key) => automaticLaborCategory(erpByKey.get(key)!)).filter((value) => value !== null));
         const derived = derivedSet.size === 1 ? [...derivedSet][0]! : null;
-        const moduleIndex = breakdownModules(section).findIndex(entry => entry.key === module.key);
+        const moduleIndex = modulesOf(section).findIndex(entry => entry.key === module.key);
         const canReorder = section.kind === "manhour" ? false : section.kind === "other" ? workspace.capabilities.canEditOtherCosts : section.kind === "expenses" ? workspace.capabilities.canEditExpenses : workspace.capabilities.canEditCostItems;
         const isSelected = keys.length > 0 && keys.every((key) => selected.has(key));
         const detail = moduleDetail(section, module);
+        /* A merged row belongs to the ERP sheet, not to a module: its name,
+           quantity and unit live on the group, and the module editors that would
+           rename a real module are not offered on it. */
+        const merged = module.merged === null ? null : groups.find(entry => entry.id === module.merged) ?? null;
+        const rowQuantity = merged ? merged.quantity : module.standalone ? module.lines[0].quantity : detail.quantity;
+        const rowUnit = merged ? merged.unit : module.standalone ? module.lines[0].unit : detail.unit;
         const canEditModule = !module.standalone && (section.kind === "cost-items" ? workspace.capabilities.canEditCostItems : section.kind === "manhour" && Boolean(LABOR_MODULE_NAMES[section.title]) && workspace.capabilities.canEditAllSections);
         /* Quantity and unit are how the module is written on the ERP sheet. On a
            cost module they also rescale its items; on the other ledgers the amount
@@ -429,28 +497,34 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
             {canEdit && keys.length ? <input type="checkbox" className="cb-check" checked={isSelected} aria-label={"Select module " + module.title} onChange={(event) => toggleKeys(keys, event.target.checked)} /> : null}
             {section.ordinal}-{index + 1}
           </td>
-          <td><div className="cell-primary cb-desc"><strong>{detail.title}</strong>{detail.descriptionRows.map((row, index) => <span key={index} style={{ whiteSpace: "pre-wrap" }}>{row}</span>)}<span>{module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
+          <td><div className="cell-primary cb-desc"><strong>{merged ? merged.title : detail.title}</strong>{merged ? null : detail.descriptionRows.map((row, index) => <span key={index} style={{ whiteSpace: "pre-wrap" }}>{row}</span>)}<span>{merged ? <span className="badge blue">{copy("รวมบนใบ ERP", "Merged on the ERP sheet", "ERPシートで1行")}</span> : null} {module.lines.length} {copy("รายการต้นทุน", "cost lines", "原価明細")}</span></div>
             <button type="button" className="chip" aria-expanded={openModules.has(module.key)} onClick={() => setOpenModules(current => { const next = new Set(current); if (next.has(module.key)) next.delete(module.key); else next.add(module.key); return next; })}>{openModules.has(module.key) ? "ย่อรายการ / Hide details" : "ดูรายการต้นทุน / View cost lines"}</button>
-            {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ไขโมดูล / Edit module</button> : null}
-            {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.standalone ? undefined : module.title, module.standalone ? Number(module.lines[0].key.split(":")[1]) : undefined)}>{module.standalone ? "แก้ไขรายการ / Edit item" : copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
+            {merged ? <>
+              <button type="button" className="chip" disabled={!canEdit || busy} onClick={() => setMerge({ title: merged.title, group: merged, members: [] })}>{copy("เปลี่ยนชื่อ", "Rename", "名前を変更")}</button>
+              <button type="button" className="chip" disabled={!canEdit || busy} onClick={() => { void splitGroup(merged); }}>{copy("แยกกลับเป็นรายการเดิม", "Split back into lines", "まとめを解除")}</button>
+            </> : <>
+              {canEditModule ? <button type="button" className="chip" disabled={busy || reorderBusy || changedLines.length > 0} onClick={() => setEditingModule(detail)}>แก้ไขโมดูล / Edit module</button> : null}
+              {section.categoryCode && onOpenCategory ? <button type="button" className="chip" onClick={() => onOpenCategory(section.categoryCode!, module.standalone ? undefined : module.title, module.standalone ? Number(module.lines[0].key.split(":")[1]) : undefined)}>{module.standalone ? "แก้ไขรายการ / Edit item" : copy("เปิดโมดูล / แก้ไข", "Open module / edit", "モジュールを編集")}</button> : null}
+            </>}
           </td>
-          {canEditUnit ? <EstimateModuleQuantityCells key={`${detail.key}:${detail.quantity}:${detail.unit}`} name={detail.title} quantity={detail.quantity} unit={detail.unit} showCostRatio={section.kind === "cost-items"}
-            units={moduleDetails.map(row => row.unit ?? "Set")} disabled={busy || reorderBusy || loading || changedLines.length > 0}
+          {canEditUnit || merged ? <EstimateModuleQuantityCells key={`${module.key}:${rowQuantity}:${rowUnit}`} name={merged ? merged.title : detail.title} quantity={rowQuantity} unit={rowUnit} showCostRatio={!merged && section.kind === "cost-items"}
+            units={moduleDetails.map(row => row.unit ?? "Set")} disabled={(merged ? !canEdit : false) || busy || reorderBusy || loading || changedLines.length > 0}
             onSave={async (nextQuantity, nextUnit) => {
               setBusy(true);
               try {
-                await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: detail.key, title: detail.title, remark: null, quantity: nextQuantity, unit: nextUnit });
+                if (merged) await updateEstimateErpGroup(workspace.header.id, merged.id, workspace.header.rowVersion, merged.rowVersion, { title: merged.title, quantity: nextQuantity, unit: nextUnit });
+                else await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: detail.key, title: detail.title, remark: null, quantity: nextQuantity, unit: nextUnit });
                 await onChanged("Module quantity / unit updated"); await load();
               } finally { setBusy(false); }
-            }} /> : <><td className="num">{module.standalone ? quantity(module.lines[0].quantity) : quantity(detail.quantity)}</td><td>{module.standalone ? module.lines[0].unit : detail.unit}</td></>}
+            }} /> : <><td className="num">{quantity(rowQuantity)}</td><td>{rowUnit}</td></>}
           <td><div className="cell-primary"><span>{inHouseLabel}: {money(module.inHouse)}</span><span>{outsourcedLabel}: {money(module.outsourced)}</span></div></td>
-          <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : module.standalone ? money(module.lines[0].unitCost) : money(module.amount / detail.quantity)}</td>
+          <td className="num">{module.lines.some((line) => line.awaitingPrice) ? <span className="soft-warn">{copy("รอราคา", "Awaiting price", "価格待ち")}</span> : !merged && module.standalone ? money(module.lines[0].unitCost) : money(module.amount / rowQuantity)}</td>
           <td className="num"><strong>{money(module.amount)}</strong></td>
           <td className="cb-erp-col"><div className="cb-module-controls"><select disabled={!canEdit || !keys.length} aria-label={"ERP category for module " + module.title} value={category} onChange={(event) => setDraftFor(keys, event.target.value as DraftCategory)}>
             <option value="Mixed" disabled>{copy("หลายหมวด ERP", "Mixed ERP categories", "複数のERP分類")}</option>
             <option value="Unmapped">{unmappedLabel}</option>
             {ERP_COST_CATEGORIES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
-          </select>{derived && category !== derived ? <button type="button" className="chip" disabled={!canEdit} title={copy(`ระบบจัดหมวดนี้เป็น ${derived} จาก cost type / ผู้ให้บริการ / แผนก — กดเพื่อคืนค่าอัตโนมัติ`, `The labour rule reads this as ${derived} from cost type, provider and discipline — click to hand it back`, `労務ルールでは ${derived} です — クリックで自動に戻す`)} onClick={() => setDraftFor(keys, derived as DraftCategory)}>↺ {derived}</button> : null}{canReorder ? <span className="row-actions"><button type="button" className="icon-btn cost-drag-handle" draggable={moduleDragReady} disabled={!moduleDragReady} title={filtering ? copy("ล้างตัวกรองก่อนจึงจะย้ายลำดับได้", "Clear the filters to reorder", "並べ替えるにはフィルターを解除してください") : copy("ลากเพื่อย้ายลำดับโมดูล", "Drag to reorder this module", "ドラッグしてモジュールを並べ替え")} aria-label={"Drag " + module.title + " to reorder"} onDragStart={(event) => { setDraggedModule({ section: section.key, key: module.key, kind: section.kind, lineIds: module.lines.map(line => Number(line.key.split(":")[1])) }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", module.key); }} onDragEnd={clearModuleDrag}>⠿</button>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= breakdownModules(section).length} onClick={() => moveSummaryModule(section, module.key, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
+          </select>{derived && category !== derived ? <button type="button" className="chip" disabled={!canEdit} title={copy(`ระบบจัดหมวดนี้เป็น ${derived} จาก cost type / ผู้ให้บริการ / แผนก — กดเพื่อคืนค่าอัตโนมัติ`, `The labour rule reads this as ${derived} from cost type, provider and discipline — click to hand it back`, `労務ルールでは ${derived} です — クリックで自動に戻す`)} onClick={() => setDraftFor(keys, derived as DraftCategory)}>↺ {derived}</button> : null}{canReorder ? <span className="row-actions"><button type="button" className="icon-btn cost-drag-handle" draggable={moduleDragReady} disabled={!moduleDragReady} title={filtering ? copy("ล้างตัวกรองก่อนจึงจะย้ายลำดับได้", "Clear the filters to reorder", "並べ替えるにはフィルターを解除してください") : copy("ลากเพื่อย้ายลำดับโมดูล", "Drag to reorder this module", "ドラッグしてモジュールを並べ替え")} aria-label={"Drag " + module.title + " to reorder"} onDragStart={(event) => { setDraggedModule({ section: section.key, key: module.key, kind: section.kind, lineIds: module.lines.map(line => Number(line.key.split(":")[1])) }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", module.key); }} onDragEnd={clearModuleDrag}>⠿</button>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" title={direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down"} aria-label={(direction === -1 ? "Move up " : "Move down ") + module.title} disabled={busy || reorderBusy || changedLines.length > 0 || filtering || moduleIndex + direction < 0 || moduleIndex + direction >= modulesOf(section).length} onClick={() => moveSummaryModule(section, module.key, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</span> : null}</div></td>
         </tr>{openModules.has(module.key) ? module.lines.map(line => <tr key={line.key} className="cb-line">
           <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")}</div></td>
           <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td>{line.source === "in-house" ? inHouseLabel : outsourcedLabel}</td>
@@ -528,6 +602,7 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
         <label className="select-field"><span className="sr-only">{copy("หมวด ERP สำหรับรายการที่เลือก", "ERP category for selected lines", "選択行のERP分類")}</span><select value={bulkCategory} aria-label={copy("หมวด ERP สำหรับรายการที่เลือก", "ERP category for selected lines", "選択行のERP分類")} onChange={(event) => setBulkCategory(event.target.value as DraftCategory)}>{ERP_COST_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}<option value="Unmapped">{unmappedLabel}</option></select><Icon name="chevronDown" /></label>
         <button className="btn default" type="button" disabled={!canEdit || !selectedShown.length} onClick={applyBulk}><Icon name="check" />{copy("กำหนดหมวดที่เลือก", "Apply to selected", "選択行に適用")}</button>
         <button className="btn default" type="button" disabled={!canEdit || !shownErpKeys.length} title={copy("แนะนำจากหมวดภายใน เช่น 03 Electrical → Hardware, 06 Engineering → Service, 08 Transportation → Installation", "Suggest from internal category, e.g. 03 Electrical → Hardware, 06 Engineering → Service, 08 Transportation → Installation", "内部分類から提案（例: 03 Electrical → Hardware）")} onClick={applySuggestions}><Icon name="cpu" />{selectedShown.length ? copy("แนะนำหมวดให้ที่เลือก", "Suggest for selected", "選択行に提案") : copy("แนะนำหมวดอัตโนมัติ", "Suggest categories", "分類を自動提案")}</button>
+        <button className="btn default" type="button" disabled={!canEdit || !mergeable} title={copy("เขียนรายการที่เลือกเป็นบรรทัดเดียวบนใบ ERP — ต้นทุนแต่ละรายการไม่เปลี่ยน", "Write the selected lines as one row on the ERP sheet — no cost line changes", "選択行をERPシート上で1行にまとめます — 原価は変わりません")} onClick={() => setMerge({ title: erpByKey.get(selectedShown[0]!)?.description ?? "", group: null, members: selectedShown.map((key) => ({ sourceType: key.slice(0, key.lastIndexOf(":")) as EstimateErpSourceType, sourceId: Number(key.slice(key.lastIndexOf(":") + 1)) })) })}><Icon name="layers" />{copy("รวมเป็นบรรทัดเดียว", "Merge into one line", "1行にまとめる")}</button>
         {selectedShown.length ? <button className="btn ghost" type="button" onClick={() => setSelected(new Set())}>{copy("ล้างการเลือก", "Clear selection", "選択解除")}</button> : null}
       </div> : null}
 
@@ -577,13 +652,27 @@ export function EstimateErpSummaryPanel({ workspace, onChanged, notify, onOpenCa
       {!approvedOverhead ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("ต้องกำหนดและอนุมัติ Overhead ก่อน Export ERP", "Set and approve Overhead before ERP export.", "ERP出力前に間接費を設定・承認してください。")}</span></div> : null}
       {changedLines.length ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("บันทึกหมวดที่แก้ไขก่อน Export", "Save mapping changes before export.", "エクスポート前に分類変更を保存してください。")}</span></div> : null}
     </> : null}
+    {merge ? <Modal size="sm" title={merge.group ? copy("เปลี่ยนชื่อบรรทัดรวม", "Rename the merged line", "まとめた行の名前") : copy("รวมเป็นบรรทัดเดียว", "Merge into one line", "1行にまとめる")}
+      subtitle={merge.group ? copy(`${merge.group.members.length} รายการ`, `${merge.group.members.length} lines`, `${merge.group.members.length}件`) : copy(`${merge.members.length} รายการที่เลือก`, `${merge.members.length} selected lines`, `選択 ${merge.members.length}件`)}
+      onClose={() => setMerge(null)}>
+      <div className="info-strip">{copy("ชื่อนี้จะไปอยู่บนใบ ERP แทนรายการย่อย — ต้นทุน หมวด และรายการในแท็บ Cost Items ไม่เปลี่ยน", "This name replaces the individual lines on the ERP sheet — the costs, the categories and the Cost Items tab do not change.", "ERPシート上でこの名前が使われます。原価・分類・Cost Itemsタブは変わりません。")}</div>
+      <label className="field"><span>{copy("ชื่อบรรทัด", "Line name", "行の名前")}</span>
+        <input value={merge.title} maxLength={200} disabled={busy} onChange={(event) => setMerge(current => current ? { ...current, title: event.target.value } : current)}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveMerge(); } }} />
+      </label>
+      <div className="panel-actions">
+        <button className="btn ghost" type="button" disabled={busy} onClick={() => setMerge(null)}><LocalizedText text={"Cancel"} /></button>
+        <button className="btn primary" type="button" disabled={busy || !merge.title.trim()} onClick={() => { void saveMerge(); }}><Icon name="check" />{merge.group ? <LocalizedText text={"Save"} /> : copy("รวมรายการ", "Merge", "まとめる")}</button>
+      </div>
+    </Modal> : null}
+
     {preview && summary ? <Modal size="wide" title={copy("ตัวอย่างข้อมูล Export ERP", "ERP export data preview", "ERP出力データのプレビュー")} subtitle={workspace.header.number + " · R" + workspace.header.revision + " · " + workspace.header.status} onClose={() => setPreview(false)}>
       <p>{workspace.header.projectName} · {workspace.header.customerName}</p>
       <div className="info-strip amber">{copy("ตัวอย่างข้อมูลที่บันทึกแล้วสำหรับไฟล์ ERP — ไม่ใช่การส่งออก", "Preview of saved ERP workbook data — no file is exported.", "保存済みERPデータのプレビューです。")}{changedLines.length ? copy(" มีการแก้ไขที่ยังไม่ได้บันทึก", " Unsaved mapping changes are not included.", " 未保存の変更は含まれません。") : ""}</div>
       {[...ERP_COST_CATEGORIES, "Unmapped"].map((category) => {
-        const rows = summary.lines.filter((line) => line.erpCategory === category);
+        const rows = foldErpGroupLines(summary.lines, groups).filter((line) => line.erpCategory === category);
         return <section key={category}><h3>{category} · {money(rows.reduce((sum, line) => sum + line.amount, 0))}</h3>
-          {sections.flatMap(section => breakdownModules(section).map(module => ({ section, module, rows: module.lines.map(erpOf).filter((line): line is ErpLine => Boolean(line) && line!.erpCategory === category) })))
+          {sections.flatMap(section => modulesOf(section).map(module => ({ section, module, rows: module.lines.map(erpOf).filter((line): line is ErpLine => Boolean(line) && line!.erpCategory === category) })))
             .filter(group => group.rows.length).map(({ section, module, rows: children }) => {
               const detail = moduleDetail(section, module);
               return <details key={module.key} className="panel" style={{ padding: 12, marginBottom: 8 }}>

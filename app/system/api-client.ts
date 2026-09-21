@@ -5,6 +5,7 @@ import { acquireApiToken } from "./auth-client";
 import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { isTrustedWebProtocol } from "./network-origin";
+import type { ErpGroup } from "../../lib/erp-estimate-groups";
 
 export const IS_API_CONFIGURED = (() => {
   try {
@@ -867,6 +868,8 @@ export type EstimateErpSummary = {
     unit?: string | null;
     remark?: string | null;
   }>;
+  /** Cost lines that are written as one row on the ERP sheet; the lines themselves are untouched. */
+  groups: ErpGroup[];
 };
 
 export type EstimateErpMappingInput = {
@@ -1416,6 +1419,24 @@ export const updateEstimateErpMappings = (id: number, estimateRowVersion: string
   apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-mappings`, {
     method: "PUT",
     body: JSON.stringify({ estimateRowVersion, mappings }),
+  });
+
+export const createEstimateErpGroup = (id: number, estimateRowVersion: string, input: { title: string; quantity?: number; unit?: string; members: Array<{ sourceType: EstimateErpSourceType; sourceId: number }> }) =>
+  apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-groups`, {
+    method: "POST",
+    body: JSON.stringify({ estimateRowVersion, ...input }),
+  });
+
+export const updateEstimateErpGroup = (id: number, groupId: number, estimateRowVersion: string, groupRowVersion: string, input: { title: string; quantity: number; unit: string }) =>
+  apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-groups/${groupId}`, {
+    method: "PUT",
+    body: JSON.stringify({ estimateRowVersion, groupRowVersion, ...input }),
+  });
+
+export const deleteEstimateErpGroup = (id: number, groupId: number, estimateRowVersion: string) =>
+  apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-groups/${groupId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ estimateRowVersion }),
   });
 
 export const recordEstimateErpExport = (id: number, input: { estimateRowVersion: string; templateVersion: string; sha256: string; filename: string; fileBase64: string }) =>

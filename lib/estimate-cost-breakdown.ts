@@ -157,14 +157,22 @@ export function breakdownLineCount(sections: readonly BreakdownSection[]): numbe
   return sections.reduce((total, section) => total + section.lines.length, 0);
 }
 
-/** Aggregate whole modules before filtering, retaining source lines for ERP mapping. */
-export function breakdownModules(section: BreakdownSection) {
-  const groups = new Map<string, { key: string; title: string; lines: BreakdownLine[]; amount: number; inHouse: number; outsourced: number; standalone: boolean }>();
+/**
+ * Aggregate whole modules before filtering, retaining source lines for ERP mapping.
+ *
+ * A merged ERP line outranks the module a line belongs to: it is how the sheet is
+ * written, so it becomes one row here too, wherever its lines came from.
+ */
+export function breakdownModules(section: BreakdownSection, mergedAs?: (line: BreakdownLine) => { id: number; title: string } | null) {
+  // sections.flatMap(breakdownModules) is idiomatic and hands an index in here.
+  const mergedOf = typeof mergedAs === "function" ? mergedAs : () => null;
+  const groups = new Map<string, { key: string; title: string; lines: BreakdownLine[]; amount: number; inHouse: number; outsourced: number; standalone: boolean; merged: number | null }>();
   for (const line of section.lines) {
-    const standalone = section.kind === "cost-items" && !line.module?.trim();
-    const title = standalone ? (line.priceSetKey ? section.lines.find(item=>item.priceSetKey===line.priceSetKey&&item.isPriceSet)?.title ?? line.title : line.title) : line.module?.trim() || "Unassigned module";
-    const key = standalone ? (line.priceSetKey ? section.key + ":set:" + line.priceSetKey : section.key + ":item:" + line.key) : section.key + ":" + title;
-    const group = groups.get(key) ?? { key, title, standalone, lines: [], amount: 0, inHouse: 0, outsourced: 0 };
+    const merged = mergedOf(line);
+    const standalone = !merged && section.kind === "cost-items" && !line.module?.trim();
+    const title = merged ? merged.title : standalone ? (line.priceSetKey ? section.lines.find(item=>item.priceSetKey===line.priceSetKey&&item.isPriceSet)?.title ?? line.title : line.title) : line.module?.trim() || "Unassigned module";
+    const key = merged ? "group:" + merged.id : standalone ? (line.priceSetKey ? section.key + ":set:" + line.priceSetKey : section.key + ":item:" + line.key) : section.key + ":" + title;
+    const group = groups.get(key) ?? { key, title, standalone, merged: merged?.id ?? null, lines: [], amount: 0, inHouse: 0, outsourced: 0 };
     group.lines.push(line);
     group.amount += line.amount;
     if (line.source === "in-house") group.inHouse += line.amount;

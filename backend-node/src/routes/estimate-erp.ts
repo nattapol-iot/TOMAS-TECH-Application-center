@@ -94,7 +94,16 @@ const ERP_SUMMARY_SQL = `
       AND m.source_type=N'Contingency' AND m.source_id IS NULL
     WHERE e.id=@estimate_id AND e.deleted_at IS NULL
   ) lines
-  ORDER BY source_order,group_code,MIN(sort_order) OVER(PARTITION BY source_order,group_code,group_name),group_name,sort_order,line_order;`;
+  ORDER BY source_order,group_code,MIN(sort_order) OVER(PARTITION BY source_order,group_code,group_name),group_name,sort_order,line_order;
+
+  SELECT g.id,g.title,g.quantity,g.unit,g.members,g.row_version
+  FROM dbo.estimate_erp_groups g
+  INNER JOIN dbo.estimates e ON e.id=g.estimate_id AND e.revision=g.revision
+  WHERE g.estimate_id=@estimate_id AND e.deleted_at IS NULL
+  ORDER BY g.id;`;
+
+type ErpGroupRow = { id: number | string; title: string; quantity: number | string; unit: string; members: string; row_version: Buffer };
+type ErpGroupMember = { sourceType: ErpSourceType; sourceId: number };
 
 type SummaryHeader = ErpHeaderRow & { can_write: boolean; can_export: boolean };
 
@@ -103,14 +112,94 @@ async function loadSummary(database: Database, estimateId: number, actor: Curren
     request.input("estimate_id", sql.BigInt, estimateId);
     request.input("actor_user", sql.BigInt, actor.id);
   });
-  const recordsets = result.recordsets as unknown as [SummaryHeader[], ErpLineRow[]];
+  const recordsets = result.recordsets as unknown as [SummaryHeader[], ErpLineRow[], ErpGroupRow[]];
   const header = recordsets[0]?.[0];
   if (!header) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
   const elevated = actor.id === Number(header.owner_id) || hasRole(actor, "Engineering Manager", "Admin");
   const canEdit = Boolean(header.can_write) && elevated && EDITABLE.has(header.status);
   const summary = buildErpSummary(header, recordsets[1] ?? [], canEdit);
   summary.capabilities.canExport = summary.capabilities.canExport && Boolean(header.can_export);
-  return summary;
+  const groups = (recordsets[2] ?? []).map((row) => ({
+    id: Number(row.id), title: row.title, quantity: Number(row.quantity), unit: row.unit,
+    members: JSON.parse(row.members) as ErpGroupMember[],
+    rowVersion: row.row_version.toString("base64"),
+  }));
+  return { ...summary, groups };
+}
+
+/** One lock and one permission rule for every ERP write. */
+async function lockEstimateForErp(transaction: sql.Transaction, id: number, version: Buffer, actor: CurrentUser) {
+  const lock = new sql.Request(transaction);
+  lock.input("estimate_id", sql.BigInt, id);
+  const estimate = (await lock.query<{ estimate_no: string; revision: number; status: string; owner_id: number | string; row_version: Buffer }>(`
+    SELECT estimate_no,revision,status,owner_id,row_version FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK)
+    WHERE id=@estimate_id AND deleted_at IS NULL;
+  `)).recordset[0];
+  if (!estimate) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
+  if (!estimate.row_version.equals(version)) throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and try again.");
+  if (!EDITABLE.has(estimate.status)) throw new ApiError(409, "estimate_locked", `ERP mappings cannot be changed while the estimate is '${estimate.status}'.`);
+  if (actor.id !== Number(estimate.owner_id) && !hasRole(actor, "Engineering Manager", "Admin")) {
+    throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can update ERP mappings.");
+  }
+  return estimate;
+}
+
+function parseGroupMembers(value: unknown): ErpGroupMember[] {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 200) {
+    throw new ApiError(400, "validation_failed", "A merged line needs between 2 and 200 cost lines.");
+  }
+  const seen = new Set<string>();
+  return value.map((candidate) => {
+    const body = bodyObject(candidate);
+    const sourceType = parseErpSourceType(body.sourceType);
+    // Contingency is a computed figure with no line of its own, so it cannot be merged.
+    if (!sourceNeedsId(sourceType)) throw new ApiError(400, "validation_failed", `${sourceType} cannot be part of a merged line.`);
+    const sourceId = requiredInteger(body.sourceId, "Source id", 1);
+    const key = `${sourceType}:${sourceId}`;
+    if (seen.has(key)) throw new ApiError(400, "validation_failed", `Duplicate line '${key}' in the merged line.`);
+    seen.add(key);
+    return { sourceType, sourceId };
+  });
+}
+
+function parseGroupShape(body: Record<string, unknown>) {
+  const title = requiredText(body.title, 200, "Merged line name");
+  const quantity = body.quantity === undefined ? 1 : Number(body.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1000000 || Math.abs(quantity * 10000 - Math.round(quantity * 10000)) > 0.00001) {
+    throw new ApiError(400, "validation_failed", "Merged line quantity must be positive with at most four decimal places.");
+  }
+  const unit = body.unit === undefined ? "Lot" : requiredText(body.unit, 30, "Merged line unit");
+  return { title, quantity, unit };
+}
+
+/** Every member must still exist in this revision and belong to no other merged line. */
+async function assertGroupMembers(transaction: sql.Transaction, id: number, revision: number, members: ErpGroupMember[]) {
+  const existing = new sql.Request(transaction);
+  existing.input("estimate_id", sql.BigInt, id); existing.input("revision", sql.Int, revision);
+  const rows = (await existing.query<{ id: number | string; members: string }>(`SELECT id,members FROM dbo.estimate_erp_groups WITH(UPDLOCK,HOLDLOCK)
+    WHERE estimate_id=@estimate_id AND revision=@revision;`)).recordset;
+  const taken = new Set(rows.flatMap((row) => (JSON.parse(row.members) as ErpGroupMember[]).map((member) => `${member.sourceType}:${member.sourceId}`)));
+  for (const member of members) {
+    if (taken.has(`${member.sourceType}:${member.sourceId}`)) {
+      throw new ApiError(409, "erp_group_member_taken", "One of these lines is already part of another merged line.");
+    }
+    const source = new sql.Request(transaction);
+    source.input("estimate_id", sql.BigInt, id); source.input("revision", sql.Int, revision);
+    source.input("source_id", sql.BigInt, member.sourceId);
+    const found = (await source.query<{ found: boolean }>(`
+      SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM ${SOURCE_TABLES[member.sourceType]} WITH(UPDLOCK,HOLDLOCK)
+        WHERE id=@source_id AND estimate_id=@estimate_id AND revision=@revision AND deleted_at IS NULL)
+        THEN 1 ELSE 0 END) found;
+    `)).recordset[0]?.found;
+    if (!found) throw new ApiError(404, "estimate_erp_source_not_found", "A line of this merged line was not found in the current Estimate revision.");
+  }
+}
+
+async function touchEstimateForErp(transaction: sql.Transaction, id: number, actorId: number) {
+  const touch = new sql.Request(transaction);
+  touch.input("estimate_id", sql.BigInt, id);
+  touch.input("actor", sql.BigInt, actorId);
+  await touch.query(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@estimate_id;`);
 }
 
 type MappingInput = {
@@ -182,18 +271,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
     const mappings = parseMappings(body.mappings);
 
     await database.transaction(async (transaction) => {
-      const lock = new sql.Request(transaction);
-      lock.input("estimate_id", sql.BigInt, id);
-      const estimate = (await lock.query<{ estimate_no: string; revision: number; status: string; owner_id: number | string; row_version: Buffer }>(`
-        SELECT estimate_no,revision,status,owner_id,row_version FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK)
-        WHERE id=@estimate_id AND deleted_at IS NULL;
-      `)).recordset[0];
-      if (!estimate) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
-      if (!estimate.row_version.equals(estimateVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and try again.");
-      if (!EDITABLE.has(estimate.status)) throw new ApiError(409, "estimate_locked", `ERP mappings cannot be changed while the estimate is '${estimate.status}'.`);
-      if (actor.id !== Number(estimate.owner_id) && !hasRole(actor, "Engineering Manager", "Admin")) {
-        throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can update ERP mappings.");
-      }
+      const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
 
       const overrides = new Set<MappingInput>();
       for (const mapping of mappings) {
@@ -254,16 +332,101 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         if (!row) throw new ApiError(409, "concurrency_conflict", "An ERP mapping changed. Reload and try again.");
       }
 
-      const touch = new sql.Request(transaction);
-      touch.input("estimate_id", sql.BigInt, id);
-      touch.input("actor", sql.BigInt, actor.id);
-      await touch.query(`UPDATE dbo.estimates SET updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@estimate_id;`);
+      await touchEstimateForErp(transaction, id, actor.id);
       await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "ERP mappings updated", null, {
         revision: estimate.revision,
         mappings: mappings.map((mapping) => ({ sourceType: mapping.sourceType, sourceId: mapping.sourceId, erpCategory: mapping.erpCategory, manualOverride: overrides.has(mapping) })),
       });
     });
 
+    const erpSummary = await loadSummary(database, id, actor);
+    return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
+  });
+
+  /*
+   * Merged lines. A group decides how cost lines are written on the ERP sheet and
+   * nothing else: no amount, category, module or line is changed by creating one,
+   * so the estimate reconciles exactly as it did before and the Cost Items tab
+   * still shows every item.
+   */
+  app.post("/api/v1/estimates/:id/erp-groups", async (request, reply) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const estimateVersion = parseRowVersion(body.estimateRowVersion);
+    const { title, quantity, unit } = parseGroupShape(body);
+    const members = parseGroupMembers(body.members);
+    await database.transaction(async (transaction) => {
+      const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
+      await assertGroupMembers(transaction, id, estimate.revision, members);
+      const insert = new sql.Request(transaction);
+      insert.input("estimate_id", sql.BigInt, id); insert.input("revision", sql.Int, estimate.revision);
+      insert.input("title", sql.NVarChar(200), title); insert.input("quantity", sql.Decimal(19, 4), quantity);
+      insert.input("unit", sql.NVarChar(30), unit); insert.input("members", sql.NVarChar(sql.MAX), JSON.stringify(members));
+      insert.input("actor", sql.BigInt, actor.id);
+      await insert.query(`INSERT dbo.estimate_erp_groups(estimate_id,revision,title,quantity,unit,members,created_by,updated_by)
+        VALUES(@estimate_id,@revision,@title,@quantity,@unit,@members,@actor,@actor);`);
+      await touchEstimateForErp(transaction, id, actor.id);
+      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "ERP lines merged", null,
+        { revision: estimate.revision, title, quantity, unit, members });
+    });
+    reply.code(201);
+    const erpSummary = await loadSummary(database, id, actor);
+    return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
+  });
+
+  app.put("/api/v1/estimates/:id/erp-groups/:groupId", async (request) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const groupId = positiveLong((request.params as { groupId?: string }).groupId, "Merged line id");
+    const body = bodyObject(request.body);
+    const estimateVersion = parseRowVersion(body.estimateRowVersion);
+    const groupVersion = parseRowVersion(body.groupRowVersion);
+    const { title, quantity, unit } = parseGroupShape(body);
+    await database.transaction(async (transaction) => {
+      const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
+      const update = new sql.Request(transaction);
+      update.input("estimate_id", sql.BigInt, id); update.input("revision", sql.Int, estimate.revision);
+      update.input("group_id", sql.BigInt, groupId); update.input("group_version", sql.VarBinary(8), groupVersion);
+      update.input("title", sql.NVarChar(200), title); update.input("quantity", sql.Decimal(19, 4), quantity);
+      update.input("unit", sql.NVarChar(30), unit); update.input("actor", sql.BigInt, actor.id);
+      const changed = (await update.query<{ id: number | string }>(`DECLARE @changed TABLE(id bigint);
+        UPDATE dbo.estimate_erp_groups SET title=@title,quantity=@quantity,unit=@unit,updated_by=@actor,updated_at=SYSUTCDATETIME()
+        OUTPUT inserted.id INTO @changed(id)
+        WHERE id=@group_id AND estimate_id=@estimate_id AND revision=@revision AND row_version=@group_version;
+        SELECT id FROM @changed;`)).recordset[0];
+      if (!changed) throw new ApiError(409, "concurrency_conflict", "This merged line changed. Reload and try again.");
+      await touchEstimateForErp(transaction, id, actor.id);
+      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line updated", null,
+        { revision: estimate.revision, groupId, title, quantity, unit });
+    });
+    const erpSummary = await loadSummary(database, id, actor);
+    return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
+  });
+
+  app.delete("/api/v1/estimates/:id/erp-groups/:groupId", async (request) => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const groupId = positiveLong((request.params as { groupId?: string }).groupId, "Merged line id");
+    const body = bodyObject(request.body);
+    const estimateVersion = parseRowVersion(body.estimateRowVersion);
+    await database.transaction(async (transaction) => {
+      const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
+      const remove = new sql.Request(transaction);
+      remove.input("estimate_id", sql.BigInt, id); remove.input("revision", sql.Int, estimate.revision);
+      remove.input("group_id", sql.BigInt, groupId);
+      const removed = (await remove.query<{ title: string; members: string }>(`DECLARE @removed TABLE(title nvarchar(200),members nvarchar(max));
+        DELETE FROM dbo.estimate_erp_groups OUTPUT deleted.title,deleted.members INTO @removed(title,members)
+        WHERE id=@group_id AND estimate_id=@estimate_id AND revision=@revision;
+        SELECT title,members FROM @removed;`)).recordset[0];
+      if (!removed) throw new ApiError(404, "erp_group_not_found", "That merged line no longer exists.");
+      await touchEstimateForErp(transaction, id, actor.id);
+      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line split",
+        { revision: estimate.revision, groupId, title: removed.title, members: JSON.parse(removed.members) as ErpGroupMember[] }, null);
+    });
     const erpSummary = await loadSummary(database, id, actor);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
   });
