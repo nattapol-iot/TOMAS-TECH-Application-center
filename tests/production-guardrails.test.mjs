@@ -884,6 +884,34 @@ test("the Item type-ahead searches the same price feeds the Price Library shows"
   }
 });
 
+test("an imported quotation is checked against what the company already paid", async () => {
+  /*
+   * Filing a document is not importing knowledge. Every line is matched against the
+   * price catalogue while it is being entered, so the brand and model nobody types are
+   * filled from the last purchase and a price rise is seen here rather than at approval.
+   */
+  const [screen, styles, dictionary] = await Promise.all([
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+    readFile(new URL("app/system/i18n.ts", root), "utf8"),
+  ]);
+
+  assert.match(screen, /function useCatalogueMatches/);
+  assert.match(screen, /function CatalogueComparison/);
+  assert.match(screen, /lookupCostItems\(\{ q: key\.slice/);
+  // It hangs off the shared editor, so the upload, the reference and the edit dialogs
+  // all get it without each wiring its own copy.
+  assert.match(screen, /<CatalogueComparison lines=\{lines\} matches=\{matches\}/);
+  // Cost lines are held in baht; a foreign-currency line has nothing comparable.
+  assert.match(screen, /if \(line\.currency !== "THB"\) return \[\];/);
+  // Filling must not overwrite what the supplier actually wrote.
+  assert.match(screen, /itemCode: line\.itemCode\.trim\(\) \|\| row\.match\.itemCode/);
+  assert.match(styles, /\.catalogue-match \{/);
+  for (const key of ["Previous price", "This quotation", "Source / Reference"]) {
+    assert.match(dictionary, new RegExp(`"${key}": \\{"th":`), `${key} has no dictionary entry`);
+  }
+});
+
 test("the quotation route writes only columns supplier_quotations actually has", async () => {
   /*
    * Every backend test here mocks the SQL driver, so a statement naming a column that

@@ -1486,6 +1486,27 @@ td strong { color: var(--ink); font-weight: 600; }
 .quotation-lines-empty strong { font-size: var(--fs-sm); color: var(--ink); }
 .quotation-lines-empty small { font-size: var(--fs-xs); color: var(--muted); }
 
+/* What the price catalogue already knows about these parts, shown under the lines
+   while they are still being typed. Tinted apart from the entry grid above it: this
+   is the system answering back, not another set of boxes to fill in. */
+.catalogue-match {
+  margin-top: 12px; border: 1px solid var(--blue-line); border-radius: var(--r-md);
+  background: var(--blue-soft); overflow: hidden;
+}
+.catalogue-match-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 8px 10px;
+}
+.catalogue-match-head > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.catalogue-match-head strong { font-size: var(--fs-sm); color: var(--blue-text); }
+.catalogue-match-head span { font-size: var(--fs-xs); color: var(--ink-soft); }
+.catalogue-match .table-wrap { background: var(--surface); border-top: 1px solid var(--blue-line); }
+.catalogue-match table { font-size: var(--fs-xs); }
+
+@media (max-width: 720px) {
+  .catalogue-match-head { flex-direction: column; align-items: flex-start; }
+}
+
 /* The original document, kept beside the form while its numbers are being checked. */
 .quotation-pdf-pane { position: sticky; top: 0; flex: 0 0 480px; width: 480px; }
 .quotation-pdf-head {

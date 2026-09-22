@@ -22,6 +22,9 @@ import {
   listInquiries,
   listProjects,
   listQuotationLines,
+  lookupCostItems,
+  type CostItemLookupField,
+  type CostItemLookupRecord,
   listSupplierQuotations,
   listSupplierPriceHistory,
   loadEstimateCostWorkspace,
@@ -56,6 +59,7 @@ import {
   Tabs,
   Toolbar,
 } from "../ui";
+import { COST_ITEM_LOOKUP_MIN_CHARS } from "../../../lib/cost-item-lookup";
 import {
   assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue,
 } from "../../../lib/estimate-assignment-queue";
@@ -2208,6 +2212,153 @@ const quotationLinesTotal = (lines: QuotationLineItem[]) =>
   lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 0);
 
 /*
+ * What the company already knows about the parts on a quotation.
+ *
+ * Importing a document only files it away; matching each line against the price
+ * catalogue imports the knowledge with it. The catalogue supplies the brand and model
+ * nobody ever types, and it puts what the part cost last time beside what it costs
+ * now — so a rise is seen while the quotation is being entered rather than months
+ * later at approval. It is also the only memory this flow has: every correction
+ * someone made to an earlier line is what the next one is matched against.
+ */
+const CATALOGUE_MATCH_LIMIT = 20;
+const CATALOGUE_DEBOUNCE_MS = 400;
+
+/** "code:PLC-01" or "desc:Media converter" — a part number identifies far better. */
+function catalogueKeyOf(line: QuotationLineItem): string | null {
+  const code = line.itemCode.trim();
+  if (code.length >= COST_ITEM_LOOKUP_MIN_CHARS) return `code:${code}`;
+  const description = line.description.trim();
+  return description.length >= COST_ITEM_LOOKUP_MIN_CHARS ? `desc:${description}` : null;
+}
+
+function useCatalogueMatches(lines: QuotationLineItem[]): Record<string, CostItemLookupRecord> {
+  const [matches, setMatches] = useState<Record<string, CostItemLookupRecord>>({});
+  const searched = useRef(new Set<string>());
+  /* The effect depends on this one string rather than the array, and reads the keys
+     back out of it, so the lookups re-run exactly when the set of parts changes. */
+  const signature = lines.map(catalogueKeyOf).filter(Boolean).join("\n");
+
+  useEffect(() => {
+    const keys = Array.from(new Set(signature.split("\n").filter(Boolean)));
+    const pending = keys.filter((key) => !searched.current.has(key)).slice(0, CATALOGUE_MATCH_LIMIT);
+    if (!pending.length) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        /* Marked before the call, not after: a part the catalogue does not know, and a
+           lookup that fails, both stop here rather than being asked again on every
+           keystroke. This panel is help, not something to retry at the user's expense. */
+        for (const key of pending) searched.current.add(key);
+        const results = await mapSettledLimited(pending, 4, async (key) => {
+          const field: CostItemLookupField = key.startsWith("code:") ? "itemCode" : "description";
+          const { items } = await lookupCostItems({ q: key.slice(key.indexOf(":") + 1), field, limit: 1 });
+          return { key, record: items[0] };
+        });
+        if (!active) return;
+        const found: Record<string, CostItemLookupRecord> = {};
+        for (const result of results) {
+          if (result.ok && result.value.record) found[result.value.key] = result.value.record;
+        }
+        if (Object.keys(found).length) setMatches((previous) => ({ ...previous, ...found }));
+      })();
+    }, CATALOGUE_DEBOUNCE_MS);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [signature]);
+
+  return matches;
+}
+
+/** Percentage this line moved against the catalogue, or null when there is nothing to compare. */
+function priceChange(line: QuotationLineItem, match: CostItemLookupRecord): number | null {
+  if (!(match.unitCost > 0) || !(line.unitPrice > 0)) return null;
+  return ((line.unitPrice - match.unitCost) / match.unitCost) * 100;
+}
+
+type CatalogueRow = {
+  line: QuotationLineItem;
+  index: number;
+  match: CostItemLookupRecord;
+  change: number | null;
+};
+
+/*
+ * The catalogue's answer, shown while the lines are still being typed: what each part
+ * cost last time, and what this quotation is asking for it. The rise is the reason to
+ * look — finding it here is worth more than finding it after the estimate is approved.
+ */
+function CatalogueComparison({ lines, matches, disabled, onChange }: {
+  lines: QuotationLineItem[];
+  matches: Record<string, CostItemLookupRecord>;
+  disabled: boolean;
+  onChange: (lines: QuotationLineItem[]) => void;
+}) {
+  const rows = lines.flatMap<CatalogueRow>((line, index) => {
+    /* Cost lines are held in baht, so a foreign-currency line has nothing comparable. */
+    if (line.currency !== "THB") return [];
+    const key = catalogueKeyOf(line);
+    const match = key ? matches[key] : undefined;
+    return match ? [{ line, index, match, change: priceChange(line, match) }] : [];
+  });
+  if (!rows.length) return null;
+
+  const missing = (value: string, known: string) => !value.trim() && Boolean(known);
+  const fillable = rows.filter(({ line, match }) =>
+    missing(line.itemCode, match.itemCode) || missing(line.brand, match.brand) || missing(line.model, match.model));
+  /* Only the blanks are filled: whatever the supplier actually wrote stays as written. */
+  const fill = () => onChange(lines.map((line, index) => {
+    const row = rows.find((candidate) => candidate.index === index);
+    if (!row) return line;
+    return {
+      ...line,
+      itemCode: line.itemCode.trim() || row.match.itemCode,
+      brand: line.brand.trim() || row.match.brand,
+      model: line.model.trim() || row.match.model,
+    };
+  }));
+
+  return <div className="catalogue-match">
+    <div className="catalogue-match-head">
+      <div>
+        <strong>{`เคยซื้อแล้ว ${rows.length} จาก ${lines.length} รายการ`}</strong>
+        <span>เทียบกับราคาล่าสุดที่บริษัทเคยจ่าย</span>
+      </div>
+      {fillable.length && !disabled ? <button className="btn ghost sm" type="button" onClick={fill}>
+        <Icon name="check" />{`เติมรหัส/ยี่ห้อ/รุ่นที่ว่าง ${fillable.length} รายการ`}
+      </button> : null}
+    </div>
+    <div className="table-wrap">
+      <table style={{ minWidth: 760 }}>
+        <thead><tr>
+          <th><LocalizedText text={"Item"} /></th>
+          <th><LocalizedText text={"Previous price"} /></th>
+          <th><LocalizedText text={"This quotation"} /></th>
+          <th><LocalizedText text={"Change"} /></th>
+          <th><LocalizedText text={"Source / Reference"} /></th>
+        </tr></thead>
+        <tbody>{rows.map(({ line, match, change }) => <tr key={line.lineNo}>
+          <td><div className="cell-primary">
+            <strong className="mono">{match.itemCode || line.itemCode || "—"}</strong>
+            <span>{line.description || match.description}</span>
+          </div></td>
+          <td className="num">{money(match.unitCost)}<small className="muted"> / {match.unit}</small></td>
+          <td className="num">{money(line.unitPrice)}<small className="muted"> / {line.unit}</small></td>
+          <td className="num">{change === null
+            ? "—"
+            : <Badge tone={change > 1 ? "red" : change < -1 ? "green" : "slate"}>
+              {`${change > 0 ? "+" : ""}${number(change, 1)}%`}
+            </Badge>}</td>
+          <td><div className="cell-primary">
+            <strong>{match.priceSource}</strong>
+            <span className="mono">{match.sourceNumber} <LocalizedText text={"·"} /> {date(match.priceDate)}</span>
+          </div></td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </div>;
+}
+
+/*
  * The price lines are the only part of a supplier quotation the Price Library reads.
  * The document is the evidence; these rows are the prices. They therefore get a real
  * entry grid — one row per price, the arithmetic on the right, a running total under
@@ -2228,6 +2379,7 @@ function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = fals
   const add = () => onChange([...lines, blankQuotationLine(lines.length + 1, currency)]);
   /* A row with no name or no price is stored but reaches the library as nothing useful. */
   const incomplete = lines.filter((line) => !line.description.trim() || !(line.unitPrice > 0)).length;
+  const matches = useCatalogueMatches(lines);
 
   return <div className="quotation-lines">
     <div className="quotation-lines-head">
@@ -2293,6 +2445,7 @@ function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = fals
         <small>{emptyHint ?? "กรอกชื่อรายการกับราคาต่อหน่วย แล้วราคาจะเข้าคลังราคาทันทีที่บันทึก"}</small>
       </span>
     </button>}
+    <CatalogueComparison lines={lines} matches={matches} disabled={disabled} onChange={onChange} />
   </div>;
 }
 
