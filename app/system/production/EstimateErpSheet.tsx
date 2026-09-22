@@ -6,7 +6,7 @@ import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
 import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
-import { LABOR_MODULE_NAMES, breakdownSheetModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
+import { LABOR_MODULE_NAMES, erpSheetQuantity, breakdownSheetModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import {
@@ -345,7 +345,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     const rows = headings.flatMap((heading) => heading.rows.map((row) => {
       const merged = mergedOf(row);
       const detail = moduleDetails.find((entry) => entry.moduleKey === detailKeyOf(row));
-      const rowQuantity = merged ? merged.quantity : row.standalone ? row.lines[0].quantity : detail?.quantity ?? 1;
+      const { quantity: rowQuantity, unit: rowUnit } = erpSheetQuantity(row, merged, detail);
       const erpLines = row.erpKeys.map((key) => erpByKey.get(key)).filter((line): line is ErpLine => Boolean(line));
       return {
         sourceType: erpLines[0]?.sourceType ?? "CostItem",
@@ -362,7 +362,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
         quoteRevision: agreed(erpLines.map((line) => line.quoteRevision)),
         unitPrice: rowQuantity > 0 ? round(row.amount / rowQuantity) : round(row.amount),
         quantity: rowQuantity,
-        unit: merged ? merged.unit : row.standalone ? row.lines[0].unit : detail?.unit ?? "Set",
+        unit: rowUnit,
       };
     }));
     /* Contingency is a figure of the estimate rather than a line of any ledger, so
@@ -433,16 +433,15 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     const detail = moduleDetails.find((entry) => entry.moduleKey === detailKey);
     const merged = mergedOf(row);
     const title = titleOf(row);
-    const rowQuantity = merged ? merged.quantity : row.standalone ? row.lines[0].quantity : detail?.quantity ?? 1;
-    const rowUnit = merged ? merged.unit : row.standalone ? row.lines[0].unit : detail?.unit ?? "Set";
+    const { quantity: rowQuantity, unit: rowUnit } = erpSheetQuantity(row, merged, detail);
     const isSelected = row.erpKeys.length > 0 && row.erpKeys.every((key) => selected.has(key));
     const open = opened.has(row.key);
     /* The rule that derives a labour category is a default, not a veto. Offering it
        back as one click keeps an override visible and reversible. */
     const derivedSet = new Set(row.erpKeys.map((key) => automaticLaborCategory(erpByKey.get(key)!)).filter((value) => value !== null));
     const derived = derivedSet.size === 1 ? [...derivedSet][0]! : null;
-    /* Quantity and unit say how the line is written. On a cost module they also
-       rescale its items; everywhere else the amount comes from the ledger below. */
+    /* Cost modules are one summary set. Their component quantities are edited
+       in the cost ledger, never scaled from this summary. */
     /* Hardware lines are the purchased items themselves, so their names are not the
        sheet's to reword. A standalone item has no module behind it to rename — its
        description belongs to the line, and is edited in the tab that owns it. */
@@ -452,7 +451,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
         : row.source.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[row.source.title]) && workspace.capabilities.canEditAllSections
         : row.source.kind === "expenses" ? workspace.capabilities.canEditExpenses
         : workspace.capabilities.canEditOtherCosts)));
-    const canEditUnit = !row.standalone && (row.source.kind === "cost-items" ? workspace.capabilities.canEditCostItems
+    const canEditUnit = !row.standalone && (row.source.kind === "cost-items" ? false
       : row.source.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[row.source.title]) && workspace.capabilities.canEditAllSections
       : row.source.kind === "expenses" ? workspace.capabilities.canEditExpenses
       : workspace.capabilities.canEditOtherCosts);
@@ -482,7 +481,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
             {merged ? <button type="button" className="chip" disabled={!canEdit} onClick={() => { void splitMerged(merged); }}>{copy("แยกกลับ", "Split back", "まとめを解除")}</button> : null}
           </div>
         </td>
-        {canEditUnit || merged ? <EstimateModuleQuantityCells key={`${row.key}:${rowQuantity}:${rowUnit}`} name={title} quantity={rowQuantity} unit={rowUnit} showCostRatio={!merged && row.source.kind === "cost-items"}
+        {canEditUnit || merged ? <EstimateModuleQuantityCells key={`${row.key}:${rowQuantity}:${rowUnit}`} name={title} quantity={rowQuantity} unit={rowUnit} showCostRatio={false}
           units={moduleDetails.map((entry) => entry.unit ?? "Set")} disabled={!canEdit || unsaved.length > 0}
           onSave={async (nextQuantity, nextUnit) => {
             setBusy(true);

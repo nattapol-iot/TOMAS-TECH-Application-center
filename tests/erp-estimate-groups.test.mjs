@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { foldErpGroupLines, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
-import { buildEstimateCostBreakdown, breakdownModules, breakdownSheetModules, groupErpLaborSections } from "../lib/estimate-cost-breakdown.ts";
+import { buildEstimateCostBreakdown, erpSheetQuantity, breakdownModules, breakdownSheetModules, groupErpLaborSections } from "../lib/estimate-cost-breakdown.ts";
 
 const line = (id, amount, category = "Hardware", description = "Item " + id) => ({
   sourceType: "CostItem", sourceId: id, description, amount, erpCategory: category,
@@ -209,4 +209,17 @@ test('identical titles in different source sections stay separate unless explici
   assert.equal(breakdownSheetModules(sections).length, 2);
   const differentGroups = line => ({id: line.key === 'manhour:1' ? 8 : 9, title:'Installation'});
   assert.deepEqual(breakdownSheetModules(sections, differentGroups).map(row => row.amount), [7000, 2000]);
+});
+
+
+test('summary cost module is one Set regardless of stored module multiplier', () => {
+  const row = { standalone:false, source:{kind:'cost-items'}, lines:[
+    {quantity:390,unit:'Meter'}, {quantity:13,unit:'Set'}, {quantity:13,unit:'Set'}, {quantity:195,unit:'Pcs'}, {quantity:1,unit:'Pcs'},
+  ]};
+  const before = JSON.stringify(row);
+  assert.deepEqual(erpSheetQuantity(row, null, {quantity:13,unit:'Set'}), {quantity:1,unit:'Set'});
+  assert.equal(JSON.stringify(row), before);
+  assert.deepEqual(erpSheetQuantity({...row,standalone:true},null), {quantity:390,unit:'Meter'});
+  assert.deepEqual(erpSheetQuantity(row,{quantity:2,unit:'Lot'}), {quantity:2,unit:'Lot'});
+  assert.deepEqual(erpSheetQuantity({...row,source:{kind:'manhour'}},null,{quantity:3,unit:'Job'}), {quantity:3,unit:'Job'});
 });
