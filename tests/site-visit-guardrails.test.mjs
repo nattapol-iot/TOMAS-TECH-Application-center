@@ -324,7 +324,7 @@ test("the site visit module is part of deployment and of the production baseline
     read("database/scripts/920_site_visit_master_seed.sql"),
   ]);
   assert.match(deployment, /016_sales_intake_site_visit\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 59\) <> 59/);
+  assert.match(deployment, /version BETWEEN 1 AND 60\) <> 60/);
   assert.match(health, /RequiredSchemaVersion = 28/);
 
   // The application role may create and read a notification, and mark it read.

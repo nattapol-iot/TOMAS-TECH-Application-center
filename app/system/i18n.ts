@@ -1343,6 +1343,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "No price line": {"th":"ยังไม่มีราคา","jp":"価格明細なし"},
   "Currency": {"th":"สกุลเงิน","jp":"通貨"},
   "Add price": {"th":"เพิ่มราคา","jp":"価格を追加"},
+  "Web reference": {"th":"อ้างอิงหน้าเว็บ","jp":"ウェブ参照"},
   "Use": {"th":"ใช้งาน","jp":"使用"},
   "Clear search": {"th":"ล้างการค้นหา","jp":"検索をクリア"},
   "Signing": {"th":"ลงนามเอกสาร","jp":"文書署名"},

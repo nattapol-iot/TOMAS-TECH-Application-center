@@ -281,6 +281,9 @@ export type SupplierQuotationRecord = {
   rowVersion: string;
   /** Price lines stored against the document. Zero means it adds nothing to the Price Library. */
   lineCount: number;
+  /** `WebReference` cites a public page instead of storing a document; it has no file. */
+  sourceKind: "Document" | "WebReference";
+  sourceUrl: string;
 };
 
 export type InquirySummary = {
@@ -1338,7 +1341,27 @@ export type QuotationLineForPriceLibrary = QuotationLineItem & {
   quotationId: number; quotationNumber: string; supplierReference: string;
   receivedDate: string; validUntil: string;
   supplierId: number; supplierName: string;
+  sourceKind: "Document" | "WebReference"; sourceUrl: string;
 };
+
+/**
+ * Records a price read off a vendor's public page. There is no document to upload —
+ * the link and the date it was read are the evidence — so this is plain JSON and the
+ * row is numbered RP- rather than SQ- to keep the two apart wherever they are read.
+ */
+export const createReferencePrice = (input: {
+  supplierId: number;
+  sourceUrl: string;
+  supplierReference?: string;
+  receivedDate: string;
+  validUntil: string;
+  currency: SupplierQuotationRecord["currency"];
+  amount: number;
+  inquiryId?: number | null;
+  lines?: QuotationLineItem[];
+}) => apiRequest<{ id: number; quotationNumber: string; rowVersion: string; lineCount: number }>(
+  "/api/v1/supplier-quotations/reference", { method: "POST", body: JSON.stringify(input) },
+);
 
 export const saveQuotationLines = (quotationId: number, lines: QuotationLineItem[]) =>
   apiRequest<void>(`/api/v1/supplier-quotations/${quotationId}/lines`, { method: "PUT", body: JSON.stringify({ lines }) });
@@ -1359,6 +1382,8 @@ export const updateSupplierQuotation = (
     currency?: SupplierQuotationRecord["currency"];
     amount?: number;
     inquiryId?: number | null;
+    /** Accepted only on a `WebReference` row; a document-backed one keeps its file. */
+    sourceUrl?: string;
     rowVersion: string;
   },
 ) => apiRequest<{ rowVersion: string }>(`/api/v1/supplier-quotations/${id}`, {

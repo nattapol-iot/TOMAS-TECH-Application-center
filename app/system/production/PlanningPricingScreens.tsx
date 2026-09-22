@@ -10,6 +10,7 @@ import "./my-work.css";
 import {
   ApiClientError,
   apiRequest,
+  createReferencePrice,
   createSupplierQuotation,
   deleteSupplierQuotation,
   downloadSupplierQuotation,
@@ -230,7 +231,9 @@ export type ProjectSchedule = {
 
 type PriceRecord = {
   key: string;
-  sourceKind: "Estimate" | "Historical Purchase" | "Supplier Quotation";
+  /* "Web Reference" is a price someone read off a public page: a link and a date,
+     with no document behind it. It is kept apart from the three evidenced kinds. */
+  sourceKind: "Estimate" | "Historical Purchase" | "Supplier Quotation" | "Web Reference";
   estimateId: number;
   estimateNo: string;
   estimateStatus: string;
@@ -253,6 +256,8 @@ type PriceRecord = {
   ownerName: string;
   lineStatus: string;
   ageDays: number | null;
+  /** Set only for a web reference: the page the price was read from. */
+  sourceUrl: string | null;
 };
 
 type PriceLoadState = {
@@ -312,7 +317,9 @@ const ageInDays = (value: string | null) => {
   const today = Date.parse(`${isoToday()}T00:00:00Z`);
   return Math.max(0, Math.floor((today - parsed) / 86_400_000));
 };
-const flattenTasks = (tasks: ScheduleTask[]): ScheduleTask[] => tasks.flatMap((task) => [task, ...flattenTasks(task.children)]);
+/* Only the host earns the column width; the full link lives on the href and title. */
+const hostOf = (url: string) => { try { return new URL(url).host; } catch { return url; } };
+const flattenTasks =(tasks: ScheduleTask[]): ScheduleTask[] => tasks.flatMap((task) => [task, ...flattenTasks(task.children)]);
 const leafTasks = (schedule: ProjectSchedule) => flattenTasks(schedule.tasks).filter((task) => task.kind !== "phase" && task.children.length === 0);
 
 function LoadError({ message, retry }: { message: string; retry: () => void }) {
@@ -419,6 +426,7 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
       ownerName: item.ownerName,
       lineStatus: item.status,
       ageDays: ageInDays(item.priceDate),
+      sourceUrl: null,
     }));
   });
   historical.forEach((item) => records.push({
@@ -446,10 +454,13 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
     ownerName: "PR import",
     lineStatus: item.purchaseOrderStatus || "Purchased",
     ageDays: ageInDays(item.quotationDate),
+    sourceUrl: null,
   }));
   quotationLines.forEach((item) => records.push({
     key: `sqline:${item.id}`,
-    sourceKind: "Supplier Quotation",
+    /* Both kinds arrive through the same table; only the source tells them apart, and
+       the library must never present a page someone read as a price a supplier sent. */
+    sourceKind: item.sourceKind === "WebReference" ? "Web Reference" : "Supplier Quotation",
     estimateId: 0,
     estimateNo: item.quotationNumber,
     estimateStatus: "Quoted",
@@ -466,12 +477,13 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
     unit: item.unit,
     unitCost: Number(item.unitPrice),
     lineTotal: Number(item.lineTotal ?? item.qty * item.unitPrice),
-    priceSource: "Supplier Quotation",
+    priceSource: item.sourceKind === "WebReference" ? "Web Reference" : "Supplier Quotation",
     referenceNumber: item.quotationNumber,
     priceDate: item.receivedDate,
     ownerName: item.supplierName,
-    lineStatus: "Quoted",
+    lineStatus: item.sourceKind === "WebReference" ? "Referenced" : "Quoted",
     ageDays: ageInDays(item.receivedDate),
+    sourceUrl: item.sourceUrl || null,
   }));
   records.sort((a, b) => (b.priceDate ?? "").localeCompare(a.priceDate ?? "") || b.itemId - a.itemId);
   return {
@@ -2079,6 +2091,7 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
   const canAdd = bootstrap.permissions.includes("estimate.write");
   const { records, estimateCount, historicalCount, quotationLineCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
   const [showAdd, setShowAdd] = useState(false);
+  const [showLink, setShowLink] = useState(false);
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("All sources");
   const [supplier, setSupplier] = useState("All suppliers");
@@ -2111,7 +2124,8 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
   return <>
     <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<>
       <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      {canAdd ? <button className="btn primary" type="button" onClick={() => setShowAdd(true)}><Icon name="plus" /><LocalizedText text={"Add price"} /></button> : null}
+      {canAdd ? <button className="btn default" type="button" onClick={() => setShowAdd(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
+      {canAdd ? <button className="btn primary" type="button" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
     </>} />
     <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
     <Toolbar>
@@ -2135,7 +2149,16 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
             <td className="num"><strong>{money(record.unitCost)}</strong><small className="muted"> <LocalizedText text={"of"} /> {record.unit}</small></td>
             <td className="num"><strong>{money(record.lineTotal)}</strong></td>
             <td><div className="cell-primary"><strong>{date(record.priceDate)}</strong><span><PriceAgeBadge record={record} /></span></div></td>
-            <td><div className="cell-primary"><strong>{record.priceSource || "Unspecified"}</strong><span className="mono">{record.referenceNumber || "—"} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td>
+            <td><div className="cell-primary">
+              <strong>{record.priceSource || "Unspecified"}</strong>
+              {/* A referenced price is only as good as the page it came from, so the
+                  page is one click away rather than a number nobody can check. */}
+              {record.sourceUrl
+                ? <a className="mono" href={record.sourceUrl} target="_blank" rel="noopener noreferrer" title={record.sourceUrl}>
+                  {record.referenceNumber || "—"} <Icon name="externalLink" /> {hostOf(record.sourceUrl)}
+                </a>
+                : <span className="mono">{record.referenceNumber || "—"} <LocalizedText text={"·"} /> {record.sourceKind}</span>}
+            </div></td>
             <td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td>
             <td>{record.ownerName}</td>
             <td><Badge>{record.lineStatus}</Badge></td>
@@ -2149,6 +2172,11 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
       notify(lineCount
         ? `${quotationNumber} · เพิ่ม ${lineCount} ราคาเข้าคลังแล้ว`
         : `${quotationNumber} · บันทึกเอกสารแล้วแต่ยังไม่มีรายการราคา`);
+      await load();
+    }} /> : null}
+    {showLink ? <ReferencePriceModal bootstrap={bootstrap} onClose={() => setShowLink(false)} onCreated={async (quotationNumber, lineCount) => {
+      setShowLink(false);
+      notify(`${quotationNumber} · เพิ่ม ${lineCount} ราคาอ้างอิงเข้าคลังแล้ว`);
       await load();
     }} /> : null}
   </>;
@@ -2692,6 +2720,7 @@ function EditQuotationModal({
   const [amount, setAmount] = useState(String(record.amount));
   const [inquiryId, setInquiryId] = useState(record.inquiryId ? String(record.inquiryId) : "");
   const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
+  const [sourceUrl, setSourceUrl] = useState(record.sourceUrl);
   const [lines, setLines] = useState<QuotationLineItem[]>([]);
   /* Until the existing lines are in hand, saving must not touch them: a write replaces
      them wholesale, so saving an unloaded list would erase the prices already stored. */
@@ -2713,9 +2742,12 @@ function EditQuotationModal({
     return () => { active = false; };
   }, [record.id]);
 
+  const isReference = record.sourceKind === "WebReference";
+  const urlLooksOpenable = /^https?:\/\/[^\s<>"']+$/i.test(sourceUrl.trim());
   const parsedAmount = Number(amount);
   const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
-    || !Number.isFinite(parsedAmount) || parsedAmount <= 0;
+    || !Number.isFinite(parsedAmount) || parsedAmount <= 0
+    || (isReference && !urlLooksOpenable);
   const linesTotal = quotationLinesTotal(lines);
   const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
     && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
@@ -2732,6 +2764,7 @@ function EditQuotationModal({
         currency,
         amount: parsedAmount,
         inquiryId: inquiryId ? Number(inquiryId) : null,
+        ...(isReference ? { sourceUrl: sourceUrl.trim() } : {}),
         rowVersion: record.rowVersion,
       });
       if (linesLoaded) await saveQuotationLines(record.id, lines);
@@ -2791,6 +2824,15 @@ function EditQuotationModal({
         <Field label="Amount *">
           <input type="number" min="0.0001" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
         </Field>
+        {/* A reference price is only checkable through its link, so the link is editable
+            here; a document-backed row keeps its stored file and the server refuses one. */}
+        {isReference ? (
+          <Field label="Source link *" span={2}
+            hint={urlLooksOpenable ? "หน้าเว็บที่อ่านราคานี้มา" : "ต้องขึ้นต้นด้วย http:// หรือ https://"}>
+            <input value={sourceUrl} maxLength={1000} inputMode="url" placeholder="https://..."
+              onChange={(e) => setSourceUrl(e.target.value)} />
+          </Field>
+        ) : null}
         <Field label="Related inquiry" span={2}>
           <select value={inquiryId} onChange={(e) => setInquiryId(e.target.value)}>
             <option value="">Not linked</option>
@@ -2803,6 +2845,127 @@ function EditQuotationModal({
         : <div className="quotation-lines"><div className="empty"><span className="spinner" />กำลังโหลดรายการราคา…</div></div>}
     </Modal>
   );
+}
+
+/*
+ * A price read off a vendor's public page. Deliberately small next to the upload
+ * dialog: a supplier, the link, the day it was read, and the prices. There is no
+ * file to attach because there is no document — the link and the date are what make
+ * the number checkable months later, and the row is stored saying exactly that, so
+ * it can never be read back as a price the supplier quoted.
+ */
+function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
+  bootstrap: BootstrapData;
+  onClose: () => void;
+  onCreated: (quotationNumber: string, lineCount: number) => Promise<void>;
+}) {
+  const [supplierId, setSupplierId] = useState("");
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [supplierReference, setSupplierReference] = useState("");
+  const [capturedDate, setCapturedDate] = useState(isoToday());
+  const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
+  const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>("THB");
+  /* One empty row, so the first thing on screen is a box to type a price into. */
+  const [lines, setLines] = useState<QuotationLineItem[]>([blankQuotationLine(1, "THB")]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const trimmedUrl = sourceUrl.trim();
+  const urlLooksOpenable = /^https?:\/\/[^\s<>"']+$/i.test(trimmedUrl);
+  const hasSupplier = !!supplierId || !!newSupplierName.trim();
+  const priced = lines.filter((line) => line.description.trim() && line.unitPrice > 0).length;
+  /* The lines are the whole price here: a web page has no separate stated total. */
+  const linesTotal = quotationLinesTotal(lines);
+  const invalid = !hasSupplier || !urlLooksOpenable || !capturedDate || !validUntil
+    || validUntil < capturedDate || !priced || linesTotal <= 0;
+
+  const submit = async () => {
+    if (invalid) return;
+    setBusy(true); setError("");
+    try {
+      let resolvedSupplierId = supplierId ? Number(supplierId) : 0;
+      if (!resolvedSupplierId) {
+        const found = await findOrCreateSupplier({ name: newSupplierName.trim(), taxId: "" });
+        resolvedSupplierId = found.id;
+        setSupplierId(String(found.id));
+      }
+      const created = await createReferencePrice({
+        supplierId: resolvedSupplierId, sourceUrl: trimmedUrl,
+        supplierReference: supplierReference.trim(), receivedDate: capturedDate, validUntil,
+        currency, amount: linesTotal, lines: lines.filter((line) => line.description.trim()),
+      });
+      await onCreated(created.quotationNumber, created.lineCount);
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <Modal
+    title="Add price from a link"
+    subtitle="ราคาที่อ่านจากหน้าเว็บผู้ขาย — ไม่ต้องแนบไฟล์ แต่ต้องมีลิงก์และวันที่อ่าน"
+    size="xl"
+    onClose={onClose}
+    footer={<>
+      <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+      <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
+        <Icon name="check" />{busy ? "กำลังบันทึก…" : `บันทึก ${priced} ราคาเข้าคลัง`}
+      </button>
+    </>}
+  >
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+    <div className="callout">
+      <Icon name="globe" />
+      <span>
+        <strong>ราคาอ้างอิง ไม่ใช่ราคายืนยันจากผู้ขาย</strong>
+        ในคลังราคาจะติดป้าย <em>Web reference</em> แยกจากใบเสนอราคาจริง และราคาหน้าเว็บเปลี่ยนได้ตลอด — วันที่อ่านคือสิ่งเดียวที่บอกว่าราคานี้เก่าแค่ไหน
+      </span>
+    </div>
+
+    <div className="form-grid two">
+      <Field label="Supplier *">
+        <select value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setNewSupplierName(""); }}>
+          <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
+          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
+        </select>
+        {!supplierId ? <div style={{ marginTop: 6 }}>
+          <input placeholder="ชื่อ Supplier ใหม่..." value={newSupplierName} maxLength={200} style={{ width: "100%" }}
+            onChange={(event) => setNewSupplierName(event.target.value)} />
+        </div> : null}
+      </Field>
+      <Field label="Source link *" hint={trimmedUrl && !urlLooksOpenable ? "ต้องขึ้นต้นด้วย http:// หรือ https://" : "วาง URL ของหน้าที่เห็นราคา"}>
+        <input value={sourceUrl} maxLength={1000} placeholder="https://..." inputMode="url"
+          onChange={(event) => setSourceUrl(event.target.value)} />
+      </Field>
+      <Field label="Captured date *" hint="วันที่เปิดหน้านั้นและเห็นราคานี้">
+        <input type="date" value={capturedDate} onChange={(event) => {
+          setCapturedDate(event.target.value);
+          if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
+        }} />
+      </Field>
+      <Field label="Treat as current until *" hint="พ้นวันนี้แล้วคลังราคาจะเตือนให้เช็กใหม่">
+        <input type="date" min={capturedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+      </Field>
+      <Field label="Currency *">
+        <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
+          <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
+        </select>
+      </Field>
+      <Field label="Page or catalogue reference" hint="เช่น รหัสหน้า, ชื่อแคตตาล็อก (ไม่บังคับ)">
+        <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="—" />
+      </Field>
+    </div>
+
+    <QuotationLinesEditor
+      lines={lines}
+      currency={currency}
+      disabled={busy}
+      emptyHint="กรอกชื่อรายการกับราคาต่อหน่วยที่เห็นบนหน้าเว็บ"
+      onChange={setLines}
+    />
+  </Modal>;
 }
 
 export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPlanningProps) {
@@ -2821,6 +2984,7 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
   const [showUpload, setShowUpload] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showLink, setShowLink] = useState(false);
   const [editingRecord, setEditingRecord] = useState<SupplierQuotationRecord | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -2892,9 +3056,10 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
     <PageHeader
       eyebrow="SUPPLIER SOURCING"
       title="Supplier Quotations"
-      subtitle="อัปโหลดและติดตามใบเสนอราคาผู้ขายจริง พร้อมไฟล์ต้นฉบับ เลขอ้างอิง และอายุเอกสาร"
+      subtitle="ใบเสนอราคาผู้ขายพร้อมไฟล์ต้นฉบับ และราคาอ้างอิงจากหน้าเว็บที่บันทึกลิงก์ไว้แทนไฟล์"
       actions={<>
         <button className="btn ghost" type="button" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+        {canUpload ? <button className="btn default" type="button" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
         {canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
       </>}
     />
@@ -2938,12 +3103,25 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
               : <Badge tone="amber"><LocalizedText text={"No price line"} /></Badge>}</td>
             <td><div className="cell-primary"><strong>{record.uploadedByName}</strong><span>{dateTime(record.uploadedAt)}</span></div></td>
             <td><Badge>{record.status}</Badge></td>
-            <td><div className="cell-primary"><strong>{quotationFileKind(record.fileName)}</strong><span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span></div></td>
+            {/* A reference has no file to describe; the page it cites stands in its place. */}
+            <td><div className="cell-primary">{record.sourceKind === "WebReference"
+              ? <>
+                <strong><LocalizedText text={"Web reference"} /></strong>
+                <a href={record.sourceUrl} target="_blank" rel="noopener noreferrer" title={record.sourceUrl}>
+                  <Icon name="externalLink" /> {hostOf(record.sourceUrl)}
+                </a>
+              </>
+              : <>
+                <strong>{quotationFileKind(record.fileName)}</strong>
+                <span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span>
+              </>}</div></td>
             <td>
               <div style={{ display: "flex", gap: 4 }}>
-                <button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}>
-                  <Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}
-                </button>
+                {record.sourceKind === "Document" ? (
+                  <button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}>
+                    <Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}
+                  </button>
+                ) : null}
                 {canUpload && (
                   <button className="btn ghost sm" type="button" onClick={() => setEditingRecord(record)}>
                     <Icon name="edit" />{record.lineCount
@@ -2971,6 +3149,12 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
       notify(lineCount
         ? `${quotationNumber} อัปโหลดแล้ว · ${lineCount} ราคาเข้าคลังราคา`
         : `${quotationNumber} อัปโหลดแล้ว · ยังไม่มีรายการราคา กด Add price เพื่อเพิ่ม`);
+    }} /> : null}
+    {showLink ? <ReferencePriceModal bootstrap={bootstrap} onClose={() => setShowLink(false)} onCreated={async (quotationNumber, lineCount) => {
+      setShowLink(false);
+      setPage(1);
+      setRefreshKey((value) => value + 1);
+      notify(`${quotationNumber} · เพิ่ม ${lineCount} ราคาอ้างอิงเข้าคลังแล้ว`);
     }} /> : null}
     {editingRecord ? (
       <EditQuotationModal

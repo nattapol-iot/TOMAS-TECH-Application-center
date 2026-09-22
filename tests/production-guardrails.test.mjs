@@ -629,7 +629,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(deployment, /026_performance_reviews\.sql/);
   // Migration 017 extended the list. The assertion still pins an exact count,
   // so a migration added to the runner but never applied still fails the build.
-  assert.match(deployment, /version BETWEEN 1 AND 59\) <> 59/);
+  assert.match(deployment, /version BETWEEN 1 AND 60\) <> 60/);
   assert.match(seed, /schema_versions WHERE version = 15/);
 
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
@@ -837,9 +837,48 @@ test("a quotation's price lines reach the Price Library or the screen says they 
 
   assert.match(styles, /\.quotation-lines-grid \{/);
   assert.match(styles, /\.quotation-lines-empty \{/);
+  // A JSON body carries real numbers; positiveLong only reads path and query strings.
+  assert.doesNotMatch(route, /positiveLong\(body\./);
   for (const key of ["Price lines", "Add line", "Add the first price line", "Lines total", "No price line", "Currency", "Add price"]) {
     assert.match(dictionary, new RegExp(`"${key}": \\{"th":`), `${key} has no dictionary entry`);
   }
+});
+
+test("a price with no document cites the page it came from, and the database keeps the two apart", async () => {
+  const [migration, registry, route, client, screen, deployment, dictionary] = await Promise.all([
+    readFile(new URL("database/migrations/060_price_reference_sources.sql", root), "utf8"),
+    readFile(new URL("backend-node/src/migration-validation.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/supplier-quotations.ts", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
+    readFile(new URL("app/system/i18n.ts", root), "utf8"),
+  ]);
+
+  // The kinds are separated by a constraint, not by the screen that happens to write them.
+  assert.match(migration, /source_kind IN \(N'Document', N'WebReference'\)/);
+  assert.match(migration, /CONSTRAINT CK_supplier_quotations_source CHECK/);
+  // A document is still held to exactly the integrity it had before this migration.
+  assert.match(migration, /AND LEN\(sha256\) = 64/);
+  // A reference stores no file at all, rather than a document of zero bytes.
+  assert.match(migration, /storage_key IS NULL AND file_name IS NULL AND content_type IS NULL/);
+  // SQL Server's UNIQUE constraint admits one NULL, so the key has to be filtered.
+  assert.match(migration, /CREATE UNIQUE INDEX UQ_supplier_quotations_storage\s+ON dbo\.supplier_quotations\(storage_key\) WHERE storage_key IS NOT NULL/);
+  assert.match(migration, /VALUES \(60, N'Price sources that cite a link instead of a stored document'\)/);
+  assert.match(registry, /version: 60, fileName: "060_price_reference_sources\.sql"/);
+  assert.match(deployment, /:r database\/migrations\/060_price_reference_sources\.sql/);
+
+  // A reference is numbered apart, has no file to hand back, and cannot displace one.
+  assert.match(route, /issueDocumentNumber\(transaction, "RP", receivedDate\)/);
+  assert.match(route, /no_stored_document/);
+  assert.match(route, /cannot cite a URL instead/);
+  assert.match(route, /if \(row\.storage_key\) await deleteStoredFile/);
+
+  assert.match(client, /createReferencePrice/);
+  assert.match(screen, /function ReferencePriceModal/);
+  // The Price Library must never show a page someone read as a price a supplier sent.
+  assert.match(screen, /"Web Reference" : "Supplier Quotation"/);
+  assert.match(dictionary, /"Web reference": \{"th":/);
 });
 
 test("employee master backs assignment identities without granting login access", async () => {
@@ -1068,7 +1107,7 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.match(program, /MapKnowledgeEndpoints/);
   assert.match(deployment, /014_knowledge_hub\.sql/);
   assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 59\) <> 59/);
+  assert.match(deployment, /version BETWEEN 1 AND 60\) <> 60/);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.knowledge_audit_events/);
   assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.knowledge_document_approvals/);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);
