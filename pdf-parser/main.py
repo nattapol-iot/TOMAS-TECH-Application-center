@@ -195,21 +195,30 @@ def extract_tax_id(text: str, top_lines: Optional[list[str]] = None) -> str:
     return ""
 
 
+# Tried in this order, not as one alternation. A single combined pattern returns
+# whichever label sits highest on the page, so on a two-column header "Customer PO
+# Reference:" beat "Quotation Number:" — and what followed it across the column gutter
+# was the next field's label, "Payment:". The document number became "Payment".
+QUOTATION_NUMBER_LABELS = (
+    r"quotation\s*(?:no\.?|number:?|no:)",
+    r"ใบเสนอราคา(?:เลขที่|ที่)?|เลขที่ใบเสนอราคา",
+    r"invoice\s*(?:no\.?|number:?)",
+    r"เลขที่เอกสาร|เลขที่ใบ|เลขที่\s*:",
+    r"QT\s*(?:NO\.?|:)|BT\s*NO\.?|SQ\s*NO\.?",
+    r"doc(?:ument)?\s*(?:no\.?|number)",
+    r"REF\s*(?:NO\.?|:)|REFERENCE\s*(?:NO\.?|:)",
+    r"PO\s*(?:NO\.?|:)|order\s*(?:no\.?|number:?)",
+)
+
+
 def extract_quotation_number(text: str) -> str:
-    # Labeled patterns first (most reliable)
-    labeled = re.search(
-        r"(?:quotation\s*(?:no\.?|number:?|no:)|invoice\s*(?:no\.?|number:?)|"
-        r"ใบเสนอราคา(?:เลขที่|ที่)?|เลขที่ใบเสนอราคา|เลขที่เอกสาร|เลขที่ใบ|เลขที่\s*:|"
-        r"QT\s*(?:NO\.?|:)|BT\s*NO\.?|SQ\s*NO\.?|"
-        r"doc(?:ument)?\s*(?:no\.?|number)|"
-        r"REF\s*(?:NO\.?|:)|REFERENCE\s*(?:NO\.?|:)|"
-        r"PO\s*(?:NO\.?|:)|order\s*(?:no\.?|number:?)|"
-        r"document\s*no\.?)"
-        r"[:\s#\/]*([A-Z0-9][A-Z0-9\-\/\.]{3,29})",
-        text, re.I,
-    )
-    if labeled:
-        return labeled.group(1).strip()
+    # Labeled patterns first (most reliable), most specific label first
+    for label in QUOTATION_NUMBER_LABELS:
+        for m in re.finditer(f"(?:{label})" + r"[:\s#\/]*([A-Z0-9][A-Z0-9\-\/\.]{3,29})", text, re.I):
+            candidate = m.group(1).strip()
+            # Every document number carries a digit; a bare word is the next label.
+            if re.search(r"\d", candidate):
+                return candidate
     # Known document-number patterns
     known = re.search(
         r"\b(QT[\-\d]{4,}|QT\d{4}[-\d]+|SQ[\d\-]{4,}|BT\d{2}[-\d]{5,}|"
@@ -331,6 +340,9 @@ def extract_supplier_name(lines: list[str], metadata: Optional[dict] = None) -> 
     return ""
 
 
+TOTAL_NOT_MONEY_PAT = re.compile(r"weight|น้ำหนัก|qty\b|quantity|จำนวนชิ้น", re.I)
+
+
 def extract_total(text: str) -> float:
     patterns = [
         r"(?:grand\s*total|total\s*net|net\s*total|ยอดรวมทั้งหมด|ยอดสุทธิ|รวมทั้งสิ้น)[^\d\n]*([\d,]+\.?\d*)",
@@ -343,6 +355,15 @@ def extract_total(text: str) -> float:
     best = 0.0
     for pat in patterns:
         for m in re.finditer(pat, text, re.I):
+            # "Estimated Total Weight: 200g" is not money. Neither is a count of items.
+            # "Item Total" is, so the guard names weight and quantity, never "item".
+            # Only this line counts: a fixed window would reach back into the previous
+            # line and condemn a real total for sitting under a weight.
+            label = text[text.rfind("\n", 0, m.start()) + 1:m.start(1)]
+            if TOTAL_NOT_MONEY_PAT.search(label):
+                continue
+            if re.match(r"\s*(?:g|kg|mg|lb|ตัว|ชิ้น)\b", text[m.end(1):m.end(1) + 6], re.I):
+                continue
             raw = m.group(1).replace(",", "").strip()
             try:
                 v = float(raw)
@@ -648,8 +669,11 @@ def row_to_item(cells: list[str], cols: dict, header: list[str], currency: str) 
 
     item_code = stacked_code
     if not item_code and at(code_col):
-        c = at(code_col)
-        if not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
+        # Only the first line: a stacked cell holds the part number above whatever else
+        # the column carries, and stripping all whitespace glued the two together —
+        # "E-PF-80-R" and a ship date became "E-PF-80-R10/09/2026".
+        c = first_line(at(code_col))
+        if c and not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
             item_code = re.sub(r"\s+", "", c)[:40]
     if not item_code:
         item_code, desc = split_leading_code(desc)

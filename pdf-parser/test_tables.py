@@ -152,6 +152,39 @@ check("no brand label, no brand",
       main.split_stacked_cell("Product Code\nProduct Name", "E-PF-80-R\nFAN (220V)"),
       ("E-PF-80-R", "FAN (220V)", ""))
 
+# A two-column header, flattened the way a text extractor hands it over: the left
+# column's label ends up beside the right column's next label.
+MISUMI_HEADER = (
+    "Customer PO Reference: Payment:Sales on Credit/Cut25-1M-Pay31\n"
+    "*The black marked line is waiting for MISUMI confirmation\n"
+    "Quotation Number: FA112F9DCD Rev: 0 Estimated Total Weight: 200g\n"
+    "Quotation Date: 09/09/2026 Valid until: 09/10/2026\n"
+)
+
+print("\nheader fields on a two-column quotation")
+# "Customer PO Reference:" sits above "Quotation Number:", and what follows it across
+# the gutter is the next field's label.
+check("quotation number", main.extract_quotation_number(MISUMI_HEADER), "FA112F9DCD")
+check("a label word is not a document number",
+      main.extract_quotation_number("Reference: Payment: Sales on Credit"), "")
+# "Estimated Total Weight: 200g" matches a total pattern but is not money.
+check("a weight is not the quotation total", main.extract_total(MISUMI_HEADER), 0.0)
+# Each pattern takes its first match, so "Item Total" answers before the grand total
+# below it. That is long-standing behaviour and not what this guard is about; what
+# matters here is that a real total is still found at all.
+check("an item total still is",
+      main.extract_total("Item Total 440.40\nTax 30.83\nTotal 471.23"), 440.40)
+check("a weight beside a real total does not win",
+      main.extract_total("Estimated Total Weight: 200g\nItem Total 440.40"), 440.40)
+
+print("\na part number keeps to its own line")
+CODE_TABLE = [
+    ["No", "Description", "Part No.", "Qty", "Unit Price", "Amount"],
+    ["1", "Economy fan accessory", "E-PF-80-R\n10/09/2026(11/09)", "8", "55.05", "440.40"],
+]
+coded = main.parse_plumber_table(CODE_TABLE, "THB")
+check("item code is not glued to the next line", coded and coded[0]["itemCode"], "E-PF-80-R")
+
 print()
 if failures:
     print(f"{len(failures)} failure(s)")
