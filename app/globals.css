@@ -5124,27 +5124,14 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 
 /* Estimate workspace: one primary summary, secondary controls on demand. */
 .estimate-workspace-bar { align-items: center; }
-.estimate-heading-compact { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; margin-bottom: 16px; }
-.estimate-heading-compact > .page-header { flex: 1 1 480px; margin: 0; }
-.estimate-heading-compact .page-meta { gap: 8px 18px; margin-top: 12px; }
-.estimate-heading-compact > .estimate-workspace-bar { flex: 0 1 auto; flex-wrap: wrap; padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }
-.estimate-heading-compact > .info-strip { flex-basis: 100%; }
 .estimate-validation-strip { flex-wrap: wrap; }
 .estimate-cost-panel { overflow: visible; }
 .estimate-cost-panel .panel-actions { flex-wrap: wrap; }
 .estimate-cost-panel .cost-drag-help { margin: 0; padding: 7px 14px; color: var(--muted); font-size: var(--fs-2xs); }
 .estimate-cost-panel .sheet-controls { flex-wrap: wrap; gap: 8px; }
 .estimate-cost-menu .estimate-more-content { min-width: 250px; }
-.estimate-cost-search { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
-.estimate-cost-search .estimate-sheet-search { max-width: 480px; }
-.estimate-cost-identity > .cell-text { padding-bottom: 2px; color: var(--muted); font-size: var(--fs-2xs); }
-.estimate-cost-identity > .muted { display: block; padding: 0 10px 5px; font-size: var(--fs-2xs); }
-.estimate-compact-table .cost-sheet thead th:nth-child(3),
-.estimate-compact-table .cost-sheet .item-row > td:nth-child(3) { position: static; box-shadow: none; }
-.estimate-compact-table .cost-sheet .item-row > td:nth-child(2) { box-shadow: 1px 0 0 var(--line-soft); }
 .estimate-more > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 @media (max-width: 720px) {
-  .estimate-heading-compact > .estimate-workspace-bar { flex-basis: 100%; }
   .estimate-cost-panel .panel-head { flex-wrap: wrap; gap: 12px; }
   .estimate-cost-menu .estimate-more-content { left: auto; right: 0; min-width: min(250px, 80vw); }
 }
@@ -5170,4 +5157,27 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   .estimate-main-total { flex-basis: 100%; }
   .estimate-more-content { left: 0; right: auto; }
   .estimate-sheet-search { flex-basis: 100%; }
+}
+
+/* Keep the title and total on one row; reference and ownership below. */
+.estimate-heading-compact { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; margin-bottom: 18px; }
+.estimate-title-line { grid-column: 1; grid-row: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.estimate-title-line h1 { margin: 0; font-size: var(--fs-2xl); line-height: 1.3; overflow-wrap: anywhere; }
+.estimate-heading-reference { grid-column: 1 / -1; grid-row: 2; color: var(--muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.estimate-heading-reference > span { margin: 0 6px; color: var(--line); }
+.estimate-heading-owner { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-size: var(--fs-xs); }
+.estimate-heading-owner strong { color: var(--ink); font-weight: 600; }
+.estimate-heading-owner strong.red-text { color: var(--red-text); }
+.estimate-heading-compact > .estimate-workspace-bar { grid-column: 2; grid-row: 1; margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none; flex-wrap: wrap; justify-content: flex-end; }
+.estimate-heading-compact .estimate-main-total { margin: 0 8px 0 0; }
+.estimate-heading-compact .estimate-main-total > span { display: none; }
+.estimate-heading-compact .estimate-workspace-bar > .spacer { display: none; }
+.estimate-heading-compact > .info-strip { grid-column: 1 / -1; grid-row: 4; }
+.estimate-document-meta { display: grid; gap: 6px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); font-size: var(--fs-xs); color: var(--muted); white-space: normal; }
+.estimate-document-meta strong { color: var(--ink); }
+@media (max-width: 980px) {
+  .estimate-heading-compact { grid-template-columns: minmax(0, 1fr); }
+  .estimate-heading-compact > .estimate-workspace-bar { grid-column: 1; grid-row: 4; justify-content: flex-start; }
+  .estimate-heading-compact > .info-strip { grid-row: 5; }
+  .estimate-heading-compact .estimate-main-total { flex-basis: auto; }
 }

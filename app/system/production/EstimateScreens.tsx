@@ -643,13 +643,15 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
 
   return <>
     <div className="breadcrumb"><button type="button" onClick={onBack}><LocalizedText text={"Estimate Cost"} /></button><Icon name="chevronRight" /><span>{header.number}</span></div>
-    <div className="estimate-heading-compact"><PageHeader eyebrow={`${header.number} · ${revisionCode(header.revision)}`} title={header.projectName} subtitle={`${header.customerCode} — ${header.customerName} · Inquiry ${header.inquiryNumber}`} meta={<>
-      <div><span><LocalizedText text={"Estimate owner"} /></span><strong>{header.ownerName}</strong></div><div><span><LocalizedText text={"Created"} /></span><strong>{formatDate(header.createdDate)}</strong></div><div><span><LocalizedText text={"Due"} /></span><strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong></div><div><span><LocalizedText text={"Status"} /></span><strong><Badge tone={["Approved", "Locked"].includes(header.status) ? "green" : header.status === "Revision Required" ? "amber" : "blue"}>{header.status}</Badge></strong></div><div><span><LocalizedText text={"Progress"} /></span><strong style={{ minWidth: 110 }}><ProgressCell value={numberOf(header.progress)} /></strong></div>
-    </>} />
+    <header className="estimate-heading-compact">
+      <div className="estimate-title-line"><h1>{header.projectName}</h1><Badge tone={["Approved", "Locked"].includes(header.status) ? "green" : header.status === "Revision Required" ? "amber" : "blue"}>{header.status}</Badge></div>
+      <div className="estimate-heading-reference">{header.number} · {revisionCode(header.revision)} <span> | </span> {header.customerCode} <span> | </span> Inquiry {header.inquiryNumber}</div>
+      <div className="estimate-heading-owner"><span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span><span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong></span></div>
     {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
     <div className="workspace-bar estimate-workspace-bar">
       <div className="estimate-main-total"><span><LocalizedText text="Total Estimated Cost" /></span><strong>{formatMoney(totals.total)}</strong></div>
       <details className="estimate-more"><summary className="btn default">{estimateUxCopy(currentLocale(), "เพิ่มเติม", "More", "その他")} <Icon name="chevronDown" /></summary><div className="estimate-more-content">
+      <div className="estimate-document-meta"><strong>{header.customerName}</strong><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
       <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
       <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
@@ -664,10 +666,10 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       {capabilities.canCreateRevision ? <button className="btn primary" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
       {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
     </div>
-    </div>
+    </header>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{estimateUxCopy(currentLocale(), "มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{estimateUxCopy(currentLocale(), "กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
-    {validationCount ? <div className={criticalCount ? "info-strip estimate-validation-strip red" : "info-strip estimate-validation-strip estimate-advisory"}><Icon name="alertTriangle" /><span>{criticalCount ? <strong>{criticalCount} {estimateUxCopy(currentLocale(), "รายการต้องแก้ก่อนส่งตรวจ", "issues to resolve before submission", "提出前に修正が必要")}</strong> : null}{criticalCount && warningCount ? " · " : null}{warningCount ? <span>{warningCount} {estimateUxCopy(currentLocale(), "คำเตือนที่ควรทบทวน (ไม่ขัดขวางการส่ง)", "advisory warnings (do not block submission)", "警告（提出を妨げません）")}</span> : null}</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text="Open validation" /><Icon name="arrowRight" /></button></div> : null}
+    {validationCount ? <div className="info-strip estimate-validation-strip estimate-advisory"><Icon name="alertTriangle" /><span>{criticalCount ? <strong className="red-text">{criticalCount} {estimateUxCopy(currentLocale(), "รายการต้องแก้ก่อนส่งตรวจ", "issues to resolve before submission", "提出前に修正が必要")}</strong> : null}{criticalCount && warningCount ? " · " : null}{warningCount ? <span>{warningCount} {estimateUxCopy(currentLocale(), "คำเตือนที่ควรทบทวน (ไม่ขัดขวางการส่ง)", "advisory warnings (do not block submission)", "警告（提出を妨げません）")}</span> : null}</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text="Open validation" /><Icon name="arrowRight" /></button></div> : null}
     {["Approved", "Locked"].includes(header.status) ? <div className="info-strip green"><Icon name="lock" /><span><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></span></div> : null}
     <Tabs active={tab} onChange={setTab} tabs={[
       { id: "summary", label: estimateUxCopy(currentLocale(), "สรุปต้นทุน", "Cost summary", "原価サマリー") }, { id: "cost", label: estimateUxCopy(currentLocale(), "รายการต้นทุน", "Cost Items", "原価明細"), count: workspace.costItems.length }, { id: "manhour", label: estimateUxCopy(currentLocale(), "ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length }, { id: "other", label: estimateUxCopy(currentLocale(), "ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length },
@@ -956,7 +958,6 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
-  const [costSearch, setCostSearch] = useState("");
   const [tool, setTool] = useState<"price" | "import" | "import-flat" | "copy" | "module" | "template" | null>(null);
   const [saveTarget, setSaveTarget] = useState<CostModuleGroup | null>(null);
   const [quickDraft, setQuickDraft] = useState<QuickCostDraft | null>(null);
@@ -1002,9 +1003,6 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
      would trip react-hooks/set-state-in-effect. */
   const activeCategory = category !== "all" && presentCategories.some(([code]) => code === category) ? category : "all";
   const groups = useMemo(() => costModuleGroups(activeCategory === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === activeCategory)), [workspace.costItems, activeCategory]);
-  const searchTerm = costSearch.trim().toLocaleLowerCase();
-  // Keep a matching module intact so set headers, children and ordering stay together.
-  const matchesSearch = (group: CostModuleGroup) => !searchTerm || group.lines.some(line => [group.module, line.itemCode, line.description, line.brand, line.model, line.supplierName].join(" ").toLocaleLowerCase().includes(searchTerm));
   const [draggedCostId, setDraggedCostId] = useState<number | null>(null);
   const [dropMarker, setDropMarker] = useState("");
   const clearDrag = () => { setDraggedCostId(null); setDropMarker(""); };
@@ -1038,7 +1036,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     const ids = new Set(group.lines.map(line => line.id)); let offset = 0;
     void onReorder("CostItem", workspace.costItems.map(line => ids.has(line.id) ? moved[offset++].id : line.id));
   };
-  const visibleLines = groups.filter(matchesSearch).flatMap((group) => group.lines);
+  const visibleLines = groups.flatMap((group) => group.lines);
   const total = numberOf(workspace.header.totals.total);
   const shareOf = (value: number) => total ? Math.round(value / total * 100) : 0;
   const isCollapsed = (key: string) => collapsed.includes(key);
@@ -1078,9 +1076,8 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     setQuickDraft(continueAdding ? { ...quickDraft, version: quickDraft.version + 1, itemCode: "", description: "", model: "", specification: "", referenceNumber: "", remark: "" } : null);
   };
 
-  const compactColumns = dense && !quickDraft;
-  const colCount = compactColumns ? 8 : dense ? 10 : 16;
-  const sheetWidth = compactColumns ? 1100 : dense ? 1320 : 2190;
+  const colCount = dense ? 10 : 16;
+  const sheetWidth = dense ? 1320 : 2190;
   const draftRow = (groupKey: string) => quickDraft?.groupKey === groupKey ? <tr className="item-row inline-draft-row cost-draft-row" key={`quick-${groupKey}-${quickDraft.version}`} title={localizeCopy("Enter: save and create the next row · Esc: cancel")} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setQuickDraft(null); } if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void saveQuickRow(true); } }}>
     <td><span className="cell-text quick-new"><LocalizedText text={"New"} />{!quickDraft.module ? <small style={{ display: "block" }}><LocalizedText text={"standalone"} /></small> : null}</span></td>
     <td><CostItemLookupInput field="itemCode" inputRef={(node) => { quickItemCodeRef.current = node; }} required aria-label={uiText("Item code")} maxLength={100} placeholder={localizeCopy("Part No. *")} value={quickDraft.itemCode} onChange={(text) => updateQuick("itemCode", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /></td>
@@ -1142,7 +1139,6 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
       <button className="btn ghost sm" type="button" disabled={busy} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setTool("module"); }}><Icon name="layers" /><LocalizedText text="New Main Module" /></button>
     </div></details>
   </> : undefined} flush>
-    <div className="estimate-cost-search"><label className="estimate-sheet-search"><Icon name="search" /><input type="search" value={costSearch} onChange={event => setCostSearch(event.target.value)} aria-label={estimateUxCopy(currentLocale(), "ค้นหารายการต้นทุน", "Search cost items", "原価明細を検索")} placeholder={estimateUxCopy(currentLocale(), "ค้นหารหัส ชื่อรายการ รุ่น หรือผู้ขาย", "Search code, item, model or supplier", "コード・品名・型番・仕入先を検索")} /></label>{costSearch ? <span className="muted">{estimateUxCopy(currentLocale(), "แสดงทั้งโมดูลที่มีรายการตรงกับคำค้น", "Showing complete modules with matching items", "一致する明細のモジュール全体を表示")}</span> : null}</div>
     <div className="sheet-controls">
       <div className="subtabs" role="tablist" aria-label={localizeCopy("Cost category")}>
         {presentCategories.length ? <>
@@ -1157,13 +1153,12 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
       </div>
     </div>
     {canAdd ? <p className="cost-drag-help"><LocalizedText text={"Drag ⠿ to reorder or move a line between modules · drop it on a row to choose the position, or on a module name to send it to the end"} /></p> : null}
-    {groups.length || showPending ? <div className={compactColumns ? "table-wrap cost-sheet-wrap estimate-compact-table" : "table-wrap cost-sheet-wrap"}><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
+    {groups.length || showPending ? <div className="table-wrap cost-sheet-wrap"><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
       <thead><tr>
         <th style={{ width: 48 }}><LocalizedText text={"No."} /></th>
-        {compactColumns ? <th style={{ width: 330 }}>{estimateUxCopy(currentLocale(), "รหัส / รายการต้นทุน", "Code / cost item", "コード / 原価明細")}</th> : <>
         <th style={{ width: 140 }}><LocalizedText text={"Item code"} /></th>
         <th style={{ width: 300 }}><LocalizedText text={"Description / Specification"} /></th>
-        <th style={{ width: 160 }}><LocalizedText text={"Brand / Model"} /></th></>}
+        <th style={{ width: 160 }}><LocalizedText text={"Brand / Model"} /></th>
         <th style={{ width: 180 }}><LocalizedText text={"Supplier"} /></th>
         <th className="num" style={{ width: 100 }}><LocalizedText text={"Qty"} /></th>
         <th style={{ width: 140 }}><LocalizedText text={"Unit"} /></th>
@@ -1180,20 +1175,16 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         <th style={{ width: 164 }} aria-label={uiText("Action")} />
       </tr></thead>
       <tbody>
-        {searchTerm && !groups.some(matchesSearch) ? <tr><td colSpan={colCount}>{estimateUxCopy(currentLocale(), "ไม่พบรายการตรงกับคำค้น", "No matching cost items", "一致する明細はありません")}</td></tr> : null}
         {groups.flatMap((group, groupIndex) => {
-          if (!matchesSearch(group)) return [];
           const issues = group.needPrice + group.needSupplier;
           if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
           return [
             group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues) : null,
             ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
               <td><span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span></td>
-              {compactColumns ? <td className="estimate-cost-identity"><span className="cell-text">{canAdd && line.canEdit && !line.priceSetKey ? <input type="checkbox" aria-label={"Select for price set " + line.itemCode} checked={setSelection.includes(line.id)} onChange={event=>setSetSelection(current=>event.target.checked?[...current,line.id]:current.filter(id=>id!==line.id))}/> : null}<strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong></span><div className="cell-primary"><strong>{line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}{line.description}</strong>{line.priceSetKey && !line.isPriceSet ? <span>{line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต</span> : null}{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div><span className="muted">{[line.brand, line.model].filter(Boolean).join(" · ")}</span></td> : <>
               <td><span className="cell-text">{canAdd && line.canEdit && !line.priceSetKey ? <input type="checkbox" aria-label={"Select for price set " + line.itemCode} checked={setSelection.includes(line.id)} onChange={event=>setSetSelection(current=>event.target.checked?[...current,line.id]:current.filter(id=>id!==line.id))}/> : null}<strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong></span></td>
               <td><div className="cell-primary"><strong>{line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}{line.description}</strong>{line.priceSetKey && !line.isPriceSet ? <span>{line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต</span> : null}{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
               <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
-              </>}
               <td><span className="cell-text">{line.supplierName ?? <span className="soft-warn"><LocalizedText text={"ยังไม่เลือกผู้ขาย"} /></span>}</span></td>
               {line.canEdit ? <EstimateModuleQuantityCells key={line.id+":"+line.rowVersion} name={line.itemCode} quantity={line.quantity} unit={line.unit} units={workspace.costItems.map(item=>item.unit)} showCostRatio={!line.priceSetKey||Boolean(line.isPriceSet)} disabled={busy||setBusy} onSave={async (quantity,unit)=>{setSetBusy(true);try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/cost-items/${line.id}/quantity`,{method:"PUT",body:JSON.stringify({estimateRowVersion:workspace.header.rowVersion,lineRowVersion:line.rowVersion,quantity,unit})});await onExcelImported();}finally{setSetBusy(false);}}}/> : <><td className="num">{formatNumber(line.quantity, 0)}</td><td><span className="cell-text">{line.unit}</span></td></>}
               <td className="num">{line.priceSetKey && !line.isPriceSet ? <span className="muted"><LocalizedText text={"Included in the set price"} /></span> : numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
