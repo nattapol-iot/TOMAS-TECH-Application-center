@@ -1,4 +1,6 @@
 "use client";
+import { useEstimateNavigation } from "./use-estimate-navigation";
+import type { EstimateTab } from "../../../lib/estimate-navigation";
 import { DocumentLifecycleButton, DocumentHistoryButton } from "./DocumentLifecycle";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
@@ -107,7 +109,7 @@ type Props = {
   refreshBootstrap: () => Promise<void>;
 };
 
-type WorkspaceTab = "summary" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "review";
+type WorkspaceTab = EstimateTab;
 type ManhourSeed = Partial<Pick<EstimateManhourInput, "package" | "costType" | "provider">>;
 type ExpenseSeed = Partial<Pick<EstimateExpenseInput, "package" | "costType">>;
 type CostItemSeed = Partial<Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion">>;
@@ -325,7 +327,7 @@ async function listAllNewInquiries() {
 export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initialEstimateId = null }: Props & { initialEstimateId?: number | null }) {
   const uiText = useUiText();
   const [result, setResult] = useState<PagedResult<EstimateSummary>>(EMPTY_PAGE);
-  const [selectedEstimateId, setSelectedEstimateId] = useState<number | null>(initialEstimateId);
+  const { ready: navigationReady, estimateId: selectedEstimateId, selectEstimate: setSelectedEstimateId, tab, selectTab: setTab } = useEstimateNavigation(bootstrap.user.id, initialEstimateId);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
@@ -369,9 +371,13 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  if (!navigationReady) return <div className="info-strip"><LocalizedText text="Loading…" /></div>;
   if (selectedEstimateId !== null) {
     return <ProductionEstimateWorkspace
+      key={selectedEstimateId}
       estimateId={selectedEstimateId}
+      tab={tab}
+      setTab={setTab}
       bootstrap={bootstrap}
       notify={notify}
       refreshBootstrap={refreshBootstrap}
@@ -507,9 +513,8 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
   </Modal>;
 }
 
-function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBootstrap, onBack, onListChanged }: Props & { estimateId: number; onBack: () => void; onListChanged: () => Promise<void> }) {
+function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notify, refreshBootstrap, onBack, onListChanged }: Props & { estimateId: number; tab: WorkspaceTab; setTab: (tab: WorkspaceTab) => void; onBack: () => void; onListChanged: () => Promise<void> }) {
   const [workspace, setWorkspace] = useState<EstimateCostWorkspace | null>(null);
-  const [tab, setTab] = useState<WorkspaceTab>("summary");
   const [classificationDirty, setClassificationDirty] = useState(false);
   const [costFocus, setCostFocus] = useState<string | null>(null);
   const clearCostFocus = useCallback(() => setCostFocus(null), []);
