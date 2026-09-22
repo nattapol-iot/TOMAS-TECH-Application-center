@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import sql from "mssql";
+import sql, { type Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
+import type { EmailDeliveryResult, EmailService, InquiryAssignmentEmail } from "../email.js";
 import { ApiError } from "../errors.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import {
@@ -20,6 +21,7 @@ import {
   requiredInteger,
   requiredText,
 } from "../http.js";
+import { notifyUsers } from "../site-visit-common.js";
 import type { CurrentUserService } from "../users.js";
 import { crmAccess, bindAccess, scopedOpportunity, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../crm.js";
 
@@ -100,11 +102,40 @@ function addYears(date: string, years: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+type AssignmentNotice = { inquiryId: number; inquiryNumber: string; projectName: string; customerName: string;
+  dueDate: string; priority: string; assignedBy: string; ownerId: number; ownerName: string; ownerEmail: string;
+  version: string };
+
+/*
+ * The bell row is written inside the caller's transaction and the mail is sent after it
+ * commits, so a Microsoft Graph outage can never roll back an inquiry. Assigning the
+ * inquiry to yourself notifies nobody -- you already know.
+ */
+async function queueAssignmentNotice(transaction: TransactionType, notice: AssignmentNotice, actorId: number,
+  detail: string): Promise<InquiryAssignmentEmail | null> {
+  if (notice.ownerId === actorId) return null;
+  await notifyUsers(transaction, [notice.ownerId], "INQUIRY_ASSIGNED",
+    `Inquiry ${notice.inquiryNumber} · ${notice.projectName}`.slice(0, 300), detail,
+    "Inquiry", notice.inquiryId, `inquiry:${notice.inquiryId}:assigned:${notice.ownerId}:${notice.version}`);
+  if (!notice.ownerEmail) return null;
+  return {
+    inquiryId: notice.inquiryId, inquiryNumber: notice.inquiryNumber, projectName: notice.projectName,
+    customerName: notice.customerName, dueDate: notice.dueDate, priority: notice.priority,
+    assignedBy: notice.assignedBy, recipients: [{ name: notice.ownerName, email: notice.ownerEmail }],
+  };
+}
+
+async function deliverAssignmentEmail(email: EmailService, message: InquiryAssignmentEmail | null):
+  Promise<EmailDeliveryResult | { status: "not_required"; recipients: string[] }> {
+  return message ? email.sendInquiryAssignment(message) : { status: "not_required", recipients: [] };
+}
+
 export function registerInquiryRoutes(
   app: FastifyInstance,
   config: AppConfig,
   database: Database,
   users: CurrentUserService,
+  email: EmailService,
 ): void {
   registerEndUserUpdateRoute(app, database, users, "Inquiry");
   app.get("/api/v1/inquiries", async (request) => {
@@ -419,9 +450,23 @@ export function registerInquiryRoutes(
         projectProbability, customerInterestGrade, qualificationNote, requirement, background, scopeSummary,
         technical, targetDelivery, siteLocation, standard, special, remark,
       });
-      return { id, number, rowVersion: row.row_version.toString("base64") };
+      const assignee = new sql.Request(transaction);
+      assignee.input("owner_id", sql.BigInt, estimateOwnerId); assignee.input("customer_id", sql.BigInt, customerId);
+      const notice = (await assignee.query<{ owner_name: string; owner_email: string | null; customer_name: string }>(`
+        SELECT u.name AS owner_name,u.email AS owner_email,
+          (SELECT c.name FROM dbo.customers c WHERE c.id=@customer_id) AS customer_name
+        FROM dbo.users u WHERE u.id=@owner_id;
+      `)).recordset[0]!;
+      const emailMessage = await queueAssignmentNotice(transaction, {
+        inquiryId: id, inquiryNumber: number, projectName, customerName: notice.customer_name ?? "",
+        dueDate, priority, assignedBy: actor.name, ownerId: estimateOwnerId,
+        ownerName: notice.owner_name, ownerEmail: notice.owner_email ?? "", version: row.row_version.toString("hex"),
+      }, actor.id, `${notice.customer_name ?? ""} · ${projectName} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${priority} · มอบหมายโดย ${actor.name}`);
+      return { payload: { id, number, rowVersion: row.row_version.toString("base64") }, emailMessage };
     });
-    return reply.status(201).header("Location", `/api/v1/inquiries/${created.id}`).send(created);
+    const notification = await deliverAssignmentEmail(email, created.emailMessage);
+    return reply.status(201).header("Location", `/api/v1/inquiries/${created.payload.id}`)
+      .send({ ...created.payload, notification });
   });
 
   app.put("/api/v1/inquiries/:id/assignment", async (request, reply) => {
@@ -434,16 +479,20 @@ export function registerInquiryRoutes(
     const response = await database.transaction(async (transaction) => {
       const currentRequest = new sql.Request(transaction);
       currentRequest.input("id", sql.BigInt, id);
-      const current = (await currentRequest.query<{ inquiry_no: string; estimate_owner_id: number | string; owner_name: string; row_version: Buffer }>(`
-        SELECT i.inquiry_no,i.estimate_owner_id,u.name AS owner_name,i.row_version FROM dbo.inquiries i WITH (UPDLOCK,HOLDLOCK)
-        INNER JOIN dbo.users u ON u.id=i.estimate_owner_id WHERE i.id=@id AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
+      const current = (await currentRequest.query<{ inquiry_no: string; estimate_owner_id: number | string; owner_name: string;
+        project_name: string; customer_name: string; due_date: Date | string; priority: string; row_version: Buffer }>(`
+        SELECT i.inquiry_no,i.estimate_owner_id,u.name AS owner_name,i.project_name,c.name AS customer_name,i.due_date,i.priority,i.row_version
+        FROM dbo.inquiries i WITH (UPDLOCK,HOLDLOCK)
+        INNER JOIN dbo.users u ON u.id=i.estimate_owner_id
+        INNER JOIN dbo.customers c ON c.id=i.customer_id
+        WHERE i.id=@id AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
       `)).recordset[0];
       if (!current) return null;
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
       const ownerRequest = new sql.Request(transaction);
       ownerRequest.input("owner_id", sql.BigInt, estimateOwnerId);
-      const nextOwner = (await ownerRequest.query<{ name: string }>(`
-        SELECT u.name FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
+      const nextOwner = (await ownerRequest.query<{ name: string; email: string | null }>(`
+        SELECT u.name,u.email FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
         WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL
           AND r.code IN (N'Engineer',N'Engineering Manager',N'Admin');
       `)).recordset[0];
@@ -459,10 +508,20 @@ export function registerInquiryRoutes(
       await insertAudit(transaction, actor.id, "Inquiry", id, current.inquiry_no, "Estimate owner assigned",
         { estimateOwnerId: Number(current.estimate_owner_id), estimateOwnerName: current.owner_name },
         { estimateOwnerId, estimateOwnerName: nextOwner.name });
-      return { id, estimateOwnerId, estimateOwnerName: nextOwner.name, rowVersion: updated.row_version.toString("base64") };
+      // Re-saving the same owner is not a new assignment, so it must not mail them again.
+      const dueDate = dateOnly(current.due_date) ?? "";
+      const emailMessage = Number(current.estimate_owner_id) === estimateOwnerId ? null
+        : await queueAssignmentNotice(transaction, {
+            inquiryId: id, inquiryNumber: current.inquiry_no, projectName: current.project_name,
+            customerName: current.customer_name, dueDate, priority: current.priority, assignedBy: actor.name,
+            ownerId: estimateOwnerId, ownerName: nextOwner.name, ownerEmail: nextOwner.email ?? "",
+            version: updated.row_version.toString("hex"),
+          }, actor.id, `${current.customer_name} · ${current.project_name} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${current.priority} · มอบหมายโดย ${actor.name}`);
+      return { payload: { id, estimateOwnerId, estimateOwnerName: nextOwner.name, rowVersion: updated.row_version.toString("base64") }, emailMessage };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     if (!response) return reply.status(404).send();
-    return response;
+    const notification = await deliverAssignmentEmail(email, response.emailMessage);
+    return { ...response.payload, notification };
   });
 
   app.put("/api/v1/inquiries/:id/qualification", async (request, reply) => {

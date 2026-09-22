@@ -16,6 +16,17 @@ export type EstimateAssignmentEmail = {
   recipients: EmailRecipient[];
 };
 
+export type InquiryAssignmentEmail = {
+  inquiryId: number;
+  inquiryNumber: string;
+  projectName: string;
+  customerName: string;
+  dueDate: string;
+  priority: string;
+  assignedBy: string;
+  recipients: EmailRecipient[];
+};
+
 export type SupportTicketEmail = {
   ticketId: number;
   ticketNumber: string;
@@ -60,6 +71,21 @@ export class EmailService {
       + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
       + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
       + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Estimate Cost หมายเลข ${escapeHtml(message.estimateNumber)}</p>`);
+  }
+
+  // The engineer picked in "Create inquiry" (from a CRM opportunity or directly) and on a
+  // later reassignment. inquiries.ts writes the matching in-app notification inside the
+  // transaction, so the bell still tells the engineer even when mail is off or Graph fails.
+  async sendInquiryAssignment(message: InquiryAssignmentEmail): Promise<EmailDeliveryResult> {
+    return this.sendMail(message.recipients, `[IoT Team Center] Inquiry ${message.inquiryNumber}: ${message.projectName}`, (appUrl) =>
+      `<p>คุณได้รับมอบหมาย Inquiry ใหม่ / A new inquiry has been assigned to you.</p>`
+      + `<table><tr><td><strong>Inquiry</strong></td><td>${escapeHtml(message.inquiryNumber)}</td></tr>`
+      + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
+      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
+      + `<tr><td><strong>Priority</strong></td><td>${escapeHtml(message.priority)}</td></tr>`
+      + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
+      + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Inquiry หมายเลข ${escapeHtml(message.inquiryNumber)}</p>`);
   }
 
   // Fires for a ticket being created, commented on, (re)assigned, or changing status --

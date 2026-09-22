@@ -10,6 +10,7 @@ import { registerCrmRoutes } from "../src/routes/crm.js";
 import { registerCrmCustomerRoutes } from "../src/routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "../src/routes/crm-documents.js";
 import { registerInquiryRoutes } from "../src/routes/inquiries.js";
+import { EmailService } from "../src/email.js";
 import sql from "mssql";
 
 const base={name:"Vision inspection",customerId:1,salesOwnerId:2,stage:"NEW"};
@@ -69,7 +70,7 @@ test("CRM endpoints and conversion reject unauthorized callers before SQL access
  let touched=false;const database={query(){touched=true;throw Error("Unexpected SQL");},transaction(){touched=true;throw Error("Unexpected SQL");}} as unknown as Database;
  const users={async demandPermission(){throw new ApiError(403,"permission_denied","Denied");},async required(){throw Error("Unexpected actor access");}} as unknown as CurrentUserService;
  const config={businessTimeZone:"Asia/Bangkok"} as AppConfig;
- const app=Fastify();registerErrorHandler(app);registerCrmRoutes(app,config,database,users);registerCrmCustomerRoutes(app,database,users);registerCrmDocumentRoutes(app,config,database,users);registerInquiryRoutes(app,config,database,users);
+ const app=Fastify();registerErrorHandler(app);registerCrmRoutes(app,config,database,users);registerCrmCustomerRoutes(app,database,users);registerCrmDocumentRoutes(app,config,database,users);registerInquiryRoutes(app,config,database,users,new EmailService({mode:"Disabled"}));
  try{
   const paths=["/crm/dashboard","/crm/options","/crm/opportunities","/crm/opportunities/1","/crm/customers","/crm/customers/1","/crm/contacts","/crm/activities","/crm/my-work","/crm/documents","/crm/documents/1/content","/crm/inquiries/1/source"];
   for(const path of paths){const response=await app.inject({method:"GET",url:`/api/v1${path}`});assert.equal(response.statusCode,403,path);}

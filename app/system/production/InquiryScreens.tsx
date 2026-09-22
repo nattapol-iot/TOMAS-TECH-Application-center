@@ -13,6 +13,7 @@ import { InquiryCustomerFields } from "./InquiryCustomerFields";
 import { defaultInquiryQueueScope, inquiryNextAction, type InquiryNextAction, type InquiryQueueScope } from "../../../lib/inquiry-queue";
 import {
   assignInquiryOwner,
+  assignmentDeliveryNote,
   apiRequest,
   createEstimate,
   createInquiry,
@@ -290,14 +291,14 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
 
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError("");
-    let createdInquiry: { id: number; number: string; rowVersion: string } | null = null;
+    let createdInquiry: Awaited<ReturnType<typeof createInquiry>> | null = null;
     try {
       const similar=await apiRequest<Array<{referenceNo:string;projectName:string;status:string;source:string}>>(`/api/v1/inquiry-duplicates?customerId=${form.customerId}&projectName=${encodeURIComponent(form.projectName.trim())}`);
       if(similar.length&&!window.confirm(`พบ Inquiry ที่กำลังดำเนินการและมีชื่องานคล้ายกัน ต้องการสร้างรายการใหม่ต่อหรือไม่\n\n${similar.map(item=>`${item.referenceNo} · ${item.projectName} · ${item.source}`).join("\n")}`)){setBusy(false);return;}
       createdInquiry = await createInquiry({ ...form, targetDelivery: form.targetDelivery || undefined });
       for (const queued of files) await uploadInquiryAttachment(createdInquiry.id, queued);
       await refreshBootstrap();
-      notify(`${createdInquiry.number} registered${files.length ? ` · uploaded ${files.length} file(s)` : ""}`);
+      notify(`${createdInquiry.number} registered${files.length ? ` · uploaded ${files.length} file(s)` : ""}${assignmentDeliveryNote(createdInquiry.notification)}`);
       onCreated(createdInquiry.id);
     } catch (requestError) {
       if (createdInquiry) {
@@ -479,7 +480,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
     {tab === "activity" ? <InquiryActivityTab detail={detail} /> : null}
     {endUserOpen ? <EndUserEditModal kind="inquiries" record={detail} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserOpen(false)} onSaved={load} reloadRecord={() => loadInquiry(detail.id)} /> : null}
     {meetingOpen ? <MeetingDrawer bootstrap={bootstrap} detail={detail} onClose={() => setMeetingOpen(false)} onSaved={async () => { setMeetingOpen(false); notify("Meeting record added to the inquiry"); await load(); }} /> : null}
-    {assignOpen ? <AssignOwnerDrawer bootstrap={bootstrap} detail={detail} onClose={() => setAssignOpen(false)} onSaved={async () => { setAssignOpen(false); notify("Estimate owner re-assigned"); await load(); }} /> : null}
+    {assignOpen ? <AssignOwnerDrawer bootstrap={bootstrap} detail={detail} onClose={() => setAssignOpen(false)} onSaved={async (delivery) => { setAssignOpen(false); notify(`Estimate owner re-assigned${delivery}`); await load(); }} /> : null}
     {qualificationOpen ? <QualificationDrawer detail={detail} onClose={() => setQualificationOpen(false)} onSaved={async () => { setQualificationOpen(false); notify("Project qualification updated"); await load(); }} /> : null}
     {uploadOpen ? <AttachmentDrawer detail={detail} onClose={() => setUploadOpen(false)} onSaved={async () => { setUploadOpen(false); notify("Attachment uploaded"); await load(); }} /> : null}
   </>;
@@ -545,12 +546,12 @@ function MeetingDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap: Boo
   </Drawer>;
 }
 
-function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap: BootstrapData; detail: InquiryDetail; onClose: () => void; onSaved: () => Promise<void> }) {
+function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap: BootstrapData; detail: InquiryDetail; onClose: () => void; onSaved: (delivery: string) => Promise<void> }) {
   const owners = bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role));
   const [ownerId, setOwnerId] = useState(detail.estimateOwnerId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const save = async () => { setBusy(true); setError(""); try { await assignInquiryOwner(detail.id, ownerId, detail.rowVersion); await onSaved(); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
+  const save = async () => { setBusy(true); setError(""); try { const saved = await assignInquiryOwner(detail.id, ownerId, detail.rowVersion); await onSaved(assignmentDeliveryNote(saved.notification)); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
   return <Drawer title="Assign estimate owner" subtitle={`${detail.number} · ${detail.projectName}`} onClose={onClose} footer={<><span className="spacer" /><button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || ownerId === detail.estimateOwnerId} onClick={() => { void save(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Assign owner"}</button></>}>{error ? <LoadError message={error} retry={() => { void save(); }} /> : null}<Field label="Estimate Owner"><select value={ownerId} onChange={(event) => setOwnerId(Number(event.target.value))}>{owners.map((member) => <option key={member.id} value={member.id}>{member.name} — {member.department}</option>)}</select></Field></Drawer>;
 }
 

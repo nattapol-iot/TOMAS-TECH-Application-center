@@ -993,6 +993,13 @@ export type AssignmentNotificationResult = {
   recipients: string[];
 };
 
+export const assignmentDeliveryNote = (notification: AssignmentNotificationResult): string => {
+  if (notification.status === "sent") return ` · แจ้งทางอีเมลแล้ว (${notification.recipients.length})`;
+  if (notification.status === "failed") return " · ส่งอีเมลไม่สำเร็จ กรุณาแจ้งผู้รับผิดชอบเอง (แจ้งเตือนในระบบแล้ว)";
+  if (notification.status === "disabled") return " · แจ้งเตือนในระบบแล้ว (อีเมลยังไม่เปิดใช้งาน)";
+  return "";
+};
+
 export type EstimateAssignmentMutationResult = {
   id: number;
   rowVersion: string;
@@ -1184,12 +1191,13 @@ export const listInquiries = (values: {
   apiRequest<PagedResult<InquirySummary>>(`/api/v1/inquiries/${queryString(values)}`);
 
 export const createInquiry = (input: CreateInquiryInput) =>
-  apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/inquiries/", { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>(
+    "/api/v1/inquiries/", { method: "POST", body: JSON.stringify(input) });
 
 export const loadInquiry = (id: number) => apiRequest<InquiryDetail>(`/api/v1/inquiries/${id}`);
 
 export const assignInquiryOwner = (id: number, estimateOwnerId: number, rowVersion: string) =>
-  apiRequest<{ id: number; estimateOwnerId: number; estimateOwnerName: string; rowVersion: string }>(`/api/v1/inquiries/${id}/assignment`, {
+  apiRequest<{ id: number; estimateOwnerId: number; estimateOwnerName: string; rowVersion: string; notification: AssignmentNotificationResult }>(`/api/v1/inquiries/${id}/assignment`, {
     method: "PUT",
     body: JSON.stringify({ estimateOwnerId, rowVersion }),
   });

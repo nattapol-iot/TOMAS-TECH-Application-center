@@ -61,3 +61,40 @@ test("Microsoft Graph failure does not throw after the assignment has been commi
   });
   assert.deepEqual(result, { status: "failed", recipients: ["engineer@example.com"] });
 });
+
+test("an inquiry assignment names the inquiry, escapes the project and reports a disabled mailer", async () => {
+  let calls = 0;
+  const offline = new EmailService({ mode: "Disabled" }, (async () => { calls += 1; return new Response(); }) as typeof fetch);
+  const message = {
+    inquiryId: 12, inquiryNumber: "INQ-2609-0012", projectName: "Line <B> retrofit", customerName: "JVCKENWOOD",
+    dueDate: "2026-10-06", priority: "Normal", assignedBy: "Sales & CRM",
+    recipients: [{ name: "Chalermchai", email: "Chalermchai@Example.com" }],
+  };
+  assert.deepEqual(await offline.sendInquiryAssignment(message), { status: "disabled", recipients: ["chalermchai@example.com"] });
+  assert.equal(calls, 0);
+
+  const sent: Array<{ url: string; init?: RequestInit }> = [];
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    sent.push({ url: String(input), ...(init ? { init } : {}) });
+    if (String(input).includes("/oauth2/v2.0/token")) return Response.json({ access_token: "token-1", expires_in: 3600 });
+    return new Response(null, { status: 202 });
+  }) as typeof fetch;
+  assert.equal((await new EmailService(graphConfig, fetcher).sendInquiryAssignment(message)).status, "sent");
+  const payload = JSON.parse(String(sent.find((call) => call.url.includes("/sendMail"))!.init!.body)) as { message: { subject: string; body: { content: string } } };
+  assert.match(payload.message.subject, /INQ-2609-0012/);
+  assert.match(payload.message.body.content, /Line &lt;B&gt; retrofit/);
+  assert.doesNotMatch(payload.message.body.content, /Line <B> retrofit/);
+  assert.match(payload.message.body.content, /JVCKENWOOD/);
+});
+
+test("an inquiry assignment survives a Microsoft Graph outage", async () => {
+  const fetcher = (async (input: Parameters<typeof fetch>[0]) => String(input).includes("/oauth2/v2.0/token")
+    ? Response.json({ access_token: "token-1", expires_in: 3600 })
+    : new Response("blocked", { status: 403 })) as typeof fetch;
+  const result = await new EmailService(graphConfig, fetcher).sendInquiryAssignment({
+    inquiryId: 1, inquiryNumber: "INQ-1", projectName: "Robot", customerName: "Customer",
+    dueDate: "2026-10-06", priority: "High", assignedBy: "Manager",
+    recipients: [{ name: "Engineer", email: "engineer@example.com" }],
+  });
+  assert.deepEqual(result, { status: "failed", recipients: ["engineer@example.com"] });
+});

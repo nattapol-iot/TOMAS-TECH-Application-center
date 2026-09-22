@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   addProjectMember,
   createEmployee,
+  assignmentDeliveryNote,
   createEstimate,
   createCostItem,
   createInquiry,
@@ -542,14 +543,14 @@ export function ProductionInquiries({ bootstrap, notify, refreshBootstrap }: Com
           </div>
         ) : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="inbox" title="No inquiry found" message="ปรับตัวกรองหรือสร้าง Inquiry รายการแรก" />}
       </Panel>
-      {createOpen ? <CreateInquiryModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (number) => {
-        setCreateOpen(false); notify(`${number} created`); await Promise.all([load(), refreshBootstrap()]);
+      {createOpen ? <CreateInquiryModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (number, delivery) => {
+        setCreateOpen(false); notify(`${number} created${delivery}`); await Promise.all([load(), refreshBootstrap()]);
       }} /> : null}
     </>
   );
 }
 
-function CreateInquiryModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (number: string) => Promise<void> }) {
+function CreateInquiryModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (number: string, delivery: string) => Promise<void> }) {
   const engineers = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const [form, setForm] = useState<CreateInquiryInput>({
     customerId: bootstrap.customers[0]?.id ?? 0,
@@ -568,7 +569,7 @@ function CreateInquiryModal({ bootstrap, onClose, onCreated }: { bootstrap: Boot
   const update = <K extends keyof CreateInquiryInput>(key: K, value: CreateInquiryInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async () => {
     setBusy(true); setError("");
-    try { const created = await createInquiry(form); await onCreated(created.number); }
+    try { const created = await createInquiry(form); await onCreated(created.number, assignmentDeliveryNote(created.notification)); }
     catch (requestError) { setError(toError(requestError)); }
     finally { setBusy(false); }
   };

@@ -177,7 +177,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateCopyRoutes(app, config, database, users);
   registerEstimateAssignmentReadRoutes(app, database, users);
   registerInventoryRoutes(app, database, users);
-  registerInquiryRoutes(app, config, database, users);
+  registerInquiryRoutes(app, config, database, users, email);
   registerCrmRoutes(app, config, database, users);
   registerCrmCustomerRoutes(app, database, users);
   registerCrmDocumentRoutes(app, config, database, users);

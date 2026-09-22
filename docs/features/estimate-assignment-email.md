@@ -42,3 +42,20 @@ written to source, logs, SQL Server or the frontend.
 Team Test launchers explicitly set `Email__Mode=Disabled`; this prevents UAT actions
 from emailing real employees. Enable and test production mail only after the sender
 mailbox, permission scope and administrator consent have been approved.
+
+## Inquiry assignment
+
+The engineer chosen in **Create inquiry** — from a CRM opportunity or from the direct
+intake form — and the engineer named on a later re-assignment receive the same treatment
+through the same Microsoft Graph configuration above. There is nothing extra to configure.
+
+Two differences from the estimate assignment:
+
+- An in-app notification (`INQUIRY_ASSIGNED`, the bell) is written inside the same
+  transaction as the inquiry. It is therefore committed or rolled back with the inquiry
+  itself, and it still reaches the engineer when `Email__Mode` is `Disabled` or when
+  Microsoft Graph is unreachable. The mail is sent only after that transaction commits.
+- Assigning an inquiry to yourself, and re-saving an assignment without changing the
+  owner, notify nobody. Handing an inquiry back to a previous owner does notify them
+  again: the dedupe key carries the inquiry's row version, so each assignment is its
+  own event.

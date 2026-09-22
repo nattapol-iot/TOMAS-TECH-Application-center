@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ApiClientError, apiRequest, downloadCrmDocument, uploadCrmDocument, type BootstrapData } from "../api-client";
+import { ApiClientError, apiRequest, assignmentDeliveryNote, downloadCrmDocument, uploadCrmDocument, type AssignmentNotificationResult, type BootstrapData } from "../api-client";
 import { useLanguage, useT } from "../i18n";
 import { Badge, EmptyState, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SummaryTile, TablePageSize, type IconName, type Tone } from "../ui";
 import { CustomerModal } from "./AdminAnalyticsScreens";
@@ -13,7 +13,7 @@ type Page = {items:CrmRecord[];total:number;page:number;pageSize:number};
 type Detail = {opportunity:CrmRecord;activities:CrmRecord[];followups:CrmRecord[];history:CrmRecord[];links:CrmRecord[]};
 type CustomerDetail = {service:CrmRecord[];customer:CrmRecord;sites:CrmRecord[];contacts:CrmRecord[];inquiries:CrmRecord[];estimates:CrmRecord[];projects:CrmRecord[]};
 export type CrmView = "crm-dashboard"|"crm-customers"|"crm-contacts"|"crm-opportunities"|"crm-activities"|"crm-pipeline";
-type Props = {refreshBootstrap?:()=>Promise<void>;bootstrap:BootstrapData;view:CrmView;preferredOpportunityId?:number|null;openInquiry:(id:number)=>void;openEstimate:(id:number)=>void;openProject:(id:number)=>void};
+type Props = {refreshBootstrap?:()=>Promise<void>;notify?:(message:string)=>void;bootstrap:BootstrapData;view:CrmView;preferredOpportunityId?:number|null;openInquiry:(id:number)=>void;openEstimate:(id:number)=>void;openProject:(id:number)=>void};
 const stages=["NEW","QUALIFICATION","REQUIREMENT","ESTIMATING","PROPOSAL","NEGOTIATION","WON","LOST","ON_HOLD"];
 const activityTypes=["Meeting","Call","Email","SiteVisit","CustomerUpdate","InternalDiscussion","MessageLINE","Note","Other"];
 const statuses=["Open","WaitingCustomer","WaitingInternal","WaitingSupplier","Done","Cancelled"];
@@ -225,7 +225,7 @@ function OpportunityWorkspace({id,options,openCustomer,onCustomer,...props}:Prop
     {editor==="opportunity"?<OpportunityEditor bootstrap={bootstrap} options={options} initial={o} onClose={()=>setEditor(null)} onSaved={state.refresh}/>:null}
     {editor==="action"?<Editor title="CRM.addAction" initial={action??{ownerId:bootstrap.user.id,priority:"Normal",status:"Open"}} fields={followupFields} onClose={()=>setEditor(null)} onSave={async v=>{await crmRequest(`/api/v1/crm/opportunities/${id}/followups${action?`/${action.id}`:""}`,action?"PUT":"POST",v);state.refresh();}}/>:null}
     {editor==="activity"?<ActivityEditor bootstrap={bootstrap} customerId={Number(o.customerId)} opportunityId={id} onClose={()=>setEditor(null)} onSaved={state.refresh}/>:null}
-    {editor==="convert"?<Editor title="CRM.convert" initial={{estimateOwnerId:o.technicalOwnerId??bootstrap.user.id,projectType:"IoT",dueDate:futureDate(14)}} fields={[{key:"estimateOwnerId",required:true,options:teamOptions(bootstrap)},{key:"dueDate",required:true,type:"date"}]} onClose={()=>setEditor(null)} onSave={async v=>{const result=await crmRequest<{id:number}>("/api/v1/inquiries","POST",{...v,projectType:"IoT",opportunityId:id,opportunityRowVersion:o.rowVersion});state.refresh();props.openInquiry(result.id);}}>{()=> <div className="alert info"><strong>{t("CRM.convertHint")}</strong><p>{t("CRM.autoFilledHint")}</p><p>{t("CRM.filesInherited")}</p></div>}</Editor>:null}
+    {editor==="convert"?<Editor title="CRM.convert" initial={{estimateOwnerId:o.technicalOwnerId??bootstrap.user.id,projectType:"IoT",dueDate:futureDate(14)}} fields={[{key:"estimateOwnerId",required:true,options:teamOptions(bootstrap)},{key:"dueDate",required:true,type:"date"}]} onClose={()=>setEditor(null)} onSave={async v=>{const result=await crmRequest<{id:number;number:string;notification:AssignmentNotificationResult}>("/api/v1/inquiries","POST",{...v,projectType:"IoT",opportunityId:id,opportunityRowVersion:o.rowVersion});props.notify?.(`${result.number} created${assignmentDeliveryNote(result.notification)}`);state.refresh();props.openInquiry(result.id);}}>{()=> <div className="alert info"><strong>{t("CRM.convertHint")}</strong><p>{t("CRM.autoFilledHint")}</p><p>{t("CRM.filesInherited")}</p></div>}</Editor>:null}
   </>;
 }
 

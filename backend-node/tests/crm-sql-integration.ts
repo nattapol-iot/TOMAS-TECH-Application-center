@@ -17,6 +17,7 @@ import { registerCrmRoutes } from "../src/routes/crm.js";
 import { registerCrmCustomerRoutes } from "../src/routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "../src/routes/crm-documents.js";
 import { registerInquiryRoutes } from "../src/routes/inquiries.js";
+import { EmailService } from "../src/email.js";
 import { registerSalesCustomerRoutes } from "../src/routes/sales-customers.js";
 import type { CurrentUser } from "../src/types.js";
 
@@ -62,7 +63,7 @@ if(process.env.CRM_VISUAL_TEST==="1"){
  app.get("/test-bootstrap",async()=>({user:actors.find(a=>a.name==="Admin"),team:actors,customers:(await run("SELECT id,code,name FROM dbo.customers WHERE code='CRM-INTEGRATION'")).recordset,permissions:(await run("SELECT code FROM dbo.permissions")).recordset.map(r=>r.code)}));
  app.post("/test-stop",async()=>{setTimeout(()=>stopVisual?.(),50);return {stopped:true};});
 }
-registerCrmRoutes(app,config,database,users);registerCrmCustomerRoutes(app,database,users);registerCrmDocumentRoutes(app,config,database,users);registerInquiryRoutes(app,config,database,users);registerSalesCustomerRoutes(app,database,users);
+registerCrmRoutes(app,config,database,users);registerCrmCustomerRoutes(app,database,users);registerCrmDocumentRoutes(app,config,database,users);registerInquiryRoutes(app,config,database,users,new EmailService({mode:"Disabled"}));registerSalesCustomerRoutes(app,database,users);
 async function call(method:"GET"|"POST"|"PUT",url:string,actor="Sales",body?:unknown,status=200){const response=await app.inject({method,url:`/api/v1${url}`,headers:{"x-test-actor":actor},...(body?{payload:body}:{})});assert.equal(response.statusCode,status,`${method} ${url}: ${response.body}`);return response.json();}
 try {
  await run(`INSERT dbo.users(entra_object_id,email,name,role_id,department) SELECT 'crm-api-'+v.name,'crm-api-'+v.name+'@example.invalid',v.name,r.id,v.department FROM (VALUES('Sales','Sales Engineer','Sales'),('Engineer','Engineer','Engineering'),('Other','Engineer','Other'),('Admin','Admin','Admin'))v(name,role,department) JOIN dbo.roles r ON r.code=v.role;`);
