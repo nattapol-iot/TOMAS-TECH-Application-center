@@ -5124,6 +5124,30 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 
 /* Estimate workspace: one primary summary, secondary controls on demand. */
 .estimate-workspace-bar { align-items: center; }
+.estimate-heading-compact { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; margin-bottom: 16px; }
+.estimate-heading-compact > .page-header { flex: 1 1 480px; margin: 0; }
+.estimate-heading-compact .page-meta { gap: 8px 18px; margin-top: 12px; }
+.estimate-heading-compact > .estimate-workspace-bar { flex: 0 1 auto; flex-wrap: wrap; padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; }
+.estimate-heading-compact > .info-strip { flex-basis: 100%; }
+.estimate-validation-strip { flex-wrap: wrap; }
+.estimate-cost-panel { overflow: visible; }
+.estimate-cost-panel .panel-actions { flex-wrap: wrap; }
+.estimate-cost-panel .cost-drag-help { margin: 0; padding: 7px 14px; color: var(--muted); font-size: var(--fs-2xs); }
+.estimate-cost-panel .sheet-controls { flex-wrap: wrap; gap: 8px; }
+.estimate-cost-menu .estimate-more-content { min-width: 250px; }
+.estimate-cost-search { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+.estimate-cost-search .estimate-sheet-search { max-width: 480px; }
+.estimate-cost-identity > .cell-text { padding-bottom: 2px; color: var(--muted); font-size: var(--fs-2xs); }
+.estimate-cost-identity > .muted { display: block; padding: 0 10px 5px; font-size: var(--fs-2xs); }
+.estimate-compact-table .cost-sheet thead th:nth-child(3),
+.estimate-compact-table .cost-sheet .item-row > td:nth-child(3) { position: static; box-shadow: none; }
+.estimate-compact-table .cost-sheet .item-row > td:nth-child(2) { box-shadow: 1px 0 0 var(--line-soft); }
+.estimate-more > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+@media (max-width: 720px) {
+  .estimate-heading-compact > .estimate-workspace-bar { flex-basis: 100%; }
+  .estimate-cost-panel .panel-head { flex-wrap: wrap; gap: 12px; }
+  .estimate-cost-menu .estimate-more-content { left: auto; right: 0; min-width: min(250px, 80vw); }
+}
 .estimate-main-total { display: grid; gap: 3px; margin-right: 16px; }
 .estimate-main-total > span { font-size: var(--fs-xs); color: var(--muted); }
 .estimate-main-total > strong { font-size: var(--fs-2xl); color: var(--blue-text); }

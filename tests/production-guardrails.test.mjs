@@ -560,7 +560,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /const \[pageSize, setPageSize\] = useState\(50\)/);
   assert.match(estimateScreen, /<TablePageSize value=\{pageSize\}/);
   assert.match(estimateScreen, /<StatusLegend items=/);
-  for (const tab of ["Cost summary", "Equipment & materials", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
+  for (const tab of ["Cost summary", "Cost Items", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
     assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add expense", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add with details", "New Main Module"]) {
