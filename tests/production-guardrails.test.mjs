@@ -560,7 +560,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /const \[pageSize, setPageSize\] = useState\(50\)/);
   assert.match(estimateScreen, /<TablePageSize value=\{pageSize\}/);
   assert.match(estimateScreen, /<StatusLegend items=/);
-  for (const tab of ["Summary", "Cost Items", "Engineering Man-hour", "Other Project Cost", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
+  for (const tab of ["Cost summary", "Equipment & materials", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
     assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add expense", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add with details", "New Main Module"]) {
@@ -1639,10 +1639,14 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   assert.doesNotMatch(exportBlock, /foldErpGroupLines|summary\.lines\.map/);
   // Contingency has no row on the sheet and still has to reach the file, or it stops adding up.
   assert.match(exportBlock, /sourceType === "Contingency"/);
-  // The tab exists in its own right and does not disturb the Summary tab beside it.
-  assert.match(screens, /\{ id: "erp", label: "ERP Sheet" \}/);
-  assert.match(screens, /tab === "erp" \? <EstimateErpSheetPanel/);
-  assert.match(screens, /tab === "summary" \? <><EstimateNextSteps/);
+  // The ERP sheet is now the only primary summary; secondary workflows remain available.
+  assert.match(screens, /hidden=\{tab !== "summary"\}><EstimateErpSheetPanel/);
+  assert.doesNotMatch(screens, /id: "erp"|<EstimateErpSummaryPanel/);
+  assert.match(screens, /setTab\("assignment"\)/);
+  assert.match(screens, /setTab\("revision"\)/);
+  assert.match(screens, /setTab\("review"\)/);
+  assert.match(sheet, /classify\(\[\.\.\.selected\], bulkCategory\)/);
+  assert.match(sheet, /visibleRows\.map/);
 });
 
 test("the ERP sheet renames the lines whose wording it owns, and leaves the purchased ones alone", async () => {

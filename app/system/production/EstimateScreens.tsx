@@ -10,7 +10,7 @@ import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
 import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
-import { EstimateErpSummaryPanel } from "./EstimateErpSummary";
+
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
 import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
 import { LaborPackageMaster } from "./LaborPackageMaster";
@@ -107,7 +107,7 @@ type Props = {
   refreshBootstrap: () => Promise<void>;
 };
 
-type WorkspaceTab = "summary" | "erp" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "review";
+type WorkspaceTab = "summary" | "cost" | "manhour" | "other" | "assignment" | "validation" | "revision" | "review";
 type ManhourSeed = Partial<Pick<EstimateManhourInput, "package" | "costType" | "provider">>;
 type ExpenseSeed = Partial<Pick<EstimateExpenseInput, "package" | "costType">>;
 type CostItemSeed = Partial<Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion">>;
@@ -510,6 +510,7 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
 function ProductionEstimateWorkspace({ estimateId, bootstrap, notify, refreshBootstrap, onBack, onListChanged }: Props & { estimateId: number; onBack: () => void; onListChanged: () => Promise<void> }) {
   const [workspace, setWorkspace] = useState<EstimateCostWorkspace | null>(null);
   const [tab, setTab] = useState<WorkspaceTab>("summary");
+  const [classificationDirty, setClassificationDirty] = useState(false);
   const [costFocus, setCostFocus] = useState<string | null>(null);
   const clearCostFocus = useCallback(() => setCostFocus(null), []);
   const [loading, setLoading] = useState(true);
@@ -646,21 +647,39 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       <div><span><LocalizedText text={"Estimate owner"} /></span><strong>{header.ownerName}</strong></div><div><span><LocalizedText text={"Created"} /></span><strong>{formatDate(header.createdDate)}</strong></div><div><span><LocalizedText text={"Due"} /></span><strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong></div><div><span><LocalizedText text={"Status"} /></span><strong><Badge tone={["Approved", "Locked"].includes(header.status) ? "green" : header.status === "Revision Required" ? "amber" : "blue"}>{header.status}</Badge></strong></div><div><span><LocalizedText text={"Progress"} /></span><strong style={{ minWidth: 110 }}><ProgressCell value={numberOf(header.progress)} /></strong></div>
     </>} />
     {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
-    <div className="workspace-bar">
+    <div className="workspace-bar estimate-workspace-bar">
+      <div className="estimate-main-total"><span><LocalizedText text="Total Estimated Cost" /></span><strong>{formatMoney(totals.total)}</strong></div>
+      <details className="estimate-more"><summary className="btn default">{estimateUxCopy(currentLocale(), "เพิ่มเติม", "More", "その他")} <Icon name="chevronDown" /></summary><div className="estimate-more-content">
       <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
       <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
       <button className="btn default" type="button" onClick={() => setTab("validation")}><Icon name="shield" /><LocalizedText text={"Validation"} />{validationCount ? <span className={`badge ${criticalCount ? "red" : "amber"}`}>{validationCount}</span> : <span className="badge green"><LocalizedText text={"OK"} /></span>}</button>
+      <button className="btn ghost" type="button" onClick={() => setTab("assignment")}><LocalizedText text="Assignment" /></button>
+      <button className="btn ghost" type="button" onClick={() => setTab("revision")}><LocalizedText text="Revision Control" /></button>
+      <button className="btn ghost" type="button" onClick={() => setTab("review")}><LocalizedText text="Engineering Review" /></button>
+      </div></details>
       <span className="spacer" />
-      {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
+      {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
       {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
       {capabilities.canCreateRevision ? <button className="btn primary" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
-      {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
+      {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
     </div>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
+    {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{estimateUxCopy(currentLocale(), "มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{estimateUxCopy(currentLocale(), "กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
     {criticalCount ? <div className="info-strip red"><Icon name="alertTriangle" /><span><strong>{criticalCount} <LocalizedText text={"critical validation issue(s)"} /></strong> <LocalizedText text={"must be resolved before submission or approval."} /></span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text={"Open validation"} /><Icon name="arrowRight" /></button></div> : null}
-    {warningCount ? <div className="info-strip amber"><Icon name="alertTriangle" /><span><strong>{warningCount} <LocalizedText text={"advisory warning(s)"} /></strong> <LocalizedText text={"do not block workflow, but should be reviewed."} /></span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text={"Review warnings"} /><Icon name="arrowRight" /></button></div> : null}
+    {warningCount ? <div className="info-strip estimate-advisory"><Icon name="alertTriangle" /><span><strong>{warningCount} <LocalizedText text={"advisory warning(s)"} /></strong> <LocalizedText text={"do not block workflow, but should be reviewed."} /></span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text={"Review warnings"} /><Icon name="arrowRight" /></button></div> : null}
     {["Approved", "Locked"].includes(header.status) ? <div className="info-strip green"><Icon name="lock" /><span><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></span></div> : null}
+    <Tabs active={tab} onChange={setTab} tabs={[
+      { id: "summary", label: estimateUxCopy(currentLocale(), "สรุปต้นทุน", "Cost summary", "原価サマリー") }, { id: "cost", label: estimateUxCopy(currentLocale(), "อุปกรณ์และวัสดุ", "Equipment & materials", "機器・材料"), count: workspace.costItems.length }, { id: "manhour", label: estimateUxCopy(currentLocale(), "ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length }, { id: "other", label: estimateUxCopy(currentLocale(), "ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length },
+    ]} />
+    {!["summary", "cost", "manhour", "other"].includes(tab) ? <div className="estimate-secondary-heading"><button className="btn ghost sm" type="button" onClick={() => setTab("summary")}><Icon name="chevronLeft" />{estimateUxCopy(currentLocale(), "กลับสรุปต้นทุน", "Back to cost summary", "原価サマリーへ")}</button><strong><LocalizedText text={tab === "assignment" ? "Assignment" : tab === "revision" ? "Revision Control" : tab === "review" ? "Engineering Review" : "Validation"} /></strong></div> : null}
+
+    <div hidden={tab !== "summary"}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} />
+    </div>
+    {tab === "summary" ? <>
+      {header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
+      {ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}
+      <details className="estimate-secondary"><summary>{estimateUxCopy(currentLocale(), "รายละเอียดต้นทุนและความพร้อม", "Cost breakdown and readiness", "原価と準備状況")}</summary>
     <section className="summary-strip">
       <SummaryTile label="Material Cost" value={formatMoney(totals.material)} note="01–05" />
       <SummaryTile label="Engineering cost" value={formatMoney(totals.engineering)} note={`${formatNumber(workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0))} MD`} />
@@ -671,12 +690,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       <SummaryTile label={`Contingency ${formatNumber(header.contingencyRate)}%`} value={formatMoney(totals.contingency)} note="Calculated by SQL Server" />
       <SummaryTile label="Total Estimated Cost" value={formatMoney(totals.total)} note="Internal cost · no margin" strong />
     </section>
-    <Tabs active={tab} onChange={setTab} tabs={[
-      { id: "summary", label: "Summary" }, { id: "erp", label: "ERP Sheet" }, { id: "cost", label: "Cost Items", count: workspace.costItems.length }, { id: "manhour", label: "Engineering Man-hour", count: workspace.manhourLines.length }, { id: "other", label: "Other Project Cost", count: workspace.otherCostLines.length }, { id: "assignment", label: "Assignment", count: workspace.assignments.length }, { id: "revision", label: "Revision Control", count: workspace.revisionHistory.length }, { id: "review", label: "Engineering Review" },
-    ]} />
-
-    {tab === "summary" ? <><EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /><EstimateErpSummaryPanel reorderBusy={busy} workspace={workspace} notify={notify} onChanged={afterMutation} onOpenCategory={(categoryCode, module, itemId) => { if (itemId) { const line = workspace.costItems.find(line => line.id === itemId); if (line) { if (line.priceSetKey) setCostFocus(`price-set:${line.priceSetKey}`); else setCostEditor(line); setTab("cost"); } return; } const group = costModuleGroups(workspace.costItems).find((entry) => entry.categoryCode === categoryCode && (!module || entry.module === module)); if (group) { setCostFocus(group.key); setTab("cost"); } }} />{ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}<EstimateSummaryTab workspace={workspace} /><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /></> : null}
-    {tab === "erp" ? <EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} /> : null}
+<EstimateSummaryTab workspace={workspace} /></details></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
@@ -770,9 +784,9 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       if (expense?.canEdit) { setExpenseSeed({}); setExpenseEditor(expense); }
       if (other && capabilities.canEditOtherCosts) setOtherEditor(other);
     }} /> : null}
-    {tab === "revision" ? <div className="stack"><EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
+    {tab === "revision" ? <div className="stack"><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /><EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
 
-    {tab === "review" ? <EstimateReviewTab workspace={workspace} onWorkflow={setWorkflowAction} /> : null}
+    {tab === "review" ? <EstimateReviewTab workspace={workspace} onWorkflow={action => { if (classificationDirty && (action === "submit" || action === "approve")) { setTab("summary"); return; } setWorkflowAction(action); }} /> : null}
 
     {costEditor ? <CostItemEditor bootstrap={bootstrap} workspace={workspace} line={costEditor === "new" ? null : costEditor} seed={costSeed} busy={busy} onClose={() => { setCostEditor(null); setCostSeed({}); }} onSave={async (input, lineId) => {
       setBusy(true); setError("");

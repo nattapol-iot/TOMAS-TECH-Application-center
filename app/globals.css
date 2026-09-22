@@ -5121,3 +5121,29 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cb-line-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; padding: 2px 6px 0; font-size: var(--fs-2xs); color: var(--muted); }
 .cb-line-meta .cb-code { margin-left: 0; }
 .cb-line-meta .chip { padding: 1px 8px; font-size: var(--fs-2xs); }
+
+/* Estimate workspace: one primary summary, secondary controls on demand. */
+.estimate-workspace-bar { align-items: center; }
+.estimate-main-total { display: grid; gap: 3px; margin-right: 16px; }
+.estimate-main-total > span { font-size: var(--fs-xs); color: var(--muted); }
+.estimate-main-total > strong { font-size: var(--fs-2xl); color: var(--blue-text); }
+.estimate-more { position: relative; }
+.estimate-more > summary { list-style: none; cursor: pointer; }
+.estimate-more-content { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; min-width: 230px; display: grid; gap: 6px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 24px rgb(0 0 0 / 10%); }
+.estimate-more-content > .btn { justify-content: flex-start; }
+.estimate-secondary { margin: 12px 0; padding: 12px 16px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); }
+.estimate-secondary > summary { cursor: pointer; color: var(--ink-soft); font-size: var(--fs-sm); }
+.estimate-secondary[open] > summary { margin-bottom: 14px; }
+.estimate-secondary-heading { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.estimate-advisory { background: var(--n-50); border-color: var(--line-soft); color: var(--ink-soft); }
+.estimate-sheet-search { display: flex; align-items: center; gap: 8px; flex: 1 1 250px; min-width: 180px; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0 10px; background: var(--surface); color: var(--muted); }
+.estimate-sheet-search input { border: 0; background: transparent; width: 100%; min-width: 0; padding: 9px 0; color: var(--ink); }
+.estimate-sheet-search:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
+.estimate-sheet-tools { flex-wrap: wrap; }
+.estimate-sheet-tools .chip[aria-pressed="true"] { background: var(--blue-soft); border-color: var(--blue-line); color: var(--blue-text); }
+.estimate-selection-bar { background: var(--blue-soft); flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .estimate-main-total { flex-basis: 100%; }
+  .estimate-more-content { left: 0; right: auto; }
+  .estimate-sheet-search { flex-basis: 100%; }
+}
