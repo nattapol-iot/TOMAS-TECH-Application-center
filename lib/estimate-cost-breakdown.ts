@@ -248,9 +248,10 @@ export function erpSheetQuantity(
   row: { standalone: boolean; source: { kind: BreakdownSectionKind }; lines: readonly { quantity: number; unit: string }[] },
   merged: { quantity: number; unit: string } | null,
   detail?: { quantity?: number; unit?: string },
+  summaryDetail?: { quantity?: number; unit?: string },
 ) {
   if (merged) return { quantity: merged.quantity, unit: merged.unit };
   if (row.standalone) return { quantity: row.lines[0].quantity, unit: row.lines[0].unit };
-  if (row.source.kind === 'cost-items') return { quantity: 1, unit: 'Set' };
+  if (row.source.kind === 'cost-items') return { quantity: summaryDetail?.quantity ?? 1, unit: summaryDetail?.unit ?? 'Set' };
   return { quantity: detail?.quantity ?? 1, unit: detail?.unit ?? 'Set' };
 }

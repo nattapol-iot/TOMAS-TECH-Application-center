@@ -223,3 +223,10 @@ test('summary cost module is one Set regardless of stored module multiplier', ()
   assert.deepEqual(erpSheetQuantity(row,{quantity:2,unit:'Lot'}), {quantity:2,unit:'Lot'});
   assert.deepEqual(erpSheetQuantity({...row,source:{kind:'manhour'}},null,{quantity:3,unit:'Job'}), {quantity:3,unit:'Job'});
 });
+
+
+test('saved summary quantity overrides one Set without reading the module multiplier', () => {
+ const row={standalone:false,source:{kind:'cost-items'},lines:[{quantity:390,unit:'Meter'}]};
+ assert.deepEqual(erpSheetQuantity(row,null,{quantity:13,unit:'Set'},{quantity:2,unit:'Lot'}),{quantity:2,unit:'Lot'});
+ assert.equal(row.lines[0].quantity,390);
+});

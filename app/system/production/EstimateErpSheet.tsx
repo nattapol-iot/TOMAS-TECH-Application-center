@@ -322,6 +322,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     const detail = moduleDetails.find((entry) => entry.moduleKey === detailKeyOf(row));
     return row.source.kind === "cost-items" ? row.title : detail?.title ?? row.title;
   };
+  const quantityKeyOf = (row: SheetRow) => row.source.kind === "cost-items" ? "erp:" + detailKeyOf(row) : detailKeyOf(row);
   const ledgerOf = (row: SheetRow) => row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title;
 
   /*
@@ -345,7 +346,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     const rows = headings.flatMap((heading) => heading.rows.map((row) => {
       const merged = mergedOf(row);
       const detail = moduleDetails.find((entry) => entry.moduleKey === detailKeyOf(row));
-      const { quantity: rowQuantity, unit: rowUnit } = erpSheetQuantity(row, merged, detail);
+      const { quantity: rowQuantity, unit: rowUnit } = erpSheetQuantity(row, merged, detail, moduleDetails.find(entry => entry.moduleKey === quantityKeyOf(row)));
       const erpLines = row.erpKeys.map((key) => erpByKey.get(key)).filter((line): line is ErpLine => Boolean(line));
       return {
         sourceType: erpLines[0]?.sourceType ?? "CostItem",
@@ -433,7 +434,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     const detail = moduleDetails.find((entry) => entry.moduleKey === detailKey);
     const merged = mergedOf(row);
     const title = titleOf(row);
-    const { quantity: rowQuantity, unit: rowUnit } = erpSheetQuantity(row, merged, detail);
+    const { quantity: rowQuantity, unit: rowUnit } = erpSheetQuantity(row, merged, detail, moduleDetails.find(entry => entry.moduleKey === quantityKeyOf(row)));
     const isSelected = row.erpKeys.length > 0 && row.erpKeys.every((key) => selected.has(key));
     const open = opened.has(row.key);
     /* The rule that derives a labour category is a default, not a veto. Offering it
@@ -451,7 +452,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
         : row.source.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[row.source.title]) && workspace.capabilities.canEditAllSections
         : row.source.kind === "expenses" ? workspace.capabilities.canEditExpenses
         : workspace.capabilities.canEditOtherCosts)));
-    const canEditUnit = !row.standalone && (row.source.kind === "cost-items" ? false
+    const canEditUnit = !row.standalone && (row.source.kind === "cost-items" ? workspace.capabilities.canEditCostItems
       : row.source.kind === "manhour" ? Boolean(LABOR_MODULE_NAMES[row.source.title]) && workspace.capabilities.canEditAllSections
       : row.source.kind === "expenses" ? workspace.capabilities.canEditExpenses
       : workspace.capabilities.canEditOtherCosts);
@@ -487,7 +488,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
             setBusy(true);
             try {
               if (merged) await updateEstimateErpGroup(workspace.header.id, merged.id, workspace.header.rowVersion, merged.rowVersion, { title: merged.title, quantity: nextQuantity, unit: nextUnit });
-              else await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: detailKey, title, remark: null, quantity: nextQuantity, unit: nextUnit });
+              else await updateEstimateModuleDetails(workspace.header.id, workspace.header.rowVersion, { moduleKey: quantityKeyOf(row), title, remark: null, quantity: nextQuantity, unit: nextUnit });
               await onChanged(copy("บันทึกจำนวนและหน่วยแล้ว", "Quantity and unit saved", "数量と単位を保存しました")); await load();
             } finally { setBusy(false); }
           }} /> : <><td className="num">{quantity(rowQuantity)}</td><td>{rowUnit}</td></>}

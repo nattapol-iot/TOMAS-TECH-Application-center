@@ -185,19 +185,20 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       throw new ApiError(400, "validation_failed", "Module quantity must be positive with at most four decimal places.");
     const moduleUnit = body.unit === undefined ? undefined : requiredText(body.unit, 30, "Module unit");
     const workPackage = /^package:(Engineering|Installation):(.+)$/.exec(moduleKey);
+    const summaryCost = /^erp:category:(\d{2}):(.+)$/.exec(moduleKey);
     const cost = /^category:(\d{2}):(.+)$/.exec(moduleKey);
-    /* Quantity and unit are how a module is written on the ERP sheet. On a cost
-       module they also rescale its items; on a labour or ledger module the amount
-       comes from its own lines, so they only change how that amount is expressed. */
+    /* erp:category metadata only controls summary/export quantity and unit.
+       category metadata remains the cost-editor multiplier; only that key may
+       rescale component quantities or rename the underlying module. */
     const ledger = /^(expenses|other):(.+)$/.exec(moduleKey);
-    if (!cost && !workPackage && !ledger && moduleKey !== "summary" && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
+    if (!cost && !summaryCost && !workPackage && !ledger && moduleKey !== "summary" && !["labor:Software", "labor:Service", "labor:Installation"].includes(moduleKey))
       throw new ApiError(400, "invalid_module", "Choose an existing main module.");
     if ((moduleQuantity !== undefined || moduleUnit !== undefined) && moduleKey === "summary")
       throw new ApiError(400, "invalid_module", "The summary remark has no quantity.");
     return database.transaction(async transaction => {
       const estimate = await lockEditableEstimate(transaction, id, parseRowVersion(body.estimateRowVersion));
       // An assignee edits the modules of the sections they work in; the rest is owner or admin.
-      const assigneeEditable = Boolean(cost || workPackage || ledger?.[1] === "expenses");
+      const assigneeEditable = Boolean(cost || summaryCost || workPackage || ledger?.[1] === "expenses");
       if (!elevated(actor, estimate) && (!assigneeEditable || !assigned(actor, await estimateAssignees(transaction, id, estimate.revision))))
         throw new ApiError(403, "module_forbidden", "You cannot edit this module.");
       const query = new sql.Request(transaction);
@@ -214,13 +215,14 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       query.input("module_unit", sql.NVarChar(30), moduleUnit ?? before?.unit ?? "Set");
       let quantityBefore: { id: number; qty: number | string }[] = [];
       let quantityAfter: unknown[] = [];
-      if (cost) {
-        query.input("category", sql.Char(2), cost[1]); query.input("module", sql.NVarChar(200), cost[2]);
+      if (cost || summaryCost) {
+        const sourceCost = (cost ?? summaryCost)!;
+        query.input("category", sql.Char(2), sourceCost[1]); query.input("module", sql.NVarChar(200), sourceCost[2]);
         const current = (await query.query<{ id: number }>(`SELECT id FROM dbo.cost_items WITH(UPDLOCK,HOLDLOCK)
           WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
           AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`)).recordset;
         if (!current.length) throw new ApiError(409, "module_changed", "This module changed. Reload and try again.");
-        if (nextQuantity !== oldQuantity) {
+        if (cost && nextQuantity !== oldQuantity) {
           query.input("old_quantity", sql.Decimal(19,4), oldQuantity);
           quantityBefore = (await query.query(`SELECT id,qty,unit,unit_cost,price_set_key,is_price_set,qty_per_set FROM dbo.cost_items
             WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
@@ -237,7 +239,7 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
             WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
             AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`)).recordset;
         }
-        if (title !== cost[2]) {
+        if (cost && title !== cost[2]) {
           const collision = (await query.query(`SELECT TOP(1) id FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision
             AND deleted_at IS NULL AND category_code=@category AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@title;`)).recordset[0];
           if (collision) throw new ApiError(409, "module_name_exists", "Another module already uses this name.");
