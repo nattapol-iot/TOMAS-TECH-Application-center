@@ -4453,7 +4453,8 @@ tbody tr.row-late:hover td { background: #fadada; }
    Type and Activity stay put so a row keeps its name while supplier, owner and
    remark scroll underneath. The band, add and subtotal rows span the table and
    are deliberately left out — they have nothing to lose sideways. */
-.manhour-sheet thead th:nth-child(-n+3) { position: sticky; z-index: 4; }
+.manhour-sheet thead th { position: sticky; top: 0; z-index: 5; }
+.manhour-sheet thead th:nth-child(-n+3) { z-index: 6; }
 .manhour-sheet thead th:nth-child(1) { left: 0; }
 .manhour-sheet thead th:nth-child(2) { left: 44px; }
 .manhour-sheet thead th:nth-child(3) { left: 174px; }
@@ -4480,6 +4481,9 @@ tbody tr.row-late:hover td { background: #fadada; }
   z-index: 2;
 }
 .manhour-sheet tbody tr.subtotal-row > td:first-child { background: var(--n-100); }
+.manhour-sheet tbody tr.labor-package-subtotal > td { padding: 10px; background: var(--n-50); border-top: 1px solid var(--line); border-bottom: 0; }
+.manhour-sheet tbody tr.labor-package-subtotal > td:first-child { position: static; text-align: right; white-space: normal; color: var(--muted); font-weight: 500; }
+.manhour-sheet tbody tr.labor-package-gap > td { height: 12px; padding: 0; border: 0; background: var(--surface); }
 
 /* Chevron and module name are one hit target — folding a module should not
    require aiming at a 16px icon. */
