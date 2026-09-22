@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { unzipSync } from "fflate";
+import { erpSheetAmounts } from "../lib/erp-estimate-groups.ts";
 import {
   buildErpEstimateWorkbook,
   ErpEstimateWorkbookValidationError,
@@ -43,6 +44,27 @@ function workbookXml(input = fixture()) {
   const files = unzipSync(buildErpEstimateWorkbook(input));
   return Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, decoder.decode(bytes)]));
 }
+
+test("three Sets export the unchanged per-set price and the multiplied total", () => {
+  const input = fixture();
+  const children = [{ key: "cost:1", amount: 7500, source: "in-house", quantity: 5, unitCost: 1500 }];
+  const { amount } = erpSheetAmounts(children, new Map([["CostItem:1", { amount: 22500 }]]));
+  const sets = 3;
+  input.summary.lines = [{ sourceType: "CostItem", sourceId: 1, internalCategory: "Hardware",
+    erpCategory: "Hardware", description: "Cable module", quantity: sets, unit: "Set",
+    unitPrice: amount / sets, amount }];
+  input.summary.categories = [{ category: "Hardware", amount, lineCount: 1 }];
+  input.summary.classifiedTotal = amount;
+  input.summary.canonicalTotal = amount;
+  input.approvedOverhead.amount = 0;
+  const sheet = workbookXml(input)["xl/worksheets/sheet1.xml"];
+  const row = [...sheet.matchAll(/<row\b[^>]*>[\s\S]*?<\/row>/g)].find(match => match[0].includes("Cable module"))[0];
+  assert.match(row, /<v>3<\/v>/);
+  assert.match(row, /<v>7500<\/v>/);
+  assert.match(row, /<v>22500<\/v>/);
+  assert.equal(children[0].quantity, 5);
+  assert.equal(children[0].unitCost, 1500);
+});
 
 test("creates one standalone Summary cost sheet with ERP-compatible headers", () => {
   const files = workbookXml();

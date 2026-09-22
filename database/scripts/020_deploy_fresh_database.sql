@@ -122,6 +122,7 @@ GO
 :r database/migrations/058_admin_document_purge.sql
 :r database/migrations/059_admin_inquiry_cascade.sql
 :r database/migrations/060_price_reference_sources.sql
+:r database/migrations/061_estimate_summary_cost_multiplier.sql
 
 USE [$(DatabaseName)];
 GO
@@ -167,7 +168,8 @@ IF EXISTS (
         (57, N'Inquiry and estimate document lifecycle'),
         (58, N'Admin permanent deletion of trial documents'),
         (59, N'Admin inquiry cascade deletion and row confirmation'),
-        (60, N'Price sources that cite a link instead of a stored document')
+        (60, N'Price sources that cite a link instead of a stored document'),
+        (61, N'Summary set quantities multiply totals without changing components')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

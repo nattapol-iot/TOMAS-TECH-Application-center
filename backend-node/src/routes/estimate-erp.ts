@@ -44,12 +44,13 @@ const ERP_SUMMARY_SQL = `
     item,model_part_number,supplier,brand,lead_time,quote_revision,unit_price,quantity,unit,remark
   FROM (
     SELECT CAST(N'CostItem' AS nvarchar(30)) source_type,ci.id source_id,
-      ci.description,CONCAT(ci.category_code,N' ',ci.category) internal_category,ci.line_total amount,
+      ci.description,CONCAT(ci.category_code,N' ',ci.category) internal_category,amounts.amount amount,
       COALESCE(m.erp_category,CASE ci.category_code WHEN '01' THEN N'Hardware' WHEN '02' THEN N'Software' ELSE N'Unmapped' END) erp_category,
       m.row_version mapping_row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)) manual_override,ci.item_code item,ci.model model_part_number,
       s.name supplier,ci.brand,NULL lead_time,ci.reference_no quote_revision,ci.unit_cost unit_price,ci.qty quantity,ci.unit,CASE WHEN ci.is_price_set=1 THEN CONCAT(ci.remark,N' Included: ',(SELECT STRING_AGG(CONVERT(nvarchar(max),CONCAT(child.item_code,N' - ',child.description,N' x ',child.qty,N' ',child.unit)),N'; ') FROM dbo.cost_items child WHERE child.estimate_id=ci.estimate_id AND child.revision=ci.revision AND child.price_set_key=ci.price_set_key AND child.is_price_set=0 AND child.deleted_at IS NULL)) ELSE ci.remark END remark,
       1 source_order,ci.sort_order sort_order,ci.category_code group_code,ci.module group_name,ci.id line_order
     FROM dbo.cost_items ci
+    INNER JOIN dbo.v_estimate_cost_amounts amounts ON amounts.id=ci.id
     INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision
     LEFT JOIN dbo.estimate_erp_mappings m ON m.estimate_id=ci.estimate_id AND m.revision=ci.revision
       AND m.source_type=N'CostItem' AND m.source_id=ci.id

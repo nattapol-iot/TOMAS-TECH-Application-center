@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { foldErpGroupLines, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
+import { foldErpGroupLines, erpSheetAmounts, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
 import { buildEstimateCostBreakdown, erpSheetQuantity, breakdownModules, breakdownSheetModules, groupErpLaborSections } from "../lib/estimate-cost-breakdown.ts";
 
 const line = (id, amount, category = "Hardware", description = "Item " + id) => ({
@@ -229,4 +229,31 @@ test('saved summary quantity overrides one Set without reading the module multip
  const row={standalone:false,source:{kind:'cost-items'},lines:[{quantity:390,unit:'Meter'}]};
  assert.deepEqual(erpSheetQuantity(row,null,{quantity:13,unit:'Set'},{quantity:2,unit:'Lot'}),{quantity:2,unit:'Lot'});
  assert.equal(row.lines[0].quantity,390);
+});
+
+
+test("summary uses multiplied ERP totals while every child remains per-set", () => {
+  const children = [
+    {key:"cost:1",amount:2500,quantity:5,unitCost:500,source:"in-house"},
+    {key:"cost:2",amount:5000,quantity:2,unitCost:2500,source:"outsourced"},
+  ];
+  const original = structuredClone(children);
+  for (const sets of [1,3,2,1]) {
+    const amounts = new Map([["CostItem:1",{amount:2500*sets}],["CostItem:2",{amount:5000*sets}]]);
+    assert.deepEqual(erpSheetAmounts(children, amounts), {amount:7500*sets,inHouse:2500*sets,outsourced:5000*sets});
+    assert.deepEqual(children, original);
+  }
+});
+
+test("merged and split summaries add each source's effective amount only once", () => {
+  const children = [
+    {key:"cost:1",amount:7500,source:"in-house",priceSetKey:"set",isPriceSet:true},
+    {key:"cost:2",amount:0,quantity:13,source:"in-house",priceSetKey:"set",isPriceSet:false},
+    {key:"cost:3",amount:7500,source:"outsourced"},
+    {key:"manhour:4",amount:1000,source:"in-house"},
+  ];
+  const amounts = new Map([["CostItem:1",{amount:22500}],["CostItem:3",{amount:7500}],["ManhourLine:4",{amount:1000}]]);
+  assert.deepEqual(erpSheetAmounts(children,amounts),{amount:31000,inHouse:23500,outsourced:7500});
+  assert.equal(erpSheetAmounts(children.slice(0,2),amounts).amount,22500);
+  assert.equal(erpSheetAmounts(children.slice(2),amounts).amount,8500);
 });

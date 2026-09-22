@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
-import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
+import { classifyErpGroups, erpSheetAmounts, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { LABOR_MODULE_NAMES, erpSheetQuantity, breakdownSheetModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
@@ -27,18 +27,17 @@ import { EmptyState, Icon, Modal, Panel } from "../ui";
  * the page has exactly three jobs — say which heading a line belongs under, say how
  * many lines the sheet writes, and hand the file over.
  *
- * Nothing here changes what anything costs. Classifying a row moves it between
- * headings, merging rows writes them as one line, and neither touches an amount:
- * the totals at the foot always reconcile with the estimate, which is what makes
- * the sheet safe to import. Internal engineering cost only; no selling figures
- * exist anywhere in this application.
+ * Classification and merging preserve amounts. A cost module's Set quantity
+ * multiplies its summary amount on the server, while components remain per-set.
+ * Row amounts come from the ERP API so the sheet, canonical total and export agree.
+ * Internal engineering cost only; no selling figures exist here.
  */
 
 type ErpLine = EstimateErpSummary["lines"][number];
 type DraftCategory = EstimateErpCategory | "Unmapped";
 /** One line of the sheet: a module, a standalone item, or several of either written as one. */
 type SheetRow = {
-  key: string; title: string; lines: BreakdownLine[]; erpKeys: string[];
+  key: string; detailKey: string; title: string; lines: BreakdownLine[]; erpKeys: string[];
   standalone: boolean; merged: number | null; source: BreakdownSection;
   amount: number; inHouse: number; outsourced: number;
 };
@@ -215,12 +214,10 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     for (const part of splitRowsByCategory(modules, categoryOfLine)) {
       const rows = collected.get(part.category) ?? [];
       rows.push({
-        key: part.key, title: part.row.title, lines: part.lines, source: part.row.source,
+        key: part.key, detailKey: part.row.key, title: part.row.title, lines: part.lines, source: part.row.source,
         standalone: part.row.standalone, merged: part.row.merged,
         erpKeys: part.lines.map((line) => erpKeyOfBreakdownKey(line.key)).filter((key): key is string => key !== null && erpByKey.has(key)),
-        amount: part.lines.reduce((total, line) => total + line.amount, 0),
-        inHouse: part.lines.filter((line) => line.source === "in-house").reduce((total, line) => total + line.amount, 0),
-        outsourced: part.lines.filter((line) => line.source === "outsourced").reduce((total, line) => total + line.amount, 0),
+        ...erpSheetAmounts(part.lines, erpByKey),
       });
       collected.set(part.category, rows);
     }
@@ -314,7 +311,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
 
   /* A row's name and the record it is stored in, in one place: the sheet and the
      file must never disagree about which line they are talking about. */
-  const detailKeyOf = (row: SheetRow) => row.source.kind === "manhour" && LABOR_MODULE_NAMES[row.source.title] ? row.source.key : row.key;
+  const detailKeyOf = (row: SheetRow) => row.source.kind === "manhour" && LABOR_MODULE_NAMES[row.source.title] ? row.source.key : row.detailKey;
   const mergedOf = (row: SheetRow) => row.merged === null ? null : groups.find((group) => group.id === row.merged) ?? null;
   const titleOf = (row: SheetRow) => {
     const merged = mergedOf(row);

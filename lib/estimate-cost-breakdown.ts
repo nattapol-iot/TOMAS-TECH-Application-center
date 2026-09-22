@@ -243,7 +243,7 @@ export function breakdownSheetModules(sections: BreakdownSection[], mergedAs?: (
   return rows;
 }
 
-/** A cost module summarizes all its current components as one set, not a multiplier. */
+/** Cost module Set counts are independent of the per-set component quantities. */
 export function erpSheetQuantity(
   row: { standalone: boolean; source: { kind: BreakdownSectionKind }; lines: readonly { quantity: number; unit: string }[] },
   merged: { quantity: number; unit: string } | null,

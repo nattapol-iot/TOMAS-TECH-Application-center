@@ -207,11 +207,13 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       query.input("key", sql.NVarChar(250), moduleKey); query.input("title", sql.NVarChar(200), title);
       query.input("description_rows", sql.NVarChar(sql.MAX), descriptionRows === undefined ? null : JSON.stringify(descriptionRows));
       query.input("remark", sql.NVarChar(2000), remark); query.input("actor", sql.BigInt, actor.id);
-      const before = (await query.query(`SELECT module_key,title,remark,description_rows,quantity,unit FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
+      const before = (await query.query(`SELECT module_key,title,remark,description_rows,quantity,unit,cost_multiplier FROM dbo.estimate_module_details WITH(UPDLOCK,HOLDLOCK)
         WHERE estimate_id=@id AND revision=@revision AND module_key=@key;`)).recordset[0] ?? null;
       let savedKey = moduleKey;
       const oldQuantity = Number(before?.quantity ?? 1);
       const nextQuantity = moduleQuantity ?? oldQuantity;
+      const costMultiplier = summaryCost && moduleQuantity !== undefined ? nextQuantity : Number(before?.cost_multiplier ?? 1);
+      query.input("cost_multiplier", sql.Decimal(19,4), costMultiplier);
       query.input("module_quantity", sql.Decimal(19,4), nextQuantity);
       query.input("module_unit", sql.NVarChar(30), moduleUnit ?? before?.unit ?? "Set");
       let quantityBefore: { id: number; qty: number | string }[] = [];
@@ -248,6 +250,10 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
             WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
               AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module;`);
           savedKey = "category:" + cost[1] + ":" + title;
+          query.input("summary_key", sql.NVarChar(250), "erp:" + savedKey);
+          await query.query(`DELETE dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key=@summary_key;
+            UPDATE dbo.estimate_module_details SET module_key=@summary_key,title=@title,updated_by=@actor,updated_at=SYSUTCDATETIME()
+            WHERE estimate_id=@id AND revision=@revision AND module_key=N'erp:'+@key;`);
         }
       }
       if (workPackage) {
@@ -276,12 +282,12 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       }
       query.input("saved_key", sql.NVarChar(250), savedKey);
       // Audit retains the old identity; move its metadata to the current module name.
-      await query.query(`UPDATE dbo.estimate_module_details SET quantity=@module_quantity,unit=@module_unit,title=@title,remark=CASE WHEN @key=N'summary' THEN @remark ELSE remark END,description_rows=COALESCE(@description_rows,description_rows),updated_by=@actor,updated_at=SYSUTCDATETIME()
+      await query.query(`UPDATE dbo.estimate_module_details SET quantity=@module_quantity,cost_multiplier=@cost_multiplier,unit=@module_unit,title=@title,remark=CASE WHEN @key=N'summary' THEN @remark ELSE remark END,description_rows=COALESCE(@description_rows,description_rows),updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE estimate_id=@id AND revision=@revision AND module_key=@saved_key;
-        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows,quantity,unit)
-          VALUES(@id,@revision,@saved_key,@title,CASE WHEN @key=N'summary' THEN @remark END,@actor,COALESCE(@description_rows,N'[]'),@module_quantity,@module_unit);
+        IF @@ROWCOUNT=0 INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows,quantity,unit,cost_multiplier)
+          VALUES(@id,@revision,@saved_key,@title,CASE WHEN @key=N'summary' THEN @remark END,@actor,COALESCE(@description_rows,N'[]'),@module_quantity,@module_unit,@cost_multiplier);
         DELETE dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key=@key AND @key<>@saved_key;`);
-      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before, lines: quantityBefore }, { moduleKey: savedKey, title, quantity: nextQuantity, unit: moduleUnit ?? before?.unit ?? "Set", lines: quantityAfter, ...(moduleKey === "summary" ? { remark } : {}), descriptionRows });
+      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Module details updated", { moduleKey, details: before, lines: quantityBefore }, { moduleKey: savedKey, title, quantity: nextQuantity, costMultiplier, unit: moduleUnit ?? before?.unit ?? "Set", lines: quantityAfter, ...(moduleKey === "summary" ? { remark } : {}), descriptionRows });
       const version = await touchEstimate(transaction, id, actor.id);
       return { estimateRowVersion: version.toString("base64") };
     });
@@ -438,9 +444,9 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
           WHERE estimate_id=@id AND revision=@revision AND source_type=N'CostItem' AND source_id=@source_id;`);
         copied.push({ sourceId: Number(line.id), id: Number(created.id) });
       }
-      await read.query(`INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,description_rows,quantity,unit,updated_by)
+      await read.query(`INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,description_rows,quantity,unit,cost_multiplier,updated_by)
         SELECT estimate_id,revision,CASE WHEN module_key=@source_key THEN @target_key ELSE N'erp:'+@target_key END,
-          @target,remark,description_rows,quantity,unit,@actor FROM dbo.estimate_module_details
+          @target,remark,description_rows,quantity,unit,cost_multiplier,@actor FROM dbo.estimate_module_details
         WHERE estimate_id=@id AND revision=@revision AND module_key IN (@source_key,N'erp:'+@source_key);`);
       const version = await touchEstimate(transaction, id, actor.id);
       await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "ModuleCopied", null,

@@ -2,13 +2,13 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `52125692`; generated, do not edit. [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| PUT | `/api/v1/estimates/:id/line-order` | 29–64 |
+| PUT | `/api/v1/estimates/:id/line-order` | 38–109 |
 
 ## Named functions
 
@@ -16,8 +16,8 @@ Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `parseOrder` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 11–16 |
 | `assertCompleteOrder` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 17–20 |
-| `parseCostMove` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 21–27 |
-| `registerEstimateOrderRoutes` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 28–65 |
+| `parseCostMove` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 25–36 |
+| `registerEstimateOrderRoutes` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 37–110 |
 
 ## Direct local dependencies
 
@@ -30,7 +30,7 @@ Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.cost_items`
+`dbo.cost_items`, `dbo.estimate_module_details`
 
 ## Change boundary
 

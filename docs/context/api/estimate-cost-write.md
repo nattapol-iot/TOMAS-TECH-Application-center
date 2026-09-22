@@ -2,20 +2,20 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `8071aa25`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `52125692`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/estimates/:id/module-details` | 166–174 |
-| PUT | `/api/v1/estimates/:id/module-details` | 175–288 |
-| POST | `/api/v1/estimates/:id/cost-items` | 290–316 |
-| PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 318–344 |
-| POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 346–371 |
-| POST | `/api/v1/estimates/:id/cost-modules/copy` | 373–450 |
-| POST | `/api/v1/estimates/:id/cost-modules/remove` | 452–487 |
-| POST | `/api/v1/estimates/:id/apply-template` | 492–568 |
+| PUT | `/api/v1/estimates/:id/module-details` | 175–294 |
+| POST | `/api/v1/estimates/:id/cost-items` | 296–322 |
+| PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 324–350 |
+| POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 352–377 |
+| POST | `/api/v1/estimates/:id/cost-modules/copy` | 379–456 |
+| POST | `/api/v1/estimates/:id/cost-modules/remove` | 458–493 |
+| POST | `/api/v1/estimates/:id/apply-template` | 498–574 |
 
 ## Named functions
 
@@ -31,7 +31,7 @@ Evidence: source snapshot `8071aa25`; generated, do not edit. [backend-node/src/
 | `costSnapshot` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 128–140 |
 | `bindCost` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 142–154 |
 | `touchEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 156–163 |
-| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 165–569 |
+| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 165–575 |
 
 ## Direct local dependencies
 

@@ -87,7 +87,9 @@ export function registerEstimateOrderRoutes(app: FastifyInstance, database: Data
           details.input("old_key", sql.NVarChar(250), "category:" + from + ":" + name);
           details.input("new_key", sql.NVarChar(250), "category:" + target.category_code + ":" + name);
           await details.query(`DELETE FROM dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key=@new_key;
-            UPDATE dbo.estimate_module_details SET module_key=@new_key WHERE estimate_id=@id AND revision=@revision AND module_key=@old_key;`);
+            UPDATE dbo.estimate_module_details SET module_key=@new_key WHERE estimate_id=@id AND revision=@revision AND module_key=@old_key;
+            DELETE FROM dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key=N'erp:'+@new_key;
+            UPDATE dbo.estimate_module_details SET module_key=N'erp:'+@new_key WHERE estimate_id=@id AND revision=@revision AND module_key=N'erp:'+@old_key;`);
         }
         // Destination identity is read from locked current-revision rows, never trusted from the browser.
         await query.query(`UPDATE moving SET ${move.keepModule ? "" : "module=target.module,"}category_code=target.category_code,category=target.category,

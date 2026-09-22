@@ -180,3 +180,21 @@ export function foldErpGroupLines<T extends FoldableLine>(lines: readonly T[], g
   }
   return folded;
 }
+
+/** Summary amounts include the saved Set count; expanded components stay per-set. */
+export function erpSheetAmounts(
+  lines: readonly { key: string; amount: number; source: string; priceSetKey?: string | null; isPriceSet?: boolean }[],
+  amounts: ReadonlyMap<string, { amount: number }>,
+): { amount: number; inHouse: number; outsourced: number } {
+  const totals = { amount: 0, inHouse: 0, outsourced: 0 };
+  for (const line of lines) {
+    // A price-set component is already included in the header's amount.
+    if (line.priceSetKey && !line.isPriceSet) continue;
+    const key = erpKeyOfBreakdownKey(line.key);
+    const amount = (key ? amounts.get(key)?.amount : undefined) ?? line.amount;
+    totals.amount += amount;
+    if (line.source === "outsourced") totals.outsourced += amount;
+    else totals.inHouse += amount;
+  }
+  return totals;
+}

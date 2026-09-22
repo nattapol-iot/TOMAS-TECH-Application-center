@@ -46,6 +46,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 58, fileName: "058_admin_document_purge.sql", name: "Admin permanent deletion of trial documents" },
   { version: 59, fileName: "059_admin_inquiry_cascade.sql", name: "Admin inquiry cascade deletion and row confirmation" },
   { version: 60, fileName: "060_price_reference_sources.sql", name: "Price sources that cite a link instead of a stored document" },
+  { version: 61, fileName: "061_estimate_summary_cost_multiplier.sql", name: "Summary set quantities multiply totals without changing components" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;
