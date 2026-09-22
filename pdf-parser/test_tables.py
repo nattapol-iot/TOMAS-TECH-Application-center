@@ -102,6 +102,56 @@ check("issue date", issued, "2026-09-22")
 check("the naive read is the issue date", main.find_date(columned, ["หมดอายุ"]), "2026-09-22")
 check("recovered expiry", main.later_date_on_a_shared_line(columned, issued), "2026-10-22")
 
+# A stacked table: one line item printed down three rows of one cell.
+#
+# MiSUMi heads its product column with three sub-labels and puts three values under
+# them, so the part number and the brand live inside the cell rather than in columns
+# of their own. This is how pdfplumber hands that table over.
+MISUMI_TABLE = [
+    ["No",
+     "Customer Item Reference\nProduct Code\nProduct Name(Brand Name)",
+     "Quantity\nExp.\nWeight",
+     "Unit Price(THB)\nDiscount Rate\nItem Remarks",
+     "Amount(THB)",
+     "Leadtime(working days) Incl. Sat/Hols\nEst.Ship Date(Estim.Arrival)\n*Revised Date"],
+    ["1\n003119",
+     "PJ260160 Meiji Homepro\nE-PF-80-R\nECONOMY FAN ACCESSORY(MISUMI)",
+     "8 PCS\n\n200g",
+     "55.05",
+     "440.40",
+     "1day(s)\n10/09/2026(11/09)"],
+]
+
+print("\na stacked table is read through its own sub-labels")
+stacked_cols = main._detect_columns(MISUMI_TABLE[0])
+check("description column", stacked_cols["desc"], 1)
+check("quantity column", stacked_cols["qty"], 2)
+check("amount column", stacked_cols["amount"], 4)
+# "item" and "code" also appear in "Item Remarks" and "Discount Rate"; a column already
+# holding the price is not the part number.
+check("the price column is not claimed as the item code",
+      stacked_cols["code"] in (None, 1), True)
+
+misumi = main.parse_plumber_table(MISUMI_TABLE, "THB")
+check("one line item from three stacked rows", len(misumi), 1)
+if misumi:
+    # The Product Code, not the Customer Item Reference sitting above it.
+    check("item code", misumi[0]["itemCode"], "E-PF-80-R")
+    # The header says "Product Name(Brand Name)", so the bracket holds the brand.
+    check("brand", misumi[0]["brand"], "MISUMI")
+    check("description", misumi[0]["description"], "ECONOMY FAN ACCESSORY")
+    check("quantity", misumi[0]["qty"], 8.0)
+    check("unit taken from '8 PCS'", misumi[0]["unit"], "PCS")
+    check("unit price", misumi[0]["unitPrice"], 55.05)
+
+print("\na cell whose lines do not line up with its header is left alone")
+check("mismatched line counts", main.split_stacked_cell("Product Code\nProduct Name", "E-PF-80-R"), ("", "", ""))
+check("a single-label header is not stacked", main.split_stacked_cell("Description", "Widget"), ("", "", ""))
+# Without a "brand" sub-label a trailing bracket is a specification, not a maker.
+check("no brand label, no brand",
+      main.split_stacked_cell("Product Code\nProduct Name", "E-PF-80-R\nFAN (220V)"),
+      ("E-PF-80-R", "FAN (220V)", ""))
+
 print()
 if failures:
     print(f"{len(failures)} failure(s)")

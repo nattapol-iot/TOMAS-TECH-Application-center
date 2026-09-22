@@ -493,10 +493,13 @@ def _detect_columns(header: list[str]) -> dict:
             unit_col = None
 
     # ── Conflict resolution ──────────────────────────────────────
-    # If desc and code point at the same column, the match was ambiguous.
-    # Re-run code search excluding desc_col; if nothing found, leave code=None.
-    if code_col is not None and code_col == desc_col:
-        code_col = _find_col(header, CODE_KW, exclude={desc_col})
+    # The code keywords include bare "item" and "code", which also appear in headings
+    # like "Item Remarks" and "Discount Rate". A column that already holds the
+    # description or an arithmetic value is not the part number, so the search runs
+    # again without it; finding nothing leaves code=None, which is the honest answer.
+    claimed = {i for i in (desc_col, price_col, amount_col, qty_col) if i is not None}
+    if code_col is not None and code_col in claimed:
+        code_col = _find_col(header, CODE_KW, exclude=claimed)
 
     # price_col must not equal amount_col (e.g. single "Total" column table).
     # In that case prefer amount_col and leave price_col=None.
@@ -509,6 +512,197 @@ def _detect_columns(header: list[str]) -> dict:
     }
 
 
+# ── One table row → one line item, shared by the Markdown and pdfplumber tiers ──
+
+# Some quotations stack several fields down a single cell and name them the same way
+# in the header. MiSUMi's product column is headed
+#     Customer Item Reference / Product Code / Product Name(Brand Name)
+# and every cell under it carries those three on three lines. Flattened, the part
+# number and the brand disappear into the middle of one long description.
+STACKED_CODE_KW = ("product code", "part code", "part no", "part number", "item code",
+                   "model no", "รหัสสินค้า", "รหัส", "品番", "型番")
+STACKED_NAME_KW = ("product name", "item name", "description", "goods name",
+                   "ชื่อสินค้า", "รายละเอียด", "品名")
+BRAND_LABEL_KW = ("brand", "maker", "ยี่ห้อ", "メーカー")
+TRAILING_BRACKET_PAT = re.compile(r"^(.*?)\s*[(（]\s*([^()（）]{2,60})\s*[)）]\s*$", re.S)
+
+
+def cell_lines(value: object) -> list[str]:
+    """The non-empty lines of a cell, in order."""
+    return [line.strip() for line in str(value or "").split("\n") if line.strip()]
+
+
+def first_line(value: object) -> str:
+    lines = cell_lines(value)
+    return lines[0] if lines else ""
+
+
+def split_stacked_cell(header_cell: str, value_cell: str) -> tuple[str, str, str]:
+    """
+    (item_code, description, brand) read out of a stacked cell, using the header's own
+    sub-labels to say which line is which. ("", "", "") when the cell is not stacked or
+    its lines do not line up with the header's, so the caller keeps its own behaviour.
+    """
+    labels = cell_lines(header_cell)
+    values = cell_lines(value_cell)
+    if len(labels) < 2 or len(labels) != len(values):
+        return "", "", ""
+    code = name = brand = ""
+    for label, value in zip(labels, values):
+        low = label.lower()
+        if not code and any(kw in low for kw in STACKED_CODE_KW):
+            code = re.sub(r"\s+", "", value)[:40]
+        elif not name and any(kw in low for kw in STACKED_NAME_KW):
+            name = value
+            # A label that says "Product Name(Brand Name)" is the document telling us
+            # what the trailing bracket holds. Without that, a bracket is just a spec.
+            if any(kw in low for kw in BRAND_LABEL_KW):
+                m = TRAILING_BRACKET_PAT.match(value)
+                if m and m.group(1).strip():
+                    name, brand = m.group(1).strip(), m.group(2).strip()
+    if not code and not name:
+        return "", "", ""
+    return code, name, brand
+
+
+def row_to_item(cells: list[str], cols: dict, header: list[str], currency: str) -> Optional[dict]:
+    """One data row read through the column roles its header declares."""
+    desc_col, qty_col = cols["desc"], cols["qty"]
+    price_col, amount_col = cols["price"], cols["amount"]
+    code_col, unit_col = cols["code"], cols["unit"]
+
+    at = lambda index: cells[index] if index is not None and index < len(cells) else ""
+
+    stacked_code, stacked_name, stacked_brand = "", "", ""
+    if desc_col is not None and desc_col < len(header):
+        stacked_code, stacked_name, stacked_brand = split_stacked_cell(header[desc_col], at(desc_col))
+
+    if stacked_name:
+        desc = stacked_name
+    elif at(desc_col):
+        desc = at(desc_col)
+    elif at(code_col):
+        # Supplier has no separate description column — use the code column as desc
+        desc = at(code_col)
+    else:
+        desc = max((c for c in cells if c and not is_numeric(c) and len(c) > 2), key=len, default="")
+    desc = re.sub(r"\s+", " ", desc).strip()
+
+    if not desc or len(desc) < 3:
+        return None
+    if SKIP_PAT.search(desc):
+        return None
+    if re.match(r"^(?:no\.?|#|ลำดับ|item|description|รายการ|qty|จำนวน|price|ราคา|amount|unit)$", desc, re.I):
+        return None
+    if re.search(r"ซอย|ถนน|แขวง|เขต|\bSoi\b|\bRoad\b", desc):
+        return None
+
+    def number_in(index: Optional[int]) -> float:
+        raw = first_line(at(index))
+        if not is_numeric(raw):
+            return 0.0
+        try:
+            return clean_num(raw)
+        except ValueError:
+            return 0.0
+
+    unit_price = number_in(price_col)
+    amount = number_in(amount_col)
+
+    # Fallback: pick the last two positive numbers in the row
+    if unit_price == 0 and amount == 0:
+        nums = []
+        for c in cells:
+            raw = first_line(c)
+            if is_numeric(raw):
+                try:
+                    value = clean_num(raw)
+                    if value > 0:
+                        nums.append(value)
+                except ValueError:
+                    pass
+        if len(nums) >= 2:
+            unit_price, amount = nums[-2], nums[-1]
+        elif len(nums) == 1:
+            unit_price = nums[0]
+
+    if unit_price <= 0 and amount <= 0:
+        return None
+    effective_price = unit_price if unit_price > 0 else amount
+
+    # Quantity: the column when it reads as a number, otherwise the arithmetic the line
+    # already states. A column present but unreadable must not leave the line at one.
+    qty = 0.0
+    m = re.match(r"([\d,]+\.?\d*)", first_line(at(qty_col)).replace(" ", ""))
+    if m:
+        try:
+            qty = clean_num(m.group(1))
+        except ValueError:
+            qty = 0.0
+    if qty <= 0 and unit_price > 0 and amount > 0:
+        q = round(amount / unit_price, 4)
+        if 0 < q <= 100_000:
+            qty = q
+    if qty <= 0:
+        qty = 1.0
+
+    item_code = stacked_code
+    if not item_code and at(code_col):
+        c = at(code_col)
+        if not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
+            item_code = re.sub(r"\s+", "", c)[:40]
+    if not item_code:
+        item_code, desc = split_leading_code(desc)
+    if desc_col is None and item_code:
+        desc = item_code
+
+    unit = "EA"
+    u = first_line(at(unit_col))
+    if u and u.lower().rstrip("s") in UNIT_TOKENS:
+        unit = u.upper()
+    if unit == "EA":
+        # "8 PCS" — the unit is often printed beside the number rather than given a column.
+        m_unit = re.match(r"^[\d,]+\.?\d*\s*([A-Za-z฀-๿]{1,10})$", first_line(at(qty_col)).strip())
+        if m_unit and m_unit.group(1).lower().rstrip("s") in UNIT_TOKENS:
+            unit = m_unit.group(1).upper()
+
+    return {
+        "lineNo":      1,
+        "itemCode":    item_code,
+        "description": desc,
+        "brand":       stacked_brand,
+        "model":       item_code,
+        "qty":         qty,
+        "unit":        unit,
+        "unitPrice":   effective_price,
+        "currency":    currency,
+        "remark":      "",
+    }
+
+
+def parse_plumber_table(table: list[list[Optional[str]]], currency: str) -> list[dict]:
+    """
+    A pdfplumber table read through its own header rather than by guesswork.
+
+    The blind cell heuristic below is still the last resort, but it cannot know which
+    column is which — and on a stacked table that is the whole difference between a
+    part number and a sentence.
+    """
+    rows = [["" if cell is None else str(cell) for cell in row] for row in table if row]
+    if len(rows) < 2:
+        return []
+    header = rows[0]
+    cols = _detect_columns(header)
+    if cols["desc"] is None and cols["price"] is None and cols["amount"] is None:
+        return []
+    items: list[dict] = []
+    for cells in rows[1:]:
+        item = row_to_item(cells, cols, header, currency)
+        if item:
+            items.append(item)
+    return items
+
+
 def parse_markdown_table(md: str, currency: str) -> list[dict]:
     items: list[dict] = []
     seen_desc: set[str] = set()
@@ -517,6 +711,7 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
     # Remember column positions from the last valid table — used for continuation
     # tables on page 2+ that lack headers (common in multi-page PDFs).
     last_col_map: Optional[dict] = None
+    last_header: list[str] = []
     last_n_cols: int = 0
 
     lines = md.split("\n")
@@ -543,18 +738,13 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             data_rows = table_lines[2:]
 
             col_map = _detect_columns(header)
-            desc_col   = col_map["desc"]
-            qty_col    = col_map["qty"]
-            price_col  = col_map["price"]
-            amount_col = col_map["amount"]
-            code_col   = col_map["code"]
-            unit_col   = col_map["unit"]
 
-            if desc_col is None and price_col is None and amount_col is None:
+            if col_map["desc"] is None and col_map["price"] is None and col_map["amount"] is None:
                 continue
 
-            # Save column map for continuation tables (page 2+)
+            # Save column map and header for continuation tables (page 2+)
             last_col_map = col_map
+            last_header = header
             last_n_cols = n_cols
         else:
             # No separator → headerless continuation table from a later page
@@ -562,13 +752,9 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
             n_cols = len(table_lines[0].split("|")) - 2
             if last_col_map is None or n_cols != last_n_cols:
                 continue
-            desc_col   = last_col_map["desc"]
-            qty_col    = last_col_map["qty"]
-            price_col  = last_col_map["price"]
-            amount_col = last_col_map["amount"]
-            code_col   = last_col_map["code"]
-            unit_col   = last_col_map["unit"]
-            data_rows  = table_lines
+            col_map   = last_col_map
+            header    = last_header
+            data_rows = table_lines
 
         for row_text in data_rows:
             cells = [c.strip() for c in row_text.split("|")[1:-1]]
@@ -576,121 +762,11 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 cells.append("")
             cells = cells[:n_cols]
 
-            # Description
-            if desc_col is not None and desc_col < len(cells):
-                desc = cells[desc_col]
-            elif code_col is not None and code_col < len(cells):
-                # Supplier has no separate description column — use the code column as desc
-                desc = cells[code_col]
-            else:
-                desc = max(
-                    (c for c in cells if c and not is_numeric(c) and len(c) > 2),
-                    key=len, default="",
-                )
-            desc = re.sub(r"\s+", " ", desc).strip()
-
-            if not desc or len(desc) < 3:
-                continue
-            if SKIP_PAT.search(desc):
-                continue
-            if re.match(r"^(?:no\.?|#|ลำดับ|item|description|รายการ|qty|จำนวน|price|ราคา|amount|unit)$", desc, re.I):
-                continue
-            if re.search(r"ซอย|ถนน|แขวง|เขต|\bSoi\b|\bRoad\b", desc):
-                continue
-
-            # Unit price
-            unit_price = 0.0
-            if price_col is not None and price_col < len(cells):
-                raw = cells[price_col]
-                if is_numeric(raw):
-                    try:
-                        unit_price = clean_num(raw)
-                    except ValueError:
-                        pass
-
-            # Amount / line total
-            amount = 0.0
-            if amount_col is not None and amount_col < len(cells):
-                raw = cells[amount_col]
-                if is_numeric(raw):
-                    try:
-                        amount = clean_num(raw)
-                    except ValueError:
-                        pass
-
-            # Fallback: pick last two positive numbers in the row
-            if unit_price == 0 and amount == 0:
-                nums = []
-                for c in cells:
-                    if is_numeric(c):
-                        try:
-                            v = clean_num(c)
-                            if v > 0:
-                                nums.append(v)
-                        except ValueError:
-                            pass
-                if len(nums) >= 2:
-                    unit_price, amount = nums[-2], nums[-1]
-                elif len(nums) == 1:
-                    unit_price = nums[0]
-
-            if unit_price <= 0 and amount <= 0:
-                continue
-
-            effective_price = unit_price if unit_price > 0 else amount
-
-            # Quantity: the column when it reads as a number, otherwise the arithmetic
-            # the line already states. A column that is present but unreadable used to
-            # skip the arithmetic entirely and leave every line quietly at one, which
-            # is the difference between a 550 baht line and an 1,100 baht one.
-            qty = 0.0
-            if qty_col is not None and qty_col < len(cells):
-                m = re.match(r"([\d,]+\.?\d*)", cells[qty_col].replace(" ", ""))
-                if m:
-                    try:
-                        qty = clean_num(m.group(1))
-                    except ValueError:
-                        qty = 0.0
-            if qty <= 0 and unit_price > 0 and amount > 0:
-                q = round(amount / unit_price, 4)
-                if 0 < q <= 100_000:
-                    qty = q
-            if qty <= 0:
-                qty = 1.0
-
-            # Item code
-            item_code = ""
-            if code_col is not None and code_col < len(cells):
-                c = cells[code_col]
-                if c and not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
-                    item_code = re.sub(r"\s+", "", c)[:40]
-            if not item_code:
-                item_code, desc = split_leading_code(desc)
-            # No separate description column → code is also the description
-            if desc_col is None and item_code:
-                desc = item_code
-
-            # Unit
-            unit = "EA"
-            if unit_col is not None and unit_col < len(cells):
-                u = cells[unit_col].strip()
-                if u.lower().rstrip("s") in UNIT_TOKENS:
-                    unit = u.upper()
-
-            if desc not in seen_desc:
-                seen_desc.add(desc)
-                items.append({
-                    "lineNo":      line_no,
-                    "itemCode":    item_code,
-                    "description": desc,
-                    "brand":       "",
-                    "model":       item_code,
-                    "qty":         qty,
-                    "unit":        unit,
-                    "unitPrice":   effective_price,
-                    "currency":    currency,
-                    "remark":      "",
-                })
+            item = row_to_item(cells, col_map, header, currency)
+            if item and item["description"] not in seen_desc:
+                seen_desc.add(item["description"])
+                item["lineNo"] = line_no
+                items.append(item)
                 line_no += 1
 
     return items
@@ -943,6 +1019,7 @@ def _pick_best(candidates, SELF_PAT, DOC_TYPE, _eng_ratio, _is_garbled) -> str:
 def process_pdf(pdf_bytes: bytes) -> dict:
     md_text = ""
     table_rows: list[list] = []
+    plumber_tables: list[list[list]] = []
     all_text = ""
     plumber_text = ""
     pdf_meta: dict = {}
@@ -969,6 +1046,9 @@ def process_pdf(pdf_bytes: bytes) -> dict:
                 if not all_text:
                     all_text += page_text + "\n"
                 for table in page.extract_tables():
+                    # Kept whole as well as flattened: a table read through its own
+                    # header beats the same cells read by guesswork.
+                    plumber_tables.append(table)
                     table_rows.extend(row for row in table if row)
     except Exception as exc:
         log.warning("pdfplumber failed: %s", exc)
@@ -1032,6 +1112,23 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         if items:
             log.info("Tier 1 (Markdown): %d line items", len(items))
 
+    # Tier 2a: pdfplumber tables read through their own header. A stacked table — one
+    # where a single cell carries the reference, the part number and the name on three
+    # lines — is only readable this way; guessing from the cells alone buries the part
+    # number and the brand inside one long description.
+    if not items and plumber_tables:
+        seen_headed: set[str] = set()
+        for table in plumber_tables:
+            for item in parse_plumber_table(table, currency):
+                if item["description"] in seen_headed:
+                    continue
+                seen_headed.add(item["description"])
+                item["lineNo"] = len(items) + 1
+                items.append(item)
+        if items:
+            log.info("Tier 2a (pdfplumber, header-aware): %d line items", len(items))
+
+    # Tier 2b: the same cells with no header to go on.
     if not items and table_rows:
         seen: set[str] = set()
         ln = 1
@@ -1042,7 +1139,7 @@ def process_pdf(pdf_bytes: bytes) -> dict:
                 items.append(item)
                 ln += 1
         if items:
-            log.info("Tier 2 (pdfplumber): %d line items", len(items))
+            log.info("Tier 2b (pdfplumber, heuristic): %d line items", len(items))
 
     if not items:
         items = lines_to_items(text_lines, currency)
