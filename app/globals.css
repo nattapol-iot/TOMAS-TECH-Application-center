@@ -4709,13 +4709,15 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .cost-sheet-wrap { max-height: calc(100vh - 260px); min-height: 320px; }
 
 /* A fixed header height makes the module band's sticky offset exact. */
-.cost-sheet thead th { height: 32px; }
+.cost-sheet { --cost-heading-height: 40px; }
+.cost-sheet thead th { box-sizing: border-box; height: var(--cost-heading-height); padding: 9px 10px; line-height: 20px; top: 0; z-index: 5; }
+.cost-sheet thead th:nth-child(-n+3) { z-index: 6; }
 
 /* The band stays under the header while its items scroll past, so the engineer
    can always see which module — and which subtotal — the rows belong to. */
 .cost-sheet .module-row > td {
   position: sticky;
-  top: 32px;
+  top: var(--cost-heading-height);
   z-index: 3;
 }
 
@@ -5175,6 +5177,12 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .estimate-heading-compact > .info-strip { grid-column: 1 / -1; grid-row: 4; }
 .estimate-document-meta { display: grid; gap: 6px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); font-size: var(--fs-xs); color: var(--muted); white-space: normal; }
 .estimate-document-meta strong { color: var(--ink); }
+.cost-collapsed-total { margin-left: auto; }
+.cost-module-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cost-module-footer > span { color: var(--muted); font-size: var(--fs-xs); }
+.cost-sheet .cost-module-subtotal > td { background: var(--n-50); border-top: 1px solid var(--line); }
+.cost-module-footer .add-row-btn { width: auto; flex: 0 1 auto; }
+.estimate-cost-panel .estimate-entry-help { padding: 9px 12px; color: var(--blue-text); background: var(--blue-soft); border-block: 1px solid var(--blue-line); }
 @media (max-width: 980px) {
   .estimate-heading-compact { grid-template-columns: minmax(0, 1fr); }
   .estimate-heading-compact > .estimate-workspace-bar { grid-column: 1; grid-row: 4; justify-content: flex-start; }

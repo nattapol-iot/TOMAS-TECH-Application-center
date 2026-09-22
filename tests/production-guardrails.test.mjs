@@ -563,7 +563,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   for (const tab of ["Cost summary", "Cost Items", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
     assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add expense", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add with details", "New Main Module"]) {
+  for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add expense", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add item to this module", "Add module"]) {
     assert.match(estimateScreen, new RegExp(action));
   }
   assert.match(estimateScreen, /loadPriceLibraryRecords/);
