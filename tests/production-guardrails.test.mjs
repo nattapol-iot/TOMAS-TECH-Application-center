@@ -844,6 +844,44 @@ test("a quotation's price lines reach the Price Library or the screen says they 
   }
 });
 
+test("the quotation route writes only columns supplier_quotations actually has", async () => {
+  /*
+   * Every backend test here mocks the SQL driver, so a statement naming a column that
+   * does not exist passes them all and fails only against a real database — as
+   * `updated_by` did on every save the edit dialog ever attempted. This reads the
+   * table's own DDL instead and holds the route's writes to it.
+   */
+  const [route, base, extension] = await Promise.all([
+    readFile(new URL("backend-node/src/routes/supplier-quotations.ts", root), "utf8"),
+    readFile(new URL("database/migrations/013_supplier_quotations.sql", root), "utf8"),
+    readFile(new URL("database/migrations/060_price_reference_sources.sql", root), "utf8"),
+  ]);
+
+  const createStart = base.indexOf("CREATE TABLE dbo.supplier_quotations (");
+  assert.ok(createStart > 0, "the supplier_quotations table declaration moved");
+  const declaration = base.slice(createStart, base.indexOf("\n);", createStart));
+  const columnType = "bigint|nvarchar|char|varchar|date|datetimeoffset|decimal|int|bit|rowversion";
+  const declared = new Set([
+    ...declaration.matchAll(new RegExp(`^\\s+(\\w+)\\s+(?:${columnType})\\b`, "gm")),
+    ...extension.matchAll(new RegExp(`\\bADD (\\w+) (?:${columnType})\\b`, "g")),
+  ].map((match) => match[1]));
+  assert.ok(declared.has("quotation_no") && declared.has("source_url"), "column extraction stopped working");
+
+  const written = new Set();
+  for (const insert of route.matchAll(/INSERT INTO dbo\.supplier_quotations\(([^)]*)\)/g)) {
+    for (const column of insert[1].split(",")) written.add(column.trim());
+  }
+  const updateStart = route.indexOf("UPDATE dbo.supplier_quotations SET");
+  assert.ok(updateStart > 0, "the quotation update moved");
+  const setClause = route.slice(updateStart, route.indexOf("OUTPUT", updateStart));
+  for (const assignment of setClause.matchAll(/(\w+)=@/g)) written.add(assignment[1]);
+
+  assert.ok(written.size > 10, "no written columns were found");
+  for (const column of written) {
+    assert.ok(declared.has(column), `supplier_quotations has no column '${column}', but the route writes it`);
+  }
+});
+
 test("a price with no document cites the page it came from, and the database keeps the two apart", async () => {
   const [migration, registry, route, client, screen, deployment, dictionary] = await Promise.all([
     readFile(new URL("database/migrations/060_price_reference_sources.sql", root), "utf8"),

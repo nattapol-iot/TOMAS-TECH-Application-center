@@ -497,12 +497,13 @@ export function registerSupplierQuotationRoutes(
       upd.input("amount", sql.Decimal(19, 4), newAmount);
       upd.input("inquiry", sql.BigInt, newInquiryId);
       upd.input("source_url", sql.NVarChar(1000), newSourceUrl);
-      upd.input("actor", sql.BigInt, actor.id);
+      /* Who changed it is recorded in audit_log below; supplier_quotations has never
+         carried an updated_by column, and writing to one failed every save. */
       const row = (await upd.query<{ row_version: Buffer }>(`
         UPDATE dbo.supplier_quotations SET
           supplier_id=@supplier, supplier_reference=@reference, received_date=@received,
           valid_until=@valid, currency=@currency, amount=@amount, inquiry_id=@inquiry,
-          source_url=@source_url, updated_by=@actor
+          source_url=@source_url
         OUTPUT inserted.row_version WHERE id=@id;
       `)).recordset[0]!;
 
