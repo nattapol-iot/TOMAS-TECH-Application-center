@@ -279,6 +279,8 @@ export type SupplierQuotationRecord = {
   uploadedByName: string;
   uploadedAt: string;
   rowVersion: string;
+  /** Price lines stored against the document. Zero means it adds nothing to the Price Library. */
+  lineCount: number;
 };
 
 export type InquirySummary = {
@@ -1299,6 +1301,8 @@ export async function createSupplierQuotation(input: {
   inquiryId?: number;
   currency: SupplierQuotationRecord["currency"];
   amount: number;
+  /** Sent with the document so the quotation and its price lines commit together. */
+  lines?: QuotationLineItem[];
 }) {
   const body = new FormData();
   body.set("file", input.file);
@@ -1309,8 +1313,9 @@ export async function createSupplierQuotation(input: {
   if (input.inquiryId) body.set("inquiryId", String(input.inquiryId));
   body.set("currency", input.currency);
   body.set("amount", String(input.amount));
+  if (input.lines?.length) body.set("lines", JSON.stringify(input.lines));
   const response = await authorizedFetch("/api/v1/supplier-quotations/", { method: "POST", body }, 120_000);
-  return response.json() as Promise<{ id: number; quotationNumber: string; rowVersion: string }>;
+  return response.json() as Promise<{ id: number; quotationNumber: string; rowVersion: string; lineCount: number }>;
 }
 
 export async function downloadSupplierQuotation(id: number) {

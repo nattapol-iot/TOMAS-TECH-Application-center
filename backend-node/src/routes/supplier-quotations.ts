@@ -44,6 +44,8 @@ function quotation(row: Record<string, unknown> & { row_version: Buffer }) {
     projectName: row.project_name, currency: row.currency, amount: Number(row.amount), status: row.display_status,
     fileName: row.file_name, contentType: row.content_type, sizeBytes: Number(row.size_bytes),
     uploadedByName: row.uploaded_by_name, uploadedAt: row.uploaded_at, rowVersion: row.row_version.toString("base64"),
+    /* Zero here means the document is stored but no price reached the Price Library. */
+    lineCount: Number(row.line_count ?? 0),
   };
 }
 
@@ -71,7 +73,8 @@ export function registerSupplierQuotationRoutes(
                CASE WHEN q.status=N'Superseded' THEN N'Superseded'
                     WHEN q.valid_until<@today THEN N'Expired'
                     WHEN q.valid_until<=DATEADD(day,30,@today) THEN N'Expiring' ELSE N'Valid' END display_status,
-               q.file_name,q.content_type,q.size_bytes,u.name uploaded_by_name,q.uploaded_at,q.row_version
+               q.file_name,q.content_type,q.size_bytes,u.name uploaded_by_name,q.uploaded_at,q.row_version,
+               (SELECT COUNT_BIG(*) FROM dbo.supplier_quotation_lines l WHERE l.quotation_id=q.id) line_count
         FROM dbo.supplier_quotations q
         INNER JOIN dbo.suppliers s ON s.id=q.supplier_id
         INNER JOIN dbo.users u ON u.id=q.uploaded_by
@@ -112,6 +115,15 @@ export function registerSupplierQuotationRoutes(
     const fileName = uploadedFileName(upload.file.filename);
     const extension = validateFileExtension(fileName, new Set([...SUPPLIER_QUOTATION_EXTENSIONS].filter((value) => DOCUMENT_EXTENSIONS.has(value))));
     const contentType = contentTypeFor(fileName);
+    /* The lines are what reaches the Price Library, so they travel with the upload and
+       are validated before a byte is written — a rejected payload leaves no orphan file. */
+    const linesField = multipartText(values, "lines", 400_000);
+    let lines: LineInput[] = [];
+    if (linesField) {
+      let payload: unknown;
+      try { payload = JSON.parse(linesField); } catch { throw new ApiError(400, "validation_failed", "lines must be valid JSON."); }
+      lines = parseLineArray(payload);
+    }
 
     const references = await database.query<{ supplier_name: string }>(`
       SELECT s.name supplier_name FROM dbo.suppliers s
@@ -144,12 +156,13 @@ export function registerSupplierQuotationRoutes(
           INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,file_name,content_type,size_bytes,storage_key,sha256,uploaded_by)
           OUTPUT inserted.id,inserted.row_version VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,@file,@content_type,@size,@key,@sha,@actor);
         `)).recordset[0]!;
+        await writeQuotationLines(transaction, Number(row.id), lines, actor.id);
         const audit = new sql.Request(transaction);
         audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, Number(row.id)); audit.input("number", sql.NVarChar(50), number);
-        audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, fileName }));
+        audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, fileName, lineCount: lines.length }));
         await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,after_json,reason)
           VALUES(@actor,N'SupplierQuotation',@id,@number,N'Uploaded',@after,N'Supplier quotation document uploaded');`);
-        return { id: Number(row.id), quotationNumber: number, rowVersion: row.row_version.toString("base64") };
+        return { id: Number(row.id), quotationNumber: number, rowVersion: row.row_version.toString("base64"), lineCount: lines.length };
       }, sql.ISOLATION_LEVEL.READ_COMMITTED);
       return reply.status(201).header("Location", `/api/v1/supplier-quotations/${created.id}/content`).send(created);
     } catch (error) {
@@ -185,7 +198,10 @@ export function registerSupplierQuotationRoutes(
   };
 
   function parseLines(body: Record<string, unknown>): LineInput[] {
-    const raw = body.lines;
+    return parseLineArray(body.lines);
+  }
+
+  function parseLineArray(raw: unknown): LineInput[] {
     if (!Array.isArray(raw)) throw new ApiError(400, "validation_failed", "lines must be an array.");
     if (raw.length > 200) throw new ApiError(400, "validation_failed", "Maximum 200 line items per quotation.");
     const validCurrencies = new Set(["THB", "JPY", "USD", "EUR"]);
@@ -212,6 +228,31 @@ export function registerSupplierQuotationRoutes(
     });
   }
 
+  /*
+   * Replaces a quotation's lines wholesale — the table's trigger forbids updating a
+   * row in place. Shared by the upload, so a new quotation and its lines commit or
+   * fail together: a quotation with no lines adds nothing to the Price Library, and
+   * that used to be the silent outcome of a half-finished upload.
+   */
+  async function writeQuotationLines(
+    transaction: sql.Transaction, quotationId: number, lines: LineInput[], actorId: number,
+  ): Promise<void> {
+    await new sql.Request(transaction).input("id", sql.BigInt, quotationId)
+      .query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
+    for (const line of lines) {
+      const ins = new sql.Request(transaction);
+      ins.input("qid", sql.BigInt, quotationId); ins.input("no", sql.Int, line.lineNo);
+      ins.input("code", sql.NVarChar(200), line.itemCode); ins.input("desc", sql.NVarChar(500), line.description);
+      ins.input("brand", sql.NVarChar(100), line.brand); ins.input("model", sql.NVarChar(200), line.model);
+      ins.input("qty", sql.Decimal(19, 4), line.qty); ins.input("unit", sql.NVarChar(50), line.unit);
+      ins.input("price", sql.Decimal(19, 4), line.unitPrice); ins.input("cur", sql.Char(3), line.currency);
+      ins.input("remark", sql.NVarChar(sql.MAX), line.remark); ins.input("actor", sql.BigInt, actorId);
+      await ins.query(`INSERT INTO dbo.supplier_quotation_lines
+        (quotation_id,line_no,item_code,description,brand,model,qty,unit,unit_price,currency,remark,created_by)
+        VALUES(@qid,@no,@code,@desc,@brand,@model,@qty,@unit,@price,@cur,@remark,@actor);`);
+    }
+  }
+
   async function demandQuotationAccess(request: Parameters<typeof users.required>[0], id: number) {
     await users.demandPermission(request, "estimate.write");
     const check = await database.query<{ id: number }>(
@@ -229,22 +270,10 @@ export function registerSupplierQuotationRoutes(
     const body = bodyObject(request.body);
     const lines = parseLines(body);
 
-    await database.transaction(async (transaction) => {
-      await new sql.Request(transaction).input("id", sql.BigInt, id)
-        .query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
-      for (const line of lines) {
-        const ins = new sql.Request(transaction);
-        ins.input("qid", sql.BigInt, id); ins.input("no", sql.Int, line.lineNo);
-        ins.input("code", sql.NVarChar(200), line.itemCode); ins.input("desc", sql.NVarChar(500), line.description);
-        ins.input("brand", sql.NVarChar(100), line.brand); ins.input("model", sql.NVarChar(200), line.model);
-        ins.input("qty", sql.Decimal(19, 4), line.qty); ins.input("unit", sql.NVarChar(50), line.unit);
-        ins.input("price", sql.Decimal(19, 4), line.unitPrice); ins.input("cur", sql.Char(3), line.currency);
-        ins.input("remark", sql.NVarChar(sql.MAX), line.remark); ins.input("actor", sql.BigInt, actor.id);
-        await ins.query(`INSERT INTO dbo.supplier_quotation_lines
-          (quotation_id,line_no,item_code,description,brand,model,qty,unit,unit_price,currency,remark,created_by)
-          VALUES(@qid,@no,@code,@desc,@brand,@model,@qty,@unit,@price,@cur,@remark,@actor);`);
-      }
-    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+    await database.transaction(
+      (transaction) => writeQuotationLines(transaction, id, lines, actor.id),
+      sql.ISOLATION_LEVEL.READ_COMMITTED,
+    );
 
     return reply.status(204).send();
   });

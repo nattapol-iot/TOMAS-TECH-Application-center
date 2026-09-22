@@ -20,6 +20,7 @@ import {
   listMyEstimateAssignments,
   listInquiries,
   listProjects,
+  listQuotationLines,
   listSupplierQuotations,
   listSupplierPriceHistory,
   loadEstimateCostWorkspace,
@@ -2070,10 +2071,14 @@ function PriceLoadWarning({ estimateCount, skippedWorkspaces }: Pick<PriceLoadSt
   return skippedWorkspaces ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Price view บางส่วนไม่ถูกโหลด"} /></strong><small><LocalizedText text={"ไม่สามารถอ่าน Cost workspace"} /> {skippedWorkspaces} <LocalizedText text={"From"} /> {estimateCount} <LocalizedText text={"estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น"} /></small></span></div> : null;
 }
 
-export function ProductionPriceLibrary({ bootstrap }: ProductionPlanningProps) {
+export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanningProps) {
   const uiText = useUiText();
   const allowed = bootstrap.permissions.includes("estimate.read");
+  /* The library itself is derived and has nothing to write to. Adding a price means
+     recording the quotation it came from — done here so nobody has to know that. */
+  const canAdd = bootstrap.permissions.includes("estimate.write");
   const { records, estimateCount, historicalCount, quotationLineCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
+  const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("All sources");
   const [supplier, setSupplier] = useState("All suppliers");
@@ -2104,7 +2109,10 @@ export function ProductionPriceLibrary({ bootstrap }: ProductionPlanningProps) {
   const aging = priced.filter((record) => record.ageDays !== null && record.ageDays > 90 && record.ageDays <= 180).length;
   const stale = priced.filter((record) => record.ageDays === null || record.ageDays > 180).length;
   return <>
-    <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
+    <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<>
+      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+      {canAdd ? <button className="btn primary" type="button" onClick={() => setShowAdd(true)}><Icon name="plus" /><LocalizedText text={"Add price"} /></button> : null}
+    </>} />
     <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
     <Toolbar>
       <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
@@ -2136,6 +2144,13 @@ export function ProductionPriceLibrary({ bootstrap }: ProductionPlanningProps) {
       </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading cost workspaces…"} /></div> : <EmptyState icon="book" title="No priced cost item found" message="ไม่พบข้อมูลตามตัวกรอง หรือยังไม่มี Unit cost ใน Estimate" />}
       <Pagination page={currentPage} pageCount={pageCount} from={from} to={to} total={rows.length} onPage={setPage} />
     </Panel>
+    {showAdd ? <SupplierQuotationUploadModal bootstrap={bootstrap} onClose={() => setShowAdd(false)} onCreated={async (quotationNumber, lineCount) => {
+      setShowAdd(false);
+      notify(lineCount
+        ? `${quotationNumber} · เพิ่ม ${lineCount} ราคาเข้าคลังแล้ว`
+        : `${quotationNumber} · บันทึกเอกสารแล้วแต่ยังไม่มีรายการราคา`);
+      await load();
+    }} /> : null}
   </>;
 }
 
@@ -2156,10 +2171,107 @@ const quotationFileKind = (name: string) => {
   return "File";
 };
 
+const blankQuotationLine = (lineNo: number, currency: string): QuotationLineItem => ({
+  lineNo, itemCode: "", description: "", brand: "", model: "",
+  qty: 1, unit: "EA", unitPrice: 0, currency, remark: "",
+});
+
+const quotationLinesTotal = (lines: QuotationLineItem[]) =>
+  lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 0);
+
+/*
+ * The price lines are the only part of a supplier quotation the Price Library reads.
+ * The document is the evidence; these rows are the prices. They therefore get a real
+ * entry grid — one row per price, the arithmetic on the right, a running total under
+ * it — instead of the footnote they used to be beneath the header form.
+ */
+function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = false, emptyHint, onChange }: {
+  lines: QuotationLineItem[];
+  currency: string;
+  minWidth?: number;
+  disabled?: boolean;
+  emptyHint?: string;
+  onChange: (lines: QuotationLineItem[]) => void;
+}) {
+  const renumber = (next: QuotationLineItem[]) => next.map((line, index) => ({ ...line, lineNo: index + 1 }));
+  const update = (index: number, patch: Partial<QuotationLineItem>) =>
+    onChange(lines.map((line, position) => position === index ? { ...line, ...patch } : line));
+  const remove = (index: number) => onChange(renumber(lines.filter((_, position) => position !== index)));
+  const add = () => onChange([...lines, blankQuotationLine(lines.length + 1, currency)]);
+  /* A row with no name or no price is stored but reaches the library as nothing useful. */
+  const incomplete = lines.filter((line) => !line.description.trim() || !(line.unitPrice > 0)).length;
+
+  return <div className="quotation-lines">
+    <div className="quotation-lines-head">
+      <div>
+        <strong><LocalizedText text={"Price lines"} /></strong>
+        <span>{lines.length
+          ? `${lines.length} รายการ · เข้าคลังราคาทันทีที่บันทึก`
+          : "ยังไม่มีรายการ — ใบนี้จะไม่เพิ่มราคาเข้าคลัง"}</span>
+      </div>
+      {lines.length ? <button className="btn ghost sm" type="button" disabled={disabled} onClick={add}>
+        <Icon name="plus" /><LocalizedText text={"Add line"} />
+      </button> : null}
+    </div>
+    {lines.length ? <div className="quotation-lines-grid">
+      <div className="table-wrap">
+        <table className="sheet" style={{ minWidth }}>
+          <thead><tr>
+            <th style={{ width: 34 }}>#</th>
+            <th style={{ width: 124 }}><LocalizedText text={"Item code"} /></th>
+            <th><LocalizedText text={"Description"} /></th>
+            <th style={{ width: 118 }}><LocalizedText text={"Brand"} /></th>
+            <th style={{ width: 66 }}><LocalizedText text={"Qty"} /></th>
+            <th style={{ width: 70 }}><LocalizedText text={"Unit"} /></th>
+            <th style={{ width: 112 }}><LocalizedText text={"Unit price"} /></th>
+            <th style={{ width: 112 }}><LocalizedText text={"Line total"} /></th>
+            <th style={{ width: 74 }}><LocalizedText text={"Currency"} /></th>
+            <th style={{ width: 36 }} />
+          </tr></thead>
+          <tbody>{lines.map((line, index) => <tr key={index}>
+            <td className="computed" style={{ fontWeight: 400, color: "var(--muted)", textAlign: "center" }}>{line.lineNo}</td>
+            <td><input value={line.itemCode} disabled={disabled} maxLength={200} placeholder="—"
+              onChange={(event) => update(index, { itemCode: event.target.value })} /></td>
+            <td><input value={line.description} disabled={disabled} maxLength={500} placeholder="ชื่อรายการ"
+              onChange={(event) => update(index, { description: event.target.value })} /></td>
+            <td><input value={line.brand} disabled={disabled} maxLength={100} placeholder="—"
+              onChange={(event) => update(index, { brand: event.target.value })} /></td>
+            <td><input className="num" type="number" min="0.0001" step="1" value={line.qty} disabled={disabled}
+              onChange={(event) => update(index, { qty: Number(event.target.value) })} /></td>
+            <td><input value={line.unit} disabled={disabled} maxLength={50}
+              onChange={(event) => update(index, { unit: event.target.value })} /></td>
+            <td><input className="num" type="number" min="0" step="0.01" value={line.unitPrice} disabled={disabled}
+              onChange={(event) => update(index, { unitPrice: Number(event.target.value) })} /></td>
+            <td className="computed">{number((Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 2)}</td>
+            <td><select value={line.currency} disabled={disabled}
+              onChange={(event) => update(index, { currency: event.target.value })}>
+              <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
+            </select></td>
+            <td><button className="btn ghost sm" type="button" disabled={disabled} title="Remove line"
+              style={{ padding: "2px 6px" }} onClick={() => remove(index)}><Icon name="x" /></button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      <div className="quotation-lines-foot">
+        {incomplete
+          ? <span className="warn"><Icon name="alertTriangle" /> {incomplete} รายการยังไม่มีชื่อหรือราคา</span>
+          : <span />}
+        <span><LocalizedText text={"Lines total"} /> <strong>{number(quotationLinesTotal(lines), 2)}</strong> {currency}</span>
+      </div>
+    </div> : <button className="quotation-lines-empty" type="button" disabled={disabled} onClick={add}>
+      <Icon name="plus" />
+      <span>
+        <strong><LocalizedText text={"Add the first price line"} /></strong>
+        <small>{emptyHint ?? "กรอกชื่อรายการกับราคาต่อหน่วย แล้วราคาจะเข้าคลังราคาทันทีที่บันทึก"}</small>
+      </span>
+    </button>}
+  </div>;
+}
+
 function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   bootstrap: BootstrapData;
   onClose: () => void;
-  onCreated: (quotationNumber: string) => Promise<void>;
+  onCreated: (quotationNumber: string, lineCount: number) => Promise<void>;
 }) {
   const [supplierId, setSupplierId] = useState("");
   const [supplierReference, setSupplierReference] = useState("");
@@ -2167,6 +2279,8 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
   const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>("THB");
   const [amount, setAmount] = useState("");
+  /* True once the total has been stated rather than derived — by the PDF or by hand. */
+  const [amountPinned, setAmountPinned] = useState(false);
   const [inquiryId, setInquiryId] = useState("");
   const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -2245,6 +2359,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     setValidUntil(addIsoDays(isoToday(), 30));
     setCurrency("THB");
     setAmount("");
+    setAmountPinned(false);
     setLines([]);
     try {
       const result: ParsedQuotationResult = await parsePdfViaBackend(targetFile);
@@ -2255,7 +2370,9 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
       if (result.receivedDate) setReceivedDate(result.receivedDate);
       if (result.validUntil) setValidUntil(result.validUntil);
       if (result.currency) setCurrency(result.currency);
-      if (result.totalAmount > 0) setAmount(String(result.totalAmount));
+      /* A total printed on the document outranks the line arithmetic: it can include
+         freight, discount or tax that no single line carries. */
+      if (result.totalAmount > 0) { setAmount(String(result.totalAmount)); setAmountPinned(true); }
 
       // Auto-match supplier: try exact/substring match against master data first;
       // fall back to pre-filling the new-supplier text box so user can confirm.
@@ -2276,7 +2393,13 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
 
       // Auto-populate line items extracted from the PDF
       if (result.lines?.length > 0) {
-        setLines(result.lines.map((l, i) => ({ ...l, lineNo: i + 1, currency: l.currency || result.currency })));
+        const parsed = result.lines.map((l, i) => ({ ...l, lineNo: i + 1, currency: l.currency || result.currency }));
+        setLines(parsed);
+        /* No total was printed, so the lines are the only statement of what it costs. */
+        if (!(result.totalAmount > 0)) {
+          const total = quotationLinesTotal(parsed);
+          if (total > 0) setAmount(String(Number(total.toFixed(4))));
+        }
       }
 
       if (result.requiresOcr) {
@@ -2289,12 +2412,14 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     }
   };
 
-  const updateLine = (idx: number, patch: Partial<QuotationLineItem>) =>
-    setLines((prev) => prev.map((l, i) => i === idx ? { ...l, ...patch } : l));
-  const removeLine = (idx: number) =>
-    setLines((prev) => prev.filter((_, i) => i !== idx).map((l, i) => ({ ...l, lineNo: i + 1 })));
-  const addLine = () =>
-    setLines((prev) => [...prev, { lineNo: prev.length + 1, itemCode: "", description: "", brand: "", model: "", qty: 1, unit: "EA", unitPrice: 0, currency, remark: "" }]);
+  /* While nothing has stated the total, the lines are the total — typing a price is
+     then the whole job. Once the PDF or the user states one it stays put. */
+  const applyLines = (next: QuotationLineItem[]) => {
+    setLines(next);
+    if (amountPinned) return;
+    const total = quotationLinesTotal(next);
+    setAmount(total > 0 ? String(Number(total.toFixed(4))) : "");
+  };
 
   const parsedAmount = Number(amount);
   const hasSupplier = !!supplierId || !!newSupplierName.trim();
@@ -2302,7 +2427,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
 
   // Warn when manual line items total doesn't match declared amount (>1% diff)
-  const linesTotal = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const linesTotal = quotationLinesTotal(lines);
   const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
     && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
 
@@ -2325,15 +2450,15 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
         if (found.created) setParseWarning(`เพิ่ม Supplier ใหม่: "${found.name}" ใน Master Data แล้ว`);
       }
 
+      /* Lines travel with the document: the backend commits both or neither, so an
+         upload can no longer succeed while the prices it carried vanish unreported. */
       const created = await createSupplierQuotation({
         file, supplierId: resolvedSupplierId,
         supplierReference: supplierReference.trim(), receivedDate, validUntil,
         inquiryId: inquiryId ? Number(inquiryId) : undefined, currency, amount: parsedAmount,
+        lines,
       });
-      if (lines.length > 0) {
-        await saveQuotationLines(created.id, lines).catch(() => {/* non-blocking */});
-      }
-      await onCreated(created.quotationNumber);
+      await onCreated(created.quotationNumber, created.lineCount);
     } catch (requestError) {
       setError(toError(requestError));
     } finally {
@@ -2385,10 +2510,24 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
         </div>
       </div>
     )}
+    {/* Uploading with no lines stores a document and no price — say so before it happens. */}
+    {file && !parsing && !lines.length ? (
+      <div className="callout warning" style={{ marginBottom: 12 }}>
+        <Icon name="alertTriangle" />
+        <span>
+          <strong>ยังไม่มีรายการราคา</strong>
+          อัปโหลดตอนนี้จะได้เฉพาะไฟล์เอกสาร คลังราคาจะไม่ได้ราคาจากใบนี้ — เพิ่มรายการด้านล่างก่อน
+        </span>
+      </div>
+    ) : null}
     {linesTotalMismatch && (
       <div className="callout warning" style={{ marginBottom: 12 }}>
         <Icon name="alertTriangle" />
-        <span>ผลรวม line items ({number(linesTotal, 2)}) ไม่ตรงกับยอด Quotation ({number(parsedAmount, 2)}) — กรุณาตรวจสอบ</span>
+        <span>ผลรวมรายการ ({number(linesTotal, 2)}) ไม่ตรงกับยอดใบเสนอราคา ({number(parsedAmount, 2)}) — ต่างกันได้ถ้ามีค่าขนส่ง ภาษี หรือส่วนลด</span>
+        <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap", alignSelf: "center" }}
+          onClick={() => { setAmount(String(Number(linesTotal.toFixed(4)))); setAmountPinned(true); }}>
+          ใช้ยอดรวมรายการ
+        </button>
       </div>
     )}
 
@@ -2405,7 +2544,8 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
               <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
                 onChange={(event) => {
                   const f = event.target.files?.[0] ?? null;
-                  selectFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName(""); setLines([]);
+                  selectFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName("");
+                  setLines([]); setAmount(""); setAmountPinned(false);
                   if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
                 }} />
               {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
@@ -2481,45 +2621,26 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
             </select>
           </Field>
           <div style={confWrap("totalAmount")}>
-            <Field label="Quotation amount *" hint={confHint("totalAmount")}>
-              <input type="number" min="0.0001" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
+            <Field label="Quotation amount *" hint={confHint("totalAmount") ?? (amountPinned ? undefined : "คิดจากผลรวมรายการให้อัตโนมัติ แก้เองได้")}>
+              <input type="number" min="0.0001" step="0.01" value={amount} placeholder="0.00"
+                onChange={(event) => { setAmount(event.target.value); setAmountPinned(true); }} />
             </Field>
           </div>
         </div>
 
-        {/* Line items table */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <strong style={{ fontSize: 13 }}>Line items ({lines.length}) — จะเข้า Price Library อัตโนมัติ</strong>
-            <button className="btn ghost sm" type="button" onClick={addLine}><Icon name="plus" /> Add line</button>
-          </div>
-          {lines.length > 0 ? <div className="table-wrap">
-            <table style={{ fontSize: 12, minWidth: showPdf ? 600 : 900 }}>
-              <thead><tr>
-                <th style={{ width: 36 }}>#</th><th>Item code</th><th>Description *</th><th style={{ width: 60 }}>Qty</th>
-                <th style={{ width: 60 }}>Unit</th><th style={{ width: 110 }}>Unit price</th><th style={{ width: 70 }}>Cur.</th>
-                <th style={{ width: 32 }}></th>
-              </tr></thead>
-              <tbody>{lines.map((line, idx) => (
-                <tr key={idx}>
-                  <td style={{ textAlign: "center", color: "var(--text-muted)" }}>{line.lineNo}</td>
-                  <td><input style={{ width: "100%" }} value={line.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} placeholder="—" /></td>
-                  <td><input style={{ width: "100%" }} value={line.description} onChange={(e) => updateLine(idx, { description: e.target.value })} required /></td>
-                  <td><input type="number" style={{ width: "100%" }} value={line.qty} min="0.0001" step="1" onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} /></td>
-                  <td><input style={{ width: "100%" }} value={line.unit} onChange={(e) => updateLine(idx, { unit: e.target.value })} /></td>
-                  <td><input type="number" style={{ width: "100%" }} value={line.unitPrice} min="0" step="0.01"
-                    onChange={(e) => updateLine(idx, { unitPrice: Number(e.target.value) })} /></td>
-                  <td><select value={line.currency} onChange={(e) => updateLine(idx, { currency: e.target.value })}>
-                    <option>THB</option><option>JPY</option><option>USD</option><option>EUR</option>
-                  </select></td>
-                  <td><button className="btn ghost sm" type="button" style={{ padding: "2px 6px" }} onClick={() => removeLine(idx)}><Icon name="x" /></button></td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div> : <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "8px 0" }}>
-            {parsing ? "กำลังอ่าน PDF…" : hasParsed ? "ไม่พบรายการสินค้าใน PDF — กด \"Add line\" เพื่อเพิ่มเอง" : "เลือกไฟล์ PDF เพื่ออ่านรายการสินค้าอัตโนมัติ หรือกด \"Add line\" เพื่อกรอกเอง"}
-          </div>}
-        </div>
+        {/* The lines are the price. Everything above is the document they arrived on. */}
+        <QuotationLinesEditor
+          lines={lines}
+          currency={currency}
+          minWidth={showPdf ? 760 : 940}
+          disabled={busy}
+          emptyHint={parsing
+            ? "กำลังอ่าน PDF…"
+            : hasParsed
+              ? "ไม่พบรายการในไฟล์ — กรอกเองได้เลย ชื่อรายการกับราคาต่อหน่วยก็พอ"
+              : "กรอกชื่อรายการกับราคาต่อหน่วย หรือเลือกไฟล์ PDF ให้ระบบอ่านรายการให้"}
+          onChange={applyLines}
+        />
 
         {/* Legend */}
         {hasParsed && <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
@@ -2571,6 +2692,10 @@ function EditQuotationModal({
   const [amount, setAmount] = useState(String(record.amount));
   const [inquiryId, setInquiryId] = useState(record.inquiryId ? String(record.inquiryId) : "");
   const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
+  const [lines, setLines] = useState<QuotationLineItem[]>([]);
+  /* Until the existing lines are in hand, saving must not touch them: a write replaces
+     them wholesale, so saving an unloaded list would erase the prices already stored. */
+  const [linesLoaded, setLinesLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -2580,9 +2705,20 @@ function EditQuotationModal({
     ).catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void listQuotationLines(record.id)
+      .then((loaded) => { if (active) { setLines(loaded); setLinesLoaded(true); } })
+      .catch((loadError) => { if (active) setError("โหลดรายการราคาไม่สำเร็จ: " + toError(loadError)); });
+    return () => { active = false; };
+  }, [record.id]);
+
   const parsedAmount = Number(amount);
   const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0;
+  const linesTotal = quotationLinesTotal(lines);
+  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
+    && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
 
   const submit = async () => {
     if (invalid) return;
@@ -2598,6 +2734,7 @@ function EditQuotationModal({
         inquiryId: inquiryId ? Number(inquiryId) : null,
         rowVersion: record.rowVersion,
       });
+      if (linesLoaded) await saveQuotationLines(record.id, lines);
       onSaved();
     } catch (e) {
       setError(toError(e));
@@ -2609,7 +2746,8 @@ function EditQuotationModal({
   return (
     <Modal
       title={`Edit ${record.quotationNumber}`}
-      size="lg"
+      subtitle="แก้หัวใบเสนอราคาและรายการราคา — รายการที่บันทึกคือสิ่งที่เข้าคลังราคา"
+      size="xl"
       onClose={onClose}
       footer={<>
         <button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button>
@@ -2619,6 +2757,16 @@ function EditQuotationModal({
       </>}
     >
       {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+      {linesTotalMismatch ? (
+        <div className="callout warning">
+          <Icon name="alertTriangle" />
+          <span>ผลรวมรายการ ({number(linesTotal, 2)}) ไม่ตรงกับยอดใบเสนอราคา ({number(parsedAmount, 2)}) — ต่างกันได้ถ้ามีค่าขนส่ง ภาษี หรือส่วนลด</span>
+          <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap", alignSelf: "center" }}
+            onClick={() => setAmount(String(Number(linesTotal.toFixed(4))))}>
+            ใช้ยอดรวมรายการ
+          </button>
+        </div>
+      ) : null}
       <div className="form-grid two">
         <Field label="Supplier *">
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
@@ -2650,6 +2798,9 @@ function EditQuotationModal({
           </select>
         </Field>
       </div>
+      {linesLoaded
+        ? <QuotationLinesEditor lines={lines} currency={currency} disabled={busy} onChange={setLines} />
+        : <div className="quotation-lines"><div className="empty"><span className="spinner" />กำลังโหลดรายการราคา…</div></div>}
     </Modal>
   );
 }
@@ -2769,8 +2920,8 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
     <Panel title={result.total + " supplier quotations"} subtitle="เอกสารทุกแถวจัดเก็บใน secure document storage และ metadata อยู่ใน SQL Server" flush>
       <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
       {result.items.length ? <div className="table-wrap">
-        <table style={{ minWidth: 1500 }}>
-          <thead><tr><th><LocalizedText text={"Quotation No."} /></th><th><LocalizedText text={"Supplier reference"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Valid until"} /></th><th><LocalizedText text={"Inquiry / Project"} /></th><th><LocalizedText text={"Currency"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Attachment"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead>
+        <table style={{ minWidth: 1600 }}>
+          <thead><tr><th><LocalizedText text={"Quotation No."} /></th><th><LocalizedText text={"Supplier reference"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Valid until"} /></th><th><LocalizedText text={"Inquiry / Project"} /></th><th><LocalizedText text={"Currency"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Price lines"} /></th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Attachment"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead>
           <tbody>{result.items.map((record) => <tr key={record.id}>
             <td><strong className="mono">{record.quotationNumber}</strong></td>
             <td className="mono">{record.supplierReference || "—"}</td>
@@ -2780,6 +2931,11 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
             <td><div className="cell-primary"><strong className="mono">{record.inquiryNumber || "Not linked"}</strong><span>{record.projectName || "—"}</span></div></td>
             <td><Badge>{record.currency}</Badge></td>
             <td className="num"><strong>{supplierQuotationCurrency(record.amount, record.currency)}</strong></td>
+            {/* Zero here is the failure this column exists to expose: a stored document
+                that put no price into the Price Library. */}
+            <td className="num">{record.lineCount > 0
+              ? <strong>{record.lineCount}</strong>
+              : <Badge tone="amber"><LocalizedText text={"No price line"} /></Badge>}</td>
             <td><div className="cell-primary"><strong>{record.uploadedByName}</strong><span>{dateTime(record.uploadedAt)}</span></div></td>
             <td><Badge>{record.status}</Badge></td>
             <td><div className="cell-primary"><strong>{quotationFileKind(record.fileName)}</strong><span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span></div></td>
@@ -2790,7 +2946,9 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
                 </button>
                 {canUpload && (
                   <button className="btn ghost sm" type="button" onClick={() => setEditingRecord(record)}>
-                    <Icon name="edit" />Edit
+                    <Icon name="edit" />{record.lineCount
+                      ? <LocalizedText text={"Edit"} />
+                      : <LocalizedText text={"Add price"} />}
                   </button>
                 )}
                 {canUpload && (
@@ -2806,11 +2964,13 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
       </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading supplier quotations…"} /></div> : <EmptyState icon="quote" title="No supplier quotation found" message="อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก" action={canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : undefined} />}
       <Pagination page={page} pageCount={pageCount} from={from} to={to} total={result.total} onPage={setPage} />
     </Panel>
-    {showUpload ? <SupplierQuotationUploadModal bootstrap={bootstrap} onClose={() => setShowUpload(false)} onCreated={async (quotationNumber) => {
+    {showUpload ? <SupplierQuotationUploadModal bootstrap={bootstrap} onClose={() => setShowUpload(false)} onCreated={async (quotationNumber, lineCount) => {
       setShowUpload(false);
       setPage(1);
       setRefreshKey((value) => value + 1);
-      notify("Supplier quotation " + quotationNumber + " uploaded");
+      notify(lineCount
+        ? `${quotationNumber} อัปโหลดแล้ว · ${lineCount} ราคาเข้าคลังราคา`
+        : `${quotationNumber} อัปโหลดแล้ว · ยังไม่มีรายการราคา กด Add price เพื่อเพิ่ม`);
     }} /> : null}
     {editingRecord ? (
       <EditQuotationModal

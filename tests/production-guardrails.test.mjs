@@ -792,6 +792,56 @@ test("supplier quotations are uploaded to secure storage and listed in the stand
   assert.match(verifier, /\(N'supplier_quotations', N'SELECT'\), \(N'supplier_quotations', N'INSERT'\)/);
 });
 
+test("a quotation's price lines reach the Price Library or the screen says they did not", async () => {
+  const [route, client, screen, styles, dictionary] = await Promise.all([
+    readFile(new URL("backend-node/src/routes/supplier-quotations.ts", root), "utf8"),
+    readFile(new URL("app/system/api-client.ts", root), "utf8"),
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+    readFile(new URL("app/system/i18n.ts", root), "utf8"),
+  ]);
+
+  // The document and the prices it carries commit together, or neither does.
+  const createStart = route.indexOf('app.post("/api/v1/supplier-quotations"');
+  const createEnd = route.indexOf('app.get("/api/v1/supplier-quotations/:id/content"');
+  assert.ok(createStart > 0 && createEnd > createStart, "the create handler moved");
+  const create = route.slice(createStart, createEnd);
+  assert.match(create, /await writeQuotationLines\(transaction, Number\(row\.id\), lines, actor\.id\);/);
+  assert.ok(
+    create.indexOf("parseLineArray(payload)") < create.indexOf("writeStoredFile("),
+    "lines must be validated before the file is written, or a rejected payload leaves an orphan file",
+  );
+  assert.match(client, /body\.set\("lines", JSON\.stringify\(input\.lines\)\)/);
+  assert.match(screen, /onCreated\(created\.quotationNumber, created\.lineCount\)/);
+  // The old failure: the line write was fired separately and its error thrown away.
+  assert.doesNotMatch(screen, /saveQuotationLines\(created\.id/);
+  assert.doesNotMatch(screen, /non-blocking/);
+
+  // A document that carries no price says so, in the register and before uploading.
+  assert.match(route, /FROM dbo\.supplier_quotation_lines l WHERE l\.quotation_id=q\.id\) line_count/);
+  assert.match(client, /lineCount: number;/);
+  assert.match(screen, /text=\{"No price line"\}/);
+  assert.match(screen, /ยังไม่มีรายการราคา/);
+
+  // Lines stay correctable after the upload, and a failed load never saves as "none".
+  assert.match(screen, /void listQuotationLines\(record\.id\)/);
+  assert.match(screen, /if \(linesLoaded\) await saveQuotationLines\(record\.id, lines\);/);
+
+  // The Price Library offers the add path itself rather than sending people elsewhere.
+  const priceLibrary = screen.slice(
+    screen.indexOf("export function ProductionPriceLibrary"),
+    screen.indexOf("const supplierQuotationCurrency"),
+  );
+  assert.match(priceLibrary, /<SupplierQuotationUploadModal/);
+  assert.match(priceLibrary, /text=\{"Add price"\}/);
+
+  assert.match(styles, /\.quotation-lines-grid \{/);
+  assert.match(styles, /\.quotation-lines-empty \{/);
+  for (const key of ["Price lines", "Add line", "Add the first price line", "Lines total", "No price line", "Currency", "Add price"]) {
+    assert.match(dictionary, new RegExp(`"${key}": \\{"th":`), `${key} has no dictionary entry`);
+  }
+});
+
 test("employee master backs assignment identities without granting login access", async () => {
   const [migration, directoryMigration, endpoints, nodeEndpoints, bootstrap, nodeBootstrap, models, client, screen, grants] = await Promise.all([
     readFile(new URL("database/migrations/011_employee_master.sql", root), "utf8"),
