@@ -77,4 +77,11 @@ export const DOCUMENT_LIFECYCLE_COPY: Record<string, { th: string; en: string; j
   ["CRM opportunities", "โอกาสการขาย CRM", "CRM商談"],
   ["Bill of materials", "รายการวัสดุ BOM", "部品表"],
   ["Signing documents", "เอกสารลงนาม", "署名文書"],
+  ["Delete inquiry", "ลบ Inquiry", "案件を削除"],
+  ["Delete inquiry permanently?", "ยืนยันลบ Inquiry ถาวร?", "案件を完全に削除しますか？"],
+  ["Confirm deletion", "ยืนยันการลบ", "削除を確定"],
+  ["Inquiry and related estimate deleted", "ลบ Inquiry และ Estimate ที่เชื่อมโยงแล้ว", "案件と関連見積を削除しました"],
+  ["This permanently deletes the inquiry, its estimate and all downstream work, including projects, BOMs and reports. This cannot be undone.", "จะลบ Inquiry พร้อม Estimate และงานต่อเนื่องทั้งหมด รวม Project, BOM และรายงานถาวร กู้คืนไม่ได้", "案件、見積、プロジェクト、BOM、レポートを含む後続作業を完全に削除します。元に戻せません。"],
+  ["Related records", "ข้อมูลที่เกี่ยวข้อง", "関連レコード"],
+  ["Estimate revisions", "Revision ของ Estimate", "見積リビジョン"],
 ].map(([en, th, jp]) => [en, { en: REASON_EN[en] ?? en, th, jp }]));

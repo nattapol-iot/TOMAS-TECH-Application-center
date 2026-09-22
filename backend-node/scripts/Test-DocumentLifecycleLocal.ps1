@@ -26,7 +26,7 @@ try {
   $test.Open()
   Execute-Sql $test "CREATE ROLE iot_team_app_role"
   foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $repository 'database/migrations') -Filter '*.sql' | Sort-Object Name)) {
-    if ($file.Name -eq "058_admin_document_purge.sql") { continue } # Exercised by the real Node runner below.
+    if ($file.Name -in @("058_admin_document_purge.sql", "059_admin_inquiry_cascade.sql")) { continue } # Exercised by the real Node runner below.
     Write-Output "Applying $($file.Name)"
     # Older baseline scripts use sqlcmd's directive; ErrorActionPreference implements it here.
     $sqlText = [regex]::Replace([IO.File]::ReadAllText($file.FullName), '(?im)^:on error exit\s*$', '')

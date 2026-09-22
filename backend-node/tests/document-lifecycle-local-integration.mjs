@@ -37,7 +37,7 @@ async function preview(kind, id, suffix = "") {
 }
 async function act(kind, id, action, extra = {}, expectedStatus = 200) {
   const p = await preview(kind, id);
-  const response = await app.inject({ method: "POST", url: `/api/v1/${kind}/${id}/lifecycle`, payload: { action, token: p.token, reason: "Local integration", ...extra } });
+  const response = await app.inject({ method: "POST", url: `/api/v1/${kind}/${id}/lifecycle`, payload: { action, token: p.token, reason: "Local integration", ...(kind === "inquiries" && action === "permanent-delete" ? { confirmed: true } : {}), ...extra } });
   assert.equal(response.statusCode, expectedStatus, response.body); return response.json();
 }
 async function latest(kind, id) {
@@ -51,7 +51,7 @@ try {
   const { runPendingMigrations } = await import("../src/migrate.ts");
   await runPendingMigrations({ database: { connectionString: process.env.LIFECYCLE_TEST_CONNECTION, trustServerCertificate: true } });
   // Reapply through the same driver to verify idempotency as well as RPC batching.
-  await query(await readFile(new URL("../../database/migrations/058_admin_document_purge.sql", import.meta.url), "utf8"));
+  await query(await readFile(new URL("../../database/migrations/059_admin_inquiry_cascade.sql", import.meta.url), "utf8"));
   const seedIdentity = (await query(`IF NOT EXISTS(SELECT 1 FROM dbo.roles WHERE code=N'Admin') INSERT dbo.roles(code,name) VALUES(N'Admin',N'Admin');
     DECLARE @role bigint=(SELECT id FROM dbo.roles WHERE code=N'Admin');
     INSERT dbo.permissions(code) SELECT v.code FROM (VALUES(N'inquiry.read'),(N'inquiry.write'),(N'estimate.read'),(N'estimate.write'),(N'estimate.approve')) v(code)
@@ -171,7 +171,7 @@ try {
       UPDATE dbo.estimates SET revision=1,status=N'Approved' WHERE id=${estimateId};`);
     await assert.rejects(query(`DELETE FROM dbo.estimate_submission_snapshots WHERE estimate_id=${estimateId};`), /immutable/);
     await assert.rejects(query(`DELETE FROM dbo.cost_items WHERE estimate_id=${estimateId};`), /current estimate revision/);
-    await act("inquiries", inquiryId, "permanent-delete", { confirmNumber: (await preview("inquiries", inquiryId)).document.number }, 409);
+    assert.equal((await preview("inquiries", inquiryId)).permanentDelete.allowed, true);
     await act("estimates", estimateId, "permanent-delete", { confirmNumber: number });
     for (const table of ["estimates", "cost_items", "estimate_revisions", "estimate_submission_snapshots", "estimate_overhead_snapshots", "estimate_erp_mappings"])
       assert.equal((await query(`SELECT COUNT(*) n FROM dbo.${table} WHERE ${table === "estimates" ? "id" : "estimate_id"}=${estimateId}`))[0].n, 0);
@@ -228,6 +228,14 @@ try {
       EXEC sys.sp_set_session_context @key=N'trial_purge_estimate',@value=NULL;
       REVERT;`);
     assert.equal(spoof[0].blocked, 51112);
+    const scopedSpoof = await query(`EXECUTE AS USER=N'lifecycle_restricted';
+      CREATE TABLE #trial_delete_scope(object_id int,key_hash varbinary(32));
+      INSERT #trial_delete_scope SELECT OBJECT_ID(N'dbo.cost_items'),HASHBYTES('SHA2_256',(SELECT x.id AS id FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER)) FROM dbo.cost_items x WHERE estimate_id=${estimateId};
+      BEGIN TRY DELETE FROM dbo.cost_items WHERE estimate_id=${estimateId}; SELECT 0 blocked;
+      END TRY BEGIN CATCH SELECT ERROR_NUMBER() blocked; END CATCH;
+      DROP TABLE #trial_delete_scope; REVERT;`);
+    assert.equal(scopedSpoof[0].blocked, 51112);
+
     const denied = await query(`BEGIN TRANSACTION; EXECUTE AS USER=N'lifecycle_restricted';
       BEGIN TRY EXEC dbo.purge_trial_document N'Estimate',${estimateId},0,1; SELECT 0 blocked;
       END TRY BEGIN CATCH SELECT ERROR_NUMBER() blocked; END CATCH;
@@ -242,6 +250,59 @@ try {
       IF SESSION_CONTEXT(N'trial_purge_estimate') IS NOT NULL THROW 51998,'Purge context leaked',1;
       ROLLBACK;`);
     assert.equal((await query(`SELECT COUNT(*) n FROM dbo.cost_items WHERE estimate_id=${estimateId}`))[0].n, 1);
+  });
+  await check("SQL inquiry cascade deletes approved estimate, project, BOM and approved report atomically", async () => {
+    const { inquiryId, estimateId } = await seed(); const unrelated = await seed();
+    const ids = (await query(`DECLARE @p bigint,@b bigint,@r bigint,@reviewer bigint,@doc bigint;
+      INSERT dbo.users(entra_object_id,email,name,role_id) SELECT N'cascade-reviewer',N'cascade@example.invalid',N'Reviewer',role_id FROM dbo.users WHERE id=${actor.id};
+      SET @reviewer=SCOPE_IDENTITY();
+      UPDATE dbo.inquiries SET status=N'Approved' WHERE id=${inquiryId}; UPDATE dbo.estimates SET status=N'Locked' WHERE id=${estimateId};
+      INSERT dbo.projects(project_no,name,customer_id,project_type,status,manager_id,lead_engineer_id,inquiry_id,estimate_id,po_no,po_date,start_date,target_delivery,folder_path,created_by,updated_by)
+      VALUES(N'PJ-CASCADE',N'Cascade project',${customer},N'IoT',N'Closed',${actor.id},${actor.id},${inquiryId},${estimateId},N'PO-CASCADE',GETDATE(),GETDATE(),GETDATE(),N'/fixture',${actor.id},${actor.id});
+      SET @p=SCOPE_IDENTITY();
+      INSERT dbo.boms(bom_no,project_id,estimate_id,status,created_by,updated_by) VALUES(N'BOM-CASCADE',@p,${estimateId},N'Released',${actor.id},${actor.id}); SET @b=SCOPE_IDENTITY();
+      INSERT dbo.bom_lines(bom_id,section_code,sort_order,estimate_line_id,description,qty_required,unit,owner_id,non_stock,created_by,updated_by)
+      SELECT @b,N'01',1,id,N'Fixture BOM line',1,N'Pcs',${actor.id},1,${actor.id},${actor.id} FROM dbo.cost_items WHERE estimate_id=${estimateId};
+      INSERT dbo.unified_reports(report_no,report_type,project_id,created_by) VALUES(N'RPT-CASCADE',N'UAT',@p,${actor.id}); SET @r=SCOPE_IDENTITY();
+      INSERT dbo.unified_report_revisions(report_id,revision,title,report_date,locale,body_json,state,prepared_by,approver_id,snapshot_json,snapshot_sha256,approved_at)
+      VALUES(@r,0,N'Approved fixture',GETDATE(),N'en',N'{}',N'APPROVED',${actor.id},@reviewer,N'{}',REPLICATE('c',64),SYSUTCDATETIME());
+      INSERT dbo.signable_documents(doc_no,doc_class,title,project_id,estimate_id,owner_id,created_by)
+      VALUES(N'DOC-CASCADE',N'UAT_ACCEPT',N'Fixture signing',@p,${estimateId},${actor.id},${actor.id}); SET @doc=SCOPE_IDENTITY();
+      INSERT dbo.document_files(document_id,revision_label,source,storage_key,file_name,content_type,size_bytes,sha256,frozen_by)
+      VALUES(@doc,N'R00',N'UPLOADED',N'/fixture/cascade.pdf',N'cascade.pdf',N'application/pdf',100,REPLICATE('d',64),${actor.id});
+      UPDATE dbo.signable_documents SET current_file_id=SCOPE_IDENTITY() WHERE id=@doc;
+      INSERT dbo.notifications(user_id,kind,title,detail,entity_type,entity_id) VALUES(${actor.id},N'Fixture',N'Delete with inquiry',N'Fixture',N'Inquiry',${inquiryId});
+      INSERT dbo.crm_activities(customer_id,inquiry_id,estimate_id,project_id,activity_type,occurred_at,owner_id,summary,created_by)
+      VALUES(${customer},${inquiryId},${estimateId},@p,N'Note',SYSUTCDATETIME(),${actor.id},N'Preserve upstream history',${actor.id});
+      SELECT @p projectId,@b bomId,@r reportId,@doc documentId;`))[0];
+    let p = await preview("inquiries", inquiryId);
+    assert.equal(p.permanentDelete.allowed, true);
+    for (const table of ["dbo.inquiries", "dbo.estimates", "dbo.projects", "dbo.boms", "dbo.bom_lines", "dbo.unified_reports", "dbo.unified_report_revisions", "dbo.signable_documents", "dbo.document_files", "dbo.notifications"])
+      assert.ok(p.permanentDelete.affected.some(r => r.source === table), table);
+    await query(`UPDATE dbo.projects SET remark=N'Updated after preview' WHERE id=${ids.projectId};`);
+    const stale = await app.inject({ method: "POST", url: `/api/v1/inquiries/${inquiryId}/lifecycle`, payload: { action: "permanent-delete", confirmed: true, token: p.token } });
+    assert.equal(stale.statusCode, 409); assert.equal(stale.json().code, "concurrency_conflict");
+    p = await preview("inquiries", inquiryId);
+    // The actual row action sends only explicit confirmation and the preview token.
+    const url = `/api/v1/inquiries/${inquiryId}/lifecycle`;
+    await query(`CREATE TRIGGER dbo.trg_cascade_reject_audit ON dbo.audit_log AFTER INSERT AS
+      IF EXISTS(SELECT 1 FROM inserted WHERE action=N'Document permanent-delete') THROW 51999,'Cascade rollback',1;`);
+    let response;
+    try {
+      response = await app.inject({ method: "POST", url, payload: { action: "permanent-delete", confirmed: true, token: p.token } });
+      assert.equal(response.statusCode, 503, response.body);
+      assert.equal((await query(`SELECT COUNT(*) n FROM dbo.projects WHERE id=${ids.projectId}`))[0].n, 1);
+      assert.equal((await query(`SELECT COUNT(*) n FROM dbo.unified_report_revisions WHERE report_id=${ids.reportId}`))[0].n, 1);
+    } finally { await query("DROP TRIGGER dbo.trg_cascade_reject_audit;"); }
+    p = await preview("inquiries", inquiryId);
+    response = await app.inject({ method: "POST", url, payload: { action: "permanent-delete", confirmed: true, token: p.token } });
+    assert.equal(response.statusCode, 200, response.body);
+    for (const [table, field, id] of [["inquiries", "id", inquiryId], ["estimates", "id", estimateId], ["projects", "id", ids.projectId], ["bom_lines", "bom_id", ids.bomId], ["unified_reports", "id", ids.reportId], ["unified_report_revisions", "report_id", ids.reportId], ["signable_documents", "id", ids.documentId], ["document_files", "document_id", ids.documentId]])
+      assert.equal((await query(`SELECT COUNT(*) n FROM dbo.${table} WHERE ${field}=${id}`))[0].n, 0, table);
+    assert.equal((await query(`SELECT COUNT(*) n FROM dbo.estimates WHERE id=${unrelated.estimateId}`))[0].n, 1);
+    assert.equal((await query(`SELECT COUNT(*) n FROM dbo.customers WHERE id=${customer}`))[0].n, 1);
+    const crm = (await query("SELECT inquiry_id,estimate_id,project_id FROM dbo.crm_activities WHERE summary=N'Preserve upstream history'"))[0];
+    assert.equal(crm.inquiry_id, null); assert.equal(crm.estimate_id, null); assert.equal(crm.project_id, null);
   });
   console.log(JSON.stringify({ passed: checks.length, database: expected, checks }));
 } finally { await app.close(); await db.close(); }

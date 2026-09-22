@@ -1,5 +1,5 @@
 "use client";
-import { DocumentLifecycleButton, DocumentHistoryButton } from "./DocumentLifecycle";
+import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } from "./DocumentLifecycle";
 import { CrmInquirySource } from "./CrmScreens";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
@@ -124,6 +124,8 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
   const uiText = useUiText();
   const { lang } = useLanguage();
   const [result, setResult] = useState(EMPTY_PAGE);
+  const [deleteInquiryId, setDeleteInquiryId] = useState<number | null>(null);
+  const isAdmin = (bootstrap.user.roles?.length ? bootstrap.user.roles : [bootstrap.user.role]).includes("Admin");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
@@ -256,12 +258,16 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
             <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus)]}</strong></td>
             <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
-            <td><span className="row-action"><Icon name="chevronRight" /></span></td>
+            <td><div className="actions">{isAdmin ? <button className="btn danger" type="button" aria-label={`${uiText("Delete inquiry")}: ${item.number}`}
+              onClick={event => { event.stopPropagation(); setDeleteInquiryId(item.id); }}><Icon name="trash" /><LocalizedText text="Delete inquiry" /></button> : null}
+              <span className="row-action"><Icon name="chevronRight" /></span></div></td>
           </tr>;
         })}</tbody>
       </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div>
         : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading from SQL Server…"} /></div> : <EmptyState icon="inbox" title="No inquiry matches the filter" message="Adjust the filters above or register a new customer inquiry." />}
     </Panel>
+    {deleteInquiryId !== null ? <InquiryDeleteDialog id={deleteInquiryId} notify={notify} onClose={() => setDeleteInquiryId(null)}
+      onChanged={async () => { if (result.items.length === 1 && page > 1) setPage(page - 1); else await load(); await refreshBootstrap(); }} /> : null}
   </>;
 }
 

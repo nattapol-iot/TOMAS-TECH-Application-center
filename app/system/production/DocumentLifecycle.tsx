@@ -11,15 +11,16 @@ type Document = { id: number; number: string; name: string; status: string; revi
 type Preview = {
   document: Document; token: string; options: { action: Action; allowed: boolean; reason: string | null }[];
   linkedEstimate: Document | null; projects: { id: number; number: string; status: string }[];
-  permanentDelete: { allowed: boolean; blockers: { source: string; count: number }[] } | null;
+  permanentDelete: { allowed: boolean; blockers: { source: string; count: number }[]; affected?: { source: string; count: number }[] } | null;
   linkedWorkCount: number; fallbackRevision: number | null; restore: { eventId: number; reason: string | null; revision: number } | null;
 };
 const labels: Record<Action, string> = { "delete-draft": "Delete draft", cancel: "Cancel work", "cancel-linked": "Cancel inquiry and estimate",
   "permanent-delete": "Permanently delete (Admin)", archive: "Archive document", withdraw: "Withdraw review", restore: "Restore document" };
 const referenceLabels: Record<string, string> = {
-  "dbo.estimates": "Related estimate", "dbo.projects": "Related projects", "dbo.inquiry_attachments": "Inquiry attachments",
+  "dbo.inquiries": "Inquiry", "dbo.estimates": "Related estimate", "dbo.projects": "Related projects", "dbo.inquiry_attachments": "Inquiry attachments",
   "dbo.inquiry_meetings": "Inquiry meetings", "dbo.sales_intakes": "Site visit requests", "dbo.resource_tasks": "Resource tasks",
   "dbo.unified_reports": "Related reports", "dbo.supplier_quotations": "Supplier quotations", "dbo.crm_opportunities": "CRM opportunities",
+  "dbo.cost_items": "Cost items", "dbo.estimate_revisions": "Estimate revisions", "dbo.manhour_lines": "Man-hour lines", "dbo.expense_lines": "Expense lines",
   "dbo.boms": "Bill of materials", "dbo.bom_lines": "Bill of materials", "dbo.signable_documents": "Signing documents",
 };
 const reasons = ["Created by mistake", "Duplicate document", "Customer cancelled", "Work completed", "Other reason"];
@@ -53,7 +54,7 @@ function LifecycleDialog({ kind, id, eventId, onChanged, notify, onClose }: Prop
     setBusy(true); setError("");
     try {
       await apiRequest(`/api/v1/${kind}/${id}/lifecycle`, { method: "POST", body: JSON.stringify({ action, token: preview.token,
-        eventId, confirmNumber, reason: `${t(reason)}${detail.trim() ? `: ${detail.trim()}` : ""}` }) });
+        eventId, confirmNumber, confirmed: kind === "inquiries" && action === "permanent-delete", reason: `${t(reason)}${detail.trim() ? `: ${detail.trim()}` : ""}` }) });
       notify(t("Document changes saved"));
       onClose(); await onChanged();
     } catch (e) { setError(errorText(e)); setPreview(null); }
@@ -84,7 +85,7 @@ function LifecycleDialog({ kind, id, eventId, onChanged, notify, onClose }: Prop
       {preview.permanentDelete ? <div className="callout danger">
         <label><input type="radio" name="document-action" checked={action === "permanent-delete"} disabled={busy || !preview.permanentDelete.allowed}
           onChange={() => setAction("permanent-delete")} /> {t("Permanently delete (Admin)")}</label>
-        <p>{t("Permanent deletion removes this document and all estimate revisions and cost lines. It cannot be restored. The deletion audit is retained.")}</p>
+        <p>{t(kind === "inquiries" ? "This permanently deletes the inquiry, its estimate and all downstream work, including projects, BOMs and reports. This cannot be undone." : "Permanent deletion removes this document and all estimate revisions and cost lines. It cannot be restored. The deletion audit is retained.")}</p>
         {preview.permanentDelete.blockers.length ? <><p>{t("Handle linked records before deleting this document.")}</p><ul>{preview.permanentDelete.blockers.map(b => <li key={b.source}>{t(referenceLabels[b.source] ?? "Other linked work")}: {b.count}</li>)}</ul></> : null}
         {action === "permanent-delete" ? <Field label="Type the document number to confirm permanent deletion"><strong>{preview.document.number}</strong>
           <input className="input" aria-label={t("Type the document number to confirm permanent deletion")} value={confirmNumber} autoComplete="off" disabled={busy} onChange={e => setConfirmNumber(e.target.value)} />
@@ -131,5 +132,40 @@ function DocumentHistory({ kind, onChanged, notify, onOpen, onClose }: Omit<Prop
     <div className="workspace-bar"><button className="btn default" type="button" disabled={page <= 1 || loading} onClick={() => setPage(v => v - 1)}>{t("Previous")}</button>
       <span>{page} / {Math.max(1, Math.ceil(result.total / 25))}</span>
       <button className="btn default" type="button" disabled={page * 25 >= result.total || loading} onClick={() => setPage(v => v + 1)}>{t("Next")}</button></div>
+  </Modal>;
+}
+
+
+/** A single confirmation for Admin's row action; no reason or typed-number form. */
+export function InquiryDeleteDialog({ id, onChanged, notify, onClose }: Omit<Props, "kind"> & { onClose: () => void }) {
+  const t = useT();
+  const [preview, setPreview] = useState<Preview | null>(null), [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    setError(""); setPreview(null);
+    try { setPreview(await apiRequest<Preview>(`/api/v1/inquiries/${id}/lifecycle`)); }
+    catch (e) { setError(errorText(e)); }
+  }, [id]);
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  const remove = async () => {
+    if (busy || !preview?.permanentDelete?.allowed) return;
+    setBusy(true); setError("");
+    try {
+      await apiRequest(`/api/v1/inquiries/${id}/lifecycle`, { method: "POST", body: JSON.stringify({
+        action: "permanent-delete", confirmed: true, token: preview.token,
+      }) });
+      notify(t("Inquiry and related estimate deleted")); onClose(); await onChanged();
+    } catch (e) { setError(errorText(e)); setPreview(null); }
+    finally { setBusy(false); }
+  };
+  return <Modal title="Delete inquiry permanently?" size="sm" onClose={() => { if (!busy) onClose(); }}
+    footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
+      <button className="btn danger" type="button" disabled={busy || !preview?.permanentDelete?.allowed} onClick={() => { void remove(); }}>{busy ? "…" : t("Confirm deletion")}</button></>}>
+    {error ? <div className="callout danger" role="alert">{error}<button className="btn default" type="button" disabled={busy} onClick={() => { void load(); }}>{t("Refresh preview")}</button></div> : null}
+    {preview ? <><strong>{preview.document.number}</strong><p>{preview.document.name}</p>
+      {preview.linkedEstimate ? <p>{t("Related estimate")}: {preview.linkedEstimate.number}</p> : null}
+      {preview.permanentDelete?.affected?.length ? <ul>{preview.permanentDelete.affected.map(row => <li key={row.source}>{t(referenceLabels[row.source] ?? "Related records")}: {row.count}</li>)}</ul> : null}
+      <p>{t("This permanently deletes the inquiry, its estimate and all downstream work, including projects, BOMs and reports. This cannot be undone.")}</p>
+    </> : !error ? <p>{t("Loading")}…</p> : null}
   </Modal>;
 }

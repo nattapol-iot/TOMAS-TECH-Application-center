@@ -44,6 +44,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 56, fileName: "056_estimate_erp_groups.sql", name: "ERP export groups for merged summary lines" },
   { version: 57, fileName: "057_document_lifecycle.sql", name: "Inquiry and estimate document lifecycle" },
   { version: 58, fileName: "058_admin_document_purge.sql", name: "Admin permanent deletion of trial documents" },
+  { version: 59, fileName: "059_admin_inquiry_cascade.sql", name: "Admin inquiry cascade deletion and row confirmation" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

@@ -12,7 +12,7 @@ The document detail toolbar exposes **Manage document**. Both list headers expos
 | Archive | Approved, Locked or Cancelled documents. Hides the document from active lists and assignments without deleting data used by project references. Archived detail remains readable. |
 | Restore | Restores the same identity. A deleted draft can be restored only if its inquiry and estimate have not changed since removal and no project now references it. Archive restore changes visibility only. |
 
-An inquiry with a cancelled estimate is not automatically cancelled: the user can review the inquiry and cancel it separately. Related projects, site work and CRM opportunities are never silently cancelled. The confirmation shows related documents and the fallback revision. Every action requires a reason.
+An inquiry with a cancelled estimate is not automatically cancelled: the user can review the inquiry and cancel it separately. Related projects, site work and CRM opportunities are never silently cancelled. The confirmation shows related documents and the fallback revision. Reversible actions and standalone Estimate permanent deletion require a reason. Admin Inquiry cascade records the confirmation automatically.
 
 An estimate hidden in the trash reserves its inquiry and document number. Restore it instead of creating a replacement estimate. Discarded revision numbers remain reserved even when the current header has returned to an older approval.
 
@@ -32,7 +32,7 @@ Migration **057** adds `archived_at`, the estimate `Cancelled` status and `docum
 
 Unit/API contract tests: `backend-node/tests/document-lifecycle.test.ts`.
 
-SQL integration uses a disposable database and login on a **local, mixed-authentication SQL Server**. The wrapper verifies the actual server machine, applies all migrations, reapplies 057 and 058, runs twelve integration scenarios and removes only the random database/login it created:
+SQL integration uses a disposable database and login on a **local, mixed-authentication SQL Server**. The wrapper verifies the actual server machine, applies all migrations, reapplies 057 and 059, runs thirteen integration scenarios and removes only the random database/login it created:
 
 ```powershell
 pwsh -NoProfile -File backend-node/scripts/Test-DocumentLifecycleLocal.ps1 -Server 'tcp:127.0.0.1,<local-port>'
@@ -42,12 +42,25 @@ The wrapper never targets an existing application database. No shared-database c
 
 ## Admin permanent deletion
 
-Migration 058 adds `purge_trial_document`. Only an active effective Admin role (primary or additional), with document write permission, can execute `permanent-delete`. The lifecycle preview exposes `permanentDelete` only to Admin. The request must include the exact document number in `confirmNumber`, a reason and a fresh preview token.
+Migration 058 adds `purge_trial_document`. Only an active effective Admin role (primary or additional), with document write permission, can execute `permanent-delete`. The following restrictions describe standalone Estimate deletion; Inquiry uses the cascade below. The lifecycle preview exposes `permanentDelete` only to Admin. The request must include the exact document number in `confirmNumber`, a reason and a fresh preview token.
 
-The action is available from Manage document and from a trash/archive entry. It removes the selected Inquiry, or the entire Estimate including every revision, cost ledger, assignment, ERP mapping/group and immutable submission/overhead snapshot. The linked inquiry remains and its estimate pointer is cleared. Existing cancelled/archived inquiries remain closed. Delete the estimate first before deleting its inquiry. Numbers are not rewound.
+Standalone Estimate permanent deletion is available from Manage document and from a trash/archive entry. It removes the selected Inquiry, or the entire Estimate including every revision, cost ledger, assignment, ERP mapping/group and immutable submission/overhead snapshot. The linked inquiry remains and its estimate pointer is cleared. Existing cancelled/archived inquiries remain closed. Delete the estimate first before deleting its inquiry. Numbers are not rewound.
 
 External foreign-key references block deletion, including CRM opportunities, projects, BOMs, signing documents, inquiry attachments, site work, reports and meetings. The preview lists the blocking categories; the transaction rechecks them under locks. No related business document or physical attachment is cascaded. Audit and lifecycle history remain as evidence, but the removed document no longer appears in trash and cannot be restored.
 
 The SQL procedure runs as owner to respect the app role's normal delete denials. Eight estimate triggers retain their original behavior except for deletion of the one estimate identified by a scoped session context while executing as dbo. Inserts/updates remain protected. The context is cleared on success/error; deletion and the API audit commit together, and audit failure rolls everything back. No existing business document is deleted by the migration.
 
 Migration 058 keeps BEGIN/COMMIT in one Node SQL request and creates triggers/procedure in nested dynamic batches. The local harness applies 058 using the production Node migration runner, then reapplies it through the same driver before integration checks.
+
+
+## Admin Inquiry row deletion (migration 059)
+
+Admin sees **Delete inquiry** at the end of every Inquiry row. Clicking it stops row navigation and opens one confirmation popup showing the inquiry number, related estimate and counts of affected records. No typed document number, manual reason or workflow-status prerequisite is required. The same cascade applies to Inquiry permanent deletion from Manage document.
+
+The user explicitly requested deletion of all downstream work, including Project, BOM and reports. The server therefore removes the inquiry, its estimates (including locked/approved history), projects, purchasing/material work, schedule/site work, reports, signing records and owned attachment metadata, through the transitive foreign-key graph. Composite keys and self-referencing tables are supported. Explicit edges include GRN stock movements and Inquiry/Estimate/Project notifications whose references are not FKs. Master customers, suppliers, users, shared supplier quotations, upstream CRM records and append-only application/material audit logs remain. Links from retained CRM activities and supplier quotations are cleared. Stored file bytes remain for shared-file retention; the action does not recursively delete NAS folders.
+
+`purge_trial_inquiry` discovers a row-key scope in a serializable transaction, returns a count manifest and hashes the scope plus row versions into the confirmation token. POST must include `confirmed: true`; legacy typed-number confirmation alone cannot authorize this broader cascade. A changed manifest requires a refreshed confirmation. Changes and the root/estimate audit commit together; audit failure rolls the entire cascade back.
+
+Deletion exceptions in database triggers apply only while running as owner and only to exact primary keys in the procedure-local `#trial_delete_scope`. They never bypass updates/inserts or global audit protection. No trigger is disabled, and no foreign key is disabled. New trigger migrations must preserve this scoped deletion branch for tables in the cascade.
+
+Verification covers a locked estimate, closed project, released BOM with a cost-linked line, approved report revision, stale downstream preview, rollback after audit rejection, retained CRM history and an unrelated inquiry/estimate/customer. Browser interaction could not be verified because the browser tool failed to initialize (kernel assets path unavailable).

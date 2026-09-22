@@ -33,8 +33,10 @@ const manager = (actor: CurrentUser) => hasRole(actor, "Admin", "Engineering Man
 async function purge(tx: Transaction, kind: DocumentKind, id: number, actor: number, execute = false) {
   return (await new sql.Request(tx).input("kind", sql.NVarChar(20), kind).input("id", sql.BigInt, id)
     .input("actor", sql.BigInt, actor).input("execute", sql.Bit, execute)
-    .query<{ source: string; count: number }>("EXEC dbo.purge_trial_document @kind,@id,@actor,@execute;")).recordset;
+    .query<{ source: string; count: number; scopeToken?: string }>(kind === "Inquiry" ? "EXEC dbo.purge_trial_inquiry @kind,@id,@actor,@execute;" : "EXEC dbo.purge_trial_document @kind,@id,@actor,@execute;")).recordset;
 }
+const confirmationToken = (g: Graph, cascade: { scopeToken?: string }[] | null) => cascade?.[0]?.scopeToken
+  ? createHash("sha256").update(token(g) + cascade[0].scopeToken).digest("hex") : token(g);
 function doc(row: Row): LifecycleDocument {
   return { id: Number(row.id), number: row.number, name: row.project_name, status: row.status, revision: row.revision,
     ownerId: Number(row.owner_id), createdBy: Number(row.created_by), deleted: !!row.deleted_at, archived: !!row.archived_at, submitted: !!row.submitted };
@@ -140,9 +142,9 @@ export function registerDocumentLifecycleRoutes(app: FastifyInstance, database: 
         const g = await graph(tx, kind, id), f = facts(g, kind, actor, permissions);
         const event = eventValue ? await eventById(tx, kind, id, positiveLong(eventValue, "Event id")) : null;
         const purgeBlockers = hasRole(actor, "Admin") ? await purge(tx, kind, id, actor.id) : null;
-        if (purgeBlockers && g.projects.length && !purgeBlockers.some(b => b.source === "dbo.projects")) purgeBlockers.push({ source: "dbo.projects", count: g.projects.length });
-        return { document: f.document, token: token(g), options: lifecycleOptions(f),
-          permanentDelete: purgeBlockers === null ? null : { allowed: permissions.has(`${permission(kind)}.write`) && !purgeBlockers.length, blockers: purgeBlockers },
+        if (kind === "Estimate" && purgeBlockers && g.projects.length && !purgeBlockers.some(b => b.source === "dbo.projects")) purgeBlockers.push({ source: "dbo.projects", count: g.projects.length });
+        return { document: f.document, token: confirmationToken(g, kind === "Inquiry" ? purgeBlockers : null), options: lifecycleOptions(f),
+          permanentDelete: purgeBlockers === null ? null : { allowed: permissions.has(`${permission(kind)}.write`) && (kind === "Inquiry" || !purgeBlockers.length), blockers: kind === "Inquiry" ? [] : purgeBlockers, affected: kind === "Inquiry" ? purgeBlockers : [] },
           linkedEstimate: kind === "Inquiry" ? f.estimate : null, projects: g.projects, linkedWorkCount: g.work,
           fallbackRevision: g.fallback?.revision ?? null,
           restore: event ? { eventId: Number(event.id), reason: restoreBlock(g, kind, actor, permissions, event),
@@ -153,18 +155,21 @@ export function registerDocumentLifecycleRoutes(app: FastifyInstance, database: 
       await users.demandPermission(request, `${permission(kind)}.write`);
       const actor = await users.required(request), permissions = await access(database, actor);
       const id = positiveLong((request.params as { id: string }).id, "Document id"), body = bodyObject(request.body);
-      const action = requiredText(body.action, 30, "Action"), reason = requiredText(body.reason, 1000, "Reason");
+      const action = requiredText(body.action, 30, "Action");
+      const reason = kind === "Inquiry" && action === "permanent-delete" ? optionalText(body.reason, 1000, "Reason") ?? "Admin confirmed inquiry and downstream deletion" : requiredText(body.reason, 1000, "Reason");
       const expected = requiredText(body.token, 64, "Preview token");
       if (action === "permanent-delete" && !hasRole(actor, "Admin")) throw new ApiError(403, "admin_required", "Only Admin can permanently delete documents.");
       return database.transaction(async tx => {
         const g = await graph(tx, kind, id), current = root(g, kind), before = save(g);
-        if (token(g) !== expected) throw new ApiError(409, "concurrency_conflict", "Documents changed. Refresh the preview before confirming.");
+        const cascade = kind === "Inquiry" && hasRole(actor, "Admin") ? await purge(tx, kind, id, actor.id) : null;
+        if (confirmationToken(g, cascade) !== expected) throw new ApiError(409, "concurrency_conflict", "Documents changed. Refresh the preview before confirming.");
         if (action === "permanent-delete") {
-          if (body.confirmNumber !== current.number) throw new ApiError(400, "confirmation_required", "Type the exact document number to confirm permanent deletion.");
-          const blockers = await purge(tx, kind, id, actor.id);
-          if (blockers.length || g.projects.length) throw new ApiError(409, "document_referenced", "Linked records must be handled before permanent deletion. Refresh the preview.");
+          if (kind === "Inquiry" ? body.confirmed !== true : body.confirmNumber !== current.number) throw new ApiError(400, "confirmation_required", kind === "Inquiry" ? "Confirm the inquiry and downstream deletion in the current dialog." : "Type the exact document number to confirm permanent deletion.");
+          const blockers = kind === "Inquiry" ? [] : await purge(tx, kind, id, actor.id);
+          if (kind === "Estimate" && (blockers.length || g.projects.length)) throw new ApiError(409, "document_referenced", "Linked records must be handled before permanent deletion. Refresh the preview.");
           await purge(tx, kind, id, actor.id, true);
-          await insertAudit(tx, actor.id, kind, id, current.number, "Document permanent-delete", before, { permanentlyDeleted: true, reason });
+          await insertAudit(tx, actor.id, kind, id, current.number, "Document permanent-delete", before, { permanentlyDeleted: true, reason, affected: cascade });
+          if (kind === "Inquiry" && g.estimate) await insertAudit(tx, actor.id, "Estimate", Number(g.estimate.id), g.estimate.number, "Deleted with inquiry", before.estimate, { permanentlyDeleted: true, reason });
           if (kind === "Estimate") await insertAudit(tx, actor.id, "Inquiry", g.inquiry.id, g.inquiry.number,
             "Estimate permanent-delete", before.inquiry, { estimateId: null, reason });
           return { id, action, number: current.number };

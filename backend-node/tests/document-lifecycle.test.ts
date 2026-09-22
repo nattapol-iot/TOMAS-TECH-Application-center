@@ -219,3 +219,23 @@ test("API: permanent deletion cannot remove project-backed documents", async t =
   assert.equal((await f.post("permanent-delete", f.path, { confirmNumber: "EST-2" })).statusCode, 409);
   assert.equal(f.audits.length, 0);
 });
+
+test("API: Admin confirms inquiry cascade once even with a locked estimate and a project", async t => {
+  const f = fixture(t, { manager: true, projects: true, status: "Locked" });
+  const url = "/api/v1/inquiries/1/lifecycle";
+  const preview = await f.preview(url);
+  assert.equal(preview.permanentDelete.allowed, true);
+  assert.equal((await f.app.inject({ method: "POST", url, payload: { action: "permanent-delete", token: preview.token } })).statusCode, 400);
+  const response = await f.app.inject({ method: "POST", url, payload: { action: "permanent-delete", confirmed: true, token: preview.token } });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.ok(f.statements.some(s => s.includes("EXEC dbo.purge_trial_inquiry")));
+  assert.ok(f.audits.some(a => a.entity_type === "Inquiry"));
+  assert.ok(f.audits.some(a => a.entity_type === "Estimate"));
+});
+test("API: row confirmation never grants an owner Admin cascade permission", async t => {
+  const f = fixture(t); const url = "/api/v1/inquiries/1/lifecycle";
+  const preview = await f.preview(url);
+  const response = await f.app.inject({ method: "POST", url, payload: { action: "permanent-delete", confirmed: true, token: preview.token } });
+  assert.equal(response.statusCode, 403);
+  assert.equal(f.audits.length, 0);
+});
