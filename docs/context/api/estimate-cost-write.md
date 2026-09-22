@@ -2,7 +2,7 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d471fc2c`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `8071aa25`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -13,9 +13,9 @@ Evidence: source snapshot `d471fc2c`; generated, do not edit. [backend-node/src/
 | POST | `/api/v1/estimates/:id/cost-items` | 290–316 |
 | PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 318–344 |
 | POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 346–371 |
-| POST | `/api/v1/estimates/:id/cost-modules/copy` | 373–445 |
-| POST | `/api/v1/estimates/:id/cost-modules/remove` | 447–482 |
-| POST | `/api/v1/estimates/:id/apply-template` | 487–563 |
+| POST | `/api/v1/estimates/:id/cost-modules/copy` | 373–450 |
+| POST | `/api/v1/estimates/:id/cost-modules/remove` | 452–487 |
+| POST | `/api/v1/estimates/:id/apply-template` | 492–568 |
 
 ## Named functions
 
@@ -31,7 +31,7 @@ Evidence: source snapshot `d471fc2c`; generated, do not edit. [backend-node/src/
 | `costSnapshot` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 128–140 |
 | `bindCost` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 142–154 |
 | `touchEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 156–163 |
-| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 165–564 |
+| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 165–569 |
 
 ## Direct local dependencies
 

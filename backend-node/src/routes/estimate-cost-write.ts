@@ -407,6 +407,9 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
           AND category_code=@category AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module COLLATE Latin1_General_100_BIN2)
         AND (c.category_code<>@category OR LTRIM(RTRIM(c.module)) COLLATE Latin1_General_100_BIN2<>@module COLLATE Latin1_General_100_BIN2);`)).recordset;
       if (outside.length) throw new ApiError(409, "price_set_member", "This price set spans multiple modules. Keep the set in one module before copying.");
+      // Unordered rows use SQL INT_MAX. Retain that sentinel instead of adding past it.
+      let sortOrder = Number((await read.query<{ maxSortOrder: number | null }>(`SELECT MAX(sort_order) maxSortOrder FROM dbo.cost_items
+        WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL;`)).recordset[0]?.maxSortOrder ?? -1);
       const setKeys = new Map<string, string>();
       const copied: Array<{ sourceId: number; id: number }> = [];
       for (const line of lines) {
@@ -416,6 +419,8 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
         insert.input("source_id", sql.BigInt, line.id); insert.input("target", sql.NVarChar(200), targetName);
         insert.input("actor", sql.BigInt, actor.id);
         insert.input("set_key", sql.UniqueIdentifier, line.price_set_key ? setKeys.get(line.price_set_key) : null);
+        sortOrder = Math.min(2147483647, sortOrder + 1);
+        insert.input("sort_order", sql.Int, sortOrder);
         const created = (await insert.query<{ id: number }>(`DECLARE @created TABLE(id bigint);
           INSERT dbo.cost_items(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,
             specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,
@@ -423,7 +428,7 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
           OUTPUT inserted.id INTO @created
           SELECT estimate_id,revision,category_code,category,subcategory,@target,item_code,description,brand,model,
             specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,@actor,N'Active',
-            @actor,@actor,(SELECT COALESCE(MAX(sort_order),0)+1 FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL),@set_key,is_price_set,qty_per_set
+            @actor,@actor,@sort_order,@set_key,is_price_set,qty_per_set
           FROM dbo.cost_items WHERE id=@source_id AND estimate_id=@id AND revision=@revision AND deleted_at IS NULL;
           SELECT id FROM @created;`)).recordset[0];
         if (!created) throw new ApiError(409, "module_changed", "A source item changed while copying.");
