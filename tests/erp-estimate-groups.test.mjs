@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { foldErpGroupLines, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
-import { buildEstimateCostBreakdown, breakdownModules } from "../lib/estimate-cost-breakdown.ts";
+import { buildEstimateCostBreakdown, breakdownModules, breakdownSheetModules, groupErpLaborSections } from "../lib/estimate-cost-breakdown.ts";
 
 const line = (id, amount, category = "Hardware", description = "Item " + id) => ({
   sourceType: "CostItem", sourceId: id, description, amount, erpCategory: category,
@@ -160,4 +160,53 @@ test("a price set stays one row: its components follow the header instead of bec
     ["Hardware", ["cost:1", "cost:2"]],
     ["Service", ["cost:3"]],
   ]);
+});
+
+const installationSections = () => groupErpLaborSections(buildEstimateCostBreakdown({
+  costItems: [], otherCostLines: [],
+  manhourLines: [{id:1, package:'Installation', activity:'Wiring', costType:'Installation', provider:'Internal', department:'IoT', level:'Engineer', engineers:1, manDays:2, dailyRate:3500, lineCost:7000}],
+  expenseLines: [{id:2, package:'Travel', expenseType:'Travel', description:'Site travel', quantity:1, unit:'Lot', unitCost:2000, lineTotal:2000}],
+}, {manhour:'Labor', expenses:'Expenses', other:'Other', manDayUnit:'MD'}), new Map([['manhour:1','Installation']]));
+const installationMerge = line => ['manhour:1','expense:2'].includes(line.key) ? {id:8,title:'Installation including travel'} : null;
+
+test('Installation merge combines labor and travel into one row with the whole price', () => {
+  const rows = breakdownSheetModules(installationSections(), installationMerge);
+  assert.equal(rows.length, 1, 'merged heading must not repeat once per source ledger');
+  assert.equal(rows[0].amount, 9000);
+  assert.equal(rows[0].inHouse, 9000);
+  assert.equal(rows[0].outsourced, 0);
+  assert.deepEqual(rows[0].lines.map(line => line.key), ['manhour:1','expense:2']);
+  assert.equal(rows[0].title, 'Installation including travel');
+});
+
+
+test('split back restores each source row without losing or duplicating Installation cost', () => {
+  const sections = installationSections();
+  const before = JSON.stringify(sections);
+  breakdownSheetModules(sections, installationMerge);
+  const rows = breakdownSheetModules(sections);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(row => row.amount), [7000, 2000]);
+  assert.equal(JSON.stringify(sections), before, 'grouping must not mutate the source ledgers');
+});
+
+test('a cross-ledger merge retains supplier totals, first position, and one ERP category row', () => {
+  const sections = installationSections();
+  sections[1].lines[0].source = 'outsourced';
+  const rows = breakdownSheetModules(sections, installationMerge);
+  const parts = splitRowsByCategory(rows, () => 'Installation');
+  assert.equal(parts.length, 1);
+  assert.equal(rows[0].key, 'group:8');
+  assert.equal(rows[0].inHouse, 7000);
+  assert.equal(rows[0].outsourced, 2000);
+  assert.equal(parts[0].lines.reduce((total, line) => total + line.amount, 0), 9000);
+  assert.equal(new Set(parts.flatMap(part => part.lines.map(line => line.key))).size, 2);
+});
+
+test('identical titles in different source sections stay separate unless explicitly merged', () => {
+  const sections = installationSections();
+  for (const section of sections) for (const line of section.lines) line.module = 'Installation';
+  assert.equal(breakdownSheetModules(sections).length, 2);
+  const differentGroups = line => ({id: line.key === 'manhour:1' ? 8 : 9, title:'Installation'});
+  assert.deepEqual(breakdownSheetModules(sections, differentGroups).map(row => row.amount), [7000, 2000]);
 });

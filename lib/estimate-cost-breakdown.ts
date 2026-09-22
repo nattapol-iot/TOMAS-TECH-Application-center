@@ -219,3 +219,26 @@ export function groupErpLaborSections(sections: BreakdownSection[], categories: 
   }
   return result.map((section, index) => ({ ...section, ordinal: index + 1 }));
 }
+
+/** Rows for the ERP sheet, retaining their source ledger. */
+export function breakdownSheetModules(sections: BreakdownSection[], mergedAs?: (line: BreakdownLine) => { id: number; title: string } | null) {
+  const rows: Array<ReturnType<typeof breakdownModules>[number] & { source: BreakdownSection }> = [];
+  const mergedRows = new Map<number, (typeof rows)[number]>();
+  for (const source of sections) {
+    for (const row of breakdownModules(source, mergedAs)) {
+      // ERP groups span ledgers; a section boundary must not split their price.
+      const existing = row.merged === null ? undefined : mergedRows.get(row.merged);
+      if (existing) {
+        existing.lines.push(...row.lines);
+        existing.amount += row.amount;
+        existing.inHouse += row.inHouse;
+        existing.outsourced += row.outsourced;
+      } else {
+        const entry = { ...row, source };
+        rows.push(entry);
+        if (row.merged !== null) mergedRows.set(row.merged, entry);
+      }
+    }
+  }
+  return rows;
+}

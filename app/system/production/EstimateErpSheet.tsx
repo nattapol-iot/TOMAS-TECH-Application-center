@@ -6,7 +6,7 @@ import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
 import { classifyErpGroups, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
-import { LABOR_MODULE_NAMES, breakdownModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
+import { LABOR_MODULE_NAMES, breakdownSheetModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import {
@@ -207,24 +207,22 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
 
   const headings = useMemo<SheetHeading[]>(() => {
     const collected = new Map<string, SheetRow[]>();
-    for (const section of sections) {
-      const modules = breakdownModules(section, (line) => {
-        const key = erpKeyOfBreakdownKey(line.key);
-        const group = key ? foldableByMember.get(key) : undefined;
-        return group ? { id: group.id, title: group.title } : null;
+    const modules = breakdownSheetModules(sections, (line) => {
+      const key = erpKeyOfBreakdownKey(line.key);
+      const group = key ? foldableByMember.get(key) : undefined;
+      return group ? { id: group.id, title: group.title } : null;
+    });
+    for (const part of splitRowsByCategory(modules, categoryOfLine)) {
+      const rows = collected.get(part.category) ?? [];
+      rows.push({
+        key: part.key, title: part.row.title, lines: part.lines, source: part.row.source,
+        standalone: part.row.standalone, merged: part.row.merged,
+        erpKeys: part.lines.map((line) => erpKeyOfBreakdownKey(line.key)).filter((key): key is string => key !== null && erpByKey.has(key)),
+        amount: part.lines.reduce((total, line) => total + line.amount, 0),
+        inHouse: part.lines.filter((line) => line.source === "in-house").reduce((total, line) => total + line.amount, 0),
+        outsourced: part.lines.filter((line) => line.source === "outsourced").reduce((total, line) => total + line.amount, 0),
       });
-      for (const part of splitRowsByCategory(modules, categoryOfLine)) {
-        const rows = collected.get(part.category) ?? [];
-        rows.push({
-          key: part.key, title: part.row.title, lines: part.lines, source: section,
-          standalone: part.row.standalone, merged: part.row.merged,
-          erpKeys: part.lines.map((line) => erpKeyOfBreakdownKey(line.key)).filter((key): key is string => key !== null && erpByKey.has(key)),
-          amount: part.lines.reduce((total, line) => total + line.amount, 0),
-          inHouse: part.lines.filter((line) => line.source === "in-house").reduce((total, line) => total + line.amount, 0),
-          outsourced: part.lines.filter((line) => line.source === "outsourced").reduce((total, line) => total + line.amount, 0),
-        });
-        collected.set(part.category, rows);
-      }
+      collected.set(part.category, rows);
     }
     return [...ERP_COST_CATEGORIES, "Unmapped"]
       .filter((category) => collected.has(category) || addedHeadings.includes(category))
