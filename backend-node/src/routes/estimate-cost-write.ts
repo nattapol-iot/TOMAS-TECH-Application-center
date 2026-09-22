@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { parseModuleDescriptionRows, scaleModuleQuantities } from "../estimate-module-details.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import sql from "mssql";
@@ -366,6 +367,80 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
       const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await costSnapshot(transaction, id, estimate.revision, lineId, row.row_version, true);
       await insertAudit(transaction, actor.id, "CostItem", lineId, estimate.estimate_no, "Removed", { line: before }, { line: after, removalReason: reason });
       return { id: lineId, estimateRowVersion: estimateVersion.toString("base64") };
+    });
+  });
+
+  app.post("/api/v1/estimates/:id/cost-modules/copy", async request => {
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const categoryCode = requiredText(body.categoryCode, 2, "Category code");
+    const moduleName = requiredText(body.module, 200, "Source module");
+    const targetName = requiredText(body.targetModule, 200, "New module name");
+    if (!categoryNames[categoryCode] || targetName.toLowerCase() === moduleName.toLowerCase())
+      throw new ApiError(400, "validation_failed", "Choose a category and a different module name.");
+    return database.transaction(async transaction => {
+      const estimate = await lockEditableEstimate(transaction, id, parseRowVersion(body.estimateRowVersion));
+      if (!elevated(actor, estimate) && !assigned(actor, await estimateAssignees(transaction, id, estimate.revision)))
+        throw new ApiError(403, "cost_line_forbidden", "You cannot copy this module.");
+      const read = new sql.Request(transaction);
+      read.input("id", sql.BigInt, id); read.input("revision", sql.Int, estimate.revision);
+      read.input("category", sql.Char(2), categoryCode); read.input("module", sql.NVarChar(200), moduleName);
+      read.input("target", sql.NVarChar(200), targetName);
+      const sourceKey = "category:" + categoryCode + ":" + moduleName;
+      const targetKey = "category:" + categoryCode + ":" + targetName;
+      read.input("source_key", sql.NVarChar(250), sourceKey); read.input("target_key", sql.NVarChar(250), targetKey);
+      read.input("actor", sql.BigInt, actor.id);
+      const collision = (await read.query(`SELECT TOP(1) id FROM dbo.cost_items WITH(UPDLOCK,HOLDLOCK)
+        WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category AND LTRIM(RTRIM(module))=@target
+        UNION ALL SELECT TOP(1) estimate_id FROM dbo.estimate_module_details WHERE estimate_id=@id AND revision=@revision AND module_key IN (@target_key,N'erp:'+@target_key);`)).recordset;
+      if (collision.length) throw new ApiError(409, "module_name_exists", "Another module already uses this name.");
+      const lines = (await read.query<{ id: number; price_set_key: string | null }>(`SELECT id,price_set_key FROM dbo.cost_items WITH(UPDLOCK,HOLDLOCK)
+        WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL AND category_code=@category
+        AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module COLLATE Latin1_General_100_BIN2 ORDER BY sort_order,id;`)).recordset;
+      if (!lines.length) throw new ApiError(409, "module_changed", "This module was changed or removed. Reload and try again.");
+      if (lines.length > 2000) throw new ApiError(400, "validation_failed", "A module copy supports at most 2000 items.");
+      // Refuse a partial set instead of tying a copied child to its source header.
+      const outside = (await read.query(`SELECT TOP(1) c.id FROM dbo.cost_items c WHERE c.estimate_id=@id AND c.revision=@revision AND c.deleted_at IS NULL
+        AND c.price_set_key IN (SELECT price_set_key FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL
+          AND category_code=@category AND LTRIM(RTRIM(module)) COLLATE Latin1_General_100_BIN2=@module COLLATE Latin1_General_100_BIN2)
+        AND (c.category_code<>@category OR LTRIM(RTRIM(c.module)) COLLATE Latin1_General_100_BIN2<>@module COLLATE Latin1_General_100_BIN2);`)).recordset;
+      if (outside.length) throw new ApiError(409, "price_set_member", "This price set spans multiple modules. Keep the set in one module before copying.");
+      const setKeys = new Map<string, string>();
+      const copied: Array<{ sourceId: number; id: number }> = [];
+      for (const line of lines) {
+        if (line.price_set_key && !setKeys.has(line.price_set_key)) setKeys.set(line.price_set_key, randomUUID());
+        const insert = new sql.Request(transaction);
+        insert.input("id", sql.BigInt, id); insert.input("revision", sql.Int, estimate.revision);
+        insert.input("source_id", sql.BigInt, line.id); insert.input("target", sql.NVarChar(200), targetName);
+        insert.input("actor", sql.BigInt, actor.id);
+        insert.input("set_key", sql.UniqueIdentifier, line.price_set_key ? setKeys.get(line.price_set_key) : null);
+        const created = (await insert.query<{ id: number }>(`DECLARE @created TABLE(id bigint);
+          INSERT dbo.cost_items(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,
+            specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,
+            created_by,updated_by,sort_order,price_set_key,is_price_set,qty_per_set)
+          OUTPUT inserted.id INTO @created
+          SELECT estimate_id,revision,category_code,category,subcategory,@target,item_code,description,brand,model,
+            specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,@actor,N'Active',
+            @actor,@actor,(SELECT COALESCE(MAX(sort_order),0)+1 FROM dbo.cost_items WHERE estimate_id=@id AND revision=@revision AND deleted_at IS NULL),@set_key,is_price_set,qty_per_set
+          FROM dbo.cost_items WHERE id=@source_id AND estimate_id=@id AND revision=@revision AND deleted_at IS NULL;
+          SELECT id FROM @created;`)).recordset[0];
+        if (!created) throw new ApiError(409, "module_changed", "A source item changed while copying.");
+        insert.input("new_id", sql.BigInt, created.id);
+        await insert.query(`INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
+          SELECT estimate_id,revision,source_type,@new_id,erp_category,@actor,@actor FROM dbo.estimate_erp_mappings
+          WHERE estimate_id=@id AND revision=@revision AND source_type=N'CostItem' AND source_id=@source_id;`);
+        copied.push({ sourceId: Number(line.id), id: Number(created.id) });
+      }
+      await read.query(`INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,description_rows,quantity,unit,updated_by)
+        SELECT estimate_id,revision,CASE WHEN module_key=@source_key THEN @target_key ELSE N'erp:'+@target_key END,
+          @target,remark,description_rows,quantity,unit,@actor FROM dbo.estimate_module_details
+        WHERE estimate_id=@id AND revision=@revision AND module_key IN (@source_key,N'erp:'+@source_key);`);
+      const version = await touchEstimate(transaction, id, actor.id);
+      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "ModuleCopied", null,
+        { revision: estimate.revision, categoryCode, sourceModule: moduleName, targetModule: targetName, copied });
+      return { copied: copied.length, module: targetName, estimateRowVersion: version.toString("base64") };
     });
   });
 

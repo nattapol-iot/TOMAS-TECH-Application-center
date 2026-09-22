@@ -575,6 +575,14 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
       await load();
     }
   };
+  const copyModule = async (group: CostModuleGroup, targetModule: string) => {
+    if (!workspace || busy) return;
+    setBusy(true);
+    try {
+      await apiRequest(`/api/v1/estimates/${estimateId}/cost-modules/copy`, { method: "POST", body: JSON.stringify({ categoryCode: group.categoryCode, module: group.module, targetModule, estimateRowVersion: workspace.header.rowVersion }) });
+      await afterMutation(estimateUxCopy(currentLocale(), "คัดลอกโมดูลแล้ว", "Module copied", "モジュールを複製しました"));
+    } finally { setBusy(false); }
+  };
   const removeModule = async (group: CostModuleGroup) => {
     if (!workspace || busy || !window.confirm(`ลบ Main Module "${group.module}" และรายการต้นทุนทั้งหมด ${group.lines.length} รายการ? การลบนี้มีบันทึกประวัติ
 Remove this module and all ${group.lines.length} cost items?`)) return;
@@ -697,7 +705,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       <SummaryTile label="Total Estimated Cost" value={formatMoney(totals.total)} note="Internal cost · no margin" strong />
     </section>
 <EstimateSummaryTab workspace={workspace} /></details></> : null}
-    {tab === "cost" ? <EstimateCostItemsTab onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
+    {tab === "cost" ? <EstimateCostItemsTab onCopyModule={copyModule} onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
       setBusy(true); setError("");
       let rowVersion = workspace.header.rowVersion;
@@ -949,7 +957,7 @@ function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace })
   </>;
 }
 
-function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
+function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onCopyModule: (group: CostModuleGroup, name: string) => Promise<void>; onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
   const [setSelection,setSetSelection]=useState<number[]>([]);
   const [setEditor,setSetEditor]=useState<{members:EstimateCostItem[];header?:EstimateCostItem}|null>(null);
   const [setError,setSetError]=useState("");
@@ -964,6 +972,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
   const [category, setCategory] = useState("all");
   const [tool, setTool] = useState<"price" | "import" | "import-flat" | "copy" | "module" | "template" | null>(null);
   const [saveTarget, setSaveTarget] = useState<CostModuleGroup | null>(null);
+  const [copyTarget, setCopyTarget] = useState<CostModuleGroup | null>(null);
   const [quickDraft, setQuickDraft] = useState<QuickCostDraft | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   const [collapsed, setCollapsed] = useState<string[]>([]);
@@ -1118,7 +1127,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
         const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
         const index = siblings.findIndex(entry => entry.key === group.key);
         return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={localizeCopy(direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down")} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
-      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
+      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateUxCopy(currentLocale(), "คัดลอกโมดูล", "Copy module", "モジュールを複製")} aria-label={"Copy Module " + group.module} onClick={() => setCopyTarget(groups.find(entry => entry.key === group.key) ?? null)}><Icon name="copy" /></button><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
   </tr>;
 
   return <>
@@ -1226,6 +1235,7 @@ function EstimateCostItemsTab({ onRemoveModule, onReorder, onExcelImported, boot
     if (applied) setTool(null);
     return applied;
   }} /> : null}
+  {copyTarget ? <CopyCostModuleModal group={copyTarget} groups={groups} busy={busy} onClose={() => setCopyTarget(null)} onCopy={onCopyModule} /> : null}
   {saveTarget ? <SaveModuleTemplateModal group={saveTarget} busy={busy} onClose={() => setSaveTarget(null)} onSave={async (input) => {
     const saved = await onSaveTemplate(input);
     if (saved) setSaveTarget(null);
@@ -1515,6 +1525,37 @@ function SaveModuleTemplateModal({ group, busy, onClose, onSave }: { group: Cost
     </div>
     <Field label="Description"><textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={localizeCopy("ชุดนี้ใช้กับงานแบบไหน มีอะไรที่ต้องรู้ก่อนดึงไปใช้")} /></Field>
     <div className="info-strip" style={{ marginTop: 10 }}><Icon name="alertCircle" /><span><LocalizedText text={"ราคาที่เก็บไปเป็น"} /><b><LocalizedText text={"ราคาอ้างอิง"} /></b><LocalizedText text={"พร้อมวันที่ ไม่ใช่ราคาปัจจุบัน ตอนดึงไปใช้จะเตือนถ้าเก่าเกิน"} /> {STALE_TEMPLATE_PRICE_DAYS} <LocalizedText text={"days"} /></span></div>
+  </Modal>;
+}
+
+function CopyCostModuleModal({ group, groups, busy, onCopy, onClose }: {
+  group: CostModuleGroup; groups: CostModuleGroup[]; busy: boolean;
+  onCopy: (group: CostModuleGroup, name: string) => Promise<void>; onClose: () => void;
+}) {
+  const copy = (th: string, en: string, jp: string) => estimateUxCopy(currentLocale(), th, en, jp);
+  const [name, setName] = useState(() => {
+    let index = 1;
+    const base = group.module.slice(0, 185);
+    while (groups.some(entry => entry.categoryCode === group.categoryCode && entry.module.toLowerCase() === `${base} (Copy ${index})`.toLowerCase())) index++;
+    return `${base} (Copy ${index})`;
+  });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const pending = busy || saving;
+  const duplicate = groups.some(entry => entry.categoryCode === group.categoryCode && entry.module.trim().toLowerCase() === name.trim().toLowerCase());
+  const submit = async () => {
+    if (pending || !name.trim() || duplicate) return;
+    setSaving(true); setError("");
+    try { await onCopy(group, name.trim()); onClose(); }
+    catch (error) { setError(toError(error)); }
+    finally { setSaving(false); }
+  };
+  return <Modal title={copy("คัดลอกโมดูล", "Copy module", "モジュールを複製")} subtitle={group.module} onClose={() => { if (!pending) onClose(); }}>
+    <p>{copy(`คัดลอก ${group.lines.length} รายการ พร้อมจำนวน ราคา และชุดราคา ภายใน Estimate นี้`, `Copy ${group.lines.length} items with quantities, prices and price sets into this estimate.`, `${group.lines.length}件の数量・価格・セットをこの見積内に複製します。`)}</p>
+    <label className="field"><span>{copy("ชื่อโมดูลใหม่", "New module name", "新しいモジュール名")}</span><input value={name} maxLength={200} disabled={pending} onChange={event => setName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void submit(); } }} /></label>
+    {duplicate ? <div className="info-strip amber">{copy("ชื่อนี้มีอยู่แล้ว กรุณาใช้ชื่อใหม่", "This name already exists. Choose a new name.", "この名前は既に存在します。別の名前を入力してください。")}</div> : null}
+    {error ? <div role="alert" className="info-strip red">{error}</div> : null}
+    <div className="modal-actions"><button className="btn default" disabled={pending} onClick={onClose}><LocalizedText text="Cancel" /></button><button className="btn primary" disabled={pending || !name.trim() || duplicate} onClick={() => void submit()}><Icon name="copy" />{copy(pending ? "กำลังคัดลอก…" : "คัดลอกโมดูล", pending ? "Copying…" : "Copy module", pending ? "複製中…" : "モジュールを複製")}</button></div>
   </Modal>;
 }
 
