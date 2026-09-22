@@ -43,6 +43,7 @@ export function estimateBusinessDate(date = new Date(), timeZone = "Asia/Bangkok
 
 export function estimateIssueMessage(issue: { code: string; message: string }, locale: string): string {
   const messages: Record<string, [string, string, string]> = {
+    duplicate_cost_item: ["พบรายการซ้ำใน Module เดียวกัน โปรดตรวจรายละเอียด (ไม่บล็อกการส่งตรวจหรืออนุมัติ)", "Review repeated items within this module (does not block submission or approval).", "同じモジュール内の重複明細を確認してください（提出・承認は可能です）。"],
     engineering_manhour_required: ["เพิ่มกิจกรรมวิศวกรรมอย่างน้อย 1 รายการ พร้อมจำนวนคนและวันทำงาน", "Add at least one engineering activity with staffing and work days.", "技術作業を1件以上追加し、人数と作業日数を入力してください。"],
     empty_estimate: ["เริ่มเพิ่มอุปกรณ์หรือค่าแรง เพื่อให้ประมาณการมีต้นทุน", "Start by adding equipment or effort to this estimate.", "機器または工数を追加してください。"],
     missing_unit_cost: ["ตรวจและใส่ราคาต่อหน่วยให้รายการนี้", "Check and enter the unit price for this item.", "この明細の単価を確認・入力してください。"],

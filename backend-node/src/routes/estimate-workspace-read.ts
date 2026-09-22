@@ -1,3 +1,4 @@
+import { estimateDuplicateWarnings, withoutLegacyDuplicateErrors } from "../estimate-duplicate-policy.js";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../feature-flags.js";
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
@@ -179,8 +180,12 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       code: row.code, reason: row.reason, description: row.description, createdById: number(row.created_by), createdByName: row.created_by_name,
       createdAt: row.created_at, reviewedById: nullableNumber(row.reviewed_by), reviewedByName: row.reviewed_by_name, reviewedAt: row.reviewed_at,
       status: row.status, total: number(row.total) }));
-    const validationIssues = (result.recordsets[8] as unknown as Array<Record<string, unknown>>).map((row) => ({ code: row.code, message: row.message,
-      entityType: row.entity_type, entityId: number(row.entity_id), severity: row.severity }));
+    const validationIssues = withoutLegacyDuplicateErrors((result.recordsets[8] as unknown as Array<Record<string, unknown>>).map((row) => ({ code: row.code, message: row.message,
+      entityType: row.entity_type, entityId: number(row.entity_id), severity: row.severity })));
+    validationIssues.push(...estimateDuplicateWarnings(costItems.map(item => ({
+      id: item.id, categoryCode: String(item.categoryCode ?? ""), module: String(item.module ?? ""),
+      itemCode: String(item.itemCode ?? ""), model: String(item.model ?? ""), description: String(item.description ?? ""),
+    }))));
     const canEditCostItems = permissionRow.can_write && editable && (elevated || isAssignee);
     const canEditManhour = permissionRow.can_write && editable && (elevated || isAssignee);
     const canEditExpenses = permissionRow.can_write && editable && (elevated || isAssignee);

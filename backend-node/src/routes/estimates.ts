@@ -1,3 +1,4 @@
+import { withoutLegacyDuplicateErrors } from "../estimate-duplicate-policy.js";
 import { booleanQuery } from "../http.js";
 import { laborCategorySql } from "../estimate-labor-category.js";
 import { createHash } from "node:crypto";
@@ -75,7 +76,7 @@ export function adminSelfDecision(actor: { roles: string[] }): boolean {
 
 async function validationIssues(database: Database, estimateId: number, transaction?: TransactionType): Promise<Array<{ code: string; message: string; entityType: string; entityId: number }>> {
   const statement = `SELECT code,message,entity_type,entity_id FROM dbo.fn_estimate_validation(@estimate_id) ORDER BY code,entity_id;`;
-  const map = (rows: Array<{ code: string; message: string; entity_type: string; entity_id: number | string }>) => rows.map((row) => ({
+  const map = (rows: Array<{ code: string; message: string; entity_type: string; entity_id: number | string }>) => withoutLegacyDuplicateErrors(rows).map((row) => ({
     code: row.code, message: row.message, entityType: row.entity_type, entityId: Number(row.entity_id),
   }));
   if (transaction) {
