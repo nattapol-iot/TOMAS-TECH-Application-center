@@ -4,7 +4,18 @@
 
 export const COST_ITEM_LOOKUP_MIN_CHARS = 2;
 
-export type CostItemLookupSourceKind = "Estimate" | "Historical Purchase";
+export type CostItemLookupSourceKind = "Estimate" | "Historical Purchase" | "Supplier Quotation" | "Web Reference";
+
+/* What a pick records as the origin of the number. An estimate line is a Price
+   Library reference and an imported PO line a Purchase Price, as before; a
+   quotation line keeps its own provenance so a price read off a web page is never
+   written down as one the supplier quoted. */
+const PRICE_SOURCE_OF: Record<CostItemLookupSourceKind, string> = {
+  "Estimate": "Price Library",
+  "Historical Purchase": "Purchase Price",
+  "Supplier Quotation": "Supplier Quotation",
+  "Web Reference": "Web Reference",
+};
 
 export type CostItemLookupRecordLike = {
   sourceKind: CostItemLookupSourceKind;
@@ -41,10 +52,9 @@ export type LookupSupplierLike = { id: number; code: string; name: string };
 /** Whether the typed text is long enough to ask the server. */
 export const lookupQueryReady = (text: string): boolean => text.trim().length >= COST_ITEM_LOOKUP_MIN_CHARS;
 
-/* Mirrors the Price Library picker: an estimate line is a "Price Library"
-   reference, an imported PO line is a "Purchase Price". The supplier is only
-   carried when it is still active in the bootstrap list, otherwise the form
-   would submit an id the API rejects. */
+/* Mirrors the Price Library picker: the pick fills the whole line and records where
+   the number came from. The supplier is only carried when it is still active in the
+   bootstrap list, otherwise the form would submit an id the API rejects. */
 export function costItemPatchFromLookup(record: CostItemLookupRecordLike, activeSuppliers: ReadonlyArray<{ id: number }>): CostItemLookupPatch {
   const supplierId = record.supplierId !== null && activeSuppliers.some((supplier) => supplier.id === record.supplierId) ? record.supplierId : undefined;
   return {
@@ -56,7 +66,7 @@ export function costItemPatchFromLookup(record: CostItemLookupRecordLike, active
     supplierId,
     unit: record.unit,
     unitCost: record.unitCost,
-    priceSource: record.sourceKind === "Historical Purchase" ? "Purchase Price" : "Price Library",
+    priceSource: PRICE_SOURCE_OF[record.sourceKind] ?? "Price Library",
     referenceNumber: record.sourceNumber,
     referenceProject: record.projectName,
     ...(record.priceDate ? { priceDate: record.priceDate.slice(0, 10) } : {}),

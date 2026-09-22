@@ -1263,7 +1263,7 @@ export const listEstimates = (values: {
 export type CostItemLookupField = "itemCode" | "description" | "brand" | "supplier";
 export type CostItemLookupRecord = {
   key: string;
-  sourceKind: "Estimate" | "Historical Purchase";
+  sourceKind: "Estimate" | "Historical Purchase" | "Supplier Quotation" | "Web Reference";
   sourceNumber: string;
   projectName: string;
   categoryCode: string;

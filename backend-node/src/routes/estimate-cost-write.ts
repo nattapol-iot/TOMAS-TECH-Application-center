@@ -20,6 +20,8 @@ const allowedPriceSources = [
   "Supplier Quotation", "Price Library", "Previous Project", "Budgetary", "Previous Estimate",
   "Previous Project Cost", "Purchase Price", "Master Price", "Manual Estimate", "Budgetary Price",
   "Master Template",
+  /* A price read off a vendor's public page — evidenced by a link, not a quotation. */
+  "Web Reference",
 ];
 
 export type EditableEstimate = { estimate_no: string; revision: number; owner_id: number | string; due_date: Date | string };

@@ -160,7 +160,18 @@ export function CostItemLookupInput({ field, value, onChange, onPick, suppliers,
     onPick(patch, record);
   };
   const keys: MenuKeys = { open, count: items.length, active, setActive, pick, close: () => setDismissedFor(value), show: () => setDismissedFor(null) };
-  const kindLabel = (kind: CostItemLookupRecord["sourceKind"]) => kind === "Estimate" ? copy("Estimate เดิม", "Past estimate", "過去見積") : copy("ซื้อจริง", "Purchased", "購入実績");
+  /* Where the number came from, said plainly on every row: a price read off a public
+     page is not a price the supplier quoted, and the engineer picking it should see
+     that before it lands on the estimate. */
+  const kindLabel = (kind: CostItemLookupRecord["sourceKind"]) => {
+    if (kind === "Estimate") return copy("Estimate เดิม", "Past estimate", "過去見積");
+    if (kind === "Historical Purchase") return copy("ซื้อจริง", "Purchased", "購入実績");
+    if (kind === "Supplier Quotation") return copy("ใบเสนอราคา", "Quoted", "見積書");
+    return copy("อ้างอิงเว็บ", "Web reference", "ウェブ参照");
+  };
+  const kindTone = (kind: CostItemLookupRecord["sourceKind"]) => kind === "Estimate" ? "blue"
+    : kind === "Historical Purchase" ? "green"
+      : kind === "Supplier Quotation" ? "violet" : "amber";
 
   return <>
     <input
@@ -181,7 +192,7 @@ export function CostItemLookupInput({ field, value, onChange, onPick, suppliers,
       {items.map((item, index) => <button type="button" key={item.key} role="option" tabIndex={-1} aria-selected={index === active} className={`lookup-option${index === active ? " active" : ""}`} onMouseEnter={() => setActive(index)} onClick={() => pick(index)}>
         <div className="lookup-main"><strong className="mono">{item.itemCode}</strong><span className="lookup-desc">{item.description}</span>{item.brand || item.model ? <em>{[item.brand, item.model].filter(Boolean).join(" · ")}</em> : null}</div>
         <div className="lookup-meta">
-          <span className={`pill ${item.sourceKind === "Estimate" ? "blue" : "green"}`}>{kindLabel(item.sourceKind)}</span>
+          <span className={`pill ${kindTone(item.sourceKind)}`}>{kindLabel(item.sourceKind)}</span>
           <span>{item.supplierName ?? copy("ไม่ระบุ supplier", "No supplier", "仕入先なし")}</span>
           <strong className="lookup-price">{money(item.unitCost)} / {item.unit}</strong>
           {item.priceDate ? <span>{shortDate(item.priceDate)}</span> : null}

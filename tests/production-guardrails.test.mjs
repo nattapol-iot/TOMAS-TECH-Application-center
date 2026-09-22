@@ -844,6 +844,46 @@ test("a quotation's price lines reach the Price Library or the screen says they 
   }
 });
 
+test("the Item type-ahead searches the same price feeds the Price Library shows", async () => {
+  /*
+   * The Price Library is assembled from three feeds. The type-ahead read only two of
+   * them, so a price entered through a supplier quotation appeared in the library and
+   * never in the Item box — the two surfaces disagreed about what the company knows.
+   */
+  const [lookup, library, lib, writeRoute, fields] = await Promise.all([
+    readFile(new URL("backend-node/src/routes/estimate-cost-lookup.ts", root), "utf8"),
+    readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
+    readFile(new URL("lib/cost-item-lookup.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/estimate-cost-write.ts", root), "utf8"),
+    readFile(new URL("app/system/production/CostItemFields.tsx", root), "utf8"),
+  ]);
+
+  // Anchored on the FROM clause: a table named only in a comment is not a feed.
+  for (const feed of ["cost_items", "supplier_price_history", "supplier_quotation_lines"]) {
+    assert.match(lookup, new RegExp(`FROM dbo\\.${feed}\\b`), `the Item type-ahead does not search ${feed}`);
+  }
+  for (const loader of ["loadAllSupplierPriceHistory", "listAllQuotationLinesForPriceLibrary", "loadEstimateCostWorkspace"]) {
+    assert.ok(library.includes(loader), `the Price Library no longer reads ${loader}; the feeds have drifted apart`);
+  }
+
+  // A pick is useless if the API then rejects the provenance it stamped on the line.
+  const mapStart = lib.indexOf("const PRICE_SOURCE_OF");
+  assert.ok(mapStart > 0, "the price source map moved");
+  const produced = [...lib.slice(mapStart, lib.indexOf("};", mapStart)).matchAll(/:\s*"([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(produced.length >= 4, "no price sources were extracted");
+  const sliceList = (source, marker) => {
+    const start = source.indexOf(marker);
+    assert.ok(start > 0, `${marker} moved`);
+    return source.slice(start, source.indexOf("];", start));
+  };
+  const allowed = sliceList(writeRoute, "const allowedPriceSources");
+  const offered = sliceList(fields, "export const PRICE_SOURCES");
+  for (const source of produced) {
+    assert.ok(allowed.includes(`"${source}"`), `the cost write API rejects the price source '${source}' a pick produces`);
+    assert.ok(offered.includes(`"${source}"`), `the cost item form does not offer the price source '${source}'`);
+  }
+});
+
 test("the quotation route writes only columns supplier_quotations actually has", async () => {
   /*
    * Every backend test here mocks the SQL driver, so a statement naming a column that

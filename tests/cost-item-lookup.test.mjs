@@ -62,3 +62,13 @@ test("blur commits only an exact name or code match", () => {
   assert.equal(matchSupplierExactly(suppliers, "Siemens"), undefined);
   assert.equal(matchSupplierExactly(suppliers, ""), undefined);
 });
+
+test("a quoted line and a referenced line each record where the number came from", () => {
+  const quoted = costItemPatchFromLookup({ ...record, sourceKind: "Supplier Quotation" }, suppliers);
+  assert.equal(quoted.priceSource, "Supplier Quotation");
+  /* The separation only means anything if it survives onto the estimate: a price read
+     off a public page must never be written down as one the supplier quoted. */
+  const referenced = costItemPatchFromLookup({ ...record, sourceKind: "Web Reference" }, suppliers);
+  assert.equal(referenced.priceSource, "Web Reference");
+  assert.equal(referenced.unitCost, 48000);
+});

@@ -11,7 +11,7 @@ export const COST_CATEGORIES = [
   ["06", "Engineering"], ["07", "Outsource"], ["08", "Transportation"], ["09", "Accommodation"], ["10", "Other Cost"],
 ] as const;
 export const UNITS = ["Set", "Pcs", "Lot", "Unit", "Meter", "Day", "Month", "Service", "Trip", "Night", "Person", "Km"];
-export const PRICE_SOURCES = ["Supplier Quotation", "Price Library", "Previous Project", "Budgetary", "Previous Estimate", "Previous Project Cost", "Purchase Price", "Master Price", "Manual Estimate", "Budgetary Price", "Master Template"];
+export const PRICE_SOURCES = ["Supplier Quotation", "Price Library", "Previous Project", "Budgetary", "Previous Estimate", "Previous Project Cost", "Purchase Price", "Master Price", "Manual Estimate", "Budgetary Price", "Master Template", "Web Reference"];
 export type CostItemFieldsValue = Pick<CostItemInput, "categoryCode" | "category" | "subcategory" | "itemCode" | "description" | "brand" | "model" | "specification" | "supplierId" | "quantity" | "unit" | "unitCost" | "priceSource" | "priceDate" | "remark">;
 const formatMoney = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB" }).format(Number.isFinite(value) ? value : 0);
 export const COST_ITEM_TABLE_COLUMNS = [

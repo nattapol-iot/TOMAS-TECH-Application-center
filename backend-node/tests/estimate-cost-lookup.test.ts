@@ -111,3 +111,48 @@ test("history rows map to the Historical Purchase kind with their own key space"
   assert.equal(mapped.supplierId, null);
   assert.equal(mapped.priceDate, null);
 });
+
+/*
+ * The Price Library is built from three feeds — estimate cost lines, imported purchase
+ * history, and supplier quotation lines. The type-ahead read only the first two, so a
+ * price entered through a quotation showed in the library and never in the Item box.
+ */
+
+test("quotation lines are one of the sources the type-ahead searches", () => {
+  assert.match(COST_ITEM_LOOKUP_SQL, /FROM dbo\.supplier_quotation_lines l/);
+  assert.match(COST_ITEM_LOOKUP_SQL, /INNER JOIN dbo\.supplier_quotations q ON q\.id=l\.quotation_id/);
+  // A superseded quotation is not a current price, exactly as the Price Library reads it.
+  assert.match(COST_ITEM_LOOKUP_SQL, /q\.status IS NULL OR q\.status<>N'Superseded'/);
+  // A cost line has no currency column, so only THB may be offered as a unit cost.
+  assert.match(COST_ITEM_LOOKUP_SQL, /AND l\.currency=N'THB'/);
+  // Every branch of the union must select the same 22 columns.
+  const branches = COST_ITEM_LOOKUP_SQL.slice(
+    COST_ITEM_LOOKUP_SQL.indexOf("WITH candidates AS ("),
+    COST_ITEM_LOOKUP_SQL.indexOf("), ranked AS ("),
+  ).split(/\bUNION ALL\b/);
+  assert.equal(branches.length, 3, "the candidate union should carry all three price feeds");
+});
+
+test("a quoted line and a referenced line keep their own provenance and key space", () => {
+  const quoted = mapLookupRow({
+    ...row, source_kind: "Supplier Quotation", source_id: 31, source_number: "SQ-2609-0003",
+    price_source: "Supplier Quotation", category_code: "", category: "", module: "",
+  });
+  assert.equal(quoted.key, "quotation:31");
+  assert.equal(quoted.sourceKind, "Supplier Quotation");
+  assert.equal(quoted.priceSource, "Supplier Quotation");
+
+  const referenced = mapLookupRow({
+    ...row, source_kind: "Web Reference", source_id: 32, source_number: "RP-2609-0001",
+    price_source: "Web Reference", category_code: "", category: "", module: "",
+  });
+  assert.equal(referenced.key, "quotation:32");
+  assert.equal(referenced.sourceKind, "Web Reference");
+  assert.equal(referenced.priceSource, "Web Reference");
+});
+
+test("an unrecognised source kind falls back rather than inventing a key space", () => {
+  const mapped = mapLookupRow({ ...row, source_kind: "Something New", source_id: 9 });
+  assert.equal(mapped.sourceKind, "Estimate");
+  assert.equal(mapped.key, "estimate:9");
+});

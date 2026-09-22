@@ -6,11 +6,16 @@ import { clampedInteger, dateOnly, firstQueryValue, optionalText } from "../http
 import type { CurrentUserService } from "../users.js";
 
 /* Type-ahead for the cost item entry form. One query answers "what did we call
-   this part, who supplied it and what did it cost last time" from every
-   current-revision cost line plus the imported purchase history, collapsed to
-   one row per distinct part/supplier so the engineer sees the latest price
-   once, not the same PLC forty times. Read scope matches the Price Library
-   (estimate.read); nothing here writes. */
+   this part, who supplied it and what did it cost last time" from all three of
+   the feeds the Price Library shows — every current-revision cost line, the
+   imported purchase history, and the lines of supplier quotations and price
+   references — collapsed to one row per distinct part/supplier so the engineer
+   sees the latest price once, not the same PLC forty times.
+
+   Both surfaces must read the same feeds. While this one read only two, a price
+   entered through a quotation appeared in the library and never in the Item box.
+
+   Read scope matches the Price Library (estimate.read); nothing here writes. */
 
 export const COST_ITEM_LOOKUP_FIELDS = ["itemCode", "description", "brand", "supplier"] as const;
 export type CostItemLookupField = typeof COST_ITEM_LOOKUP_FIELDS[number];
@@ -73,6 +78,21 @@ WITH candidates AS (
   FROM dbo.supplier_price_history h
   WHERE h.item_code LIKE @pattern ESCAPE '\\' OR h.description LIKE @pattern ESCAPE '\\'
     OR h.brand LIKE @pattern ESCAPE '\\' OR h.supplier_name LIKE @pattern ESCAPE '\\'
+  UNION ALL
+  SELECT CASE WHEN q.source_kind=N'WebReference' THEN N'Web Reference' ELSE N'Supplier Quotation' END,
+    l.id, q.quotation_no, COALESCE(NULLIF(q.supplier_reference,N''),q.quotation_no),
+    N'', N'', N'', N'', l.item_code, l.description, l.brand, l.model,
+    NULL, q.supplier_id, s.name, l.unit, l.unit_price,
+    CASE WHEN q.source_kind=N'WebReference' THEN N'Web Reference' ELSE N'Supplier Quotation' END,
+    q.quotation_no, N'', q.received_date, q.uploaded_at
+  FROM dbo.supplier_quotation_lines l
+  INNER JOIN dbo.supplier_quotations q ON q.id=l.quotation_id
+  INNER JOIN dbo.suppliers s ON s.id=q.supplier_id
+  WHERE (q.status IS NULL OR q.status<>N'Superseded')
+    -- A cost line carries no currency, so a foreign-currency price would land as THB.
+    AND l.currency=N'THB'
+    AND (l.item_code LIKE @pattern ESCAPE '\\' OR l.description LIKE @pattern ESCAPE '\\'
+      OR l.brand LIKE @pattern ESCAPE '\\' OR l.model LIKE @pattern ESCAPE '\\' OR s.name LIKE @pattern ESCAPE '\\')
 ), ranked AS (
   SELECT c.*,
     ROW_NUMBER() OVER (PARTITION BY c.item_code, c.description, c.brand, c.model, c.supplier_id
@@ -93,10 +113,30 @@ ORDER BY CASE
     ELSE 1 END, price_date DESC, sort_at DESC, source_id DESC;
 `;
 
+export const COST_ITEM_LOOKUP_KINDS = ["Estimate", "Historical Purchase", "Supplier Quotation", "Web Reference"] as const;
+export type CostItemLookupSourceKind = typeof COST_ITEM_LOOKUP_KINDS[number];
+
+/* The three tables number their rows independently, so a cost line, a purchase line
+   and a quotation line can all be id 31. Both quotation kinds share one key space
+   because both are rows of supplier_quotation_lines. */
+const LOOKUP_KEY_SPACE: Record<CostItemLookupSourceKind, string> = {
+  "Estimate": "estimate",
+  "Historical Purchase": "history",
+  "Supplier Quotation": "quotation",
+  "Web Reference": "quotation",
+};
+
+function lookupSourceKind(value: string): CostItemLookupSourceKind {
+  return (COST_ITEM_LOOKUP_KINDS as readonly string[]).includes(value)
+    ? value as CostItemLookupSourceKind
+    : "Estimate";
+}
+
 export function mapLookupRow(row: LookupRow) {
+  const sourceKind = lookupSourceKind(row.source_kind);
   return {
-    key: `${row.source_kind === "Estimate" ? "estimate" : "history"}:${Number(row.source_id)}`,
-    sourceKind: row.source_kind === "Estimate" ? "Estimate" as const : "Historical Purchase" as const,
+    key: `${LOOKUP_KEY_SPACE[sourceKind]}:${Number(row.source_id)}`,
+    sourceKind,
     sourceNumber: row.source_number,
     projectName: row.project_name,
     categoryCode: row.category_code,
