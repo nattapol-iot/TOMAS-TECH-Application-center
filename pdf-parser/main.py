@@ -143,6 +143,26 @@ def find_date(text: str, keywords: list[str]) -> str:
     m = re.search(r"\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b", text)
     return parse_date(m.group(1)) if m else ""
 
+def later_date_on_a_shared_line(text: str, after: str) -> str:
+    """
+    The expiry when a header is laid out in columns.
+
+        วันที่เสนอราคา   วันหมดอายุ   พนักงานขาย
+        22/09/2026      22/10/2026   ...
+
+    Extracted as text, the labels land on one line and their values on the next, so
+    searching forward from "หมดอายุ" finds the issue date sitting directly under it.
+    A line carrying two dates settles it: the later one is the expiry.
+    """
+    for line in text.split("\n"):
+        found = [d for d in (parse_date(raw) for raw in
+                             re.findall(r"\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}", line)) if d]
+        later = sorted(d for d in found if d > after)
+        if len(found) >= 2 and later:
+            return later[0]
+    return ""
+
+
 # ── Field extraction helpers ───────────────────────────────────────────────
 
 def detect_currency(text: str) -> str:
@@ -341,6 +361,25 @@ def is_numeric(s: Optional[str]) -> bool:
     return bool(re.fullmatch(r"[\d,]+\.?\d*\s*[฿¥€$]?", s.strip()))
 
 
+# A great many quotations print the part number in front of the description instead
+# of giving it a column: "[TPL-0226] TP-LINK Media Converter". Pulling it out gives
+# the line a real item code — which is what the Price Library and the Item type-ahead
+# search on — and leaves the description reading as a name.
+LEADING_CODE_PAT = re.compile(r"^[\[(]\s*([A-Za-z0-9][A-Za-z0-9\-_/.]{2,39})\s*[\])]\s*(.+)$", re.S)
+
+
+def split_leading_code(description: str) -> tuple[str, str]:
+    """Return (item_code, description-without-the-code), or ("", description)."""
+    m = LEADING_CODE_PAT.match(description.strip())
+    if not m:
+        return "", description
+    code, rest = m.group(1), m.group(2).strip()
+    # A bracket holding a word is a note, not a part number; a part number has a digit.
+    if not rest or not re.search(r"\d", code):
+        return "", description
+    return code, rest
+
+
 def clean_num(s: str) -> float:
     cleaned = re.sub(r"[,฿¥€$\s]", "", s)
     return float(cleaned) if cleaned else 0.0
@@ -414,6 +453,10 @@ def _detect_columns(header: list[str]) -> dict:
     AMOUNT_KW = [
         "line total", "line amount", "extended price", "ext price", "ext. price",
         "total price", "total amount",
+        # "จำนวนเงิน" is what a Thai quotation calls the line amount. Without it the
+        # amount column is never found, and with no amount there is nothing to check
+        # the quantity against.
+        "จำนวนเงิน", "มูลค่า", "เป็นเงิน",
         "amount", "total",
         "ยอดรวม", "รวมเงิน", "รวม", "ยอด",
         "金額", "合計", "小計",
@@ -428,6 +471,12 @@ def _detect_columns(header: list[str]) -> dict:
     amount_col = _find_col(header, AMOUNT_KW)
     code_col   = _find_col(header, CODE_KW)
 
+    # "จำนวน" is a prefix of "จำนวนเงิน": on a table that names only the amount, the
+    # quantity search would claim the amount column. The amount keyword is the more
+    # specific of the two, so the quantity gives way and looks again elsewhere.
+    if qty_col is not None and qty_col == amount_col:
+        qty_col = _find_col(header, QTY_KW, exclude={amount_col})
+
     # Exact-match "unit" / "uom" only — prevent "Unit Price" being picked as UOM
     unit_col: Optional[int] = None
     for i, h in enumerate(header):
@@ -436,7 +485,12 @@ def _detect_columns(header: list[str]) -> dict:
             unit_col = i
             break
     if unit_col is None:
-        unit_col = _find_col(header, UOM_KW)
+        # "หน่วย" also sits inside "ราคาต่อหน่วย", so the loose search would return the
+        # price column and every line would take its unit of measure from a number.
+        taken = {i for i in (price_col, amount_col, qty_col, desc_col) if i is not None}
+        unit_col = _find_col(header, UOM_KW, exclude=taken)
+        if unit_col is not None and re.search(r"ราคา|price|amount|จำนวนเงิน|単価|金額", header[unit_col], re.I):
+            unit_col = None
 
     # ── Conflict resolution ──────────────────────────────────────
     # If desc and code point at the same column, the match was ambiguous.
@@ -585,19 +639,24 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
 
             effective_price = unit_price if unit_price > 0 else amount
 
-            # Quantity
-            qty = 1.0
+            # Quantity: the column when it reads as a number, otherwise the arithmetic
+            # the line already states. A column that is present but unreadable used to
+            # skip the arithmetic entirely and leave every line quietly at one, which
+            # is the difference between a 550 baht line and an 1,100 baht one.
+            qty = 0.0
             if qty_col is not None and qty_col < len(cells):
                 m = re.match(r"([\d,]+\.?\d*)", cells[qty_col].replace(" ", ""))
                 if m:
                     try:
                         qty = clean_num(m.group(1))
                     except ValueError:
-                        pass
-            elif unit_price > 0 and amount > 0 and amount != unit_price:
+                        qty = 0.0
+            if qty <= 0 and unit_price > 0 and amount > 0:
                 q = round(amount / unit_price, 4)
                 if 0 < q <= 100_000:
                     qty = q
+            if qty <= 0:
+                qty = 1.0
 
             # Item code
             item_code = ""
@@ -605,6 +664,8 @@ def parse_markdown_table(md: str, currency: str) -> list[dict]:
                 c = cells[code_col]
                 if c and not is_numeric(c) and re.search(r"[A-Z0-9]", c, re.I):
                     item_code = re.sub(r"\s+", "", c)[:40]
+            if not item_code:
+                item_code, desc = split_leading_code(desc)
             # No separate description column → code is also the description
             if desc_col is None and item_code:
                 desc = item_code
@@ -670,6 +731,8 @@ def row_to_line(row: list[Optional[str]], currency: str, line_no: int) -> Option
         if c and re.fullmatch(r"[A-Z0-9][A-Z0-9\-\/\.]{2,39}", c) and re.search(r"[A-Z]", c) and c != description:
             item_code = c
             break
+    if not item_code:
+        item_code, description = split_leading_code(description)
 
     unit = "EA"
     for c in cells:
@@ -954,6 +1017,11 @@ def process_pdf(pdf_bytes: bytes) -> dict:
         "Expire Date", "expiry date", "expiration date", "expiration", "expire",
         "หมดอายุ", "expiry", "ใช้ได้ถึง", "validity",
     ])
+    # Issued and expiring on the same day means a column header was read straight down
+    # instead of across. Recover the expiry from a line that carries both dates, and
+    # claim nothing rather than an expiry that is already past on the day of issue.
+    if valid_until and received_date and valid_until <= received_date:
+        valid_until = later_date_on_a_shared_line(extraction_text, received_date)
     total_amount      = extract_total(extraction_text)
 
     # ── Line items: try each tier until results appear ─────────────────────

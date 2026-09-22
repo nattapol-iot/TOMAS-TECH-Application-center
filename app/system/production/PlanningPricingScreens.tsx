@@ -2560,7 +2560,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
     )}
 
     {/* Main layout: form on left, PDF viewer on right when showPdf */}
-    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
 
       {/* ── Left: form content ── */}
       <div style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -2583,6 +2583,13 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
                   <Icon name="eye" /> Parse PDF
                 </button>
               )}
+              {/* Hiding the document used to be one-way: the only path back was picking the file again. */}
+              {pdfObjectUrl && !showPdf ? (
+                <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap" }}
+                  onClick={() => setShowPdf(true)}>
+                  <Icon name="eye" /> แสดง PDF
+                </button>
+              ) : null}
             </div>
           </Field>
         </div>
@@ -2656,20 +2663,6 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
           </div>
         </div>
 
-        {/* The lines are the price. Everything above is the document they arrived on. */}
-        <QuotationLinesEditor
-          lines={lines}
-          currency={currency}
-          minWidth={showPdf ? 760 : 940}
-          disabled={busy}
-          emptyHint={parsing
-            ? "กำลังอ่าน PDF…"
-            : hasParsed
-              ? "ไม่พบรายการในไฟล์ — กรอกเองได้เลย ชื่อรายการกับราคาต่อหน่วยก็พอ"
-              : "กรอกชื่อรายการกับราคาต่อหน่วย หรือเลือกไฟล์ PDF ให้ระบบอ่านรายการให้"}
-          onChange={applyLines}
-        />
-
         {/* Legend */}
         {hasParsed && <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
           <span><span style={{ color: "#22c55e" }}>●</span> มั่นใจ</span>
@@ -2682,22 +2675,35 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
 
       {/* ── Right: PDF viewer (sticky — stays in view while scrolling the form) ── */}
       {showPdf && pdfObjectUrl && (
-        <div style={{ width: 480, flexShrink: 0, position: "sticky", top: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>PDF ต้นฉบับ</span>
+        <div className="quotation-pdf-pane">
+          <div className="quotation-pdf-head">
+            <span>PDF ต้นฉบับ</span>
             <button className="btn ghost sm" type="button" onClick={() => setShowPdf(false)} style={{ padding: "2px 8px" }}>
               <Icon name="x" /> ซ่อน
             </button>
           </div>
-          <iframe
-            src={pdfObjectUrl}
-            title="PDF Preview"
-            style={{ width: "100%", height: 680, border: "1px solid #e5e7eb", borderRadius: 6, display: "block" }}
-          />
+          <iframe src={pdfObjectUrl} title="PDF Preview" />
         </div>
       )}
 
     </div>
+
+    {/*
+      The price lines get the full width of the dialog rather than the half left over
+      beside the PDF. Squeezed into that half, the description column — the one thing
+      an engineer reads to know what the line is — collapsed to a single character.
+    */}
+    <QuotationLinesEditor
+      lines={lines}
+      currency={currency}
+      disabled={busy}
+      emptyHint={parsing
+        ? "กำลังอ่าน PDF…"
+        : hasParsed
+          ? "ไม่พบรายการในไฟล์ — กรอกเองได้เลย ชื่อรายการกับราคาต่อหน่วยก็พอ"
+          : "กรอกชื่อรายการกับราคาต่อหน่วย หรือเลือกไฟล์ PDF ให้ระบบอ่านรายการให้"}
+      onChange={applyLines}
+    />
   </Modal>;
 }
 

@@ -1486,6 +1486,23 @@ td strong { color: var(--ink); font-weight: 600; }
 .quotation-lines-empty strong { font-size: var(--fs-sm); color: var(--ink); }
 .quotation-lines-empty small { font-size: var(--fs-xs); color: var(--muted); }
 
+/* The original document, kept beside the form while its numbers are being checked. */
+.quotation-pdf-pane { position: sticky; top: 0; flex: 0 0 480px; width: 480px; }
+.quotation-pdf-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px; font-size: var(--fs-xs); font-weight: 600; color: var(--muted);
+}
+.quotation-pdf-pane iframe {
+  display: block; width: 100%; height: 680px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-50);
+}
+
+@media (max-width: 1180px) {
+  /* Side by side, neither pane is wide enough to read; the document moves underneath. */
+  .quotation-pdf-pane { position: static; flex-basis: 100%; width: 100%; }
+  .quotation-pdf-pane iframe { height: 420px; }
+}
+
 @media (max-width: 720px) {
   .quotation-lines-head { flex-direction: column; align-items: flex-start; }
   .quotation-lines-foot { flex-direction: column; align-items: flex-start; gap: 6px; }
