@@ -258,8 +258,8 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
             <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus)]}</strong></td>
             <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
-            <td><div className="actions">{isAdmin ? <button className="btn danger" type="button" aria-label={`${uiText("Delete inquiry")}: ${item.number}`}
-              onClick={event => { event.stopPropagation(); setDeleteInquiryId(item.id); }}><Icon name="trash" /><LocalizedText text="Delete inquiry" /></button> : null}
+            <td><div className="row-actions">{isAdmin ? <button className="icon-btn danger" type="button" title={uiText("Delete inquiry")} aria-label={`${uiText("Delete inquiry")}: ${item.number}`}
+              onClick={event => { event.stopPropagation(); setDeleteInquiryId(item.id); }}><Icon name="trash" /></button> : null}
               <span className="row-action"><Icon name="chevronRight" /></span></div></td>
           </tr>;
         })}</tbody>
