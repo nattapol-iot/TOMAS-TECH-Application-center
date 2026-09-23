@@ -342,7 +342,10 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
           <th style={{ width: 90 }} />
         </tr></thead>
         <tbody>{packages.map((item) => <tr key={item.id} className="clickable" onClick={() => { if (!busy && choosing === null) void choose(item); }}>
-          <td><div className="cell-primary"><strong>{item.code} · {item.name}</strong><span>{item.description || `${localizeCopy("Revision")} ${item.revision} · ${item.department || localizeCopy("all departments")}`}</span></div></td>
+          {/* The package code is what the catalogue is keyed on, not what anyone reads a
+              row by, and repeating it here pushed the name past the column. It is still
+              searchable: the list query matches it alongside the name. */}
+          <td><div className="cell-primary"><strong>{item.name}</strong><span>{item.description || `${localizeCopy("Revision")} ${item.revision} · ${item.department || localizeCopy("all departments")}`}</span></div></td>
           <td><LocalizedText text={item.costType} /></td>
           <td className="num">{item.lineCount}</td>
           <td className="num">{number(item.referenceManDays)}</td>
@@ -365,7 +368,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
     {selected ? <>
       {blocker ? <div className="info-strip red"><Icon name="alertCircle" /><span>{blocker}</span></div> : null}
       <div className="info-strip picker-chosen"><Icon name="package" /><span>
-        {selected.code} · {selected.name} <LocalizedText text={"· revision"} /> {selected.revision}
+        {selected.name} <LocalizedText text={"· revision"} /> {selected.revision}
         <LocalizedText text={" · internal rates are read from the rate master when you add them, not from this package"} />
       </span><button className="btn ghost sm" type="button" disabled={busy || saving} onClick={clearSelection}>
         <Icon name="chevronLeft" /><LocalizedText text={"Choose another package"} />
