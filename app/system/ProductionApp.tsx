@@ -565,6 +565,32 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setView("inquiries");
     window.scrollTo({top:0});
   }, [setView]);
+  /*
+   * Deep links carried by notification email. Without these an "open this estimate" link
+   * could only land on whatever view the shell happens to start on, which is My Work.
+   * A link is an instruction to navigate once, so it is spent as soon as it is followed:
+   * that keeps a refresh, or the sidebar's own Estimate Cost button, from dragging the
+   * reader back to the same record.
+   *
+   * Nothing is read until the session is up. Someone opening the link from their mailbox
+   * is usually signed out, and signing in leaves through loginRedirect: MSAL brings them
+   * back to the URL they left from, so the fragment has to still be on it.
+   */
+  useEffect(() => {
+    if (!bootstrap) return;
+    const follow = () => {
+      const estimate = window.location.hash.match(/^#estimate\/(\d+)$/);
+      const inquiry = estimate ? null : window.location.hash.match(/^#inquiry\/(\d+)$/);
+      const id = Number((estimate ?? inquiry)?.[1]);
+      if (!Number.isSafeInteger(id) || id <= 0) return;
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (estimate) openEstimate(id); else openInquiry(id);
+    };
+    const timer = window.setTimeout(follow, 0);
+    window.addEventListener("hashchange", follow);
+    return () => { window.clearTimeout(timer); window.removeEventListener("hashchange", follow); };
+  }, [bootstrap, openEstimate, openInquiry]);
+
   const startInquiry = () => { setStartInquiryCreate(true); setPreferredInquiryId(null); setView("inquiries"); };
   const toggleNavGroup = (group: string) => {
     const active = NAV.find(section => section.group === group)?.items.some(item => item.view === view);

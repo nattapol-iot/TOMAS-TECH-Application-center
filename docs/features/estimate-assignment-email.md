@@ -59,3 +59,15 @@ Two differences from the estimate assignment:
   owner, notify nobody. Handing an inquiry back to a previous owner does notify them
   again: the dedupe key carries the inquiry's row version, so each assignment is its
   own event.
+
+## Where the links go
+
+Every notification mail links straight to the record it is about, through a fragment the
+shell follows on load: `#estimate/<id>`, `#inquiry/<id>`, `#support/<id>`. Without the
+fragment the reader lands on whichever view the shell starts on — My Work — and has to
+find the record by hand.
+
+The fragment is read only once the session is up, because a reader coming from their
+mailbox is usually signed out and `loginRedirect` returns them to the URL they left from;
+it is then cleared, so a refresh or the sidebar can leave the record again.
+`Email__ApplicationBaseUrl` must therefore be the frontend host, not the API host.

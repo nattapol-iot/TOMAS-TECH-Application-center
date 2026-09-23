@@ -63,3 +63,36 @@ test("every screen that assigns an inquiry says whether the mail went out", asyn
   assert.match(shell, /<CrmScreen refreshBootstrap=\{refreshBootstrap\} notify=\{setToast\}/);
   assert.match(crm, /props\.notify\?\.\(/);
 });
+
+// A link is only useful if something answers it. The mail is written in the API and the
+// fragment is answered in the shell, so nothing but this test holds the two together.
+test("every fragment the notification mail links to is one the shell navigates", async () => {
+  const [email, shell] = await Promise.all([
+    read("backend-node/src/email.ts"),
+    read("app/system/ProductionApp.tsx"),
+  ]);
+  const linked = [...email.matchAll(/href="\$\{escapeHtml\(appUrl\)\}#([a-z-]+)\//g)].map((match) => match[1]);
+  assert.deepEqual([...new Set(linked)].sort(), ["estimate", "inquiry", "support"]);
+  for (const name of new Set(linked)) {
+    assert.ok(new RegExp(String.raw`location\.hash\.match\(/\^#${name}(?:\\/|\()`).test(shell),
+      `the shell reads a #${name}/<id> deep link`);
+  }
+  // Following the link has to open that record, not merely switch to its list.
+  assert.match(shell, /if \(estimate\) openEstimate\(id\); else openInquiry\(id\);/);
+  // A spent link must not survive, or the sidebar cannot leave the record again.
+  assert.match(shell, /window\.history\.replaceState\(null, "", window\.location\.pathname \+ window\.location\.search\);\r?\n {6}if \(estimate\)/);
+});
+
+// Someone opening the link from their mailbox is usually signed out, and signing in
+// leaves the page through MSAL's loginRedirect. Reading -- and clearing -- the fragment
+// before the session exists would strip the link off the URL MSAL brings them back to.
+test("a deep link is not spent before the session is up", async () => {
+  const shell = await read("app/system/ProductionApp.tsx");
+  const effect = shell.slice(shell.indexOf("Deep links carried by notification email"));
+  const body = effect.slice(0, effect.indexOf("}, ["));
+  const guard = body.indexOf("if (!bootstrap) return;");
+  const clears = body.indexOf("window.history.replaceState");
+  assert.ok(guard > 0, "the effect waits for bootstrap");
+  assert.ok(clears > guard, "nothing touches the URL before that guard");
+  assert.match(effect.slice(effect.indexOf("}, [")), /^\}, \[bootstrap,/, "and it re-runs once bootstrap arrives");
+});

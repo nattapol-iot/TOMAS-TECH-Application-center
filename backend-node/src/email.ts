@@ -70,7 +70,7 @@ export class EmailService {
       + `<tr><td><strong>Section</strong></td><td>${escapeHtml(message.section)}</td></tr>`
       + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
       + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Estimate Cost หมายเลข ${escapeHtml(message.estimateNumber)}</p>`);
+      + `<p><a href="${escapeHtml(appUrl)}#estimate/${message.estimateId}">เปิด Estimate Cost ${escapeHtml(message.estimateNumber)} / Open this estimate</a></p>`);
   }
 
   // The engineer picked in "Create inquiry" (from a CRM opportunity or directly) and on a
@@ -85,7 +85,7 @@ export class EmailService {
       + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
       + `<tr><td><strong>Priority</strong></td><td>${escapeHtml(message.priority)}</td></tr>`
       + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Inquiry หมายเลข ${escapeHtml(message.inquiryNumber)}</p>`);
+      + `<p><a href="${escapeHtml(appUrl)}#inquiry/${message.inquiryId}">เปิด Inquiry ${escapeHtml(message.inquiryNumber)} / Open this inquiry</a></p>`);
   }
 
   // Fires for a ticket being created, commented on, (re)assigned, or changing status --
@@ -97,7 +97,7 @@ export class EmailService {
       + `<table><tr><td><strong>Ticket</strong></td><td>${escapeHtml(message.ticketNumber)}</td></tr>`
       + `<tr><td><strong>Subject</strong></td><td>${escapeHtml(message.subject)}</td></tr>`
       + `<tr><td><strong>By</strong></td><td>${escapeHtml(message.actorName)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}">Open IoT Team Center</a> แล้วไปที่ Support Center หมายเลข ${escapeHtml(message.ticketNumber)}</p>`);
+      + `<p><a href="${escapeHtml(appUrl)}#support/${message.ticketId}">เปิด Support Center ${escapeHtml(message.ticketNumber)} / Open this ticket</a></p>`);
   }
 
   private async sendMail(rawRecipients: EmailRecipient[], subject: string, htmlBody: (appUrl: string) => string): Promise<EmailDeliveryResult> {

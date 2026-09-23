@@ -98,3 +98,30 @@ test("an inquiry assignment survives a Microsoft Graph outage", async () => {
   });
   assert.deepEqual(result, { status: "failed", recipients: ["engineer@example.com"] });
 });
+
+test("every notification link opens the record it names, not the site root", async () => {
+  const sent: Array<{ url: string; init?: RequestInit }> = [];
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    sent.push({ url: String(input), ...(init ? { init } : {}) });
+    if (String(input).includes("/oauth2/v2.0/token")) return Response.json({ access_token: "token-1", expires_in: 3600 });
+    return new Response(null, { status: 202 });
+  }) as typeof fetch;
+  const service = new EmailService(graphConfig, fetcher);
+  const recipients = [{ name: "Engineer", email: "engineer@example.com" }];
+  await service.sendEstimateAssignment({ estimateId: 41, estimateNumber: "EST-41", projectName: "Robot",
+    section: "01 Hardware", dueDate: "2026-09-30", assignedBy: "Manager", recipients });
+  await service.sendInquiryAssignment({ inquiryId: 12, inquiryNumber: "INQ-12", projectName: "Retrofit",
+    customerName: "JVCKENWOOD", dueDate: "2026-10-06", priority: "Normal", assignedBy: "Sales", recipients });
+  await service.sendSupportTicketUpdate({ ticketId: 7, ticketNumber: "SUP-7", subject: "Login",
+    summary: "New ticket reported: Login", actorName: "Reporter", recipients });
+
+  const bodies = sent.filter((call) => call.url.includes("/sendMail"))
+    .map((call) => (JSON.parse(String(call.init!.body)) as { message: { body: { content: string } } }).message.body.content);
+  assert.equal(bodies.length, 3);
+  assert.match(bodies[0]!, /href="https:\/\/iot\.example\.com\/#estimate\/41"/);
+  assert.match(bodies[1]!, /href="https:\/\/iot\.example\.com\/#inquiry\/12"/);
+  assert.match(bodies[2]!, /href="https:\/\/iot\.example\.com\/#support\/7"/);
+  // A link straight to the application root drops the reader on whatever view the shell
+  // starts on, which is My Work, and that is the bug these fragments exist to fix.
+  for (const body of bodies) assert.doesNotMatch(body, /href="https:\/\/iot\.example\.com\/"/);
+});
