@@ -16,7 +16,7 @@ const modules = [
  ['crm','CRM / Sales','ลูกค้า Contact Opportunity กิจกรรมและการติดตาม เชื่อม Inquiry และ My Work','crm crm-customers crm-documents','production/CrmScreens.tsx','crm'],
  ['shell','Application shell / Login / Profile','เมนู ภาษา session bootstrap และโปรไฟล์','auth-tmt-id bootstrap','ProductionApp.tsx production/ProfileScreen.tsx','auth|tmt-id|routing|remembered-view'],
  ['dashboard','Dashboard / Executive','ภาพรวมผู้บริหารและข้อมูลทีม','executive-dashboard','production/ExecutiveDashboard.tsx production/CoreScreens.tsx','executive-dashboard'],
- ['inquiry','Inquiry / Sales intake','รับงาน ลูกค้า end user และส่งต่อสำรวจ','inquiries inquiry-attachments sales-intakes document-lifecycle','production/InquiryScreens.tsx production/DocumentLifecycle.tsx','inquiry|end-user|document-lifecycle'],
+ ['inquiry','Inquiry / Sales intake','รับงาน ลูกค้า end user และส่งต่อสำรวจ','inquiries inquiry-attachments sales-intakes document-lifecycle','production/InquiryScreens.tsx production/ExistingRfqWork.tsx production/DocumentLifecycle.tsx','inquiry|end-user|document-lifecycle'],
  ['site-visit','Site Visit / My Assignments','นัดหมาย มอบหมาย สำรวจ รายงาน และอนุมัติ','site-visits-read site-visits-workflow site-visit-reports visit-master','production/SiteVisitScreens.tsx','site-visit|inquiry-visit'],
  ['estimate','Estimate Cost','สร้าง revision รายการต้นทุน ค่าใช้จ่าย validation และ workflow','estimates estimate-workspace-read estimate-cost-write estimate-workspace-write estimate-cost-lookup estimate-order estimate-price-sets','production/EstimateScreens.tsx production/CostItemFields.tsx production/CostItemLookup.tsx production/DocumentLifecycle.tsx','estimate|cost-item|document-lifecycle'],
  ['estimate-copy','Copy Estimate / Assignment queue','คัดลอกหลาย ledger และแสดงงานที่ยังไม่เริ่มใน My Work','estimate-copy estimate-assignments-read','production/EstimateScreens.tsx production/PlanningPricingScreens.tsx','estimate-copy|estimate-assignment'],
@@ -34,7 +34,7 @@ const modules = [
  ['performance','KPI / Growth / Team Activity','ประเมิน performance หลักฐาน insights และ activity','performance activity','production/PerformanceScreen.tsx production/TeamActivityScreen.tsx','performance|activity'],
  ['support','Support / Employee Manual','แจ้งปัญหา ticket การตอบรับ และคู่มือ','support','production/SupportScreens.tsx production/EmployeeManualScreen.tsx','support|employee-manual'],
  ['master','Master Data / Customers / Admin','ลูกค้า supplier พนักงาน role audit และ settings','master sales-customers admin','production/CoreScreens.tsx production/AdminAnalyticsScreens.tsx','customer|user-role|admin|business-card'],
- ['platform','Platform / Health / Storage','config database migration authentication และ document storage','health','','migration|database|startup|network|audit|http'],
+ ['platform','Platform / Health / Storage','config database migration authentication และ document storage','health record-presence','','migration|database|startup|network|audit|http'],
 ];
 const routes = files('backend-node/src/routes').filter(p=>p.endsWith('.ts'));
 const tests = [...files('tests'),...files('backend-node/tests')].filter(p=>/\.test\.(mjs|ts)$/.test(p));

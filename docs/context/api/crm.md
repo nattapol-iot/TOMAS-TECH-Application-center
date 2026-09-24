@@ -2,38 +2,39 @@
 
 [Module](../modules/crm.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/crm/dashboard` | 33–89 |
-| GET | `/api/v1/crm/options` | 91–94 |
-| PUT | `/api/v1/crm/options/:kind/:code` | 95–110 |
-| GET | `/api/v1/crm/opportunities` | 112–139 |
-| POST | `/api/v1/crm/opportunities` | 141–157 |
-| GET | `/api/v1/crm/opportunity-duplicates` | 159–167 |
-| PUT | `/api/v1/crm/opportunities/:id` | 169–184 |
-| GET | `/api/v1/crm/opportunities/:id` | 186–203 |
-| POST | `/api/v1/crm/opportunities/:id/followups` | 205–208 |
-| PUT | `/api/v1/crm/opportunities/:id/followups/:followupId` | 209–224 |
-| GET | `/api/v1/crm/activities` | 226–239 |
-| POST | `/api/v1/crm/activities` | 240–267 |
-| GET | `/api/v1/crm/my-work` | 269–274 |
+| GET | `/api/v1/crm/dashboard` | 34–90 |
+| GET | `/api/v1/crm/options` | 92–95 |
+| PUT | `/api/v1/crm/options/:kind/:code` | 96–111 |
+| GET | `/api/v1/crm/opportunities` | 113–143 |
+| POST | `/api/v1/crm/opportunities` | 145–162 |
+| GET | `/api/v1/crm/opportunity-duplicates` | 164–172 |
+| PUT | `/api/v1/crm/opportunities/:id` | 174–190 |
+| GET | `/api/v1/crm/opportunities/:id` | 192–209 |
+| POST | `/api/v1/crm/opportunities/:id/followups` | 211–214 |
+| PUT | `/api/v1/crm/opportunities/:id/followups/:followupId` | 215–230 |
+| GET | `/api/v1/crm/activities` | 232–245 |
+| POST | `/api/v1/crm/activities` | 246–273 |
+| GET | `/api/v1/crm/my-work` | 275–280 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `column` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 13–13 |
-| `stale` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 14–16 |
-| `activeOwner` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 17–20 |
-| `addFollowup` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 21–28 |
-| `registerCrmRoutes` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 30–275 |
+| `column` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 14–14 |
+| `stale` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 15–17 |
+| `activeOwner` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 18–21 |
+| `addFollowup` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 22–29 |
+| `registerCrmRoutes` | [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>) | 31–281 |
 
 ## Direct local dependencies
 
+- [backend-node/src/crm-sales-evidence.ts](<../../../backend-node/src/crm-sales-evidence.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/config.ts](<../../../backend-node/src/config.ts>)

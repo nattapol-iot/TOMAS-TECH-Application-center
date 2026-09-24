@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `52125692`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `ed4c2a88`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -67,5 +67,7 @@ Evidence: repository migrations at `52125692`. Highest file number is not proof 
 | [059_admin_inquiry_cascade.sql](<../../database/migrations/059_admin_inquiry_cascade.sql>) | Inspect migration SQL |
 | [060_price_reference_sources.sql](<../../database/migrations/060_price_reference_sources.sql>) | Inspect migration SQL |
 | [061_estimate_summary_cost_multiplier.sql](<../../database/migrations/061_estimate_summary_cost_multiplier.sql>) | `dbo.v_estimate_cost_amounts`, `dbo.v_estimate_totals` |
+| [062_record_presence.sql](<../../database/migrations/062_record_presence.sql>) | `dbo.record_presence` |
+| [063_crm_sales_evidence.sql](<../../database/migrations/063_crm_sales_evidence.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

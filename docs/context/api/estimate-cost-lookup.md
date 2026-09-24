@@ -2,22 +2,23 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/cost-item-lookup` | 124–139 |
+| GET | `/api/v1/estimates/cost-item-lookup` | 164–179 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `escapeLikePattern` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 21–23 |
-| `parseLookupField` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 25–29 |
-| `mapLookupRow` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 96–121 |
-| `registerEstimateCostLookupRoutes` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 123–140 |
+| `escapeLikePattern` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 26–28 |
+| `parseLookupField` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 30–34 |
+| `lookupSourceKind` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 129–133 |
+| `mapLookupRow` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 135–161 |
+| `registerEstimateCostLookupRoutes` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 163–180 |
 
 ## Direct local dependencies
 
@@ -28,7 +29,7 @@ Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.cost_items`, `dbo.estimates`, `dbo.supplier_price_history`, `dbo.suppliers`
+`dbo.cost_items`, `dbo.estimates`, `dbo.supplier_price_history`, `dbo.supplier_quotation_lines`, `dbo.supplier_quotations`, `dbo.suppliers`
 
 ## Change boundary
 

@@ -2,21 +2,22 @@
 
 [Module](../modules/pricing.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/supplier-quotations` | 56–92 |
-| POST | `/api/v1/supplier-quotations` | 94–163 |
-| GET | `/api/v1/supplier-quotations/:id/content` | 165–178 |
-| PUT | `/api/v1/supplier-quotations/:id/lines` | 225–250 |
-| GET | `/api/v1/supplier-quotations/:id/lines` | 252–265 |
-| POST | `/api/v1/supplier-quotations/parse-pdf` | 271–312 |
-| PATCH | `/api/v1/supplier-quotations/:id` | 316–392 |
-| DELETE | `/api/v1/supplier-quotations/:id` | 394–419 |
-| GET | `/api/v1/supplier-quotation-lines` | 422–449 |
+| GET | `/api/v1/supplier-quotations` | 81–120 |
+| POST | `/api/v1/supplier-quotations` | 122–201 |
+| POST | `/api/v1/supplier-quotations/reference` | 209–259 |
+| GET | `/api/v1/supplier-quotations/:id/content` | 261–278 |
+| PUT | `/api/v1/supplier-quotations/:id/lines` | 353–366 |
+| GET | `/api/v1/supplier-quotations/:id/lines` | 368–381 |
+| POST | `/api/v1/supplier-quotations/parse-pdf` | 387–428 |
+| PATCH | `/api/v1/supplier-quotations/:id` | 432–520 |
+| DELETE | `/api/v1/supplier-quotations/:id` | 522–548 |
+| GET | `/api/v1/supplier-quotation-lines` | 551–582 |
 
 ## Named functions
 
@@ -24,8 +25,10 @@ Evidence: source snapshot `80a5348e`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `todayIn` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 23–27 |
 | `multipartPositiveId` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 29–36 |
-| `quotation` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 38–48 |
-| `registerSupplierQuotationRoutes` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 50–450 |
+| `bodyId` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 42–42 |
+| `parseSourceUrl` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 49–55 |
+| `quotation` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 57–73 |
+| `registerSupplierQuotationRoutes` | [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>) | 75–583 |
 
 ## Direct local dependencies
 
