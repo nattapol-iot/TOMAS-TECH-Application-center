@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   migrationReadiness,
   REQUIRED_MIGRATIONS,
+  REQUIRED_SCHEMA_VERSION,
   validateAppliedMigrationIdentities,
   validateMigrationFiles,
 } from "../src/migration-validation.js";
@@ -63,4 +64,11 @@ test("readiness requires every exact identity from 25 through 45", () => {
     missingVersions: [39],
     mismatchedVersions: [37],
   });
+});
+
+// REQUIRED_SCHEMA_VERSION is the LAST entry, not the largest, and /health/ready reports it.
+// The list is otherwise unordered, so a new migration added anywhere but the end made
+// production report an older required version than it actually required.
+test("the required schema version health reports is the newest required migration", () => {
+  assert.equal(REQUIRED_SCHEMA_VERSION, Math.max(...REQUIRED_MIGRATIONS.map(({ version }) => version)));
 });

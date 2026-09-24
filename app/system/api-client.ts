@@ -314,6 +314,11 @@ export type InquirySummary = {
   estimateId: number | null;
   opportunityId?: number | null;
   opportunityNo?: string | null;
+  hasOpportunity?: boolean;
+  opportunityStage?: string | null;
+  proposalSentOn?: string | null;
+  wonOn?: string | null;
+  hasProject?: boolean;
   updatedAt: string;
   rowVersion: string;
 };
@@ -494,6 +499,8 @@ export type ItemBalance = {
 };
 
 export type CreateInquiryInput = {
+  opportunityId?: number;
+  opportunityRowVersion?: string;
   endUserCustomerId?: number | null;
   customerId: number;
   contact: string;

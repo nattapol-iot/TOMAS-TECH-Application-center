@@ -54,7 +54,7 @@ test("attention covers missing actions, inactivity, overdue and stage-specific d
  assert.ok(flags.includes("NeedsFollowup"));assert.ok(flags.includes("NoNextAction"));assert.ok(flags.includes("NoActivity"));assert.equal(row.stage,"NEW");
  assert.ok(crmAttention({...row,next_action:"Call",next_due:"2026-09-18",next_status:"WaitingCustomer"},"2026-09-19").includes("Overdue"));
  assert.ok(crmAttention({...row,next_action:"Call",next_due:"2026-09-19"},"2026-09-19").includes("DueToday"));
- assert.ok(crmAttention({...row,stage:"PROPOSAL",stage_changed_at:"2026-09-10",last_activity:"2026-09-19",quiet_days:7},"2026-09-19").includes("NeedsFollowup"));
+ assert.ok(crmAttention({...row,stage:"PROPOSAL",proposal_sent_on:"2026-09-10",last_activity:"2026-09-19",quiet_days:7},"2026-09-19").includes("NeedsFollowup"));
  assert.ok(crmAttention({...row,stage:"ESTIMATING",quiet_days:null,estimate_due:"2026-09-20"},"2026-09-19").includes("NeedsFollowup"));
  for(const stage of ["WON","LOST","ON_HOLD"])assert.deepEqual(crmAttention({...row,stage},"2026-09-19"),[]);
 });

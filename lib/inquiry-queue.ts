@@ -6,6 +6,11 @@ export type InquiryNextAction =
   | "follow_supplier"
   | "submit_review"
   | "engineering_review"
+  | "follow_sales"
+  | "follow_customer"
+  | "verify_order"
+  | "verify_sales"
+  | "project_created"
   | "handover_project"
   | "review_cancellation"
   | "restore_estimate"
@@ -19,12 +24,17 @@ export function defaultInquiryQueueScope(role: string): InquiryQueueScope {
 }
 
 /** Give each list row one concrete next action without treating progress as workflow state. */
-export function inquiryNextAction(status: string, hasEstimate: boolean, estimateStatus?: string | null): InquiryNextAction {
+export function inquiryNextAction(status: string, hasEstimate: boolean, estimateStatus?: string | null, sales?: { stage?: string | null; proposalSentOn?: string | null; wonOn?: string | null; hasProject?: boolean }): InquiryNextAction {
   if (status !== "Cancelled" && estimateStatus === "Cancelled") return "review_cancellation";
   if (status !== "Cancelled" && estimateStatus === "Deleted") return "restore_estimate";
   switch (status) {
     case "Cancelled": return "closed";
-    case "Approved": return "handover_project";
+    case "Approved":
+      if (sales?.hasProject) return "project_created";
+      if (sales?.stage === "WON") return sales?.wonOn ? "handover_project" : "verify_order";
+      if (sales?.stage === "LOST") return "review_cancellation";
+      if (["PROPOSAL", "NEGOTIATION"].includes(sales?.stage ?? "")) return sales?.proposalSentOn ? "follow_customer" : "verify_sales";
+      return "follow_sales";
     case "Engineering Review": return "engineering_review";
     case "Estimate Completed": return "submit_review";
     case "Waiting Supplier Price": return "follow_supplier";

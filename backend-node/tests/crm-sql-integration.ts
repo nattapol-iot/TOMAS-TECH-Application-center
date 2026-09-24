@@ -13,6 +13,7 @@ import type { Database } from "../src/db.js";
 import type { AppConfig } from "../src/config.js";
 import { CurrentUserService } from "../src/users.js";
 import { registerErrorHandler } from "../src/errors.js";
+import { confirmOpportunityOrder } from "../src/crm.js";
 import { registerCrmRoutes } from "../src/routes/crm.js";
 import { registerCrmCustomerRoutes } from "../src/routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "../src/routes/crm-documents.js";
@@ -89,7 +90,8 @@ try {
  assert.equal(work.actions[0].dueDate,yesterday);
  const dashboard=await call("GET","/crm/dashboard","Sales");assert.equal(Number(dashboard.Overdue),1);
  assert.equal((await call("GET","/crm/opportunities?attention=Overdue","Sales")).total,1);
- const converted=await call("POST","/inquiries","Sales",{opportunityId:op.id,opportunityRowVersion:updated.rowVersion,projectType:"IoT",dueDate:tomorrow},201);
+ const selectedEngineer=actors.find(a=>a.name==="Other")!;
+ const converted=await call("POST","/inquiries","Sales",{opportunityId:op.id,opportunityRowVersion:updated.rowVersion,estimateOwnerId:selectedEngineer.id,projectType:"IoT",dueDate:tomorrow},201);
  const source=await call("GET",`/crm/inquiries/${converted.id}/source`,"Engineer");assert.equal(source.id,op.id);
  await call("POST","/crm/activities","Other",{customerId,inquiryId:converted.id,activityType:"Note",occurredAt:new Date().toISOString(),summary:"Cross-scope reference"},422);
  const boundary="crm-fixture-boundary",fileBytes="CRM fixture document";
@@ -99,7 +101,7 @@ try {
  await call("GET",`/crm/documents/${upload.json().id}/content`,"Other",undefined,404);
  const detail=await call("GET",`/crm/opportunities/${op.id}`,"Sales");assert.equal(detail.links[0].inquiryId,converted.id);assert.ok(detail.history.some((h:{action:string})=>h.action==="ConvertedToInquiry"));
  const inquiry=(await run(`SELECT customer_id,customer_site_id,customer_contact_id,project_name,estimate_owner_id FROM dbo.inquiries WHERE id=${Number(converted.id)}`)).recordset[0]!;
- assert.equal(Number(inquiry.customer_id),customerId);assert.equal(Number(inquiry.customer_site_id),site.id);assert.equal(Number(inquiry.customer_contact_id),contact.id);assert.equal(inquiry.project_name,"Vision system");assert.equal(Number(inquiry.estimate_owner_id),engineer.id);
+ assert.equal(Number(inquiry.customer_id),customerId);assert.equal(Number(inquiry.customer_site_id),site.id);assert.equal(Number(inquiry.customer_contact_id),contact.id);assert.equal(inquiry.project_name,"Vision system");assert.equal(Number(inquiry.estimate_owner_id),selectedEngineer.id);
  const c360=await call("GET",`/crm/customers/${customerId}`,"Sales");assert.equal(c360.inquiries.length,1);assert.ok(c360.contacts.length);assert.ok(c360.sites.length);
  const admin=actors.find(a=>a.name==="Admin")!;
  await run(`DECLARE @estimate bigint,@project bigint,@report bigint;
@@ -121,13 +123,29 @@ try {
  const contactMeta=c360.contacts.find((r:{id:number})=>r.id===contact.id);await call("PUT",`/crm/contacts/${contact.id}/metadata`,"Sales",{...contactMeta,contactRole:"Technical",note:"UAT contact"});
  await call("PUT",`/crm/customers/${customerId}/sites/${site.id}`,"Sales",{...site,name:"Factory renamed"});
  await call("GET","/crm/contacts?search=Customer","Sales");await call("GET",`/crm/activities?customerId=${customerId}`,"Sales");await call("GET",`/crm/documents?customerId=${customerId}`,"Engineer");
- const current=detail.opportunity;
+ const beforeDispatch=(await call("GET",`/crm/opportunities/${op.id}`,"Sales")).opportunity;
+ await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:beforeDispatch.rowVersion,stage:"PROPOSAL"},422);
+ await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:beforeDispatch.rowVersion,stage:"WON"},422);
+ const dispatched=await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:beforeDispatch.rowVersion,stage:"PROPOSAL",proposalSentOn:yesterday,proposalReference:"QT-CRM-001 / email"});
+ assert.equal(dispatched.proposalSentOn,yesterday);assert.equal(dispatched.proposalReference,"QT-CRM-001 / email");
+ const inquiryList=await call("GET",`/inquiries?customerId=${customerId}`,"Sales");
+ assert.equal(inquiryList.items[0].opportunityStage,"PROPOSAL");assert.equal(inquiryList.items[0].proposalSentOn,yesterday);assert.equal(inquiryList.items[0].hasProject,true);
+ const actionable=await call("GET","/crm/opportunities?attention=Actionable","Sales");
+ assert.equal(actionable.total,(await call("GET","/crm/dashboard","Sales")).actionable);
+ assert.equal(actionable.items[0].inquiryId,converted.id);
+ await database.transaction(tx=>confirmOpportunityOrder(tx,Number(converted.id),admin.id,yesterday,"PO-CRM-001"));
+ const confirmed=(await call("GET",`/crm/opportunities/${op.id}`,"Sales")).opportunity;
+ assert.equal(confirmed.stage,"WON");assert.equal(confirmed.wonOn,yesterday);assert.equal(confirmed.wonReference,"PO-CRM-001");
+ // Repeated handover must preserve the original recorded order evidence.
+ await database.transaction(tx=>confirmOpportunityOrder(tx,Number(converted.id),admin.id,yesterday,"PO-DO-NOT-REPLACE"));
+ assert.equal((await call("GET",`/crm/opportunities/${op.id}`,"Sales")).opportunity.wonReference,"PO-CRM-001");
+ const current=confirmed;
  await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:current.rowVersion,stage:"LOST",lostReason:"Other",lostDetail:"Customer postponed funding"});
  assert.equal((await call("GET","/crm/opportunities?stage=LOST","Sales")).total,1);
  assert.equal((await call("GET","/crm/my-work","Sales")).actions.length,0);
  console.log("CRM authenticated route/SQL integration passed: create, scopes, commercial redaction, stale update, activity + next action, My Work, dashboard, conversion + shared references, Customer 360, Lost and audit.");
  if(process.env.CRM_VISUAL_TEST==="1"){
-  for(const [name,stage,value] of [["Vision inspection — phase 2","PROPOSAL",620000],["Factory traceability upgrade","REQUIREMENT",350000],["PLC line expansion","NEGOTIATION",180000]] as const)await call("POST","/crm/opportunities","Sales",{name,stage,customerId,salesOwnerId:sales.id,technicalOwnerId:engineer.id,expectedValue:value,expectedClose:tomorrow},201);
+  for(const [name,stage,value] of [["Vision inspection — phase 2","PROPOSAL",620000],["Factory traceability upgrade","REQUIREMENT",350000],["PLC line expansion","NEGOTIATION",180000]] as const)await call("POST","/crm/opportunities","Sales",{name,stage,customerId,salesOwnerId:sales.id,technicalOwnerId:engineer.id,expectedValue:value,expectedClose:tomorrow,...(["PROPOSAL","NEGOTIATION"].includes(stage)?{proposalSentOn:yesterday,proposalReference:"QT-VISUAL"}:{})},201);
   await app.listen({host:"127.0.0.1",port:4601});console.log("Private CRM visual API ready at http://127.0.0.1:4601");await new Promise<void>(resolve=>{stopVisual=resolve;});
  }
 } finally {

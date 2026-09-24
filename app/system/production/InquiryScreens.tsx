@@ -1,6 +1,7 @@
 "use client";
 import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } from "./DocumentLifecycle";
-import { CrmInquirySource } from "./CrmScreens";
+import { ExistingRfqWork } from "./ExistingRfqWork";
+import { CrmInquirySource, type CrmRecord } from "./CrmScreens";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
 
@@ -63,6 +64,7 @@ type Props = {
   preferredInquiryId?: number | null;
   startWithCreate?: boolean;
   openVisit?: (visitId: number) => void;
+  openOpportunity?: (id: number) => void;
 };
 
 type Screen = { name: "list" } | { name: "create" } | { name: "detail"; id: number };
@@ -124,7 +126,7 @@ export function ProductionInquiries(props: Props) {
   return <InquiryList {...props} onCreate={() => setScreen({ name: "create" })} onOpen={(id) => setScreen({ name: "detail", id })} />;
 }
 
-function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: Props & { onCreate: () => void; onOpen: (id: number) => void }) {
+function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, openOpportunity }: Props & { onCreate: () => void; onOpen: (id: number) => void }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const { lang } = useLanguage();
@@ -183,6 +185,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
       ? { mine: "自分の案件", team: "チーム案件", unassigned: "未割当", unavailable: "受付時に担当者を必ず選ぶため、すべての Inquiry に担当者がいます。" }
       : { mine: "My work", team: "Team work", unassigned: "Unassigned", unavailable: "Every inquiry already has an owner because ownership is required at intake." };
   const nextActionCopy: Record<InquiryNextAction, string> = lang === "TH" ? {
+    verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
     review_cancellation: "ตรวจทบทวนการยกเลิกงาน",
     restore_estimate: "กู้คืน Estimate จากถังขยะ",
     review_inputs: "ตรวจข้อมูลและเริ่ม Estimate",
@@ -193,6 +196,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
     handover_project: "ส่งต่อเพื่อสร้าง Project",
     closed: "ปิดงานแล้ว",
   } : lang === "JP" ? {
+    verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
     review_cancellation: "作業中止を確認",
     restore_estimate: "ゴミ箱から見積を復元",
     review_inputs: "内容確認・見積開始",
@@ -203,6 +207,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
     handover_project: "プロジェクトへ引継ぎ",
     closed: "終了済み",
   } : {
+    verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
     review_cancellation: "Review work cancellation",
     restore_estimate: "Restore estimate from trash",
     review_inputs: "Review inputs and start estimate",
@@ -215,7 +220,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
   };
 
   return <>
-    <PageHeader eyebrow="SALES TO ENGINEERING" title="Inquiry · รับเรื่องลูกค้า" subtitle="ใช้เมื่อได้รับ RFQ หรือข้อมูลพร้อมประเมินราคาแล้ว · งานที่ยังต้องติดตามให้เริ่มจาก CRM" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับ RFQ / สร้าง Inquiry"} /></button> : null}</>} />
+    <PageHeader eyebrow="SALES TO ENGINEERING" title="CRM.rfqTitle" subtitle="CRM.rfqSubtitle" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับ RFQ / สร้าง Inquiry"} /></button> : null}</>} />
     <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
       <Icon name="users" />
       <div className="seg-control" role="group" aria-label={queueCopy.team}>
@@ -252,17 +257,17 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
     <Panel title={`${result.total} ${uiText("inquiries")}`} flush>
       <GridControls hideSearch pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
       {result.items.length ? <div className="table-wrap"><table>
-        <thead><tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"Status"} /></th><th aria-label={uiText("Action")} /></tr></thead>
+        <thead><tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"CRM.inquiryStatus"} /></th><th aria-label={uiText("Action")} /></tr></thead>
         <tbody>{result.items.map((item) => {
           const customerItem = bootstrap.customers.find((entry) => entry.id === item.customerId);
           const late = item.dueDate < today() && item.status !== "Approved" && item.status !== "Cancelled";
           const rowClass = late ? "row-late" : item.status === "Approved" || item.status === "Estimate Completed" ? "row-ok" : item.status === "Waiting Supplier Price" ? "row-wait" : "";
           return <tr key={item.id} className={`clickable ${rowClass}`} onClick={() => onOpen(item.id)}>
-            <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo ? `จาก CRM · ${item.opportunityNo}` : "รับตรง · Direct Inquiry"}</small></td>
+            <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo&&openOpportunity ? <button type="button" className="back-link" onClick={event=>{event.stopPropagation();openOpportunity(Number(item.opportunityId));}}>{item.opportunityNo} · {uiText(`CRM.${item.opportunityStage}`)}</button> : uiText(item.hasOpportunity?"CRM.sourceOpportunity":"CRM.directInquiries")}</small></td>
             <td><div className="cell-primary"><strong>{customerItem?.code ?? "—"}</strong><span>{item.customerName}</span><small><LocalizedText text={"End user:"} /> {item.endUserName || "ยังไม่ระบุ / Not specified"}</small></div></td>
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
-            <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus)]}</strong></td>
-            <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
+            <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus, {stage:item.opportunityStage,proposalSentOn:item.proposalSentOn,wonOn:item.wonOn,hasProject:item.hasProject})]}</strong></td>
+            <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status==="Approved"?uiText("CRM.costApproved"):item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
             <td><div className="row-actions">{isAdmin ? <button className="icon-btn danger" type="button" title={uiText("Delete inquiry")} aria-label={`${uiText("Delete inquiry")}: ${item.number}`}
               onClick={event => { event.stopPropagation(); setDeleteInquiryId(item.id); }}><Icon name="trash" /></button> : null}
               <span className="row-action"><Icon name="chevronRight" /></span></div></td>
@@ -279,6 +284,8 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen }: 
 type QueuedFile = { file: File; category: string };
 
 function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated }: Props & { onBack: () => void; onCreated: (id: number) => void }) {
+  const t=useUiText();
+  const [source,setSource]=useState<CrmRecord|null>(null);
   const engineers = bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role));
   const [form, setForm] = useState<CreateInquiryInput>({
     customerId: 0, endUserCustomerId: null, contact: "", projectName: "", projectType: "Automation", rfqNo: "",
@@ -286,6 +293,8 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     projectProbability: 25, customerInterestGrade: "C", qualificationNote: "",
     requirement: "", background: "", scopeSummary: "", technical: "", targetDelivery: "", siteLocation: "", standard: "", special: "", remark: "",
   });
+  const selectedSource=source&&Number(source.customerId)===form.customerId&&source.name===form.projectName?source:null;
+  const selectSource=(row:CrmRecord)=>{setSource(row);setForm(current=>({...current,customerId:Number(row.customerId),projectName:String(row.name),endUserCustomerId:row.endUserCustomerId?Number(row.endUserCustomerId):null,salesOwner:String(row.salesOwnerName??current.salesOwner),requirement:String(row.need??""),scopeSummary:String(row.scope??""),estimateOwnerId:row.technicalOwnerId?Number(row.technicalOwnerId):current.estimateOwnerId}));};
   const [files, setFiles] = useState<QueuedFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -299,7 +308,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     try {
       const similar=await apiRequest<Array<{referenceNo:string;projectName:string;status:string;source:string}>>(`/api/v1/inquiry-duplicates?customerId=${form.customerId}&projectName=${encodeURIComponent(form.projectName.trim())}`);
       if(similar.length&&!window.confirm(`พบ Inquiry ที่กำลังดำเนินการและมีชื่องานคล้ายกัน ต้องการสร้างรายการใหม่ต่อหรือไม่\n\n${similar.map(item=>`${item.referenceNo} · ${item.projectName} · ${item.source}`).join("\n")}`)){setBusy(false);return;}
-      createdInquiry = await createInquiry({ ...form, targetDelivery: form.targetDelivery || undefined });
+      createdInquiry = await createInquiry({ ...form, targetDelivery: form.targetDelivery || undefined, ...(selectedSource?{opportunityId:Number(selectedSource.id),opportunityRowVersion:String(selectedSource.rowVersion)}:{}) });
       for (const queued of files) await uploadInquiryAttachment(createdInquiry.id, queued);
       await refreshBootstrap();
       notify(`${createdInquiry.number} registered${files.length ? ` · uploaded ${files.length} file(s)` : ""}${assignmentDeliveryNote(createdInquiry.notification)}`);
@@ -318,14 +327,16 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
     <PageHeader eyebrow="NEW INQUIRY" title="Register customer inquiry" subtitle="หนึ่งเรื่องลูกค้า ใช้ต่อได้ทั้งการสำรวจหน้างานและการประมาณราคา" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{busy ? "Registering…" : "Register inquiry"}</button></>} />
     {error ? <LoadError message={error} retry={() => undefined} /> : null}
-    <div className="info-strip" role="note"><Icon name="shield" /><span><strong>รับเรื่องโดยตรงเมื่อมี RFQ หรือข้อมูลพร้อมประเมินราคาแล้ว</strong><br />หากยังอยู่ระหว่างติดตามลูกค้า ให้สร้างจากเมนู “โอกาสขาย / ก่อนรับ RFQ” เพื่อไม่ให้ข้อมูลซ้ำ</span></div>
+    <div className="info-strip" role="note"><Icon name="shield" /><span>{t("CRM.directIntakeHint")}</span></div>
+    {selectedSource?<div className="alert info"><strong>{String(selectedSource.opportunityNo)}</strong><p>{t("CRM.linkedIntakeHint")}</p><button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button></div>:null}
+    <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/>
     <Panel title="รับเรื่องลูกค้า" subtitle="บันทึกข้อมูลหลักก่อน แล้วเลือกทำ Estimate หรือขอเข้าหน้างาน"><div className="form-grid">
-      <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
-      <EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} />
-      <Field label="Project Name" span={2}><input required maxLength={300} value={form.projectName} onChange={(event) => set("projectName", event.target.value)} /></Field>
-      <Field label="Sales Owner"><select value={form.salesOwner} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
+      <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy||Boolean(selectedSource)} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
+      <EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy||Boolean(selectedSource)} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} />
+      <Field label="Project Name" span={2}><input required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
+      <Field label="Sales Owner"><select value={form.salesOwner} disabled={Boolean(selectedSource)} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
       <Field label="กำหนดตอบกลับ / Estimate due"><input required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
-      <Field label="Customer Requirement" span={2}><textarea maxLength={20000} value={form.requirement} onChange={(event) => set("requirement", event.target.value)} /></Field>
+      <Field label="Customer Requirement" span={2}><textarea maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
     </div></Panel>
     <details className="panel" style={{ marginTop: 14, padding: 18 }}><summary><LocalizedText text={"รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค"} /></summary>
       <p className="muted"><LocalizedText text={"ผู้ประเมินเริ่มต้น:"} /> {engineers.find((member) => member.id === form.estimateOwnerId)?.name ?? "กรุณาเลือกผู้ประเมิน"} <LocalizedText text={"· เปลี่ยนได้ในส่วนนี้"} /></p>
@@ -338,10 +349,10 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
       <Field label="Customer Interest Grade"><select value={form.customerInterestGrade} onChange={(event) => set("customerInterestGrade", event.target.value)}>{INTEREST_GRADES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
       <Field label="Qualification Note" hint="Record the evidence behind the grade and probability" span={2}><textarea maxLength={2000} rows={2} value={form.qualificationNote} onChange={(event) => set("qualificationNote", event.target.value)} /></Field>
       <Field label="Project Background" span={2}><textarea maxLength={20000} value={form.background} onChange={(event) => set("background", event.target.value)} /></Field>
-      <Field label="Scope Summary" span={2}><textarea maxLength={20000} value={form.scopeSummary} onChange={(event) => set("scopeSummary", event.target.value)} /></Field>
+      <Field label="Scope Summary" span={2}><textarea maxLength={20000} value={form.scopeSummary} readOnly={Boolean(selectedSource)} onChange={(event) => set("scopeSummary", event.target.value)} /></Field>
       <Field label="Technical Requirement" span={2}><textarea maxLength={20000} value={form.technical} onChange={(event) => set("technical", event.target.value)} /></Field>
       <Field label="Target Delivery"><input type="date" min={today()} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></Field>
-      <Field label="Site Location"><input maxLength={300} value={form.siteLocation} onChange={(event) => set("siteLocation", event.target.value)} /></Field>
+      <Field label="Site Location"><input maxLength={300} value={form.siteLocation} readOnly={Boolean(selectedSource)} onChange={(event) => set("siteLocation", event.target.value)} /></Field>
       <Field label="Customer Standard"><input value={form.standard} onChange={(event) => set("standard", event.target.value)} /></Field>
       <Field label="Special Requirement"><input value={form.special} onChange={(event) => set("special", event.target.value)} /></Field>
       <Field label="Remark" span={4}><textarea value={form.remark} onChange={(event) => set("remark", event.target.value)} /></Field></div>

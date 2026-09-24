@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
+import { validateSalesEvidence } from "../crm-sales-evidence.js";
 import type { Database } from "../db.js";
 import type { CurrentUserService } from "../users.js";
 import type { AppConfig } from "../config.js";
@@ -9,7 +10,7 @@ import { ApiError } from "../errors.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredText, requiredInteger } from "../http.js";
 import { CRM_SCOPE, CRM_READ_JOINS, CRM_NEEDS_FOLLOWUP, CRM_ACTIVITY_TYPES, CRM_STAGES, crmAccess, bindAccess, scopedOpportunity, crmDto, opportunityInput, validateCrmReferences, followupInput, crmAttention, crmText, crmId, crmChoice, type CrmRow } from "../crm.js";
 
-const inputFields = { name:sql.NVarChar(300), customerId:sql.BigInt, endUserCustomerId:sql.BigInt, siteId:sql.BigInt, contactId:sql.BigInt, salesOwnerId:sql.BigInt, technicalOwnerId:sql.BigInt, source:sql.NVarChar(40), need:sql.NVarChar(sql.MAX), scope:sql.NVarChar(sql.MAX), expectedValue:sql.Decimal(19,4), expectedClose:sql.Date, stage:sql.NVarChar(40), probability:sql.Int, competitor:sql.NVarChar(300), priority:sql.NVarChar(20), lostReason:sql.NVarChar(40), lostDetail:sql.NVarChar(2000), internalNote:sql.NVarChar(sql.MAX) };
+const inputFields = { proposalSentOn:sql.Date, proposalReference:sql.NVarChar(1000), wonOn:sql.Date, wonReference:sql.NVarChar(1000), name:sql.NVarChar(300), customerId:sql.BigInt, endUserCustomerId:sql.BigInt, siteId:sql.BigInt, contactId:sql.BigInt, salesOwnerId:sql.BigInt, technicalOwnerId:sql.BigInt, source:sql.NVarChar(40), need:sql.NVarChar(sql.MAX), scope:sql.NVarChar(sql.MAX), expectedValue:sql.Decimal(19,4), expectedClose:sql.Date, stage:sql.NVarChar(40), probability:sql.Int, competitor:sql.NVarChar(300), priority:sql.NVarChar(20), lostReason:sql.NVarChar(40), lostDetail:sql.NVarChar(2000), internalNote:sql.NVarChar(sql.MAX) };
 const column = (name: string) => name.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
 function stale(row: CrmRow, version: unknown) {
   if (!(row.row_version as Buffer).equals(parseRowVersion(version))) throw new ApiError(409,"concurrency_conflict","This record changed. Refresh before saving.");
@@ -114,16 +115,19 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
     const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1, size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):30;
     const result=await database.query<CrmRow>(`SELECT o.*,c.name customer_name,c.code customer_code,eu.name end_user_name,eu.code end_user_code,s.name sales_owner_name,t.name technical_owner_name,
       opt.quiet_days,a.last_activity,f.action next_action,f.due_date next_due,f.status next_status,f.owner_id next_owner_id,
-      ed.estimate_due,COUNT(*) OVER() total_count
+      ed.estimate_due,linked.inquiry_id,linked.inquiry_no,linked.inquiry_status,COUNT(*) OVER() total_count
       FROM dbo.crm_opportunities o JOIN dbo.customers c ON c.id=o.customer_id LEFT JOIN dbo.customers eu ON eu.id=o.end_user_customer_id JOIN dbo.users s ON s.id=o.sales_owner_id
       LEFT JOIN dbo.users t ON t.id=o.technical_owner_id LEFT JOIN dbo.crm_options opt ON opt.kind='stage' AND opt.code=o.stage
       OUTER APPLY(SELECT MAX(occurred_at) last_activity FROM dbo.crm_activities WHERE opportunity_id=o.id) a
       OUTER APPLY(SELECT TOP(1) action,due_date,status,owner_id FROM dbo.crm_followups WHERE opportunity_id=o.id AND status NOT IN('Done','Cancelled') ORDER BY due_date,id) f
       OUTER APPLY(SELECT MIN(e.due_date) estimate_due FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id WHERE i.opportunity_id=o.id AND e.deleted_at IS NULL AND e.status NOT IN('Approved','Locked')) ed
+      OUTER APPLY(SELECT TOP(1) i.id inquiry_id,i.inquiry_no,i.status inquiry_status FROM dbo.inquiries i
+        WHERE i.opportunity_id=o.id AND i.deleted_at IS NULL
+        ORDER BY CASE WHEN i.status NOT IN('Approved','Cancelled') AND i.archived_at IS NULL THEN 0 ELSE 1 END,i.id DESC) linked
       WHERE ${CRM_SCOPE} AND (@customer IS NULL OR o.customer_id=@customer) AND (@stage=N'' OR o.stage=@stage)
       AND (@open=0 OR o.stage NOT IN('WON','LOST','ON_HOLD'))
       AND (@attention=N'' OR (o.stage NOT IN('WON','LOST','ON_HOLD') AND
-        ((@attention='Overdue' AND f.due_date<@today) OR (@attention='WaitingCustomer' AND f.status='WaitingCustomer')
+        ((@attention='Actionable' AND (${CRM_NEEDS_FOLLOWUP} OR f.action IS NULL OR f.due_date<=@today)) OR (@attention='Overdue' AND f.due_date<@today) OR (@attention='WaitingCustomer' AND f.status='WaitingCustomer')
          OR (@attention='NeedsFollowup' AND ${CRM_NEEDS_FOLLOWUP}) OR (@attention='NoNextAction' AND f.action IS NULL)
          OR (@attention='NoActivity' AND a.last_activity IS NULL) OR (@attention='EstimateDueSoon' AND ed.estimate_due<=DATEADD(day,3,@today)))))
       AND (@owner IS NULL OR o.sales_owner_id=@owner OR o.technical_owner_id=@owner) AND (@year IS NULL OR YEAR(o.created_at)=@year)
@@ -135,12 +139,13 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
           .input("stage",sql.NVarChar(40),query.stage??"").input("year",sql.Int,query.year ? requiredInteger(Number(query.year),"Year",2000,2200):null)
           .input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size).input("size",sql.Int,size);
       });
-    return {items:result.recordset.map(r=>({...crmDto(r,actor.permissions.includes("crm.commercial.read")),attention:crmAttention(r,today())})),total:Number(result.recordset[0]?.total_count??0),page,pageSize:size};
+    return {items:result.recordset.map(r=>{const visible={...r};if(!actor.permissions.includes("inquiry.read"))for(const key of ["inquiry_id","inquiry_no","inquiry_status"])delete visible[key];return {...crmDto(visible,actor.permissions.includes("crm.commercial.read")),attention:crmAttention(r,today())};}),total:Number(result.recordset[0]?.total_count??0),page,pageSize:size};
   });
 
   app.post("/api/v1/crm/opportunities",async(request,reply)=>{
     const actor=await crmAccess(database,users,request,"crm.write"),body=bodyObject(request.body);
     const input=opportunityInput(body,actor.permissions.includes("crm.commercial.read"));
+    validateSalesEvidence(input,null,today());
     if(!actor.permissions.includes("crm.read.all") && !actor.permissions.includes("crm.read.team") && input.salesOwnerId!==actor.id && input.technicalOwnerId!==actor.id) throw new ApiError(403,"permission_denied","An owner must be you.");
     const row=await database.transaction(async tx=>{
       await validateCrmReferences(new sql.Request(tx),input);
@@ -171,6 +176,7 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
     return database.transaction(async tx=>{
       const before=await scopedOpportunity(bindAccess(new sql.Request(tx),actor),id,true); stale(before,body.rowVersion);
       const commercial=actor.permissions.includes("crm.commercial.read"); const input=opportunityInput({...crmDto(before),...body},commercial);
+      validateSalesEvidence(input,before,today());
       if(input.customerId!==Number(before.customer_id))throw new ApiError(400,"validation_failed","An opportunity keeps its original customer. Create a new opportunity for another customer.");
       if(!commercial) input.expectedValue=before.expected_value==null?null:Number(before.expected_value);
       await validateCrmReferences(new sql.Request(tx),input);
@@ -190,7 +196,7 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
       const activities=(await q.query("SELECT a.*,u.name owner_name,f.action next_action,f.due_date next_due,fu.name next_owner_name FROM dbo.crm_activities a JOIN dbo.users u ON u.id=a.owner_id OUTER APPLY(SELECT TOP(1) action,due_date,owner_id FROM dbo.crm_followups WHERE activity_id=a.id ORDER BY due_date,id) f LEFT JOIN dbo.users fu ON fu.id=f.owner_id WHERE a.opportunity_id=@id ORDER BY a.occurred_at DESC,a.id DESC")).recordset;
       const followups=(await q.query("SELECT f.*,u.name owner_name FROM dbo.crm_followups f JOIN dbo.users u ON u.id=f.owner_id WHERE opportunity_id=@id ORDER BY CASE WHEN status IN('Done','Cancelled') THEN 1 ELSE 0 END,due_date,id")).recordset;
       const history=(await q.query("SELECT a.*,u.name actor_name FROM dbo.audit_log a JOIN dbo.users u ON u.id=a.actor_id WHERE entity_type=N'CrmOpportunity' AND entity_id=@id ORDER BY occurred_at DESC,id DESC")).recordset;
-      const links=actor.permissions.includes("inquiry.read") ? (await q.query(`SELECT i.id inquiry_id,i.inquiry_no,i.status inquiry_status,i.due_date,e.id estimate_id,e.estimate_no,e.revision,e.status estimate_status,totals.total,p.id project_id,p.project_no,p.status project_status FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL LEFT JOIN dbo.v_estimate_totals totals ON totals.estimate_id=e.id LEFT JOIN dbo.projects p ON p.estimate_id=e.id AND p.deleted_at IS NULL AND (@projectElevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) WHERE i.opportunity_id=@id AND i.deleted_at IS NULL`)).recordset:[];
+      const links=actor.permissions.includes("inquiry.read") ? (await q.query(`SELECT i.id inquiry_id,i.inquiry_no,i.status inquiry_status,i.due_date,e.id estimate_id,e.estimate_no,e.revision,e.status estimate_status,totals.total,p.id project_id,p.project_no,p.status project_status FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL LEFT JOIN dbo.v_estimate_totals totals ON totals.estimate_id=e.id LEFT JOIN dbo.projects p ON p.estimate_id=e.id AND p.deleted_at IS NULL AND (@projectElevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) WHERE i.opportunity_id=@id AND i.deleted_at IS NULL ORDER BY i.id DESC`)).recordset:[];
       const commercial=actor.permissions.includes("crm.commercial.read");
       const visibleLinks=links.map(r=>{
         const visible={...r};

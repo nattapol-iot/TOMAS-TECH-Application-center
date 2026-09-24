@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { salesEvidenceInput } from "./crm-sales-evidence.js";
 import type { FastifyRequest } from "fastify";
 import type { Database } from "./db.js";
 import type { CurrentUserService } from "./users.js";
@@ -12,15 +13,16 @@ export const TERMINAL_INQUIRY_STATUSES = ["Approved", "Cancelled"] as const;
 export function opportunityStageAfterInquiry(stage: unknown): string {
   return ["NEW", "QUALIFICATION", "REQUIREMENT"].includes(String(stage)) ? "ESTIMATING" : String(stage);
 }
-export async function syncOpportunityStageForInquiry(transaction: sql.Transaction, inquiryId: number, targetStage: "ESTIMATING"|"PROPOSAL"|"WON", actorId: number): Promise<void> {
-  const q=new sql.Request(transaction);q.input("inquiry",sql.BigInt,inquiryId).input("target",sql.NVarChar(40),targetStage).input("actor",sql.BigInt,actorId);
-  const row=(await q.query<{id:number|string;opportunity_no:string;previous_stage:string;stage:string}>(`UPDATE o SET stage=@target,stage_changed_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+export async function confirmOpportunityOrder(transaction: sql.Transaction, inquiryId: number, actorId: number, confirmedOn: string, reference: string): Promise<void> {
+  const q=new sql.Request(transaction);
+  q.input("inquiry",sql.BigInt,inquiryId).input("actor",sql.BigInt,actorId).input("confirmedOn",sql.Date,confirmedOn).input("reference",sql.NVarChar(1000),reference);
+  const row=(await q.query<{id:number|string;opportunity_no:string;previous_stage:string;stage:string}>(`UPDATE o SET stage=N'WON',
+    stage_changed_at=CASE WHEN o.stage<>N'WON' THEN SYSUTCDATETIME() ELSE o.stage_changed_at END,
+    won_on=COALESCE(o.won_on,@confirmedOn),won_reference=COALESCE(o.won_reference,@reference),updated_by=@actor,updated_at=SYSUTCDATETIME()
     OUTPUT inserted.id,inserted.opportunity_no,deleted.stage previous_stage,inserted.stage
     FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id
-    WHERE i.id=@inquiry AND ((@target=N'ESTIMATING' AND o.stage IN(N'NEW',N'QUALIFICATION',N'REQUIREMENT'))
-      OR (@target=N'PROPOSAL' AND o.stage IN(N'NEW',N'QUALIFICATION',N'REQUIREMENT',N'ESTIMATING'))
-      OR (@target=N'WON' AND o.stage NOT IN(N'WON',N'LOST')));`)).recordset[0];
-  if(row)await insertAudit(transaction,actorId,"CrmOpportunity",Number(row.id),row.opportunity_no.slice(0,50),`StageChanged:${row.stage}`,{stage:row.previous_stage},{stage:row.stage,sourceInquiryId:inquiryId});
+    WHERE i.id=@inquiry AND o.stage<>N'LOST' AND (o.stage<>N'WON' OR o.won_on IS NULL);`)).recordset[0];
+  if(row)await insertAudit(transaction,actorId,"CrmOpportunity",Number(row.id),row.opportunity_no.slice(0,50),"OrderConfirmed",{stage:row.previous_stage},{stage:row.stage,sourceInquiryId:inquiryId,confirmedOn,reference});
 }
 export type CrmRow = Record<string, unknown>;
 export type CrmAccess = { id: number; department: string; permissions: string[] };
@@ -43,7 +45,7 @@ export const CRM_READ_JOINS = `FROM dbo.crm_opportunities o
  OUTER APPLY(SELECT MAX(occurred_at) last_activity FROM dbo.crm_activities WHERE opportunity_id=o.id) a
  OUTER APPLY(SELECT TOP(1) action,due_date,status,owner_id FROM dbo.crm_followups WHERE opportunity_id=o.id AND status NOT IN('Done','Cancelled') ORDER BY due_date,id) f
  OUTER APPLY(SELECT MIN(e.due_date) estimate_due FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id WHERE i.opportunity_id=o.id AND e.deleted_at IS NULL AND e.status NOT IN('Approved','Locked')) ed`;
-export const CRM_NEEDS_FOLLOWUP = `(o.stage NOT IN('WON','LOST','ON_HOLD') AND ((opt.quiet_days IS NOT NULL AND DATEDIFF(day,CASE WHEN o.stage='PROPOSAL' THEN o.stage_changed_at ELSE COALESCE(a.last_activity,o.created_at) END,@today)>=opt.quiet_days) OR (o.stage='ESTIMATING' AND ed.estimate_due<=DATEADD(day,3,@today))))`;
+export const CRM_NEEDS_FOLLOWUP = `(o.stage NOT IN('WON','LOST','ON_HOLD') AND ((opt.quiet_days IS NOT NULL AND DATEDIFF(day,CASE WHEN o.stage='PROPOSAL' THEN o.proposal_sent_on ELSE COALESCE(a.last_activity,o.created_at) END,@today)>=opt.quiet_days) OR (o.stage='ESTIMATING' AND ed.estimate_due<=DATEADD(day,3,@today))))`;
 export async function scopedOpportunity(q: sql.Request, id: number, lock = false): Promise<CrmRow> {
   q.input("id", sql.BigInt, id);
   const row = (await q.query(`SELECT o.*,eu.name end_user_name,eu.code end_user_code FROM dbo.crm_opportunities o ${lock ? "WITH(UPDLOCK,HOLDLOCK)" : ""} LEFT JOIN dbo.customers eu ON eu.id=o.end_user_customer_id WHERE o.id=@id AND ${CRM_SCOPE}`)).recordset[0];
@@ -51,7 +53,7 @@ export async function scopedOpportunity(q: sql.Request, id: number, lock = false
   return row;
 }
 export function crmDto(row: CrmRow, commercial = true): CrmRow {
-  return Object.fromEntries(Object.entries(row).filter(([key]) => commercial || !["expected_value", "total", "before_json", "after_json"].includes(key)).map(([key,value]) => [key.replace(/_([a-z])/g, (_,c: string) => c.toUpperCase()), Buffer.isBuffer(value) ? value.toString("base64") : value instanceof Date ? (["due_date","expected_close","next_due","estimate_due","target_delivery"].includes(key)?value.toISOString().slice(0,10):value.toISOString()) : value!=null&&(key==="id"||key.endsWith("_id"))?Number(value):value]));
+  return Object.fromEntries(Object.entries(row).filter(([key]) => commercial || !["expected_value", "total", "before_json", "after_json"].includes(key)).map(([key,value]) => [key.replace(/_([a-z])/g, (_,c: string) => c.toUpperCase()), Buffer.isBuffer(value) ? value.toString("base64") : value instanceof Date ? (["due_date","expected_close","next_due","estimate_due","target_delivery","proposal_sent_on","won_on"].includes(key)?value.toISOString().slice(0,10):value.toISOString()) : value!=null&&(key==="id"||key.endsWith("_id"))?Number(value):value]));
 }
 export function crmChoice(value: unknown, choices: readonly string[], label: string): string {
   const result = requiredText(value, 40, label);
@@ -71,6 +73,7 @@ export function opportunityInput(body: CrmRow, commercial: boolean) {
     if (!Number.isFinite(value) || value < 0 || value > 99999999999999) throw new ApiError(400,"validation_failed","Expected value must be non-negative.");
   }
   return {
+    ...salesEvidenceInput(body),
     name: requiredText(body.name,300,"Opportunity name"), customerId: requiredInteger(body.customerId,"Customer",1), endUserCustomerId: crmId(body.endUserCustomerId,"End user"),
     siteId: crmId(body.siteId,"Site"), contactId: crmId(body.contactId,"Contact"), salesOwnerId: requiredInteger(body.salesOwnerId,"Sales owner",1), technicalOwnerId: crmId(body.technicalOwnerId,"Technical owner"),
     source: crmText(body.source,40) || "DirectInquiry", need: crmText(body.need,20000), scope: crmText(body.scope,20000),
@@ -95,7 +98,7 @@ export function crmAttention(row: CrmRow, today: string): string[] {
   if (due) flags.push(due < today ? "Overdue" : due === today ? "DueToday" : due <= soon.toISOString().slice(0,10) ? "DueSoon" : "Scheduled");
   if (String(row.next_status).startsWith("Waiting")) flags.push(String(row.next_status));
   if (!row.last_activity) flags.push("NoActivity");
-  const base = row.stage === "PROPOSAL" ? row.stage_changed_at : row.last_activity ?? row.created_at;
+  const base = row.stage === "PROPOSAL" ? row.proposal_sent_on : row.last_activity ?? row.created_at;
   const quiet = Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(date(base))) / 86400000);
   if ((row.quiet_days != null && quiet >= Number(row.quiet_days)) || (row.stage === "ESTIMATING" && estimateDue && estimateDue <= soon.toISOString().slice(0,10))) flags.push("NeedsFollowup");
   if (estimateDue && estimateDue <= soon.toISOString().slice(0,10)) flags.push("EstimateDueSoon");

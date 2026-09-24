@@ -23,7 +23,8 @@ import {
 } from "../http.js";
 import { notifyUsers } from "../site-visit-common.js";
 import type { CurrentUserService } from "../users.js";
-import { crmAccess, bindAccess, scopedOpportunity, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../crm.js";
+import { inquiryEstimateOwner } from "../crm-sales-evidence.js";
+import { crmAccess, bindAccess, scopedOpportunity, CRM_SCOPE, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../crm.js";
 
 type InquiryRow = Record<string, unknown> & {
   id: number | string; inquiry_no: string; inquiry_date: Date | string; customer_id: number | string;
@@ -140,6 +141,9 @@ export function registerInquiryRoutes(
   registerEndUserUpdateRoute(app, database, users, "Inquiry");
   app.get("/api/v1/inquiries", async (request) => {
     await users.demandPermission(request, "inquiry.read");
+    const actor = await users.required(request);
+    const permissions=await database.query<{code:string}>("SELECT code FROM dbo.user_effective_permissions WHERE user_id=@actor",q=>q.input("actor",sql.BigInt,actor.id));
+    const crmActor={id:actor.id,department:actor.department,permissions:permissions.recordset.map(r=>r.code)};
     const query = request.query as Record<string, unknown>;
     const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER);
     const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
@@ -172,11 +176,12 @@ export function registerInquiryRoutes(
         i.project_name, i.project_type, i.sales_owner, i.estimate_owner_id, u.name AS estimate_owner_name,
         i.due_date, i.priority, i.status, i.progress, i.revision, i.updated_at, i.row_version, i.estimate_id,
         (SELECT CASE WHEN e.deleted_at IS NOT NULL THEN N'Deleted' ELSE e.status END FROM dbo.estimates e WHERE e.inquiry_id=i.id) estimate_status,
-        i.project_probability, i.customer_interest_grade, i.opportunity_id, o.opportunity_no, COUNT_BIG(*) OVER() AS total_count
+        i.project_probability, i.customer_interest_grade, i.opportunity_id, o.opportunity_no, o.stage opportunity_stage, o.proposal_sent_on, o.won_on,
+        (SELECT COUNT_BIG(*) FROM dbo.projects p WHERE p.inquiry_id=i.id AND p.deleted_at IS NULL) project_count, COUNT_BIG(*) OVER() AS total_count
       FROM dbo.inquiries i
       INNER JOIN dbo.customers c ON c.id = i.customer_id
       LEFT JOIN dbo.customers eu ON eu.id=i.end_user_customer_id
-      LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id
+      LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id AND @crmRead=1 AND ${CRM_SCOPE}
       INNER JOIN dbo.users u ON u.id = i.estimate_owner_id
       WHERE i.deleted_at IS NULL AND i.archived_at IS NULL
         AND (@status IS NULL OR i.status = @status)
@@ -198,6 +203,7 @@ export function registerInquiryRoutes(
       ORDER BY i.updated_at DESC, i.id DESC
       OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
     `, (sqlRequest) => {
+      bindAccess(sqlRequest,crmActor).input("crmRead",sql.Bit,crmActor.permissions.includes("crm.read"));
       sqlRequest.input("status", sql.NVarChar(50), status);
       sqlRequest.input("search", sql.NVarChar(200), search);
       sqlRequest.input("customer_id", sql.BigInt, customerId);
@@ -224,7 +230,8 @@ export function registerInquiryRoutes(
         projectProbability: row.project_probability, customerInterestGrade: row.customer_interest_grade.trim(),
         status: row.status, progress: Number(row.progress), revision: row.revision, updatedAt: row.updated_at,
         rowVersion: row.row_version.toString("base64"), estimateId: nullableNumber(row.estimate_id), estimateStatus: row.estimate_status,
-        opportunityId: nullableNumber(row.opportunity_id), opportunityNo: row.opportunity_no,
+        opportunityId: row.opportunity_no ? nullableNumber(row.opportunity_id) : null, opportunityNo: row.opportunity_no,
+        hasOpportunity: row.opportunity_id != null, opportunityStage: row.opportunity_stage as string | null, proposalSentOn: row.proposal_sent_on ? dateOnly(row.proposal_sent_on as Date) : null, wonOn: row.won_on ? dateOnly(row.won_on as Date) : null, hasProject: Number(row.project_count)>0,
       })),
       page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
     };
@@ -350,7 +357,7 @@ export function registerInquiryRoutes(
         return {...opportunity,...refs};
       });
       Object.assign(body,{customerId:Number(source.customer_id),endUserCustomerId:source.end_user_customer_id==null?null:Number(source.end_user_customer_id),contact:source.contact_name??"",projectName:source.name,salesOwner:source.sales_name,requirement:source.need,scopeSummary:source.scope,siteLocation:source.site_address??"",priority:source.priority});
-      if(source.technical_owner_id) body.estimateOwnerId=Number(source.technical_owner_id);
+      body.estimateOwnerId=inquiryEstimateOwner(body.estimateOwnerId,source.technical_owner_id);
       body.projectProbability ??= Number(source.probability??50);body.customerInterestGrade ??="B";
     }
     const customerId = requiredInteger(body.customerId, "Customer", 1);
@@ -387,6 +394,7 @@ export function registerInquiryRoutes(
       const crmSource = opportunityId && crmActor ? await scopedOpportunity(bindAccess(new sql.Request(transaction),crmActor),opportunityId,true) : null;
       if (crmSource && !(crmSource.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion))) throw new ApiError(409,"concurrency_conflict","Opportunity changed. Refresh before creating an inquiry.");
       if (crmSource) {
+        if (["WON","LOST","ON_HOLD"].includes(String(crmSource.stage))) throw new ApiError(422,"crm_opportunity_closed","Reopen the opportunity before creating additional estimating work.");
         const duplicate = new sql.Request(transaction);
         duplicate.input("opportunity",sql.BigInt,opportunityId).input("approved",sql.NVarChar(50),TERMINAL_INQUIRY_STATUSES[0]).input("cancelled",sql.NVarChar(50),TERMINAL_INQUIRY_STATUSES[1]);
         const existing = (await duplicate.query<{id:number|string;inquiry_no:string}>(`SELECT TOP(1) id,inquiry_no FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
@@ -399,7 +407,7 @@ export function registerInquiryRoutes(
       validate.input("owner_id", sql.BigInt, estimateOwnerId);
       const references = await validate.query<{ customer_valid: number; owner_valid: number }>(`
         SELECT CASE WHEN EXISTS (SELECT 1 FROM dbo.customers WHERE id=@customer_id AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END AS customer_valid,
-          CASE WHEN EXISTS (SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
+          CASE WHEN EXISTS (SELECT 1 FROM dbo.users u INNER JOIN dbo.user_effective_roles r ON r.user_id=u.id
             WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL
               AND r.code IN (N'Engineer',N'Engineering Manager',N'Admin')) THEN 1 ELSE 0 END AS owner_valid;
       `);

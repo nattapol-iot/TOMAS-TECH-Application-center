@@ -10,7 +10,6 @@ import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
-import { syncOpportunityStageForInquiry } from "../crm.js";
 import { hasRole } from "../user-roles.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, clampedInteger, dateOnly, firstQueryValue, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
@@ -373,7 +372,6 @@ async function transition(
     if (action === "Submitted") await snapshotSubmission(transaction,id,current.revision,actor.id);
     if (action === "Approved") await snapshotRevision(transaction, id, current.revision, "Approved", "Approved", actor.id);
     const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, inquiryStatus, inquiryProgress, actor.id);
-    if(action === "Approved") await syncOpportunityStageForInquiry(transaction,inquiryId,"PROPOSAL",actor.id);
     await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, action,
       { revision: current.revision, status: current.status, progress: Number(current.progress) },
       { revision: current.revision, status: targetStatus, progress: targetProgress, comment });
