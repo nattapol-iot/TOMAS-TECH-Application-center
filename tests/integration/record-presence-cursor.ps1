@@ -27,7 +27,8 @@ function Invoke-SqlText {
     Set-Content -LiteralPath $file -Value ("SET NOCOUNT ON;`n" + $Text) -Encoding utf8
     $output = & sqlcmd -S $script:Server -E -C -I -b -d $Database -h -1 -W -s '|' -i $file
     if ($LASTEXITCODE -ne 0) { throw "sqlcmd failed:`n$($output -join "`n")`n--- query ---`n$Text" }
-    return @($output | Where-Object { $_ -and $_.Trim() -and $_ -notmatch '^\(\d+ rows? affected\)$' })
+    # The leading comma keeps a one-row answer an array; PowerShell unrolls it otherwise.
+    return ,@($output | Where-Object { $_ -and $_.Trim() -and $_ -notmatch '^\(\d+ rows? affected\)$' })
 }
 
 function Assert-That([bool] $Condition, [string] $Message) {
@@ -122,7 +123,11 @@ COMMIT TRANSACTION;
     $naive = (Invoke-SqlText 'SELECT CONVERT(binary(8), @@DBTS);')[0]
 
     $writer.WaitForExit()
-    Assert-That ($writer.ExitCode -eq 0) 'the held write commits'
+    # ExitCode reads back null from Start-Process unless its handle was taken before exit,
+    # so ask the database whether the write landed instead.
+    $landed = (Invoke-SqlText "SELECT CONVERT(int, qty) FROM dbo.cost_items WHERE id=$item;")[0]
+    if ($landed -ne '2') { Write-Host (Get-Content -LiteralPath (Join-Path $scratch 'hold.out') -Raw -ErrorAction SilentlyContinue) }
+    Assert-That ($landed -eq '2') 'the held write commits'
 
     $after = Get-Beat $estimate $a $during.Next
     Assert-That ($after.Changed -ge 1) 'the next beat reports the write that committed after the previous one'
