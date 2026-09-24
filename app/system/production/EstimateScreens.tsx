@@ -23,6 +23,8 @@ import { CostItemLookupInput, SupplierLookupInput } from "./CostItemLookup";
 import type { CostItemLookupPatch } from "../../../lib/cost-item-lookup";
 import { validCostItemNumbers } from "../../../lib/cost-item-validation";
 import { estimateApplyOwnerId, estimateIssueTab, estimateNextAction, estimateUxCopy, estimateIssueMessage, moduleTemplateApplyBlocker } from "../../../lib/estimate-ux";
+import { afterBeat, afterLoad, collisions, parseEditingKey, reloadDecision, type LiveSyncState, type RecordViewer } from "../../../lib/record-live-sync";
+import { DraftHoldProvider, RecordViewers, anyDialogOpen, typingInside, useDraftHolds, useHeartbeat } from "./RecordPresence";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -42,7 +44,9 @@ import {
   applyModuleTemplate,
   createModuleTemplateFromEstimate,
   listModuleTemplates,
+  leaveRecord,
   loadEstimateCostWorkspace,
+  syncEstimate,
   loadModuleTemplate,
   removeCostItem,
   removeEstimateExpense,
@@ -533,16 +537,83 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
   const [assignmentEditor, setAssignmentEditor] = useState<EstimateAssignment | null>(null);
   const [workflowAction, setWorkflowAction] = useState<"submit" | "approve" | "request-revision" | "create-revision" | null>(null);
 
+  /*
+   * Live view. Several engineers work one estimate at once; a heartbeat says who else is
+   * here and whether anything changed, and the screen takes the change in by reloading
+   * the workspace -- but only when that cannot cost the person at the keyboard anything
+   * they have not saved. lib/record-live-sync.ts holds the rules.
+   */
+  const liveRef = useRef<LiveSyncState | null>(null);
+  const [waitingOn, setWaitingOn] = useState<string[] | null>(null);
+  const [viewers, setViewers] = useState<RecordViewer[]>([]);
+  const holds = useDraftHolds();
+  const workspaceRoot = useRef<HTMLDivElement>(null);
+  const reloading = useRef(false);
+  const warnedAbout = useRef(new Set<string>());
+  const liveCopy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  /** Every workspace this screen shows is the new baseline the live view counts from. */
+  const adopt = useCallback((fresh: EstimateCostWorkspace) => {
+    liveRef.current = afterLoad(fresh.header.syncCursor);
+    setWaitingOn(null);
+    setWorkspace(fresh);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    try { setWorkspace(await loadEstimateCostWorkspace(estimateId)); }
+    try { adopt(await loadEstimateCostWorkspace(estimateId)); }
     catch (requestError) { setError(toError(requestError)); }
     finally { setLoading(false); }
-  }, [estimateId]);
+  }, [estimateId, adopt]);
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  // What this person has open, so a colleague sees it before opening the same line.
+  const editingKey = costEditor ? `cost:${costEditor === "new" ? "new" : costEditor.id}`
+    : manhourEditor ? `manhour:${manhourEditor === "new" ? "new" : manhourEditor.id}`
+    : expenseEditor ? `expense:${expenseEditor === "new" ? "new" : expenseEditor.id}`
+    : otherEditor ? `other:${otherEditor === "new" ? "new" : otherEditor.id}`
+    : assignmentEditor ? `assignment:${assignmentEditor.id}` : assignmentCreateOpen ? "assignment:new" : null;
+  const editingContext = () => ({
+    // A dialog -- including one a child opened -- and unsaved ERP classification both
+    // hold work a reload would throw away.
+    editorOpen: anyDialogOpen() || classificationDirty,
+    draftsHeld: holds.count(),
+    typing: typingInside(workspaceRoot.current),
+    busy: busy || loading,
+  });
+  const settle = async () => {
+    const state = liveRef.current;
+    if (!state) return;
+    const decision = reloadDecision(state, editingContext());
+    if (decision !== "reload") { setWaitingOn(decision === "wait" ? state.changedBy : null); return; }
+    if (reloading.current) return;
+    reloading.current = true;
+    try {
+      const fresh = await loadEstimateCostWorkspace(estimateId);
+      // Someone may have started typing while it loaded; what they type wins.
+      if (reloadDecision(liveRef.current ?? state, editingContext()) !== "reload") { setWaitingOn(state.changedBy); return; }
+      adopt(fresh);
+      notify(state.changedBy.length
+        ? `${liveCopy("อัปเดตตามการแก้ไขของ", "Updated with changes by", "変更を反映しました：")} ${state.changedBy.join(", ")}`
+        : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました"));
+    } catch { /* the next beat asks again */ }
+    finally { reloading.current = false; }
+  };
+  useHeartbeat(workspace !== null, 10_000, async () => {
+    if (!workspace) return;
+    const beat = await syncEstimate(estimateId, liveRef.current?.cursor ?? workspace.header.syncCursor, editingKey);
+    liveRef.current = afterBeat(liveRef.current ?? afterLoad(workspace.header.syncCursor), beat);
+    setViewers(beat.viewers);
+    // Said once per person per line, before the collision rather than at the 409.
+    const clash = collisions(beat.viewers, editingKey).filter((viewer) => !warnedAbout.current.has(`${editingKey}:${viewer.userId}`));
+    for (const viewer of clash) warnedAbout.current.add(`${editingKey}:${viewer.userId}`);
+    if (clash.length) notify(`${liveCopy("กำลังแก้บรรทัดนี้อยู่เช่นกัน:", "Also editing this line:", "この行をほかに編集中：")} ${clash.map((viewer) => viewer.name).join(", ")}`);
+    await settle();
+  }, () => { void leaveRecord("estimates", estimateId); });
+  // While a change waits on something unsaved, look again often -- locally, no request.
+  useHeartbeat(waitingOn !== null, 1_500, settle);
 
   const reorder: ReorderEstimate = async (sourceType, orderedIds, move) => {
     if (!workspace || busy) return;
@@ -610,6 +681,17 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
 
   const header = workspace.header;
   const totals = header.totals;
+  /** The line a colleague's editing key points at, named the way this screen names it. */
+  const describeLine = (key: string) => {
+    const target = parseEditingKey(key);
+    if (!target) return null;
+    if (target.id === "new") return liveCopy("บรรทัดใหม่", "a new line", "新しい行");
+    if (target.kind === "cost") { const line = workspace.costItems.find((item) => item.id === target.id); return line ? line.itemCode || line.description : null; }
+    if (target.kind === "manhour") return workspace.manhourLines.find((line) => line.id === target.id)?.activity ?? null;
+    if (target.kind === "expense") return workspace.expenseLines.find((line) => line.id === target.id)?.description ?? null;
+    if (target.kind === "other") return workspace.otherCostLines.find((line) => line.id === target.id)?.description ?? null;
+    return workspace.assignments.find((assignment) => assignment.id === target.id)?.section ?? null;
+  };
   const capabilities = workspace.capabilities;
   const currentLate = header.dueDate < businessDate() && !["Approved", "Locked"].includes(header.status);
   const validationCount = workspace.validationIssues.length;
@@ -654,13 +736,18 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     notify("Estimate exported from live workspace");
   };
 
-  return <>
+  return <DraftHoldProvider value={holds}><div ref={workspaceRoot} className="estimate-live-root">
     <div className="breadcrumb"><button type="button" onClick={onBack}><LocalizedText text={"Estimate Cost"} /></button><Icon name="chevronRight" /><span>{header.number}</span></div>
     <header className="estimate-heading-compact">
       <div className="estimate-title-line"><h1>{header.projectName}</h1><Badge tone={["Approved", "Locked"].includes(header.status) ? "green" : header.status === "Revision Required" ? "amber" : "blue"}>{header.status}</Badge></div>
       <div className="estimate-heading-reference">{header.number} · {revisionCode(header.revision)} <span> | </span> {header.customerCode} — {header.customerName} <span> | </span> Inquiry {header.inquiryNumber}</div>
       <div className="estimate-heading-owner"><span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span><span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong></span></div>
     {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
+    <RecordViewers viewers={viewers} describe={describeLine} />
+    {waitingOn ? <div className="info-strip amber" role="status"><Icon name="refresh" /><span><strong>{waitingOn.length
+      ? `${liveCopy("แก้ไขโดย", "Changed by", "変更者：")} ${waitingOn.join(", ")}`
+      : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました")}</strong>{" · "}
+      {liveCopy("จะอัปเดตให้ทันทีที่คุณบันทึกหรือปิดสิ่งที่กำลังแก้", "It updates as soon as you save or close what you are editing.", "編集中の内容を保存するか閉じるとすぐに更新されます。")}</span></div> : null}
     <div className="workspace-bar estimate-workspace-bar">
       <details className="estimate-more"><summary className="btn default">{estimateUxCopy(currentLocale(), "เพิ่มเติม", "More", "その他")} <Icon name="chevronDown" /></summary><div className="estimate-more-content">
       <div className="estimate-document-meta"><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
@@ -849,7 +936,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       catch (requestError) { await mutationError(requestError); }
       finally { setBusy(false); }
     }} /> : null}
-  </>;
+  </div></DraftHoldProvider>;
 }
 
 /* Cost items are grouped the way an engineer thinks about the machine: one band per

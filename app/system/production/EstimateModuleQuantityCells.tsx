@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useDraftHold } from "./RecordPresence";
 
 const ADD_UNIT = "__add_unit__";
 export const MODULE_UNITS = ["Set", "Job", "Lot", "Pcs", "System", "Unit", "Day", "Hour", "Month", "Year", "Meter"];
@@ -17,6 +18,7 @@ export function EstimateModuleQuantityCells({ name, quantity, unit, units, disab
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const changed = Number(draftQuantity) !== quantity || draftUnit.trim() !== unit;
+  useDraftHold(changed || addingUnit);
   const cancel = () => { setDraftQuantity(String(quantity)); setDraftUnit(unit); setAddingUnit(false); setError(""); };
   const save = async () => {
     if (disabled || savingRef.current || !changed) return;

@@ -39,6 +39,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerGoodsReceiptRoutes } from "./routes/goods-receipts.js";
 import { registerInventoryRoutes } from "./routes/inventory.js";
 import { registerInquiryRoutes } from "./routes/inquiries.js";
+import { registerRecordPresenceRoutes } from "./routes/record-presence.js";
 import { registerCrmRoutes } from "./routes/crm.js";
 import { registerCrmCustomerRoutes } from "./routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "./routes/crm-documents.js";
@@ -169,6 +170,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateErpRoutes(app, database, users);
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);
+  registerRecordPresenceRoutes(app, database, users);
   registerEstimateCostWriteRoutes(app, database, users);
   registerEstimateOrderRoutes(app, database, users);
   registerEstimatePriceSetRoutes(app, database, users);

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { EstimateEffortInput, EstimateManhourLine } from "../api-client";
 import { Icon } from "../ui";
+import { useDraftHold } from "./RecordPresence";
 
 type Draft = { engineers: string; manDays: string; hoursPerDay: string; rowVersion: string };
 
@@ -14,6 +15,8 @@ export function EstimateEffortCells({ line, busy, onSave, money, number }: {
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const saving = useRef(false);
+  // The draft outlives the field losing focus, so a live reload has to be told about it.
+  useDraftHold(draft !== null);
   const values = {
     engineers: Number(draft?.engineers ?? line.engineers),
     manDays: Number(draft?.manDays ?? line.manDays),

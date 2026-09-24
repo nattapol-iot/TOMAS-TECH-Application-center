@@ -30,7 +30,12 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     await users.demandPermission(request, "estimate.read"); const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const today = todayIn(config.businessTimeZone);
     const result = await database.query<Record<string, unknown>>(`
-      SELECT e.id,e.estimate_no,e.inquiry_id,i.inquiry_no,e.customer_id,c.code customer_code,c.name customer_name,
+      -- Taken before anything is read: POST /sync counts changes from this point, and a
+      -- write that commits while this batch runs is counted there rather than lost.
+      -- See ESTIMATE_CHANGES in record-presence.ts for why it is MIN_ACTIVE_ROWVERSION().
+      DECLARE @sync_cursor binary(8) = MIN_ACTIVE_ROWVERSION();
+
+      SELECT @sync_cursor sync_cursor,e.id,e.estimate_no,e.inquiry_id,i.inquiry_no,e.customer_id,c.code customer_code,c.name customer_name,
         e.project_name,e.project_type,e.owner_id,owner_user.name owner_name,e.revision,e.created_date,e.due_date,e.status,
         e.progress,e.contingency_rate,e.archived_at,i.archived_at inquiry_archived_at,e.locked_at,e.locked_by,locked_user.name locked_by_name,e.created_at,e.updated_at,e.row_version,
         t.material_total,t.engineering_total,t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,
@@ -124,6 +129,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       archived: !!headerRow.archived_at, status: headerRow.status as string, progress: number(headerRow.progress), contingencyRate: number(headerRow.contingency_rate),
       lockedAt: headerRow.locked_at, lockedBy: nullableNumber(headerRow.locked_by), lockedByName: headerRow.locked_by_name,
       createdAt: headerRow.created_at, updatedAt: headerRow.updated_at, rowVersion: (headerRow.row_version as Buffer).toString("base64"),
+      syncCursor: (headerRow.sync_cursor as Buffer).toString("hex"),
       totals: { material: number(headerRow.material_total), engineering: number(headerRow.engineering_total), outsource: number(headerRow.outsource_total),
         transportation: number(headerRow.transportation_total), accommodation: number(headerRow.accommodation_total), other: number(headerRow.other_total),
         subtotal: number(headerRow.base_total), overhead: nullableNumber(headerRow.overhead_total), contingency: number(headerRow.contingency_total), total: number(headerRow.total) },

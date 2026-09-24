@@ -1147,5 +1147,13 @@ export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en
   "Left out": {
     "th": "ไม่รวม",
     "jp": "除外"
+  },
+  "Also here now": {
+    "th": "เปิดอยู่ตอนนี้",
+    "jp": "ほかに閲覧中"
+  },
+  "editing now": {
+    "th": "กำลังแก้",
+    "jp": "編集中"
   }
 };

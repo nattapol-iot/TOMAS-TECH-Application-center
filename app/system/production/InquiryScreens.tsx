@@ -6,6 +6,8 @@ import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
+import type { RecordViewer } from "../../../lib/record-live-sync";
+import { RecordViewers, useHeartbeat } from "./RecordPresence";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ProductionSalesIntake } from "./SiteVisitScreens";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
@@ -20,7 +22,9 @@ import {
   createInquiryMeeting,
   downloadInquiryAttachment,
   listInquiries,
+  leaveRecord,
   loadInquiry,
+  pingInquiryPresence,
   updateInquiryQualification,
   uploadInquiryAttachment,
   type BootstrapData,
@@ -374,6 +378,11 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [id]);
+  // Who else has this inquiry open. Awareness only: an inquiry is edited through drawers
+  // that each save on their own, so there is no shared grid to keep current here.
+  const [viewers, setViewers] = useState<RecordViewer[]>([]);
+  useHeartbeat(true, 15_000, async () => { setViewers((await pingInquiryPresence(id)).viewers); },
+    () => { void leaveRecord("inquiries", id); });
   if (loading && !detail) return <div className="empty"><span className="spinner" /><LocalizedText text={"Loading inquiry from SQL Server…"} /></div>;
   if (!detail) return <><button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button><LoadError message={error || "Inquiry not found"} retry={() => { void load(); }} /></>;
   const closed = detail.archived || detail.status === "Cancelled";
@@ -456,6 +465,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
       {canWrite ? <button className="btn default" type="button" onClick={() => setQualificationOpen(true)}><Icon name="trendingUp" /><LocalizedText text={"Update qualification"} /></button> : null}
       <DocumentLifecycleButton kind="inquiries" id={id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
     </>} />
+    <RecordViewers viewers={viewers} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {detail.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
     {!closed && !detail.deletedEstimateId && detail.estimate?.status !== "Cancelled" ? <div className="info-strip" role="region" aria-label={flowCopy.ariaLabel} style={{ marginBottom: 14, flexWrap: "wrap" }}>

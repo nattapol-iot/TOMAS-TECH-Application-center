@@ -6,6 +6,7 @@ import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { isTrustedWebProtocol } from "./network-origin";
 import type { ErpGroup } from "../../lib/erp-estimate-groups";
+import type { RecordViewer, SyncBeat } from "../../lib/record-live-sync";
 
 export const IS_API_CONFIGURED = (() => {
   try {
@@ -817,6 +818,8 @@ export type EstimateCostWorkspace = {
     createdAt: string;
     updatedAt: string;
     rowVersion: string;
+    /** POST /sync counts changes from here; see lib/record-live-sync.ts. */
+    syncCursor: string;
     totals: {
       overhead?: number | null;
       material: number;
@@ -1453,6 +1456,17 @@ export const estimateWorkflow = (id: number, action: "submit" | "approve" | "req
 
 export const loadEstimateCostWorkspace = (id: number) =>
   apiRequest<EstimateCostWorkspace>(`/api/v1/estimates/${id}/cost-workspace`);
+
+/** One heartbeat of an open workspace: who else is here, and whether anything changed. */
+export const syncEstimate = (id: number, since: string, editingKey: string | null) =>
+  apiRequest<SyncBeat>(`/api/v1/estimates/${id}/sync`, { method: "POST", body: JSON.stringify({ since, editingKey }) });
+
+export const pingInquiryPresence = (id: number) =>
+  apiRequest<{ viewers: RecordViewer[] }>(`/api/v1/inquiries/${id}/presence`, { method: "POST", body: "{}" });
+
+/** Best effort: a record left without saying so drops out once its last beat goes stale. */
+export const leaveRecord = (kind: "estimates" | "inquiries", id: number) =>
+  apiRequest<void>(`/api/v1/${kind}/${id}/presence`, { method: "DELETE" }).catch(() => undefined);
 
 export const loadEstimateErpSummary = (id: number) =>
   apiRequest<EstimateErpSummary>(`/api/v1/estimates/${id}/erp-summary`);

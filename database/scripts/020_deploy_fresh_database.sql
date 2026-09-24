@@ -123,11 +123,12 @@ GO
 :r database/migrations/059_admin_inquiry_cascade.sql
 :r database/migrations/060_price_reference_sources.sql
 :r database/migrations/061_estimate_summary_cost_multiplier.sql
+:r database/migrations/062_record_presence.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 60) <> 60
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 62) <> 62
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -169,7 +170,8 @@ IF EXISTS (
         (58, N'Admin permanent deletion of trial documents'),
         (59, N'Admin inquiry cascade deletion and row confirmation'),
         (60, N'Price sources that cite a link instead of a stored document'),
-        (61, N'Summary set quantities multiply totals without changing components')
+        (61, N'Summary set quantities multiply totals without changing components'),
+        (62, N'Record-level presence for estimates and inquiries')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

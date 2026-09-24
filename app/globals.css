@@ -5193,3 +5193,17 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   .estimate-heading-compact > .info-strip { grid-row: 5; }
   .estimate-heading-compact .estimate-main-total { flex-basis: auto; }
 }
+
+/* Who else has a record open -- RecordPresence.tsx. The workspace wrapper exists only to
+   scope the draft registry and the typing check, so it must not add a box of its own. */
+.estimate-live-root { display: contents; }
+.record-viewers { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; font-size: var(--fs-xs); color: var(--muted); }
+.record-viewers-label { font-weight: 600; letter-spacing: .02em; }
+.record-viewers-faces { display: inline-flex; align-items: center; }
+.record-viewer { display: inline-flex; border-radius: var(--r-pill); box-shadow: 0 0 0 2px var(--surface); }
+.record-viewer + .record-viewer { margin-left: -6px; }
+/* Someone with a line open: the ring says so before anyone opens the same one. */
+.record-viewer.editing { box-shadow: 0 0 0 2px var(--amber); }
+.record-viewer.more { align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-3xs); font-weight: 600; }
+.record-viewers-names { min-width: 0; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
+@media (max-width: 720px) { .record-viewers-names { display: none; } }

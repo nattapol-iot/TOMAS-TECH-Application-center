@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
+import { useDraftHold } from "./RecordPresence";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
 import { classifyErpGroups, erpSheetAmounts, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
 import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
@@ -70,6 +71,8 @@ function SheetLineName({ value, onSave }: { value: string; onSave: (next: string
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const committing = useRef(false);
+  // Leaving the field commits; a commit that failed leaves the name unsaved, and held.
+  useDraftHold(draft.trim() !== value.trim());
   // The field is as tall as the name it holds; a long scope of work is not a secret.
   const fit = (node: HTMLTextAreaElement | null) => { if (node) { node.style.height = "auto"; node.style.height = node.scrollHeight + "px"; } };
   const commit = async (next: string) => {
