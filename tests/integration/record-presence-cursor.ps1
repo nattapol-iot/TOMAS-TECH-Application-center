@@ -110,12 +110,21 @@ SELECT @a, @b, @estimate, @item;
 SET NOCOUNT ON;
 BEGIN TRANSACTION;
 UPDATE dbo.cost_items SET qty=qty+1, updated_by=$b WHERE id=$item;
-WAITFOR DELAY '00:00:08';
+WAITFOR DELAY '00:00:15';
 COMMIT TRANSACTION;
 "@
     $writer = Start-Process -FilePath sqlcmd -PassThru -NoNewWindow -RedirectStandardOutput (Join-Path $scratch 'hold.out') `
         -ArgumentList @('-S', $Server, '-E', '-C', '-I', '-b', '-d', $database, '-i', $hold)
-    Start-Sleep -Seconds 3
+    # Wait for the write itself, not for a guess at how long it takes to start: on a busy
+    # machine a fixed sleep let the beat run before the UPDATE, and the test then proved
+    # nothing. While a transaction holds a rowversion, the active minimum is at or below
+    # the high-water mark; with none open it sits one above it.
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        Start-Sleep -Milliseconds 250
+        $open = (Invoke-SqlText 'SELECT CASE WHEN CONVERT(bigint, MIN_ACTIVE_ROWVERSION()) <= CONVERT(bigint, @@DBTS) THEN 1 ELSE 0 END;')[0]
+    } until ($open -eq '1' -or $writer.HasExited -or (Get-Date) -gt $deadline)
+    Assert-That ($open -eq '1') 'the held write has taken its rowversion and is still open'
 
     $during = Get-Beat $estimate $a $start.Next
     Assert-That ($during.Changed -eq 0) 'an uncommitted write is not reported while its transaction is open'
