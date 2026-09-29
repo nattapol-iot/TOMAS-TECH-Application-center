@@ -31,6 +31,52 @@ async function addFollowup(tx: sql.Transaction, actor: number, opportunity: numb
 export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService) {
   const today = () => new Intl.DateTimeFormat("en-CA",{timeZone:config.businessTimeZone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
 
+  app.post("/api/v1/crm/inquiries/:id/opportunity", async (request, reply) => {
+    await users.demandPermission(request,"inquiry.write");
+    await users.demandPermission(request,"inquiry.read");
+    const actor=await crmAccess(database,users,request,"crm.write");
+    await users.demandPermission(request,"crm.read");
+    const id=positiveLong((request.params as {id:string}).id,"Inquiry"), body=bodyObject(request.body);
+    const opportunityId=crmId(body.opportunityId,"Opportunity");
+    const version=parseRowVersion(body.rowVersion);
+    const result=await database.transaction(async tx => {
+      let opportunity=opportunityId ? await scopedOpportunity(bindAccess(new sql.Request(tx),actor),opportunityId,true) : null;
+      if(opportunity)stale(opportunity,body.opportunityRowVersion);
+      const q=new sql.Request(tx); q.input("inquiry",sql.BigInt,id);
+      const inquiry=(await q.query<CrmRow>(`SELECT * FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
+        WHERE id=@inquiry AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled'`)).recordset[0];
+      if(!inquiry)throw new ApiError(404,"inquiry_not_found","Inquiry not found or unavailable.");
+      if(!(inquiry.row_version as Buffer).equals(version))throw new ApiError(409,"concurrency_conflict","This inquiry changed. Refresh before linking.");
+      if(inquiry.opportunity_id)throw new ApiError(409,"crm_already_linked","This inquiry already has an opportunity.");
+      if(opportunity) {
+        if(Number(opportunity.customer_id)!==Number(inquiry.customer_id))throw new ApiError(422,"invalid_reference","Select an opportunity for the same customer.");
+        if(["LOST","ON_HOLD"].includes(String(opportunity.stage)))throw new ApiError(409,"invalid_transition","This opportunity is not active.");
+        const other=new sql.Request(tx); other.input("opportunity",sql.BigInt,opportunity.id);
+        if((await other.query(`SELECT id FROM dbo.inquiries WHERE opportunity_id=@opportunity AND deleted_at IS NULL AND status<>N'Cancelled'`)).recordset[0])throw new ApiError(409,"crm_inquiry_exists","This opportunity already has an inquiry. Open the existing inquiry.");
+      } else {
+        const input=opportunityInput({name:inquiry.project_name,customerId:Number(inquiry.customer_id),endUserCustomerId:inquiry.end_user_customer_id,
+          salesOwnerId:requiredInteger(body.salesOwnerId,"Sales owner",1),technicalOwnerId:inquiry.estimate_owner_id,
+          need:inquiry.requirement,scope:inquiry.scope_summary,priority:inquiry.priority,
+          stage:inquiry.estimate_id ? "ESTIMATING" : "REQUIREMENT",source:"DirectInquiry"},false);
+        if(!actor.permissions.includes("crm.read.all")&&!actor.permissions.includes("crm.read.team")&&input.salesOwnerId!==actor.id&&Number(input.technicalOwnerId)!==actor.id)throw new ApiError(403,"permission_denied","An owner must be you.");
+        await validateCrmReferences(new sql.Request(tx),input);
+        const insert=new sql.Request(tx); insert.input("actor",sql.BigInt,actor.id);
+        for(const [key,type] of Object.entries(inputFields))insert.input(key,type,input[key as keyof typeof input]);
+        const keys=Object.keys(inputFields);
+        opportunity=(await insert.query<CrmRow>(`DECLARE @number nvarchar(80); SELECT @number=CONCAT(N'OPP-',code,N'-',YEAR(SYSUTCDATETIME()),N'-',NEXT VALUE FOR dbo.crm_opportunity_numbers) FROM dbo.customers WHERE id=@customerId;
+          INSERT dbo.crm_opportunities(opportunity_no,${keys.map(column).join(",")},created_by,updated_by) OUTPUT inserted.* VALUES(@number,${keys.map(k=>`@${k}`).join(",")},@actor,@actor)`)).recordset[0]!;
+        await insertAudit(tx,actor.id,"CrmOpportunity",Number(opportunity.id),String(opportunity.opportunity_no).slice(0,50),"CreatedFromInquiry",null,{inquiryId:id});
+        await scopedOpportunity(bindAccess(new sql.Request(tx),actor),Number(opportunity.id));
+      }
+      const link=new sql.Request(tx); link.input("inquiry",sql.BigInt,id).input("opportunity",sql.BigInt,opportunity.id).input("actor",sql.BigInt,actor.id);
+      await link.query(`UPDATE dbo.inquiries SET opportunity_id=@opportunity,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@inquiry`);
+      await insertAudit(tx,actor.id,"Inquiry",id,String(inquiry.inquiry_no),"OpportunityLinked",null,{opportunityId:Number(opportunity.id)});
+      await insertAudit(tx,actor.id,"CrmOpportunity",Number(opportunity.id),String(opportunity.opportunity_no).slice(0,50),"InquiryLinked",null,{inquiryId:id});
+      return {id:Number(opportunity.id),opportunityNo:opportunity.opportunity_no};
+    });
+    return reply.code(201).send(result);
+  });
+
   app.get("/api/v1/crm/dashboard",async request=>{
     const actor=await crmAccess(database,users,request);
     // The attention rules are long and are needed more than once, so they are

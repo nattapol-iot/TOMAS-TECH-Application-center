@@ -1,7 +1,9 @@
 "use client";
 import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } from "./DocumentLifecycle";
+import { ProjectHandover } from "./ProjectHandover";
+import { InquirySalesFollowup } from "./InquirySalesFollowup";
 import { ExistingRfqWork } from "./ExistingRfqWork";
-import { CrmInquirySource, type CrmRecord } from "./CrmScreens";
+import { type CrmRecord } from "./CrmScreens";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
 
@@ -65,6 +67,7 @@ type Props = {
   startWithCreate?: boolean;
   openVisit?: (visitId: number) => void;
   openOpportunity?: (id: number) => void;
+  openProject?: (id: number) => void;
 };
 
 type Screen = { name: "list" } | { name: "create" } | { name: "detail"; id: number };
@@ -185,7 +188,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
       ? { mine: "自分の案件", team: "チーム案件", unassigned: "未割当", unavailable: "受付時に担当者を必ず選ぶため、すべての Inquiry に担当者がいます。" }
       : { mine: "My work", team: "Team work", unassigned: "Unassigned", unavailable: "Every inquiry already has an owner because ownership is required at intake." };
   const nextActionCopy: Record<InquiryNextAction, string> = lang === "TH" ? {
-    verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
+    await_cost_approval: uiText("CRM.awaitCostApproval"), verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
     review_cancellation: "ตรวจทบทวนการยกเลิกงาน",
     restore_estimate: "กู้คืน Estimate จากถังขยะ",
     review_inputs: "ตรวจข้อมูลและเริ่ม Estimate",
@@ -196,7 +199,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
     handover_project: "ส่งต่อเพื่อสร้าง Project",
     closed: "ปิดงานแล้ว",
   } : lang === "JP" ? {
-    verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
+    await_cost_approval: uiText("CRM.awaitCostApproval"), verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
     review_cancellation: "作業中止を確認",
     restore_estimate: "ゴミ箱から見積を復元",
     review_inputs: "内容確認・見積開始",
@@ -207,7 +210,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
     handover_project: "プロジェクトへ引継ぎ",
     closed: "終了済み",
   } : {
-    verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
+    await_cost_approval: uiText("CRM.awaitCostApproval"), verify_order: uiText("CRM.verifyOrder"), follow_sales: uiText("CRM.followSales"), follow_customer: uiText("CRM.followCustomer"), verify_sales: uiText("CRM.verifySales"), project_created: uiText("CRM.projectCreated"),
     review_cancellation: "Review work cancellation",
     restore_estimate: "Restore estimate from trash",
     review_inputs: "Review inputs and start estimate",
@@ -366,7 +369,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
   </form>;
 }
 
-function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEstimate, openVisit, onBack }: Props & { id: number; onBack: () => void }) {
+function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEstimate, openVisit, openOpportunity, openProject, onBack }: Props & { id: number; onBack: () => void }) {
   const { lang } = useLanguage();
   const [requestVisit, setRequestVisit] = useState(0);
   const [detail, setDetail] = useState<InquiryDetail | null>(null);
@@ -468,7 +471,8 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
 
   return <>
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
-    <CrmInquirySource inquiryId={id} enabled={bootstrap.permissions.includes("crm.read")} />
+    {bootstrap.permissions.includes("crm.read")?<InquirySalesFollowup detail={detail} bootstrap={bootstrap} onSaved={load} openOpportunity={openOpportunity}/>:null}
+    <ProjectHandover key={detail.rowVersion} inquiryId={id} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} openProject={openProject}/>
     <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
       {!closed && bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setAssignOpen(true)}><Icon name="user" /><LocalizedText text={"Assign owner"} /></button> : null}

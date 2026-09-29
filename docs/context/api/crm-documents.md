@@ -2,22 +2,22 @@
 
 [Module](../modules/crm.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/routes/crm-documents.ts](<../../../backend-node/src/routes/crm-documents.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `bb0e09c5`; generated, do not edit. [backend-node/src/routes/crm-documents.ts](<../../../backend-node/src/routes/crm-documents.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/crm/inquiries/:id/source` | 13–16 |
-| GET | `/api/v1/crm/documents` | 17–20 |
-| POST | `/api/v1/crm/documents` | 21–42 |
-| GET | `/api/v1/crm/documents/:id/content` | 43–48 |
+| GET | `/api/v1/crm/inquiries/:id/source` | 13–20 |
+| GET | `/api/v1/crm/documents` | 21–24 |
+| POST | `/api/v1/crm/documents` | 25–46 |
+| GET | `/api/v1/crm/documents/:id/content` | 47–52 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerCrmDocumentRoutes` | [backend-node/src/routes/crm-documents.ts](<../../../backend-node/src/routes/crm-documents.ts>) | 12–49 |
+| `registerCrmDocumentRoutes` | [backend-node/src/routes/crm-documents.ts](<../../../backend-node/src/routes/crm-documents.ts>) | 12–53 |
 
 ## Direct local dependencies
 

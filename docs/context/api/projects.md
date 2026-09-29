@@ -2,18 +2,20 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `bb0e09c5`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects` | 49–90 |
-| POST | `/api/v1/projects` | 92–200 |
-| GET | `/api/v1/projects/:id/members` | 202–227 |
-| POST | `/api/v1/projects/:id/members` | 229–252 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 254–275 |
-| PUT | `/api/v1/projects/:id` | 277–375 |
+| GET | `/api/v1/projects/creation-options` | 49–70 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 72–93 |
+| GET | `/api/v1/projects` | 94–135 |
+| POST | `/api/v1/projects` | 137–250 |
+| GET | `/api/v1/projects/:id/members` | 252–277 |
+| POST | `/api/v1/projects/:id/members` | 279–302 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 304–325 |
+| PUT | `/api/v1/projects/:id` | 327–425 |
 
 ## Named functions
 
@@ -21,7 +23,7 @@ Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 34–38 |
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 40–45 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–376 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–426 |
 
 ## Direct local dependencies
 
@@ -42,7 +44,7 @@ Evidence: source snapshot `ed4c2a88`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customers`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_folders`, `dbo.project_members`, `dbo.projects`, `dbo.roles`, `dbo.users`
+`dbo.customers`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_folders`, `dbo.project_members`, `dbo.projects`, `dbo.roles`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
 
 ## Change boundary
 

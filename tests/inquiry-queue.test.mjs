@@ -38,3 +38,14 @@ test("approved costs follow sales evidence and project handover independently", 
   assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"ON_HOLD"}), "follow_sales");
   assert.equal(inquiryNextAction("Estimating", true, "Estimating", {stage:"PROPOSAL"}), "complete_costs");
 });
+
+
+test("Won never bypasses cost approval and an existing project remains the next destination", () => {
+  for (const status of ["Draft", "Engineering Input", "Engineering Review", "Revision Required", null]) {
+    assert.equal(inquiryNextAction("Estimating", true, status, {stage:"WON",wonOn:"2026-09-29"}), "await_cost_approval");
+    assert.equal(inquiryNextAction("Approved", true, status, {stage:"WON",wonOn:"2026-09-29"}), "await_cost_approval");
+  }
+  assert.equal(inquiryNextAction("Approved", true, "Locked", {stage:"WON",wonOn:"2026-09-29"}), "handover_project");
+  assert.equal(inquiryNextAction("Estimating", true, "Locked", {stage:"WON",wonOn:"2026-09-29"}), "handover_project");
+  assert.equal(inquiryNextAction("Estimating", true, "Revision Required", {stage:"WON",hasProject:true}), "project_created");
+});

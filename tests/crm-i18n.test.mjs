@@ -15,3 +15,13 @@ test("CRM literal UI keys, stages and follow-up statuses have translations",()=>
   const keys=[...source.matchAll(/t\("(CRM\.[^"]+)"\)/g)].map(match=>match[1]);
   for(const key of [...keys,...["NEW","QUALIFICATION","REQUIREMENT","ESTIMATING","PROPOSAL","NEGOTIATION","WON","LOST","ON_HOLD","Open","WaitingCustomer","WaitingInternal","WaitingSupplier","Done","Cancelled"].map(code=>`CRM.${code}`)])assert.ok(CRM_COPY[key],key);
 });
+
+
+test("handover and direct inquiry follow-up copy resolves in all languages",()=>{
+  for(const file of ["ProjectHandover.tsx","InquirySalesFollowup.tsx","CoreScreens.tsx"]) {
+    const source=readFileSync(new URL(`../app/system/production/${file}`,import.meta.url),"utf8");
+    for(const [,key] of source.matchAll(/"(CRM\.[A-Za-z]+)"/g)) assert.ok(CRM_COPY[key],`${file}: ${key}`);
+  }
+  for(const reason of ["projectExists","sourceUnavailable","awaitCostApproval","recordPo"])assert.ok(CRM_COPY[`CRM.${reason}`]);
+  assert.equal(CRM_COPY["CRM.costApproved"].en,"Cost approved");
+});

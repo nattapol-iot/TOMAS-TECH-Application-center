@@ -46,6 +46,51 @@ function shiftDate(value: string, unit: "day" | "year", amount: number): string 
 
 export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
   registerEndUserUpdateRoute(app, database, users, "Project");
+  app.get("/api/v1/projects/creation-options", async (request) => {
+    await users.demandPermission(request, "project.write");
+    await users.demandPermission(request, "estimate.read");
+    const result = await database.query<Record<string, unknown>>(`
+      SELECT e.id,e.estimate_no number,e.project_name projectName,e.customer_id customerId,
+        e.owner_id ownerId,i.site_location siteLocation,i.target_delivery targetDelivery
+      FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id
+      WHERE e.status IN(N'Approved',N'Locked') AND e.deleted_at IS NULL AND e.archived_at IS NULL
+        AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled'
+        AND NOT EXISTS(SELECT 1 FROM dbo.projects p WHERE p.inquiry_id=i.id OR p.estimate_id=e.id)
+      ORDER BY e.updated_at DESC,e.id DESC;
+      SELECT u.id,u.name,
+        MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canManage,
+        MAX(CASE WHEN r.code IN(N'Engineer',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canLead
+      FROM dbo.users u JOIN dbo.user_effective_roles r ON r.user_id=u.id
+      GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer') THEN 1 ELSE 0 END)=1
+      ORDER BY u.name;
+    `);
+    const sets = result.recordsets as unknown as Record<string, unknown>[][];
+    return { estimates: (sets[0] ?? []).map(r => ({ ...r, id:Number(r.id), customerId:Number(r.customerId), ownerId:Number(r.ownerId), targetDelivery:dateOnly(r.targetDelivery as Date) })),
+      people: (sets[1] ?? []).map(r => ({ ...r, id:Number(r.id), canManage:Boolean(r.canManage), canLead:Boolean(r.canLead) })) };
+  });
+
+  app.get("/api/v1/projects/handover/:inquiryId", async (request) => {
+    await users.demandPermission(request, "inquiry.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as {inquiryId:string}).inquiryId,"Inquiry");
+    const result = await database.query<Record<string, unknown>>(`
+      SELECT i.status inquiryStatus,i.archived_at archivedAt,e.id estimateId,e.status estimateStatus,
+        e.deleted_at estimateDeletedAt,e.archived_at estimateArchivedAt,
+        CASE WHEN p.id IS NULL THEN 0 ELSE 1 END hasProject,
+        CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'project.read') AND p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
+          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) THEN p.id END projectId,
+        CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'project.read') AND p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
+          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) THEN p.project_no END projectNo
+      FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id
+      OUTER APPLY(SELECT TOP(1) * FROM dbo.projects WHERE inquiry_id=i.id ORDER BY id DESC) p
+      WHERE i.id=@id AND i.deleted_at IS NULL`, q => q.input("id",sql.BigInt,id).input("actor",sql.BigInt,actor.id)
+        .input("elevated",sql.Bit,isProjectElevated(actor)));
+    const row=result.recordset[0];
+    if(!row)throw new ApiError(404,"inquiry_not_found","Inquiry not found.");
+    const reason = row.hasProject ? "projectExists" : row.archivedAt || row.inquiryStatus === "Cancelled" ? "sourceUnavailable"
+      : !row.estimateId || row.estimateDeletedAt || row.estimateArchivedAt || !["Approved","Locked"].includes(String(row.estimateStatus)) ? "awaitCostApproval" : "recordPo";
+    return { reason, estimateId:row.estimateId ? Number(row.estimateId) : null, projectId:row.projectId ? Number(row.projectId) : null, projectNo:row.projectNo ?? null };
+  });
   app.get("/api/v1/projects", async (request) => {
     await users.demandPermission(request, "project.read");
     const actor = await users.required(request);
@@ -118,10 +163,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     created = await database.transaction(async (transaction) => {
       const people = new sql.Request(transaction); people.input("manager_id", sql.BigInt, input.managerId); people.input("lead_id", sql.BigInt, input.leadEngineerId);
       const roles = (await people.query<{ manager_role: string | null; lead_role: string | null }>(`
-        SELECT (SELECT r.code FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
-          WHERE u.id=@manager_id AND u.is_active=1 AND u.deleted_at IS NULL) AS manager_role,
-          (SELECT r.code FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
-          WHERE u.id=@lead_id AND u.is_active=1 AND u.deleted_at IS NULL) AS lead_role;
+        SELECT (SELECT TOP(1) code FROM dbo.user_effective_roles
+          WHERE user_id=@manager_id AND code IN(N'Project Manager',N'Engineering Manager',N'Admin')) AS manager_role,
+          (SELECT TOP(1) code FROM dbo.user_effective_roles
+          WHERE user_id=@lead_id AND code IN(N'Engineer',N'Engineering Manager',N'Admin')) AS lead_role;
       `)).recordset[0];
       if (!roles || !["Project Manager", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "")
         || !["Engineer", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")) {
@@ -133,6 +178,11 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL AND archived_at IS NULL;
       `)).recordset[0];
       if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
+      const duplicate = new sql.Request(transaction);
+      duplicate.input("estimate",sql.BigInt,input.estimateId).input("inquiry",sql.BigInt,Number(estimate.inquiry_id));
+      if((await duplicate.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate OR inquiry_id=@inquiry`)).recordset[0]) {
+        throw new ApiError(409,"project_already_exists","A project already exists for this inquiry. Open or restore the existing project.");
+      }
       await assertEstimateTotals(transaction, input.estimateId);
       const inquiryLookup = new sql.Request(transaction);
       inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));

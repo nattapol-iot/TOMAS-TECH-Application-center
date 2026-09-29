@@ -18,6 +18,7 @@ import { registerCrmRoutes } from "../src/routes/crm.js";
 import { registerCrmCustomerRoutes } from "../src/routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "../src/routes/crm-documents.js";
 import { registerInquiryRoutes } from "../src/routes/inquiries.js";
+import { registerProjectRoutes } from "../src/routes/projects.js";
 import { EmailService } from "../src/email.js";
 import { registerSalesCustomerRoutes } from "../src/routes/sales-customers.js";
 import type { CurrentUser } from "../src/types.js";
@@ -65,6 +66,7 @@ if(process.env.CRM_VISUAL_TEST==="1"){
  app.post("/test-stop",async()=>{setTimeout(()=>stopVisual?.(),50);return {stopped:true};});
 }
 registerCrmRoutes(app,config,database,users);registerCrmCustomerRoutes(app,database,users);registerCrmDocumentRoutes(app,config,database,users);registerInquiryRoutes(app,config,database,users,new EmailService({mode:"Disabled"}));registerSalesCustomerRoutes(app,database,users);
+registerProjectRoutes(app,config,database,users);
 async function call(method:"GET"|"POST"|"PUT",url:string,actor="Sales",body?:unknown,status=200){const response=await app.inject({method,url:`/api/v1${url}`,headers:{"x-test-actor":actor},...(body?{payload:body}:{})});assert.equal(response.statusCode,status,`${method} ${url}: ${response.body}`);return response.json();}
 try {
  await run(`INSERT dbo.users(entra_object_id,email,name,role_id,department) SELECT 'crm-api-'+v.name,'crm-api-'+v.name+'@example.invalid',v.name,r.id,v.department FROM (VALUES('Sales','Sales Engineer','Sales'),('Engineer','Engineer','Engineering'),('Other','Engineer','Other'),('Admin','Admin','Admin'))v(name,role,department) JOIN dbo.roles r ON r.code=v.role;`);
@@ -143,7 +145,54 @@ try {
  await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:current.rowVersion,stage:"LOST",lostReason:"Other",lostDetail:"Customer postponed funding"});
  assert.equal((await call("GET","/crm/opportunities?stage=LOST","Sales")).total,1);
  assert.equal((await call("GET","/crm/my-work","Sales")).actions.length,0);
- console.log("CRM authenticated route/SQL integration passed: create, scopes, commercial redaction, stale update, activity + next action, My Work, dashboard, conversion + shared references, Customer 360, Lost and audit.");
+ // Direct RFQ -> CRM follow-up -> Won -> approved costs -> project, through real APIs.
+ const directBody={customerId,projectName:"Direct RFQ handover",projectType:"IoT",estimateOwnerId:engineer.id,salesOwner:sales.name,
+   priority:"Normal",projectProbability:50,customerInterestGrade:"B",dueDate:tomorrow,siteLocation:"Factory A"};
+ const direct=await call("POST","/inquiries","Admin",directBody,201);
+ let directDetail=await call("GET",`/inquiries/${direct.id}`,"Admin");
+ await call("POST",`/crm/inquiries/${direct.id}/opportunity`,"Engineer",{rowVersion:directDetail.rowVersion,salesOwnerId:sales.id},403);
+ await call("POST",`/crm/inquiries/${direct.id}/opportunity`,"Admin",{rowVersion:Buffer.alloc(8).toString("base64"),salesOwnerId:sales.id},409);
+ const linked=await call("POST",`/crm/inquiries/${direct.id}/opportunity`,"Admin",{rowVersion:directDetail.rowVersion,salesOwnerId:sales.id},201);
+ assert.equal((await call("GET",`/crm/inquiries/${direct.id}/source`,"Sales")).id,linked.id);
+ assert.equal((await call("GET",`/crm/inquiries/${direct.id}/source`,"Other")).unavailable,true);
+ directDetail=await call("GET",`/inquiries/${direct.id}`,"Admin");
+ await call("POST",`/crm/inquiries/${direct.id}/opportunity`,"Admin",{rowVersion:directDetail.rowVersion,salesOwnerId:sales.id},409);
+ await call("POST",`/crm/opportunities/${linked.id}/followups`,"Sales",{action:"Confirm customer PO",ownerId:sales.id,dueDate:tomorrow},201);
+ assert.ok((await call("GET","/crm/my-work","Sales")).actions.some((r:{action:string})=>r.action==="Confirm customer PO"));
+ const directOpportunity=(await call("GET",`/crm/opportunities/${linked.id}`,"Sales")).opportunity;
+ await call("PUT",`/crm/opportunities/${linked.id}`,"Sales",{rowVersion:directOpportunity.rowVersion,stage:"WON",wonOn:yesterday,wonReference:"PO-DIRECT-1"});
+ assert.equal((await call("GET",`/projects/handover/${direct.id}`,"Admin")).reason,"awaitCostApproval");
+ const estimate=(await run(`INSERT dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,created_date,due_date,status,created_by,updated_by)
+   OUTPUT inserted.id VALUES('DIRECT-EST-FIXTURE',${direct.id},${customerId},'Direct RFQ handover','IoT',${engineer.id},GETUTCDATE(),GETUTCDATE(),'Engineering Input',${admin.id},${admin.id})`)).recordset[0]!;
+ const projectBody={estimateId:Number(estimate.id),purchaseOrderNumber:"PO-DIRECT-1",purchaseOrderDate:yesterday,managerId:admin.id,leadEngineerId:engineer.id,startDate:yesterday,targetDelivery:tomorrow,site:"Factory A"};
+ await call("POST","/projects","Admin",projectBody,422);
+ await run(`UPDATE dbo.estimates SET status='Approved' WHERE id=${estimate.id}; UPDATE dbo.inquiries SET estimate_id=${estimate.id},status='Approved' WHERE id=${direct.id};
+   INSERT dbo.user_business_roles(user_id,role_id,granted_by,reason) SELECT ${sales.id},id,${admin.id},'Project creation test' FROM dbo.roles WHERE code='Project Manager';`);
+ const creationOptions=await call("GET","/projects/creation-options","Admin");
+ assert.ok(creationOptions.estimates.some((r:{id:number})=>r.id===Number(estimate.id)));
+ assert.equal(creationOptions.people.find((r:{id:number})=>r.id===sales.id).canManage,true);
+ assert.equal((await call("GET",`/projects/handover/${direct.id}`,"Admin")).reason,"recordPo");
+ await call("POST","/projects","Admin",{...projectBody,purchaseOrderNumber:""},400);
+ const project=await call("POST","/projects","Admin",{...projectBody,managerId:sales.id},201);
+ const handover=await call("GET",`/projects/handover/${direct.id}`,"Admin");
+ assert.equal(handover.reason,"projectExists");assert.equal(handover.projectId,project.id);assert.equal(handover.projectNo,project.number);
+ const hiddenProject=await call("GET",`/projects/handover/${direct.id}`,"Other");assert.equal(hiddenProject.reason,"projectExists");assert.equal(hiddenProject.projectId,null);
+ await call("POST","/projects","Admin",projectBody,409);
+ assert.ok(!(await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(estimate.id)));
+
+ const another=await call("POST","/inquiries","Admin",{...directBody,projectName:"Link existing RFQ"},201);
+ const anotherDetail=await call("GET",`/inquiries/${another.id}`,"Admin");
+ const existing=await call("POST","/crm/opportunities","Sales",{name:"Existing customer deal",customerId,salesOwnerId:sales.id,technicalOwnerId:engineer.id},201);
+ const linkBody={rowVersion:anotherDetail.rowVersion,opportunityId:existing.id,opportunityRowVersion:existing.rowVersion};
+ await call("POST",`/crm/inquiries/${another.id}/opportunity`,"Admin",{...linkBody,opportunityRowVersion:Buffer.alloc(8).toString("base64")},409);
+ await call("POST",`/crm/inquiries/${another.id}/opportunity`,"Admin",linkBody,201);
+ assert.equal((await call("GET",`/crm/opportunities/${existing.id}`,"Admin")).links[0].inquiryId,another.id);
+ const lockedEstimate=(await run(`INSERT dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,created_date,due_date,status,created_by,updated_by)
+   OUTPUT inserted.id VALUES('LOCKED-EST-FIXTURE',${another.id},${customerId},'Locked costs','IoT',${engineer.id},GETUTCDATE(),GETUTCDATE(),'Locked',${admin.id},${admin.id})`)).recordset[0]!;
+ assert.ok((await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(lockedEstimate.id)));
+ await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),purchaseOrderNumber:"PO-LOCKED-1"},201);
+ assert.equal((await call("GET",`/crm/opportunities/${existing.id}`,"Admin")).opportunity.stage,"WON");
+ console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, project scope and duplicate prevention.");
  if(process.env.CRM_VISUAL_TEST==="1"){
   for(const [name,stage,value] of [["Vision inspection — phase 2","PROPOSAL",620000],["Factory traceability upgrade","REQUIREMENT",350000],["PLC line expansion","NEGOTIATION",180000]] as const)await call("POST","/crm/opportunities","Sales",{name,stage,customerId,salesOwnerId:sales.id,technicalOwnerId:engineer.id,expectedValue:value,expectedClose:tomorrow,...(["PROPOSAL","NEGOTIATION"].includes(stage)?{proposalSentOn:yesterday,proposalReference:"QT-VISUAL"}:{})},201);
   await app.listen({host:"127.0.0.1",port:4601});console.log("Private CRM visual API ready at http://127.0.0.1:4601");await new Promise<void>(resolve=>{stopVisual=resolve;});

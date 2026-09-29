@@ -12,7 +12,11 @@ import { contentTypeFor,deleteStoredFile,DOCUMENT_DOWNLOAD_RATE_LIMIT,DOCUMENT_U
 export function registerCrmDocumentRoutes(app: FastifyInstance,config: AppConfig,database: Database,users: CurrentUserService) {
   app.get("/api/v1/crm/inquiries/:id/source",async request=>{
     const actor=await crmAccess(database,users,request),id=positiveLong((request.params as {id:string}).id,"Inquiry");
-    return (await database.query<CrmRow>(`SELECT o.id,o.opportunity_no,o.name,o.customer_id,s.name sales_owner_name,t.name technical_owner_name,i.customer_site_id,i.customer_contact_id FROM dbo.inquiries i JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id JOIN dbo.users s ON s.id=o.sales_owner_id LEFT JOIN dbo.users t ON t.id=o.technical_owner_id WHERE i.id=@id AND i.deleted_at IS NULL AND ${CRM_SCOPE}`,q=>bindAccess(q,actor).input("id",sql.BigInt,id))).recordset.map(r=>crmDto(r))[0]??null;
+    await users.demandPermission(request,"inquiry.read");
+    const source = (await database.query<CrmRow>(`SELECT o.id,o.opportunity_no,o.name,o.stage,o.customer_id,s.name sales_owner_name,t.name technical_owner_name,i.customer_site_id,i.customer_contact_id FROM dbo.inquiries i JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id JOIN dbo.users s ON s.id=o.sales_owner_id LEFT JOIN dbo.users t ON t.id=o.technical_owner_id WHERE i.id=@id AND i.deleted_at IS NULL AND ${CRM_SCOPE}`,q=>bindAccess(q,actor).input("id",sql.BigInt,id))).recordset.map(r=>crmDto(r))[0]??null;
+    if(source)return source;
+    const linked=(await database.query<{opportunity_id:number|null}>("SELECT opportunity_id FROM dbo.inquiries WHERE id=@id AND deleted_at IS NULL",q=>q.input("id",sql.BigInt,id))).recordset[0];
+    return linked?.opportunity_id ? {unavailable:true} : null;
   });
   app.get("/api/v1/crm/documents",async request=>{
     const actor=await crmAccess(database,users,request),query=request.query as Record<string,string>;
