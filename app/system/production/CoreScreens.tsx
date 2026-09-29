@@ -1114,12 +1114,6 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
 type ProjectEstimateOption = {id:number;number:string;projectName:string;customerId:number;ownerId:number;siteLocation:string;targetDelivery:string};
 
 export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCreated, initialEstimateId }: { initialEstimateId?: number; bootstrap: BootstrapData; refreshBootstrap: () => Promise<void>; notify: (message: string) => void; onClose: () => void; onCreated: (number: string) => Promise<void> }) {
-  const { lang } = useLanguage();
-  const handoverCopy = lang === "TH"
-    ? "เมื่อสร้าง Project ระบบจะสร้างโฟลเดอร์มาตรฐานและจัดเอกสารจาก Inquiry กับ Site Visit ที่เชื่อมโยงเข้าโฟลเดอร์ให้อัตโนมัติ โดยยังเก็บไฟล์ต้นฉบับไว้"
-    : lang === "JP"
-      ? "プロジェクト作成時に標準フォルダーを作成し、関連するInquiry・Site Visit文書を自動分類します。元ファイルは保持されます。"
-      : "Creating the Project builds the standard folders and automatically categorizes documents from the linked Inquiry and Site Visit. Source files are retained.";
   const [options, setOptions] = useState<{estimates: ProjectEstimateOption[]; people: {id:number;name:string;canManage:boolean;canLead:boolean}[]}>({estimates:[],people:[]});
   const managers = options.people.filter(member=>member.canManage);
   const engineers = options.people.filter(member=>member.canLead);
@@ -1127,7 +1121,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const t = useUiText();
-  const [form, setForm] = useState<CreateProjectInput>({ estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: managers.find(member=>member.id===bootstrap.user.id)?.id??managers[0]?.id??0, leadEngineerId: engineers.find(member=>member.id===bootstrap.user.id)?.id??engineers[0]?.id??0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "" });
+  const [form, setForm] = useState<CreateProjectInput>({ estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "" });
   const [inheritEndUser, setInheritEndUser] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1138,37 +1132,43 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       setOptions(data);
       const first=initialEstimateId ? data.estimates.find(item=>item.id===initialEstimateId) : undefined;
       setForm(current=>({...current,estimateId:first?.id??0,
-        managerId:data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id??data.people.find(member=>member.canManage)?.id??0,
-        leadEngineerId:data.people.find(member=>member.canLead&&member.id===first?.ownerId)?.id??data.people.find(member=>member.canLead)?.id??0,
+        managerId:data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id??0,
+        leadEngineerId:data.people.find(member=>member.canLead&&member.id===first?.ownerId)?.id??0,
         site:first?.siteLocation??"",targetDelivery:first?.targetDelivery||current.targetDelivery}));
     }).catch(error=>{if(!cancelled)setError(toError(error));}).finally(()=>{if(!cancelled)setLoadingOptions(false);});
     return()=>{cancelled=true;};
   }, [initialEstimateId, bootstrap.user.id, optionsRevision]);
+  const selectedEstimate = estimates.find(item=>item.id===form.estimateId);
+  const customer = bootstrap.customers.find(item=>item.id===selectedEstimate?.customerId);
   const missingFields = [
     !form.estimateId ? "Approved estimate *" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
     !form.purchaseOrderDate ? "PO date *" : "", !form.managerId ? "Project manager *" : "", !form.leadEngineerId ? "Lead engineer *" : "",
     !form.startDate ? "Start date *" : "", !form.targetDelivery ? "Target delivery *" : "", !form.site.trim() ? "Site *" : "",
   ].filter(Boolean);
   const submit = async () => { setBusy(true); setError(""); try { const input = { ...form }; if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null; const created = await createProject(input); await onCreated(created.number); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
-  return <Modal title="Create production project" subtitle="CRM.projectGate" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loadingOptions || !form.estimateId || !form.managerId || !form.leadEngineerId || !form.purchaseOrderNumber.trim() || !form.purchaseOrderDate || !form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate || !form.site.trim()} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}>
+  return <Modal title="Create project" subtitle="CRM.projectGate" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loadingOptions || !form.estimateId || !form.managerId || !form.leadEngineerId || !form.purchaseOrderNumber.trim() || !form.purchaseOrderDate || !form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate || !form.site.trim()} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}>
     {error ? <LoadError message={t(error)} retry={() => { setError("");setLoadingOptions(true);setOptionsRevision(value=>value+1); }} /> : null}
     {loadingOptions?<p role="status">{t("CRM.loading")}</p>:!estimates.length?<p className="alert warn">{t("CRM.noEligibleEstimate")}</p>:initialEstimateId&&!estimates.some(e=>e.id===initialEstimateId)?<p className="alert warn">{t("CRM.sourceUnavailable")}</p>:null}
-    <p className="muted">{t("CRM.projectRequired")}</p>
     {!loadingOptions&&missingFields.length?<p role="status">{t("CRM.missingProjectFields")}: {missingFields.map(field=>t(field)).join(", ")}</p>:null}
-    <div className="info-strip" role="note"><Icon name="folder" /><span>{handoverCopy}</span></div>
     <div className="form-grid two">
-      <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));setForm((current) => ({ ...current, estimateId:Number(event.target.value),leadEngineerId:engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):current.leadEngineerId,site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||current.targetDelivery }));}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName}</option>)}</select></label>
-      <div className="span-2 info-strip" role="status"><Icon name="check" /><span>{t("CRM.projectDefaults")}</span></div>
-      <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label><small><LocalizedText text={"เอาเครื่องหมายออกเพื่อระบุ End user สำหรับ Project นี้เอง หรือเว้นว่างเมื่อยังไม่ทราบ / Uncheck to choose a company or leave unspecified."} /></small></div>
-      {!inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={estimates.find((item) => item.id === form.estimateId)?.customerId ?? 0} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
+      <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));setForm((current) => ({ ...current, estimateId:Number(event.target.value),leadEngineerId:engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0,site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||current.targetDelivery }));}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName}</option>)}</select></label>
+      <div className="field"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
+      <div className="field"><span><LocalizedText text={"CRM.projectNo"} /></span><div className="info-strip">{t("CRM.projectNoAutomatic")}</div></div>
+      <div className="field span-2"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>
+      <label className="field"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => setForm((current) => ({ ...current, managerId: Number(event.target.value) }))}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => setForm((current) => ({ ...current, leadEngineerId: Number(event.target.value) }))}><option value={0}>{t("CRM.selectLeadEngineer")}</option>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderNumber: event.target.value }))} /></label>
       <label className="field"><span><LocalizedText text={"PO date *"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderDate: event.target.value }))} /></label>
-      <label className="field"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => setForm((current) => ({ ...current, managerId: Number(event.target.value) }))}>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => setForm((current) => ({ ...current, leadEngineerId: Number(event.target.value) }))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} /></label>
       <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => setForm((current) => ({ ...current, targetDelivery: event.target.value }))} /></label>
       <label className="field span-2"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => setForm((current) => ({ ...current, site: event.target.value }))} /></label>
+      <details className="span-2"><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">
+        <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label></div>
+        {!inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={selectedEstimate?.customerId ?? 0} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
+        <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark||""} onChange={(event)=>setForm(current=>({...current,remark:event.target.value}))}/></label>
+      </div></details>
     </div>
+    <p className="muted">{t("CRM.projectPlanLater")}</p>
   </Modal>;
 }
 

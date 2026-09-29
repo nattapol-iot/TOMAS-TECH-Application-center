@@ -2,7 +2,7 @@
 
 [Module](../modules/dashboard.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `bb0e09c5`; generated, do not edit. [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d5d85b8d`; generated, do not edit. [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
