@@ -2,28 +2,28 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d5d85b8d`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `93491087`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 49–70 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 72–93 |
-| GET | `/api/v1/projects` | 94–135 |
-| POST | `/api/v1/projects` | 137–250 |
-| GET | `/api/v1/projects/:id/members` | 252–277 |
-| POST | `/api/v1/projects/:id/members` | 279–302 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 304–325 |
-| PUT | `/api/v1/projects/:id` | 327–425 |
+| GET | `/api/v1/projects/creation-options` | 50–71 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 73–94 |
+| GET | `/api/v1/projects` | 95–136 |
+| POST | `/api/v1/projects` | 138–266 |
+| GET | `/api/v1/projects/:id/members` | 268–293 |
+| POST | `/api/v1/projects/:id/members` | 295–318 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 320–341 |
+| PUT | `/api/v1/projects/:id` | 343–441 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 34–38 |
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 40–45 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–426 |
+| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 35–39 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 41–46 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 48–442 |
 
 ## Direct local dependencies
 
@@ -32,13 +32,14 @@ Evidence: source snapshot `d5d85b8d`; generated, do not edit. [backend-node/src/
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [backend-node/src/project-handover.ts](<../../../backend-node/src/project-handover.ts>)
-- [backend-node/src/document-number.ts](<../../../backend-node/src/document-number.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/end-user.ts](<../../../backend-node/src/end-user.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/project-lifecycle.ts](<../../../backend-node/src/project-lifecycle.ts>)
+- [backend-node/src/project-initial-plan.ts](<../../../backend-node/src/project-initial-plan.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
+- [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/crm.ts](<../../../backend-node/src/crm.ts>)
 

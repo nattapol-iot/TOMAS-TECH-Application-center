@@ -1112,6 +1112,12 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
 }
 
 type ProjectEstimateOption = {id:number;number:string;projectName:string;customerId:number;ownerId:number;siteLocation:string;targetDelivery:string};
+type MasterPlanDraft = { key: string; name: string; start: string; finish: string };
+type TeamPlanDraft = { key: string; userId: number; task: string; start: string; finish: string; planManDays: string };
+// Row names are the customer-facing milestone titles most projects start from; they are data, not UI copy.
+const STANDARD_MASTER_PLAN = ["Kick-off meeting", "Get Requirement & Confirm", "Development", "Internal Final Test", "Installation", "Teaching for UT", "User Testing & Trial", "Go Live"];
+const planPeriodValid = (row: { start: string; finish: string }) => Boolean(row.start && row.finish && row.finish >= row.start);
+const planManDaysValid = (value: string) => !value.trim() || /^\d{1,6}(\.\d{1,2})?$/.test(value.trim());
 
 export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCreated, initialEstimateId }: { initialEstimateId?: number; bootstrap: BootstrapData; refreshBootstrap: () => Promise<void>; notify: (message: string) => void; onClose: () => void; onCreated: (number: string) => Promise<void> }) {
   const [options, setOptions] = useState<{estimates: ProjectEstimateOption[]; people: {id:number;name:string;canManage:boolean;canLead:boolean}[]}>({estimates:[],people:[]});
@@ -1121,7 +1127,9 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const t = useUiText();
-  const [form, setForm] = useState<CreateProjectInput>({ estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "" });
+  const [form, setForm] = useState<CreateProjectInput>({ projectNumber: "", estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "" });
+  const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
+  const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
   const [inheritEndUser, setInheritEndUser] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1140,36 +1148,84 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   }, [initialEstimateId, bootstrap.user.id, optionsRevision]);
   const selectedEstimate = estimates.find(item=>item.id===form.estimateId);
   const customer = bootstrap.customers.find(item=>item.id===selectedEstimate?.customerId);
+  // With plan rows the project runs from the first row to the last, so its dates are not typed twice.
+  const planRows = [...masterPlan, ...teamPlan];
+  const planned = planRows.length > 0;
+  const span = planned && planRows.every(planPeriodValid)
+    ? { start: planRows.map(row=>row.start).sort()[0]!, finish: planRows.map(row=>row.finish).sort().at(-1)! } : null;
+  const planIssues = [
+    ...masterPlan.flatMap((row, index) => !row.name.trim() || !planPeriodValid(row) ? [`${t("CRM.masterPlan")} ${index + 1}`] : []),
+    ...teamPlan.flatMap((row, index) => !row.userId || !row.task.trim() || !planPeriodValid(row) || !planManDaysValid(row.planManDays) ? [`${t("CRM.teamPlan")} ${index + 1}`] : []),
+  ];
   const missingFields = [
-    !form.estimateId ? "Approved estimate *" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
+    !form.estimateId ? "Approved estimate *" : "", !form.projectNumber.trim() ? "CRM.projectNoFromErp" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
     !form.purchaseOrderDate ? "PO date *" : "", !form.managerId ? "Project manager *" : "", !form.leadEngineerId ? "Lead engineer *" : "",
-    !form.startDate ? "Start date *" : "", !form.targetDelivery ? "Target delivery *" : "", !form.site.trim() ? "Site *" : "",
+    !planned && !form.startDate ? "Start date *" : "", !planned && !form.targetDelivery ? "Target delivery *" : "", !form.site.trim() ? "Site *" : "",
   ].filter(Boolean);
-  const submit = async () => { setBusy(true); setError(""); try { const input = { ...form }; if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null; const created = await createProject(input); await onCreated(created.number); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
-  return <Modal title="Create project" subtitle="CRM.projectGate" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loadingOptions || !form.estimateId || !form.managerId || !form.leadEngineerId || !form.purchaseOrderNumber.trim() || !form.purchaseOrderDate || !form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate || !form.site.trim()} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}>
+  const datesInvalid = planned ? !span : !form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate;
+  const updateMilestone = (key: string, change: Partial<MasterPlanDraft>) => setMasterPlan(rows => rows.map(row => row.key === key ? { ...row, ...change } : row));
+  const updateTeamRow = (key: string, change: Partial<TeamPlanDraft>) => setTeamPlan(rows => rows.map(row => row.key === key ? { ...row, ...change } : row));
+  const submit = async () => { setBusy(true); setError(""); try {
+    const input: CreateProjectInput = { ...form, projectNumber: form.projectNumber.trim(), startDate: span?.start ?? form.startDate, targetDelivery: span?.finish ?? form.targetDelivery,
+      masterPlan: masterPlan.map(({ name, start, finish }) => ({ name: name.trim(), start, finish })),
+      team: teamPlan.map(({ userId, task, start, finish, planManDays }) => ({ userId, task: task.trim(), start, finish, planManDays: planManDays.trim() ? Number(planManDays) : 0 })) };
+    if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null;
+    const created = await createProject(input); await onCreated(created.number); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
+  return <Modal title="Create project" subtitle="CRM.projectGate" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}><div className="project-create">
     {error ? <LoadError message={t(error)} retry={() => { setError("");setLoadingOptions(true);setOptionsRevision(value=>value+1); }} /> : null}
     {loadingOptions?<p role="status">{t("CRM.loading")}</p>:!estimates.length?<p className="alert warn">{t("CRM.noEligibleEstimate")}</p>:initialEstimateId&&!estimates.some(e=>e.id===initialEstimateId)?<p className="alert warn">{t("CRM.sourceUnavailable")}</p>:null}
-    {!loadingOptions&&missingFields.length?<p role="status">{t("CRM.missingProjectFields")}: {missingFields.map(field=>t(field)).join(", ")}</p>:null}
-    <div className="form-grid two">
+    {!loadingOptions&&(missingFields.length||planIssues.length)?<p role="status">{t("CRM.missingProjectFields")}: {[...missingFields.map(field=>t(field)), ...planIssues].join(", ")}</p>:null}
+    <div className="form-grid">
       <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));setForm((current) => ({ ...current, estimateId:Number(event.target.value),leadEngineerId:engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0,site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||current.targetDelivery }));}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName}</option>)}</select></label>
-      <div className="field"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
-      <div className="field"><span><LocalizedText text={"CRM.projectNo"} /></span><div className="info-strip">{t("CRM.projectNoAutomatic")}</div></div>
-      <div className="field span-2"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>
+      <div className="field span-2"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
+      <label className="field"><span>{t("CRM.projectNoFromErp")}</span><input required maxLength={30} autoComplete="off" placeholder={t("CRM.projectNoPlaceholder")} value={form.projectNumber} onChange={(event) => setForm((current) => ({ ...current, projectNumber: event.target.value }))} /></label>
+      <div className="field span-3"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>
       <label className="field"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => setForm((current) => ({ ...current, managerId: Number(event.target.value) }))}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => setForm((current) => ({ ...current, leadEngineerId: Number(event.target.value) }))}><option value={0}>{t("CRM.selectLeadEngineer")}</option>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderNumber: event.target.value }))} /></label>
       <label className="field"><span><LocalizedText text={"PO date *"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderDate: event.target.value }))} /></label>
+      <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => setForm((current) => ({ ...current, site: event.target.value }))} /></label>
+    </div>
+    <section className="project-plan" aria-labelledby="project-master-plan-title">
+      <div className="project-plan-head"><h3 id="project-master-plan-title">{t("CRM.masterPlan")}</h3><div className="row-actions">
+        {!masterPlan.length ? <button className="btn ghost sm" type="button" onClick={() => setMasterPlan(STANDARD_MASTER_PLAN.map(name => ({ key: crypto.randomUUID(), name, start: "", finish: "" })))}>{t("CRM.useStandardPlan")}</button> : null}
+        <button className="btn sm" type="button" onClick={() => setMasterPlan(rows => [...rows, { key: crypto.randomUUID(), name: "", start: rows.at(-1)?.finish ?? "", finish: "" }])}><Icon name="plus" />{t("CRM.addMilestone")}</button>
+      </div></div>
+      {masterPlan.length ? <ol className="project-plan-rows">{masterPlan.map((row, index) => <li key={row.key} className="project-plan-row milestone">
+        <span className="project-plan-index">{index + 1}.</span>
+        <input type="date" aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => updateMilestone(row.key, { start: event.target.value })} />
+        <span className="project-plan-dash" aria-hidden="true">–</span>
+        <input type="date" aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => updateMilestone(row.key, { finish: event.target.value })} />
+        <input aria-label={`${t("CRM.milestoneName")} ${index + 1}`} placeholder={t("CRM.milestoneName")} maxLength={500} value={row.name} onChange={(event) => updateMilestone(row.key, { name: event.target.value })} />
+        <button className="icon-btn" type="button" aria-label={`${t("CRM.removeRow")} ${index + 1}`} title={t("CRM.removeRow")} onClick={() => setMasterPlan(rows => rows.filter(item => item.key !== row.key))}><Icon name="x" /></button>
+      </li>)}</ol> : <p className="muted">{t("CRM.masterPlanEmpty")}</p>}
+    </section>
+    <section className="project-plan" aria-labelledby="project-team-plan-title">
+      <div className="project-plan-head"><div><h3 id="project-team-plan-title">{t("CRM.teamPlan")}</h3><p className="muted">{t("CRM.teamPlanHint")}</p></div><div className="row-actions">
+        <button className="btn sm" type="button" onClick={() => setTeamPlan(rows => [...rows, { key: crypto.randomUUID(), userId: 0, task: "", start: "", finish: "", planManDays: "" }])}><Icon name="plus" />{t("CRM.addMember")}</button>
+      </div></div>
+      {teamPlan.length ? <ol className="project-plan-rows">{teamPlan.map((row, index) => <li key={row.key} className="project-plan-row team">
+        <span className="project-plan-index">{index + 1}.</span>
+        <select aria-label={`${t("CRM.selectMember")} ${index + 1}`} value={row.userId} onChange={(event) => updateTeamRow(row.key, { userId: Number(event.target.value) })}><option value={0}>{t("CRM.selectMember")}</option>{bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+        <input type="date" aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => updateTeamRow(row.key, { start: event.target.value })} />
+        <span className="project-plan-dash" aria-hidden="true">–</span>
+        <input type="date" aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => updateTeamRow(row.key, { finish: event.target.value })} />
+        <input aria-label={`${t("CRM.memberTask")} ${index + 1}`} placeholder={t("CRM.memberTask")} maxLength={500} value={row.task} onChange={(event) => updateTeamRow(row.key, { task: event.target.value })} />
+        <input inputMode="decimal" aria-label={`${t("CRM.planManDays")} ${index + 1}`} placeholder={t("CRM.planManDays")} aria-invalid={!planManDaysValid(row.planManDays)} value={row.planManDays} onChange={(event) => updateTeamRow(row.key, { planManDays: event.target.value })} />
+        <button className="icon-btn" type="button" aria-label={`${t("CRM.removeRow")} ${index + 1}`} title={t("CRM.removeRow")} onClick={() => setTeamPlan(rows => rows.filter(item => item.key !== row.key))}><Icon name="x" /></button>
+      </li>)}</ol> : <p className="muted">{t("CRM.teamPlanEmpty")}</p>}
+    </section>
+    {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
       <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} /></label>
       <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => setForm((current) => ({ ...current, targetDelivery: event.target.value }))} /></label>
-      <label className="field span-2"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => setForm((current) => ({ ...current, site: event.target.value }))} /></label>
-      <details className="span-2"><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">
-        <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label></div>
-        {!inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={selectedEstimate?.customerId ?? 0} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
-        <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark||""} onChange={(event)=>setForm(current=>({...current,remark:event.target.value}))}/></label>
-      </div></details>
-    </div>
+    </div>}
+    <details><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">
+      <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label></div>
+      {!inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={selectedEstimate?.customerId ?? 0} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
+      <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark||""} onChange={(event)=>setForm(current=>({...current,remark:event.target.value}))}/></label>
+    </div></details>
     <p className="muted">{t("CRM.projectPlanLater")}</p>
-  </Modal>;
+  </div></Modal>;
 }
 
 export function ProductionInventory({ bootstrap }: Pick<CommonProps, "bootstrap">) {

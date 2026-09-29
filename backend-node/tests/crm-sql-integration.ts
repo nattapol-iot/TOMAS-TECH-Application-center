@@ -87,6 +87,7 @@ try {
  const updated=await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:op.rowVersion,stage:"QUALIFICATION"});
  await call("PUT",`/crm/opportunities/${op.id}`,"Sales",{rowVersion:op.rowVersion,name:"Stale overwrite"},409);
  const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+ const dayAfter=(days:number)=>new Date(Date.now()+days*86400000).toISOString().slice(0,10);
  await call("POST","/crm/activities","Engineer",{customerId,opportunityId:op.id,contactId:contact.id,activityType:"Meeting",occurredAt:new Date().toISOString(),summary:"Customer requirements confirmed",nextAction:{action:"Send proposal",ownerId:sales.id,dueDate:yesterday}},201);
  const work=await call("GET","/crm/my-work","Sales");assert.equal(work.actions.length,1);assert.equal(work.actions[0].action,"Send proposal");
  assert.equal(work.actions[0].dueDate,yesterday);
@@ -164,7 +165,7 @@ try {
  assert.equal((await call("GET",`/projects/handover/${direct.id}`,"Admin")).reason,"awaitCostApproval");
  const estimate=(await run(`INSERT dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,created_date,due_date,status,created_by,updated_by)
    OUTPUT inserted.id VALUES('DIRECT-EST-FIXTURE',${direct.id},${customerId},'Direct RFQ handover','IoT',${engineer.id},GETUTCDATE(),GETUTCDATE(),'Engineering Input',${admin.id},${admin.id})`)).recordset[0]!;
- const projectBody={estimateId:Number(estimate.id),purchaseOrderNumber:"PO-DIRECT-1",purchaseOrderDate:yesterday,managerId:admin.id,leadEngineerId:engineer.id,startDate:yesterday,targetDelivery:tomorrow,site:"Factory A"};
+ const projectBody={estimateId:Number(estimate.id),projectNumber:"PJ-CRM-DIRECT",purchaseOrderNumber:"PO-DIRECT-1",purchaseOrderDate:yesterday,managerId:admin.id,leadEngineerId:engineer.id,startDate:yesterday,targetDelivery:tomorrow,site:"Factory A"};
  await call("POST","/projects","Admin",projectBody,422);
  await run(`UPDATE dbo.estimates SET status='Approved' WHERE id=${estimate.id}; UPDATE dbo.inquiries SET estimate_id=${estimate.id},status='Approved' WHERE id=${direct.id};
    INSERT dbo.user_business_roles(user_id,role_id,granted_by,reason) SELECT ${sales.id},id,${admin.id},'Project creation test' FROM dbo.roles WHERE code='Project Manager';`);
@@ -173,7 +174,24 @@ try {
  assert.equal(creationOptions.people.find((r:{id:number})=>r.id===sales.id).canManage,true);
  assert.equal((await call("GET",`/projects/handover/${direct.id}`,"Admin")).reason,"recordPo");
  await call("POST","/projects","Admin",{...projectBody,purchaseOrderNumber:""},400);
- const project=await call("POST","/projects","Admin",{...projectBody,managerId:sales.id},201);
+ const project=await call("POST","/projects","Admin",{...projectBody,managerId:sales.id,
+   masterPlan:[{name:"Kick-off meeting",start:tomorrow,finish:tomorrow},{name:"Go Live",start:tomorrow,finish:dayAfter(30)}],
+   team:[{userId:engineer.id,task:"Controls design",start:yesterday,finish:dayAfter(10),planManDays:12.5},{userId:admin.id,task:"Commissioning",start:tomorrow,finish:dayAfter(20)}]},201);
+ // The ERP number is kept as typed (upper-cased), the dates come from the plan, and the plan is two phases of ordinary schedule rows.
+ assert.equal(project.number,"PJ-CRM-DIRECT");
+ const projectHeader=(await run(`SELECT CONVERT(char(10),start_date,23) start_date,CONVERT(char(10),target_delivery,23) target_delivery FROM dbo.projects WHERE id=${project.id}`)).recordset[0]!;
+ assert.deepEqual([projectHeader.start_date,projectHeader.target_delivery],[yesterday,dayAfter(30)]);
+ const planRows=(await run(`SELECT t.name,t.kind,t.visibility,p.name parent,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.plan_man_days,
+   (SELECT STRING_AGG(CONVERT(varchar(20),pic.user_id),',') FROM dbo.schedule_task_pics pic WHERE pic.task_id=t.id) pics
+   FROM dbo.schedule_tasks t LEFT JOIN dbo.schedule_tasks p ON p.id=t.parent_id WHERE t.project_id=${project.id} AND t.deleted_at IS NULL ORDER BY t.parent_id,t.sort_order`)).recordset
+   .map(r=>[r.name,r.kind,r.visibility,r.parent??null,r.plan_start??null,Number(r.plan_days),Number(r.plan_man_days),r.pics??null]);
+ assert.deepEqual(planRows,[
+   ["Master Plan","phase","Customer",null,null,1,0,null],["Team plan","phase","Internal",null,null,1,0,null],
+   ["Kick-off meeting","task","Customer","Master Plan",tomorrow,1,0,null],["Go Live","task","Customer","Master Plan",tomorrow,30,0,null],
+   ["Controls design","task","Internal","Team plan",yesterday,12,12.5,String(engineer.id)],["Commissioning","task","Internal","Team plan",tomorrow,20,0,String(admin.id)],
+ ]);
+ const projectMembers=(await run(`SELECT user_id,role_on_project FROM dbo.project_members WHERE project_id=${project.id} ORDER BY user_id`)).recordset.map(r=>[Number(r.user_id),r.role_on_project]);
+ assert.deepEqual(projectMembers,[[sales.id,"Project Manager"],[engineer.id,"Lead Engineer"],[admin.id,"Member"]].sort((a,b)=>Number(a[0])-Number(b[0])));
  const handover=await call("GET",`/projects/handover/${direct.id}`,"Admin");
  assert.equal(handover.reason,"projectExists");assert.equal(handover.projectId,project.id);assert.equal(handover.projectNo,project.number);
  const hiddenProject=await call("GET",`/projects/handover/${direct.id}`,"Other");assert.equal(hiddenProject.reason,"projectExists");assert.equal(hiddenProject.projectId,null);
@@ -190,7 +208,9 @@ try {
  const lockedEstimate=(await run(`INSERT dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,created_date,due_date,status,created_by,updated_by)
    OUTPUT inserted.id VALUES('LOCKED-EST-FIXTURE',${another.id},${customerId},'Locked costs','IoT',${engineer.id},GETUTCDATE(),GETUTCDATE(),'Locked',${admin.id},${admin.id})`)).recordset[0]!;
  assert.ok((await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(lockedEstimate.id)));
- await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),purchaseOrderNumber:"PO-LOCKED-1"},201);
+ const reused=await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"pj-crm-direct",purchaseOrderNumber:"PO-LOCKED-1"},409);
+ assert.equal(reused.code,"project_number_taken");
+ await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"PJ-CRM-LOCKED",purchaseOrderNumber:"PO-LOCKED-1"},201);
  assert.equal((await call("GET",`/crm/opportunities/${existing.id}`,"Admin")).opportunity.stage,"WON");
  console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, project scope and duplicate prevention.");
  if(process.env.CRM_VISUAL_TEST==="1"){

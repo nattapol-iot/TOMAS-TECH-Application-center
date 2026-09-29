@@ -532,8 +532,13 @@ export type CreateEstimateInput = {
   contingencyRate: number;
 };
 
+export type ProjectMasterPlanRow = { name: string; start: string; finish: string };
+export type ProjectTeamPlanRow = { userId: number; task: string; start: string; finish: string; planManDays: number };
+
 export type CreateProjectInput = {
   endUserCustomerId?: number | null;
+  /** The project number issued by the ERP. */
+  projectNumber: string;
   estimateId: number;
   purchaseOrderNumber: string;
   purchaseOrderDate: string;
@@ -543,6 +548,9 @@ export type CreateProjectInput = {
   targetDelivery: string;
   site: string;
   remark?: string;
+  /** With rows, the API sets the project dates from the first start to the last finish. */
+  masterPlan?: ProjectMasterPlanRow[];
+  team?: ProjectTeamPlanRow[];
 };
 
 export type CreateCustomerInput = {

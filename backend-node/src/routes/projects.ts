@@ -5,13 +5,14 @@ import { insertAudit } from "../audit.js";
 import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
 import { createStoredDirectory, deleteStoredFile, removeEmptyStoredDirectory } from "../document-storage.js";
 import { transferProjectDocuments } from "../project-handover.js";
-import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
+import { insertInitialPlan, parseInitialPlan, parseProjectNumber, planSpan } from "../project-initial-plan.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
+import { permissionFor } from "../schedule-service.js";
 import type { CurrentUserService } from "../users.js";
 import { confirmOpportunityOrder } from "../crm.js";
 
@@ -139,17 +140,24 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const actor = await users.required(request);
     const body = bodyObject(request.body);
     const requestedEndUserId = endUserCustomerId(body.endUserCustomerId);
+    const plan = parseInitialPlan(body);
+    // With a plan, the project runs from its first row to its last; without one, the dates are typed.
+    const span = planSpan(plan);
     const input = {
+      projectNumber: parseProjectNumber(body.projectNumber),
       estimateId: requiredInteger(body.estimateId, "Approved estimate", 1),
       purchaseOrderNumber: requiredText(body.purchaseOrderNumber, 100, "Purchase order number"),
       purchaseOrderDate: parseDateOnly(body.purchaseOrderDate, "Purchase order date")!,
       managerId: requiredInteger(body.managerId, "Manager", 1),
       leadEngineerId: requiredInteger(body.leadEngineerId, "Lead engineer", 1),
-      startDate: parseDateOnly(body.startDate, "Start date")!,
-      targetDelivery: parseDateOnly(body.targetDelivery, "Target delivery")!,
+      startDate: span?.start ?? parseDateOnly(body.startDate, "Start date")!,
+      targetDelivery: span?.finish ?? parseDateOnly(body.targetDelivery, "Target delivery")!,
       site: requiredText(body.site, 300, "Project site"),
       remark: optionalBodyText(body.remark, 20_000, "Remark"),
     };
+    if (span && !(await permissionFor(database, actor.id, "schedule.plan"))) {
+      throw new ApiError(403, "schedule_plan_required", "Creating a project with a master plan or team plan requires schedule planning permission.");
+    }
     const today = businessToday(config.businessTimeZone);
     if (input.purchaseOrderDate < shiftDate(today, "year", -10) || input.purchaseOrderDate > shiftDate(today, "day", 30)
       || input.startDate < shiftDate(today, "year", -1) || input.startDate > shiftDate(today, "year", 5)
@@ -193,7 +201,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const inheritedEndUserId = inquiry.end_user_customer_id === null ? null : Number(inquiry.end_user_customer_id);
       const endUserId = requestedEndUserId === undefined ? inheritedEndUserId : requestedEndUserId;
       const endUser = await validateEndUser(transaction, endUserId);
-      const number = await issueDocumentNumber(transaction, "PJ", input.startDate);
+      // The number comes from the ERP. It stays reserved by a project in the trash, so the
+      // same ERP number is never issued to two records here.
+      const number = input.projectNumber;
+      const taken = new sql.Request(transaction); taken.input("number", sql.NVarChar(30), number);
+      if ((await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
+        throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
+      }
       const insert = new sql.Request(transaction);
       insert.input("number", sql.NVarChar(30), number); insert.input("name", sql.NVarChar(300), estimate.project_name);
       insert.input("customer_id", sql.BigInt, Number(estimate.customer_id)); insert.input("project_type", sql.NVarChar(100), estimate.project_type);
@@ -220,6 +234,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@manager_id,N'Project Manager',@actor);
         IF @lead_id<>@manager_id INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@lead_id,N'Lead Engineer',@actor);
       `);
+      await insertInitialPlan(transaction, projectId, plan, actor.id);
       const folders = new sql.Request(transaction); folders.input("project_id", sql.BigInt, projectId); folders.input("actor", sql.BigInt, actor.id);
       const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
       await folders.query(`INSERT INTO dbo.project_folders(project_id,folder_code,name,storage_key,created_by) VALUES ${values};`);
@@ -227,7 +242,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const documentsTransferred = await transferProjectDocuments(transaction, config.documentStorage,
         projectId, Number(estimate.inquiry_id), input.estimateId, actor.id, writtenKeys);
       await insertAudit(transaction, actor.id, "Project", projectId, number, "Created from approved estimate", estimate.estimate_no,
-        { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred });
+        { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred,
+          masterPlan: plan.milestones, teamPlan: plan.team });
       await confirmOpportunityOrder(transaction,Number(estimate.inquiry_id),actor.id,input.purchaseOrderDate>today?today:input.purchaseOrderDate,input.purchaseOrderNumber);
       return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred };
     });

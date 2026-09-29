@@ -1248,6 +1248,45 @@ button.kpi:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); tra
 .field label { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft); }
 .field small { color: var(--muted); font-size: var(--fs-2xs); }
 
+/* Create project: master plan and team rows, one line each like a small schedule sheet. */
+.project-create { display: flex; flex-direction: column; gap: 14px; }
+.project-create > p { margin: 0; }
+.project-plan { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.project-plan-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.project-plan-head h3 { font-size: var(--fs-sm); font-weight: 650; color: var(--ink); }
+.project-plan-head p { margin-top: 2px; font-size: var(--fs-xs); }
+.project-plan > .muted { font-size: var(--fs-xs); }
+.project-plan-rows { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.project-plan-row { display: grid; align-items: center; gap: 6px; }
+.project-plan-row.milestone { grid-template-columns: 24px 150px 10px 150px minmax(0, 1fr) 30px; }
+.project-plan-row.team { grid-template-columns: 24px minmax(140px, 200px) 150px 10px 150px minmax(0, 1fr) 110px 30px; }
+.project-plan-row input,
+.project-plan-row select {
+  width: 100%; min-width: 0; min-height: 32px; padding: 6px 9px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink); font-size: var(--fs-sm);
+}
+.project-plan-row input[aria-invalid="true"] { border-color: var(--red-line); background: var(--red-soft); }
+.project-plan-row .icon-btn:hover { background: var(--red-soft); color: var(--red-text); }
+.project-plan-index { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; text-align: right; }
+.project-plan-dash { color: var(--muted); text-align: center; }
+@media (max-width: 980px) {
+  /* Two columns of dates, with the name, member and task given their own lines. */
+  .project-plan-row.milestone,
+  .project-plan-row.team { grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 30px; }
+  .project-plan-dash { display: none; }
+  .project-plan-row > .project-plan-index { grid-column: 1; grid-row: 1; }
+  .project-plan-row > .icon-btn { grid-column: 4; grid-row: 1; }
+  .project-plan-row.milestone > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  .project-plan-row.milestone > :nth-child(4) { grid-column: 3; grid-row: 1; }
+  .project-plan-row.milestone > :nth-child(5) { grid-column: 2 / 4; grid-row: 2; }
+  .project-plan-row.team > :nth-child(2) { grid-column: 2 / 4; grid-row: 1; }
+  .project-plan-row.team > :nth-child(3) { grid-column: 2; grid-row: 2; }
+  .project-plan-row.team > :nth-child(5) { grid-column: 3; grid-row: 2; }
+  .project-plan-row.team > :nth-child(6) { grid-column: 2; grid-row: 3; }
+  .project-plan-row.team > :nth-child(7) { grid-column: 3; grid-row: 3; }
+}
+
 .field input,
 .field select,
 .field textarea {

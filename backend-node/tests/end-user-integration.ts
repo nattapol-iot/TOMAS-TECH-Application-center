@@ -73,10 +73,11 @@ try {
     return Number((await database.query<{ id: number }>(`SELECT id FROM dbo.estimates WHERE inquiry_id=${inquiryId}`)).recordset[0]!.id);
   }
   const projectBase = { purchaseOrderNumber: "TEST ONLY PO", purchaseOrderDate: today, managerId: actors["end-user-admin"], leadEngineerId: actors["end-user-engineer"], startDate: today, targetDelivery: dueDate, site: "TEST ONLY Factory" };
+  const projectFor = (estimateId: number) => ({ ...projectBase, estimateId, projectNumber: `PJ-EU-${estimateId}` });
   const estimateId = await approvedEstimate(Number(inquiry.id));
-  await api("admin", "/api/v1/projects", { ...projectBase, estimateId, endUserCustomerId: "1" }, 400);
-  await api("admin", "/api/v1/projects", { ...projectBase, estimateId, endUserCustomerId: inactive.id }, 422);
-  const inherited = await api("admin", "/api/v1/projects", { ...projectBase, estimateId }, 201);
+  await api("admin", "/api/v1/projects", { ...projectFor(estimateId), endUserCustomerId: "1" }, 400);
+  await api("admin", "/api/v1/projects", { ...projectFor(estimateId), endUserCustomerId: inactive.id }, 422);
+  const inherited = await api("admin", "/api/v1/projects", projectFor(estimateId), 201);
   const listProject = async (id: number) => (await api("admin", "/api/v1/projects?pageSize=100")).items.find((row: { id: number }) => row.id === id);
   let project = await listProject(inherited.id);
   assert.equal(project.customerId, direct.id); assert.equal(project.endUserCustomerId, endUser.id);
@@ -94,10 +95,10 @@ try {
   project = await api("admin", `/api/v1/projects/${project.id}/end-user`, { endUserCustomerId: null, rowVersion: project.rowVersion }, 200, "PUT"); assert.equal(project.endUserCustomerId, null);
   for (const explicit of [null, other.id]) {
     const source = await api("sales", "/api/v1/inquiries", { ...base, endUserCustomerId: endUser.id }, 201);
-    const created = await api("admin", "/api/v1/projects", { ...projectBase, estimateId: await approvedEstimate(Number(source.id)), endUserCustomerId: explicit }, 201);
+    const created = await api("admin", "/api/v1/projects", { ...projectFor(await approvedEstimate(Number(source.id))), endUserCustomerId: explicit }, 201);
     assert.equal((await listProject(created.id)).endUserCustomerId, explicit);
   }
-  const legacyProject = await api("admin", "/api/v1/projects", { ...projectBase, estimateId: await approvedEstimate(Number(legacy.id)) }, 201);
+  const legacyProject = await api("admin", "/api/v1/projects", projectFor(await approvedEstimate(Number(legacy.id))), 201);
   assert.equal((await listProject(legacyProject.id)).endUserCustomerId, null);
   run(`UPDATE dbo.projects SET status=N'Closed' WHERE id=${Number(project.id)};UPDATE dbo.inquiries SET status=N'Cancelled' WHERE id=${Number(inquiry.id)}`);
   project = await listProject(project.id); inquiry = await api("sales", `/api/v1/inquiries/${inquiry.id}`);

@@ -103,7 +103,7 @@ try {
     return estimate;
   }
   const today = new Date().toISOString().slice(0, 10);
-  const projectBody = (estimateId: number, dueDate: string) => ({ estimateId, purchaseOrderNumber: `TEST-PO-${estimateId}`, purchaseOrderDate: today,
+  const projectBody = (estimateId: number, dueDate: string) => ({ estimateId, projectNumber: `PJ-CARRY-${estimateId}`, purchaseOrderNumber: `TEST-PO-${estimateId}`, purchaseOrderDate: today,
     managerId: actors["handover-manager"], leadEngineerId: actors["handover-engineer"], startDate: today, targetDelivery: dueDate, site: "TEST ONLY factory" });
 
   // Start with the real Inquiry APIs and upload the customer's original files.
@@ -178,7 +178,28 @@ try {
   await upload("sales", `/api/v1/inquiries/${unrelated.inquiry.id}/attachments`, "unrelated-secret.txt", Buffer.from("TEST ONLY unrelated confidential bytes\n"), { category: "Drawing" });
 
   const estimate = await approveEstimate(Number(main.inquiry.id), main.dueDate);
-  const created = await api("admin", "POST", "/api/v1/projects", projectBody(estimate.id, main.dueDate), 201);
+  // Created with its plan, the way the Create project form sends it.
+  const planDay = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const created = await api("admin", "POST", "/api/v1/projects", { ...projectBody(estimate.id, main.dueDate),
+    masterPlan: [{ name: "Kick-off meeting", start: planDay(3), finish: planDay(3) }, { name: "Go Live", start: planDay(40), finish: planDay(45) }],
+    team: [{ userId: actors["handover-sales"], task: "TEST ONLY commissioning support", start: planDay(2), finish: planDay(20), planManDays: 12.5 }] }, 201);
+  assert.equal(created.number, `PJ-CARRY-${estimate.id}`);
+  const header = (await database.query<{ start_date: Date; target_delivery: Date }>(`SELECT start_date,target_delivery FROM dbo.projects WHERE id=${Number(created.id)}`)).recordset[0]!;
+  assert.deepEqual([header.start_date.toISOString().slice(0, 10), header.target_delivery.toISOString().slice(0, 10)], [planDay(2), planDay(45)]);
+  assert.ok((await database.query(`SELECT 1 FROM dbo.project_members WHERE project_id=${Number(created.id)} AND user_id=${actors["handover-sales"]} AND role_on_project=N'Member'`)).recordset[0]);
+  const schedule = await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`);
+  const phases = schedule.tasks as Array<{ name: string; kind: string; visibility: string; planStart: string; planFinish: string;
+    children: Array<{ name: string; planStart: string; planFinish: string; planManDays: number; pics: Array<{ id: number }> }> }>;
+  assert.deepEqual(phases.map((phase) => [phase.name, phase.kind, phase.visibility, phase.planStart, phase.planFinish]),
+    [["Master Plan", "phase", "Customer", planDay(3), planDay(45)], ["Team plan", "phase", "Internal", planDay(2), planDay(20)]]);
+  assert.deepEqual(phases[0]!.children.map((row) => [row.name, row.planStart, row.planFinish]), [["Kick-off meeting", planDay(3), planDay(3)], ["Go Live", planDay(40), planDay(45)]]);
+  assert.deepEqual(phases[1]!.children.map((row) => [row.name, row.planManDays, row.pics.map((pic) => pic.id)]), [["TEST ONLY commissioning support", 12.5, [actors["handover-sales"]]]]);
+  checks += 5;
+  // The ERP number stays with its project: a second project cannot reuse it.
+  const reuse = await approveEstimate(Number(unrelated.inquiry.id), unrelated.dueDate);
+  const refused = await api("admin", "POST", "/api/v1/projects", { ...projectBody(reuse.id, unrelated.dueDate), projectNumber: created.number.toLowerCase() }, 409);
+  assert.equal(refused.code, "project_number_taken");
+  assert.equal((await database.query(`SELECT id FROM dbo.projects WHERE estimate_id=${Number(reuse.id)}`)).recordset.length, 0);
   assert.equal(created.folderMetadataCreated, 15);
   assert.equal(created.documentsTransferred, 7);
   const folders = (await database.query<{ folder_code: string; storage_key: string }>(`SELECT folder_code,storage_key FROM dbo.project_folders WHERE project_id=${Number(created.id)} ORDER BY folder_code`)).recordset;

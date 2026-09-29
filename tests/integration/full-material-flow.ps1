@@ -432,7 +432,7 @@ EXEC sys.sp_unsetapprole @cookie = @cookie;
     Assert-Equal $approvedEstimate.status 'Approved' 'Estimate status'
 
     $project = Invoke-Api POST '/api/v1/projects' 'dev-user' ([ordered]@{
-        estimateId = $estimate.id; purchaseOrderNumber = 'CI-CUSTOMER-PO'; purchaseOrderDate = $today;
+        estimateId = $estimate.id; projectNumber = 'PJ-CI-FLOW'; purchaseOrderNumber = 'CI-CUSTOMER-PO'; purchaseOrderDate = $today;
         managerId = $manager.id; leadEngineerId = $dev.id; startDate = $today; targetDelivery = $delivery;
         site = 'CI'; remark = 'Automated integration flow'
     })

@@ -98,7 +98,7 @@ try {
   assert.equal(Number(approved.total),2040); assert.equal(JSON.parse(approved.description).totals.overhead,1200);
   const inquiryDetail=await api("engineer","GET",`/api/v1/inquiries/${await database.query<{id:number}>(`SELECT inquiry_id id FROM dbo.estimates WHERE id=${applied.id}`).then(result=>Number(result.recordset[0]!.id))}`);
   assert.equal(inquiryDetail.estimate.overheadState,"Applied"); assert.equal(inquiryDetail.estimate.overheadTotal,1200); assert.equal(inquiryDetail.estimate.total,2040);
-  const project=await api("admin","POST","/api/v1/projects",{estimateId:applied.id,purchaseOrderNumber:"TEST-OH-PO",purchaseOrderDate:today,
+  const project=await api("admin","POST","/api/v1/projects",{estimateId:applied.id,projectNumber:`PJ-OH-${applied.id}`,purchaseOrderNumber:"TEST-OH-PO",purchaseOrderDate:today,
     managerId:users["overhead-manager"],leadEngineerId:users["overhead-engineer"],startDate:today,targetDelivery:due,site:"TEST ONLY"},201);
   const carried=(await database.query<{storage_key:string}>(`SELECT storage_key FROM dbo.project_docs WHERE project_id=${project.id} AND document_type=N'Estimate cost' AND deleted_at IS NULL`)).recordset[0]!;
   const carriedText=readFileSync(resolve(storageRoot,carried.storage_key),"utf8");
