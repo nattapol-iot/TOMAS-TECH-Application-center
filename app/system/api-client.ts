@@ -464,7 +464,18 @@ export type ProjectSummary = {
   progress: number;
   updatedAt: string;
   rowVersion: string;
+  /** Department the project belongs to; a label, not a permission. */
+  team?: string | null;
+  /** Worked out from the schedule by the API, never typed. */
+  health?: ProjectHealth;
+  paymentsReceived?: PaymentMilestone[];
+  contactIds?: number[];
 };
+
+export type ProjectHealth = "On Track" | "At Risk" | "Delayed" | "No plan" | "On Hold" | "Completed";
+/** Customer payment stages; only whether each was received is kept, never an amount. */
+export type PaymentMilestone = "AFTER_PO" | "AFTER_DESIGN" | "AFTER_INSTALL" | "GO_LIVE";
+export type ProjectContactOption = { id: number; name: string; position: string; department: string; phone: string; email: string; siteName: string };
 
 export type ProjectDocument = {
   id: number;
@@ -532,8 +543,9 @@ export type CreateEstimateInput = {
   contingencyRate: number;
 };
 
-export type ProjectMasterPlanRow = { name: string; start: string; finish: string };
-export type ProjectTeamPlanRow = { userId: number; task: string; start: string; finish: string; planManDays: number };
+/** id names the schedule row an edit changes; a row without one is new. */
+export type ProjectMasterPlanRow = { id?: number; name: string; start: string; finish: string };
+export type ProjectTeamPlanRow = { id?: number; userId: number; task: string; start: string; finish: string; planManDays: number };
 
 export type CreateProjectInput = {
   endUserCustomerId?: number | null;
@@ -551,6 +563,9 @@ export type CreateProjectInput = {
   /** With rows, the API sets the project dates from the first start to the last finish. */
   masterPlan?: ProjectMasterPlanRow[];
   team?: ProjectTeamPlanRow[];
+  department?: string | null;
+  paymentsReceived?: PaymentMilestone[];
+  contactIds?: number[];
 };
 
 export type CreateCustomerInput = {
@@ -1672,7 +1687,17 @@ export type UpdateProjectInput = {
   actualDelivery?: string | null;
   site?: string;
   remark?: string;
+  department?: string | null;
+  paymentsReceived?: PaymentMilestone[];
+  contactIds?: number[];
+  /** Sent together with scheduleVersion, and both lists or neither. */
+  masterPlan?: ProjectMasterPlanRow[];
+  team?: ProjectTeamPlanRow[];
+  scheduleVersion?: string | null;
 };
+
+export const listProjectContactOptions = (customerId: number) =>
+  apiRequest<ProjectContactOption[]>(`/api/v1/projects/contact-options?customerId=${customerId}`);
 
 // Omitted fields keep their saved value, so a screen can send only what it changed.
 export const updateProject = (projectId: number, input: UpdateProjectInput) =>

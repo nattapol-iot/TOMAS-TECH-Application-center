@@ -222,7 +222,7 @@ try {
  const reused=await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"pj-crm-direct",purchaseOrderNumber:"PO-LOCKED-1"},409);
  assert.equal(reused.code,"project_number_taken");
  const lockedBody={...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"PJ-CRM-LOCKED",purchaseOrderNumber:"PO-LOCKED-1",
-   masterPlan:[{name:"Kick-off meeting",start:tomorrow,finish:tomorrow}]};
+   masterPlan:[{name:"Kick-off meeting",start:tomorrow,finish:tomorrow}],department:"Engineering",paymentsReceived:["AFTER_PO"],contactIds:[Number(contact.id)]};
  const lockedProject=await call("POST","/projects","Admin",lockedBody,201);
  assert.equal((await call("GET",`/crm/opportunities/${existing.id}`,"Admin")).opportunity.stage,"WON");
 
@@ -235,13 +235,52 @@ try {
  assert.deepEqual(blocked,{id:project.id,canDelete:false,blockers:[{source:"Schedule progress",count:1}]});
  assert.equal((await call("DELETE",`/projects/${project.id}`,"Sales",undefined,409)).code,"project_has_work");
  assert.ok((await run(`SELECT id FROM dbo.projects WHERE id=${project.id}`)).recordset[0]);
+
+ const listed=async(id:number)=>(await call("GET","/projects?pageSize=100","Sales")).items.find((r:{id:number})=>r.id===id);
+ const scheduleVersion=async(id:number)=>Buffer.from((await run(`SELECT TOP(1) row_version FROM dbo.schedule_tasks WHERE project_id=${id} ORDER BY row_version DESC`)).recordset[0]!.row_version as Buffer).toString("base64");
+ const taskIds=async(id:number)=>Object.fromEntries((await run(`SELECT id,name FROM dbo.schedule_tasks WHERE project_id=${id} AND deleted_at IS NULL AND kind=N'task'`)).recordset.map(r=>[String(r.name),Number(r.id)]));
+ let editing=await listed(project.id);
+ const ids=await taskIds(project.id);
+ // Details: team, payment stages received, and the customer's own contacts only.
+ await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,contactIds:[999999999]},422);
+ let saved=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,department:"Engineering",paymentsReceived:["AFTER_PO","GO_LIVE"],contactIds:[Number(contact.id)]});
+ const goLiveAt=(await run(`SELECT received_at FROM dbo.project_payment_milestones WHERE project_id=${project.id} AND milestone=N'GO_LIVE'`)).recordset[0]!.received_at;
+ saved=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:saved.rowVersion,paymentsReceived:["GO_LIVE"]});
+ assert.deepEqual((await run(`SELECT milestone,received_at FROM dbo.project_payment_milestones WHERE project_id=${project.id}`)).recordset,[{milestone:"GO_LIVE",received_at:goLiveAt}]);
+ editing=await listed(project.id);
+ assert.deepEqual([editing.team,editing.paymentsReceived,editing.contactIds,editing.rowVersion],["Engineering",["GO_LIVE"],[Number(contact.id)],saved.rowVersion]);
+ // The plan: rename and move one row, add one, drop two untouched rows, keep the started one as it is.
+ const planEdit={masterPlan:[{id:ids["Kick-off meeting"],name:"Kick-off (moved)",start:dayAfter(2),finish:dayAfter(2)},{name:"FAT",start:dayAfter(10),finish:dayAfter(12)}],
+   team:[{id:ids["Controls design"],userId:engineer.id,task:"Controls design",start:yesterday,finish:dayAfter(10),planManDays:12.5}]};
+ await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,...planEdit,scheduleVersion:Buffer.alloc(8).toString("base64")},409);
+ await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,masterPlan:planEdit.masterPlan,scheduleVersion:await scheduleVersion(project.id)},400);
+ await call("PUT",`/projects/${project.id}`,"Engineer",{rowVersion:editing.rowVersion,...planEdit,scheduleVersion:await scheduleVersion(project.id)},403);
+ saved=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,...planEdit,scheduleVersion:await scheduleVersion(project.id)});
+ assert.equal(saved.scheduleVersion,await scheduleVersion(project.id));
+ const afterEdit=(await run(`SELECT t.name,p.name parent,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.sort_order,t.status,
+   CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END removed FROM dbo.schedule_tasks t JOIN dbo.schedule_tasks p ON p.id=t.parent_id
+   WHERE t.project_id=${project.id} ORDER BY p.name,CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END,t.sort_order`)).recordset
+   .map(r=>[r.parent,r.name,r.removed,r.removed?null:r.plan_start,r.removed?null:Number(r.plan_days),r.removed?null:Number(r.sort_order),r.status]);
+ assert.deepEqual(afterEdit,[
+   ["Master Plan","Kick-off (moved)",0,dayAfter(2),1,1,"Not Started"],["Master Plan","FAT",0,dayAfter(10),3,2,"Not Started"],["Master Plan","Go Live",1,null,null,null,"Not Started"],
+   ["Team plan","Controls design",0,yesterday,12,1,"In Progress"],["Team plan","Commissioning",1,null,null,null,"Not Started"],
+ ]);
+ // A row with progress stays: removing it is refused and nothing changes.
+ editing=await listed(project.id);
+ const fatId=(await taskIds(project.id))["FAT"];
+ const inUse=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,masterPlan:planEdit.masterPlan.map((row,index)=>index===0?row:{...row,id:fatId}),team:[],scheduleVersion:await scheduleVersion(project.id)},409);
+ assert.equal(inUse.code,"schedule_row_in_use");
+ assert.equal((await run(`SELECT COUNT(*) n FROM dbo.schedule_tasks WHERE project_id=${project.id} AND deleted_at IS NULL AND name=N'Controls design'`)).recordset[0]!.n,1);
+ // Its plan health is read from the schedule: the moved kick-off is due within a week and not started.
+ assert.equal((await listed(project.id)).health,"At Risk");
  const removedProject=await call("DELETE",`/projects/${lockedProject.id}`,"Admin");
  assert.deepEqual(removedProject,{id:lockedProject.id,number:"PJ-CRM-LOCKED",deleted:true});
  const leftovers=(await run(`DECLARE @p bigint=${lockedProject.id}; SELECT (SELECT COUNT(*) FROM dbo.projects WHERE id=@p) projects,(SELECT COUNT(*) FROM dbo.project_members WHERE project_id=@p) members,
    (SELECT COUNT(*) FROM dbo.project_folders WHERE project_id=@p) folders,(SELECT COUNT(*) FROM dbo.project_docs WHERE project_id=@p) docs,
    (SELECT COUNT(*) FROM dbo.schedule_tasks WHERE project_id=@p) tasks,(SELECT COUNT(*) FROM dbo.schedule_updates WHERE project_id=@p) updates,
+   (SELECT COUNT(*) FROM dbo.project_payment_milestones WHERE project_id=@p) payments,(SELECT COUNT(*) FROM dbo.project_contacts WHERE project_id=@p) contacts,
    (SELECT COUNT(*) FROM dbo.audit_log WHERE entity_type=N'Project' AND entity_id=@p AND action=N'Deleted before work started') audits`)).recordset[0]!;
- assert.deepEqual(leftovers,{projects:0,members:0,folders:0,docs:0,tasks:0,updates:0,audits:1});
+ assert.deepEqual(leftovers,{projects:0,members:0,folders:0,docs:0,tasks:0,updates:0,payments:0,contacts:0,audits:1});
  // The estimate and the ERP number are free again.
  assert.ok((await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(lockedEstimate.id)));
  const recreated=await call("POST","/projects","Admin",lockedBody,201);
@@ -262,7 +301,7 @@ try {
  await call("DELETE",`/schedule-templates/${template.id}`,"Other");
  assert.ok(!(await call("GET","/schedule-templates","Other")).some((t:{id:number})=>t.id===template.id));
  assert.equal((await run(`SELECT COUNT(*) n FROM dbo.schedule_template_rows WHERE template_id=${template.id}`)).recordset[0]!.n,0);
- console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, WON-only project creation, project scope, duplicate prevention, deleting unstarted projects and master schedules.");
+ console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, WON-only project creation, project scope, duplicate prevention, deleting unstarted projects, master schedules, editing the plan, team, payments and contacts.");
  if(process.env.CRM_VISUAL_TEST==="1"){
   for(const [name,stage,value] of [["Vision inspection — phase 2","PROPOSAL",620000],["Factory traceability upgrade","REQUIREMENT",350000],["PLC line expansion","NEGOTIATION",180000]] as const)await call("POST","/crm/opportunities","Sales",{name,stage,customerId,salesOwnerId:sales.id,technicalOwnerId:engineer.id,expectedValue:value,expectedClose:tomorrow,...(["PROPOSAL","NEGOTIATION"].includes(stage)?{proposalSentOn:yesterday,proposalReference:"QT-VISUAL"}:{})},201);
   await app.listen({host:"127.0.0.1",port:4601});console.log("Private CRM visual API ready at http://127.0.0.1:4601");await new Promise<void>(resolve=>{stopVisual=resolve;});

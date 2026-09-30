@@ -50,6 +50,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 62, fileName: "062_record_presence.sql", name: "Record-level presence for estimates and inquiries" },
   { version: 63, fileName: "063_crm_sales_evidence.sql", name: "CRM quotation dispatch and order confirmation evidence" },
   { version: 64, fileName: "064_schedule_templates_project_delete.sql", name: "Reusable master schedules and deleting a project that has not started" },
+  { version: 65, fileName: "065_project_team_payments_contacts.sql", name: "Project team, customer payment milestones and project contacts" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

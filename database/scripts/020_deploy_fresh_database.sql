@@ -126,11 +126,12 @@ GO
 :r database/migrations/062_record_presence.sql
 :r database/migrations/063_crm_sales_evidence.sql
 :r database/migrations/064_schedule_templates_project_delete.sql
+:r database/migrations/065_project_team_payments_contacts.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 64) <> 64
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 65) <> 65
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -175,7 +176,8 @@ IF EXISTS (
         (61, N'Summary set quantities multiply totals without changing components'),
         (62, N'Record-level presence for estimates and inquiries'),
         (63, N'CRM quotation dispatch and order confirmation evidence'),
-        (64, N'Reusable master schedules and deleting a project that has not started')
+        (64, N'Reusable master schedules and deleting a project that has not started'),
+        (65, N'Project team, customer payment milestones and project contacts')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

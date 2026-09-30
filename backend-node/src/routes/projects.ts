@@ -10,9 +10,10 @@ import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
-import { insertInitialPlan, parseInitialPlan, parseProjectNumber, planSpan } from "../project-initial-plan.js";
+import { insertInitialPlan, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
+import { projectHealth, type HealthTask } from "../project-health.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
-import { permissionFor } from "../schedule-service.js";
+import { currentScheduleVersion, permissionFor, validateScheduleVersion } from "../schedule-service.js";
 import { hasRole } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -103,6 +104,36 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       : !row.won ? "awaitWon" : "recordPo";
     return { reason, estimateId:row.estimateId ? Number(row.estimateId) : null, projectId:row.projectId ? Number(row.projectId) : null, projectNo:row.projectNo ?? null };
   });
+  // Plan health for a page of projects, from the leaf rows that carry their own start date.
+  async function healthByProject(projects: { id: number; status: string; targetDelivery: string | null }[]) {
+    const byProject = new Map<number, HealthTask[]>(projects.map((project) => [project.id, []]));
+    if (projects.length) {
+      const rows = (await database.query<Record<string, unknown>>(`
+        SELECT t.project_id,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.status,t.percent_done,CONVERT(char(10),t.forecast_end,23) forecast_end
+        FROM dbo.schedule_tasks t WHERE t.project_id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','))
+          AND t.deleted_at IS NULL AND t.kind<>N'phase' AND t.plan_start IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.deleted_at IS NULL);`,
+        (q) => q.input("ids", sql.NVarChar(sql.MAX), projects.map((project) => project.id).join(",")))).recordset;
+      for (const row of rows) byProject.get(Number(row.project_id))?.push({ planStart: String(row.plan_start), planDays: Number(row.plan_days),
+        status: String(row.status), percentComplete: Number(row.percent_done), forecastFinish: row.forecast_end === null ? null : String(row.forecast_end) });
+    }
+    const today = businessToday(config.businessTimeZone);
+    return new Map(projects.map((project) => [project.id, projectHealth(project, byProject.get(project.id) ?? [], today)]));
+  }
+
+  // The customer's own site contacts, for ticking who the project talks to.
+  app.get("/api/v1/projects/contact-options", async (request) => {
+    await users.demandPermission(request, "project.write");
+    const customerId = positiveLong((request.query as { customerId?: string }).customerId, "Customer id");
+    const result = await database.query<Record<string, unknown>>(`
+      SELECT sc.id,sc.name,sc.position,sc.department,sc.phone,sc.email,s.name site_name
+      FROM dbo.customer_site_contacts sc JOIN dbo.customer_sites s ON s.id=sc.site_id
+      WHERE s.customer_id=@customer AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.deleted_at IS NULL
+      ORDER BY sc.is_primary DESC,sc.name,sc.id;`, (q) => q.input("customer", sql.BigInt, customerId));
+    return result.recordset.map((row) => ({ id: Number(row.id), name: String(row.name), position: String(row.position ?? ""),
+      department: String(row.department ?? ""), phone: String(row.phone ?? ""), email: String(row.email ?? ""), siteName: String(row.site_name ?? "") }));
+  });
+
   app.get("/api/v1/projects", async (request) => {
     await users.demandPermission(request, "project.read");
     const actor = await users.required(request);
@@ -115,7 +146,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       SELECT p.id,p.project_no,p.name,p.customer_id,c.name AS customer_name,p.status,p.project_type,u.name AS manager_name,
         p.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
         p.manager_id,p.lead_engineer_id,le.name AS lead_engineer_name,p.po_no,p.po_date,p.actual_delivery,p.site,p.remark,
-        p.start_date,p.target_delivery,p.progress,p.updated_at,p.row_version,COUNT_BIG(*) OVER() AS total_count
+        p.start_date,p.target_delivery,p.progress,p.updated_at,p.row_version,p.team,
+        (SELECT STRING_AGG(m.milestone,N',') FROM dbo.project_payment_milestones m WHERE m.project_id=p.id) payments_received,
+        (SELECT STRING_AGG(CONVERT(nvarchar(20),pc.contact_id),N',') FROM dbo.project_contacts pc WHERE pc.project_id=p.id) contact_ids,
+        COUNT_BIG(*) OVER() AS total_count
       FROM dbo.projects p INNER JOIN dbo.customers c ON c.id=p.customer_id INNER JOIN dbo.users u ON u.id=p.manager_id
       LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id
       INNER JOIN dbo.users le ON le.id=p.lead_engineer_id
@@ -131,9 +165,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, isProjectElevated(actor));
       sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize);
     });
+    const health = await healthByProject(result.recordset.map((row) => ({ id: Number(row.id), status: String(row.status), targetDelivery: dateOnly(row.target_delivery) })));
     return {
       items: result.recordset.map((row) => ({
         id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
+        team: row.team ?? null, health: health.get(Number(row.id)) ?? "No plan",
+        paymentsReceived: typeof row.payments_received === "string" && row.payments_received ? row.payments_received.split(",") : [],
+        contactIds: typeof row.contact_ids === "string" && row.contact_ids ? row.contact_ids.split(",").map(Number) : [],
         customerId: Number(row.customer_id), endUserCustomerId: row.end_user_customer_id === null ? null : Number(row.end_user_customer_id),
         endUserName: row.end_user_name, endUserCode: row.end_user_code,
         status: row.status, projectType: row.project_type, managerName: row.manager_name,
@@ -152,6 +190,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const body = bodyObject(request.body);
     const requestedEndUserId = endUserCustomerId(body.endUserCustomerId);
     const plan = parseInitialPlan(body);
+    const details = parseProjectDetails(body);
     // With a plan, the project runs from its first row to its last; without one, the dates are typed.
     const span = planSpan(plan);
     const input = {
@@ -251,6 +290,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         IF @lead_id<>@manager_id INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@lead_id,N'Lead Engineer',@actor);
       `);
       await insertInitialPlan(transaction, projectId, plan, actor.id);
+      await writeProjectDetails(transaction, projectId, details, actor.id);
       const folders = new sql.Request(transaction); folders.input("project_id", sql.BigInt, projectId); folders.input("actor", sql.BigInt, actor.id);
       const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
       await folders.query(`INSERT INTO dbo.project_folders(project_id,folder_code,name,storage_key,created_by) VALUES ${values};`);
@@ -259,7 +299,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         projectId, Number(estimate.inquiry_id), input.estimateId, actor.id, writtenKeys);
       await insertAudit(transaction, actor.id, "Project", projectId, number, "Created from approved estimate", estimate.estimate_no,
         { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred,
-          masterPlan: plan.milestones, teamPlan: plan.team });
+          masterPlan: plan.milestones, teamPlan: plan.team, ...details });
       await confirmOpportunityOrder(transaction,Number(estimate.inquiry_id),actor.id,input.purchaseOrderDate>today?today:input.purchaseOrderDate,input.purchaseOrderNumber);
       return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred };
     });
@@ -418,6 +458,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     // Being on the project is what grants the edit, not the permission alone.
     await demandProjectScope(database, actor, id);
     const given = <T>(key: string, read: () => T, fallback: T): T => (body[key] === undefined ? fallback : read());
+    const details = parseProjectDetails(body);
+    // The plan is sent whole: both lists, or neither.
+    const editsPlan = body.masterPlan !== undefined || body.team !== undefined;
+    if (editsPlan && (body.masterPlan === undefined || body.team === undefined)) {
+      throw new ApiError(400, "validation_failed", "Send both the master plan and the team plan, or neither.");
+    }
+    const plan = editsPlan ? parseInitialPlan(body) : null;
+    const canPlan = editsPlan && await permissionFor(database, actor.id, "schedule.plan");
     return database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction);
       lookup.input("id", sql.BigInt, id);
@@ -499,11 +547,25 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         IF NOT EXISTS(SELECT 1 FROM dbo.project_members WHERE project_id=@project_id AND user_id=@lead_id)
           INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES(@project_id,@lead_id,N'Lead Engineer',@actor);`);
 
-      const after = { ...input, status: statusValue, progress };
+      let scheduleVersion: string | null = null;
+      if (plan) {
+        // The same people who may change the plan in Project Schedule.
+        if (!canPlan || (Number(before.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin"))) {
+          throw new ApiError(403, "schedule_plan_owner_required", "Only this project's manager, an Engineering Manager, or an Admin can change its plan.");
+        }
+        if (currentStatus === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
+        await validateScheduleVersion(transaction, id, body.scheduleVersion === undefined || body.scheduleVersion === null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"));
+        await syncProjectPlan(transaction, id, plan, actor.id);
+        scheduleVersion = (await currentScheduleVersion(transaction, id))?.toString("base64") ?? null;
+      }
+      await writeProjectDetails(transaction, id, details, actor.id);
+      // Writing the team moves the row version again; hand back the one the client must send next.
+      const latest = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=@id;`)).recordset[0]!;
+      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.milestones, teamPlan: plan.team } : {}) };
       await insertAudit(transaction, actor.id, "Project", id, String(before.project_no), transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
       return {
-        id, number: String(before.project_no), ...after,
-        rowVersion: updated.row_version.toString("base64"),
+        id, number: String(before.project_no), ...after, scheduleVersion,
+        rowVersion: latest.row_version.toString("base64"),
       };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });

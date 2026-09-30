@@ -1270,6 +1270,17 @@ button.kpi:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); tra
 .project-plan-row .icon-btn:hover { background: var(--red-soft); color: var(--red-text); }
 .project-plan-index { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; text-align: right; }
 .project-plan-dash { color: var(--muted); text-align: center; }
+.project-plan-progress { grid-column: 2 / -1; font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.project-payments, .project-contacts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 14px 0 0; border: 0; border-top: 1px solid var(--line-soft); }
+.project-payments legend, .project-contacts legend { float: left; width: 100%; margin-bottom: 2px; padding: 0; font-size: var(--fs-sm); font-weight: 650; color: var(--ink); }
+.project-payments label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--ink-soft); }
+.project-contacts > p { width: 100%; margin: 0; font-size: var(--fs-xs); }
+.project-contacts ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.project-contacts label { display: flex; align-items: flex-start; gap: 8px; font-size: var(--fs-sm); }
+.project-contacts label input { margin-top: 3px; }
+.project-team-label { display: block; font-size: var(--fs-2xs); }
+.project-status-cell { display: flex; flex-wrap: wrap; gap: 4px; }
+.project-health-cell { display: flex; align-items: center; min-height: 32px; }
 /* A cell a plan row still needs reads amber, so an applied template shows what is left to fill. */
 .project-plan-row :is(input, select):invalid { border-color: var(--amber-line); }
 .project-plan-template { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }

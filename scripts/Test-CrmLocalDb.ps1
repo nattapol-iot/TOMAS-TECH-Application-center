@@ -26,7 +26,7 @@ try {
  Invoke-CrmSql -SqlArguments @('-i',$batchPath,'-v',"DatabaseName=$databaseName")
  Invoke-CrmSql -SqlArguments @('-d',$databaseName,'-i','database/migrations/053_crm.sql')
  Invoke-CrmSql -SqlArguments @('-d',$databaseName,'-i','database/tests/crm-053.sql')
- foreach($migration in (Get-ChildItem -LiteralPath 'database/migrations' -Filter '*.sql' | Where-Object { $_.Name -match '^\d{3}_' -and [int]$_.Name.Substring(0,3) -gt 53 -and [int]$_.Name.Substring(0,3) -le 64 } | Sort-Object Name)) {
+ foreach($migration in (Get-ChildItem -LiteralPath 'database/migrations' -Filter '*.sql' | Where-Object { $_.Name -match '^\d{3}_' -and [int]$_.Name.Substring(0,3) -gt 53 -and [int]$_.Name.Substring(0,3) -le 65 } | Sort-Object Name)) {
    Invoke-CrmSql -SqlArguments @('-d',$databaseName,'-i',$migration.FullName)
  }
  Invoke-CrmSql -SqlArguments @('-d',$databaseName,'-i','database/migrations/063_crm_sales_evidence.sql')

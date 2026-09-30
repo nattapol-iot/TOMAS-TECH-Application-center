@@ -2,30 +2,31 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `db66fe4a`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `63ed4e7d`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 52–80 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 82–105 |
-| GET | `/api/v1/projects` | 106–147 |
-| POST | `/api/v1/projects` | 149–282 |
-| GET | `/api/v1/projects/:id/members` | 284–309 |
-| POST | `/api/v1/projects/:id/members` | 311–334 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 336–357 |
-| GET | `/api/v1/projects/:id/deletion` | 377–384 |
-| DELETE | `/api/v1/projects/:id` | 386–409 |
-| PUT | `/api/v1/projects/:id` | 411–509 |
+| GET | `/api/v1/projects/creation-options` | 53–81 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 83–106 |
+| GET | `/api/v1/projects/contact-options` | 125–135 |
+| GET | `/api/v1/projects` | 137–185 |
+| POST | `/api/v1/projects` | 187–322 |
+| GET | `/api/v1/projects/:id/members` | 324–349 |
+| POST | `/api/v1/projects/:id/members` | 351–374 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 376–397 |
+| GET | `/api/v1/projects/:id/deletion` | 417–424 |
+| DELETE | `/api/v1/projects/:id` | 426–449 |
+| PUT | `/api/v1/projects/:id` | 451–571 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 37–41 |
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 43–48 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 50–510 |
+| `businessToday` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 38–42 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 44–49 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 51–572 |
 
 ## Direct local dependencies
 
@@ -40,6 +41,7 @@ Evidence: source snapshot `db66fe4a`; generated, do not edit. [backend-node/src/
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/project-lifecycle.ts](<../../../backend-node/src/project-lifecycle.ts>)
 - [backend-node/src/project-initial-plan.ts](<../../../backend-node/src/project-initial-plan.ts>)
+- [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
 - [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
@@ -49,7 +51,7 @@ Evidence: source snapshot `db66fe4a`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.crm_opportunities`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_folders`, `dbo.project_members`, `dbo.projects`, `dbo.roles`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
+`dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_contacts`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.projects`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
 
 ## Change boundary
 
