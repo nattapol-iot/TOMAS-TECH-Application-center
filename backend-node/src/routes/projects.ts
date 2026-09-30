@@ -13,6 +13,8 @@ import { checkProjectTransition, isProjectStatus, progressForStatus, type Projec
 import { insertInitialPlan, parseInitialPlan, parseProjectNumber, planSpan } from "../project-initial-plan.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import { permissionFor } from "../schedule-service.js";
+import { hasRole } from "../user-roles.js";
+import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import { confirmOpportunityOrder } from "../crm.js";
 
@@ -50,10 +52,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
   app.get("/api/v1/projects/creation-options", async (request) => {
     await users.demandPermission(request, "project.write");
     await users.demandPermission(request, "estimate.read");
+    // Only work the customer has ordered: the linked CRM opportunity is WON, and its order
+    // evidence is offered as the PO so it is not typed twice.
     const result = await database.query<Record<string, unknown>>(`
       SELECT e.id,e.estimate_no number,e.project_name projectName,e.customer_id customerId,
-        e.owner_id ownerId,i.site_location siteLocation,i.target_delivery targetDelivery
+        e.owner_id ownerId,i.site_location siteLocation,i.target_delivery targetDelivery,
+        o.opportunity_no opportunityNo,o.won_on wonOn,o.won_reference wonReference
       FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id
+      JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id AND o.stage=N'WON'
       WHERE e.status IN(N'Approved',N'Locked') AND e.deleted_at IS NULL AND e.archived_at IS NULL
         AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled'
         AND NOT EXISTS(SELECT 1 FROM dbo.projects p WHERE p.inquiry_id=i.id OR p.estimate_id=e.id)
@@ -66,7 +72,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       ORDER BY u.name;
     `);
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
-    return { estimates: (sets[0] ?? []).map(r => ({ ...r, id:Number(r.id), customerId:Number(r.customerId), ownerId:Number(r.ownerId), targetDelivery:dateOnly(r.targetDelivery as Date) })),
+    return { estimates: (sets[0] ?? []).map(({ wonOn, wonReference, ...r }) => ({ ...r, id:Number(r.id), customerId:Number(r.customerId), ownerId:Number(r.ownerId), targetDelivery:dateOnly(r.targetDelivery as Date),
+        // The order reference is free text; it is only a PO number when it fits the PO field.
+        purchaseOrderNumber: typeof wonReference === "string" && wonReference.trim().length <= 100 ? wonReference.trim() : "",
+        purchaseOrderDate: dateOnly(wonOn as Date | null) ?? "" })),
       people: (sets[1] ?? []).map(r => ({ ...r, id:Number(r.id), canManage:Boolean(r.canManage), canLead:Boolean(r.canLead) })) };
   });
 
@@ -76,6 +85,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const id = positiveLong((request.params as {inquiryId:string}).inquiryId,"Inquiry");
     const result = await database.query<Record<string, unknown>>(`
       SELECT i.status inquiryStatus,i.archived_at archivedAt,e.id estimateId,e.status estimateStatus,
+        CASE WHEN EXISTS(SELECT 1 FROM dbo.crm_opportunities o WHERE o.id=i.opportunity_id AND o.stage=N'WON') THEN 1 ELSE 0 END won,
         e.deleted_at estimateDeletedAt,e.archived_at estimateArchivedAt,
         CASE WHEN p.id IS NULL THEN 0 ELSE 1 END hasProject,
         CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'project.read') AND p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
@@ -89,7 +99,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const row=result.recordset[0];
     if(!row)throw new ApiError(404,"inquiry_not_found","Inquiry not found.");
     const reason = row.hasProject ? "projectExists" : row.archivedAt || row.inquiryStatus === "Cancelled" ? "sourceUnavailable"
-      : !row.estimateId || row.estimateDeletedAt || row.estimateArchivedAt || !["Approved","Locked"].includes(String(row.estimateStatus)) ? "awaitCostApproval" : "recordPo";
+      : !row.estimateId || row.estimateDeletedAt || row.estimateArchivedAt || !["Approved","Locked"].includes(String(row.estimateStatus)) ? "awaitCostApproval"
+      : !row.won ? "awaitWon" : "recordPo";
     return { reason, estimateId:row.estimateId ? Number(row.estimateId) : null, projectId:row.projectId ? Number(row.projectId) : null, projectNo:row.projectNo ?? null };
   });
   app.get("/api/v1/projects", async (request) => {
@@ -186,6 +197,11 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL AND archived_at IS NULL;
       `)).recordset[0];
       if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
+      const order = new sql.Request(transaction); order.input("inquiry", sql.BigInt, Number(estimate.inquiry_id));
+      if (!(await order.query(`SELECT o.id FROM dbo.inquiries i WITH(HOLDLOCK) JOIN dbo.crm_opportunities o WITH(HOLDLOCK) ON o.id=i.opportunity_id
+          WHERE i.id=@inquiry AND o.stage=N'WON';`)).recordset[0]) {
+        throw new ApiError(409, "opportunity_not_won", "Mark the customer order as WON on the linked CRM opportunity before creating a project.");
+      }
       const duplicate = new sql.Request(transaction);
       duplicate.input("estimate",sql.BigInt,input.estimateId).input("inquiry",sql.BigInt,Number(estimate.inquiry_id));
       if((await duplicate.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate OR inquiry_id=@inquiry`)).recordset[0]) {
@@ -338,6 +354,58 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       await insertAudit(transaction, actor.id, "Project", id, projectNo, "Removed project member", { userId: memberUserId }, null);
     });
     return reply.status(204).send();
+  });
+
+  // For a project created by mistake or for a trial. dbo.delete_unstarted_project refuses one
+  // with any work recorded and names that work; once deleted, the same estimate and ERP
+  // number can create the project again. The preview asks the same question without deleting.
+  async function projectDeletion(transaction: sql.Transaction, id: number, actor: CurrentUser, execute: boolean) {
+    const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
+    const project = (await lookup.query<Record<string, unknown> & { project_no: string; manager_id: number | string }>(`
+      SELECT project_no,name,customer_id,inquiry_id,estimate_id,status,manager_id,lead_engineer_id,po_no,po_date,start_date,target_delivery
+      FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+    if (!project) throw new ApiError(404, "project_not_found", "Project not found.");
+    if (Number(project.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) {
+      throw new ApiError(403, "project_delete_forbidden", "Only this project's manager, an Engineering Manager or an Admin can delete it.");
+    }
+    const run = new sql.Request(transaction); run.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("execute", sql.Bit, execute);
+    const sets = (await run.execute("dbo.delete_unstarted_project")).recordsets as unknown as Record<string, unknown>[][];
+    const blockers = (sets[0] ?? []).map((row) => ({ source: String(row.source), count: Number(row.row_count) }));
+    return { project, blockers, storageKeys: (sets[1] ?? []).map((row) => String(row.storage_key)) };
+  }
+
+  app.get("/api/v1/projects/:id/deletion", async (request) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    await demandProjectScope(database, actor, id);
+    const { blockers } = await database.transaction((transaction) => projectDeletion(transaction, id, actor, false));
+    return { id, canDelete: blockers.length === 0, blockers };
+  });
+
+  app.delete("/api/v1/projects/:id", async (request) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    await demandProjectScope(database, actor, id);
+    const deleted = await database.transaction(async (transaction) => {
+      const { project, blockers, storageKeys } = await projectDeletion(transaction, id, actor, true);
+      if (blockers.length) {
+        throw new ApiError(409, "project_has_work", "This project already has work recorded against it, so it cannot be deleted.", { blockers });
+      }
+      await insertAudit(transaction, actor.id, "Project", id, project.project_no, "Deleted before work started", project, null);
+      return { number: project.project_no, storageKeys };
+    });
+    // Files go only after the rows are gone; a file left behind is logged, never the reverse.
+    for (const key of deleted.storageKeys) {
+      await deleteStoredFile(config.documentStorage, key).catch((error: unknown) => {
+        request.log.error({ err: error, storageKey: key, projectId: id }, "Could not remove a deleted project's file");
+      });
+    }
+    await removeEmptyStoredDirectory(config.documentStorage, `projects/${id}`).catch((error: unknown) => {
+      request.log.error({ err: error, projectId: id }, "Could not remove a deleted project's folders");
+    });
+    return { id, number: deleted.number, deleted: true };
   });
 
   app.put("/api/v1/projects/:id", async (request) => {

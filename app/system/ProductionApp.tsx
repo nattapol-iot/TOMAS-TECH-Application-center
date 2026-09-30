@@ -63,6 +63,7 @@ import {
 import { ProductionKnowledgeHub } from "./production/KnowledgeScreens";
 import { ProductionModuleTemplates } from "./production/ModuleTemplateScreens";
 import { LaborPackageMaster } from "./production/LaborPackageMaster";
+import { ScheduleTemplateMaster } from "./production/ScheduleTemplateMaster";
 import { ProductionProfile } from "./production/ProfileScreen";
 import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens";
 import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
@@ -84,7 +85,7 @@ type View = CrmView
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
   | "suppliers" | "employees" | "material-master" | "user-accounts" | "summary-reports"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "schedule-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; rateAccess?: boolean };
 type MyWorkUrgencyItem = {
@@ -161,6 +162,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     {"view":"employees","label":"Employees","icon":"user","permission":"master.read"},
     {"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"},
     {"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit.read"},
+    {"view":"schedule-templates","label":"Master Schedule","icon":"calendar"},
   ] },
   { group: "ESTIMATING LIBRARY", items: [
     {"view":"module-templates","label":"Module Templates","icon":"package","permission":"estimate.read"},
@@ -761,6 +763,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
+          {view === "schedule-templates" ? <ScheduleTemplateMaster notify={setToast} /> : null}
           {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
           {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
           {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}

@@ -98,6 +98,17 @@ try {
   assert.equal(Number(approved.total),2040); assert.equal(JSON.parse(approved.description).totals.overhead,1200);
   const inquiryDetail=await api("engineer","GET",`/api/v1/inquiries/${await database.query<{id:number}>(`SELECT inquiry_id id FROM dbo.estimates WHERE id=${applied.id}`).then(result=>Number(result.recordset[0]!.id))}`);
   assert.equal(inquiryDetail.estimate.overheadState,"Applied"); assert.equal(inquiryDetail.estimate.overheadTotal,1200); assert.equal(inquiryDetail.estimate.total,2040);
+  // Project creation needs the inquiry's CRM opportunity WON; mark the linked one, or link a new one.
+  const markOrderWon = (inquiry: string) => run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
+    IF EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND opportunity_id IS NOT NULL)
+      UPDATE o SET stage=N'WON',won_on=COALESCE(o.won_on,CONVERT(date,SYSUTCDATETIME())),won_reference=COALESCE(o.won_reference,N'TEST ONLY PO')
+      FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id WHERE i.id=@inquiry;
+    ELSE BEGIN
+      INSERT dbo.crm_opportunities(opportunity_no,name,customer_id,sales_owner_id,stage,won_on,won_reference,created_by,updated_by)
+      SELECT N'OPP-TEST-'+CONVERT(nvarchar(20),id),LEFT(project_name,300),customer_id,@owner,N'WON',CONVERT(date,SYSUTCDATETIME()),N'TEST ONLY PO',@owner,@owner FROM dbo.inquiries WHERE id=@inquiry;
+      UPDATE dbo.inquiries SET opportunity_id=SCOPE_IDENTITY() WHERE id=@inquiry;
+    END;`);
+  markOrderWon(`SELECT inquiry_id FROM dbo.estimates WHERE id=${applied.id}`);
   const project=await api("admin","POST","/api/v1/projects",{estimateId:applied.id,projectNumber:`PJ-OH-${applied.id}`,purchaseOrderNumber:"TEST-OH-PO",purchaseOrderDate:today,
     managerId:users["overhead-manager"],leadEngineerId:users["overhead-engineer"],startDate:today,targetDelivery:due,site:"TEST ONLY"},201);
   const carried=(await database.query<{storage_key:string}>(`SELECT storage_key FROM dbo.project_docs WHERE project_id=${project.id} AND document_type=N'Estimate cost' AND deleted_at IS NULL`)).recordset[0]!;

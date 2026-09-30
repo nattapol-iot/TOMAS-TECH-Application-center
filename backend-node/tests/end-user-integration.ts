@@ -67,7 +67,18 @@ try {
   detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: null, rowVersion: detail.rowVersion }, 200, "PUT"); assert.equal(detail.endUserCustomerId, null);
   detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: direct.id, rowVersion: detail.rowVersion }, 200, "PUT"); assert.equal(detail.endUserCustomerId, direct.id);
   detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: endUser.id, rowVersion: detail.rowVersion }, 200, "PUT");
+  // Project creation needs the inquiry's CRM opportunity WON; mark the linked one, or link a new one.
+  const markOrderWon = (inquiry: string) => run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
+    IF EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND opportunity_id IS NOT NULL)
+      UPDATE o SET stage=N'WON',won_on=COALESCE(o.won_on,CONVERT(date,SYSUTCDATETIME())),won_reference=COALESCE(o.won_reference,N'TEST ONLY PO')
+      FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id WHERE i.id=@inquiry;
+    ELSE BEGIN
+      INSERT dbo.crm_opportunities(opportunity_no,name,customer_id,sales_owner_id,stage,won_on,won_reference,created_by,updated_by)
+      SELECT N'OPP-TEST-'+CONVERT(nvarchar(20),id),LEFT(project_name,300),customer_id,@owner,N'WON',CONVERT(date,SYSUTCDATETIME()),N'TEST ONLY PO',@owner,@owner FROM dbo.inquiries WHERE id=@inquiry;
+      UPDATE dbo.inquiries SET opportunity_id=SCOPE_IDENTITY() WHERE id=@inquiry;
+    END;`);
   async function approvedEstimate(inquiryId: number) {
+    markOrderWon(String(inquiryId));
     run(`INSERT dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,created_date,due_date,status,created_by,updated_by)
       SELECT N'EU-EST-'+CONVERT(nvarchar(20),id),id,customer_id,project_name,project_type,estimate_owner_id,CONVERT(date,SYSUTCDATETIME()),due_date,N'Approved',created_by,updated_by FROM dbo.inquiries WHERE id=${inquiryId}`);
     return Number((await database.query<{ id: number }>(`SELECT id FROM dbo.estimates WHERE inquiry_id=${inquiryId}`)).recordset[0]!.id);

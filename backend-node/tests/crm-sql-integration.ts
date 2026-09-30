@@ -19,6 +19,7 @@ import { registerCrmCustomerRoutes } from "../src/routes/crm-customers.js";
 import { registerCrmDocumentRoutes } from "../src/routes/crm-documents.js";
 import { registerInquiryRoutes } from "../src/routes/inquiries.js";
 import { registerProjectRoutes } from "../src/routes/projects.js";
+import { registerScheduleTemplateRoutes } from "../src/routes/schedule-templates.js";
 import { EmailService } from "../src/email.js";
 import { registerSalesCustomerRoutes } from "../src/routes/sales-customers.js";
 import type { CurrentUser } from "../src/types.js";
@@ -66,8 +67,8 @@ if(process.env.CRM_VISUAL_TEST==="1"){
  app.post("/test-stop",async()=>{setTimeout(()=>stopVisual?.(),50);return {stopped:true};});
 }
 registerCrmRoutes(app,config,database,users);registerCrmCustomerRoutes(app,database,users);registerCrmDocumentRoutes(app,config,database,users);registerInquiryRoutes(app,config,database,users,new EmailService({mode:"Disabled"}));registerSalesCustomerRoutes(app,database,users);
-registerProjectRoutes(app,config,database,users);
-async function call(method:"GET"|"POST"|"PUT",url:string,actor="Sales",body?:unknown,status=200){const response=await app.inject({method,url:`/api/v1${url}`,headers:{"x-test-actor":actor},...(body?{payload:body}:{})});assert.equal(response.statusCode,status,`${method} ${url}: ${response.body}`);return response.json();}
+registerProjectRoutes(app,config,database,users);registerScheduleTemplateRoutes(app,database,users);
+async function call(method:"GET"|"POST"|"PUT"|"DELETE",url:string,actor="Sales",body?:unknown,status=200){const response=await app.inject({method,url:`/api/v1${url}`,headers:{"x-test-actor":actor},...(body?{payload:body}:{})});assert.equal(response.statusCode,status,`${method} ${url}: ${response.body}`);return response.json();}
 try {
  await run(`INSERT dbo.users(entra_object_id,email,name,role_id,department) SELECT 'crm-api-'+v.name,'crm-api-'+v.name+'@example.invalid',v.name,r.id,v.department FROM (VALUES('Sales','Sales Engineer','Sales'),('Engineer','Engineer','Engineering'),('Other','Engineer','Other'),('Admin','Admin','Admin'))v(name,role,department) JOIN dbo.roles r ON r.code=v.role;`);
  actors=(await run("SELECT u.id,u.name,u.email,u.department,r.code role FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.email LIKE 'crm-api-%@example.invalid'")).recordset.map(r=>({id:Number(r.id),name:String(r.name),email:String(r.email),department:String(r.department),role:String(r.role),roles:[String(r.role)],isActive:true,entraObjectId:""}));
@@ -170,7 +171,9 @@ try {
  await run(`UPDATE dbo.estimates SET status='Approved' WHERE id=${estimate.id}; UPDATE dbo.inquiries SET estimate_id=${estimate.id},status='Approved' WHERE id=${direct.id};
    INSERT dbo.user_business_roles(user_id,role_id,granted_by,reason) SELECT ${sales.id},id,${admin.id},'Project creation test' FROM dbo.roles WHERE code='Project Manager';`);
  const creationOptions=await call("GET","/projects/creation-options","Admin");
- assert.ok(creationOptions.estimates.some((r:{id:number})=>r.id===Number(estimate.id)));
+ // A WON opportunity's order evidence is offered as the PO.
+ const directOption=creationOptions.estimates.find((r:{id:number})=>r.id===Number(estimate.id));
+ assert.deepEqual([directOption.purchaseOrderNumber,directOption.purchaseOrderDate],["PO-DIRECT-1",yesterday]);assert.match(directOption.opportunityNo,/^OPP-/);
  assert.equal(creationOptions.people.find((r:{id:number})=>r.id===sales.id).canManage,true);
  assert.equal((await call("GET",`/projects/handover/${direct.id}`,"Admin")).reason,"recordPo");
  await call("POST","/projects","Admin",{...projectBody,purchaseOrderNumber:""},400);
@@ -207,12 +210,59 @@ try {
  assert.equal((await call("GET",`/crm/opportunities/${existing.id}`,"Admin")).links[0].inquiryId,another.id);
  const lockedEstimate=(await run(`INSERT dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,created_date,due_date,status,created_by,updated_by)
    OUTPUT inserted.id VALUES('LOCKED-EST-FIXTURE',${another.id},${customerId},'Locked costs','IoT',${engineer.id},GETUTCDATE(),GETUTCDATE(),'Locked',${admin.id},${admin.id})`)).recordset[0]!;
- assert.ok((await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(lockedEstimate.id)));
+ // Costs are Locked but the order is not WON: not offered, and refused if posted anyway.
+ assert.ok(!(await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(lockedEstimate.id)));
+ assert.equal((await call("GET",`/projects/handover/${another.id}`,"Admin")).reason,"awaitWon");
+ const notWon=await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"PJ-CRM-LOCKED",purchaseOrderNumber:"PO-LOCKED-1"},409);
+ assert.equal(notWon.code,"opportunity_not_won");
+ const existingOpportunity=(await call("GET",`/crm/opportunities/${existing.id}`,"Sales")).opportunity;
+ await call("PUT",`/crm/opportunities/${existing.id}`,"Sales",{rowVersion:existingOpportunity.rowVersion,stage:"WON",wonOn:yesterday,wonReference:"PO-LOCKED-1"});
+ const lockedOption=(await call("GET","/projects/creation-options","Admin")).estimates.find((r:{id:number})=>r.id===Number(lockedEstimate.id));
+ assert.deepEqual([lockedOption.purchaseOrderNumber,lockedOption.purchaseOrderDate],["PO-LOCKED-1",yesterday]);
  const reused=await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"pj-crm-direct",purchaseOrderNumber:"PO-LOCKED-1"},409);
  assert.equal(reused.code,"project_number_taken");
- await call("POST","/projects","Admin",{...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"PJ-CRM-LOCKED",purchaseOrderNumber:"PO-LOCKED-1"},201);
+ const lockedBody={...projectBody,estimateId:Number(lockedEstimate.id),projectNumber:"PJ-CRM-LOCKED",purchaseOrderNumber:"PO-LOCKED-1",
+   masterPlan:[{name:"Kick-off meeting",start:tomorrow,finish:tomorrow}]};
+ const lockedProject=await call("POST","/projects","Admin",lockedBody,201);
  assert.equal((await call("GET",`/crm/opportunities/${existing.id}`,"Admin")).opportunity.stage,"WON");
- console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, project scope and duplicate prevention.");
+
+ // Deleting a project: only its manager, an Engineering Manager or an Admin, and only before work is recorded.
+ await call("GET",`/projects/${lockedProject.id}/deletion`,"Sales",undefined,403);
+ await call("DELETE",`/projects/${lockedProject.id}`,"Sales",undefined,403);
+ assert.deepEqual(await call("GET",`/projects/${lockedProject.id}/deletion`,"Admin"),{id:lockedProject.id,canDelete:true,blockers:[]});
+ await run(`UPDATE dbo.schedule_tasks SET status=N'In Progress',percent_done=10,actual_start=CONVERT(date,GETUTCDATE()) WHERE project_id=${project.id} AND name=N'Controls design'`);
+ const blocked=await call("GET",`/projects/${project.id}/deletion`,"Sales");
+ assert.deepEqual(blocked,{id:project.id,canDelete:false,blockers:[{source:"Schedule progress",count:1}]});
+ assert.equal((await call("DELETE",`/projects/${project.id}`,"Sales",undefined,409)).code,"project_has_work");
+ assert.ok((await run(`SELECT id FROM dbo.projects WHERE id=${project.id}`)).recordset[0]);
+ const removedProject=await call("DELETE",`/projects/${lockedProject.id}`,"Admin");
+ assert.deepEqual(removedProject,{id:lockedProject.id,number:"PJ-CRM-LOCKED",deleted:true});
+ const leftovers=(await run(`DECLARE @p bigint=${lockedProject.id}; SELECT (SELECT COUNT(*) FROM dbo.projects WHERE id=@p) projects,(SELECT COUNT(*) FROM dbo.project_members WHERE project_id=@p) members,
+   (SELECT COUNT(*) FROM dbo.project_folders WHERE project_id=@p) folders,(SELECT COUNT(*) FROM dbo.project_docs WHERE project_id=@p) docs,
+   (SELECT COUNT(*) FROM dbo.schedule_tasks WHERE project_id=@p) tasks,(SELECT COUNT(*) FROM dbo.schedule_updates WHERE project_id=@p) updates,
+   (SELECT COUNT(*) FROM dbo.audit_log WHERE entity_type=N'Project' AND entity_id=@p AND action=N'Deleted before work started') audits`)).recordset[0]!;
+ assert.deepEqual(leftovers,{projects:0,members:0,folders:0,docs:0,tasks:0,updates:0,audits:1});
+ // The estimate and the ERP number are free again.
+ assert.ok((await call("GET","/projects/creation-options","Admin")).estimates.some((r:{id:number})=>r.id===Number(lockedEstimate.id)));
+ const recreated=await call("POST","/projects","Admin",lockedBody,201);
+ assert.equal(recreated.number,"PJ-CRM-LOCKED");
+
+ // Master schedules: every signed-in user keeps and reuses them.
+ const seeded=(await call("GET","/schedule-templates","Other")).find((t:{name:string})=>t.name==="Standard project");
+ assert.equal(seeded.rows.length,8);assert.equal(seeded.rows[0].name,"Kick-off meeting");assert.equal(seeded.rows[0].startOffsetDays,null);
+ const templateRows=[{name:"Kick-off",startOffsetDays:0,durationDays:1},{name:"Install",startOffsetDays:30,durationDays:5},{name:"Handover",startOffsetDays:null,durationDays:null}];
+ const template=await call("POST","/schedule-templates","Other",{name:"Line upgrade",rows:templateRows},201);
+ assert.equal((await call("POST","/schedule-templates","Sales",{name:"Line upgrade",rows:[{name:"Kick-off"}]},409)).code,"schedule_template_name_taken");
+ await call("POST","/schedule-templates","Sales",{name:"Half period",rows:[{name:"Kick-off",startOffsetDays:1}]},400);
+ const listedTemplate=(await call("GET","/schedule-templates","Sales")).find((t:{id:number})=>t.id===template.id);
+ assert.deepEqual(listedTemplate.rows,templateRows);
+ await call("PUT",`/schedule-templates/${template.id}`,"Sales",{name:"Line upgrade v2",rows:[{name:"Only"}],rowVersion:Buffer.alloc(8).toString("base64")},409);
+ await call("PUT",`/schedule-templates/${template.id}`,"Sales",{name:"Line upgrade v2",rows:[{name:"Only"}],rowVersion:listedTemplate.rowVersion});
+ assert.deepEqual((await call("GET","/schedule-templates","Other")).find((t:{id:number})=>t.id===template.id).rows,[{name:"Only",startOffsetDays:null,durationDays:null}]);
+ await call("DELETE",`/schedule-templates/${template.id}`,"Other");
+ assert.ok(!(await call("GET","/schedule-templates","Other")).some((t:{id:number})=>t.id===template.id));
+ assert.equal((await run(`SELECT COUNT(*) n FROM dbo.schedule_template_rows WHERE template_id=${template.id}`)).recordset[0]!.n,0);
+ console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, WON-only project creation, project scope, duplicate prevention, deleting unstarted projects and master schedules.");
  if(process.env.CRM_VISUAL_TEST==="1"){
   for(const [name,stage,value] of [["Vision inspection — phase 2","PROPOSAL",620000],["Factory traceability upgrade","REQUIREMENT",350000],["PLC line expansion","NEGOTIATION",180000]] as const)await call("POST","/crm/opportunities","Sales",{name,stage,customerId,salesOwnerId:sales.id,technicalOwnerId:engineer.id,expectedValue:value,expectedClose:tomorrow,...(["PROPOSAL","NEGOTIATION"].includes(stage)?{proposalSentOn:yesterday,proposalReference:"QT-VISUAL"}:{})},201);
   await app.listen({host:"127.0.0.1",port:4601});console.log("Private CRM visual API ready at http://127.0.0.1:4601");await new Promise<void>(resolve=>{stopVisual=resolve;});

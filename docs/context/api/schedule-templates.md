@@ -1,0 +1,40 @@
+# schedule-templates
+
+[Module](../modules/planning.md) · [Index](../../../AGENTS.md)
+
+Evidence: source snapshot `db66fe4a`; generated, do not edit. [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>). Ranges are hints: search symbol after edits.
+
+## API operations
+
+| Method | Path | Source lines |
+|---|---|---|
+| GET | `/api/v1/schedule-templates` | 67–84 |
+| POST | `/api/v1/schedule-templates` | 86–101 |
+| PUT | `/api/v1/schedule-templates/:id` | 103–123 |
+| DELETE | `/api/v1/schedule-templates/:id` | 125–136 |
+
+## Named functions
+
+| Symbol | Source | Lines |
+|---|---|---|
+| `optionalDays` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 21–27 |
+| `parseTemplate` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 29–46 |
+| `writeRows` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 48–58 |
+| `demandUniqueName` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 60–64 |
+| `registerScheduleTemplateRoutes` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 66–137 |
+
+## Direct local dependencies
+
+- [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
+- [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
+- [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
+- [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
+
+## SQL references (literal scan, not a complete schema or write-set)
+
+`dbo.schedule_template_rows`, `dbo.schedule_templates`, `dbo.users`
+
+## Change boundary
+
+Read the selected handler and helpers it calls, then its caller in api-client.ts. Verify permission checks, record scope, transaction, rowVersion and audit on that path; a route name alone does not prove authorization. Dynamic routes/SQL, helper side effects and runtime config require source inspection.

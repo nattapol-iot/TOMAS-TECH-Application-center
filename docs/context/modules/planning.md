@@ -4,13 +4,14 @@
 
 แผนงาน timeline กำลังคน lifecycle งานและคำขอปรับวัน
 
-Evidence: snapshot `93491087`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `db66fe4a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
 - [schedule API and function map](../api/schedule.md) — registered in Node app
 - [resource-planning API and function map](../api/resource-planning.md) — registered in Node app
 - [resource-tasks API and function map](../api/resource-tasks.md) — registered in Node app
+- [schedule-templates API and function map](../api/schedule-templates.md) — registered in Node app
 
 ## UI function locator
 
@@ -152,6 +153,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/tests/drawing-workflow.test.ts](<../../../backend-node/tests/drawing-workflow.test.ts>)
 - [backend-node/tests/resource-planning.test.ts](<../../../backend-node/tests/resource-planning.test.ts>)
 - [backend-node/tests/resource-task-math.test.ts](<../../../backend-node/tests/resource-task-math.test.ts>)
+- [backend-node/tests/schedule-templates.test.ts](<../../../backend-node/tests/schedule-templates.test.ts>)
 
 ## Client contract lookup
 

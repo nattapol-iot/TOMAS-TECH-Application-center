@@ -89,7 +89,18 @@ try {
     }, 201);
     return { customer, inquiry, dueDate };
   }
+  // Project creation needs the inquiry's CRM opportunity WON; mark the linked one, or link a new one.
+  const markOrderWon = (inquiry: string) => run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
+    IF EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND opportunity_id IS NOT NULL)
+      UPDATE o SET stage=N'WON',won_on=COALESCE(o.won_on,CONVERT(date,SYSUTCDATETIME())),won_reference=COALESCE(o.won_reference,N'TEST ONLY PO')
+      FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id WHERE i.id=@inquiry;
+    ELSE BEGIN
+      INSERT dbo.crm_opportunities(opportunity_no,name,customer_id,sales_owner_id,stage,won_on,won_reference,created_by,updated_by)
+      SELECT N'OPP-TEST-'+CONVERT(nvarchar(20),id),LEFT(project_name,300),customer_id,@owner,N'WON',CONVERT(date,SYSUTCDATETIME()),N'TEST ONLY PO',@owner,@owner FROM dbo.inquiries WHERE id=@inquiry;
+      UPDATE dbo.inquiries SET opportunity_id=SCOPE_IDENTITY() WHERE id=@inquiry;
+    END;`);
   async function approveEstimate(inquiryId: number, dueDate: string) {
+    markOrderWon(String(inquiryId));
     let estimate = await api("engineer", "POST", "/api/v1/estimates", { inquiryId, ownerId: actors["handover-engineer"], contingencyRate: 5, dueDate }, 201);
     const manhour = await api("engineer", "POST", `/api/v1/estimates/${estimate.id}/manhour-lines`, {
       estimateRowVersion: estimate.rowVersion, package: "TEST ONLY engineering", activity: "TEST ONLY design and implementation",

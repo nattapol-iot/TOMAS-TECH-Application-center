@@ -1639,6 +1639,24 @@ export const listProjects = (values: { page?: number; pageSize?: number; search?
 export const createProject = (input: CreateProjectInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/projects/", { method: "POST", body: JSON.stringify(input) });
 
+/** Work recorded against a project that stops it being deleted, by source ("BOM", "Purchase order", ...). */
+export type ProjectDeletionCheck = { id: number; canDelete: boolean; blockers: { source: string; count: number }[] };
+export const checkProjectDeletion = (projectId: number) => apiRequest<ProjectDeletionCheck>(`/api/v1/projects/${projectId}/deletion`);
+export const deleteProject = (projectId: number) =>
+  apiRequest<{ id: number; number: string; deleted: true }>(`/api/v1/projects/${projectId}`, { method: "DELETE" });
+
+/** A reusable Master Plan. Days count from the project start; a row without them carries only its name. */
+export type ScheduleTemplateRow = { name: string; startOffsetDays: number | null; durationDays: number | null };
+export type ScheduleTemplate = { id: number; name: string; updatedAt: string; updatedBy: string | null; rowVersion: string; rows: ScheduleTemplateRow[] };
+export type ScheduleTemplateInput = { name: string; rows: ScheduleTemplateRow[] };
+export const listScheduleTemplates = () => apiRequest<ScheduleTemplate[]>("/api/v1/schedule-templates");
+export const createScheduleTemplate = (input: ScheduleTemplateInput) =>
+  apiRequest<{ id: number; rowVersion: string }>("/api/v1/schedule-templates", { method: "POST", body: JSON.stringify(input) });
+export const updateScheduleTemplate = (id: number, input: ScheduleTemplateInput & { rowVersion: string }) =>
+  apiRequest<{ id: number; rowVersion: string }>(`/api/v1/schedule-templates/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteScheduleTemplate = (id: number) =>
+  apiRequest<{ id: number; deleted: true }>(`/api/v1/schedule-templates/${id}`, { method: "DELETE" });
+
 export type UpdateProjectInput = {
   rowVersion: string;
   name?: string;

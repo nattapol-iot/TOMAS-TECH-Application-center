@@ -125,11 +125,12 @@ GO
 :r database/migrations/061_estimate_summary_cost_multiplier.sql
 :r database/migrations/062_record_presence.sql
 :r database/migrations/063_crm_sales_evidence.sql
+:r database/migrations/064_schedule_templates_project_delete.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 63) <> 63
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 64) <> 64
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -173,7 +174,8 @@ IF EXISTS (
         (60, N'Price sources that cite a link instead of a stored document'),
         (61, N'Summary set quantities multiply totals without changing components'),
         (62, N'Record-level presence for estimates and inquiries'),
-        (63, N'CRM quotation dispatch and order confirmation evidence')
+        (63, N'CRM quotation dispatch and order confirmation evidence'),
+        (64, N'Reusable master schedules and deleting a project that has not started')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

@@ -63,6 +63,7 @@ import { registerProjectDocumentRoutes } from "./routes/project-documents.js";
 import { registerPurchaseRequisitionRoutes } from "./routes/purchase-requisitions.js";
 import { registerReportRoutes } from "./routes/reports.js";
 import { registerScheduleRoutes } from "./routes/schedule.js";
+import { registerScheduleTemplateRoutes } from "./routes/schedule-templates.js";
 import { registerSalesIntakeRoutes } from "./routes/sales-intakes.js";
 import { registerSignatureMasterRoutes } from "./routes/signature-master.js";
 import { registerSigningRoutes } from "./routes/signing.js";
@@ -204,6 +205,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerHistoricalPrRoutes(app, database, users);
   registerReportRoutes(app, config, database, users);
   registerScheduleRoutes(app, database, users);
+  registerScheduleTemplateRoutes(app, database, users);
   registerResourcePlanningRoutes(app, database, users);
   registerResourceTaskRoutes(app, database, users);
   registerSalesIntakeRoutes(app, config, database, users);

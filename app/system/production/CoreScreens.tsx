@@ -56,7 +56,12 @@ import {
   type ProjectDocument,
   type ProjectMember,
   type ProjectSummary,
+  type ProjectDeletionCheck,
+  type ScheduleTemplate,
   type SignInbox,
+  checkProjectDeletion,
+  deleteProject,
+  listScheduleTemplates,
   updateProject,
 } from "../api-client";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
@@ -796,23 +801,50 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const [endUserProject, setEndUserProject] = useState<ProjectSummary | null>(null);
   const [membersProject, setMembersProject] = useState<ProjectSummary | null>(null);
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null);
+  const [deletingProject, setDeletingProject] = useState<ProjectSummary | null>(null);
   const load = useCallback(async () => { setLoading(true); setError(""); try { setResult(await listProjects({ page, pageSize, search, status: status === "All status" ? undefined : status })); } catch (requestError) { setError(toError(requestError)); } finally { setLoading(false); } }, [page, pageSize, search, status]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
   const canWrite = bootstrap.permissions.includes("project.write");
+  // The API has the final say (work recorded, role); this only hides a button that could never work.
+  const canDelete = (project: ProjectSummary) => canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
   return <>
     <PageHeader eyebrow="APPROVED WORK" title={uiText("Projects")} subtitle={teamTestMode ? "สร้างได้จาก Estimate ที่อนุมัติแล้ว และเก็บเอกสารชั่วคราวในเครื่องทดสอบ (ยังไม่เชื่อม NAS)" : "สร้างได้จาก Estimate ที่อนุมัติแล้ว พร้อมเอกสารโครงการบน NAS ตามโฟลเดอร์มาตรฐาน 15 รายการ"} actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Create project"} /></button> : undefined} />
     <Toolbar><SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search project, customer or end user…" /><Select label="Status" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"]} /><button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${result.total} projects`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-      {result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr><th><LocalizedText text={"Project No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"บริษัทที่รับงานด้วย / Contracting customer"} /></th><th><LocalizedText text={"End user / ผู้ใช้งานปลายทาง"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Manager"} /></th><th><LocalizedText text={"Start"} /></th><th><LocalizedText text={"Target delivery"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{result.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.name}</strong></td><td>{item.customerName}</td><td>{item.endUserName || <span className="muted"><LocalizedText text={"ยังไม่ระบุ / Not specified"} /></span>}</td><td>{item.projectType}</td><td>{item.managerName}</td><td>{formatDate(item.startDate)}</td><td>{formatDate(item.targetDelivery)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td><td><Badge>{item.status}</Badge></td><td className="muted">{formatDateTime(item.updatedAt)}</td><td>{canWrite ? <button className="btn ghost sm" type="button" onClick={() => setEditingProject(item)}><Icon name="edit" /><LocalizedText text={"Edit project"} /></button> : null}{canWrite && canEditEndUser(item.status) ? <button className="btn ghost sm" type="button" onClick={() => setEndUserProject(item)}><LocalizedText text={"แก้ไข End user / Edit"} /></button> : null}<button className="btn ghost sm" type="button" aria-label={`Documents for ${item.number}`} onClick={() => setDocumentsProject(item)}><Icon name="paperclip" /><LocalizedText text={"Documents"} /></button><button className="btn ghost sm" type="button" aria-label={`Team for ${item.number}`} onClick={() => setMembersProject(item)}><Icon name="users" /><LocalizedText text={"Team"} /></button></td></tr>)}</tbody></table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
+      {result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr><th><LocalizedText text={"Project No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"บริษัทที่รับงานด้วย / Contracting customer"} /></th><th><LocalizedText text={"End user / ผู้ใช้งานปลายทาง"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Manager"} /></th><th><LocalizedText text={"Start"} /></th><th><LocalizedText text={"Target delivery"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{result.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.name}</strong></td><td>{item.customerName}</td><td>{item.endUserName || <span className="muted"><LocalizedText text={"ยังไม่ระบุ / Not specified"} /></span>}</td><td>{item.projectType}</td><td>{item.managerName}</td><td>{formatDate(item.startDate)}</td><td>{formatDate(item.targetDelivery)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td><td><Badge>{item.status}</Badge></td><td className="muted">{formatDateTime(item.updatedAt)}</td><td>{canWrite ? <button className="btn ghost sm" type="button" onClick={() => setEditingProject(item)}><Icon name="edit" /><LocalizedText text={"Edit project"} /></button> : null}{canWrite && canEditEndUser(item.status) ? <button className="btn ghost sm" type="button" onClick={() => setEndUserProject(item)}><LocalizedText text={"แก้ไข End user / Edit"} /></button> : null}<button className="btn ghost sm" type="button" aria-label={`Documents for ${item.number}`} onClick={() => setDocumentsProject(item)}><Icon name="paperclip" /><LocalizedText text={"Documents"} /></button><button className="btn ghost sm" type="button" aria-label={`Team for ${item.number}`} onClick={() => setMembersProject(item)}><Icon name="users" /><LocalizedText text={"Team"} /></button>{canDelete(item) ? <button className="btn ghost sm danger" type="button" aria-label={`${uiText("CRM.deleteProject")} ${item.number}`} title={uiText("CRM.deleteProject")} onClick={() => setDeletingProject(item)}><Icon name="trash" /></button> : null}</td></tr>)}</tbody></table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
     </Panel>
     {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} created with folder metadata`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
     {endUserProject ? <EndUserEditModal kind="projects" record={endUserProject} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserProject(null)} onSaved={load} reloadRecord={async () => { const page = await listProjects({ search: endUserProject.number, pageSize: 100 }); const latest = page.items.find((item) => item.id === endUserProject.id); if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable"); return latest; }} /> : null}
     {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
     {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
+    {deletingProject ? <DeleteProjectModal project={deletingProject} onClose={() => setDeletingProject(null)} onDeleted={async (number) => { setDeletingProject(null); notify(`${number} · ${uiText("CRM.projectDeleted")}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
     {editingProject ? <EditProjectModal bootstrap={bootstrap} project={editingProject} onClose={() => setEditingProject(null)} onSaved={async (number) => { setEditingProject(null); notify(`${number} updated`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
   </>;
+}
+
+// Deleting is offered only after the API has confirmed nothing has been worked against the
+// project; otherwise the dialog names the work that keeps it.
+function DeleteProjectModal({ project, onClose, onDeleted }: { project: ProjectSummary; onClose: () => void; onDeleted: (number: string) => Promise<void> }) {
+  const t = useUiText();
+  const [check, setCheck] = useState<ProjectDeletionCheck | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { let cancelled = false; void checkProjectDeletion(project.id).then(value => { if (!cancelled) setCheck(value); }).catch(failure => { if (!cancelled) setError(toError(failure)); }); return () => { cancelled = true; }; }, [project.id]);
+  const submit = async () => { setBusy(true); setError(""); try { const deleted = await deleteProject(project.id); await onDeleted(deleted.number); } catch (failure) { setError(toError(failure)); } finally { setBusy(false); } };
+  return <Modal title="CRM.deleteProject" subtitle={`${project.number} · ${project.name}`} size="sm" onClose={onClose} footer={<>
+    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn danger" type="button" disabled={busy || !check?.canDelete} onClick={() => { void submit(); }}><Icon name="trash" />{busy ? t("CRM.deletingProject") : t("CRM.deleteProject")}</button>
+  </>}>
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
+    {!check && !error ? <p role="status">{t("CRM.loading")}</p> : null}
+    {check?.canDelete ? <p>{t("CRM.deleteProjectConfirm")}</p> : null}
+    {check && !check.canDelete ? <>
+      <p>{t("CRM.deleteProjectBlocked")}</p>
+      <ul className="project-delete-blockers">{check.blockers.map(blocker => <li key={blocker.source}><span>{t(`ProjectWork.${blocker.source}`)}</span><strong>{blocker.count}</strong></li>)}</ul>
+    </> : null}
+  </Modal>;
 }
 
 function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: { project: ProjectSummary; bootstrap: BootstrapData; canWrite: boolean; notify: (message: string) => void; onClose: () => void }) {
@@ -1111,11 +1143,16 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
   </Modal>;
 }
 
-type ProjectEstimateOption = {id:number;number:string;projectName:string;customerId:number;ownerId:number;siteLocation:string;targetDelivery:string};
+// Only estimates whose CRM opportunity is WON; the order evidence arrives as the suggested PO.
+type ProjectEstimateOption = {id:number;number:string;projectName:string;customerId:number;ownerId:number;siteLocation:string;targetDelivery:string;opportunityNo:string;purchaseOrderNumber:string;purchaseOrderDate:string};
 type MasterPlanDraft = { key: string; name: string; start: string; finish: string };
 type TeamPlanDraft = { key: string; userId: number; task: string; start: string; finish: string; planManDays: string };
-// Row names are the customer-facing milestone titles most projects start from; they are data, not UI copy.
-const STANDARD_MASTER_PLAN = ["Kick-off meeting", "Get Requirement & Confirm", "Development", "Internal Final Test", "Installation", "Teaching for UT", "User Testing & Trial", "Go Live"];
+const shiftIsoDate = (iso: string, days: number) => { const date = new Date(`${iso}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+/** A master schedule's rows as dated plan rows: days count from the chosen start, rows without them keep only their name. */
+const planFromTemplate = (template: ScheduleTemplate, start: string): MasterPlanDraft[] => template.rows.map(row => {
+  const first = row.startOffsetDays === null || !start ? "" : shiftIsoDate(start, row.startOffsetDays);
+  return { key: crypto.randomUUID(), name: row.name, start: first, finish: first && row.durationDays ? shiftIsoDate(first, row.durationDays - 1) : "" };
+});
 const planPeriodValid = (row: { start: string; finish: string }) => Boolean(row.start && row.finish && row.finish >= row.start);
 const planManDaysValid = (value: string) => !value.trim() || /^\d{1,6}(\.\d{1,2})?$/.test(value.trim());
 
@@ -1130,6 +1167,11 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const [form, setForm] = useState<CreateProjectInput>({ projectNumber: "", estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "" });
   const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
   const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
+  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
+  const [templateId, setTemplateId] = useState(0);
+  const [templateStart, setTemplateStart] = useState(today());
+  useEffect(() => { let cancelled = false; void listScheduleTemplates().then(items => { if (!cancelled) setTemplates(items); }).catch(() => undefined); return () => { cancelled = true; }; }, []);
+  const chosenTemplate = templates.find(item => item.id === templateId);
   const [inheritEndUser, setInheritEndUser] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1142,7 +1184,8 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       setForm(current=>({...current,estimateId:first?.id??0,
         managerId:data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id??0,
         leadEngineerId:data.people.find(member=>member.canLead&&member.id===first?.ownerId)?.id??0,
-        site:first?.siteLocation??"",targetDelivery:first?.targetDelivery||current.targetDelivery}));
+        site:first?.siteLocation??"",targetDelivery:first?.targetDelivery||current.targetDelivery,
+        purchaseOrderNumber:first?.purchaseOrderNumber??current.purchaseOrderNumber,purchaseOrderDate:first?.purchaseOrderDate||current.purchaseOrderDate}));
     }).catch(error=>{if(!cancelled)setError(toError(error));}).finally(()=>{if(!cancelled)setLoadingOptions(false);});
     return()=>{cancelled=true;};
   }, [initialEstimateId, bootstrap.user.id, optionsRevision]);
@@ -1153,9 +1196,12 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const planned = planRows.length > 0;
   const span = planned && planRows.every(planPeriodValid)
     ? { start: planRows.map(row=>row.start).sort()[0]!, finish: planRows.map(row=>row.finish).sort().at(-1)! } : null;
+  // Counted, not listed: a template fills many rows at once and every row would otherwise be named.
+  const incompleteMilestones = masterPlan.filter(row => !row.name.trim() || !planPeriodValid(row)).length;
+  const incompleteTeamRows = teamPlan.filter(row => !row.userId || !row.task.trim() || !planPeriodValid(row) || !planManDaysValid(row.planManDays)).length;
   const planIssues = [
-    ...masterPlan.flatMap((row, index) => !row.name.trim() || !planPeriodValid(row) ? [`${t("CRM.masterPlan")} ${index + 1}`] : []),
-    ...teamPlan.flatMap((row, index) => !row.userId || !row.task.trim() || !planPeriodValid(row) || !planManDaysValid(row.planManDays) ? [`${t("CRM.teamPlan")} ${index + 1}`] : []),
+    ...(incompleteMilestones ? [`${t("CRM.masterPlanIncomplete")}: ${incompleteMilestones}`] : []),
+    ...(incompleteTeamRows ? [`${t("CRM.teamPlanIncomplete")}: ${incompleteTeamRows}`] : []),
   ];
   const missingFields = [
     !form.estimateId ? "Approved estimate *" : "", !form.projectNumber.trim() ? "CRM.projectNoFromErp" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
@@ -1176,7 +1222,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
     {loadingOptions?<p role="status">{t("CRM.loading")}</p>:!estimates.length?<p className="alert warn">{t("CRM.noEligibleEstimate")}</p>:initialEstimateId&&!estimates.some(e=>e.id===initialEstimateId)?<p className="alert warn">{t("CRM.sourceUnavailable")}</p>:null}
     {!loadingOptions&&(missingFields.length||planIssues.length)?<p role="status">{t("CRM.missingProjectFields")}: {[...missingFields.map(field=>t(field)), ...planIssues].join(", ")}</p>:null}
     <div className="form-grid">
-      <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));setForm((current) => ({ ...current, estimateId:Number(event.target.value),leadEngineerId:engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0,site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||current.targetDelivery }));}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName}</option>)}</select></label>
+      <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));setForm((current) => ({ ...current, estimateId:Number(event.target.value),leadEngineerId:engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0,site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||current.targetDelivery,purchaseOrderNumber:estimate?.purchaseOrderNumber??"",purchaseOrderDate:estimate?.purchaseOrderDate||today() }));}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.opportunityNo} · {item.number} — {item.projectName}</option>)}</select></label>
       <div className="field span-2"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
       <label className="field"><span>{t("CRM.projectNoFromErp")}</span><input required maxLength={30} autoComplete="off" placeholder={t("CRM.projectNoPlaceholder")} value={form.projectNumber} onChange={(event) => setForm((current) => ({ ...current, projectNumber: event.target.value }))} /></label>
       <div className="field span-3"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>
@@ -1188,15 +1234,19 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
     </div>
     <section className="project-plan" aria-labelledby="project-master-plan-title">
       <div className="project-plan-head"><h3 id="project-master-plan-title">{t("CRM.masterPlan")}</h3><div className="row-actions">
-        {!masterPlan.length ? <button className="btn ghost sm" type="button" onClick={() => setMasterPlan(STANDARD_MASTER_PLAN.map(name => ({ key: crypto.randomUUID(), name, start: "", finish: "" })))}>{t("CRM.useStandardPlan")}</button> : null}
         <button className="btn sm" type="button" onClick={() => setMasterPlan(rows => [...rows, { key: crypto.randomUUID(), name: "", start: rows.at(-1)?.finish ?? "", finish: "" }])}><Icon name="plus" />{t("CRM.addMilestone")}</button>
       </div></div>
+      {!masterPlan.length && templates.length ? <div className="project-plan-template">
+        <select aria-label={t("CRM.pickMasterSchedule")} value={templateId} onChange={(event) => setTemplateId(Number(event.target.value))}><option value={0}>{t("CRM.pickMasterSchedule")}</option>{templates.map(item => <option key={item.id} value={item.id}>{item.name} ({item.rows.length})</option>)}</select>
+        {chosenTemplate?.rows.some(row => row.startOffsetDays !== null) ? <label className="project-plan-template-start"><span>{t("CRM.masterScheduleStart")}</span><input type="date" value={templateStart} onChange={(event) => setTemplateStart(event.target.value)} /></label> : null}
+        <button className="btn sm" type="button" disabled={!chosenTemplate} onClick={() => { if (chosenTemplate) setMasterPlan(planFromTemplate(chosenTemplate, templateStart)); }}>{t("CRM.applyMasterSchedule")}</button>
+      </div> : null}
       {masterPlan.length ? <ol className="project-plan-rows">{masterPlan.map((row, index) => <li key={row.key} className="project-plan-row milestone">
         <span className="project-plan-index">{index + 1}.</span>
-        <input type="date" aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => updateMilestone(row.key, { start: event.target.value })} />
+        <input type="date" required aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => updateMilestone(row.key, { start: event.target.value })} />
         <span className="project-plan-dash" aria-hidden="true">–</span>
-        <input type="date" aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => updateMilestone(row.key, { finish: event.target.value })} />
-        <input aria-label={`${t("CRM.milestoneName")} ${index + 1}`} placeholder={t("CRM.milestoneName")} maxLength={500} value={row.name} onChange={(event) => updateMilestone(row.key, { name: event.target.value })} />
+        <input type="date" required aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => updateMilestone(row.key, { finish: event.target.value })} />
+        <input required aria-label={`${t("CRM.milestoneName")} ${index + 1}`} placeholder={t("CRM.milestoneName")} maxLength={500} value={row.name} onChange={(event) => updateMilestone(row.key, { name: event.target.value })} />
         <button className="icon-btn" type="button" aria-label={`${t("CRM.removeRow")} ${index + 1}`} title={t("CRM.removeRow")} onClick={() => setMasterPlan(rows => rows.filter(item => item.key !== row.key))}><Icon name="x" /></button>
       </li>)}</ol> : <p className="muted">{t("CRM.masterPlanEmpty")}</p>}
     </section>
@@ -1206,11 +1256,11 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       </div></div>
       {teamPlan.length ? <ol className="project-plan-rows">{teamPlan.map((row, index) => <li key={row.key} className="project-plan-row team">
         <span className="project-plan-index">{index + 1}.</span>
-        <select aria-label={`${t("CRM.selectMember")} ${index + 1}`} value={row.userId} onChange={(event) => updateTeamRow(row.key, { userId: Number(event.target.value) })}><option value={0}>{t("CRM.selectMember")}</option>{bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
-        <input type="date" aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => updateTeamRow(row.key, { start: event.target.value })} />
+        <select required aria-label={`${t("CRM.selectMember")} ${index + 1}`} value={row.userId || ""} onChange={(event) => updateTeamRow(row.key, { userId: Number(event.target.value) })}><option value="">{t("CRM.selectMember")}</option>{bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+        <input type="date" required aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => updateTeamRow(row.key, { start: event.target.value })} />
         <span className="project-plan-dash" aria-hidden="true">–</span>
-        <input type="date" aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => updateTeamRow(row.key, { finish: event.target.value })} />
-        <input aria-label={`${t("CRM.memberTask")} ${index + 1}`} placeholder={t("CRM.memberTask")} maxLength={500} value={row.task} onChange={(event) => updateTeamRow(row.key, { task: event.target.value })} />
+        <input type="date" required aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => updateTeamRow(row.key, { finish: event.target.value })} />
+        <input required aria-label={`${t("CRM.memberTask")} ${index + 1}`} placeholder={t("CRM.memberTask")} maxLength={500} value={row.task} onChange={(event) => updateTeamRow(row.key, { task: event.target.value })} />
         <input inputMode="decimal" aria-label={`${t("CRM.planManDays")} ${index + 1}`} placeholder={t("CRM.planManDays")} aria-invalid={!planManDaysValid(row.planManDays)} value={row.planManDays} onChange={(event) => updateTeamRow(row.key, { planManDays: event.target.value })} />
         <button className="icon-btn" type="button" aria-label={`${t("CRM.removeRow")} ${index + 1}`} title={t("CRM.removeRow")} onClick={() => setTeamPlan(rows => rows.filter(item => item.key !== row.key))}><Icon name="x" /></button>
       </li>)}</ol> : <p className="muted">{t("CRM.teamPlanEmpty")}</p>}

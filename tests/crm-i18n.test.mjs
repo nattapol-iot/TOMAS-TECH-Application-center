@@ -22,6 +22,6 @@ test("handover and direct inquiry follow-up copy resolves in all languages",()=>
     const source=readFileSync(new URL(`../app/system/production/${file}`,import.meta.url),"utf8");
     for(const [,key] of source.matchAll(/"(CRM\.[A-Za-z]+)"/g)) assert.ok(CRM_COPY[key],`${file}: ${key}`);
   }
-  for(const reason of ["projectExists","sourceUnavailable","awaitCostApproval","recordPo"])assert.ok(CRM_COPY[`CRM.${reason}`]);
+  for(const reason of ["projectExists","sourceUnavailable","awaitCostApproval","awaitWon","recordPo"])assert.ok(CRM_COPY[`CRM.${reason}`]);
   assert.equal(CRM_COPY["CRM.costApproved"].en,"Cost approved");
 });
