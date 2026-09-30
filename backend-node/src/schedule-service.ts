@@ -200,6 +200,8 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
   const task = tasks.get(resolved.source.id)!;
   return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
     isMilestone: task.isMilestone, origin: task.origin, visibility: task.visibility, planStart: resolved.planStart, planFinish: resolved.planFinish,
+    // The start as stored, for an edit to send back unchanged; planStart above is the resolved one.
+    storedPlanStart: task.planStart,
     planDays: task.planDays, workDays: resolved.workDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays,
     pics: pics.get(task.id) ?? [], picExternal: task.picExternal, planManDays: task.planManDays, baselineStart: task.baselineStart,
     baselineFinish: task.baselineFinish, baselineDays: task.baselineDays, baselineRevision: task.baselineRevision, actualStart: resolved.actualStart,

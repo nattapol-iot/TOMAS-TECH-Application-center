@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   listProjectContactOptions,
   type BootstrapData,
@@ -13,7 +13,7 @@ import {
 } from "../api-client";
 import { useT } from "../i18n";
 import { Badge, Icon } from "../ui";
-import { LookupMenu, handleMenuKeys, type MenuKeys } from "./CostItemLookup";
+import { SearchMultiPicker } from "./SearchMultiPicker";
 
 /*
  * The parts of a project that Create project and Edit project share: its Master Plan, who
@@ -128,20 +128,12 @@ export function PaymentChecklist({ value, onChange }: { value: PaymentMilestone[
   </fieldset>;
 }
 
-/** A customer can have dozens of contacts: type to find one, pick it, and it joins the chips above. */
-const CONTACT_MATCH_LIMIT = 50;
 const contactDetail = (contact: ProjectContactOption) => [contact.position, contact.siteName, contact.phone, contact.email].filter(Boolean).join(" · ");
 
-/** The customer's site contacts; phone and LINE are kept on the customer, not copied here. */
+/** The customer's site contacts, found by typing; phone and LINE are kept on the customer, not copied here. */
 export function ContactPicker({ customerId, value, onChange }: { customerId: number; value: number[]; onChange: (value: number[]) => void }) {
   const t = useT();
-  const menuId = useId();
   const [state, setState] = useState<{ customerId: number; contacts: ProjectContactOption[]; error: string } | null>(null);
-  const [query, setQuery] = useState("");
-  const [focused, setFocused] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  const [active, setActive] = useState(0);
-  const [anchor, setAnchor] = useState<HTMLInputElement | null>(null);
   useEffect(() => {
     if (!customerId) return;
     let cancelled = false;
@@ -150,40 +142,15 @@ export function ContactPicker({ customerId, value, onChange }: { customerId: num
     return () => { cancelled = true; };
   }, [customerId]);
   const current = state?.customerId === customerId ? state : null;
-  const contacts = useMemo(() => current?.contacts ?? [], [current]);
-  const chosen = value.map(id => contacts.find(contact => contact.id === id)).filter((contact): contact is ProjectContactOption => Boolean(contact));
-  const needle = query.trim().toLocaleLowerCase();
-  const matches = contacts.filter(contact => !value.includes(contact.id)
-    && (!needle || `${contact.name} ${contactDetail(contact)} ${contact.department}`.toLocaleLowerCase().includes(needle))).slice(0, CONTACT_MATCH_LIMIT);
-  const open = focused && !dismissed && Boolean(current) && !current?.error;
-  const highlighted = Math.min(active, Math.max(0, matches.length - 1));
-  const pick = (index: number) => { const contact = matches[index]; if (!contact) return; onChange([...value, contact.id]); setQuery(""); setActive(0); };
-  const keys: MenuKeys = { open, count: matches.length, active: highlighted, setActive, pick, close: () => setDismissed(true), show: () => setDismissed(false) };
+  const options = useMemo(() => (current?.contacts ?? []).map(contact => ({ id: contact.id, label: contact.name, detail: contactDetail(contact), searchText: contact.department })), [current]);
   return <fieldset className="project-contacts"><legend>{t("CRM.projectContacts")}</legend>
     <p className="muted">{t("CRM.projectContactsHint")}</p>
     {!customerId ? <p className="muted">{t("CRM.projectContactsPickCustomer")}</p>
       : !current ? <p className="muted" role="status">{t("CRM.loading")}</p>
       : current.error ? <p role="alert">{t(current.error)}</p>
-      : !contacts.length ? <p className="muted">{t("CRM.projectContactsNone")}</p>
-      : <>
-        {chosen.length ? <ul className="project-contact-chips">{chosen.map(contact => <li key={contact.id}>
-          <span><strong>{contact.name}</strong>{contact.position ? <small className="muted"> · {contact.position}</small> : null}</span>
-          <button className="icon-btn" type="button" aria-label={`${t("CRM.removeContact")} ${contact.name}`} title={t("CRM.removeContact")} onClick={() => onChange(value.filter(id => id !== contact.id))}><Icon name="x" /></button>
-        </li>)}</ul> : null}
-        <input className="project-contact-search" ref={setAnchor} value={query} placeholder={t("CRM.searchContacts")} aria-label={t("CRM.searchContacts")}
-          role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={open ? menuId : undefined} autoComplete="off"
-          onChange={(event) => { setQuery(event.target.value); setActive(0); setDismissed(false); }}
-          onFocus={() => { setFocused(true); setDismissed(false); }} onBlur={() => setFocused(false)}
-          onKeyDown={(event) => { handleMenuKeys(event, keys); }} />
-        {open ? <LookupMenu id={menuId} anchor={anchor} minWidth={360} label={t("CRM.projectContacts")}>
-          {matches.map((contact, index) => <button type="button" key={contact.id} role="option" tabIndex={-1} aria-selected={index === highlighted}
-            className={`lookup-option${index === highlighted ? " active" : ""}`} onMouseEnter={() => setActive(index)} onClick={() => pick(index)}>
-            <div className="lookup-main"><strong>{contact.name}</strong></div>
-            {contactDetail(contact) ? <div className="lookup-meta"><span>{contactDetail(contact)}</span></div> : null}
-          </button>)}
-          {!matches.length ? <div className="lookup-status">{t(value.length === contacts.length ? "CRM.allContactsChosen" : "CRM.noContactMatch")}</div> : null}
-        </LookupMenu> : null}
-      </>}
+      : !options.length ? <p className="muted">{t("CRM.projectContactsNone")}</p>
+      : <SearchMultiPicker options={options} value={value} onChange={onChange} label={t("CRM.projectContacts")} placeholder={t("CRM.searchContacts")}
+        removeLabel={t("CRM.removeContact")} noMatchText={t("CRM.noContactMatch")} allChosenText={t("CRM.allContactsChosen")} />}
   </fieldset>;
 }
 

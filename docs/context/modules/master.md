@@ -4,7 +4,7 @@
 
 ลูกค้า supplier พนักงาน role audit และ settings
 
-Evidence: snapshot `63ed4e7d`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `eb795318`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

@@ -38,7 +38,7 @@ These project rules guide both agents; they do not override host/system policies
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — IoT Team Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `63ed4e7d` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `eb795318` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 

@@ -6,10 +6,15 @@ import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CreateSignableDocumentModal } from "./SigningScreens";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
+import { SearchMultiPicker } from "./SearchMultiPicker";
+import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
+import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import "./my-work.css";
 import {
   ApiClientError,
+  addProjectMember,
   apiRequest,
+  listProjectMembers,
   createReferencePrice,
   createSupplierQuotation,
   deleteSupplierQuotation,
@@ -157,6 +162,8 @@ export type ScheduleTask = {
   visibility: string;
   planStart: string | null;
   planFinish: string | null;
+  /** The start as stored; null for a phase or a row linked to a predecessor. */
+  storedPlanStart?: string | null;
   planDays: number;
   workDays: number;
   startMode: string;
@@ -1688,6 +1695,23 @@ function ProductionAddDetailModal({ item, onClose, onCreated }: {
   </Modal>;
 }
 
+/** Everyone can be picked; a person not yet on the project joins it first, because a PIC must be a member. */
+function usePicOptions(bootstrap: BootstrapData) {
+  return useMemo(() => bootstrap.team.map((member) => ({ id: member.id, label: member.name, detail: member.department })), [bootstrap.team]);
+}
+async function ensureScheduleMembers(projectId: number, managerId: number, userIds: number[]) {
+  if (!userIds.length) return;
+  const members = new Set((await listProjectMembers(projectId)).map((member) => member.userId));
+  for (const userId of userIds) if (userId !== managerId && !members.has(userId)) await addProjectMember(projectId, { userId, roleOnProject: "Member" });
+}
+function PicPicker({ options, value, onChange }: { options: { id: number; label: string; detail?: string }[]; value: number[]; onChange: (value: number[]) => void }) {
+  const t = useUiText();
+  return <div className="field span-2"><span>{t("Schedule.pics")}</span>
+    <SearchMultiPicker options={options} value={value} onChange={onChange} label={t("Schedule.pics")} placeholder={t("Schedule.searchPeople")}
+      removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
+    <small>{t("Schedule.picsHint")}</small></div>;
+}
+
 function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onConflict }: {
   bootstrap: BootstrapData;
   schedule: ProjectSchedule;
@@ -1701,7 +1725,8 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   const [planStart, setPlanStart] = useState(isoToday());
   const [planDays, setPlanDays] = useState(1);
   const [visibility, setVisibility] = useState("Internal");
-  const [picUserId, setPicUserId] = useState("");
+  const [picUserIds, setPicUserIds] = useState<number[]>([]);
+  const picOptions = usePicOptions(bootstrap);
   const [picExternal, setPicExternal] = useState("");
   const [planManDays, setPlanManDays] = useState(0);
   const [milestone, setMilestone] = useState(false);
@@ -1709,14 +1734,12 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   const [error, setError] = useState("");
   const phases = flattenTasks(schedule.tasks).filter((task) => task.kind === "phase");
   const allRows = flattenTasks(schedule.tasks);
-  const knownEligibleIds = new Set<number>([schedule.managerId, bootstrap.user.id]);
-  allRows.forEach((task) => task.pics.forEach((pic) => knownEligibleIds.add(pic.id)));
-  const eligibleMembers = bootstrap.team.filter((member) => knownEligibleIds.has(member.id));
   const selectedParent = parentId ? Number(parentId) : null;
   const sortOrder = Math.max(0, ...allRows.filter((task) => task.parentId === selectedParent).map((task) => task.sortOrder)) + 10;
   const submit = async () => {
     setBusy(true); setError("");
     try {
+      if (kind === "task") await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
       await apiRequest(`/api/v1/projects/${schedule.projectId}/schedule/tasks`, {
         method: "POST",
         body: JSON.stringify(kind === "phase" ? {
@@ -1748,7 +1771,7 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
           startMode: "manual",
           predecessorId: null,
           lagDays: 0,
-          picUserIds: picUserId ? [Number(picUserId)] : [],
+          picUserIds,
           picExternal: picExternal.trim(),
           planManDays,
         }),
@@ -1784,10 +1807,83 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
         <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={planStart} onChange={(event) => setPlanStart(event.target.value)} /></label>
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
-        <label className="field"><span><LocalizedText text={"PIC (known project member)"} /></span><select value={picUserId} onChange={(event) => setPicUserId(event.target.value)}><option value=""><LocalizedText text={"Unassigned"} /></option>{eligibleMembers.map((member) => <option key={member.id} value={member.id}>{member.name} <LocalizedText text={"·"} /> {member.department}</option>)}</select><small>{eligibleMembers.length ? "แสดงเฉพาะ Project Manager, ผู้ใช้ปัจจุบัน และ PIC ที่พบใน Schedule; API จะตรวจสอบสมาชิกอีกครั้ง" : "ยังไม่พบผู้ใช้ที่ยืนยันได้จาก Schedule นี้ จึงบันทึกเป็น Unassigned เท่านั้น"}</small></label>
+        <PicPicker options={picOptions} value={picUserIds} onChange={setPicUserIds} />
         <label className="field"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
         <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>
       </> : <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div>}
+    </div>
+  </Modal>;
+}
+
+/*
+ * Changes one schedule row's plan: name, visibility, dates, effort and who is responsible.
+ * Progress stays where it is. A row whose dates come from its detail rows or from a
+ * predecessor keeps them; they are shown but not editable here.
+ */
+function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, onConflict }: {
+  bootstrap: BootstrapData;
+  schedule: ProjectSchedule;
+  task: ScheduleTask;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  onConflict: () => Promise<void>;
+}) {
+  const t = useUiText();
+  const isPhase = task.kind === "phase";
+  const datesLocked = isPhase || task.children.length > 0 || task.startMode !== "manual";
+  const [name, setName] = useState(task.name);
+  const [visibility, setVisibility] = useState(task.visibility);
+  const [planStart, setPlanStart] = useState(task.storedPlanStart ?? task.planStart ?? isoToday());
+  const [planDays, setPlanDays] = useState(task.planDays);
+  const [milestone, setMilestone] = useState(task.isMilestone);
+  const [planManDays, setPlanManDays] = useState(task.planManDays);
+  const [picUserIds, setPicUserIds] = useState<number[]>(task.pics.map((pic) => pic.id));
+  const [picExternal, setPicExternal] = useState(task.picExternal);
+  const picOptions = usePicOptions(bootstrap);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      if (!isPhase) await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
+      await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "PUT", body: JSON.stringify({
+        scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion,
+        parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: name.trim(),
+        isMilestone: isPhase ? false : milestone, visibility,
+        // Locked dates go back exactly as stored, so the API sees them unchanged.
+        planStart: isPhase ? null : datesLocked ? task.storedPlanStart ?? null : planStart,
+        planDays: isPhase ? 1 : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : planDays,
+        startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays,
+        picUserIds: isPhase ? [] : picUserIds, picExternal: isPhase ? "" : picExternal.trim(), planManDays: isPhase ? 0 : planManDays,
+      }) });
+      await onSaved();
+      onClose();
+    } catch (requestError) {
+      if (isConcurrencyConflict(requestError)) {
+        try { await onConflict(); onClose(); } catch (reloadError) { setError(toError(reloadError)); }
+        return;
+      }
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Modal title="Schedule.editRow" subtitle={`${schedule.projectNo} · ${task.wbs} · ${task.name}`} size="lg" onClose={onClose} footer={<>
+    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!planStart || planDays < 1)) || planManDays < 0} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
+  </>}>
+    {error ? <LoadError message={t(error)} retry={() => { void submit(); }} /> : null}
+    <div className="form-grid two">
+      <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
+      {isPhase ? <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div> : <>
+        <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
+        <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={datesLocked ? task.planStart ?? "" : planStart} disabled={datesLocked} onChange={(event) => setPlanStart(event.target.value)} /></label>
+        <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
+        {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>}
+        <PicPicker options={picOptions} value={picUserIds} onChange={setPicUserIds} />
+        <label className="field span-2"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
+      </>}
     </div>
   </Modal>;
 }
@@ -1898,6 +1994,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [createOpen, setCreateOpen] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
+  const [editTask, setEditTask] = useState<ScheduleTask | null>(null);
   const [drawingTask, setDrawingTask] = useState<{projectId:number;taskId:number} | null>(null);
   const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
   const scheduleRequestId = useRef(0);
@@ -1919,6 +2016,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     setCreateOpen(false);
     setBaselineOpen(false);
     setProgressTask(null);
+    setEditTask(null);
     setAnswerRequest(null);
     setSchedule(null);
     if (!selectedId) { setLoadingSchedule(false); return; }
@@ -1965,6 +2063,21 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         setSelectedId(nextId);
       }} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>)}</select><Icon name="chevronDown" /></label>
       <span className="spacer" />
+      {activeSchedule ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => {
+        const exportedOn = isoToday();
+        downloadErpEstimateWorkbookBytes(buildScheduleWorkbook({
+          projectNo: activeSchedule.projectNo, projectName: activeSchedule.projectName, exportedOn,
+          planStart: activeSchedule.summary.planStart, planFinish: activeSchedule.summary.planFinish, percentComplete: Number(activeSchedule.summary.percentComplete),
+          labels: { title: uiText("Schedule.exportTitle"), project: uiText("Project"), exported: uiText("Schedule.exportedOn"), planPeriod: uiText("Plan period"), progress: uiText("Progress"),
+            columns: ["WBS", uiText("Task"), uiText("Schedule.kind"), uiText("Visibility"), uiText("Schedule.planStart"), uiText("Schedule.planFinish"), uiText("Work days"), uiText("PIC"),
+              uiText("Plan man-days"), uiText("Schedule.actualManDays"), uiText("Progress"), uiText("Status"), uiText("Schedule.actualStart"), uiText("Schedule.actualFinish"), uiText("Schedule.forecastFinish"), uiText("Remark")] },
+          rows: rows.map((task) => ({ wbs: task.wbs, depth: task.depth, kind: task.kind, name: task.name, visibility: task.visibility,
+            planStart: task.planStart, planFinish: task.planFinish, workDays: task.workDays,
+            pics: [...task.pics.map((pic) => pic.name), task.picExternal].filter(Boolean).join(", "),
+            planManDays: Number(task.planManDays), actualManDays: Number(task.actualManDays), percentComplete: Number(task.percentComplete), status: task.status,
+            actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, remark: task.remark })),
+        }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
+      }}><Icon name="download" />{uiText("Schedule.exportExcel")}</button> : null}
       {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
       {canPlan ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
     </Toolbar>
@@ -1993,9 +2106,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             <td className="num">{number(task.planManDays)} <LocalizedText text={"MD"} /></td>
             <td style={{ minWidth: 120 }}><ProgressCell value={Number(task.percentComplete)} /></td>
             <td><Badge>{task.status}</Badge></td>
-            <td>{canProgress ? <button className="btn sm default" type="button" onClick={() => setProgressTask(task)}><Icon name="edit" /><LocalizedText text={"Update"} /></button> : null}
+            <td><div className="row-actions">{canPlan && activeSchedule.projectStatus !== "Closed" ? <button className="btn sm ghost" type="button" aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={() => setEditTask(task)}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
+              {canProgress ? <button className="btn sm default" type="button" onClick={() => setProgressTask(task)}><Icon name="edit" /><LocalizedText text={"Update"} /></button> : null}
               {canProgress && bootstrap.permissions.includes("signing.request") ? <button className="btn sm default" type="button" onClick={() => setDrawingTask({projectId:activeSchedule.projectId,taskId:task.id})}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
-            </td>
+            </div></td>
           </tr>;
         })}</tbody></table></div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
@@ -2017,6 +2131,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       })}</tbody></table></div></Panel> : null}
     </> : loadingProjects || loadingSchedule ? <Panel><div className="empty"><span className="spinner" /><LocalizedText text={"Loading schedule…"} /></div></Panel> : <Panel><EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" /></Panel>}
     {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} onClose={() => setCreateOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} schedule row created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
+    {editTask && activeSchedule ? <EditScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} task={editTask} onClose={() => setEditTask(null)}
+      onSaved={async () => { notify(`${activeSchedule.projectNo} · ${editTask.wbs} ${uiText("Schedule.rowSaved")}`); await loadSchedule(); }}
+      onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {drawingTask ? <CreateSignableDocumentModal initialProjectId={drawingTask.projectId} initialTaskId={drawingTask.taskId} onClose={() => setDrawingTask(null)} onCreated={message => {setDrawingTask(null);notify(`${message} · Open Signed Documents to request approval`);}} /> : null}
     {baselineOpen && activeSchedule ? <BaselineModal schedule={activeSchedule} onClose={() => setBaselineOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} baseline created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, forecastFinish: progressTask.forecastFinish, remark: progressTask.remark }} onClose={() => setProgressTask(null)} onSubmit={async (input) => {
