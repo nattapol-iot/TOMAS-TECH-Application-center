@@ -50,7 +50,7 @@ function placeUnder(anchor: HTMLElement | null, minWidth: number): CSSProperties
 /* Mounted only while open; the anchor arrives as state (callback ref on the
    input), so the first position is measured on mount and only scroll/resize
    (plus one settle frame) re-measure. */
-function LookupMenu({ id, anchor, minWidth, label, children }: { id: string; anchor: HTMLElement | null; minWidth: number; label: string; children: ReactNode }) {
+export function LookupMenu({ id, anchor, minWidth, label, children }: { id: string; anchor: HTMLElement | null; minWidth: number; label: string; children: ReactNode }) {
   const [style, setStyle] = useState<CSSProperties | null>(() => placeUnder(anchor, minWidth));
   useLayoutEffect(() => {
     const place = () => setStyle(placeUnder(anchor, minWidth));
@@ -64,10 +64,10 @@ function LookupMenu({ id, anchor, minWidth, label, children }: { id: string; anc
   return createPortal(<div id={id} className="lookup-menu" role="listbox" tabIndex={-1} aria-label={label} style={style} onMouseDown={(event) => event.preventDefault()}>{children}</div>, document.body);
 }
 
-type MenuKeys = { open: boolean; count: number; active: number; setActive: (index: number) => void; pick: (index: number) => void; close: () => void; show: () => void };
+export type MenuKeys = { open: boolean; count: number; active: number; setActive: (index: number) => void; pick: (index: number) => void; close: () => void; show: () => void };
 
 /** Shared arrow/Enter/Escape handling. Returns true when the key was consumed by the menu. */
-function handleMenuKeys(event: KeyboardEvent<HTMLInputElement>, keys: MenuKeys): boolean {
+export function handleMenuKeys(event: KeyboardEvent<HTMLInputElement>, keys: MenuKeys): boolean {
   if (event.nativeEvent.isComposing) return false;
   if (event.key === "ArrowDown") {
     event.preventDefault();

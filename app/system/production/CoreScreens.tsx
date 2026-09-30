@@ -66,7 +66,7 @@ import {
 } from "../api-client";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
-import { ContactChecklist, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, useDepartments,
+import { ContactPicker, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, useDepartments,
   type MasterPlanDraft, type TeamPlanDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -1064,7 +1064,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
         ? <button className="btn ghost sm" type="button" onClick={() => setForm(state => ({ ...state, startDate: span.start, targetDelivery: span.finish }))}><Icon name="calendar" />{t("CRM.usePlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)}</button> : null}</div>
       <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => set("site", event.target.value)} /></label>
     </div>
-    <ContactChecklist customerId={project.customerId ?? 0} value={form.contactIds} onChange={(contactIds) => set("contactIds", contactIds)} />
+    <ContactPicker customerId={project.customerId ?? 0} value={form.contactIds} onChange={(contactIds) => set("contactIds", contactIds)} />
     {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
       : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
       : plan.snapshot.canPlan ? <>
@@ -1267,7 +1267,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       <label className="field"><span><LocalizedText text={"PO date *"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderDate: event.target.value }))} /></label>
       <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => setForm((current) => ({ ...current, site: event.target.value }))} /></label>
     </div>
-    <ContactChecklist customerId={selectedEstimate?.customerId ?? 0} value={form.contactIds ?? []} onChange={(contactIds) => setForm((current) => ({ ...current, contactIds }))} />
+    <ContactPicker customerId={selectedEstimate?.customerId ?? 0} value={form.contactIds ?? []} onChange={(contactIds) => setForm((current) => ({ ...current, contactIds }))} />
     <MasterPlanSection rows={masterPlan} onChange={setMasterPlan} templates={templates} />
     <TeamPlanSection rows={teamPlan} onChange={setTeamPlan} people={bootstrap.team} />
     {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
