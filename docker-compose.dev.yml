@@ -30,6 +30,8 @@ services:
       Email__SenderUser: ${Email__SenderUser:-}
       Email__ApplicationBaseUrl: ${Email__ApplicationBaseUrl:-}
       ConnectionStrings__IoTTeamCenter: ${DEV_SQL_CONNECTION_STRING:?set this in .env, copied from .env.dev.example}
+      # No owner login here: scripts/macos/deploy.sh hands DEV_MIGRATIONS_CONNECTION_STRING only to
+      # its one-off migration container, and this long-running API then finds nothing pending.
       DocumentStorage__Mode: ${DEV_DOCUMENT_STORAGE_MODE:-Local}
       DocumentStorage__RootPath: /app/App_Data/project-documents
       # backend-node validates CORS origins in every environment and accepts plain http only

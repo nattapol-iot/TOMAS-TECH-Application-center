@@ -19,33 +19,23 @@ export type UserProvisioning = {
   ensure(session: TmtIdSession): Promise<void>;
 };
 
-// Keeps the same identity key CurrentUserService joins on (entra_object_id holds the Keycloak
-// sub in TmtId mode) and mirrors database/scripts/030_provision_user.sql: a row already known by
-// email is promoted to this object id instead of tripping the unique email constraint.
-export function createUserProvisioning(database: Pick<Database, "query">, roleCode: string | undefined): UserProvisioning | null {
-  if (!roleCode) return null;
+// Links a TMT ID sign-in to the account Employee Master already made for that email
+// (dbo.sync_employee_directory_user creates it with the employee's department). It never
+// creates an account: since 2026-10-05 only registered people may sign in, so an unknown
+// email meets user_not_registered instead of becoming whatever TMT_ID_DEFAULT_ROLE_CODE said.
+// entra_object_id holds the Keycloak sub in TmtId mode, the key CurrentUserService joins on.
+// dbo.link_registered_sign_in (migration 066) fills it only on an account that has no TMT ID
+// yet, as database/scripts/030_provision_user.sql does, so an email claim cannot take over an
+// account already linked to someone else.
+export function createUserProvisioning(database: Pick<Database, "query">): UserProvisioning {
   return {
     async ensure(session) {
       const user = deriveProvisionedUser(session);
       await database.query(
-        `
-        DECLARE @role_id bigint = (SELECT id FROM dbo.roles WHERE code = @role_code);
-        IF @role_id IS NULL THROW 51900, 'TMT_ID_DEFAULT_ROLE_CODE does not match any dbo.roles code.', 1;
-        IF EXISTS (SELECT 1 FROM dbo.users WHERE entra_object_id = @object_id) RETURN;
-        IF EXISTS (SELECT 1 FROM dbo.users WHERE email = @email AND deleted_at IS NULL)
-          UPDATE dbo.users
-             SET entra_object_id = @object_id, updated_at = SYSUTCDATETIME()
-           WHERE email = @email AND deleted_at IS NULL;
-        ELSE
-          INSERT INTO dbo.users(entra_object_id, email, name, initials, role_id)
-          VALUES (@object_id, @email, @name, @initials, @role_id);
-        `,
+        "EXEC dbo.link_registered_sign_in @object_id = @object_id, @email = @email;",
         (request) => {
-          request.input("role_code", sql.NVarChar(50), roleCode);
           request.input("object_id", sql.NVarChar(64), user.objectId);
           request.input("email", sql.NVarChar(256), user.email);
-          request.input("name", sql.NVarChar(200), user.name);
-          request.input("initials", sql.NVarChar(10), user.initials);
         },
       );
     },

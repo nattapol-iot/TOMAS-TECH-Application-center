@@ -11,6 +11,10 @@ services:
   api:
     ports: !override
       - "127.0.0.1:5105:5106"
+    environment:
+      # Caddy, on the private compose network, is the only way in. Believe its
+      # X-Forwarded-For so the per-address limit sees each client, not the proxy.
+      Http__TrustProxy: uniquelocal
 
   frontend:
     ports: !override

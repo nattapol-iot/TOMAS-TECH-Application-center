@@ -73,9 +73,17 @@ import { registerSiteVisitWorkflowRoutes } from "./routes/site-visits-workflow.j
 import { registerStockControlRoutes } from "./routes/stock-control.js";
 import { registerSupplierQuotationRoutes } from "./routes/supplier-quotations.js";
 import { registerVisitMasterRoutes } from "./routes/visit-master.js";
+import { rateLimitedError, requestAllowance } from "./rate-limits.js";
 import { CurrentUserService } from "./users.js";
 
 export type Application = { app: FastifyInstance; database: Database };
+
+// A hop count trusts that many nearest proxies, as Fastify does for a number; its types only
+// accept the function form.
+function trustedProxies(setting: AppConfig["trustProxy"]): boolean | string | ((address: string, hop: number) => boolean) {
+  if (typeof setting === "number") return (_address, hop) => hop < setting;
+  return setting ?? false;
+}
 
 export async function buildApp(config: AppConfig): Promise<Application> {
   const app = Fastify({
@@ -83,7 +91,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     // Existing frontend collection URLs end in '/', as supported by the
     // previous API. Normalize before matching routes such as inquiries/:id.
     routerOptions: { ignoreTrailingSlash: true },
-    trustProxy: false,
+    trustProxy: trustedProxies(config.trustProxy),
     bodyLimit: config.documentStorage.maxFileSizeBytes + 1_048_576,
   });
   const database = new Database(config.database);
@@ -120,11 +128,18 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     ],
     maxAge: 3600,
   });
+  // The per-person limit runs as a route preHandler, which Fastify places after the shared
+  // authentication preHandler, so request.identity is known and each signed-in person gets
+  // their own bucket. At onRequest it was always empty and everyone fell back to the
+  // proxy's address. Routes' own config.rateLimit (documents) inherits the same key.
+  // Rejected credentials are limited in auth.ts, where they are known.
   await app.register(rateLimit, {
     global: true,
-    max: 300,
+    hook: "preHandler",
+    max: requestAllowance,
     timeWindow: "1 minute",
     keyGenerator: (request) => request.identity?.partitionKey ?? request.ip,
+    errorResponseBuilder: () => rateLimitedError(),
   });
 
   app.addHook("onRequest", async (request) => {
@@ -157,7 +172,11 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   });
 
   registerAuthentication(app, config, tmtId);
-  if (tmtId) registerTmtIdAuthRoutes(app, tmtId, createUserProvisioning(database, tmtId.settings.defaultRoleCode));
+  if (tmtId?.settings.defaultRoleCode) {
+    app.log.warn("TMT_ID_DEFAULT_ROLE_CODE is ignored: only people registered in Employee Master can sign in.");
+  }
+  // A read-only API cannot link anyone; people already linked still sign in.
+  if (tmtId) registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database));
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
   registerBootstrapRoutes(app, database, users);

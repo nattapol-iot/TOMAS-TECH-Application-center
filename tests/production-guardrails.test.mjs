@@ -629,7 +629,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(deployment, /026_performance_reviews\.sql/);
   // Migration 017 extended the list. The assertion still pins an exact count,
   // so a migration added to the runner but never applied still fails the build.
-  assert.match(deployment, /version BETWEEN 1 AND 65\) <> 65/);
+  assert.match(deployment, /version BETWEEN 1 AND 67\) <> 67/);
   assert.match(seed, /schema_versions WHERE version = 15/);
 
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
@@ -1213,7 +1213,7 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.match(program, /MapKnowledgeEndpoints/);
   assert.match(deployment, /014_knowledge_hub\.sql/);
   assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 65\) <> 65/);
+  assert.match(deployment, /version BETWEEN 1 AND 67\) <> 67/);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.knowledge_audit_events/);
   assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.knowledge_document_approvals/);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);
@@ -1225,18 +1225,22 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
 });
 
 test("Node backend keeps the per-route document upload and download limits", async () => {
-  const [storage, inquiryAttachments, projectDocuments, app] = await Promise.all([
+  const [storage, inquiryAttachments, projectDocuments, app, limits] = await Promise.all([
     readFile(new URL("backend-node/src/document-storage.ts", root), "utf8"),
     readFile(new URL("backend-node/src/routes/inquiry-attachments.ts", root), "utf8"),
     readFile(new URL("backend-node/src/routes/project-documents.ts", root), "utf8"),
     readFile(new URL("backend-node/src/app.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/rate-limits.ts", root), "utf8"),
   ]);
 
   // The C#-to-Node cutover kept the global 300/minute ceiling but dropped the
   // two narrower policies. These routes move whole files across the NAS link
   // and each download re-hashes the file to verify it, so the global ceiling is
-  // far too generous for them.
-  assert.match(app, /max: 300/);
+  // far too generous for them. The ceiling is per signed-in person: it runs as a
+  // preHandler, after authentication has set the identity it is keyed on.
+  assert.match(limits, /PER_PERSON_REQUESTS_PER_MINUTE = 300;/);
+  assert.match(limits, /request\.identity \? PER_PERSON_REQUESTS_PER_MINUTE : UNIDENTIFIED_REQUESTS_PER_MINUTE/);
+  assert.match(app, /hook: "preHandler",\s+max: requestAllowance/);
   assert.match(storage, /DOCUMENT_UPLOAD_RATE_LIMIT = \{ max: 6, timeWindow: "1 minute" \}/);
   assert.match(storage, /DOCUMENT_DOWNLOAD_RATE_LIMIT = \{ max: 12, timeWindow: "1 minute" \}/);
 

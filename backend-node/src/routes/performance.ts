@@ -22,6 +22,7 @@ import {
   frameworkForRole,
   type PerformanceAreaCode,
 } from "../performance-framework.js";
+import { teamOfSql } from "../team-scope.js";
 import type { CurrentUserService } from "../users.js";
 
 const MANAGER_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager", "Sales Manager"]);
@@ -65,6 +66,8 @@ type AssessmentScoreRow = {
 type TargetRow = {
   user_id: number;
   target_role: string;
+  target_team: string;
+  actor_team: string;
   cycle_status: string;
   assessment_id: number | null;
   assessment_status: string | null;
@@ -100,11 +103,12 @@ function performanceScores(value: unknown, areaCodes: readonly PerformanceAreaCo
   return areaCodes.map((area) => parsed.find((item) => item.areaCode === area)!);
 }
 
-async function targetRow(transaction: Transaction, employeeId: number, cycleId: number): Promise<TargetRow> {
+async function targetRow(transaction: Transaction, employeeId: number, cycleId: number, actorDepartment: string): Promise<TargetRow> {
   const request = new sql.Request(transaction);
-  request.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId);
+  request.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId)
+    .input("actor_department", sql.NVarChar(100), actorDepartment.trim());
   const row = (await request.query<TargetRow>(`
-    SELECT employee.user_id,role.code target_role,cycle.status cycle_status,assessment.id assessment_id,assessment.status assessment_status,
+    SELECT employee.user_id,role.code target_role,${teamOfSql("app_user.department")} target_team,${teamOfSql("@actor_department")} actor_team,cycle.status cycle_status,assessment.id assessment_id,assessment.status assessment_status,
            assessment.self_summary,assessment.manager_summary,assessment.development_goal
     FROM dbo.employees employee WITH(UPDLOCK,HOLDLOCK)
     INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
@@ -147,7 +151,8 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
         AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
         AND (app_user.id=@actor OR EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Admin')
           OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Sales Manager') AND role.code IN(N'Sales Engineer',N'Sales Manager'))
-          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager')))
+          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager')
+            AND @department<>N'' AND ${teamOfSql("app_user.department")}=${teamOfSql("@department")}))
       ORDER BY employee.employee_no;
 
       SELECT score.assessment_id,score.area_code,score.self_score,
@@ -162,9 +167,10 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       WHERE role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
         AND (app_user.id=@actor OR EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Admin')
           OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Sales Manager') AND role.code IN(N'Sales Engineer',N'Sales Manager'))
-          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager')));
+          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager')
+            AND @department<>N'' AND ${teamOfSql("app_user.department")}=${teamOfSql("@department")}));
     `, (bind) => bind.input("cycle", sql.BigInt, selectedCycle.id).input("manage", sql.Bit, canManage)
-      .input("actor", sql.BigInt, actor.id));
+      .input("actor", sql.BigInt, actor.id).input("department", sql.NVarChar(100), actor.department.trim()));
     const rows = result.recordsets[0] as unknown as AssessmentRow[];
     const scoreRows = result.recordsets[1] as unknown as AssessmentScoreRow[];
     const activityAccess = await activityScope(database, actor);
@@ -208,20 +214,21 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
     const employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id");
     const cycleId = positiveLong((request.query as Record<string, unknown>).cycleId, "Cycle id");
     const targetResult = await database.query<{
-      user_id: number; name_en: string; target_role: string; cycle_code: string; period_start: Date | string; period_end: Date | string;
+      user_id: number; name_en: string; target_role: string; target_team: string; actor_team: string; cycle_code: string; period_start: Date | string; period_end: Date | string;
     }>(`
-      SELECT employee.user_id,employee.name_en,role.code target_role,cycle.code cycle_code,cycle.period_start,cycle.period_end
+      SELECT employee.user_id,employee.name_en,role.code target_role,${teamOfSql("app_user.department")} target_team,${teamOfSql("@actor_department")} actor_team,cycle.code cycle_code,cycle.period_start,cycle.period_end
       FROM dbo.employees employee
       INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
       INNER JOIN dbo.roles role ON role.id=app_user.role_id
       INNER JOIN dbo.kpi_review_cycles cycle ON cycle.id=@cycle
       WHERE employee.id=@employee AND employee.user_id IS NOT NULL AND employee.is_active=1 AND employee.deleted_at IS NULL;
-    `, (bind) => bind.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId));
+    `, (bind) => bind.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId)
+      .input("actor_department", sql.NVarChar(100), actor.department.trim()));
     const target = targetResult.recordset[0];
     if (!target) throw new ApiError(404, "performance_target_not_found", "The employee or KPI cycle was not found.");
     if (Number(target.user_id) !== actor.id) {
       await users.demandPermission(request, "performance.manage");
-      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
+      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
     }
 
     if (frameworkForRole(target.target_role).code === "SALES") {
@@ -346,10 +353,10 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
     const cycleId = requiredInteger(body.cycleId, "Cycle id", 1);
     const summary = optionalBodyText(body.summary, 1000, "Summary") ?? "", developmentGoal = optionalBodyText(body.developmentGoal, 1000, "Development goal") ?? "", submit = body.submit === true;
     return database.transaction(async (transaction) => {
-      const target = await targetRow(transaction, employeeId, cycleId), selfReview = Number(target.user_id) === actor.id;
+      const target = await targetRow(transaction, employeeId, cycleId, actor.department), selfReview = Number(target.user_id) === actor.id;
       if (!selfReview) {
         await users.demandPermission(request, "performance.manage");
-        if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
+        if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
       }
       const inputScores = performanceScores(body.scores, frameworkForRole(target.target_role).areaCodes, submit);
       const currentStatus = target.assessment_status ?? "NOT_STARTED";
@@ -418,8 +425,8 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
     const actor = await users.required(request), employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id"), body = bodyObject(request.body);
     const cycleId = requiredInteger(body.cycleId, "Cycle id", 1), note = requiredText(body.calibrationNote, 1000, "Calibration note"), version = parseRowVersion(body.rowVersion);
     return database.transaction(async (transaction) => {
-      const target = await targetRow(transaction, employeeId, cycleId);
-      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
+      const target = await targetRow(transaction, employeeId, cycleId, actor.department);
+      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
       if (Number(target.user_id) === actor.id) throw new ApiError(403, "performance_self_completion_denied", "Another review manager must complete your assessment.");
       const requiredAreaCount = frameworkForRole(target.target_role).areaCodes.length;
       const activityAccess = await activityScope(database, actor);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
@@ -244,10 +245,29 @@ test("first-login provisioning derives a stable user from the token", () => {
   assert.equal(fallback.initials, "N");
 });
 
-test("provisioning stays dormant without TMT_ID_DEFAULT_ROLE_CODE", () => {
-  const database = { query: async () => { throw new Error("must not be called"); } };
-  assert.equal(createUserProvisioning(database, undefined), null);
-  assert.notEqual(createUserProvisioning(database, "Admin"), null);
+test("first sign-in only links a registered account and never creates one", async () => {
+  const statements: { text: string; inputs: Record<string, unknown> }[] = [];
+  const database = {
+    query: async (text: string, bind?: (request: { input(name: string, type: unknown, value: unknown): void }) => void) => {
+      const inputs: Record<string, unknown> = {};
+      bind?.({ input: (name, _type, value) => { inputs[name] = value; } });
+      statements.push({ text, inputs });
+      return { recordset: [], recordsets: [], rowsAffected: [0], output: {} };
+    },
+  };
+  await createUserProvisioning(database as never).ensure({ sub: "sub-9", preferredUsername: "new.person", email: "New.Person@TomasTC.com" });
+  assert.equal(statements.length, 1);
+  const [statement] = statements;
+  assert.match(statement!.text, /EXEC dbo\.link_registered_sign_in @object_id = @object_id, @email = @email;/);
+  assert.deepEqual(statement!.inputs, { object_id: "sub-9", email: "new.person@tomastc.com" });
+
+  // The procedure links, never creates, and never moves an account linked to someone else.
+  const migration = readFileSync(new URL("../../database/migrations/066_application_role_grants.sql", import.meta.url), "utf8");
+  const procedure = migration.slice(migration.indexOf("CREATE OR ALTER PROCEDURE dbo.link_registered_sign_in"), migration.indexOf("-- ── Batch 2"));
+  assert.match(procedure, /WITH EXECUTE AS OWNER/);
+  assert.doesNotMatch(procedure, /\bINSERT\b/i, "an unknown email must meet user_not_registered, not a new account");
+  assert.doesNotMatch(procedure, /role_id/i, "linking must not touch the role Employee Master gave");
+  assert.match(procedure, /AND \(entra_object_id IS NULL OR entra_object_id LIKE N'team-test:%'\)/);
 });
 
 test("TMT_ID_DEFAULT_ROLE_CODE is validated as a role code", () => {

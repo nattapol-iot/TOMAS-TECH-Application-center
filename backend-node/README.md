@@ -102,9 +102,10 @@ the app origin, list it in `Cors__AllowedOrigins__0`, and the API answers with
 
 ### First-login provisioning
 
-`TMT_ID_DEFAULT_ROLE_CODE` (a `dbo.roles.code`, for example `Admin`) makes the callback create the
-`dbo.users` row for anyone TMT ID authenticates, keyed by the Keycloak `sub` in `entra_object_id`
-so `CurrentUserService` keeps its single join. A row already known by email is promoted to that
-object id instead of duplicated, mirroring `database/scripts/030_provision_user.sql`. Leave the
-variable unset to require manual provisioning; then `/api/me` succeeds but bootstrap answers
-`403 user_not_registered` until an operator provisions the person.
+Only registered people can sign in (owner's decision, 2026-10-05). Creating an employee in
+Employee Master makes the `dbo.users` row (`dbo.sync_employee_directory_user`, with the employee's
+department). On the first TMT ID sign-in the callback links that row by email, writing the Keycloak
+`sub` into `entra_object_id` so `CurrentUserService` keeps its single join, as
+`database/scripts/030_provision_user.sql` does. Nobody else gets an account: an unknown email gets
+`/api/me` but bootstrap answers `403 user_not_registered`. `TMT_ID_DEFAULT_ROLE_CODE`, which used to
+create an account for anyone, is now ignored with a warning in the API log.

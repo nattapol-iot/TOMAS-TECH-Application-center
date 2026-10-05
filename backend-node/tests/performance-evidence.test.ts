@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildPerformanceEvidence, buildSalesPerformanceEvidence } from "../src/performance-evidence.js";
 import { canManagePerformanceTarget, frameworkForRole } from "../src/performance-framework.js";
+import { teamOfSql } from "../src/team-scope.js";
 
 test("work evidence scores only due assigned work and keeps suggestions advisory", () => {
   const result = buildPerformanceEvidence({
@@ -88,8 +90,25 @@ test("sales evidence uses owned pipeline, forecast outcomes and Project handover
 test("role-specific frameworks and manager scope keep Sales separate from Engineering", () => {
   assert.deepEqual(frameworkForRole("Sales Engineer").areaCodes, ["PIPELINE", "CUSTOMER", "FORECAST", "COMMERCIAL", "HANDOVER"]);
   assert.deepEqual(frameworkForRole("Engineer").areaCodes, ["DELIVERY", "QUALITY", "TECHNICAL", "TEAMWORK"]);
-  assert.equal(canManagePerformanceTarget("Sales Manager", "Sales Engineer"), true);
-  assert.equal(canManagePerformanceTarget("Sales Manager", "Engineer"), false);
-  assert.equal(canManagePerformanceTarget("Engineering Manager", "Sales Engineer"), false);
-  assert.equal(canManagePerformanceTarget("Admin", "Sales Engineer"), true);
+  assert.equal(canManagePerformanceTarget("Sales Manager", "Sales Engineer", "Sales", "Sales"), true);
+  assert.equal(canManagePerformanceTarget("Sales Manager", "Engineer", "Sales", "IoT Engineer Dept."), false);
+  assert.equal(canManagePerformanceTarget("Engineering Manager", "Sales Engineer", "IoT Engineer Dept.", "IoT Engineer Dept."), false);
+  assert.equal(canManagePerformanceTarget("Admin", "Sales Engineer", "", "Sales"), true);
+});
+
+test("Engineering Managers and Project Managers review only their own team's people", () => {
+  const iot = "IoT Engineer Dept.", application = "Application Engineer Dept.";
+  assert.equal(canManagePerformanceTarget("Engineering Manager", "Engineer", iot, iot), true);
+  assert.equal(canManagePerformanceTarget("Engineering Manager", "Engineer", iot, " iot engineer dept. "), true, "matched the way SQL Server compares");
+  assert.equal(canManagePerformanceTarget("Engineering Manager", "Engineer", iot, application), false);
+  assert.equal(canManagePerformanceTarget("Project Manager", "Engineering Manager", application, iot), false);
+  assert.equal(canManagePerformanceTarget("Engineering Manager", "Engineer", "", ""), false, "no department is nobody's team");
+  assert.equal(canManagePerformanceTarget("Admin", "Engineer", iot, application), true);
+});
+
+test("a department belongs to its own team unless department_teams maps it, as Electrical maps to IoT", () => {
+  const migration = readFileSync(new URL("../../database/migrations/067_department_teams.sql", import.meta.url), "utf8");
+  assert.match(migration, /VALUES \(N'Electrical Engineer Dept\.', N'IoT Engineer Dept\.'\)/);
+  assert.equal(teamOfSql("u.department"),
+    "COALESCE((SELECT TOP (1) team_map.team FROM dbo.department_teams team_map WHERE team_map.department=u.department),u.department)");
 });

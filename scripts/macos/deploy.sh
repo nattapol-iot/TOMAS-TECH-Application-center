@@ -100,7 +100,13 @@ compose build
 # Apply additive schema changes before replacing the currently running API.
 # A migration failure stops deployment here, leaving the old containers running.
 log "Applying database migrations before container replacement"
-compose run --rm --no-deps api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
+# Migrations alter the schema, which the iot_team_app login cannot. The owner login from .env goes
+# to this one-off container only, never to the long-running API; unset, migrations reuse the API's.
+migrations_connection="$(sed -n 's/^DEV_MIGRATIONS_CONNECTION_STRING=//p' .env 2>/dev/null | tail -n 1)"
+migrations_connection="${migrations_connection%\"}"; migrations_connection="${migrations_connection#\"}"
+export ConnectionStrings__Migrations="$migrations_connection"
+compose run --rm --no-deps -e ConnectionStrings__Migrations api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
+unset ConnectionStrings__Migrations
 log "Starting containers"
 # --force-recreate matters here: 'frontend' has no 'build:' (bind-mounted source, persistent
 # 'npm run dev' process), so its image/env/command never change between deploys and plain

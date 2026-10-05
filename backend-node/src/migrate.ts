@@ -44,7 +44,7 @@ const DEFAULT_MIGRATIONS_DIR = process.env.MIGRATIONS_DIR
   ?? join(fileURLToPath(new URL(".", import.meta.url)), "../../migrations");
 
 function connectionConfig(config: AppConfig["database"]): sql.config {
-  const parsed = sql.ConnectionPool.parseConnectionString(config.connectionString);
+  const parsed = sql.ConnectionPool.parseConnectionString(config.migrationConnectionString ?? config.connectionString);
   parsed.options = {
     ...parsed.options,
     encrypt: true,

@@ -1,3 +1,5 @@
+import { sameTeam } from "./team-scope.js";
+
 export const ENGINEERING_AREA_CODES = ["DELIVERY", "QUALITY", "TECHNICAL", "TEAMWORK"] as const;
 export const SALES_AREA_CODES = ["PIPELINE", "CUSTOMER", "FORECAST", "COMMERCIAL", "HANDOVER"] as const;
 export const PERFORMANCE_ROLES = ["Engineer", "Project Manager", "Engineering Manager", "Sales Engineer", "Sales Manager"] as const;
@@ -13,8 +15,12 @@ export function frameworkForRole(role: string): { code: PerformanceFrameworkCode
     : { code: "ENGINEERING", areaCodes: ENGINEERING_AREA_CODES };
 }
 
-export function canManagePerformanceTarget(actorRole: string, targetRole: string): boolean {
+// Engineering Managers and Project Managers review their own team only (see team-scope.ts), so
+// the IoT, Application and Mechanical teams cannot read or score each other's people. Admin
+// reviews everyone.
+export function canManagePerformanceTarget(actorRole: string, targetRole: string, actorTeam: string, targetTeam: string): boolean {
   if (actorRole === "Admin") return true;
   if (actorRole === "Sales Manager") return isSalesRole(targetRole);
-  return ["Engineering Manager", "Project Manager"].includes(actorRole) && !isSalesRole(targetRole);
+  return ["Engineering Manager", "Project Manager"].includes(actorRole) && !isSalesRole(targetRole)
+    && sameTeam(actorTeam, targetTeam);
 }

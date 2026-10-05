@@ -817,11 +817,16 @@ function ProductionLogin({
         </div>
         <h1>{t(copy.heading)}</h1>
         <p>{t(copy.intro)}</p>
-        {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+        {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
         {teamTestMode && apiConfigured ? <><label className="field"><span>{t("Registered email")}</span><input required type="email" maxLength={256} autoComplete="email" value={teamTestEmail} onChange={(event) => setTeamTestEmail(event.target.value)} /></label><label className="field"><span>{t("Personal test access code")}</span><input required type="password" maxLength={256} autoComplete="current-password" value={teamTestAccessCode} onChange={(event) => setTeamTestAccessCode(event.target.value)} /></label></> : null}
         {configured
           ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{t(busy ? "Connecting…" : copy.submitLabel)}</button>
           : <div className="callout warning" role="status"><Icon name="alertTriangle" /><span>{t(copy.lockedTitle)} {t("until these settings are configured:")} {missing}</span></div>}
+        {/* TMT ID keeps its own sign-in session, so signing in again would return the same
+            unregistered account; ending that session is the only way to pick another one. */}
+        {mode === "tmt-id" && error && configured
+          ? <button className="btn default block" type="button" disabled={busy} onClick={() => redirectToTmtIdLogout()}><Icon name="logout" />{t("Use another account")}</button>
+          : null}
         <div className="login-role-hint"><strong>{t(copy.accessTitle)}</strong>{t(copy.accessBody)}</div>
       </form>
     </div>

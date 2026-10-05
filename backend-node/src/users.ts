@@ -39,7 +39,10 @@ export class CurrentUserService {
       WHERE ${predicate} AND u.deleted_at IS NULL;
     `, (sqlRequest) => sqlRequest.input("identity", sql.NVarChar(useEmail ? 256 : 64), identity.value));
     const row = result.recordset[0];
-    if (!row) throw new ApiError(403, "user_not_registered", "Your account is not registered for Engineering Center.");
+    // Only TMT ID links an Employee Master record on sign-in; other modes are provisioned by an operator.
+    if (!row) throw new ApiError(403, "user_not_registered", identity.mode === "TmtId"
+      ? "Your account is not registered for Engineering Center. Ask an administrator to add you in Employee Master with your company email, then sign in again."
+      : "Your account is not registered for Engineering Center. Ask an administrator to register it.");
 
     const user: CurrentUser = {
       id: Number(row.id),

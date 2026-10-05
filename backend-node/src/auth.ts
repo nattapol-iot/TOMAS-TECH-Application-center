@@ -3,6 +3,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "./config.js";
 import { ApiError } from "./errors.js";
+import { failedSignInLimit } from "./rate-limits.js";
 import type { TmtIdRuntime } from "./tmt-id/runtime.js";
 import type { TmtIdSession } from "./tmt-id/types.js";
 import type { Identity } from "./types.js";
@@ -68,8 +69,7 @@ export function registerAuthentication(
 
   app.decorateRequest("identity", null);
   app.decorateRequest("currentUser", null);
-  app.addHook("preHandler", async (request) => {
-    if (request.routeOptions.config.public === true) return;
+  const identify = async (request: FastifyRequest): Promise<void> => {
     if (config.auth.mode === "Development") {
       request.identity = developmentIdentity(request);
       return;
@@ -113,6 +113,19 @@ export function registerAuthentication(
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(401, "invalid_token", "The Entra access token is invalid.");
+    }
+  };
+
+  // Only rejected credentials count toward the per-address limit, so people who are signed in
+  // never share a bucket, even when every request arrives from the proxy's address.
+  const failedSignIns = failedSignInLimit();
+  app.addHook("preHandler", async (request) => {
+    if (request.routeOptions.config.public === true) return;
+    try {
+      await identify(request);
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 401) failedSignIns.record(request.ip);
+      throw error;
     }
   });
 }

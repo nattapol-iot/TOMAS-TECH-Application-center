@@ -149,7 +149,22 @@ State on 2026-09-07 evening. Everything below is live and was verified with real
   host `.env`; the application code shipped in PR #5 and is live (see "TMT ID sign-in").
 - The SQL login in `.env` is still `sa`. The deployment docs require the least-privileged
   `iot_team_app` login (`database/scripts/010_application_login.sql`). Fix this before anyone
-  outside the team can reach the host.
+  outside the team can reach the host. Since migration 066 the role covers every statement the
+  API runs (`tests/app-role-grants.test.mjs`; `scripts/Test-AppRoleGrantsLocalDb.ps1` runs the
+  same steps on LocalDB, including `080_verify_production_baseline.sql`). The switch, after 066
+  is deployed:
+  1. On the SQL server, create the login (`database/scripts/005_create_server_login.template.sql`),
+     then run `010_application_login.sql` (`AppLogin=iot_team_app`). Its generated last block
+     replays every migration's grant, so 010 alone is enough even though the role is created
+     after the migrations ran. Then run `080_verify_production_baseline.sql`.
+  2. In `.env`: `DEV_SQL_CONNECTION_STRING` → the `iot_team_app` login, and
+     `DEV_MIGRATIONS_CONNECTION_STRING` → the current owner login. `deploy.sh` passes the owner
+     login only to its one-off migration container; the long-running API never receives it.
+  3. Redeploy and check `/health/ready`, then a project edit and a first sign-in.
+- Accounts created by the old `TMT_ID_DEFAULT_ROLE_CODE=Admin` (Admin, no department) still sign
+  in. Before another team joins, list them with `database/scripts/045_list_accounts_outside_employee_master.sql`
+  and either register each person in Employee Master with the same email or disable the account
+  (`040_deprovision_user.sql`).
 - `~/iot-team-center/sqlcmd.sh` runs `sqlcmd` (amd64 `mcr.microsoft.com/mssql-tools` under the
   iot VM's qemu binfmt) against whatever `.env` points at, with `/src` mounted read-only as the
   working directory so the runner's `:r` includes resolve. `SQLCMD_DATABASE=<name>` overrides the
@@ -262,11 +277,12 @@ Single origin: Caddy serves `/api/*` and `/health/*` on `https://iot-team-center
 so `DEV_API_BASE_URL` and `PUBLIC_BASE_URL` are both that origin and no CORS is involved. The
 `:8445` site still exposes the API directly for operators and for `deploy.sh`'s health check.
 
-First-login provisioning: `TMT_ID_DEFAULT_ROLE_CODE=Admin` in `.env` makes the callback create
-the `dbo.users` row for anyone TMT ID authenticates (owner's decision: everyone who signs in gets
-in, all as Admin for now). Keycloak `sub` lands in `entra_object_id`, the same key
-`CurrentUserService` joins on. Change the role code, or unset it to go back to manual
-provisioning with `database/scripts/030_provision_user.sql`. Profile enrichment from master-data
+First-login provisioning: until 2026-10-05, `TMT_ID_DEFAULT_ROLE_CODE=Admin` in `.env` made the
+callback create an Admin account for anyone TMT ID authenticated. That setting is now ignored
+(the API logs a warning; remove the line from `.env`). Only people registered in Employee Master
+can sign in: the callback links their account by email, writing the Keycloak `sub` into
+`entra_object_id`, the key `CurrentUserService` joins on. Accounts the old setting created as
+Admin keep that role until someone changes it in Admin → user roles. Profile enrichment from master-data
 is dormant (`MASTER_DATA_URL` / `MASTER_DATA_API_KEY` unset), so names come from the token.
 
 Keycloak admin: `https://100.64.0.4:2083/admin`, realm `internal`, bootstrap admin credentials
@@ -331,9 +347,10 @@ values; the self-hosted runner; DNS and certificate.
 
 Still the owner's call:
 
-1. **`sa` in the connection string.** Run `database/scripts/010_application_login.sql` against
-   `IoTTeamCenterDev`, then swap `DEV_SQL_CONNECTION_STRING` to `iot_team_app` and redeploy.
-   Nobody outside the team should reach this host before that.
+1. **`sa` in the connection string.** Follow the switch steps under "Already done" (010 against
+   `IoTTeamCenterDev`, 080, then `DEV_SQL_CONNECTION_STRING` → `iot_team_app` and
+   `DEV_MIGRATIONS_CONNECTION_STRING` → the owner login) and redeploy. Nobody outside the team
+   should reach this host before that.
 2. **`IoTTeamCenterTeamTest`.** Drop the partial database and recreate it under that name with
    `020_deploy_fresh_database.sql` (then repoint `.env` and drop `IoTTeamCenterDev`), or keep
    using `IoTTeamCenterDev`. Either is fine; what is not fine is leaving two half-truths around.

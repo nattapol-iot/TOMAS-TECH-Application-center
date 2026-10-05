@@ -20,6 +20,8 @@ export type AppConfig = {
   host: string;
   port: number;
   allowedHosts: string[];
+  /** Proxies whose X-Forwarded-For is believed; false when the API is reached directly. */
+  trustProxy?: false | number | string;
   corsOrigins: string[];
   businessTimeZone: string;
   auth: {
@@ -33,6 +35,8 @@ export type AppConfig = {
   tmtId?: TmtIdConfig;
   database: {
     connectionString: string;
+    /** Owner credentials for migrations, so the API itself can run as iot_team_app_role. */
+    migrationConnectionString?: string;
     trustServerCertificate: boolean;
     runMigrations?: boolean;
     readOnly?: boolean;
@@ -58,6 +62,19 @@ export type AppConfig = {
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]?.trim();
   if (!value) throw new Error(`${name} is required.`);
+  return value;
+}
+
+// Fastify takes a hop count or a list of addresses and networks (proxy-addr); an unparsable
+// value would otherwise stop the API with an error that never names this setting.
+const TRUSTED_PROXY_ITEM = /^(loopback|linklocal|uniquelocal|[0-9a-f.:]+(\/\d{1,3})?)$/i;
+function trustProxySetting(value: string | undefined): false | number | string {
+  if (value === undefined || /^(false|0|no|off)$/i.test(value)) return false;
+  if (/^(true|\*)$/i.test(value))
+    throw new Error("Http__TrustProxy must list proxy addresses or networks, not trust every hop.");
+  if (/^\d+$/.test(value)) return Number(value);
+  if (!value.split(",").every((item) => TRUSTED_PROXY_ITEM.test(item.trim())))
+    throw new Error("Http__TrustProxy must be a hop count or a comma-separated list of addresses, networks, loopback, linklocal or uniquelocal.");
   return value;
 }
 
@@ -207,6 +224,7 @@ function loadTmtIdConfig(
       "MASTER_DATA_URL and MASTER_DATA_API_KEY are required together.",
     );
   if (masterDataUrl) validateOrigin(masterDataUrl, allowPrivateLanHttp);
+  // Still parsed so an old .env keeps starting; the API only warns that it is ignored.
   const defaultRoleCode = optional(env, "TMT_ID_DEFAULT_ROLE_CODE");
   if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode))
     throw new Error("TMT_ID_DEFAULT_ROLE_CODE must be an existing dbo.roles code (1-50 characters).");
@@ -302,6 +320,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error("AllowedHosts must list exact hosts outside development.");
   }
 
+  // Behind Caddy every request otherwise carries the proxy's address, so a per-address limit
+  // puts the whole company in one bucket. Name the proxy networks; never trust every hop.
+  const trustProxy = trustProxySetting(optional(env, "Http__TrustProxy"));
+
   const allowPrivateLanHttp = environment === "staging" && mode === "TeamTest";
   const corsOrigins = listByPrefix(env, "Cors__AllowedOrigins__");
   if (environment !== "development" && corsOrigins.length === 0)
@@ -347,6 +369,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     );
   }
 
+  // Migrations create and alter objects, which the least-privilege application login cannot.
+  // When the API connects as that login, they run with this owner connection instead.
+  const migrationConnectionString = optional(env, "ConnectionStrings__Migrations");
   const runMigrations = optionalBoolean(env, "Database__RunMigrations", true);
   const readOnly = optionalBoolean(env, "Database__ReadOnly", false);
   if ((!runMigrations || readOnly) && environment === "production") {
@@ -403,6 +428,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     host: optional(env, "HOST") ?? "127.0.0.1",
     port: positiveInteger(env, "PORT", 5106),
     allowedHosts,
+    trustProxy,
     corsOrigins,
     businessTimeZone: normalizeBusinessTimeZone(
       optional(env, "Business__TimeZoneId"),
@@ -418,6 +444,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(tmtId ? { tmtId } : {}),
     database: {
       connectionString: required(env, "ConnectionStrings__IoTTeamCenter"),
+      ...(migrationConnectionString ? { migrationConnectionString } : {}),
       trustServerCertificate:
         environment === "development" || trustTeamTestCertificate,
       runMigrations,

@@ -4,7 +4,7 @@
 
 config database migration authentication และ document storage
 
-Evidence: snapshot `5bedc2f3`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `aad8821a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -29,6 +29,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/tests/audit.test.ts](<../../../backend-node/tests/audit.test.ts>)
 - [backend-node/tests/database-read-only.test.ts](<../../../backend-node/tests/database-read-only.test.ts>)
 - [backend-node/tests/http.test.ts](<../../../backend-node/tests/http.test.ts>)
+- [backend-node/tests/migration-connection.test.ts](<../../../backend-node/tests/migration-connection.test.ts>)
 - [backend-node/tests/migration-validation.test.ts](<../../../backend-node/tests/migration-validation.test.ts>)
 - [backend-node/tests/startup-migrations.test.ts](<../../../backend-node/tests/startup-migrations.test.ts>)
 

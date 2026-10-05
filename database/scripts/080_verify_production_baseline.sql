@@ -72,6 +72,12 @@ IF OBJECT_ID(N'dbo.issue_document_number', N'P') IS NULL
        FROM sys.sql_modules
        WHERE object_id = OBJECT_ID(N'dbo.sync_employee_directory_user')
          AND execute_as_principal_id = -2)
+   OR OBJECT_ID(N'dbo.link_registered_sign_in', N'P') IS NULL
+   OR NOT EXISTS (
+       SELECT 1
+       FROM sys.sql_modules
+       WHERE object_id = OBJECT_ID(N'dbo.link_registered_sign_in')
+         AND execute_as_principal_id = -2)
    OR OBJECT_ID(N'dbo.fn_estimate_validation', N'IF') IS NULL
    OR OBJECT_ID(N'dbo.v_estimate_totals', N'V') IS NULL
    OR OBJECT_ID(N'dbo.assert_estimate_totals', N'P') IS NULL
@@ -338,7 +344,16 @@ BEGIN
                             COLUMNPROPERTY(OBJECT_ID(N'dbo.users'), N'updated_at', 'ColumnId')))))
                 OR (object_item.name = N'employees' AND permission.permission_name = N'DELETE')
                 OR (object_item.name = N'supplier_price_history' AND permission.permission_name IN (N'INSERT', N'UPDATE', N'DELETE'))
-                OR (object_item.name = N'supplier_quotations' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
+                OR (object_item.name = N'supplier_quotations' AND permission.permission_name = N'UPDATE'
+                    AND permission.minor_id NOT IN (
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'supplier_id', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'supplier_reference', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'received_date', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'valid_until', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'currency', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'amount', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'inquiry_id', 'ColumnId'),
+                        COLUMNPROPERTY(OBJECT_ID(N'dbo.supplier_quotations'), N'source_url', 'ColumnId')))
                 OR (object_item.name = N'knowledge_document_files' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
                 OR (object_item.name = N'knowledge_audit_events' AND permission.permission_name IN (N'UPDATE', N'DELETE'))
                 OR (object_item.name IN (N'kpi_review_cycles', N'kpi_assessments', N'kpi_assessment_scores') AND permission.permission_name = N'DELETE')
@@ -408,8 +423,15 @@ BEGIN
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'INSERT'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'UPDATE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_price_history', N'OBJECT', N'DELETE'), 0) = 1
-        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE'), 0) = 1
-        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'DELETE'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'quotation_no', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'status', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'file_name', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'content_type', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'size_bytes', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'storage_key', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'sha256', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'uploaded_by', N'COLUMN'), 0) = 1
+        OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.supplier_quotations', N'OBJECT', N'UPDATE', N'uploaded_at', N'COLUMN'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_document_files', N'OBJECT', N'UPDATE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_document_files', N'OBJECT', N'DELETE'), 0) = 1
         OR COALESCE(HAS_PERMS_BY_NAME(N'dbo.knowledge_audit_events', N'OBJECT', N'UPDATE'), 0) = 1
@@ -500,6 +522,13 @@ IF NOT EXISTS (
       AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
     THROW 51180, 'The employee directory sync procedure EXECUTE grant is missing.', 1;
 
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.link_registered_sign_in')
+      AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
+    THROW 51181, 'The sign-in linking procedure EXECUTE grant is missing.', 1;
+
 IF EXISTS (
     SELECT 1
     FROM sys.database_permissions
@@ -508,7 +537,8 @@ IF EXISTS (
           OBJECT_ID(N'dbo.issue_document_number'),
           OBJECT_ID(N'dbo.answer_schedule_day_request'),
           OBJECT_ID(N'dbo.issue_knowledge_document_number'),
-          OBJECT_ID(N'dbo.sync_employee_directory_user'))
+          OBJECT_ID(N'dbo.sync_employee_directory_user'),
+          OBJECT_ID(N'dbo.link_registered_sign_in'))
       AND permission_name = N'EXECUTE'
       AND state IN ('G', 'W')
       AND grantee_principal_id <> @app_role_id)
