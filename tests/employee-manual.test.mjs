@@ -16,7 +16,7 @@ test("employee manual is wired into the authenticated application", async () => 
   assert.match(app, /employeeManualLabel\(language\)/);
   assert.match(screen, /\/manual\/employee-operation-manual\.html/);
   assert.match(screen, /embedded=1/);
-  assert.match(screen, /download="IoT-Team-Center-Employee-Manual\.html"/);
+  assert.match(screen, /download="Engineering-Center-Employee-Manual\.html"/);
   assert.match(screen, /TH:[\s\S]*EN:[\s\S]*JP:/);
   assert.match(activity, /manual:'Manual document'/);
 });

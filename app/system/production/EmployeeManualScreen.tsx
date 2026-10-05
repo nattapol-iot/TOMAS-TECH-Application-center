@@ -11,7 +11,7 @@ const COPY = {
   TH: {
     nav: "คู่มือการใช้งาน",
     eyebrow: "ศูนย์ช่วยเหลือสำหรับพนักงาน",
-    title: "คู่มือการใช้งาน IoT Team Center",
+    title: "คู่มือการใช้งาน Engineering Center",
     subtitle: "ค้นหาขั้นตอนการทำงาน อ่านคำอธิบายพร้อมภาพหน้าจอจริง และพิมพ์หรือดาวน์โหลดไว้ใช้ออฟไลน์ได้",
     open: "เปิดเต็มหน้าจอ",
     download: "ดาวน์โหลดคู่มือ",
@@ -25,7 +25,7 @@ const COPY = {
   EN: {
     nav: "Employee Manual",
     eyebrow: "Employee help centre",
-    title: "IoT Team Center Employee Manual",
+    title: "Engineering Center Employee Manual",
     subtitle: "Find operating procedures, follow guidance with real application screenshots, and print or download an offline copy.",
     open: "Open full screen",
     download: "Download manual",
@@ -39,7 +39,7 @@ const COPY = {
   JP: {
     nav: "操作マニュアル",
     eyebrow: "従業員ヘルプセンター",
-    title: "IoT Team Center 操作マニュアル",
+    title: "Engineering Center 操作マニュアル",
     subtitle: "実画面付きの操作手順を検索し、印刷またはダウンロードしてオフラインでも閲覧できます。",
     open: "全画面で開く",
     download: "マニュアルを保存",
@@ -79,7 +79,7 @@ export function EmployeeManualScreen() {
         </div>
         <div className="employee-manual-actions">
           <a className="btn primary" href={fullUrl} target="_blank" rel="noreferrer"><Icon name="externalLink" />{copy.open}</a>
-          <a className="btn default" href={MANUAL_PATH} download="IoT-Team-Center-Employee-Manual.html"><Icon name="download" />{copy.download}</a>
+          <a className="btn default" href={MANUAL_PATH} download="Engineering-Center-Employee-Manual.html"><Icon name="download" />{copy.download}</a>
         </div>
       </header>
 

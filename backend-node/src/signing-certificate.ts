@@ -192,10 +192,10 @@ ${rows}
 <p><span class="code">${escapeHtml(model.verifyCode)}</span></p>
 <p class="sub">Open ${escapeHtml(model.verifyUrl)} and enter the code above to check this document against the system record.</p>
 <div class="note"><strong>What this certificate is</strong>
-A statement of what IoT Team Center recorded. Identity comes from the company Microsoft sign-in, not from a
+A statement of what Engineering Center recorded. Identity comes from the company Microsoft sign-in, not from a
 certification authority, and this is not a certificate issued by one. Signature blocks marked as paper were
 signed on a printed copy and scanned back; the scan is held against the step.</div>
-<footer>${escapeHtml(model.legalEntity)} · IoT Team Center · generated ${escapeHtml(instant(model.completedAt))} · DSN-TC-005</footer>
+<footer>${escapeHtml(model.legalEntity)} · Engineering Center · generated ${escapeHtml(instant(model.completedAt))} · DSN-TC-005</footer>
 </div>
 </body>
 </html>

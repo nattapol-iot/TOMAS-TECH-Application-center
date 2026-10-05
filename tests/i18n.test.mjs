@@ -206,7 +206,8 @@ test("the production login has complete TH and JP copy instead of a mixed-langua
   const source = readFileSync("app/system/ProductionApp.tsx", "utf8");
   const { PRODUCTION_LOGIN_COPY } = load("app/system/production/production-login-copy.ts");
   const phrases = [
-    "IoT team workspace for inquiries, estimates, projects and materials with controlled access and an audit trail.",
+    "Central workspace for the engineering team",
+    "One place for the engineering team's sales, estimates, projects, schedules, purchasing and stock, with controlled access and an audit trail.",
     ...Object.values(PRODUCTION_LOGIN_COPY).flatMap((copy) => [
       copy.identityPoint,
       copy.heading,

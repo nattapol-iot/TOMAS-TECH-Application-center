@@ -36,9 +36,9 @@ These project rules guide both agents; they do not override host/system policies
 - Do not open the Browser/computer-use tools unless the change actually needs visual verification.
 
 <!-- PROJECT-CONTEXT:START -->
-## Project Context — IoT Team Center
+## Project Context — Engineering Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `eb795318` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `5bedc2f3` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 

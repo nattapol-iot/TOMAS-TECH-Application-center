@@ -63,7 +63,7 @@ export class EmailService {
   ) {}
 
   async sendEstimateAssignment(message: EstimateAssignmentEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[IoT Team Center] Assigned: ${message.estimateNumber} · ${message.section}`, (appUrl) =>
+    return this.sendMail(message.recipients, `[Engineering Center] Assigned: ${message.estimateNumber} · ${message.section}`, (appUrl) =>
       `<p>คุณได้รับมอบหมายงาน Estimate Cost / You have been assigned an Estimate Cost section.</p>`
       + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)}</td></tr>`
       + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
@@ -77,7 +77,7 @@ export class EmailService {
   // later reassignment. inquiries.ts writes the matching in-app notification inside the
   // transaction, so the bell still tells the engineer even when mail is off or Graph fails.
   async sendInquiryAssignment(message: InquiryAssignmentEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[IoT Team Center] Inquiry ${message.inquiryNumber}: ${message.projectName}`, (appUrl) =>
+    return this.sendMail(message.recipients, `[Engineering Center] Inquiry ${message.inquiryNumber}: ${message.projectName}`, (appUrl) =>
       `<p>คุณได้รับมอบหมาย Inquiry ใหม่ / A new inquiry has been assigned to you.</p>`
       + `<table><tr><td><strong>Inquiry</strong></td><td>${escapeHtml(message.inquiryNumber)}</td></tr>`
       + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
@@ -92,7 +92,7 @@ export class EmailService {
   // support.ts computes the same audience the in-app notification goes to and passes it
   // here, so email recipients are always the same set (never a second, drifting rule).
   async sendSupportTicketUpdate(message: SupportTicketEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[IoT Team Center] Support ${message.ticketNumber}: ${message.summary}`, (appUrl) =>
+    return this.sendMail(message.recipients, `[Engineering Center] Support ${message.ticketNumber}: ${message.summary}`, (appUrl) =>
       `<p>${escapeHtml(message.summary)}</p>`
       + `<table><tr><td><strong>Ticket</strong></td><td>${escapeHtml(message.ticketNumber)}</td></tr>`
       + `<tr><td><strong>Subject</strong></td><td>${escapeHtml(message.subject)}</td></tr>`

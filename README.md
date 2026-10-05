@@ -1,4 +1,6 @@
-# IoT Team Center
+# Engineering Center
+
+The app was called IoT Team Center until 2026-10-05. Repository, remote, container, NAS folder and Entra registration names keep the old name.
 
 For AI-assisted maintenance, start at [Project Context](AGENTS.md): a module index with API/function locations, architecture and targeted checks. Read only the module relevant to your task. Dated status sections below are historical evidence, not a live deployment status.
 

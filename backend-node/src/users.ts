@@ -39,7 +39,7 @@ export class CurrentUserService {
       WHERE ${predicate} AND u.deleted_at IS NULL;
     `, (sqlRequest) => sqlRequest.input("identity", sql.NVarChar(useEmail ? 256 : 64), identity.value));
     const row = result.recordset[0];
-    if (!row) throw new ApiError(403, "user_not_registered", "Your account is not registered for IoT Team Center.");
+    if (!row) throw new ApiError(403, "user_not_registered", "Your account is not registered for Engineering Center.");
 
     const user: CurrentUser = {
       id: Number(row.id),
@@ -53,7 +53,7 @@ export class CurrentUserService {
       department: row.department,
       isActive: Boolean(row.is_active),
     };
-    if (!user.isActive) throw new ApiError(403, "user_disabled", "Your IoT Team Center account is disabled.");
+    if (!user.isActive) throw new ApiError(403, "user_disabled", "Your Engineering Center account is disabled.");
     request.currentUser = user;
     return user;
   }

@@ -10,7 +10,7 @@ export const PRODUCTION_LOGIN_COPY: Record<SignInMode, ProductionLoginCopy> = {
     submitLabel: "Continue with TMT ID",
     lockedTitle: "Production is locked",
     accessTitle: "Production access",
-    accessBody: "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your TMT ID password.",
+    accessBody: "Roles and permissions are managed by the Engineering Center administrator. This system does not receive or store your TMT ID password.",
   },
   "team-test": {
     identityBadge: "TEST",
@@ -30,6 +30,6 @@ export const PRODUCTION_LOGIN_COPY: Record<SignInMode, ProductionLoginCopy> = {
     submitLabel: "Continue with Microsoft",
     lockedTitle: "Production is locked",
     accessTitle: "Production access",
-    accessBody: "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your Microsoft password.",
+    accessBody: "Roles and permissions are managed by the Engineering Center administrator. This system does not receive or store your Microsoft password.",
   },
 };

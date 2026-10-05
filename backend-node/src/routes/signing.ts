@@ -1476,7 +1476,7 @@ export function registerSigningRoutes(
       chainHead: chain.head,
       chainVerified: chain.verified,
       blocks,
-      statement: "A statement of what IoT Team Center recorded. Identity comes from the company Microsoft sign-in, "
+      statement: "A statement of what Engineering Center recorded. Identity comes from the company Microsoft sign-in, "
         + "not from a certification authority, and this is not a certificate issued by one.",
     };
   });

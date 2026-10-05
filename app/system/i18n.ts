@@ -125,7 +125,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Password": { th: "รหัสผ่าน", jp: "パスワード" },
   "Sign in as": { th: "เข้าใช้งานในบทบาท", jp: "ロールを選択" },
   "Keep me signed in on this workstation": { th: "จดจำการเข้าสู่ระบบบนเครื่องนี้", jp: "この端末でログイン状態を保持する" },
-  "Engineering Estimate Cost Management System": { th: "ระบบบริหารต้นทุนประมาณการงานวิศวกรรม", jp: "エンジニアリング見積原価管理システム" },
+  "Central workspace for the engineering team": { th: "พื้นที่ทำงานกลางของทีมวิศวกรรม", jp: "エンジニアリングチームの共通ワークスペース" },
   "Team test sign in": { th: "เข้าสู่ระบบทดสอบทีม", jp: "チームテストにサインイン" },
   "Use your registered email and temporary test access code.":
     { th: "ใช้อีเมลที่ลงทะเบียนในระบบและรหัสทดสอบชั่วคราว", jp: "登録済みメールアドレスと一時テストコードを使用してください。" },
@@ -136,8 +136,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Enter team test": { th: "เข้าสู่ระบบทดสอบ", jp: "チームテストに入る" },
   "Continue with Microsoft": { th: "ดำเนินการต่อด้วย Microsoft", jp: "Microsoftで続行" },
   "Connecting…": { th: "กำลังเชื่อมต่อ…", jp: "接続中…" },
-  "IoT team workspace for inquiries, estimates, projects and materials with controlled access and an audit trail.":
-    { th: "พื้นที่ทำงานของทีม IoT สำหรับงานสอบถามราคา ประมาณการ โปรเจกต์ และวัสดุ พร้อมการควบคุมสิทธิ์และประวัติการเปลี่ยนแปลง", jp: "アクセス制御と監査履歴を備えた、引合・見積・プロジェクト・資材のための IoT チームワークスペースです。" },
+  "One place for the engineering team's sales, estimates, projects, schedules, purchasing and stock, with controlled access and an audit trail.":
+    { th: "รวมงานขาย ประมาณการ โปรเจกต์ แผนงาน จัดซื้อ และคลังวัสดุของทีมวิศวกรรมไว้ในที่เดียว พร้อมการควบคุมสิทธิ์และประวัติการเปลี่ยนแปลง", jp: "エンジニアリングチームの営業・見積・プロジェクト・工程・購買・在庫をひとつにまとめ、アクセス制御と監査履歴を備えています。" },
   "Temporary team-test access": { th: "สิทธิ์เข้าใช้ระบบทดสอบทีมชั่วคราว", jp: "一時的なチームテストアクセス" },
   "Microsoft company account": { th: "บัญชี Microsoft ของบริษัท", jp: "会社の Microsoft アカウント" },
   "SQL Server is the single source of record.": { th: "SQL Server เป็นแหล่งข้อมูลกลางเพียงแห่งเดียว", jp: "SQL Server を唯一の正式なデータソースとして使用します。" },
@@ -152,14 +152,16 @@ export const DICTIONARY: Record<string, Entry> = {
   "Production access": { th: "สิทธิ์ใช้งานระบบจริง", jp: "本番環境へのアクセス" },
   "For temporary UAT use. The access code stays only in this browser session, and Production does not enable this mode.":
     { th: "ใช้สำหรับ UAT ชั่วคราวเท่านั้น รหัสจะเก็บเฉพาะในเซสชันของเบราว์เซอร์นี้ และระบบใช้งานจริงจะไม่เปิดโหมดนี้", jp: "一時的な UAT 専用です。アクセスコードはこのブラウザーセッション内だけに保持され、本番環境ではこのモードを有効にしません。" },
-  "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your Microsoft password.":
-    { th: "บทบาทและสิทธิ์ดูแลโดยผู้ดูแล IoT Team Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน Microsoft ของคุณ", jp: "ロールと権限は IoT Team Center 管理者が管理します。このシステムは Microsoft のパスワードを受信・保存しません。" },
+  "Roles and permissions are managed by the Engineering Center administrator. This system does not receive or store your Microsoft password.":
+    { th: "บทบาทและสิทธิ์ดูแลโดยผู้ดูแล Engineering Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน Microsoft ของคุณ", jp: "ロールと権限は Engineering Center 管理者が管理します。このシステムは Microsoft のパスワードを受信・保存しません。" },
+  "Your role and permissions are assigned by the Engineering Center administrator. Passwords are handled by Microsoft and are never stored in this application.":
+    { th: "บทบาทและสิทธิ์กำหนดโดยผู้ดูแล Engineering Center รหัสผ่านดูแลโดย Microsoft และไม่ถูกจัดเก็บในแอปพลิเคชันนี้", jp: "ロールと権限は Engineering Center 管理者が割り当てます。パスワードは Microsoft が管理し、このアプリケーションには保存されません。" },
   "TMT ID company single sign-on": { th: "ระบบล็อกอินรวมด้วยบัญชี TMT ID ของบริษัท", jp: "会社の TMT ID によるシングルサインオン" },
   "Use your TMT ID company account to enter the Production workspace.":
     { th: "ใช้บัญชี TMT ID ของบริษัทเพื่อเข้าสู่พื้นที่ใช้งานจริง", jp: "会社の TMT ID アカウントで本番ワークスペースにサインインしてください。" },
   "Continue with TMT ID": { th: "ดำเนินการต่อด้วย TMT ID", jp: "TMT ID で続行" },
-  "Roles and permissions are managed by the IoT Team Center administrator. This system does not receive or store your TMT ID password.":
-    { th: "บทบาทและสิทธิ์ดูแลโดยผู้ดูแล IoT Team Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน TMT ID ของคุณ", jp: "ロールと権限は IoT Team Center 管理者が管理します。このシステムは TMT ID のパスワードを受信・保存しません。" },
+  "Roles and permissions are managed by the Engineering Center administrator. This system does not receive or store your TMT ID password.":
+    { th: "บทบาทและสิทธิ์ดูแลโดยผู้ดูแล Engineering Center ระบบนี้ไม่รับหรือจัดเก็บรหัสผ่าน TMT ID ของคุณ", jp: "ロールと権限は Engineering Center 管理者が管理します。このシステムは TMT ID のパスワードを受信・保存しません。" },
 
   /* Common actions */
   "Save": { th: "บันทึก", jp: "保存" },

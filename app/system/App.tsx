@@ -649,7 +649,7 @@ function Login({
 
         <div>
           <h2>{PRODUCT.name}</h2>
-          <p className="login-strap">{t("Engineering Estimate Cost Management System")}</p>
+          <p className="login-strap">{t("Central workspace for the engineering team")}</p>
           <p>Engineers should spend their time estimating engineering work — not searching old Excel files, copying prices, checking formulas or combining costs by hand.</p>
           <ul className="login-points">
             <li><Icon name="check" />One inquiry number, one estimate number, no duplication</li>
@@ -683,7 +683,7 @@ function Login({
               </button>
               <div className="login-role-hint">
                 <strong>{t("Production access")}</strong>
-                {t("Your role and permissions are assigned by the IoT Team administrator. Passwords are handled by Microsoft and are never stored in this application.")}
+                {t("Your role and permissions are assigned by the Engineering Center administrator. Passwords are handled by Microsoft and are never stored in this application.")}
               </div>
             </>
           ) : (

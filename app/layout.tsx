@@ -22,7 +22,7 @@ export function generateMetadata(): Metadata {
   const origin = safeOrigin(configuredOrigin);
   const image = `${origin}/og.png`;
   const title = `${PRODUCT.name} — ${PRODUCT.tagline}`;
-  const description = "Secure internal engineering workflow for inquiry registration, estimate cost review and approval, project initiation, and inventory visibility.";
+  const description = "Central workspace for the TOMAS TECH engineering team: CRM, inquiries, estimate cost, projects, schedules, procurement, inventory, signing and reports.";
   return { title, description, openGraph: { title, description, images: [image] }, twitter: { card: "summary_large_image", title, description, images: [image] } };
 }
 

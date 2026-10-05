@@ -807,7 +807,7 @@ function ProductionLogin({
   return <div className="login">
     <aside className="login-aside">
       <div className="login-brand"><BrandLockup tone="dark" height={44} /><span>{PRODUCT.name}</span></div>
-      <div><h2>{PRODUCT.name}</h2><p className="login-strap">{t("Engineering Estimate Cost Management System")}</p><p>{t("IoT team workspace for inquiries, estimates, projects and materials with controlled access and an audit trail.")}</p><ul className="login-points"><li><Icon name="check" />{t(copy.identityPoint)}</li><li><Icon name="check" />{t("SQL Server is the single source of record.")}</li><li><Icon name="check" />{t("Role-based access and safe concurrent editing.")}</li><li><Icon name="check" />{t("Unique document numbers with a traceable history.")}</li></ul></div>
+      <div><h2>{PRODUCT.name}</h2><p className="login-strap">{t("Central workspace for the engineering team")}</p><p>{t("One place for the engineering team's sales, estimates, projects, schedules, purchasing and stock, with controlled access and an audit trail.")}</p><ul className="login-points"><li><Icon name="check" />{t(copy.identityPoint)}</li><li><Icon name="check" />{t("SQL Server is the single source of record.")}</li><li><Icon name="check" />{t("Role-based access and safe concurrent editing.")}</li><li><Icon name="check" />{t("Unique document numbers with a traceable history.")}</li></ul></div>
       <div className="login-stats"><div><strong>{copy.identityBadge}</strong><span>{t("Identity")}</span></div><div><strong>RBAC</strong><span>{t("Access")}</span></div><div><strong>SQL</strong><span>{t("System of record")}</span></div></div>
     </aside>
     <div className="login-form-wrap">
