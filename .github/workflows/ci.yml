@@ -9,6 +9,8 @@ on:
   pull_request:
   push:
     branches:
+      # Deploy waits for this workflow to pass on main (see deploy.yml).
+      - main
       - develop
       - "feature/**"
       - "hotfix/**"

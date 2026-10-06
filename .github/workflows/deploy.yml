@@ -1,17 +1,18 @@
 name: Deploy
 
 # Production deployment to the Mac mini (macmini-1 / tmt-eq-0056).
-# Triggered by a push to main after a PR is merged.
-# The job waits for manual approval in the GitHub "production" Environment
-# before being dispatched to the self-hosted runner registered on the Mac mini.
+# Triggered when CI (ci.yml) finishes successfully for a push to main, so a red lint,
+# typecheck or test run never reaches production. workflow_dispatch remains the manual
+# override and deploys the selected ref without waiting for CI.
 # The runner (label: iot-team-center-macmini) makes an outbound-only connection
 # to GitHub — no inbound port, no public IP, no VPN needed.
 # See docs/MACMINI_HANDOFF.md for host layout and constraints.
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +23,9 @@ jobs:
     name: Deploy to Mac mini (colima-iot)
     # Runner registered on macmini-1 at /Users/tomastc/actions-runner
     # launchd service: actions.runner.pattana1902-IoT-Team-Center.macmini-1
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: [self-hosted, iot-team-center-macmini]
     timeout-minutes: 20
     # Requires a "production" Environment in repo Settings with at least one
@@ -29,6 +33,9 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v6
+        with:
+          # A workflow_run event otherwise checks out the latest main, not the commit CI tested.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Deploy via macOS script
         # scripts/macos/deploy.sh handles rsync, colima-iot Docker context,

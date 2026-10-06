@@ -125,7 +125,9 @@ test("the assignment read is scoped to the caller and respects finished and arch
   assert.match(route, /WHERE \(a\.owner_id=@actor OR a\.support_id=@actor\)/);
   assert.match(route, /e\.deleted_at IS NULL AND i\.deleted_at IS NULL/);
   assert.match(route, /CLOSED_ASSIGNMENT_STATUSES = \["Completed", "Reviewed"\]/);
-  assert.match(route, /CLOSED_ESTIMATE_STATUSES = \["Approved", "Locked"\]/);
+  // Cancelled joined with the inquiry/estimate lifecycle actions (6239366b).
+  assert.match(route, /CLOSED_ESTIMATE_STATUSES = \["Approved", "Locked", "Cancelled"\]/);
+  assert.match(route, /e\.archived_at IS NULL AND i\.archived_at IS NULL/);
   assert.match(route, /line\.revision=e\.revision/);
   // A read must not move work along to make it visible.
   assert.doesNotMatch(route, /\b(UPDATE|INSERT|DELETE|MERGE)\b/);

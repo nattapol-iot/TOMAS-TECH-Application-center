@@ -5,6 +5,7 @@ import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, parseRowVersion, positiveLong } from "../http.js";
 import { insertAudit } from "../audit.js";
+import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { assigned, elevated, estimateAssignees, lockEditableEstimate, touchEstimate } from "./estimate-cost-write.js";
 
 const tables = { CostItem: "cost_items", ManhourLine: "manhour_lines", ExpenseLine: "expense_lines", OtherCostLine: "other_cost_lines" } as const;
@@ -98,6 +99,8 @@ export function registerEstimateOrderRoutes(app: FastifyInstance, database: Data
           AND target.estimate_id=@id AND target.revision=@revision AND target.deleted_at IS NULL
           INNER JOIN OPENJSON(@moving_ids) ordering ON moving.id=CONVERT(bigint,ordering.value)
           WHERE moving.estimate_id=@id AND moving.revision=@revision AND moving.deleted_at IS NULL;`);
+        // A line takes the cost multiplier of the summary module it lands in, so a move can change the total.
+        await assertEstimateTotals(transaction, id);
       }
       await query.query(`UPDATE line SET sort_order=CONVERT(int,ordering.[key]),updated_by=@actor,updated_at=SYSUTCDATETIME()
         FROM dbo.${table} line INNER JOIN OPENJSON(@ids) ordering ON line.id=CONVERT(bigint,ordering.value)

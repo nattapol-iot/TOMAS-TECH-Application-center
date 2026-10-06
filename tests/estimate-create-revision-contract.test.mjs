@@ -24,7 +24,9 @@ test("locked estimates can open a forward-only revision with audit protection", 
   assert.ok(flow.indexOf("SET revision=@next_revision") < flow.indexOf("cloneRevisionLines"));
   assert.match(flow, /"Revision created"/);
   assert.match(flow, /"Estimate revision created"/);
-  assert.match(workspace, /canCreateRevision: permissionRow\.can_write && elevated && \["Approved", "Locked"\]\.includes\(header\.status\)/);
+  // An archived estimate (or one under an archived inquiry) is not open, so it cannot be revised.
+  assert.match(workspace, /const open = !headerRow\.archived_at && !headerRow\.inquiry_archived_at;/);
+  assert.match(workspace, /canCreateRevision: open && permissionRow\.can_write && elevated && \["Approved", "Locked"\]\.includes\(header\.status\)/);
   assert.match(client, /"create-revision"/);
   assert.match(screen, /capabilities\.canCreateRevision/);
   assert.match(screen, /The locked revision remains immutable/);

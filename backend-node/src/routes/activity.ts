@@ -17,7 +17,10 @@ const missing=()=>new ApiError(404,'activity_not_found','Activity record not fou
 const textDate=(v:unknown,label:string)=>parseDateOnly(v,label,false)!;
 const periodDays=(start:string,end:string)=>(Date.parse(`${end}T00:00:00Z`)-Date.parse(`${start}T00:00:00Z`))/86400_000+1;
 const uuid=(v:unknown)=>{const key=requiredText(v,36,'Request key');if(!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(key))throw invalid('Invalid request key.');return key;};
-const modules=new Set(['sales-intake','labor','signature','dashboard','my-work','inquiries','estimates','projects','knowledge','site-visits','my-assignments','price','quotations','missing','project-timeline','resources','procurement','boms','purchase','pos','inventory','receiving','issues','approvals','signing','documents','performance','reports','master','rates','audit','settings','profile','support','activity','module-templates','stamps','visit-master','signature']);
+// Every navigable view in app/system/ProductionApp.tsx; a view missing here is refused with 400,
+// which the client swallows, so that page silently never counts (tests/activity-presence-modules.test.mjs).
+const modules=new Set(['sales-intake','labor','signature','dashboard','my-work','inquiries','estimates','projects','knowledge','site-visits','my-assignments','price','quotations','missing','project-timeline','resources','procurement','boms','purchase','pos','inventory','receiving','issues','approvals','signing','documents','performance','reports','master','rates','audit','settings','profile','support','activity','module-templates','stamps','visit-master','signature',
+ 'crm-dashboard','crm-customers','crm-contacts','crm-opportunities','crm-activities','crm-pipeline','customers','suppliers','employees','material-master','user-accounts','labor-packages','schedule-templates','summary-reports','manual']);
 
 export function registerActivityRoutes(app:FastifyInstance,db:Database,users:CurrentUserService){
  const actorFor=async(request:Parameters<CurrentUserService['required']>[0])=>{await users.demandPermission(request,'activity.read');return users.required(request);};

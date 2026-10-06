@@ -60,8 +60,11 @@ test("migration 042 adds a forced decimal aggregate guard without changing the t
  */
 const backendSrc = new URL("backend-node/src/", root);
 
-/** Tables whose rows are summed by dbo.v_estimate_totals. */
-const MONETARY_LINE_TABLES = ["cost_items", "estimate_overhead_snapshots", "expense_lines", "manhour_lines", "other_cost_lines"];
+/**
+ * Tables whose rows are summed by dbo.v_estimate_totals, directly or through a view it reads.
+ * estimate_module_details joined in 061: a summary module's cost_multiplier scales its lines.
+ */
+const MONETARY_LINE_TABLES = ["cost_items", "estimate_module_details", "estimate_overhead_snapshots", "expense_lines", "manhour_lines", "other_cost_lines"];
 
 /** Columns of dbo.estimates that change the canonical totals. */
 const ESTIMATE_TOTAL_COLUMNS = /\b(?:contingency_rate|revision)\b/i;
@@ -107,13 +110,20 @@ function estimateWriteChangesTotals(statement) {
   return true;
 }
 
+/** `UPDATE moving SET ... FROM dbo.cost_items moving` writes cost_items through its alias. */
+function aliasedUpdateTarget(statement, alias) {
+  if (!/^UPDATE\s/i.test(statement)) return alias;
+  const source = new RegExp(`\\b(?:FROM|JOIN)\\s+(?:dbo\\.)?([A-Za-z_][A-Za-z0-9_]*)\\s+(?:AS\\s+)?${alias}\\b`, "i").exec(statement);
+  return source ? source[1].toLowerCase() : alias;
+}
+
 /** Tables feeding v_estimate_totals that the given source text writes to. */
 function findTotalsWrites(text) {
   const tables = new Set();
   for (const match of text.matchAll(WRITE_STATEMENT)) {
-    const table = match[1].toLowerCase();
     const terminator = text.indexOf(";", match.index);
     const statement = text.slice(match.index, terminator === -1 ? text.length : terminator);
+    const table = aliasedUpdateTarget(statement, match[1].toLowerCase());
     if (MONETARY_LINE_TABLES.includes(table)) tables.add(table);
     else if (table === "estimates" && estimateWriteChangesTotals(statement)) tables.add("estimates");
   }
@@ -121,24 +131,37 @@ function findTotalsWrites(text) {
 }
 
 test("the totals-guard write inventory covers every input of dbo.v_estimate_totals", async () => {
-  const migrations = (await readdir(new URL("database/migrations/", root))).filter((name) => name.endsWith(".sql")).sort();
-  const definitions = [];
-  for (const name of migrations) {
-    const text = await readFile(new URL(`database/migrations/${name}`, root), "utf8");
-    if (/CREATE\s+OR\s+ALTER\s+VIEW\s+dbo\.v_estimate_totals/i.test(text)) definitions.push({ name, text });
+  const migrations = [];
+  for (const name of (await readdir(new URL("database/migrations/", root))).filter((file) => file.endsWith(".sql")).sort()) {
+    migrations.push({ name, text: await readFile(new URL(`database/migrations/${name}`, root), "utf8") });
   }
-  assert.ok(definitions.length > 0, "no migration defines dbo.v_estimate_totals");
+  /** Tables the latest definition of a view reads, following any dbo.v_* view it reads in turn. */
+  const viewInputs = (view, seen = new Set()) => {
+    const create = new RegExp(`CREATE\\s+OR\\s+ALTER\\s+VIEW\\s+dbo\\.${view}\\b`, "i");
+    const latest = migrations.filter((migration) => create.test(migration.text)).at(-1);
+    assert.ok(latest, `no migration defines dbo.${view}`);
+    const start = create.exec(latest.text).index;
+    const rest = latest.text.slice(start + 1);
+    // A definition ends at GO, at the next definition, or where its sp_executesql string closes.
+    const end = [/CREATE\s+OR\s+ALTER\s/i, /\r?\nGO\b/, /';\r?\n/].map((pattern) => pattern.exec(rest)?.index ?? rest.length);
+    const body = latest.text.slice(start, start + 1 + Math.min(...end));
+    const tables = new Set();
+    for (const [, reference] of body.matchAll(/\b(?:FROM|JOIN)\s+dbo\.([A-Za-z_][A-Za-z0-9_]*)/gi)) {
+      const name = reference.toLowerCase();
+      if (!name.startsWith("v_")) tables.add(name);
+      else if (!seen.has(name)) { seen.add(name); for (const table of viewInputs(name, seen).tables) tables.add(table); }
+    }
+    return { tables, name: latest.name };
+  };
 
-  const latest = definitions.at(-1);
-  const body = /CREATE\s+OR\s+ALTER\s+VIEW\s+dbo\.v_estimate_totals[\s\S]*?(?:\r?\nGO|$)/i.exec(latest.text)[0];
-  const referenced = new Set([...body.matchAll(/\b(?:FROM|JOIN)\s+dbo\.([A-Za-z_][A-Za-z0-9_]*)/gi)].map((match) => match[1].toLowerCase()));
+  const { tables: referenced, name } = viewInputs("v_estimate_totals");
   const covered = new Set([...MONETARY_LINE_TABLES, "estimates"]);
 
   for (const table of referenced) {
-    assert.ok(covered.has(table), `${latest.name} feeds dbo.${table} into v_estimate_totals but the source guardrail does not watch writes to it`);
+    assert.ok(covered.has(table), `${name} feeds dbo.${table} into v_estimate_totals but the source guardrail does not watch writes to it`);
   }
   for (const table of covered) {
-    assert.ok(referenced.has(table), `dbo.${table} is watched by the source guardrail but no longer feeds v_estimate_totals in ${latest.name}`);
+    assert.ok(referenced.has(table), `dbo.${table} is watched by the source guardrail but no longer feeds v_estimate_totals in ${name}`);
   }
 });
 
@@ -193,6 +216,8 @@ test("the write-path scanner rejects an unguarded monetary write", () => {
   const contingency = 'await request.query("UPDATE dbo.estimates SET contingency_rate=@rate WHERE id=@id;");';
   const statusOnly = "await request.query(\"UPDATE dbo.estimates SET status=N'Approved' WHERE id=@id AND revision=@revision;\");";
   const readOnly = 'await request.query("SELECT total FROM dbo.v_estimate_totals WHERE estimate_id=@id;");';
+  const aliasedMove = "await query.query(`UPDATE moving SET module=target.module FROM dbo.cost_items moving INNER JOIN dbo.cost_items target ON target.id=@target_id WHERE moving.estimate_id=@id;`);";
+  const aliasedNonMonetary = "await query.query(`UPDATE t SET status=N'Done' FROM dbo.resource_tasks t WHERE t.id=@id;`);";
 
   assert.deepEqual([...findTotalsWrites(unguardedRoute)], ["cost_items"]);
   assert.ok(!GUARD_CALL.test(unguardedRoute), "the unguarded sample must not look guarded");
@@ -201,4 +226,6 @@ test("the write-path scanner rejects an unguarded monetary write", () => {
   assert.deepEqual([...findTotalsWrites(contingency)], ["estimates"], "a contingency change must be detected");
   assert.deepEqual([...findTotalsWrites(statusOnly)], [], "a non-monetary estimate update must not be flagged");
   assert.deepEqual([...findTotalsWrites(readOnly)], [], "reads must not be flagged");
+  assert.deepEqual([...findTotalsWrites(aliasedMove)], ["cost_items"], "an UPDATE through a FROM alias writes the aliased table");
+  assert.deepEqual([...findTotalsWrites(aliasedNonMonetary)], [], "an aliased update of another table must not be flagged");
 });
