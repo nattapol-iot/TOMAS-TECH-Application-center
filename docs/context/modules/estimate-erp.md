@@ -4,7 +4,7 @@
 
 จัดหมวด ERP สรุปยอด export และ import workbook
 
-Evidence: snapshot `aad8821a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `8b394fcc`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -122,7 +122,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 ## Candidate regression tests
 
-- [tests/erp-category-suggest.test.mjs](<../../../tests/erp-category-suggest.test.mjs>)
 - [tests/erp-estimate-groups.test.mjs](<../../../tests/erp-estimate-groups.test.mjs>)
 - [tests/erp-estimate-workbook.test.mjs](<../../../tests/erp-estimate-workbook.test.mjs>)
 - [tests/estimate-excel-import.test.mjs](<../../../tests/estimate-excel-import.test.mjs>)

@@ -2,22 +2,22 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `aad8821a`; generated, do not edit. [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `8b394fcc`; generated, do not edit. [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| PUT | `/api/v1/estimates/:id/line-order` | 38–109 |
+| PUT | `/api/v1/estimates/:id/line-order` | 39–112 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `parseOrder` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 11–16 |
-| `assertCompleteOrder` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 17–20 |
-| `parseCostMove` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 25–36 |
-| `registerEstimateOrderRoutes` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 37–110 |
+| `parseOrder` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 12–17 |
+| `assertCompleteOrder` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 18–21 |
+| `parseCostMove` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 26–37 |
+| `registerEstimateOrderRoutes` | [backend-node/src/routes/estimate-order.ts](<../../../backend-node/src/routes/estimate-order.ts>) | 38–113 |
 
 ## Direct local dependencies
 
@@ -26,6 +26,7 @@ Evidence: source snapshot `aad8821a`; generated, do not edit. [backend-node/src/
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
+- [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)

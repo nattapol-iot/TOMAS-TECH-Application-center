@@ -4,7 +4,7 @@
 
 จัดซื้อ อนุมัติ และประวัติ PR
 
-Evidence: snapshot `aad8821a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `8b394fcc`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -74,7 +74,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 ## Candidate regression tests
 
-- [tests/full-material-flow.integration.test.mjs](<../../../tests/full-material-flow.integration.test.mjs>)
 - [tests/historical-pr-reconciliation.test.mjs](<../../../tests/historical-pr-reconciliation.test.mjs>)
 - [backend-node/tests/historical-pr.test.ts](<../../../backend-node/tests/historical-pr.test.ts>)
 - [backend-node/tests/knowledge-sales-materials.test.ts](<../../../backend-node/tests/knowledge-sales-materials.test.ts>)
