@@ -3564,6 +3564,10 @@ tbody tr.row-late:hover td { background: #fadada; }
   .sidebar, .topbar, .page-actions, .workspace-bar { display: none; }
   .page { padding: 0; }
   .panel { break-inside: avoid; box-shadow: none; }
+  /* Was applied to every page only because the report stylesheet loaded with the shell;
+     kept here now that Reports loads on demand (production/LazyScreens.tsx). */
+  .sidebar, .topbar, .app-footer, .btn, nav, header, footer { display: none !important; }
+  .page { padding: 0 !important; }
 }
 
 /* ==========================================================================

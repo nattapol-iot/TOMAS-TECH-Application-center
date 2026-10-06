@@ -210,6 +210,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Add an employee or change the search filters": { th: "เพิ่มพนักงานหรือเปลี่ยนตัวกรองการค้นหา", jp: "従業員を追加するか検索条件を変更してください" },
   "Refresh": { th: "รีเฟรช", jp: "更新" },
   "Loading…": { th: "กำลังโหลด…", jp: "読み込み中…" },
+  "Opening this screen…": { th: "กำลังเปิดหน้าจอนี้…", jp: "画面を開いています…" },
+  "This screen could not be opened. Refresh the page to load the latest version.": { th: "เปิดหน้าจอนี้ไม่สำเร็จ กรุณารีเฟรชหน้าเพื่อโหลดเวอร์ชันล่าสุด", jp: "この画面を開けませんでした。ページを再読み込みして最新版を読み込んでください。" },
   "Saving…": { th: "กำลังบันทึก…", jp: "保存中…" },
   "Approve": { th: "อนุมัติ", jp: "承認" },
   "Reject": { th: "ไม่อนุมัติ", jp: "却下" },
