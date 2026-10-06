@@ -100,7 +100,14 @@ export async function saveApprovedProjectPlan(tx:Transaction,r:WorkRow,plan:Task
   let id=r.schedule_task_id?Number(r.schedule_task_id):null;
   if(id) {
     q.input('task',sql.BigInt,id);
-    await q.query(`UPDATE dbo.schedule_tasks SET plan_start=@start,plan_days=@days,plan_man_days=@effort,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@task AND deleted_at IS NULL;`);
+    // The linked row must still exist, and a day request waiting on it is answered before Resource Plan moves its dates.
+    // Locked in the order answering a request takes them, the request rows and then the task.
+    const pending=(await q.query<{pending:boolean}>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_updates WITH(UPDLOCK,HOLDLOCK) WHERE task_id=@task AND field=N'request' AND request_days>0 AND answer IS NULL) THEN 1 ELSE 0 END AS bit) pending;`)).recordset[0];
+    const live=(await q.query<{live:boolean}>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) live;`)).recordset[0];
+    if(!live?.live) throw new ApiError(409,'schedule_task_missing','The schedule row this task updates was removed. Reload Resource Plan.');
+    if(pending?.pending) throw new ApiError(409,'schedule_day_request_pending','Answer the pending request for more days on this task before changing its plan.');
+    const updated=await q.query(`UPDATE dbo.schedule_tasks SET plan_start=@start,plan_days=@days,plan_man_days=@effort,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@task AND deleted_at IS NULL;`);
+    if(updated.rowsAffected[0]!==1) throw new ApiError(409,'concurrency_conflict','The schedule changed. Reload it and try again.');
   } else {
     id=Number((await q.query<{id:number}>(`DECLARE @ids TABLE(id bigint); INSERT dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,lag_days,pic_external,plan_man_days,updated_by) OUTPUT inserted.id INTO @ids VALUES(@project,NULL,1000,N'task',@title,0,N'PM',@actor,N'Internal',@start,@days,N'manual',0,N'',@effort,@actor);SELECT id FROM @ids;`)).recordset[0]!.id);
   }

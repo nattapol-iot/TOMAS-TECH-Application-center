@@ -283,7 +283,11 @@ export function Tabs<T extends string>({ tabs, active, onChange }: {
    app/system/segment-filters.css.
    -------------------------------------------------------------------------- */
 
-export type FilterItem = { key: string; label: string; value: number; tone: Tone };
+export type FilterItem = {
+  key: string; label: string; value: number; tone: Tone;
+  /** A chart token such as var(--c2), for a ramp the six tones cannot draw; it overrides the tone in SegmentBar. */
+  color?: string;
+};
 
 /** A stacked bar with a legend; picking the active segment again clears the filter. */
 export function SegmentBar({ items, active, onPick, lead, label }: {
@@ -301,7 +305,7 @@ export function SegmentBar({ items, active, onPick, lead, label }: {
       {lead ? <div className="segment-bar-lead">{lead}</div> : null}
       <div className="segment-bar-track">
         {total ? items.filter((item) => item.value > 0).map((item) => (
-          <button key={item.key} type="button" style={{ flexGrow: item.value }} aria-pressed={active === item.key}
+          <button key={item.key} type="button" style={{ flexGrow: item.value, ...(item.color ? { background: item.color } : {}) }} aria-pressed={active === item.key}
             className={`segment-bar-seg ${item.tone}${active === item.key ? " active" : ""}`}
             title={`${t(item.label)} · ${item.value}`} aria-label={`${t(item.label)} ${item.value}`} onClick={() => pick(item.key)} />
         )) : <span className="segment-bar-empty" />}
@@ -310,7 +314,7 @@ export function SegmentBar({ items, active, onPick, lead, label }: {
         {items.map((item) => (
           <li key={item.key}>
             <button type="button" aria-pressed={active === item.key} className={active === item.key ? "active" : ""} onClick={() => pick(item.key)}>
-              <i aria-hidden="true" className={`segment-bar-dot ${item.tone}`} />{t(item.label)}<strong>{item.value}</strong>
+              <i aria-hidden="true" className={`segment-bar-dot ${item.tone}`} style={item.color ? { background: item.color } : undefined} />{t(item.label)}<strong>{item.value}</strong>
             </button>
           </li>
         ))}

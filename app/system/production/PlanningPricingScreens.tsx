@@ -5,7 +5,7 @@ import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CreateSignableDocumentModal } from "./SigningScreens";
-import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
+import { ResourceTaskWorkspace, type ResourceTask } from "./ResourceTaskWorkspace";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
@@ -45,6 +45,7 @@ import {
   type EstimateCostItem,
   type EstimateSummary,
   type MyEstimateAssignment,
+  type PagedResult,
   type ProjectHealth,
   type ProjectSummary,
   type QuotationLineForPriceLibrary,
@@ -144,6 +145,8 @@ type MyWorkItem = {
   } | null;
   rowVersion: string;
   updatedAt: string;
+  /** When progress was last reported; plan edits and baselines also touch updatedAt, so quiet days count from this. */
+  lastProgressAt?: string | null;
 };
 
 type MyWorkUpdate = {
@@ -691,8 +694,10 @@ const workEffectiveFinish = (item: MyWorkItem) => item.status === "Done" ? item.
 // The shared rules in lib/my-work.ts: late against the current plan, a forecast owed, quiet too long.
 const workIsLate = (item: MyWorkItem) => isLateAgainstPlan(item, isoToday());
 const workNeedsForecast = (item: MyWorkItem) => needsForecastDate(item, isoToday());
-const workIsStale = (item: MyWorkItem) => isStaleInProgress(item, Date.now());
-const workNeedsUpdate = (item: MyWorkItem) => myWorkNeedsAttention({ ...item, canUpdate: true }, isoToday(), Date.now());
+const workIsStale = (item: MyWorkItem) => isStaleInProgress({ status: item.status, updatedAt: workLastReport(item) }, Date.now());
+/** The last progress report; an older API without it falls back to the row's update time. */
+const workLastReport = (item: MyWorkItem) => item.lastProgressAt ?? item.updatedAt;
+const workNeedsUpdate = (item: MyWorkItem) => myWorkNeedsAttention({ ...item, canUpdate: true, updatedAt: workLastReport(item) }, isoToday(), Date.now());
 const workUserNote = (value: string | null) => value?.trim().startsWith("Imported from Overall Project Plan") ? "" : value ?? "";
 const daysFromToday = (value: string | null) => value
   ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
@@ -824,7 +829,7 @@ function groupScheduleWork(items: MyWorkItem[]): ScheduleWorkGroup[] {
     }).length;
     const waitingCount = rows.filter((item) => item.pendingRequest).length;
     const nearestDue = rows.map(workEffectiveFinish).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
-    const updatedAt = rows.reduce((latest, item) => Date.parse(item.updatedAt) > Date.parse(latest) ? item.updatedAt : latest, first.updatedAt);
+    const updatedAt = rows.reduce((latest, item) => Date.parse(workLastReport(item)) > Date.parse(latest) ? workLastReport(item) : latest, workLastReport(first));
     const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : waitingCount ? 4 : 5;
     return {
       key,
@@ -1039,6 +1044,8 @@ export function ProductionMyWork({
   const [tab, setTab] = useState<MyWorkTab>("active");
   const [saving, setSaving] = useState<Set<number>>(() => new Set());
   const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
+  const [inquiryWork, setInquiryWork] = useState<ResourceTask[]>([]);
+  const [inquirySaving, setInquirySaving] = useState<number | null>(null);
   // The dialog saves against the row it opened on; the latest row is offered only after its own conflict.
   const [editingFor, setEditingFor] = useState<MyWorkItem | null>(null);
   const editingLatest = editingFor ? items.find((item) => item.taskId === editingFor.taskId) ?? null : null;
@@ -1048,7 +1055,15 @@ export function ProductionMyWork({
   const [expandedGroups, setExpandedGroups] = useState<MyWorkExpansion>({});
   const [expansionReady, setExpansionReady] = useState(false);
   const expansionOwner = useRef("");
-  const [taskSort, setTaskSort] = useState<MyWorkSort>("priority");
+  // The chosen sort is remembered per user, like the expanded groups.
+  const sortStorageKey = `tomas-tech-my-work-sort:${bootstrap.user.id}`;
+  const [taskSort, setTaskSortState] = useState<MyWorkSort>(() => {
+    try { const stored = window.localStorage.getItem(sortStorageKey); return stored === "due" || stored === "project" ? stored : "priority"; } catch { return "priority"; }
+  });
+  const setTaskSort = (next: MyWorkSort) => {
+    setTaskSortState(next);
+    try { window.localStorage.setItem(sortStorageKey, next); } catch { /* The sort is a convenience when storage is blocked. */ }
+  };
   const [taskSearch, setTaskSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   /* Estimate assignments are read on their own permission and their own request:
@@ -1101,13 +1116,17 @@ export function ProductionMyWork({
     const request = ++loadSequence.current;
     setLoading(true); setError("");
     try {
-      const [loadedItems, loadedUpdates] = await Promise.all([
+      const [loadedItems, loadedUpdates, loadedInquiryWork] = await Promise.all([
         apiRequest<MyWorkItem[]>("/api/v1/me/work"),
         apiRequest<MyWorkUpdate[]>("/api/v1/me/work/updates"),
+        // Approved Inquiry / Estimate tasks have no schedule row, so /me/work never lists them; after
+        // acknowledgment they are worked here. A failure leaves them out rather than failing My Work.
+        apiRequest<PagedResult<ResourceTask>>("/api/v1/resource-tasks?mine=true&filter=Approved&source=estimate&pageSize=100").catch(() => null),
       ]);
       if (request !== loadSequence.current) return;
       setItems(loadedItems);
       setUpdates(loadedUpdates);
+      setInquiryWork((loadedInquiryWork?.items ?? []).filter((task) => task.acknowledgedAt && !task.scheduleTaskId && task.status !== "Done"));
     } catch (requestError) {
       if (request === loadSequence.current) setError(toError(requestError));
     } finally {
@@ -1207,6 +1226,33 @@ export function ProductionMyWork({
       });
     }
   }, [load, notify]);
+
+  // Resource-task progress (no schedule row): the same one-click control, saved against the task's row version.
+  // The saved task replaces the card at once, so a second click sends the new row version; the error of a
+  // refused save stays on screen because only a success or a conflict reloads.
+  const saveInquiryProgress = useCallback(async (task: ResourceTask, patch: Partial<MyWorkProgressInput>, message: string) => {
+    setInquirySaving(task.id);
+    try {
+      const saved = await apiRequest<ResourceTask>(`/api/v1/resource-tasks/${task.id}/progress`, { method: "POST", body: JSON.stringify({
+        rowVersion: task.rowVersion, percentComplete: Number(task.percentComplete), status: task.status,
+        actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: null, remark: null, ...patch,
+      }) });
+      loadSequence.current += 1;
+      setInquiryWork((current) => current.map((entry) => entry.id === task.id ? { ...entry, percentComplete: saved.percentComplete, status: saved.status,
+        actualStart: saved.actualStart, actualFinish: saved.actualFinish, rowVersion: saved.rowVersion, updatedAt: saved.updatedAt } : entry));
+      notify(message);
+      void load();
+    } catch (requestError) {
+      if (isConcurrencyConflict(requestError)) {
+        notify(`${task.reference} · ${uiText("Plan.changedReloaded")}`);
+        await load();
+      } else {
+        setError(toError(requestError));
+      }
+    } finally {
+      setInquirySaving(null);
+    }
+  }, [load, notify, uiText]);
 
   const patchProgress = useCallback((item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => {
     const input: MyWorkProgressInput = {
@@ -1346,6 +1392,20 @@ export function ProductionMyWork({
         </div>
       </Panel>
 
+      {(sourceFilter === "all" || sourceFilter === "estimate") && inquiryWork.length ? <Panel title="MyWork.inquiryWork" subtitle="MyWork.inquiryWorkHint" flush><div className="my-work-task-list">
+        {inquiryWork.map((task) => <article key={task.id} className={`my-task-card${isLateAgainstPlan({ status: task.status, planFinish: task.end }, todayIso) ? " late" : ""}${task.status === "Blocked" ? " blocked" : ""}`}>
+          <div className="my-task-card-main">
+            <div className="my-task-identity">
+              <div className="my-task-kicker"><Badge tone="blue"><LocalizedText text={"Inquiry / Estimate"} /></Badge><span className="mono">{task.reference}</span></div>
+              <h3>{task.title}</h3>
+              <div className="my-task-meta"><span>{task.sourceTitle}</span><span><Icon name="calendar" />{date(task.start)} → {date(task.end)}</span>{task.manDays !== null ? <span><Icon name="users" />{task.manDays} <LocalizedText text={"estimated man-days"} /></span> : null}</div>
+            </div>
+            <div className="my-task-progress"><ProgressCell value={Number(task.percentComplete)} /></div>
+          </div>
+          <QuickProgressControls target={{ key: `rt:${task.id}`, wbs: task.reference, percentComplete: Number(task.percentComplete), status: task.status, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: null, planFinish: task.end, remark: null, updatedAt: task.updatedAt }}
+            editable={inquirySaving === null} taskNotes={false} notify={notify} onPatch={(patch, message) => { void saveInquiryProgress(task, patch, message); }} />
+        </article>)}
+      </div></Panel> : null}
       {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !items.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} /></Panel> : null}
       {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
       </> : null}
@@ -1421,13 +1481,17 @@ type QuickProgressTarget = {
  * The one-click progress control, on every My Work card and in the plan's task drawer: the percent
  * strip, the status, a forecast once the task is late, and the note. Choosing Blocked without a note
  * asks for the reason in place and saves once. Rules: percentChangePatch / statusChangePatch in lib/my-work.ts.
+ * `taskNotes={false}` is for a row that keeps no note or forecast (a Resource Plan task without a schedule
+ * row): those inputs are left out, and a Blocked row changes status first, since the API asks for the
+ * blocking reason again on every save and the row has none to send.
  */
-function QuickProgressControls({ target, editable, notify, onPatch, extra }: {
+function QuickProgressControls({ target, editable, notify, onPatch, extra, taskNotes = true }: {
   target: QuickProgressTarget;
   editable: boolean;
   notify: (message: string) => void;
   onPatch: (patch: Partial<MyWorkProgressInput>, message: string) => void;
   extra?: ReactNode;
+  taskNotes?: boolean;
 }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
@@ -1445,7 +1509,7 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra }: {
   };
   return <div className="quick-controls">
     <div className="pct-strip" role="group" aria-label={uiText("Percent done")}>
-      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && value === 100)} className={percent === value ? "on" : undefined} onClick={() => {
+      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && (value === 100 || !taskNotes))} className={percent === value ? "on" : undefined} onClick={() => {
         const patch = percentChangePatch(target, value, today);
         if (!patch) return;
         if (needsZeroProgressFinishConfirmation(percent, value === 100 ? "Done" : target.status)
@@ -1473,7 +1537,7 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra }: {
       <button className="btn sm primary" type="button" disabled={!blockedReason.trim()} onClick={saveBlocked}><Icon name="check" />{uiText("MyWork.saveBlocked")}</button>
       <button className="btn sm ghost" type="button" onClick={() => setBlockedReason(null)}><LocalizedText text={"Cancel"} /></button>
     </span> : null}
-    {late || target.forecastFinish ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input
+    {taskNotes && (late || target.forecastFinish) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input
       key={`${target.key}:forecast:${target.forecastFinish ?? ""}`}
       type="date"
       disabled={!editable}
@@ -1488,7 +1552,7 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra }: {
         onPatch({ forecastFinish: value }, `${target.wbs} ${localizeCopy("forecast updated")}`);
       }}
     /></label> : null}
-    <input
+    {taskNotes ? <input
       key={`${target.key}:note:${userNote}`}
       className="note-inline"
       disabled={!editable}
@@ -1500,7 +1564,7 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra }: {
         if (target.status === "Blocked" && !value) { notify(localizeCopy("Blocked tasks require a reason")); return; }
         onPatch({ remark: value }, `${target.wbs} ${localizeCopy("note updated")}`);
       }}
-    />
+    /> : null}
     {extra}
   </div>;
 }
@@ -1605,7 +1669,7 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
   const needsForecast = workNeedsForecast(item);
   // Due is the plan finish; a forecast is shown beside it but does not move the due date.
   const dueDays = daysFromToday(item.planFinish);
-  const silentDays = quietDays(item.updatedAt);
+  const silentDays = quietDays(workLastReport(item));
   const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : workIsStale(item) ? "Update due" : null;
   const timing = item.status === "Done" ? <LocalizedText text={"Completed"} />
     : dueDays === null ? <LocalizedText text={"No due date"} />
@@ -1629,7 +1693,7 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
           <span>{item.workDays} <LocalizedText text={"work days"} /></span>
           {item.forecastFinish ? <span><LocalizedText text={"Forecast"} /> {date(item.forecastFinish)}</span> : null}
           {item.planManDays > 0 ? <span><Icon name="users" />{item.planManDays} <LocalizedText text={"estimated man-days"} />{item.actualManDays > 0 ? <> · {item.actualManDays} <LocalizedText text={"actual"} /></> : null}</span> : null}
-          <span><Icon name="clock" /><LocalizedText text={"Last update"} /> {dateTime(item.updatedAt)} · {silentDays} <LocalizedText text={"quiet days"} /></span>
+          <span><Icon name="clock" />{item.lastProgressAt === null ? <LocalizedText text={"MyWork.noReportYet"} /> : <><LocalizedText text={"Last update"} /> {dateTime(workLastReport(item))} · {silentDays} <LocalizedText text={"quiet days"} /></>}</span>
         </div>
       </div>
       <div className="my-task-progress">

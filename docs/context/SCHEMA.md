@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `68f83bd3`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `3d891f13`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -73,5 +73,7 @@ Evidence: repository migrations at `68f83bd3`. Highest file number is not proof 
 | [065_project_team_payments_contacts.sql](<../../database/migrations/065_project_team_payments_contacts.sql>) | `dbo.project_payment_milestones`, `dbo.project_contacts` |
 | [066_application_role_grants.sql](<../../database/migrations/066_application_role_grants.sql>) | Inspect migration SQL |
 | [067_department_teams.sql](<../../database/migrations/067_department_teams.sql>) | `dbo.department_teams` |
+| [068_day_request_effective_roles.sql](<../../database/migrations/068_day_request_effective_roles.sql>) | Inspect migration SQL |
+| [069_withdraw_project_document.sql](<../../database/migrations/069_withdraw_project_document.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

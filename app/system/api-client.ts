@@ -109,6 +109,8 @@ export type BootstrapData = {
     nickname: string;
     startWorkDate?: string;
     canSignIn: boolean;
+    /** Primary and additional roles (dbo.user_effective_roles); older API builds omit it. */
+    roles?: string[];
     rowVersion: string;
   }[];
   permissions: string[];
@@ -490,6 +492,8 @@ export type ProjectDocument = {
   uploadedAt: string;
   sha256: string | null;
   rowVersion: string;
+  /** The signed-in user may withdraw it: uploader, project manager, EM or Admin, and signing does not use it. */
+  canWithdraw?: boolean;
 };
 
 export type ItemBalance = {
@@ -1688,6 +1692,10 @@ export const updateProject = (projectId: number, input: UpdateProjectInput) =>
 
 export const listProjectDocuments = (projectId: number) =>
   apiRequest<ProjectDocument[]>(`/api/v1/projects/${projectId}/documents`);
+
+/** Takes a mistaken upload out of the project. The row and the stored file stay as evidence. */
+export const withdrawProjectDocument = (projectId: number, documentId: number, input: { rowVersion: string; reason: string }) =>
+  apiRequest<{ id: number; withdrawn: true }>(`/api/v1/projects/${projectId}/documents/${documentId}`, { method: "DELETE", body: JSON.stringify(input) });
 
 export type ProjectMember = {
   userId: number;

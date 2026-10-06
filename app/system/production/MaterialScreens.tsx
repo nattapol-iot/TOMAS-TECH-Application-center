@@ -4,6 +4,7 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { HistoricalPrPanel } from "./HistoricalPrPanel";
+import { newestProjectFirst, projectOverviewPath } from "../project-overview-client";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
@@ -405,9 +406,6 @@ type QuarantineItem = {
 
 type ProjectPage = {
   items: Array<{ id: number; number: string; name: string; status: string }>;
-  page: number;
-  pageSize: number;
-  total: number;
 };
 
 type InventoryItem = {
@@ -658,9 +656,11 @@ function ReserveStockModal({ bomId, line, onClose, onReserved }: { bomId: number
 }
 
 function GenerateBomModal({ onClose, onCreated }: { onClose: () => void; onCreated: (number: string) => void }) {
-  const projects = useEndpoint<ProjectPage>("/api/v1/projects/?page=1&pageSize=100", { items: [], page: 1, pageSize: 100, total: 0 });
+  // Every project in scope (the paged list stops at 100), newest number first.
+  const projects = useEndpoint<ProjectPage>(projectOverviewPath(true), { items: [] });
+  const projectChoices = useMemo(() => [...projects.data.items].sort(newestProjectFirst), [projects.data.items]);
   const [projectId, setProjectId] = useState(0);
-  const effectiveProjectId = projectId || projects.data.items[0]?.id || 0;
+  const effectiveProjectId = projectId || projectChoices[0]?.id || 0;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
@@ -675,7 +675,7 @@ function GenerateBomModal({ onClose, onCreated }: { onClose: () => void; onCreat
     <Modal title="Generate production BOM" subtitle="ระบบจะคัดลอกรายการจาก Estimate revision ที่อนุมัติและล็อกแล้วของ Project เพียงครั้งเดียว" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !effectiveProjectId} onClick={() => { void submit(); }}><Icon name="layers" />{busy ? "Generating…" : "Generate BOM"}</button></>}>
       {projects.error ? <LoadError message={projects.error} retry={projects.reload} /> : null}
       <ActionError message={error} />
-      <Field label="Project"><select value={effectiveProjectId} disabled={projects.loading} onChange={(event) => setProjectId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select project…"} /></option>{projects.data.items.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name} ({project.status}<LocalizedText text={")"} /></option>)}</select></Field>
+      <Field label="Project"><select value={effectiveProjectId} disabled={projects.loading} onChange={(event) => setProjectId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select project…"} /></option>{projectChoices.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name} ({project.status}<LocalizedText text={")"} /></option>)}</select></Field>
       {!projects.loading && !projects.data.items.length ? <EmptyState icon="folder" title="No project available" message="Create a project from an approved or locked estimate first" /> : null}
     </Modal>
   );

@@ -24,6 +24,7 @@ import {
   listInquiries,
   listInventory,
   listProjectDocuments,
+  withdrawProjectDocument,
   listProjectMembers,
   listProjects,
   loadEstimateCostWorkspace,
@@ -66,7 +67,7 @@ import {
   ApiClientError,
   type ProjectHealth,
 } from "../api-client";
-import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
+import { listPendingDayRequests, listProjectOverview, type PendingDayRequest, type ProjectOverviewItem } from "../project-overview-client";
 import { ProjectPortfolioGantt } from "./ProjectPortfolioGantt";
 import { useActivitySubView } from "../use-activity-presence";
 import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFOLIO_SORT_KEYS, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
@@ -964,6 +965,16 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     finally { if (request === latestRequest.current) setLoading(false); }
   }, [includeClosed]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  // Day requests waiting for this user's answer across projects; answered from the plan, opened on the task.
+  const canAnswer = bootstrap.permissions.includes("schedule.plan") && bootstrap.permissions.includes("schedule.read");
+  const [pendingRequests, setPendingRequests] = useState<PendingDayRequest[]>([]);
+  useEffect(() => {
+    // Once per portfolio load (loadedAt is unset until the first one lands), not once before and once after.
+    if (!canAnswer || !overview?.loadedAt) return;
+    let cancelled = false;
+    void listPendingDayRequests().then((rows) => { if (!cancelled) setPendingRequests(rows); }).catch(() => { if (!cancelled) setPendingRequests([]); });
+    return () => { cancelled = true; };
+  }, [canAnswer, overview?.loadedAt]);
   const canWrite = bootstrap.permissions.includes("project.write");
   // The API has the final say (work recorded, role); this only hides a button that could never work.
   const canDelete = (project: ProjectSummary) => canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
@@ -1041,6 +1052,15 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{actionError}</span></div> : null}
+    {pendingRequests.length ? <details className="portfolio-waiting" open>
+      <summary><Icon name="clock" />{uiText("Portfolio.waitingForYou")} <strong>{pendingRequests.length}</strong></summary>
+      <ul>{pendingRequests.map((request) => <li key={request.id}>
+        <span className="mono">{request.projectNo}</span>
+        <span className="portfolio-waiting-task">{request.wbs ? `${request.wbs} ` : ""}{request.taskName}<small className="muted">{request.requestedBy} · {formatDay(request.occurredAt)}{request.comment ? ` · “${request.comment}”` : ""}</small></span>
+        <Badge tone="amber">+{request.requestDays} {uiText("days")}</Badge>
+        {openProjectSchedule ? <button className="btn sm primary" type="button" onClick={() => openProjectSchedule(request.projectId, request.taskId)}><Icon name="checkCircle" />{uiText("Portfolio.reviewRequest")}</button> : null}
+      </li>)}</ul>
+    </details> : null}
     <Panel flush className="portfolio-panel">
       {sorted.length && mode === "timeline" ? <>
         <div className="portfolio-gantt-sort">
@@ -1048,7 +1068,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
           <button type="button" className="btn ghost sm" onClick={() => changeSort(sort.key)} aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")} title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}><Icon name="chevronDown" className={sort.direction} />{uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}</button>
         </div>
         {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
-        <ProjectPortfolioGantt key={overview?.loadedAt ?? 0} rows={sorted} today={today()} canReadSchedule={bootstrap.permissions.includes("schedule.read")} {...(openProjectSchedule ? { openProjectSchedule } : {})} />
+        <ProjectPortfolioGantt key={overview?.loadedAt ?? 0} rows={sorted} today={today()} canReadSchedule={bootstrap.permissions.includes("schedule.read")} includeClosed={includeClosed} {...(openProjectSchedule ? { openProjectSchedule } : {})} />
       </>
         : sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
         <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
@@ -1214,9 +1234,13 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
   onSaved: (number: string) => Promise<void>;
 }) {
   const t = useUiText();
-  const managers = useMemo(()=>bootstrap.team.filter((member) => ["Project Manager", "Engineering Manager", "Admin"].includes(member.role)),[bootstrap.team]);
-  const engineers = useMemo(()=>bootstrap.team.filter((member) => ["Engineer", "Engineering Manager", "Admin"].includes(member.role)),[bootstrap.team]);
-  const elevated = ["Admin", "Engineering Manager", "Project Manager"].includes(bootstrap.user.role);
+  // Additional roles count, as they do in the API. The person already on the project stays listed even
+  // when no role qualifies them any more, so the dialog shows who is assigned instead of the first name.
+  const eligible = useCallback((roles: string[], keepId: number | null | undefined) => bootstrap.team.filter((member) =>
+    member.id === keepId || (member.roles ?? [member.role]).some((role) => roles.includes(role))), [bootstrap.team]);
+  const managers = useMemo(() => eligible(["Project Manager", "Engineering Manager", "Admin"], project.managerId), [eligible, project.managerId]);
+  const engineers = useMemo(() => eligible(["Engineer", "Engineering Manager", "Admin"], project.leadEngineerId), [eligible, project.leadEngineerId]);
+  const elevated = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => ["Admin", "Engineering Manager", "Project Manager"].includes(role));
   const current = project.status as ProjectStatus;
   const statusChoices = useMemo(() => [current, ...allowedProjectTransitions(current, elevated)], [current, elevated]);
   // Seeded defensively: an older API build that omits one of these fields must leave the dialog
@@ -1322,8 +1346,8 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
       <div className="field"><span>{t("CRM.planHealth")}</span><div className="project-health-cell">{project.health ? <HealthBadge health={project.health} /> : "—"}</div></div>
       <label className="field"><span><LocalizedText text={"Status"} /></span><select value={form.status} onChange={(event) => set("status", event.target.value)}>{statusChoices.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Portfolio.typedProgress"} /></span><input type="number" min={0} max={100} step={1} disabled={closing} value={closing ? 100 : form.progress} onChange={(event) => set("progress", Number(event.target.value))} /></label>
-      <label className="field"><span><LocalizedText text={"Project manager"} /></span><select value={form.managerId} onChange={(event) => set("managerId", Number(event.target.value))}>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Lead engineer"} /></span><select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Project manager"} /></span><select value={form.managerId} onChange={(event) => set("managerId", Number(event.target.value))}>{managers.some((member) => member.id === project.managerId) ? null : <option value={project.managerId}>{project.managerName}</option>}{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Lead engineer"} /></span><select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>{engineers.some((member) => member.id === project.leadEngineerId) ? null : <option value={project.leadEngineerId}>{project.leadEngineerName}</option>}{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Project type"} /></span><input maxLength={100} value={form.projectType} onChange={(event) => set("projectType", event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => set("purchaseOrderNumber", event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"PO date"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => set("purchaseOrderDate", event.target.value)} /></label>
@@ -1366,6 +1390,10 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [withdrawing, setWithdrawing] = useState<ProjectDocument | null>(null);
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [withdrawError, setWithdrawError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1406,7 +1434,8 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
     setUploading(true);
     try {
       const created = await uploadProjectDocument(project.id, { file, folderCode, documentType: documentType.trim(), remark: remark.trim() || undefined });
-      setDocuments((current) => [created, ...current]);
+      // The uploader may withdraw a fresh upload; nothing in signing uses it yet.
+      setDocuments((current) => [{ ...created, canWithdraw: canWrite }, ...current]);
       setDocumentType("");
       setRemark("");
       setFile(null);
@@ -1416,6 +1445,24 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
       setActionError(toError(requestError));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const startWithdraw = (document: ProjectDocument) => { setWithdrawing(document); setWithdrawReason(""); setWithdrawError(""); };
+  const withdraw = async () => {
+    const target = withdrawing;
+    if (!target || !withdrawReason.trim()) return;
+    setWithdrawBusy(true);
+    setWithdrawError("");
+    try {
+      await withdrawProjectDocument(project.id, target.id, { rowVersion: target.rowVersion, reason: withdrawReason.trim() });
+      setDocuments((current) => current.filter((item) => item.id !== target.id));
+      setWithdrawing(null);
+      notify(`${target.fileName} · ${localizeCopy("ProjectDocs.withdrawn")}`);
+    } catch (requestError) {
+      setWithdrawError(toError(requestError));
+    } finally {
+      setWithdrawBusy(false);
     }
   };
 
@@ -1462,8 +1509,14 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
     {loadError ? <LoadError message={loadError} retry={() => { void load(); }} /> : null}
 
     <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : registerCopy} flush>
-      {documents.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"File"} /></th><th><LocalizedText text={"Folder"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Size"} /></th><th>{sourceRemarkLabel}</th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Uploaded"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
+      {documents.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"File"} /></th><th><LocalizedText text={"Folder"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Size"} /></th><th>{sourceRemarkLabel}</th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Uploaded"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button>{document.canWithdraw ? <button className="btn ghost sm" type="button" aria-label={`${localizeCopy("ProjectDocs.withdraw")} ${document.fileName}`} onClick={() => startWithdraw(document)}><Icon name="trash" /><LocalizedText text={"ProjectDocs.withdraw"} /></button> : null}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
     </Panel>
+    {withdrawing ? <Modal title="ProjectDocs.withdrawTitle" subtitle={withdrawing.fileName} size="sm" onClose={() => { if (!withdrawBusy) setWithdrawing(null); }}
+      footer={<><button className="btn ghost" type="button" disabled={withdrawBusy} onClick={() => setWithdrawing(null)}><LocalizedText text={"Cancel"} /></button><button className="btn danger" type="button" disabled={withdrawBusy || !withdrawReason.trim()} onClick={() => { void withdraw(); }}><Icon name="trash" /><LocalizedText text={withdrawBusy ? "Saving…" : "ProjectDocs.withdraw"} /></button></>}>
+      <p className="muted"><LocalizedText text={"ProjectDocs.withdrawHint"} /></p>
+      {withdrawError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{withdrawError}</span></div> : null}
+      <label className="field"><span><LocalizedText text={"ProjectDocs.withdrawReason"} /></span><textarea required maxLength={500} rows={3} value={withdrawReason} disabled={withdrawBusy} onChange={(event) => setWithdrawReason(event.target.value)} /></label>
+    </Modal> : null}
   </Modal>;
 }
 

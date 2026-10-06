@@ -8,6 +8,7 @@ import { SigningPreview, SignedFilePreview } from "./SigningPreview";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import "./signing-stamp-form.css";
 import { signPositionedStep, type PlacementConfirmation } from "./signing-preview-client";
+import { listAllProjectsByNumber } from "../project-overview-client";
 import {
   attachPaperSignature,
   createCompanyStamp,
@@ -20,7 +21,6 @@ import {
   listProjectDocuments,
   listDrawingTasks,
   uploadProjectDocument,
-  listProjects,
   listSignableDocuments,
   listSignatureFlows,
   loadMySignature,
@@ -1034,10 +1034,9 @@ export function ProductionSignedDocuments({
 }
 
 export function CreateSignableDocumentModal({ onClose, onCreated, initialProjectId = 0, initialTaskId = 0 }: { onClose: () => void; onCreated: (message: string) => void; initialProjectId?: number; initialTaskId?: number }) {
-  const projects = useEndpoint(useCallback(() => listProjects({ pageSize: 200 }), []),
-    { items: [] as ProjectSummary[], page: 1, pageSize: 200, total: 0 });
+  const projects = useEndpoint<ProjectSummary[]>(useCallback(() => listAllProjectsByNumber(), []), EMPTY as ProjectSummary[]);
   const [projectId, setProjectId] = useState(initialProjectId);
-  const effectiveProjectId = projectId || projects.data.items[0]?.id || 0;
+  const effectiveProjectId = projectId || projects.data[0]?.id || 0;
   const attachments = useEndpoint<ProjectDocument[]>(
     useCallback(() => effectiveProjectId ? listProjectDocuments(effectiveProjectId) : Promise.resolve(EMPTY as ProjectDocument[]),
       [effectiveProjectId]), EMPTY);
@@ -1097,8 +1096,8 @@ export function CreateSignableDocumentModal({ onClose, onCreated, initialProject
       <div className="form-grid two">
         <Field label="Project">
           <select value={effectiveProjectId} disabled={projects.loading || Boolean(projects.error)} onChange={(event) => { setProjectId(Number(event.target.value)); setProjectDocumentId(0); setTaskId(0); setFile(null); }}>
-            {!projects.data.items.length ? <option value={0}>{projects.loading ? "Loading projects…" : projects.error ? "Projects unavailable" : "No accessible project"}</option> : null}
-            {projects.data.items.map((project) => (
+            {!projects.data.length ? <option value={0}>{projects.loading ? "Loading projects…" : projects.error ? "Projects unavailable" : "No accessible project"}</option> : null}
+            {projects.data.map((project) => (
               <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>
             ))}
           </select>

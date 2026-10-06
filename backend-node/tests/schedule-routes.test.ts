@@ -403,6 +403,78 @@ test("GET me/work: a Resource Plan row cannot add details or request days", asyn
   } finally { await app.close(); }
 });
 
+test("GET me/work: a task shared by several PICs takes no personal task, and quiet days follow the last progress report", async (t) => {
+  const actor = { id: 30, role: "Engineer" };
+  const { app } = harness(actor);
+  const rows = [
+    taskRaw({ id: 3, kind: "phase", name: "Execution", plan_start: null, plan_days: 1 }),
+    taskRaw({ id: 8, parent_id: 3, name: "Mine alone", plan_start: "2027-03-01", updated_at: "2026-10-05T00:00:00Z" }),
+    taskRaw({ id: 10, parent_id: 3, sort_order: 2, name: "Shared", plan_start: "2027-03-01" }),
+  ];
+  installSqlMock(t, (statement) => {
+    if (statement.includes("SELECT DISTINCT p.id,p.project_no")) return { recordset: [{ id: PROJECT_ID, project_no: "P-26-007", name: "Line 3 IoT", manager_id: MANAGER_ID, manager_name: "PM", status: "Design", can_update: true }] };
+    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: rows };
+    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [{ task_id: 8, id: 30, name: "Me", email: "me@example.test" }, { task_id: 10, id: 30, name: "Me", email: "me@example.test" }, { task_id: 10, id: 31, name: "Colleague", email: "c@example.test" }] };
+    if (statement.includes("SELECT task_id,MAX(occurred_at) last_at FROM dbo.schedule_updates")) return { recordset: [{ task_id: 8, last_at: "2026-09-20T03:00:00Z" }] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+    return undefined;
+  });
+  try {
+    const items = (await app.inject({ method: "GET", url: "/api/v1/me/work" })).json() as Array<Record<string, unknown>>;
+    const byId = Object.fromEntries(items.map((item) => [item.taskId, item]));
+    assert.equal(byId[8]!.canAddDetail, true);
+    // A personal task would make the shared row a roll-up and take it out of the colleague's My Work.
+    assert.equal(byId[10]!.canAddDetail, false);
+    // A plan edit touched updated_at on 2026-10-05; the last progress report was 2026-09-20.
+    assert.equal(byId[8]!.lastProgressAt, "2026-09-20T03:00:00Z");
+    assert.equal(byId[10]!.lastProgressAt, null);
+  } finally { await app.close(); }
+});
+
+test("GET day-requests/pending lists requests the user can answer, with their WBS", async (t) => {
+  const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  const statements = installSqlMock(t, (statement) => {
+    if (statement.includes("FROM dbo.schedule_updates s")) return { recordset: [{ id: 90, project_id: PROJECT_ID, project_no: "P-26-007", project_name: "Line 3 IoT", task_id: 5, task_name: "Panel build", request_days: 3, comment: "Cable delay", occurred_at: "2026-10-05T03:00:00Z", actor_name: "User 30" }] };
+    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: scheduleRows };
+    return undefined;
+  });
+  try {
+    const response = await app.inject({ method: "GET", url: "/api/v1/schedule/day-requests/pending" });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json(), [{ id: 90, projectId: PROJECT_ID, projectNo: "P-26-007", projectName: "Line 3 IoT", taskId: 5, wbs: "2.2", taskName: "Panel build", requestDays: 3, comment: "Cable delay", requestedBy: "User 30", occurredAt: "2026-10-05T03:00:00Z" }]);
+    const query = statements.find((entry) => entry.statement.includes("FROM dbo.schedule_updates s"))!;
+    // A project manager answers for the projects they manage; only an Engineering Manager or Admin sees the rest of their scope.
+    assert.equal(query.params.answer_all, false);
+    assert.match(query.statement, /p\.manager_id=@actor OR \(@answer_all=1/);
+  } finally { await app.close(); }
+});
+
+test("GET schedule/search escapes LIKE wildcards and caps the answer", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  const app = Fastify();
+  registerErrorHandler(app);
+  const database = {
+    transaction: async () => { throw new Error("unexpected"); },
+    query: async (statement: string, bind?: (request: Binder) => void) => {
+      const params: Params = {}; const request: Binder = { input: (name, ...rest) => { params[name] = rest.length > 1 ? rest[1] : rest[0]; return request; } };
+      bind?.(request);
+      if (statement.includes("user_effective_permissions")) return { recordset: [{ allowed: true }] };
+      seen.push({ statement, ...params });
+      return { recordset: Array.from({ length: 301 }, (_, index) => ({ project_id: PROJECT_ID, id: index + 1 })) };
+    },
+  } as unknown as Database;
+  registerScheduleRoutes(app, database, { demandPermission: async () => {}, required: async () => ({ id: 30, role: "Engineer" }) } as unknown as CurrentUserService, "Asia/Bangkok");
+  try {
+    assert.equal((await app.inject({ method: "GET", url: "/api/v1/schedule/search?q=a" })).statusCode, 400, "one character is too short");
+    const response = await app.inject({ method: "GET", url: `/api/v1/schedule/search?q=${encodeURIComponent("50%_[x]")}` });
+    assert.equal(response.statusCode, 200, response.body);
+    const body = response.json() as { matches: unknown[]; truncated: boolean };
+    assert.equal(body.matches.length, 300); assert.equal(body.truncated, true);
+    assert.equal(seen[0]!.pattern, "%50\\%\\_\\[x]%");
+    assert.match(String(seen[0]!.statement), /ESCAPE N'\\'/);
+  } finally { await app.close(); }
+});
+
 test("GET schedule: a Resource Plan row offers Update only when the preHandler would accept it", async (t) => {
   const cases: Array<{ label: string; actor: number; managed: ManagedRaw; can: boolean }> = [
     { label: "approved, acknowledged, the assignee", actor: 30, managed: readyManaged, can: true },
@@ -431,21 +503,35 @@ test("managedProgressReady mirrors the resource-tasks preHandler", () => {
   assert.equal(managedProgressReady(ready, 31), false);
 });
 
-test("canAnswerDayRequests follows dbo.answer_schedule_day_request: the manager or a PRIMARY Engineering Manager / Admin", () => {
+test("canAnswerDayRequests follows dbo.answer_schedule_day_request: the manager, or an Engineering Manager / Admin in any role held", () => {
   const project = { managerId: MANAGER_ID };
-  assert.equal(canAnswerDayRequests(project, { id: MANAGER_ID, role: "Project Manager" }), true);
-  assert.equal(canAnswerDayRequests(project, { id: 40, role: "Engineering Manager" }), true);
-  assert.equal(canAnswerDayRequests(project, { id: 41, role: "Admin" }), true);
-  // An additional Engineering Manager / Admin role does not count: the procedure reads users.role_id only.
-  assert.equal(canAnswerDayRequests(project, { id: 42, role: "Project Manager" }), false);
+  const user = (id: number, role: string, roles?: string[]) => ({ id, role, ...(roles ? { roles } : {}) }) as unknown as Parameters<typeof canAnswerDayRequests>[1];
+  assert.equal(canAnswerDayRequests(project, user(MANAGER_ID, "Project Manager")), true);
+  assert.equal(canAnswerDayRequests(project, user(40, "Engineering Manager")), true);
+  assert.equal(canAnswerDayRequests(project, user(41, "Admin")), true);
+  // Since migration 068 the procedure reads dbo.user_effective_roles, so an additional role counts too.
+  assert.equal(canAnswerDayRequests(project, user(42, "Project Manager", ["Project Manager", "Engineering Manager"])), true);
+  assert.equal(canAnswerDayRequests(project, user(43, "Project Manager")), false);
 });
 
-test("GET schedule: canAnswerRequests is canPlan narrowed to the procedure's primary-role rule", async (t) => {
+test("migration 068 makes the answer procedure read every role a user holds", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const migration = await readFile(new URL("../../database/migrations/068_day_request_effective_roles.sql", import.meta.url), "utf8");
+  assert.match(migration, /CREATE OR ALTER PROCEDURE dbo\.answer_schedule_day_request/);
+  assert.match(migration, /WITH EXECUTE AS OWNER/);
+  assert.match(migration, /FROM dbo\.user_effective_roles\s+WHERE user_id = @answer_by AND code IN \(N'Engineering Manager', N'Admin'\)/);
+  assert.doesNotMatch(migration, /INNER JOIN dbo\.roles r WITH \(UPDLOCK, HOLDLOCK\) ON r\.id = u\.role_id/, "the primary-role lookup is gone");
+  // The rest of the procedure is the 007 body: the same THROW numbers the API maps.
+  for (const number of [51110, 51114, 51115, 51116, 51117, 51121, 51122, 51123, 51125, 51126]) assert.match(migration, new RegExp(`THROW ${number},`), String(number));
+  assert.match(migration, /VALUES \(68, N'Day-request answers accept additional roles'\)/);
+});
+
+test("GET schedule: canAnswerRequests matches canPlan now that the procedure reads every role", async (t) => {
   const cases: Array<{ label: string; actor: Actor; status?: string; permissions?: string[]; canPlan: boolean; canAnswer: boolean }> = [
     { label: "project manager", actor: { id: MANAGER_ID, role: "Project Manager" }, canPlan: true, canAnswer: true },
     { label: "primary Engineering Manager", actor: { id: 40, role: "Engineering Manager" }, canPlan: true, canAnswer: true },
-    { label: "additional Engineering Manager", actor: { id: 42, role: "Project Manager", roles: ["Project Manager", "Engineering Manager"] }, canPlan: true, canAnswer: false },
-    { label: "additional Admin", actor: { id: 43, role: "Engineer", roles: ["Engineer", "Admin"] }, canPlan: true, canAnswer: false },
+    { label: "additional Engineering Manager", actor: { id: 42, role: "Project Manager", roles: ["Project Manager", "Engineering Manager"] }, canPlan: true, canAnswer: true },
+    { label: "additional Admin", actor: { id: 43, role: "Engineer", roles: ["Engineer", "Admin"] }, canPlan: true, canAnswer: true },
     { label: "without schedule.plan", actor: { id: MANAGER_ID, role: "Project Manager" }, permissions: ["schedule.progress"], canPlan: false, canAnswer: false },
     { label: "closed project", actor: { id: 40, role: "Engineering Manager" }, status: "Closed", canPlan: false, canAnswer: false },
   ];
@@ -477,13 +563,23 @@ function answerRouteAnswers(procedure: () => Answer) {
 const answerPayload = { answer: "Accepted", rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64") };
 const sqlThrow = (number: number, message = "procedure THROW") => Object.assign(new sql.RequestError(message, "EREQUEST"), { number });
 
-test("an Engineering Manager held only as an additional role gets a clear 403 before the procedure runs", async (t) => {
+test("an Engineering Manager held only as an additional role may answer (migration 068)", async (t) => {
   const { app, transactions } = harness({ id: 42, role: "Project Manager", roles: ["Project Manager", "Engineering Manager"] });
+  const statements = installSqlMock(t, answerRouteAnswers(() => ({ recordset: [{ task_id: 11, row_version: NEXT_VERSION }] })));
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/schedule/day-requests/90/answer", payload: answerPayload });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(transactions, ["committed"]);
+    assert.equal(statements.some((entry) => entry.execute), true);
+  } finally { await app.close(); }
+});
+
+test("someone who is neither the manager nor an Engineering Manager / Admin is refused before the procedure runs", async (t) => {
+  const { app, transactions } = harness({ id: 44, role: "Project Manager" });
   const statements = installSqlMock(t, answerRouteAnswers(() => { throw new Error("the procedure must not run"); }));
   try {
     const response = await app.inject({ method: "POST", url: "/api/v1/schedule/day-requests/90/answer", payload: answerPayload });
     assert.equal(response.statusCode, 403, response.body);
-    assert.equal(response.json().code, "schedule_day_request_answer_forbidden");
     assert.deepEqual(transactions, ["rolled-back"]);
     assert.equal(statements.some((entry) => entry.execute), false);
   } finally { await app.close(); }
@@ -546,4 +642,117 @@ test("GET schedule returns baseline headers without the frozen snapshot JSON", a
   // The snapshot stays in dbo.schedule_baselines for audit; no screen reads it, so the per-project schedule stays small.
   assert.doesNotMatch(reader, /snapshot_json|JSON\.parse/);
   assert.match(reader, /b\.revision,b\.label,b\.taken_at/);
+});
+
+// ---- The shared-task rule from both sides, and the scope of the new cross-project reads ----
+
+test("POST details: a task shared by several PICs refuses a personal task", async (t) => {
+  const { app, transactions } = harness({ id: 30, role: "Engineer" });
+  const statements = installSqlMock(t, (statement) => {
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11 })] };
+    if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
+    if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [{ task_id: 11, id: 30, name: "Me", email: "me@example.test" }, { task_id: 11, id: 31, name: "Colleague", email: "c@example.test" }] };
+    if (statement.includes("FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor")) return { recordset: [{ allowed: true }] };
+    return undefined;
+  });
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/details", payload: { name: "My part", planDays: 2, rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64") } });
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(response.json().code, "schedule_detail_shared_task");
+    assert.deepEqual(transactions, ["rolled-back"]);
+    assert.equal(statements.some((entry) => entry.statement.includes("INSERT INTO dbo.schedule_tasks")), false);
+  } finally { await app.close(); }
+});
+
+/** Answers for PUT /schedule/tasks/11 by its manager; `details` = live personal tasks under it, `pics` = its PICs now. */
+function planEditAnswers(details: number, pics: number[]) {
+  return (statement: string): Answer | undefined => {
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11 })] };
+    if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: pics.map((id) => ({ task_id: 11, id, name: `User ${id}`, email: `${id}@example.test` })) };
+    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: [taskRaw({ id: 11 }), ...(details ? [taskRaw({ id: 40, parent_id: 11, kind: "detail", origin: "Member" })] : [])] };
+    if (statement.includes("FROM dbo.users u WHERE u.id=@user")) return { recordset: [{ allowed: true }] };
+    if (statement.includes("kind=N'detail' AND deleted_at IS NULL")) return { recordset: [{ found: details }] };
+    if (statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")) return { recordset: [{ row_version: NEXT_VERSION }] };
+    return undefined;
+  };
+}
+const planEditPayload = (picUserIds: number[]) => ({
+  rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64"), parentId: null, sortOrder: 1, kind: "task",
+  name: "Panel wiring", isMilestone: false, visibility: "Internal", planStart: "2027-03-01", planDays: 5, startMode: "manual", predecessorId: null,
+  lagDays: 0, picUserIds, picExternal: "", planManDays: 0,
+});
+
+test("PUT task: a second PIC is refused while a member's personal task sits under the row", async (t) => {
+  const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  const statements = installSqlMock(t, planEditAnswers(1, [30]));
+  try {
+    const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11", payload: planEditPayload([30, 31]) });
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(response.json().code, "schedule_detail_shared_task");
+    assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")), false);
+  } finally { await app.close(); }
+});
+
+test("PUT task: the personal-task check runs only when the row gains a second PIC", async (t) => {
+  const cases: Array<[number[], number[], boolean]> = [[[30], [31], false], [[30, 31], [30, 31, 32], false], [[30], [30, 31], true]];
+  for (const [pics, payloadPics, checked] of cases) {
+    await t.test(`${pics.join(",")} -> ${payloadPics.join(",")}`, async (sub) => {
+      const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+      const statements = installSqlMock(sub, planEditAnswers(0, pics));
+      try {
+        const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11", payload: planEditPayload(payloadPics) });
+        assert.notEqual(response.json().code, "schedule_detail_shared_task", response.body);
+        assert.equal(statements.some((entry) => entry.statement.includes("kind=N'detail'")), checked);
+        assert.ok(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")), "the edit itself goes ahead");
+      } finally { await app.close(); }
+    });
+  }
+});
+
+test("GET schedule/search binds the caller's project scope and the closed-projects switch", async () => {
+  const cases: Array<[Actor, string, boolean, boolean]> = [
+    [{ id: 30, role: "Engineer" }, "", false, false],
+    [{ id: 31, role: "Engineer", roles: ["Engineer", "Engineering Manager"] }, "&includeClosed=1", true, true],
+  ];
+  for (const [actor, query, elevated, includeClosed] of cases) {
+    const seen: Array<Record<string, unknown>> = [];
+    const app = Fastify();
+    registerErrorHandler(app);
+    const database = {
+      transaction: async () => { throw new Error("unexpected"); },
+      query: async (statement: string, bind?: (request: Binder) => void) => {
+        const params: Params = {}; const request: Binder = { input: (name, ...rest) => { params[name] = rest.length > 1 ? rest[1] : rest[0]; return request; } };
+        bind?.(request); seen.push({ statement, ...params });
+        return { recordset: [] };
+      },
+    } as unknown as Database;
+    registerScheduleRoutes(app, database, { demandPermission: async () => {}, required: async () => actor } as unknown as CurrentUserService, "Asia/Bangkok");
+    try {
+      assert.equal((await app.inject({ method: "GET", url: `/api/v1/schedule/search?q=panel${query}` })).statusCode, 200);
+      const search = seen.find((entry) => String(entry.statement).includes("SELECT TOP(301)"))!;
+      assert.match(String(search.statement), /@elevated=1 OR p\.manager_id=@actor OR p\.lead_engineer_id=@actor OR EXISTS\(SELECT 1 FROM dbo\.project_members m WHERE m\.project_id=p\.id AND m\.user_id=@actor\)/);
+      assert.match(String(search.statement), /@include_closed=1 OR p\.status<>N'Closed'/);
+      assert.match(String(search.statement), /p\.deleted_at IS NULL/);
+      assert.equal(search.actor, actor.id);
+      assert.equal(search.elevated, elevated, "an additional Engineering Manager role widens the scope like the portfolio");
+      assert.equal(search.include_closed, includeClosed);
+    } finally { await app.close(); }
+  }
+});
+
+test("GET day-requests/pending: an Engineering Manager held as an additional role sees every request in scope", async (t) => {
+  const { app } = harness({ id: 31, role: "Engineer", roles: ["Engineer", "Engineering Manager"] });
+  const statements = installSqlMock(t, () => undefined);
+  try {
+    assert.equal((await app.inject({ method: "GET", url: "/api/v1/schedule/day-requests/pending" })).statusCode, 200);
+    const query = statements.find((entry) => entry.statement.includes("FROM dbo.schedule_updates s"))!;
+    assert.equal(query.params.answer_all, true);
+    assert.equal(query.params.elevated, true);
+    assert.match(query.statement, /s\.answer IS NULL/);
+    assert.match(query.statement, /p\.status<>N'Closed'/);
+  } finally { await app.close(); }
 });

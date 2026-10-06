@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ApiClientError, apiRequest, assignmentDeliveryNote, downloadCrmDocument, uploadCrmDocument, type AssignmentNotificationResult, type BootstrapData } from "../api-client";
 import { useLanguage, useT } from "../i18n";
-import { Badge, EmptyState, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SummaryTile, TablePageSize, Tabs, type IconName, type Tone } from "../ui";
+import { Badge, EmptyState, FilterChips, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SegmentBar, SummaryTile, TablePageSize, Tabs, type IconName, type Tone } from "../ui";
 import { CustomerModal } from "./AdminAnalyticsScreens";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
+import "../segment-filters.css";
 import "./crm.css";
 import { ProjectHandover } from "./ProjectHandover";
 import { CRM_COPY } from "./crm-copy";
@@ -96,20 +97,21 @@ const OPEN_STAGES=stages.filter(code=>!["WON","LOST","ON_HOLD"].includes(code));
 /* A distribution belongs in one bar, not in one card per stage: the same
    reading in a fraction of the height. Every segment is also the filter it
    describes, so looking and acting are one click. */
+/* The pipeline ramp runs cool to warm as a deal commits, so a glance at the bar says how far along the
+   book is, not just how it splits: one chart token per open stage, in OPEN_STAGES order. */
+const STAGE_RAMP=["var(--c8)","var(--c2)","var(--c1)","var(--c7)","var(--c5)","var(--c4)"];
 function PipelineBar({counts,labelOf,active,onPick}:{counts:Record<string,number>;labelOf:(code:string)=>string;active:string;onPick:(code:string)=>void}) {
-  const t=useT(),rows=OPEN_STAGES.map(code=>({code,value:Number(counts[code]??0)})),total=rows.reduce((sum,row)=>sum+row.value,0);
+  const t=useT(),items=OPEN_STAGES.map((code,index)=>({key:code,label:labelOf(code),value:Number(counts[code]??0),tone:toneFor(code),color:STAGE_RAMP[index]})),total=items.reduce((sum,item)=>sum+item.value,0);
   return <div className="crm-distribution">
-    <p className="crm-distribution-head"><strong>{total}</strong> <span>{t("CRM.open")}</span></p>
-    {total?<div className="crm-distribution-bar">{rows.filter(row=>row.value).map(row=><button key={row.code} type="button" style={{flexGrow:row.value}} aria-pressed={active===row.code} className={`crm-seg c${OPEN_STAGES.indexOf(row.code)}${active===row.code?" active":""}`} title={`${labelOf(row.code)} · ${row.value}`} aria-label={`${labelOf(row.code)} ${row.value}`} onClick={()=>onPick(active===row.code?"":row.code)}/>)}</div>:<p className="crm-muted">{t("CRM.emptyHint")}</p>}
-    <ul className="crm-legend">{rows.map(row=><li key={row.code}><button type="button" aria-pressed={active===row.code} className={active===row.code?"active":""} onClick={()=>onPick(active===row.code?"":row.code)}><i aria-hidden="true" className={`crm-dot c${OPEN_STAGES.indexOf(row.code)}`}/>{labelOf(row.code)}<strong>{row.value}</strong></button></li>)}</ul>
+    <SegmentBar label="CRM.pipelineOverview" items={items} active={active||null} onPick={code=>onPick(code??"")} lead={<><strong>{total}</strong><span>{t("CRM.open")}</span></>}/>
+    {total?null:<p className="crm-muted">{t("CRM.emptyHint")}</p>}
   </div>;
 }
 
 /* The counts people act on, each one already the filter it names. */
 const ATTENTION_KEYS=["NeedsFollowup","Overdue","WaitingCustomer","NoNextAction","NoActivity","EstimateDueSoon"];
 function AttentionChips({counts,active,onPick}:{counts:CrmRecord|null;active:string;onPick:(key:string)=>void}) {
-  const t=useT();
-  return <ul className="crm-chips">{ATTENTION_KEYS.map(key=><li key={key}><button type="button" aria-pressed={active===key} className={`crm-chip ${toneFor(key)}${active===key?" active":""}`} onClick={()=>onPick(active===key?"":key)}><span>{t(`CRM.${key}`)}</span><strong>{Number(counts?.[key]??0)}</strong></button></li>)}</ul>;
+  return <FilterChips items={ATTENTION_KEYS.map(key=>({key,label:`CRM.${key}`,value:Number(counts?.[key]??0),tone:toneFor(key)}))} active={active||null} onPick={key=>onPick(key??"")}/>;
 }
 
 /* A funnel is only honest against a fixed denominator, so each step is a share
@@ -179,7 +181,7 @@ function OpportunityList({bootstrap,mode,options,open,openInquiry}:{bootstrap:Bo
   return <><Notice error={dashboard.error||list.error} loading={list.loading}/>
     <Panel title="CRM.pipelineOverview" subtitle="CRM.allScopeHint">
       <div className="crm-overview">
-        <ul className="crm-chips">{[{key:"totalOpportunities",count:dash?.totalOpportunities,open:false,attention:""},{key:"open",count:dash?.open,open:true,attention:""},{key:"Actionable",count:dash?.actionable,open:true,attention:"Actionable"}].map(item=><li key={item.key}><button type="button" className="crm-chip" onClick={()=>{setSearch("");setOwner("");setStage("");setOnlyOpen(item.open);setAttention(item.attention);setPage(1);}}>{t(`CRM.${item.key}`)} <strong>{Number(item.count??0)}</strong></button></li>)}</ul>
+        <ul className="filter-chips">{[{key:"totalOpportunities",count:dash?.totalOpportunities,open:false,attention:""},{key:"open",count:dash?.open,open:true,attention:""},{key:"Actionable",count:dash?.actionable,open:true,attention:"Actionable"}].map(item=><li key={item.key}><button type="button" className="filter-chip slate" onClick={()=>{setSearch("");setOwner("");setStage("");setOnlyOpen(item.open);setAttention(item.attention);setPage(1);}}>{t(`CRM.${item.key}`)} <strong>{Number(item.count??0)}</strong></button></li>)}</ul>
         <PipelineBar counts={(dash?.stages as Record<string,number>|undefined)??{}} labelOf={label} active={stage} onPick={code=>{setSearch("");setOwner("");setOnlyOpen(true);setStage(code);setAttention("");setPage(1);}}/>
         {mode==="crm-dashboard"?<><AttentionChips counts={dash} active={attention} onPick={key=>{setSearch("");setOwner("");setOnlyOpen(true);setAttention(key);setStage("");setPage(1);}}/>
         <ConversionFunnel total={Number(dash?.totalOpportunities??0)} steps={[{label:"CRM.convertedToInquiry",value:Number(dash?.convertedToInquiry??0)},{label:"CRM.convertedToEstimate",value:Number(dash?.convertedToEstimate??0)},{label:"CRM.convertedToProject",value:Number(dash?.convertedToProject??0)}]}/>

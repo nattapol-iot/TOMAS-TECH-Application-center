@@ -15,7 +15,7 @@ import { insertInitialPlan, parseInitialPlan, parseProjectDetails, parseProjectN
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
-import { currentScheduleVersion, permissionFor, validateScheduleVersion } from "../schedule-service.js";
+import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, validateScheduleVersion } from "../schedule-service.js";
 import { hasRole } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -173,6 +173,28 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     };
   }
 
+  // The Projects menu badge: open projects in the user's scope that need attention (Delayed or At
+  // Risk), by the same shared health rule as the portfolio. No per-project fields leave this route.
+  app.get("/api/v1/projects/attention", async (request) => {
+    await users.demandPermission(request, "project.read");
+    const actor = await users.required(request);
+    const result = await database.query<ProjectRow>(`
+      SELECT ${PROJECT_COLUMNS}
+      ${PROJECT_SOURCE}
+        AND p.status NOT IN (N'Closed',N'On Hold')
+      ORDER BY p.id;
+    `, (sqlRequest) => { sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, isProjectElevated(actor)); });
+    const rows = result.recordset;
+    if (!rows.length) return { delayed: 0, atRisk: 0, attention: 0 };
+    const summaries = await loadProjectScheduleSummaries(database, rows.map(projectInput), businessToday(config.businessTimeZone));
+    let delayed = 0, atRisk = 0;
+    for (const row of rows) {
+      const health = summaries.get(Number(row.id))?.health;
+      if (health === "Delayed") delayed += 1; else if (health === "At Risk") atRisk += 1;
+    }
+    return { delayed, atRisk, attention: delayed + atRisk };
+  });
+
   // The Projects portfolio: every project in scope with its schedule summary, unpaged, for the
   // screen to sort and filter in memory. Closed projects only when asked for.
   app.get("/api/v1/projects/overview", async (request) => {
@@ -199,7 +221,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const activity = new Map((await database.query<{ project_id: number | string; pending_requests: number | string; last_progress_at: Date | null }>(`
       SELECT u.project_id,
         SUM(CASE WHEN u.field=N'request' AND u.request_days>0 AND u.answer IS NULL THEN 1 ELSE 0 END) pending_requests,
-        MAX(CASE WHEN u.field IN(N'percent_complete',N'status',N'actual_start',N'actual_finish',N'forecast_finish',N'progress') THEN u.occurred_at END) last_progress_at
+        MAX(CASE WHEN u.field IN(${PROGRESS_REPORT_FIELDS_SQL}) THEN u.occurred_at END) last_progress_at
       FROM dbo.schedule_updates u WHERE u.project_id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','))
       GROUP BY u.project_id;`, (sqlRequest) => sqlRequest.input("ids", sql.NVarChar(sql.MAX), rows.map((row) => Number(row.id)).join(",")),
     )).recordset.map((row) => [Number(row.project_id), row] as const));

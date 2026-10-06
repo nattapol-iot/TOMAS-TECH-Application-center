@@ -342,9 +342,9 @@ C('pricing', 'Reference prices and supplier quotations || 参考価格と仕入�
   ], 'The item leaves the waiting criteria when source data is complete. || 元データが条件を満たすと価格待ちの対象から外れます。',
     'This view is derived from supplier-linked cost items. It does not dispatch RFQs or change a cost item’s status automatically. || 仕入先付き原価項目から算出する画面であり、RFQ自動送信や項目状態の自動変更は行いません。'))
 
-C('projects', 'Projects and project documents || プロジェクトと関連書類', 'Projects → Project Portfolio || Projects → Project Portfolio', 'PM / authorized project users / members || PM・プロジェクト権限者・メンバー',
+C('projects', 'Projects and project documents || プロジェクトと関連書類', 'Projects → Overview || Projects → Overview', 'PM / authorized project users / members || PM・プロジェクト権限者・メンバー',
   P('15.1 Create a project from an approved estimate || 15.1 承認済み見積からプロジェクトを作成', [
-    'Open Projects → Project Portfolio → Create project. || Projects → Project Portfolio → Create projectを開きます。',
+    'Open Projects → the <b>Overview</b> tab → <b>Create project</b>. || Projects → <b>Overview</b>タブ → <b>Create project</b>を開きます。',
     'Select an approved estimate within your scope; verify customer, job and revision. || 自分の範囲の承認済み見積を選び、顧客、案件、版を確認します。',
     'Complete Customer PO number, PO date, Project manager, Lead engineer, Start date, Target delivery and Site. Delivery must not precede the start. || 顧客PO番号、PO日、PM、Lead engineer、開始日、目標納期、現場を入力します。納期は開始日以降にします。',
     'Check Contracting customer and End user, then save. || 契約顧客とEnd userを確認して保存します。',
@@ -373,23 +373,55 @@ C('projects', 'Projects and project documents || プロジェクトと関連書�
     ['12 || 12', 'DATA &amp; EXAMPLE || DATA &amp; EXAMPLE', 'Data and examples || データ・例'],
     ['13 || 13', 'Pic and Video || Pic and Video', 'Photos and videos || 写真・動画'],
     ['14 || 14', 'Ref || Ref', 'References || 参考資料']
-  ]))
+  ]) +
+  P('15.3 Monitor and sort the portfolio || 15.3 ポートフォリオの把握と並べ替え', [
+    'Open Projects → <b>Overview</b>. The <b>Projects by schedule health</b> bar counts projects by plan health; select a colour or legend entry to filter, and select it again to clear. || Projects → <b>Overview</b>を開きます。<b>Projects by schedule health</b>のバーは計画の健全性別に件数を示します。色または凡例を選ぶと絞り込み、もう一度選ぶと解除します。',
+    'Use the attention chips such as <b>Overdue tasks, Blocked tasks, Waiting for PM, No update 7d+ and Forecast past target</b>, together with search, the PM and team filters, <b>Mine</b> or <b>Show closed projects</b>. || <b>Overdue tasks、Blocked tasks、Waiting for PM、No update 7d+、Forecast past target</b>などの注意チップを、検索、PM・チームの絞り込み、<b>Mine</b>、<b>Show closed projects</b>と組み合わせて使います。',
+    'Choose a field in <b>Sort projects by</b>, such as Project No., Health, Target or Progress, then ascending or descending. The sort is remembered for your next visit. || <b>Sort projects by</b>でProject No.、Health、Target、Progressなどを選び、昇順・降順を選びます。並べ替えは次回も保持されます。',
+    'Read Progress beside the value planned for today. A project without a plan shows the typed value with a typed label. || Progressは本日の計画値（planned today）と並べて確認します。計画のないプロジェクトは手入力値をtypedラベル付きで表示します。',
+    'Change a project stage from its row one step at a time. Closing a project needs the date the customer took delivery. || プロジェクトのステージは行から1段階ずつ変更します。完了には顧客の受領日が必要です。'
+  ], 'Projects that need attention come first, and every screen calculates health and progress with the same rule. || 注意が必要なプロジェクトが先に表示され、すべての画面で同じ規則により健全性と進捗が計算されます。',
+    'Project progress is weighted by the working days of the planned tasks. Master Plan rows are a time frame, so they are left out of progress, health, overdue and blocked counts unless the plan has nothing else. || プロジェクト進捗は計画タスクの稼働日数で重み付けされます。Master Plan行は期間の枠であり、計画にそれ以外の行がない場合を除き、進捗・健全性・期限超過・ブロックの集計に含めません。') +
+  P('15.4 Use the timeline and find work across projects || 15.4 タイムライン表示とプロジェクト横断のタスク検索', [
+    'In Overview, choose the <b>Timeline</b> view. Each project is one bar across its plan, with its target delivery, using the same filters and sort as the list. || Overviewで<b>Timeline</b>表示を選びます。各プロジェクトは計画期間の1本のバーと目標納期で表示され、一覧と同じ絞り込み・並べ替えが適用されます。',
+    'Choose <b>Month / Quarter / Half-year / Year</b> and move the range with <b>Earlier / Later / Today</b>. || <b>Month / Quarter / Half-year / Year</b>を選び、<b>Earlier / Later / Today</b>で期間を移動します。',
+    'Select the arrow before a project to show its tasks, or <b>Expand projects</b> to open the first 20 projects in the view. || プロジェクト前の矢印でタスクを表示するか、<b>Expand projects</b>で表示中の先頭20件を展開します。',
+    'Type a task or person in <b>Find a task or person in these projects</b> and select <b>Find tasks</b>. Only the matching projects remain, showing the matching tasks with their parents. Select <b>Clear search</b> to return. || <b>Find a task or person in these projects</b>にタスク名または担当者名を入力し、<b>Find tasks</b>を選びます。該当するプロジェクトだけが残り、一致したタスクと親タスクが表示されます。<b>Clear search</b>で元に戻ります。',
+    'Select a project or task name to open the <b>Plan</b> tab at that task. || プロジェクト名またはタスク名を選ぶと、そのタスクの位置で<b>Plan</b>タブが開きます。'
+  ], 'You can find one person’s or one topic’s work across every project from a single page. || 1つの画面から、担当者やテーマごとの作業を全プロジェクト横断で探せます。',
+    'The search covers only projects in your scope, shows up to 300 tasks at a time, and includes closed projects when Show closed projects is selected. || 検索対象は権限範囲内のプロジェクトのみで、一度に最大300件まで表示します。Show closed projectsを選ぶと完了済みプロジェクトも含みます。') +
+  P('15.5 Withdraw a mistaken upload || 15.5 誤ってアップロードした書類の取り下げ', [
+    'Open the project’s <b>Documents</b> and find the file uploaded by mistake. || プロジェクトの<b>Documents</b>を開き、誤ってアップロードしたファイルを探します。',
+    'Select <b>Withdraw</b>. It appears only to users who may edit the project and are the uploader, the project manager, an Engineering Manager or an Admin, and only for documents that signing does not use. || <b>Withdraw</b>を選びます。プロジェクトの編集権限を持ち、かつアップロードした本人、プロジェクトのPM、Engineering Manager、Adminのいずれかである場合にのみ表示され、署名で使われていない書類だけが対象です。',
+    'Enter the reason and confirm with <b>Withdraw</b>. || 取り下げ理由を入力し、<b>Withdraw</b>で確定します。',
+    'Check that the file has left the list, then upload the correct file. || ファイルが一覧から外れたことを確認し、正しいファイルをアップロードします。'
+  ], 'The mistaken file is no longer listed, and the Audit Log records who withdrew it and why. || 誤ったファイルは一覧に表示されず、取り下げた人と理由が監査ログに記録されます。',
+    'Withdrawing does not delete the file: the file and its record are kept as evidence. A document used in signing or as a signed scan cannot be withdrawn. || 取り下げてもファイルは削除されず、ファイルと記録は証跡として残ります。署名で使用中、または署名済みスキャンとして使われた書類は取り下げできません。'))
 
-C('schedule', 'Project Schedule and baselines || Project ScheduleとBaseline', 'Projects → Project Schedule || Projects → Project Schedule', 'PM / planners / assigned members || PM・計画担当・担当メンバー',
+C('schedule', 'Project plan and baselines || プロジェクト計画（Plan）とBaseline', 'Projects → Plan || Projects → Plan', 'PM / planners / assigned members || PM・計画担当・担当メンバー',
   P('16.1 Plan work and save a baseline || 16.1 工程作成と基準計画の保存', [
-    'Choose the project and verify its name and schedule version before editing. || 編集前にプロジェクト名と計画版を確認します。',
-    'Planners use Add schedule row to enter title, Phase/Task type, parent, visibility, PIC, start date, working-day duration and effort. || 計画担当はAdd schedule rowで名称、Phase・Task、親業務、公開範囲、PIC、開始日、稼働日数、工数を入力します。',
-    'Check the calculated finish and task relationships, save and inspect the actual table row. || 計算された終了日と業務関係を確認し、保存後に表の行を確認します。',
+    'Open Projects → the <b>Plan</b> tab and find the project by number, name or customer. The plan shows as a Gantt with a plan summary. || Projects → <b>Plan</b>タブを開き、番号・名称・顧客でプロジェクトを探します。計画はガントチャートと計画概要で表示されます。',
+    'Planners (the project manager, an Engineering Manager or an Admin) use Add schedule row to enter title, Phase/Task type, parent, visibility, PIC, start date, working-day duration and effort. || 計画担当はAdd schedule rowで名称、Phase・Task、親業務、公開範囲、PIC、開始日、稼働日数、工数を入力します。',
+    'Select a task on the Gantt to open its details panel. Check the calculated finish and relationships and read <b>History</b>; only planners can change dates. || ガント上のタスクを選ぶと詳細パネルが開きます。計算された終了日と関係を確認し、<b>History</b>を読みます。日付を変更できるのは計画担当だけです。',
     'Use Create baseline for the reference plan with a name and reason. Explain plan changes when saving later baselines. || Create baselineで基準計画に名称・理由を付けます。次のBaselineを作る場合は変更理由を説明します。',
-    'Compare the current schedule and forecast finish against baseline, and address delays with owners. || 現在計画・完了予測とBaselineを比較し、遅延を担当者と調整します。'
+    'Use the quick filters <b>Late / Blocked / Waiting for the PM / My tasks</b> to compare the plan and forecast finish against baseline, and address delays with owners. || クイックフィルター<b>Late / Blocked / Waiting for the PM / My tasks</b>で計画・完了予測をBaselineと比較し、遅延を担当者と調整します。'
   ], 'Tasks have owners and a usable reference baseline. || 業務担当と比較用Baselineが揃います。',
     'Tasks from Resource Plan/Punchlist retain their governed plan-approval workflow. The legacy schedule is not a bypass. || Resource Plan・PunchlistのTaskは専用の計画承認手順に従います。旧工程表から承認手順を回避することはできません。') +
   P('16.2 Review requests for additional days || 16.2 延長日数の申請を審査', [
-    'Open the task’s Updates/requests and read the requested days and reason. || 業務のUpdates・申請から希望日数と理由を確認します。',
+    'Find requests waiting for you in Projects → Overview under <b>Day requests waiting for your answer</b>, or in the plan with the <b>Waiting for the PM</b> filter. || 自分宛ての申請はProjects → Overviewの<b>Day requests waiting for your answer</b>、または計画の<b>Waiting for the PM</b>フィルターで確認します。',
+    'Select <b>Review request</b> to open the plan at that task, and read the requested days and reason. || <b>Review request</b>でそのタスクの計画を開き、希望日数と理由を確認します。',
     'Consider impact on delivery and dependent work before accepting or rejecting. || 納期と関連業務への影響を確認して承認・却下を判断します。',
     'Record the decision and explanation, then verify the updated schedule dates. || 判定と説明を保存し、調整後の日付を確認します。',
     'For a governed task with a proposed plan awaiting approval, use its Resource Plan workflow. || 承認待ちの計画提案があるTaskはResource Planの専用手順で処理します。'
-  ], 'The request has a decision and the dates match the approved outcome. || 申請結果と承認された日付が一致します。'))
+  ], 'The request has a decision and the dates match the approved outcome. || 申請結果と承認された日付が一致します。',
+    'The project manager can answer, and so can anyone holding the Engineering Manager or Admin role, including as an additional role. || 回答できるのはプロジェクトのPMと、追加ロールを含めEngineering ManagerまたはAdminのロールを持つ人です。') +
+  P('16.3 Update progress from the plan || 16.3 計画から進捗を更新', [
+    'Select a task in the Plan tab, then <b>Update progress</b>. || Planタブでタスクを選び、<b>Update progress</b>を選びます。',
+    'Use the 0 / 25 / 50 / 75 / 100 buttons, or enter status, actual start and finish, forecast finish and notes. || 0 / 25 / 50 / 75 / 100のボタンを使うか、状態、実績開始・終了、完了予測、メモを入力します。',
+    'For a blocked task choose Blocked and write what is blocking it. Done needs 100% and both actual dates. || 止まっているタスクはBlockedを選び、原因を記入します。Doneには100%と実績日2つが必要です。',
+    'Check the Gantt bar and History after saving. || 保存後にガントのバーとHistoryを確認します。'
+  ], 'Progress matches in the plan, My Work and the portfolio. || 計画、My Work、ポートフォリオの進捗が一致します。',
+    'The task’s PIC, the project manager or an Admin can update progress. On a task managed by Resource Plan, only its assignee can, after acknowledging it. || 進捗を更新できるのはタスクのPIC、プロジェクトのPM、Adminです。Resource Plan管理のタスクは、担当者が受諾した後に本人だけが更新できます。'))
 
 C('resources', 'Resource Plan and Project Timeline || Resource PlanとProject Timeline', 'Planning → Resource Plan / Project Timeline || Planning → Resource Plan / Project Timeline', 'Planners / team leads / PM || 計画担当・チームリーダー・PM',
   P('17.1 Check team capacity || 17.1 人員の対応可能量を確認', [
@@ -409,16 +441,17 @@ C('resources', 'Resource Plan and Project Timeline || Resource PlanとProject Ti
   ], 'The approved plan is committed and appears in the assignee’s Task inbox. || 承認計画が確定負荷になり、担当者のTask inboxに表示されます。',
     'Unapproved proposals do not increase committed workload. Approving the first child task of an inquiry switches effort counting to tasks; break down the remaining work completely. || 未承認提案は確定負荷に加算されません。Inquiryの最初の子Task承認後はTask単位の工数集計に切り替わるため、残作業も漏れなく分解します。') +
   P('17.3 Review the project timeline || 17.3 プロジェクト全体の日程を見る', [
-    'Open Project Timeline and set period/project filters. || Project Timelineで期間・プロジェクトを絞り込みます。',
-    'Review planned ranges, delivery dates, progress and delayed/overdue work shown. || 計画期間、納期、進捗、延期・遅延業務を確認します。',
-    'Open a project’s Project Schedule and change the plan only through actions your role permits. || Project Scheduleを開き、自分の権限で許可された操作から計画を変更します。'
+    'Open Project Timeline (the same view as Projects → Overview → Timeline) and set filters and the period. || Project Timeline（Projects → Overview → Timelineと同じ表示）を開き、絞り込みと期間を設定します。',
+    'Review each project’s planned range, target delivery, progress and forecast-past-plan bar. || 各プロジェクトの計画期間、目標納期、進捗、計画超過見込みのバーを確認します。',
+    'Expand projects, or find tasks and people across projects as in 15.4. || 15.4の手順でプロジェクトを展開するか、プロジェクト横断でタスク・担当者を検索します。',
+    'Select a project or task to open the Plan tab at that task, and change the plan only through actions your role permits. || プロジェクトまたはタスクを選んでPlanタブを開き、自分の権限で許可された操作から計画を変更します。'
   ], 'Staffing and delivery decisions refer to the same project plan. || 人員配置と納期の判断が同じプロジェクト計画に基づきます。'))
 
 C('my-work', 'My Work and Team Activity: accept, report and review scores || My WorkとTeam Activity：受諾・報告・スコア確認', 'My Work → Task inbox / Project schedule tasks · Team Activity || My Work → Task inbox / Project schedule tasks・Team Activity', 'Assigned members / team leaders || 担当メンバー・チームリーダー',
   P('18.1 Accept and execute a task || 18.1 Taskを受諾して実行', [
-    'Open Task inbox, filter awaiting acceptance and read the task details. || Task inboxで受諾待ちを絞り込み、詳細を確認します。',
-    'Read the scope and approved plan. Accept using your own account when ready. || 範囲と承認計画を読み、対応可能なら本人のアカウントで受諾します。',
-    'Update status, progress, actual start/finish and notes to match real work. || 実際の作業に合わせて状態、進捗、実績開始・終了、メモを更新します。',
+    'New assignments appear at the top of My Work. Select <b>Review assignment</b> to read the scope and approved plan. || 新しい割当はMy Workの上部に表示されます。<b>Review assignment</b>で範囲と承認計画を確認します。',
+    'When ready, select <b>Acknowledge</b> on the assignment, or <b>Acknowledge all</b> for the whole group, using your own account. || 対応可能なら、本人のアカウントで割当の<b>Acknowledge</b>、またはグループ全体の<b>Acknowledge all</b>を選びます。',
+    'Update status, progress, actual start/finish and notes to match real work. Acknowledged inquiry estimate work is updated under <b>Inquiry estimate work</b>. || 実際の作業に合わせて状態、進捗、実績開始・終了、メモを更新します。受諾済みの引合い見積作業は<b>Inquiry estimate work</b>で更新します。',
     'Use Blocked with an explanation when waiting on an obstacle. On completion, set Done and describe the deliverable for verification. || 障害で止まる場合はBlockedと理由を記録します。完了時はDoneにし、検収対象の成果を記載します。',
     'Wait for the planner to verify, record acceptance notes and close the task. || 計画担当による検収、確認メモ、クローズを待ちます。'
   ], 'Done means work finished awaiting verification; Closed means verified and closed. || Doneは作業完了・検収待ち、Closedは検収済み・完了です。') +
@@ -429,9 +462,9 @@ C('my-work', 'My Work and Team Activity: accept, report and review scores || My 
     'Accept the new plan again after approval. || 新計画の承認後に再度受諾します。'
   ], 'The plan changes only after approval and the assignee acknowledges the new version. || 承認後にだけ計画が変わり、担当者が新版を再確認します。') +
   P('18.3 Update legacy project schedule tasks || 18.3 既存の工程表業務を更新', [
-    'Choose Project schedule tasks → My tasks; prioritize urgent and outstanding groups. || Project schedule tasks → My tasksで緊急・未完業務から確認します。',
-    'Open your assigned row and edit permitted progress, status, actual dates, forecast finish and notes. || 自分の担当行を開き、許可された進捗、状態、実績日、完了予測、メモを更新します。',
-    'Use Add my task for supported personal subtasks, and Request more days for a duration extension. || 対応業務の個人子タスクはAdd my task、延長はRequest more daysを使います。',
+    'Choose Project schedule tasks → My tasks; prioritize urgent and outstanding groups. The sort you choose is remembered. || Project schedule tasks → My tasksで緊急・未完業務から確認します。選んだ並べ替えは保持されます。',
+    'Select 0 / 25 / 50 / 75 / 100 on a card to update at once, or open the row to edit status, actual dates, forecast finish and notes. A card never reported on shows <b>No progress reported yet</b>. || カードの0 / 25 / 50 / 75 / 100ですぐに更新するか、行を開いて状態、実績日、完了予測、メモを編集します。一度も報告していないカードには<b>No progress reported yet</b>と表示されます。',
+    'Use Add my task for a personal subtask only on a task with a single PIC; for a task shared by several PICs, ask the PM to split the row in the plan. Use Request more days for a duration extension. || 個人子タスクのAdd my taskはPICが1人のタスクでのみ使えます。複数PICのタスクはPMに計画上の行分割を依頼します。延長はRequest more daysを使います。',
     'Read My updates for history and request outcomes. || My updatesで履歴と申請結果を確認します。'
   ], 'My Work and Project Schedule show consistent progress for the same work. || 同じ業務のMy WorkとProject Scheduleの進捗が一致します。',
     'Task inbox, legacy schedule tasks and site-visit assignments have different acceptance/replan workflows. Use the action for that work type. || Task inbox、旧工程表業務、現地訪問割当は受諾・計画変更手順が異なります。業務種類に合った操作を使います。') +

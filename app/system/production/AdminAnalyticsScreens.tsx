@@ -8,6 +8,7 @@ import { apiRequest, checkAdminStorage, createSalesCustomerContact, listSalesCus
 import { canManageEngineeringRates, canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
+import { listAllProjectsByNumber } from "../project-overview-client";
 import { canonicalLocalizedName, contactNameLines, localizedNameLines, localizedNamesFromCard, type ContactTitles, type LocalizedNames } from "./customer-localized-names";
 import {
   Badge,
@@ -631,10 +632,10 @@ export function ProductionReports({ bootstrap }: AdminAnalyticsProps) {
 
   useEffect(() => {
     if (!canProject) return;
-    void apiRequest<PagedResult<ProjectSummary>>("/api/v1/projects/?page=1&pageSize=100")
-      .then((result) => {
-        setProjects(result.items);
-        setProjectId((current) => current || result.items[0]?.id || 0);
+    void listAllProjectsByNumber()
+      .then((items) => {
+        setProjects(items);
+        setProjectId((current) => current || items[0]?.id || 0);
       })
       .catch(() => setProjects([]));
   }, [canProject]);

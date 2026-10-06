@@ -302,9 +302,9 @@ chapter('pricing', 'ราคาอ้างอิงและใบเสนอ
     ], 'รายการพ้นเกณฑ์รอราคาเมื่อข้อมูลต้นทางครบ', 'หน้านี้เป็นมุมมองคำนวณจาก Cost item ที่ระบุ Supplier ไม่ใช่ระบบส่งคำขอราคาให้ผู้ขายอัตโนมัติ และไม่เปลี่ยนสถานะ Cost item ให้เอง'),
     'app/system/production/PlanningPricingScreens.tsx', 'price quotations missing')
 
-chapter('projects', 'Projects และเอกสารโครงการ', 'Projects → Project Portfolio', 'PM / ผู้มีสิทธิ์ Project / สมาชิกโครงการ',
+chapter('projects', 'Projects และเอกสารโครงการ', 'Projects → Overview', 'PM / ผู้มีสิทธิ์ Project / สมาชิกโครงการ',
     proc('15.1 สร้าง Project จาก Estimate ที่อนุมัติ', [
-        'เปิด Projects → Project Portfolio → <b>Create project</b>',
+        'เปิด Projects → แท็บ <b>Overview</b> → <b>Create project</b>',
         'เลือก Estimate ที่อนุมัติและอยู่ในขอบเขตงานของตน ตรวจลูกค้า ชื่องานและ revision',
         'กรอก <b>Customer PO number, PO date, Project manager, Lead engineer, Start date, Target delivery และ Site</b> ให้ครบ วันส่งมอบต้องไม่ก่อนวันเริ่ม',
         'ตรวจ Contracting customer กับ End user แล้วบันทึก',
@@ -318,23 +318,51 @@ chapter('projects', 'Projects และเอกสารโครงการ',
     ], 'เพื่อนร่วมโครงการที่มีสิทธิ์หาไฟล์ได้จากโฟลเดอร์เดียวกัน', 'ที่เก็บไฟล์ขึ้นกับสภาพแวดล้อม Team Test อาจเป็นพื้นที่ทดสอบในเครื่อง ส่วน Production ใช้ที่เก็บที่องค์กรตั้งค่า การอัปโหลดไฟล์ไม่ได้หมายถึงอนุมัติเอกสารแล้ว') +
     table(['รหัส', 'โฟลเดอร์', 'ใช้เก็บ'], [
         ['00', 'To do list', 'รายการงานและประเด็นค้าง'], ['01', 'Concept Design and Proposal', 'แนวคิดและเอกสารนำเสนอ'], ['02', 'Drawing', 'แบบและ Layout'], ['03', 'Estimate cost', 'ต้นทุนและฉบับอ้างอิง'], ['04', 'Quote', 'ใบเสนอราคาที่เกี่ยวข้อง'], ['05', 'PO', 'เอกสาร PO'], ['06', 'Specifications and Documentation', 'ข้อกำหนดและมาตรฐาน'], ['07', 'Development', 'โปรแกรม/การตั้งค่า/งานพัฒนา'], ['08', 'Schedule', 'แผนงาน'], ['09', 'Installation', 'บันทึกติดตั้ง'], ['10', 'Report', 'รายงาน'], ['11', 'Manual and Document', 'คู่มือใช้งานและบำรุงรักษา'], ['12', 'DATA &amp; EXAMPLE', 'ข้อมูลและตัวอย่าง'], ['13', 'Pic and Video', 'ภาพและวิดีโอ'], ['14', 'Ref', 'เอกสารอ้างอิง']
-    ]), 'app/system/production/CoreScreens.tsx app/system/api-client.ts', 'projects')
+    ]) +
+    proc('15.3 ติดตามภาพรวมและเรียงโครงการ', [
+        'เปิด Projects → <b>Overview</b> แถบ <b>Projects by schedule health</b> แสดงจำนวนโครงการตามสุขภาพแผน กดสีหรือชื่อในคำอธิบายเพื่อกรอง และกดซ้ำเพื่อยกเลิก',
+        'ใช้ชิปโครงการที่ต้องติดตาม เช่น <b>Overdue tasks, Blocked tasks, Waiting for PM, No update 7d+, Forecast past target</b> ร่วมกับค้นหา กรอง PM ทีม <b>Mine</b> หรือ <b>Show closed projects</b>',
+        'เลือกหัวข้อใน <b>Sort projects by</b> เช่น Project No., Health, Target หรือ Progress แล้วเลือกน้อยไปมาก/มากไปน้อย ระบบจำการเรียงไว้ให้ครั้งถัดไป',
+        'อ่าน Progress คู่กับค่าตามแผนวันนี้ (planned today) ถ้าโครงการยังไม่มีแผน ระบบแสดงค่าที่กรอกเองพร้อมป้าย typed',
+        'เปลี่ยนสถานะโครงการจากแถวได้ทีละขั้น การปิดโครงการต้องระบุวันที่ลูกค้ารับมอบ'
+    ], 'โครงการที่ต้องติดตามขึ้นมาก่อน และทุกหน้าคำนวณสุขภาพกับความคืบหน้าด้วยกฎเดียวกัน', 'Progress ของโครงการถ่วงน้ำหนักตามวันทำงานของงานในแผน แถวใน Master Plan เป็นกรอบเวลา จึงไม่นับในความคืบหน้า สุขภาพ งานเลยกำหนด และงานติดปัญหา เว้นแต่แผนมีแต่แถวเหล่านั้น') +
+    proc('15.4 ดู Timeline และค้นหางานข้ามโครงการ', [
+        'ใน Overview เลือกมุมมอง <b>Timeline</b> แต่ละโครงการเป็นหนึ่งแถบตามช่วงแผน พร้อมวันส่งมอบเป้าหมาย โดยใช้ตัวกรองและการเรียงเดียวกับรายการ',
+        'เลือกช่วง <b>Month / Quarter / Half-year / Year</b> และใช้ <b>Earlier / Later / Today</b> เลื่อนช่วงเวลา',
+        'กดลูกศรหน้าโครงการเพื่อกางงานในแผน หรือกด <b>Expand projects</b> เพื่อกาง 20 โครงการแรกในมุมมอง',
+        'พิมพ์ชื่องานหรือชื่อผู้รับผิดชอบในช่อง <b>Find a task or person in these projects</b> แล้วกด <b>Find tasks</b> ระบบแสดงเฉพาะโครงการที่พบ และงานที่ตรงพร้อมงานแม่ กด <b>Clear search</b> เพื่อกลับ',
+        'กดชื่อโครงการหรืองานเพื่อเปิดแท็บ <b>Plan</b> ที่งานนั้น'
+    ], 'หางานของคนหรือหัวข้อเดียวกันได้ทุกโครงการจากหน้าเดียว', 'ค้นหาเฉพาะโครงการในขอบเขตสิทธิ์ แสดงได้สูงสุด 300 งานต่อครั้ง และรวมโครงการที่ปิดแล้วเมื่อเลือก Show closed projects') +
+    proc('15.5 ถอนเอกสารที่อัปโหลดผิด', [
+        'เปิด <b>Documents</b> ของโครงการและหาไฟล์ที่อัปโหลดผิด',
+        'กด <b>Withdraw</b> ซึ่งแสดงเฉพาะผู้ที่มีสิทธิ์แก้ไขโครงการและเป็นผู้อัปโหลด PM ของโครงการ Engineering Manager หรือ Admin และเฉพาะเอกสารที่งานลงนามยังไม่ได้ใช้',
+        'ระบุเหตุผลที่ถอน แล้วกด <b>Withdraw</b> ยืนยัน',
+        'ตรวจว่าไฟล์ออกจากรายการแล้ว จากนั้นอัปโหลดไฟล์ที่ถูกต้องใหม่'
+    ], 'ไฟล์ผิดไม่อยู่ในรายการของโครงการ และ Audit Log บันทึกผู้ถอนพร้อมเหตุผล', 'การถอนไม่ได้ลบไฟล์จริง ไฟล์และประวัติยังเก็บไว้เป็นหลักฐาน เอกสารที่อยู่ในงานลงนามหรือใช้เป็นสแกนลงนามแล้วถอนไม่ได้'),
+    'app/system/production/CoreScreens.tsx app/system/production/ProjectPortfolioGantt.tsx app/system/api-client.ts', 'projects')
 
-chapter('schedule', 'Project Schedule และ Baseline', 'Projects → Project Schedule', 'PM / Planner / สมาชิกที่ได้รับมอบหมาย',
+chapter('schedule', 'แผนงานโครงการ (Plan) และ Baseline', 'Projects → Plan', 'PM / Planner / สมาชิกที่ได้รับมอบหมาย',
     proc('16.1 จัดแผนและเก็บ Baseline', [
-        'เลือก Project ที่ต้องการ ตรวจชื่อโครงการและเวอร์ชันแผนก่อนแก้',
-        'ผู้วางแผนใช้ <b>Add schedule row</b> กำหนดชื่อ ชนิด Phase/Task งานแม่ Visibility, PIC, วันเริ่ม ระยะวันทำงาน และ effort ตามฟอร์ม',
-        'ตรวจวันที่สิ้นสุดและความสัมพันธ์ของงานที่ระบบคำนวณ บันทึกแล้วตรวจแถวจริงในตาราง',
+        'เปิด Projects → แท็บ <b>Plan</b> ค้นหาโครงการจากเลขที่ ชื่อ หรือลูกค้า แผนแสดงเป็น Gantt พร้อมสรุปแผน',
+        'ผู้วางแผน (PM ของโครงการ, Engineering Manager หรือ Admin) ใช้ <b>Add schedule row</b> กำหนดชื่อ ชนิด Phase/Task งานแม่ Visibility, PIC, วันเริ่ม ระยะวันทำงาน และ effort ตามฟอร์ม',
+        'กดงานบน Gantt เพื่อเปิดแผงรายละเอียด ตรวจวันสิ้นสุดและความสัมพันธ์ที่ระบบคำนวณ ดู <b>History</b> และแก้วันได้เฉพาะผู้วางแผน',
         'เมื่อได้แผนอ้างอิง ให้ใช้ <b>Create baseline</b> ตั้งชื่อและเหตุผล โดยการเก็บฉบับถัดไปต้องอธิบายว่าทำไมแผนเปลี่ยน',
-        'ติดตามแผนปัจจุบันเทียบ Baseline และวันคาดว่าจะเสร็จ แก้ปัญหางานที่เลื่อนกับเจ้าของงาน'
+        'ใช้ตัวกรองด่วน <b>Late / Blocked / Waiting for the PM / My tasks</b> ติดตามแผนเทียบ Baseline และวันคาดว่าจะเสร็จ แล้วแก้ปัญหางานที่เลื่อนกับเจ้าของงาน'
     ], 'มีงานและผู้รับผิดชอบครบ พร้อม Baseline ที่ใช้เทียบได้', 'งานที่สร้างผ่าน Resource Plan / Punchlist ใช้ขั้นอนุมัติแผนของงานนั้น การแก้ผ่านตารางเดิมไม่ใช่ทางข้ามขั้นอนุมัติ') +
     proc('16.2 พิจารณาคำขอเพิ่มวันของงานในแผน', [
-        'เปิดงานและรายการ Updates/คำขอที่หน้าจอแสดง อ่านจำนวนวันและเหตุผลจากสมาชิก',
+        'ดูคำขอที่รอคุณใน Projects → Overview กล่อง <b>Day requests waiting for your answer</b> หรือในแผนด้วยตัวกรอง <b>Waiting for the PM</b>',
+        'กด <b>Review request</b> เพื่อเปิดแผนที่งานนั้น อ่านจำนวนวันและเหตุผลจากสมาชิก',
         'ตรวจผลต่อการส่งมอบและงานที่เกี่ยวข้องก่อนตอบรับหรือปฏิเสธ',
         'บันทึกผลพิจารณาและคำอธิบาย แล้วตรวจวันที่หลังระบบปรับแผน',
         'ถ้างานเป็น Task ที่มีแผนเสนอใหม่รออนุมัติ ให้เปิดงานใน Resource Plan และใช้ flow ของ Task นั้น'
-    ], 'คำขอมีผลตัดสินและวันที่ในแผนสะท้อนผลที่อนุมัติ'),
-    'app/system/production/PlanningPricingScreens.tsx docs/resource-task-workflow.md')
+    ], 'คำขอมีผลตัดสินและวันที่ในแผนสะท้อนผลที่อนุมัติ', 'ผู้ตอบคำขอได้คือ PM ของโครงการ และผู้ที่มีบทบาท Engineering Manager หรือ Admin รวมถึงบทบาทเพิ่มเติม') +
+    proc('16.3 อัปเดตความคืบหน้าจากแผน', [
+        'กดงานในแท็บ Plan แล้วเลือก <b>Update progress</b>',
+        'ใช้ปุ่ม 0 / 25 / 50 / 75 / 100 หรือกรอกสถานะ วันเริ่ม–เสร็จจริง วันคาดว่าจะเสร็จ และหมายเหตุ',
+        'งานที่ติดปัญหาให้เลือก Blocked และระบุสิ่งที่ติด งานเสร็จต้องเป็น 100% พร้อมวันจริงทั้งสองช่อง',
+        'ตรวจแถบบน Gantt และ History หลังบันทึก'
+    ], 'ความคืบหน้าในแผน My Work และภาพรวมโครงการตรงกัน', 'ผู้อัปเดตได้คือ PIC ของงาน PM ของโครงการ หรือ Admin งานที่ Resource Plan ดูแล ผู้รับผิดชอบอัปเดตได้หลังตอบรับเท่านั้น'),
+    'app/system/production/PlanningPricingScreens.tsx app/system/production/GanttChart.tsx docs/resource-task-workflow.md')
 
 chapter('resources', 'Resource Plan และ Project Timeline', 'Planning → Resource Plan / Project Timeline', 'Planner / หัวหน้าทีม / PM',
     proc('17.1 ตรวจความพร้อมกำลังคน', [
@@ -352,17 +380,18 @@ chapter('resources', 'Resource Plan และ Project Timeline', 'Planning → R
         'หากยืนยันแผนที่เกินกำลังหรือข้อมูลคำนวณไม่ครบ ผู้อนุมัติต้องใส่เหตุผล override ตามระบบ จากนั้นรอสมาชิกตอบรับ'
     ], 'หลังอนุมัติ Task มีแผนที่ยืนยันและปรากฏใน Task inbox ของผู้รับผิดชอบ', 'ข้อเสนอที่ยังไม่อนุมัติยังไม่เพิ่ม Workload ที่ยืนยันแล้ว เมื่ออนุมัติ Task ย่อยแรกของ Inquiry ระบบเปลี่ยนมานับ effort จาก Task จึงต้องแจกแจงงานที่เหลือให้ครบ') +
     proc('17.3 ดูภาพรวมโครงการใน Project Timeline', [
-        'เปิด Project Timeline ตั้งช่วงเวลาและตัวกรองโครงการที่ต้องการติดตาม',
-        'ตรวจช่วงแผน วันส่งมอบ ความคืบหน้า และงานที่เลื่อน/เกินกำหนดตามข้อมูลที่แสดง',
-        'เปิดโครงการจากรายการเพื่อไปยัง Project Schedule แล้วปรับแผนผ่านขั้นตอนที่มีสิทธิ์'
+        'เปิด Project Timeline (มุมมองเดียวกับ Projects → Overview → Timeline) ตั้งตัวกรองและช่วงเวลาที่ต้องการติดตาม',
+        'ตรวจช่วงแผน วันส่งมอบเป้าหมาย ความคืบหน้า และแถบคาดว่าเกินแผนของแต่ละโครงการ',
+        'กางโครงการหรือค้นหางาน/ผู้รับผิดชอบข้ามโครงการตามขั้นตอน 15.4',
+        'กดโครงการหรืองานเพื่อเปิดแท็บ Plan ที่งานนั้น แล้วปรับแผนผ่านขั้นตอนที่มีสิทธิ์'
     ], 'การตัดสินใจจัดคนและวันส่งมอบอ้างอิงแผนโครงการเดียวกัน'),
     'app/system/production/ResourcePlanningScreen.tsx app/system/production/ResourceTaskWorkspace.tsx app/system/production/ProjectPortfolioGantt.tsx app/system/production/GanttChart.tsx docs/resource-planning.md docs/resource-task-workflow.md', 'resources project-timeline')
 
 chapter('my-work', 'My Work และ Team Activity: รับงาน รายงาน และติดตามคะแนน', 'My Work → Task inbox / Project schedule tasks · Team Activity', 'สมาชิกผู้รับผิดชอบงาน / หัวหน้าทีม',
     proc('18.1 ตอบรับและดำเนินการ Task', [
-        'เปิด Task inbox → กรองงานรอตอบรับ แล้วเปิดรายละเอียด',
-        'อ่านขอบเขตและแผนที่อนุมัติ หากพร้อมให้ <b>ตอบรับงาน</b> ด้วยบัญชีของตนเอง',
-        'อัปเดตสถานะ Progress, Actual start / Actual finish และหมายเหตุให้ตรงงานจริง',
+        'งานใหม่ที่ได้รับมอบหมายแสดงด้านบนของ My Work กด <b>Review assignment</b> เพื่ออ่านขอบเขตและแผนที่อนุมัติ',
+        'หากพร้อมให้กด <b>Acknowledge</b> ที่งานนั้น หรือ <b>Acknowledge all</b> เพื่อตอบรับทั้งกลุ่มด้วยบัญชีของตนเอง',
+        'อัปเดตสถานะ Progress, Actual start / Actual finish และหมายเหตุให้ตรงงานจริง งานประเมินราคาจาก Inquiry ที่ตอบรับแล้วอัปเดตได้ในกล่อง <b>Inquiry estimate work</b>',
         'หากติดปัญหาให้ใช้สถานะ Blocked พร้อมอธิบายสิ่งที่รอ เมื่อเสร็จให้ระบุ Done และผลลัพธ์สำหรับตรวจรับ',
         'รอ Planner ตรวจรับพร้อมบันทึกหมายเหตุและปิดงาน'
     ], 'Done แสดงว่าเสร็จรอตรวจรับ ส่วน Closed แสดงว่าผ่านการตรวจรับและปิดแล้ว') +
@@ -373,9 +402,9 @@ chapter('my-work', 'My Work และ Team Activity: รับงาน รา�
         'เมื่อแผนใหม่อนุมัติแล้ว ให้ตอบรับอีกครั้ง เพื่อยืนยันว่าเข้าใจแผนฉบับใหม่'
     ], 'แผนไม่เปลี่ยนจนอนุมัติ และมีการตอบรับใหม่หลังเปลี่ยนแผน') +
     proc('18.3 อัปเดต Project schedule tasks เดิม', [
-        'เลือกแท็บ Project schedule tasks เปิด My tasks และใช้กลุ่มเร่งด่วน/งานค้างเพื่อจัดลำดับ',
-        'เปิดแถวที่ได้รับมอบหมาย อัปเดตเปอร์เซ็นต์ สถานะ วันจริง วันคาดเสร็จและหมายเหตุตามช่องที่เปิดให้แก้',
-        'ใช้ <b>Add my task</b> เมื่อต้องแยกงานย่อยส่วนตนในงานที่รองรับ และใช้ <b>Request more days</b> เมื่อแผนต้องเพิ่มวัน',
+        'เลือกแท็บ Project schedule tasks เปิด My tasks และใช้กลุ่มเร่งด่วน/งานค้างเพื่อจัดลำดับ ระบบจำการเรียงที่เลือกไว้ให้ครั้งถัดไป',
+        'กดปุ่ม 0 / 25 / 50 / 75 / 100 บนการ์ดเพื่ออัปเดตทันที หรือเปิดแถวเพื่อแก้สถานะ วันจริง วันคาดเสร็จและหมายเหตุ การ์ดที่ยังไม่เคยรายงานแสดง <b>No progress reported yet</b>',
+        'ใช้ <b>Add my task</b> เพื่อแยกงานย่อยส่วนตนได้เฉพาะงานที่มีผู้รับผิดชอบคนเดียว งานที่มีหลาย PIC ให้ขอ PM แยกแถวในแผน และใช้ <b>Request more days</b> เมื่อแผนต้องเพิ่มวัน',
         'ตรวจ <b>My updates</b> เพื่อติดตามประวัติและผลคำขอ'
     ], 'ความคืบหน้าใน My Work และ Project Schedule ของงานเดียวกันสอดคล้องกัน', 'Task inbox, งานใน Project schedule และ Site Visit assignments มีขั้นตอบรับ/แก้แผนต่างกัน ให้ใช้ปุ่มของชนิดงานนั้น'),
     'app/system/production/ResourceTaskWorkspace.tsx app/system/production/PlanningPricingScreens.tsx app/system/production/TeamActivityScreen.tsx app/system/ProductionApp.tsx', 'my-work activity')
@@ -934,7 +963,7 @@ releases should re-check button wording, permissions, input requirements, file l
 workflow states, translations and screenshots whenever the application changes.
 '''
     (ROOT / 'docs' / 'employee-operation-manual.md').write_text(coverage, encoding='utf-8')
-    print(f'Built {output.name}: {screen_count} screens / {image_count} embedded images, {len(CHAPTERS)} chapters, {page.count("class=\"procedure\"")} procedures, {len(nav)} navigation views covered, {len(page.encode("utf-8")):,} bytes')
+    print(f'Built {public_output.name}: {screen_count} screens / {image_count} embedded images, {len(CHAPTERS)} chapters, {page.count("class=\"procedure\"")} procedures, {len(nav)} navigation views covered, {len(page.encode("utf-8")):,} bytes')
 
 
 if __name__ == '__main__':

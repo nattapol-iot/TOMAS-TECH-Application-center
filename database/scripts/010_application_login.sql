@@ -721,4 +721,8 @@ GO
 -- database/migrations/067_department_teams.sql
 GRANT SELECT ON OBJECT::dbo.department_teams TO [iot_team_app_role];
 GO
+
+-- database/migrations/069_withdraw_project_document.sql
+GRANT EXECUTE ON OBJECT::dbo.withdraw_project_document TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

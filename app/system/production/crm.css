@@ -58,77 +58,8 @@
 .crm-overview { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .crm-overview > * + * { padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
-.crm-distribution-head { display: flex; align-items: baseline; gap: 6px; }
-.crm-distribution-head strong { font-size: var(--fs-xl); font-weight: 660; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.crm-distribution-head span { color: var(--muted); font-size: var(--fs-xs); }
-
-.crm-distribution-bar { display: flex; gap: 2px; height: 10px; margin: 8px 0 9px; }
-.crm-seg {
-  min-width: 6px;
-  border: 0;
-  border-radius: var(--r-xs);
-  padding: 0;
-  cursor: pointer;
-  transition: opacity 120ms ease, outline-color 120ms ease;
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-}
-.crm-seg:hover { opacity: 0.78; }
-.crm-seg.active { outline-color: var(--ink); }
-
-.crm-legend { display: flex; gap: 4px 14px; flex-wrap: wrap; }
-.crm-legend button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: none;
-  padding: 1px 0;
-  color: var(--muted);
-  font: inherit;
-  font-size: var(--fs-2xs);
-  cursor: pointer;
-}
-.crm-legend button:hover, .crm-legend button.active { color: var(--ink); }
-.crm-legend strong { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 650; }
-.crm-legend button.active strong { color: var(--ink); }
-.crm-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-
-/* The pipeline ramp runs cool to warm as a deal commits, so a glance at the
-   bar says how far along the book is, not just how it splits. */
-.crm-distribution .c0 { background: var(--c8); }
-.crm-distribution .c1 { background: var(--c2); }
-.crm-distribution .c2 { background: var(--c1); }
-.crm-distribution .c3 { background: var(--c7); }
-.crm-distribution .c4 { background: var(--c5); }
-.crm-distribution .c5 { background: var(--c4); }
-
-.crm-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.crm-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 26px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: var(--fs-2xs);
-  font-weight: 550;
-  cursor: pointer;
-}
-.crm-chip strong { font-variant-numeric: tabular-nums; font-weight: 700; }
-.crm-chip:hover { border-color: var(--n-300); }
-.crm-chip.amber { border-color: var(--amber-line); color: var(--amber-text); }
-.crm-chip.red { border-color: var(--red-line); color: var(--red-text); }
-.crm-chip.blue { border-color: var(--blue-line); color: var(--blue-text); }
-.crm-chip.amber.active { background: var(--amber-soft); }
-.crm-chip.red.active { background: var(--red-soft); }
-.crm-chip.blue.active { background: var(--blue-soft); }
-.crm-chip.slate.active { background: var(--n-100); }
-.crm-chip.active { font-weight: 650; }
+/* The stage bar and the attention chips are the shared SegmentBar and FilterChips
+   (app/system/segment-filters.css). */
 
 .crm-funnel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }
 .crm-funnel li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

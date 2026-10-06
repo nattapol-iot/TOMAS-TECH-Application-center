@@ -53,6 +53,8 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 65, fileName: "065_project_team_payments_contacts.sql", name: "Project team, customer payment milestones and project contacts" },
   { version: 66, fileName: "066_application_role_grants.sql", name: "Application role grants for existing API statements" },
   { version: 67, fileName: "067_department_teams.sql", name: "Department teams for manager scope" },
+  { version: 68, fileName: "068_day_request_effective_roles.sql", name: "Day-request answers accept additional roles" },
+  { version: 69, fileName: "069_withdraw_project_document.sql", name: "Withdraw a mistaken project document upload" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

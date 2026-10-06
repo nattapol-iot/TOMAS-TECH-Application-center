@@ -16,13 +16,15 @@ import {
   validateFileExtension,
   writeStoredFile,
 } from "../document-storage.js";
-import { ApiError } from "../errors.js";
-import { positiveLong } from "../http.js";
+import { ApiError, documentWithdrawError } from "../errors.js";
+import { bodyObject, parseRowVersion, positiveLong, requiredText } from "../http.js";
+import { permissionFor } from "../schedule-service.js";
 import { demandProjectScope } from "../project-scope.js";
 import { insertAudit } from "../audit.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import { demandDrawingTask } from "../drawing-workflow.js";
+import { hasRole } from "../user-roles.js";
 
 function summary(row: Record<string, unknown> & { row_version: Buffer }) {
   return {
@@ -38,6 +40,7 @@ function summary(row: Record<string, unknown> & { row_version: Buffer }) {
     uploadedAt: row.uploaded_at,
     sha256: row.provider_etag,
     rowVersion: row.row_version.toString("base64"),
+    ...(row.can_withdraw === undefined ? {} : { canWithdraw: Boolean(row.can_withdraw) }),
   };
 }
 
@@ -91,14 +94,22 @@ export function registerProjectDocumentRoutes(
     await demandProjectScope(database, actor, projectId);
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`
       SELECT d.id,d.name,d.content_type,d.size_bytes,d.folder_code,f.name folder_name,
-             d.document_type,d.remark,u.name uploaded_by_name,d.uploaded_at,d.provider_etag,d.row_version
+             d.document_type,d.remark,u.name uploaded_by_name,d.uploaded_at,d.provider_etag,d.row_version,
+             -- The rule dbo.withdraw_project_document enforces, so the list offers Withdraw only where it can succeed.
+             CONVERT(bit, CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'project.write')
+               AND (d.uploaded_by=@actor OR p.manager_id=@actor OR @elevated=1)
+               AND NOT EXISTS(SELECT 1 FROM dbo.document_files df WHERE df.project_doc_id=d.id)
+               AND NOT EXISTS(SELECT 1 FROM dbo.signature_marks sm WHERE sm.scan_project_doc_id=d.id) THEN 1 ELSE 0 END) AS can_withdraw
       FROM dbo.project_docs d
       INNER JOIN dbo.projects p ON p.id=d.project_id AND p.deleted_at IS NULL
       INNER JOIN dbo.project_folders f ON f.project_id=d.project_id AND f.folder_code=d.folder_code
       INNER JOIN dbo.users u ON u.id=d.uploaded_by
       WHERE d.project_id=@project AND d.deleted_at IS NULL
       ORDER BY d.uploaded_at DESC,d.id DESC;
-    `, (bind) => bind.input("project", sql.BigInt, projectId));
+    `, (bind) => {
+      bind.input("project", sql.BigInt, projectId).input("actor", sql.BigInt, actor.id);
+      bind.input("elevated", sql.Bit, hasRole(actor, "Engineering Manager", "Admin"));
+    });
     return result.recordset.map(summary);
   });
 
@@ -108,6 +119,11 @@ export function registerProjectDocumentRoutes(
     async (request, reply) => {
     const actor = await users.required(request);
     const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id");
+    // Which permission applies depends on the form (a drawing task or not), but someone with neither
+    // is refused before the upload, up to the storage size limit, is read.
+    if (!await permissionFor(database, actor.id, "project.write") && !await permissionFor(database, actor.id, "signing.request")) {
+      throw new ApiError(403, "permission_denied", "Uploading a project document needs project.write or signing.request.");
+    }
     await demandProjectScope(database, actor, projectId);
     const upload = await readMultipartUpload(request, config.documentStorage.maxFileSizeBytes);
     const taskText = multipartText(upload.values, "taskId", 20);
@@ -194,5 +210,35 @@ export function registerProjectDocumentRoutes(
       storageKey: String(row.storage_key), fileName: String(row.name), contentType: String(row.content_type),
       sizeBytes: Number(row.size_bytes), sha256: row.provider_etag ? String(row.provider_etag) : null,
     });
+  });
+
+  // A mistaken upload is withdrawn, not deleted: dbo.withdraw_project_document (migration 069) sets
+  // deleted_at under the caller's transaction, refuses documents that signing uses, and keeps the row
+  // and the stored file as evidence; the reason goes to the audit log.
+  app.delete("/api/v1/projects/:projectId/documents/:documentId", async (request) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const params = request.params as { projectId?: string; documentId?: string };
+    const projectId = positiveLong(params.projectId, "Project id");
+    const documentId = positiveLong(params.documentId, "Document id");
+    const body = bodyObject(request.body);
+    const expected = parseRowVersion(body.rowVersion);
+    const reason = requiredText(body.reason, 500, "Reason");
+    await demandProjectScope(database, actor, projectId);
+    return database.transaction(async (transaction) => {
+      const before = new sql.Request(transaction);
+      before.input("document", sql.BigInt, documentId).input("project", sql.BigInt, projectId);
+      const row = (await before.query<{ name: string; folder_code: string; project_no: string }>(`
+        SELECT d.name,d.folder_code,p.project_no FROM dbo.project_docs d INNER JOIN dbo.projects p ON p.id=d.project_id
+        WHERE d.id=@document AND d.project_id=@project AND d.deleted_at IS NULL;`)).recordset[0];
+      if (!row) throw new ApiError(404, "document_not_found", "Project document not found.");
+      const withdraw = new sql.Request(transaction);
+      withdraw.input("document_id", sql.BigInt, documentId).input("project_id", sql.BigInt, projectId)
+        .input("actor", sql.BigInt, actor.id).input("expected_row_version", sql.VarBinary(8), expected);
+      await withdraw.execute("dbo.withdraw_project_document").catch((error: unknown) => { throw documentWithdrawError(error) ?? error; });
+      await insertAudit(transaction, actor.id, "ProjectDocument", documentId, row.project_no, "Withdrawn",
+        { fileName: row.name, folderCode: row.folder_code }, { reason });
+      return { id: documentId, withdrawn: true };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
 }

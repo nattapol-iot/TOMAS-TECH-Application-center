@@ -21,6 +21,7 @@ function mountForm(file, exportName, props) {
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
     "../api-client": { async apiRequest(url, options) { requests.push({ url, body: JSON.parse(options.body) }); return { code: "TEST" }; } },
     "./BusinessCardScanner": { BusinessCardScanner: "scanner" },
+    "../project-overview-client": { listAllProjectsByNumber: async () => [] },
     "../ui": new Proxy({}, { get: (_, name) => name }),
     "../i18n": { useT: () => value => value },
     "../LocalizedText": { LocalizedText: "localized" },

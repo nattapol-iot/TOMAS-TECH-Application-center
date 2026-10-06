@@ -112,10 +112,13 @@ async function loadProjectDocument(
   transaction?: TransactionType,
 ): Promise<ProjectDocumentSource> {
   if (projectDocumentId <= 0) throw new ApiError(400, "project_document_required", "A stored document must be named.");
+  // Inside a transaction the row stays locked until signing has recorded its use, so a withdrawal
+  // (dbo.withdraw_project_document, migration 069) either finishes first and the document is gone, or
+  // waits and then sees the reference and refuses.
   const statement = `
     SELECT d.id, d.project_id, d.name, d.content_type, d.size_bytes, d.storage_key,
            COALESCE(d.sha256, d.provider_etag) AS sha256
-    FROM dbo.project_docs d
+    FROM dbo.project_docs d${transaction ? " WITH (UPDLOCK, HOLDLOCK)" : ""}
     INNER JOIN dbo.projects p ON p.id = d.project_id AND p.deleted_at IS NULL
     WHERE d.id = @id AND d.deleted_at IS NULL;
   `;

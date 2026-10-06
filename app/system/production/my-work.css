@@ -291,6 +291,20 @@
   font-size: var(--fs-3xs);
 }
 
+/* Acknowledge in place, or open the assignment to review it first. */
+.new-assignment-child > .new-assignment-child-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.new-assignment-group-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .estimate-work-sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

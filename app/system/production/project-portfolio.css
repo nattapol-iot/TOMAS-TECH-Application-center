@@ -99,6 +99,9 @@
 
 @media (max-width: 720px) {
   .portfolio-overview { padding: 10px 12px; }
+  .portfolio-waiting li { grid-template-columns: minmax(0, 1fr) max-content; }
+  .portfolio-waiting li .mono { grid-column: 1 / -1; }
+  .portfolio-gantt-search input { flex-basis: 100%; }
   .portfolio-table .portfolio-col-pm, .portfolio-table .portfolio-col-slip { display: none; }
   .portfolio-project { min-width: 160px; }
   .portfolio-progress { min-width: 120px; }
@@ -109,3 +112,19 @@
 .portfolio-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 0 14px; }
 .portfolio-gantt-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px 0; }
 .portfolio-gantt-sort .icon.asc { transform: rotate(180deg); }
+
+/* Timeline task search: one row under the zoom bar; the result line wraps below the buttons. */
+.portfolio-gantt-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px; }
+.portfolio-gantt-search input { flex: 0 1 340px; min-width: 200px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font-size: var(--fs-sm); }
+.portfolio-gantt-search .muted, .portfolio-gantt-search .danger-text { font-size: var(--fs-xs); }
+.portfolio-gantt-search .danger-text { color: var(--red-text); }
+
+/* Day requests waiting for this PM or EM, above the portfolio. */
+.portfolio-waiting { border: 1px solid var(--amber-line); border-radius: var(--r-md); background: var(--amber-soft); }
+.portfolio-waiting > summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; color: var(--amber-text); font-size: var(--fs-sm); font-weight: 650; cursor: pointer; }
+.portfolio-waiting > summary .icon { width: 15px; height: 15px; }
+.portfolio-waiting ul { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--amber-line); background: var(--line-soft); }
+.portfolio-waiting li { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; align-items: center; gap: 12px; padding: 8px 14px; background: var(--surface); font-size: var(--fs-sm); }
+.portfolio-waiting li:last-child { border-radius: 0 0 var(--r-md) var(--r-md); }
+.portfolio-waiting-task { display: grid; gap: 2px; min-width: 0; }
+.portfolio-waiting-task small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); }

@@ -20,7 +20,7 @@ Renderer and localized captions: `scripts/employee_manual_illustrated.py`.
 Capture provenance and hashes: `docs/manual/screenshots/manifest.json`.
 Application integration: `docs/employee-manual-integration.md`.
 
-The build verifies 40 chapters and matching identifiers for all 97 procedures in
+The build verifies 40 chapters and matching identifiers for all 101 procedures in
 each language. Screenshots were captured in Chrome from the real Team Test app
 on 2026-09-06, in TH/EN/JP. No business transactions were submitted for capture.
 Source UI strings that remain untranslated are preserved in the screenshots.
@@ -35,16 +35,16 @@ Images show accessible pages, not proof that every transaction was exercised.
 | 05 ลูกค้า ผู้ติดต่อ และ End user | customers, crm-dashboard, crm-customers, crm-contacts, crm-opportunities, crm-activities, crm-pipeline | `app/system/production/InquiryCustomerFields.tsx`, `app/system/production/EndUserCompanyField.tsx`, `app/system/production/BusinessCardScanner.tsx`, `app/system/production/CrmScreens.tsx`, `docs/customer-multilingual-names.md`, `docs/customer-contact-titles.md`, `docs/customer-contact-roles.md`, `docs/end-user-companies.md`, `docs/context/modules/crm.md` |
 | 06 Inquiry: รับงานและรวบรวมความต้องการ | inquiries | `app/system/production/InquiryScreens.tsx`, `docs/inquiry-visit-flow.md` |
 | 07 ขอเข้าหน้างานและตรวจความพร้อม | sales-intake | `app/system/production/SiteVisitScreens.tsx`, `docs/inquiry-visit-flow.md`, `lib/inquiry-visit-flow.ts` |
-| 08 Site Visit: จัดทีม นัดหมาย และสำรวจ | site-visits | `app/system/production/SiteVisitScreens.tsx`, `docs/site-visit-workspace.md`, `lib/site-visit-rules.ts` |
+| 08 Site Visit: จัดทีม นัดหมาย และสำรวจ | site-visits | `app/system/production/SiteVisitScreens.tsx`, `docs/site-visit-workspace.md`, `backend-node/src/site-visit-common.ts` |
 | 09 My Assignments และรายงานผลสำรวจ | my-assignments | `app/system/production/SiteVisitScreens.tsx`, `docs/site-visit-workspace.md` |
 | 10 Estimate Cost: สร้างและจัดรายการต้นทุน | estimates | `app/system/production/EstimateScreens.tsx`, `app/system/production/CostItemFields.tsx` |
 | 11 Man-hour ค่าใช้จ่าย และ Contingency | Estimate → Engineering Man-hour / Other Project Cost | `app/system/production/EstimateScreens.tsx`, `backend-node/src/routes/estimate-workspace-write.ts` |
 | 12 นำเข้า Excel Estimate และใช้ Module Templates | module-templates | `docs/estimate-excel-import.md`, `app/system/production/EstimateExcelImport.tsx`, `app/system/production/ModuleTemplateScreens.tsx`, `app/system/production/ModuleTemplateEditor.tsx` |
 | 13 มอบหมาย ตรวจสอบ อนุมัติ และ Revision ของ Estimate | Estimate → Assignment / Validation / Engineering Review | `app/system/production/EstimateScreens.tsx`, `docs/estimate-assignment-email.md`, `backend-node/src/routes/estimates.ts` |
 | 14 ราคาอ้างอิงและใบเสนอราคาผู้ขาย | price, quotations, missing | `app/system/production/PlanningPricingScreens.tsx` |
-| 15 Projects และเอกสารโครงการ | projects | `app/system/production/CoreScreens.tsx`, `app/system/api-client.ts` |
-| 16 Project Schedule และ Baseline | Projects → Project Schedule | `app/system/production/PlanningPricingScreens.tsx`, `docs/resource-task-workflow.md` |
-| 17 Resource Plan และ Project Timeline | resources, project-timeline | `app/system/production/ResourcePlanningScreen.tsx`, `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/ProjectTimelineScreen.tsx`, `docs/resource-planning.md`, `docs/resource-task-workflow.md` |
+| 15 Projects และเอกสารโครงการ | projects | `app/system/production/CoreScreens.tsx`, `app/system/production/ProjectPortfolioGantt.tsx`, `app/system/api-client.ts` |
+| 16 แผนงานโครงการ (Plan) และ Baseline | Projects → Plan | `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/GanttChart.tsx`, `docs/resource-task-workflow.md` |
+| 17 Resource Plan และ Project Timeline | resources, project-timeline | `app/system/production/ResourcePlanningScreen.tsx`, `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/ProjectPortfolioGantt.tsx`, `app/system/production/GanttChart.tsx`, `docs/resource-planning.md`, `docs/resource-task-workflow.md` |
 | 18 My Work และ Team Activity: รับงาน รายงาน และติดตามคะแนน | my-work, activity | `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/TeamActivityScreen.tsx`, `app/system/ProductionApp.tsx` |
 | 19 Punchlist: ติดตาม Issue ของลูกค้าจนปิด | Projects → Punchlist · Issue ลูกค้า | `app/system/production/ResourceTaskWorkspace.tsx`, `docs/resource-task-workflow.md` |
 | 20 Procurement Dashboard และ BOM | procurement, boms | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/boms.ts`, `backend-node/src/routes/stock-control.ts` |

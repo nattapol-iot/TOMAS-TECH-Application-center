@@ -190,11 +190,19 @@ export async function demandProgressWriter(transaction: TransactionType, task: T
   if (!canPostProgress(rights)) throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager or an Admin can update this task's progress.");
 }
 /**
- * Who may answer a day request. dbo.answer_schedule_day_request (migration 007) checks the PRIMARY role only (users.role_id),
- * so an Engineering Manager or Admin held as an additional role would be refused there with THROW 51125.
+ * Who may answer a day request: the project manager, or anyone holding Engineering Manager or Admin as any
+ * role. Since migration 068, dbo.answer_schedule_day_request reads dbo.user_effective_roles too, so the
+ * API and the procedure agree (before it, an additional role was refused there with THROW 51125).
  */
-export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId">, actor: Pick<CurrentUser, "id" | "role">): boolean {
-  return project.managerId === actor.id || actor.role === "Engineering Manager" || actor.role === "Admin";
+/**
+ * The dbo.schedule_updates fields that count as a progress report, as a SQL IN list. My Work's last report
+ * and quiet days and the portfolio's last progress and "No update 7d+" all read this one list.
+ */
+export const PROGRESS_REPORT_FIELDS_SQL = ["percent_complete", "status", "actual_start", "actual_finish", "forecast_finish", "blocked_reason", "remark", "progress"]
+  .map((field) => `N'${field}'`).join(",");
+
+export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId">, actor: CurrentUser): boolean {
+  return project.managerId === actor.id || hasRole(actor, "Engineering Manager", "Admin");
 }
 /** A Resource Plan task linked to a schedule row (dbo.resource_tasks.schedule_task_id is unique). */
 export type ManagedTask = { state: string; acknowledged: boolean; assigneeId: number };

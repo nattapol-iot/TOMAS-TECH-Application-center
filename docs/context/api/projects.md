@@ -2,7 +2,7 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `68f83bd3`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `3d891f13`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -12,21 +12,22 @@ Evidence: source snapshot `68f83bd3`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/handover/:inquiryId` | 79–102 |
 | GET | `/api/v1/projects/contact-options` | 104–114 |
 | GET | `/api/v1/projects` | 116–143 |
-| GET | `/api/v1/projects/overview` | 178–227 |
-| POST | `/api/v1/projects` | 229–364 |
-| GET | `/api/v1/projects/:id/members` | 366–391 |
-| POST | `/api/v1/projects/:id/members` | 393–416 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 418–439 |
-| GET | `/api/v1/projects/:id/deletion` | 459–466 |
-| DELETE | `/api/v1/projects/:id` | 468–491 |
-| PUT | `/api/v1/projects/:id` | 493–613 |
+| GET | `/api/v1/projects/attention` | 178–196 |
+| GET | `/api/v1/projects/overview` | 200–249 |
+| POST | `/api/v1/projects` | 251–386 |
+| GET | `/api/v1/projects/:id/members` | 388–413 |
+| POST | `/api/v1/projects/:id/members` | 415–438 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 440–461 |
+| GET | `/api/v1/projects/:id/deletion` | 481–488 |
+| DELETE | `/api/v1/projects/:id` | 490–513 |
+| PUT | `/api/v1/projects/:id` | 515–635 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 40–45 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–614 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–636 |
 
 ## Direct local dependencies
 

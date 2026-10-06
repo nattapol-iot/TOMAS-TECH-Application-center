@@ -2,24 +2,25 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `68f83bd3`; generated, do not edit. [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `3d891f13`; generated, do not edit. [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/:projectId/drawing-tasks` | 72–86 |
-| GET | `/api/v1/projects/:projectId/documents` | 87–103 |
-| POST | `/api/v1/projects/:projectId/documents` | 105–175 |
-| GET | `/api/v1/projects/:projectId/documents/:documentId/content` | 177–197 |
+| GET | `/api/v1/projects/:projectId/drawing-tasks` | 75–89 |
+| GET | `/api/v1/projects/:projectId/documents` | 90–114 |
+| POST | `/api/v1/projects/:projectId/documents` | 116–191 |
+| GET | `/api/v1/projects/:projectId/documents/:documentId/content` | 193–213 |
+| DELETE | `/api/v1/projects/:projectId/documents/:documentId` | 218–243 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `summary` | [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>) | 27–42 |
-| `projectFolder` | [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>) | 44–64 |
-| `registerProjectDocumentRoutes` | [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>) | 66–198 |
+| `summary` | [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>) | 29–45 |
+| `projectFolder` | [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>) | 47–67 |
+| `registerProjectDocumentRoutes` | [backend-node/src/routes/project-documents.ts](<../../../backend-node/src/routes/project-documents.ts>) | 69–244 |
 
 ## Direct local dependencies
 
@@ -28,15 +29,17 @@ Evidence: source snapshot `68f83bd3`; generated, do not edit. [backend-node/src/
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/types.ts](<../../../backend-node/src/types.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/drawing-workflow.ts](<../../../backend-node/src/drawing-workflow.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.project_docs`, `dbo.project_folders`, `dbo.projects`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.users`
+`dbo.document_files`, `dbo.project_docs`, `dbo.project_folders`, `dbo.projects`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.signature_marks`, `dbo.user_effective_permissions`, `dbo.users`, `dbo.withdraw_project_document`
 
 ## Change boundary
 

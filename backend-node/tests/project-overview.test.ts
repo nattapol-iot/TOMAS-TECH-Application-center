@@ -293,3 +293,33 @@ test("the paged project list takes its health from the same schedule summary", a
     assert.equal("progressSource" in items[0], false);
   } finally { await server.close(); }
 });
+
+// ---- GET /api/v1/projects/attention (the Projects menu badge) ----
+
+test("the menu badge counts open Delayed and At Risk projects by the overview's own rule", async () => {
+  const { server, calls } = overviewServer({ id: 5, roles: ["Engineer"] });
+  try {
+    const items = (await server.inject({ method: "GET", url: "/api/v1/projects/overview" })).json().items as { health: string }[];
+    const delayed = items.filter((item) => item.health === "Delayed").length;
+    const atRisk = items.filter((item) => item.health === "At Risk").length;
+    assert.ok(delayed + atRisk > 0, "the fixture has a project that needs attention");
+    calls.length = 0;
+    const badge = await server.inject({ method: "GET", url: "/api/v1/projects/attention" });
+    assert.equal(badge.statusCode, 200);
+    assert.deepEqual(badge.json(), { delayed, atRisk, attention: delayed + atRisk });
+    const list = calls.find((call) => call.statement.includes("FROM dbo.projects p"))!;
+    assert.match(list.statement, /p\.status NOT IN \(N'Closed',N'On Hold'\)/);
+    assert.match(list.statement, /@elevated=1 OR p\.manager_id=@actor OR p\.lead_engineer_id=@actor/);
+    assert.equal(list.bound.actor, 5);
+    assert.equal(list.bound.elevated, false);
+  } finally { await server.close(); }
+});
+
+test("the menu badge needs project.read", async () => {
+  const { server, calls, permission } = overviewServer({ id: 5, roles: ["Engineer"] }, { denied: true });
+  try {
+    assert.equal((await server.inject({ method: "GET", url: "/api/v1/projects/attention" })).statusCode, 403);
+    assert.equal(permission(), "project.read");
+    assert.equal(calls.length, 0);
+  } finally { await server.close(); }
+});
