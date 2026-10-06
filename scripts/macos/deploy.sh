@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Deploys the Development-mode stack on a colima host. Runs as the login user that owns the
+# Deploys the shared-host stack (docker-compose.dev.yml + docker-compose.tls.yml: Node API,
+# production-built frontend, Caddy) on a colima host. Runs as the login user that owns the
 # colima profile (no sudo: the docker socket lives under that user's home), from the CI
 # runner or by hand:
 #
@@ -31,6 +32,11 @@ done
 [[ -n "$SOURCE" ]] || die "--source is required."
 [[ -f "$SOURCE/docker-compose.dev.yml" ]] || die "$SOURCE does not look like the repository root."
 [[ -f "$DEPLOY_DIR/.env" ]] || die "$DEPLOY_DIR/.env is missing; see docs/MACMINI_HANDOFF.md for the keys it must carry."
+# The compose files fall back to header-trusting Development identity and an Entra build when
+# these are unset, so the shared host refuses to deploy anything but TMT ID.
+env_value() { grep -E "^$1=" "$DEPLOY_DIR/.env" | tail -n 1 | cut -d= -f2- | tr -d '"\r' || true; }
+[[ "$(env_value DEV_API_AUTH_MODE)" == "TmtId" ]] || die "DEV_API_AUTH_MODE must be TmtId in $DEPLOY_DIR/.env."
+[[ "$(env_value DEV_FRONTEND_AUTH_MODE)" == "tmt-id" ]] || die "DEV_FRONTEND_AUTH_MODE must be tmt-id in $DEPLOY_DIR/.env."
 docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context '$DOCKER_CONTEXT' does not exist."
 # A context can exist while its VM is down; compose would then hang on the dead socket for minutes.
 if ! /usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1; then
@@ -91,9 +97,18 @@ rsync -a --delete \
   "$SOURCE/" "$DEPLOY_DIR/"
 
 cd "$DEPLOY_DIR"
-# vinext leaves a PID lock in the bind-mounted project dir; a replaced container sees a dead
-# PID and exits instead of starting, so clear it before every deploy.
+# Left behind by the former bind-mounted dev server (a PID lock that stops a new one starting).
 rm -rf .vinext
+
+# The former frontend was a bind-mounted 'npm run dev' container allowed 3 GB. The iot VM has
+# 4 GiB and no swap, so the first production build must not run beside it; stopping it costs
+# one build's worth of frontend downtime, once. Afterwards the image is ours and stays up.
+frontend_container="$(compose ps -q frontend 2>/dev/null || true)"
+if [[ -n "$frontend_container" ]] \
+  && [[ "$(docker --context "$DOCKER_CONTEXT" inspect -f '{{.Config.Image}}' "$frontend_container" 2>/dev/null)" == node:* ]]; then
+  log "Stopping the legacy dev-server frontend before the first production build"
+  compose stop frontend
+fi
 
 log "Building images"
 compose build
@@ -108,12 +123,8 @@ export ConnectionStrings__Migrations="$migrations_connection"
 compose run --rm --no-deps -e ConnectionStrings__Migrations api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
 unset ConnectionStrings__Migrations
 log "Starting containers"
-# --force-recreate matters here: 'frontend' has no 'build:' (bind-mounted source, persistent
-# 'npm run dev' process), so its image/env/command never change between deploys and plain
-# 'up -d' sees no diff and leaves the old container -- and old in-memory dev server -- running.
-# rsync updates the bind-mounted files on disk, but the already-running process never re-reads
-# them (file-watch events routinely don't propagate through colima's virtiofs mount either), so
-# a deploy could report success while the site keeps serving the previous commit indefinitely.
+# --force-recreate keeps every deploy a clean restart: pdf-parser and caddy have no source
+# change most of the time, and a stale container would otherwise survive the deploy unnoticed.
 compose up -d --force-recreate
 # The Caddyfile is a bind mount, so an edited file does not recreate the container; reload it.
 compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 || log "Caddy reload skipped (container not running yet)"

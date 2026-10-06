@@ -1,12 +1,13 @@
-# Overlay for docker-compose.dev.yml that puts Caddy in front of both services with real
-# certificates, so the app can be reached as https://$PUBLIC_HOST:$TLS_FRONTEND_PORT (and the
-# API on $TLS_API_PORT) without exposing the plain-http ports beyond the host itself:
+# Overlay for docker-compose.dev.yml that turns it into the shared-host deployment: Caddy in
+# front of both services with real certificates, a production-built frontend, and identity
+# settings that must be stated rather than defaulted. The app is reached as
+# https://$PUBLIC_HOST:$TLS_FRONTEND_PORT (and the API on $TLS_API_PORT) without exposing the
+# plain-http ports beyond the host itself:
 #
 #   docker compose -f docker-compose.dev.yml -f docker-compose.tls.yml up -d
 #
-# The browser calls the API directly, so both origins need TLS; DEV_API_BASE_URL and
-# DEV_SITE_ORIGIN in .env must then be the https URLs, and DEV_ALLOWED_HOSTS must include
-# PUBLIC_HOST.
+# scripts/macos/deploy.sh is the only caller. DEV_API_BASE_URL and DEV_SITE_ORIGIN in .env
+# must be the https URLs; they are compiled into the frontend bundle at build time.
 services:
   api:
     ports: !override
@@ -15,10 +16,34 @@ services:
       # Caddy, on the private compose network, is the only way in. Believe its
       # X-Forwarded-For so the per-address limit sees each client, not the proxy.
       Http__TrustProxy: uniquelocal
+      # The dev file falls back to Development, which trusts an x-dev-user-email header from
+      # anyone. On the shared host a missing value must stop compose instead.
+      Authentication__Mode: ${DEV_API_AUTH_MODE:?set DEV_API_AUTH_MODE=TmtId in .env on the shared host}
 
   frontend:
+    # The dev file bind-mounts the checkout and runs 'npm run dev', and a Vite dev server
+    # answers any path under the project root -- source, docs and /demo -- without sign-in.
+    # Here the image is built from ./Dockerfile and serves only the compiled dist/.
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_APP_MODE: production
+        NEXT_PUBLIC_AUTH_MODE: ${DEV_FRONTEND_AUTH_MODE:?set DEV_FRONTEND_AUTH_MODE=tmt-id in .env on the shared host}
+        NEXT_PUBLIC_API_BASE_URL: ${DEV_API_BASE_URL:?set DEV_API_BASE_URL to the https API origin}
+        NEXT_PUBLIC_ENTRA_TENANT_ID: ${DEV_ENTRA_TENANT_ID:-}
+        NEXT_PUBLIC_ENTRA_CLIENT_ID: ${DEV_ENTRA_CLIENT_ID:-}
+        NEXT_PUBLIC_ENTRA_API_SCOPE: ${DEV_ENTRA_API_SCOPE:-}
+        NEXT_PUBLIC_BUSINESS_TIME_ZONE: Asia/Bangkok
+        SITE_ORIGIN: ${DEV_SITE_ORIGIN:?set DEV_SITE_ORIGIN to the https site origin}
+    image: iot-team-center-frontend:current
+    command: !reset null
+    volumes: !reset []
+    environment: !override
+      SITE_ORIGIN: ${DEV_SITE_ORIGIN:?set DEV_SITE_ORIGIN to the https site origin}
     ports: !override
       - "127.0.0.1:3000:3000"
+    # 'vinext start' serves prebuilt files; the 3g in the dev file was for 'npm ci' plus Vite.
+    mem_limit: 1g
 
   caddy:
     # Same build the rest of this host already runs; the stock caddy image has no DNS plugin.

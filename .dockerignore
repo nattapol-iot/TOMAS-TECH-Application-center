@@ -13,3 +13,10 @@ database/*
 !database/migrations/**
 docs/
 *.tsbuildinfo
+# Secrets reach the containers through compose, never through an image layer.
+.env
+.env.*
+!.env.example
+!.env.dev.example
+output/
+outputs/
