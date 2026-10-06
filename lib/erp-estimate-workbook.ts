@@ -298,10 +298,6 @@ export function buildErpEstimateWorkbook(input: ErpEstimateWorkbookInput): Uint8
   });
 }
 
-export function downloadErpEstimateWorkbook(input: ErpEstimateWorkbookInput, filename: string): void {
-  downloadErpEstimateWorkbookBytes(buildErpEstimateWorkbook(input), filename);
-}
-
 export function downloadErpEstimateWorkbookBytes(bytes: Uint8Array, filename: string): void {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);

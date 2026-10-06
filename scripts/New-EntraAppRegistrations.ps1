@@ -156,7 +156,7 @@ else {
 
 Write-Host ''
 Write-Host '==================== Entra values -- paste into your env files ====================' -ForegroundColor Green
-Write-Host 'api.env.input (scripts/linux/api.env.template):'
+Write-Host 'API environment (backend-node):'
 Write-Host "  Authentication__TenantId      = $tenantId"
 Write-Host "  Authentication__ClientId      = $apiAppId"
 Write-Host "  Authentication__Audience      = $apiAppId"

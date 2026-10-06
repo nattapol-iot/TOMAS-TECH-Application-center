@@ -32,9 +32,7 @@ does not alter or fabricate those screen contents.
 
 Deliverables:
 
-- `output/IoT-Team-Center-Employee-Manual.html`
-- `output/IoT-Team-Center-Employee-Manual-TH.html` (compatible previous path)
-- `public/manual/employee-operation-manual.html` (in-application copy)
+- `public/manual/employee-operation-manual.html` (the only copy; served at `/manual/` and offered as the download)
 - `output/employee-manual-preview.jpg`
 - `output/employee-manual-preview-jp.jpg`
 

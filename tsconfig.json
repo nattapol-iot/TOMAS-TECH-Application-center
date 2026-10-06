@@ -25,5 +25,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "examples", "backend-node", "backend-php", ".codex-tmp", ".claude/worktrees", ".tmp", "tmp", "outputs", "output", "dist", ".vercel", ".vinext", ".wrangler"]
+  "exclude": ["node_modules", "examples", "backend-node", ".codex-tmp", ".claude/worktrees", ".tmp", "tmp", "outputs", "output", "dist", ".vercel", ".vinext", ".wrangler"]
 }

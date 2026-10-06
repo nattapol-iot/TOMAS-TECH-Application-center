@@ -4,10 +4,11 @@ import { useT as useStaticCopy } from "../i18n";
 /* ==========================================================================
    Sales Intake & Engineer Site Visit — production screens.
 
-   Everything here talks to the API. The rule tables in lib/site-visit-rules.ts
-   decide which buttons appear; the API decides whether the action happens. A
-   button this file fails to hide is refused server-side, so the worst outcome
-   of a UI mistake is a clear error, never an unauthorised write.
+   Everything here talks to the API. Buttons follow the transitions the API
+   returns for each record (backend-node/src/site-visit-common.ts), and the API
+   decides whether the action happens. A button this file fails to hide is
+   refused server-side, so the worst outcome of a UI mistake is a clear error,
+   never an unauthorised write.
    ========================================================================== */
 
 import { LocalizedText } from "../LocalizedText";

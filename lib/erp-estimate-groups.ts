@@ -76,26 +76,6 @@ export function splitRowsByCategory<TLine, TRow extends { key: string; lines: TL
   return split;
 }
 
-type FoldableLine = {
-  sourceType: string;
-  sourceId: number | null;
-  description: string;
-  amount: number;
-  erpCategory: string;
-  unitPrice?: number | null;
-  quantity?: number | null;
-  unit?: string | null;
-  remark?: string | null;
-  item?: string | number | null;
-  modelPartNumber?: string | null;
-  supplier?: string | null;
-  brand?: string | null;
-  leadTime?: string | null;
-  quoteRevision?: string | null;
-};
-
-const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-
 /**
  * Which merged lines are still written as one line, and which have stopped being
  * one thing.
@@ -129,56 +109,6 @@ export function classifyErpGroups<T extends { sourceType: string; sourceId: numb
     else foldable.push(group);
   }
   return { foldable, broken };
-}
-
-/**
- * One row per merged line, in the position of its first member.
- *
- * A group whose members no longer agree on an ERP category is left unfolded: the
- * sheet must never move money between categories to tidy up a name. Fields that
- * belong to a single item — supplier, brand, part number — are dropped rather
- * than guessed from whichever member happened to come first, and the members'
- * own descriptions are kept in the remark so nothing disappears.
- */
-export function foldErpGroupLines<T extends FoldableLine>(lines: readonly T[], groups: readonly ErpGroup[]): T[] {
-  if (!groups.length) return [...lines];
-  const { foldable } = classifyErpGroups(lines, groups, (line) => line.erpCategory);
-  const index = erpGroupsByMember(foldable);
-  const membersOf = new Map<number, T[]>();
-  for (const line of lines) {
-    const group = index.get(erpMemberKey(line));
-    if (!group) continue;
-    const collected = membersOf.get(group.id) ?? [];
-    collected.push(line);
-    membersOf.set(group.id, collected);
-  }
-  const folded: T[] = [];
-  const done = new Set<number>();
-  for (const line of lines) {
-    const group = index.get(erpMemberKey(line));
-    // Only groups that survive classifyErpGroups() reach the index, so a member here is always foldable.
-    if (!group) { folded.push(line); continue; }
-    if (done.has(group.id)) continue;
-    done.add(group.id);
-    const members = membersOf.get(group.id) ?? [];
-    const amount = members.reduce((total, member) => total + member.amount, 0);
-    folded.push({
-      ...line,
-      description: group.title,
-      amount,
-      quantity: group.quantity,
-      unit: group.unit,
-      unitPrice: money(amount / group.quantity),
-      item: null,
-      modelPartNumber: null,
-      supplier: null,
-      brand: null,
-      leadTime: null,
-      quoteRevision: null,
-      remark: members.map((member) => member.description).join("; "),
-    } as T);
-  }
-  return folded;
 }
 
 /** Summary amounts include the saved Set count; expanded components stay per-set. */

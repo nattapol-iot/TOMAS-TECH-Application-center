@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { foldErpGroupLines, erpSheetAmounts, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
+import { erpSheetAmounts, erpGroupsByMember, erpMemberKey, splitRowsByCategory, classifyErpGroups } from "../lib/erp-estimate-groups.ts";
 import { buildEstimateCostBreakdown, erpSheetQuantity, breakdownModules, breakdownSheetModules, groupErpLaborSections } from "../lib/estimate-cost-breakdown.ts";
 
 const line = (id, amount, category = "Hardware", description = "Item " + id) => ({
@@ -10,42 +10,6 @@ const line = (id, amount, category = "Hardware", description = "Item " + id) => 
 const group = (members, extra = {}) => ({
   id: 1, title: "Network accessories", quantity: 1, unit: "Lot", rowVersion: "AAAA",
   members: members.map(id => ({ sourceType: "CostItem", sourceId: id })), ...extra,
-});
-
-test("a merged line is one exported row that still carries the whole amount", () => {
-  const lines = [line(1, 1000), line(2, 250), line(3, 4000)];
-  const folded = foldErpGroupLines(lines, [group([1, 2])]);
-  assert.equal(folded.length, 2);
-  assert.equal(folded.reduce((sum, row) => sum + row.amount, 0), lines.reduce((sum, row) => sum + row.amount, 0));
-  const [merged, untouched] = folded;
-  assert.equal(merged.description, "Network accessories");
-  assert.equal(merged.amount, 1250);
-  assert.equal(merged.unitPrice, 1250);
-  assert.equal(merged.unit, "Lot");
-  // Nothing the members said is lost, and nothing is inherited from whichever came first.
-  assert.equal(merged.remark, "Item 1; Item 2");
-  assert.deepEqual([merged.supplier, merged.brand, merged.item], [null, null, null]);
-  assert.deepEqual(untouched, line(3, 4000));
-});
-
-test("quantity divides the merged amount instead of multiplying it", () => {
-  const [merged] = foldErpGroupLines([line(1, 900), line(2, 600)], [group([1, 2], { quantity: 3, unit: "Set" })]);
-  assert.equal(merged.amount, 1500);
-  assert.equal(merged.quantity, 3);
-  assert.equal(merged.unit, "Set");
-  assert.equal(merged.unitPrice * merged.quantity, merged.amount);
-});
-
-test("a merged line whose members disagree on a category is left alone", () => {
-  // Folding these would move 250 baht from Service into Hardware on the sheet.
-  const lines = [line(1, 1000, "Hardware"), line(2, 250, "Service")];
-  assert.deepEqual(foldErpGroupLines(lines, [group([1, 2])]), lines);
-});
-
-test("a merged line that has lost all but one member exports as that line", () => {
-  const lines = [line(1, 1000)];
-  assert.deepEqual(foldErpGroupLines(lines, [group([1, 2])]), lines);
-  assert.deepEqual(foldErpGroupLines(lines, []), lines);
 });
 
 test("members are indexed by the identity ERP mappings already use", () => {
@@ -117,8 +81,6 @@ test("a merged line is drawn exactly when it will be written, and says why when 
   const mixed = classifyErpGroups([line(1, 1000, "Hardware"), line(2, 250, "Service")], [group([1, 2])], saved);
   assert.deepEqual(mixed.foldable, []);
   assert.deepEqual(mixed.broken.map(entry => entry.reason), ["mixed"]);
-  // And the export agrees with that verdict, line for line.
-  assert.deepEqual(foldErpGroupLines([line(1, 1000, "Hardware"), line(2, 250, "Service")], [group([1, 2])]).map(row => row.description), ["Item 1", "Item 2"]);
 
   /* The screen asks about the category a person has chosen but not saved, so a
      merge that is about to break is shown as broken before the save, not after. */

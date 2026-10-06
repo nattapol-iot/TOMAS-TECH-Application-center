@@ -612,17 +612,6 @@ export type CreateInventoryItemInput = {
   preferredSupplierId?: number;
 };
 
-export type CreateEngineeringRateInput = {
-  level: string;
-  department: string;
-  engineeringHourly: number;
-  engineeringDaily: number;
-  installationHourly: number;
-  installationDaily: number;
-  effectiveFrom: string;
-  effectiveTo?: string;
-};
-
 export type CreatedMasterRecord = {
   id: number;
   code: string;
@@ -1141,14 +1130,6 @@ export async function uploadReportExport(reportId: number, format: "pdf" | "pptx
   const body = new FormData();
   body.set("file", new File([bytes as BlobPart], fileName, { type: contentType }));
   return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/exports`, { method: "POST", body }, 120_000)).json() as Promise<ReportExportRecord>;
-}
-
-export async function listReportExports(reportId: number): Promise<{ items: ReportExportRecord[] }> {
-  return apiRequest(`/api/v1/reports/workspace/${reportId}/exports`);
-}
-
-export async function downloadReportExport(reportId: number, exportId: number): Promise<Blob> {
-  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/exports/${exportId}/content`, {}, 120_000)).blob();
 }
 
 export const loadBootstrap = () => apiRequest<BootstrapData>("/api/v1/bootstrap");
@@ -1767,12 +1748,6 @@ export const createSupplier = (input: CreateSupplierInput) =>
 export const createInventoryItem = (input: CreateInventoryItemInput) =>
   apiRequest<CreatedMasterRecord>("/api/v1/master/inventory-items", { method: "POST", body: JSON.stringify(input) });
 
-export const createEngineeringRate = (input: CreateEngineeringRateInput) =>
-  apiRequest<{ id: number; level: string; department: string; rowVersion: string }>("/api/v1/master/engineering-rates", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-
 export const listEmployees = (values: { search?: string; activeOnly?: boolean } = {}) =>
   apiRequest<EmployeeRecord[]>(`/api/v1/master/employees${queryString(values)}`);
 
@@ -2149,20 +2124,6 @@ export const linkKnowledgeDocument = (documentId: number, input: {
 export const unlinkKnowledgeDocument = (documentId: number, relationId: number) =>
   apiRequest<void>(`/api/v1/knowledge/documents/${documentId}/relations/${relationId}`, { method: "DELETE" });
 
-export const listRelatedKnowledge = (entityType: string, entityId: number) =>
-  apiRequest<{ items: Array<{
-    relationId: number;
-    relationType: string;
-    documentId: number;
-    documentNumber: string;
-    title: string;
-    documentType: string;
-    status: string;
-    revision: string | null;
-    ownerName: string;
-    updatedAt: string;
-  }> }>(`/api/v1/knowledge/related${queryString({ entityType, entityId })}`);
-
 export const assignKnowledgeAcknowledgement = (versionId: number, input: { userIds: number[]; dueAt?: string }) =>
   apiRequest<{ versionId: number; assigned: number }>(
     `/api/v1/knowledge/versions/${versionId}/acknowledgements`, {
@@ -2283,10 +2244,9 @@ export async function previewKnowledgeVersion(versionId: number) {
 /* ==========================================================================
    Sales Intake & Engineer Site Visit
 
-   Appended block — nothing above is touched. The shapes match
-   backend/IoTTeamCenter.Api/Models/SiteVisitModels.cs field for field, so a
-   change on either side shows up as a type error rather than as an undefined
-   at runtime.
+   Appended block — nothing above is touched. The shapes follow the JSON the
+   Node routes return (backend-node/src/routes/sales-intakes.ts, site-visits-*.ts,
+   site-visit-reports.ts and visit-master.ts).
    ========================================================================== */
 
 export type IntakeStatus =
@@ -2344,18 +2304,6 @@ export type VisitMasterData = {
   slaPolicies: SlaPolicyRecord[];
   engineerSkills: EngineerSkillRecord[];
   availability: EngineerAvailabilityRecord[];
-};
-
-export type CustomerSiteContactRecord = {
-  id: number; siteId: number; name: string; department: string; position: string;
-  phone: string; email: string; preferredChannel: string; isPrimary: boolean; isActive: boolean; rowVersion: string;
-};
-
-export type CustomerSiteRecord = {
-  id: number; customerId: number; customerName: string; code: string; name: string; branch: string;
-  address: string; province: string; country: string; latitude: number | null; longitude: number | null;
-  travelMinutes: number; accessNote: string; isActive: boolean; rowVersion: string;
-  contacts: CustomerSiteContactRecord[];
 };
 
 export type SalesIntakeSummary = {
@@ -2779,9 +2727,6 @@ export const saveVisitFinding = (id: number, input: {
   method: "POST", body: JSON.stringify(input),
 });
 
-export const deleteVisitFinding = (id: number, findingId: number) =>
-  apiRequest<{ id: number; findingId: number }>(`/api/v1/site-visits/${id}/findings/${findingId}`, { method: "DELETE" });
-
 export const saveVisitActionItem = (id: number, input: {
   title: string; detail?: string; ownerId?: number | null; ownerName?: string;
   dueDate?: string | null; status: string;
@@ -2832,10 +2777,6 @@ export const acknowledgeVisitReport = (id: number, input: {
 export const closeSiteVisit = (id: number, input: { reason: string; rowVersion: string }) =>
   apiRequest<{ id: number; status: string; hasApprovedReport: boolean; rowVersion: string }>(
     `/api/v1/site-visits/${id}/close`, { method: "POST", body: JSON.stringify(input) });
-
-export const linkVisitRecord = (id: number, input: { targetType: string; targetId: number; relation?: string; note?: string }) =>
-  apiRequest<{ id: number; targetType: string; targetId: number; targetNumber: string }>(
-    `/api/v1/site-visits/${id}/links`, { method: "POST", body: JSON.stringify(input) });
 
 export const createInquiryFromVisit = (id: number, input: {
   projectName: string; projectType: string; estimateOwnerId: number; dueDate: string;
@@ -2896,24 +2837,6 @@ export const saveEngineerAvailability = (input: {
 
 export const deleteEngineerAvailability = (id: number) =>
   apiRequest<{ id: number }>(`/api/v1/visit-master/availability/${id}`, { method: "DELETE" });
-
-export const listCustomerSites = (customerId: number) =>
-  apiRequest<CustomerSiteRecord[]>(`/api/v1/visit-master/customers/${customerId}/sites`);
-
-export const saveCustomerSite = (customerId: number, input: {
-  customerId: number; code: string; name: string; branch?: string; address?: string; province?: string;
-  country?: string; latitude?: number | null; longitude?: number | null; travelMinutes: number;
-  accessNote?: string; isActive: boolean;
-}) => apiRequest<{ id: number; code: string }>(`/api/v1/visit-master/customers/${customerId}/sites`, {
-  method: "POST", body: JSON.stringify(input),
-});
-
-export const saveCustomerSiteContact = (siteId: number, input: {
-  name: string; department?: string; position?: string; phone?: string; email?: string;
-  preferredChannel?: string; isPrimary: boolean; isActive: boolean;
-}) => apiRequest<{ id: number; siteId: number }>(`/api/v1/visit-master/sites/${siteId}/contacts`, {
-  method: "POST", body: JSON.stringify(input),
-});
 
 /* ------------------------ Customer people (contacts) --------------------- */
 
@@ -3397,12 +3320,6 @@ export const createCompanyStamp = (input: {
 }) => apiRequest<{ id: number; code: string }>(
   "/api/v1/master/company-stamps", { method: "POST", body: JSON.stringify(input) });
 
-export const setCompanyStampImage = (stampId: number, imageBase64: string, rowVersion: string) =>
-  apiRequest<{ id: number }>(`/api/v1/master/company-stamps/${stampId}/image`, {
-    method: "PUT",
-    body: JSON.stringify({ imageBase64, rowVersion }),
-  });
-
 export const grantStampAuthority = (stampId: number, input: {
   holderKind: "ROLE" | "USER";
   holderId: number;
@@ -3583,35 +3500,6 @@ export const listLaborRates = (values: {
   includeInactive?: boolean;
 } = {}) => apiRequest<LaborRatePage>(`/api/v1/labor-rates${queryString(values)}`);
 
-export const supersedeLaborRate = (id: number, input: {
-  rowVersion: string;
-  effectiveFrom: string;
-  effectiveTo?: string | null;
-  engineeringHourly: number;
-  engineeringDaily: number;
-  installationHourly: number;
-  installationDaily: number;
-  code?: string;
-  roleActivity?: string;
-  defaultErpCategory?: string | null;
-  notes?: string;
-  reason: string;
-}) => apiRequest<{
-  supersededRateId: number;
-  supersededEffectiveTo: string;
-  rateId: number;
-  level: string;
-  department: string;
-  version: number;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  rowVersion: string;
-}>(`/api/v1/master/engineering-rates/${id}/supersede`, { method: "POST", body: JSON.stringify(input) });
-
-export const retireLaborRate = (id: number, input: { rowVersion: string; effectiveTo: string; reason: string }) =>
-  apiRequest<{ id: number; effectiveTo: string; alreadyClosed: boolean; rowVersion?: string }>(
-    `/api/v1/master/engineering-rates/${id}/retire`, { method: "POST", body: JSON.stringify(input) });
-
 export type LaborPackageSummary = {
   id: number;
   code: string;
@@ -3717,9 +3605,6 @@ export const installStandardLaborLibrary = () =>
 
 export const updateLaborPackage = (id: number, input: LaborPackageInput & { rowVersion: string }) =>
   apiRequest<{ id: number; revision: number; rowVersion: string }>(`/api/v1/labor-packages/${id}`, { method: "PUT", body: JSON.stringify(input) });
-
-export const retireLaborPackage = (id: number, rowVersion: string) =>
-  apiRequest<{ id: number; status: string }>(`/api/v1/labor-packages/${id}/retire`, { method: "POST", body: JSON.stringify({ rowVersion }) });
 
 export const createLaborPackageFromEstimate = (input: {
   estimateId: number;

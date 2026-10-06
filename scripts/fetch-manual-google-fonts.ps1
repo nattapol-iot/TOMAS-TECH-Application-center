@@ -1,5 +1,5 @@
 param(
-    [string]$ManualPath = "output/IoT-Team-Center-Employee-Manual.html"
+    [string]$ManualPath = "public/manual/employee-operation-manual.html"
 )
 
 $ErrorActionPreference = "Stop"

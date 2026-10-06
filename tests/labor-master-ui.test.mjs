@@ -9,10 +9,6 @@ import {
   previewLaborLine,
   rateDailyFor,
   rateHourlyFor,
-  rateLabel,
-  rateSelectable,
-  rateWindowLabel,
-  seedFromRate,
   summarizeLaborApply,
 } from "../lib/labor-master.ts";
 
@@ -63,27 +59,7 @@ const supplierLine = {
   defaultErpCategory: null,
 };
 
-test("a rate row reads as one line an estimator can scan", () => {
-  assert.equal(rateLabel(rate), "ENG-MID · Middle Engineer · Engineering — Commissioning");
-  assert.equal(rateLabel({ ...rate, code: null, roleActivity: "" }), "Middle Engineer · Engineering");
-  assert.equal(rateWindowLabel(rate), "2026-01-01 → open");
-  assert.equal(rateWindowLabel({ ...rate, effectiveTo: "2026-09-30" }), "2026-01-01 → 2026-09-30");
-});
-
-test("only an effective rate may seed a line, though the others are still shown", () => {
-  assert.equal(rateSelectable({ status: "Effective" }), true);
-  for (const status of ["Future", "Expired", "Inactive"]) {
-    assert.equal(rateSelectable({ status }), false, status);
-  }
-});
-
-test("selecting a rate fills the classification and previews the rate the server will freeze", () => {
-  assert.deepEqual(seedFromRate(rate, "Engineering"), {
-    department: "Engineering", level: "Middle Engineer", dailyRate: 5000, hourlyRate: 625, erpCategory: "Service",
-  });
-  assert.deepEqual(seedFromRate(rate, "Installation"), {
-    department: "Engineering", level: "Middle Engineer", dailyRate: 4000, hourlyRate: 500, erpCategory: "Service",
-  });
+test("a rate is read for the cost type of the line it prices", () => {
   assert.equal(rateDailyFor("Installation", rate), 4000);
   assert.equal(rateHourlyFor("Engineering", rate), 625);
 });

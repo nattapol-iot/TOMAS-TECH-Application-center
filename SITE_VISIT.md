@@ -39,9 +39,10 @@ exclusions and risks across by itself.
 
 Migration **016** adds 27 tables, one stored procedure, five triggers and
 11 permissions. The API is three endpoint files plus a shared core; the UI is
-one production module plus a demo screen. `lib/site-visit-rules.ts` holds the
-status machine, the readiness rules and the conflict detector as pure functions
-so the screens and the tests can use exactly what the API enforces.
+one production module. The status machine and readiness rules live in
+`backend-node/src/site-visit-common.ts`; the screens show the transitions the API
+returns for each record (`allowedTransitions`). The demo screen and the
+duplicate `lib/site-visit-rules.ts` were removed on 2026-10-05.
 
 | Path | Purpose |
 | --- | --- |
@@ -52,8 +53,7 @@ so the screens and the tests can use exactly what the API enforces.
 | `backend/.../Endpoints/SiteVisitEndpoints.cs` | Scheduling, assignment, confirmation, execution, report, links, calendar, dashboards |
 | `backend/.../Endpoints/SiteVisitMasterEndpoints.cs` | Visit types, skills, checklists, SLA, engineer profiles, availability, notification feed |
 | `app/system/production/SiteVisitScreens.tsx` | The four production workspaces |
-| `app/system/screens/SiteVisit.tsx` | The `/demo` prototype on in-file sample data |
-| `lib/site-visit-rules.ts` | Shared rules, imported by the screens and unit-tested directly |
+| `backend-node/src/site-visit-common.ts` | Transition tables, readiness evaluation, audit and notification helpers |
 
 ## The invariants, and where they live
 
@@ -98,7 +98,7 @@ exist: Sales → `Sales Engineer`, Estimator → `Engineer` / `Project Manager`.
 
 The rule the requirement is most explicit about — *sales may not finally assign
 an engineer* — is expressed as a grant: the sales roles hold `intake.write` and
-never `visit.schedule`. `tests/site-visit-rules.test.mjs` asserts that a holder
+never `visit.schedule`. `backend-node/tests/site-visit.test.ts` asserts that a holder
 of the sales permission set has no available transition out of `Tentative`.
 
 ## Separation of sources

@@ -5,7 +5,7 @@
    modals and the small SVG charts used by the dashboard and the reports.
    ========================================================================== */
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId } from "react";
 import { useT } from "./i18n";
 
 /* --------------------------------------------------------------------------
@@ -391,34 +391,6 @@ export function Drawer({ title, subtitle, onClose, children, footer, width = 520
   );
 }
 
-export function Menu({ label, items }: { label: string; items: { label: string; icon?: IconName; onClick?: () => void }[] }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const handler = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-  return (
-    <div className="menu-wrap" ref={ref}>
-      <button type="button" className="btn ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu">
-        {t(label)}<Icon name="chevronDown" />
-      </button>
-      {open ? (
-        <div className="menu" role="menu">
-          {items.map((item) => (
-            <button key={item.label} role="menuitem" type="button" onClick={() => { setOpen(false); item.onClick?.(); }}>
-              {item.icon ? <Icon name={item.icon} /> : null}{t(item.label)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /* --------------------------------------------------------------------------
    Charts — small hand-drawn SVG so no chart library ships to the browser.
    -------------------------------------------------------------------------- */
@@ -440,121 +412,6 @@ export function BarChart({ data, unit = "", height = 168 }: { data: { label: str
         </div>
       ))}
     </div>
-  );
-}
-
-export function HBarList({ data, format }: { data: { label: string; value: number; note?: string }[]; format?: (value: number) => string }) {
-  const t = useT();
-  // Bars are drawn as a share of the total so the bar width and the printed
-  // percentage always tell the same story.
-  const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
-  return (
-    <ul className="hbar-list">
-      {data.map((d, index) => (
-        <li key={d.label}>
-          <div className="hbar-top">
-            <span>{t(d.label)}</span>
-            <strong>{format ? format(d.value) : d.value}<em>{Math.round((d.value / total) * 100)}%</em></strong>
-          </div>
-          <div className="hbar-track"><b style={{ width: `${(d.value / total) * 100}%`, background: SERIES[index % SERIES.length] }} /></div>
-          {d.note ? <small>{t(d.note)}</small> : null}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function Donut({ data, centerLabel, centerValue, format }: {
-  data: { label: string; value: number }[]; centerLabel: string; centerValue: string; format?: (v: number) => string;
-}) {
-  const t = useT();
-  const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const dashes = data.map((d) => (d.value / total) * circumference);
-  const offsets = dashes.map((_, index) => dashes.slice(0, index).reduce((sum, dash) => sum + dash, 0));
-  return (
-    <div className="donut">
-      <svg viewBox="0 0 140 140" role="img" aria-label={`${t(centerLabel)} ${centerValue}`}>
-        <g transform="translate(70,70) rotate(-90)">
-          {data.map((d, index) => (
-            <circle key={d.label} r={radius} fill="none" strokeWidth="18"
-              stroke={SERIES[index % SERIES.length]}
-              strokeDasharray={`${dashes[index]} ${circumference - dashes[index]}`}
-              strokeDashoffset={-offsets[index]} />
-          ))}
-        </g>
-        <text x="70" y="64" textAnchor="middle" className="donut-value">{centerValue}</text>
-        <text x="70" y="82" textAnchor="middle" className="donut-label">{t(centerLabel)}</text>
-      </svg>
-      <ul className="donut-legend">
-        {data.map((d, index) => (
-          <li key={d.label}>
-            <i style={{ background: SERIES[index % SERIES.length] }} />
-            <span>{t(d.label)}</span>
-            <strong>{format ? format(d.value) : d.value}</strong>
-            <em>{Math.round((d.value / total) * 100)}%</em>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-export function LineChart({ points, format }: { points: { label: string; value: number }[]; format?: (v: number) => string }) {
-  const t = useT();
-  const width = 1000;
-  const height = 240;
-  const padding = { top: 24, right: 48, bottom: 30, left: 56 };
-  const values = points.map((p) => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const innerW = width - padding.left - padding.right;
-  const innerH = height - padding.top - padding.bottom;
-  const x = (index: number) => padding.left + (points.length === 1 ? innerW / 2 : (index / (points.length - 1)) * innerW);
-  const y = (value: number) => padding.top + innerH - ((value - min + span * 0.15) / (span * 1.3)) * innerH;
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
-  const area = `${path} L${x(points.length - 1).toFixed(1)},${padding.top + innerH} L${x(0).toFixed(1)},${padding.top + innerH} Z`;
-
-  return (
-    <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Price trend")}>
-      {[0, 0.5, 1].map((ratio) => (
-        <line key={ratio} x1={padding.left} x2={width - padding.right}
-          y1={padding.top + innerH * ratio} y2={padding.top + innerH * ratio} className="grid-line" />
-      ))}
-      <path d={area} className="line-area" />
-      <path d={path} className="line-path" />
-      {points.map((p, i) => {
-        // Keep the first and last labels inside the viewBox instead of letting
-        // them hang past the edge and get clipped.
-        const anchor = i === 0 ? "start" : i === points.length - 1 ? "end" : "middle";
-        return (
-          <g key={p.label}>
-            <circle cx={x(i)} cy={y(p.value)} r="4.5" className="line-dot" />
-            <text x={x(i)} y={y(p.value) - 12} textAnchor={anchor} className="line-value">{format ? format(p.value) : p.value}</text>
-            <text x={x(i)} y={height - 8} textAnchor={anchor} className="line-label">{t(p.label)}</text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-export function Sparkline({ values }: { values: number[] }) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const path = values.map((value, index) => {
-    const x = (index / (values.length - 1 || 1)) * 60;
-    const y = 20 - ((value - min) / span) * 16;
-    return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  const rising = values[values.length - 1] >= values[0];
-  return (
-    <svg className={`sparkline ${rising ? "up" : "down"}`} viewBox="0 0 60 24" aria-hidden="true">
-      <path d={path} />
-    </svg>
   );
 }
 
@@ -634,21 +491,6 @@ export function TablePageSize({ value, onChange }: {
       <span>{t("entries")}</span>
     </div>
   );
-}
-
-/* --------------------------------------------------------------------------
-   Pagination
-   -------------------------------------------------------------------------- */
-
-/** Slices rows for the current page and keeps the page in range. */
-export function usePaged<T>(rows: T[], pageSize: number, page: number) {
-  return useMemo(() => {
-    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
-    const current = Math.min(Math.max(1, page), pageCount);
-    const from = rows.length ? (current - 1) * pageSize + 1 : 0;
-    const to = Math.min(current * pageSize, rows.length);
-    return { pageRows: rows.slice((current - 1) * pageSize, current * pageSize), pageCount, current, from, to, total: rows.length };
-  }, [rows, pageSize, page]);
 }
 
 /** Page numbers with an ellipsis once the list gets long. */

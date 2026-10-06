@@ -23,8 +23,6 @@ import {
   packageApplyBlocker,
   previewLaborLine,
   rateDailyFor,
-  rateLabel,
-  rateWindowLabel,
   summarizeLaborApply,
   type LaborCostType,
   type LaborLineDraft,
@@ -52,120 +50,6 @@ const unavailableReason = (error: unknown): string | null =>
   error instanceof ApiClientError && error.code === "labor_packages_unavailable" ? error.message : null;
 
 const ERP_CATEGORIES = ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"] as const;
-
-function statusTone(status: LaborRate["status"]): string {
-  return status === "Effective" ? "pill ok" : status === "Future" ? "pill" : "pill muted";
-}
-
-/* The dictionary already owns "Effective" as the date-window column header
-   ("มีผลตั้งแต่"), which does not read as a status. The badge gets its own
-   words rather than a second meaning welded onto one key. */
-const RATE_STATUS_TEXT: Record<LaborRate["status"], string> = {
-  Effective: "In effect", Future: "Starts later", Expired: "Expired", Inactive: "Inactive",
-};
-
-/**
- * Rate master search.
- *
- * Future, expired and inactive rows stay visible — an estimator needs to see
- * that next quarter's card is already loaded — but only an effective row can be
- * chosen, because anything else would write a line the API would reject.
- */
-export function LaborRatePickerModal({ costType, department, busy, onClose, onSelect }: {
-  costType: LaborCostType;
-  department?: string;
-  busy: boolean;
-  onClose: () => void;
-  onSelect: (rate: LaborRate) => void;
-}) {
-  const today = estimateBusinessDate(new Date());
-  const [search, setSearch] = useState("");
-  const [onlyEffective, setOnlyEffective] = useState(true);
-  const [page, setPage] = useState(1);
-  const [rates, setRates] = useState<LaborRate[]>([]);
-  const [total, setTotal] = useState(0);
-  const [masterFields, setMasterFields] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const localizeCopy = useT();
-
-  useEffect(() => {
-    let active = true;
-    const timer = window.setTimeout(() => {
-      setLoading(true);
-      void listLaborRates({
-        costType, search: search || undefined, department: department || undefined,
-        on: today, effectiveOnly: onlyEffective, page, pageSize: PAGE_SIZE,
-      })
-        .then((result) => {
-          if (!active) return;
-          setRates(result.items);
-          setTotal(result.total);
-          setMasterFields(result.masterFieldsAvailable);
-          setError("");
-        })
-        .catch((requestError) => { if (active) setError(errorText(requestError)); })
-        .finally(() => { if (active) setLoading(false); });
-    }, 200);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [costType, department, onlyEffective, page, search, today]);
-
-  return <Modal
-    title="Rate master"
-    subtitle="Search the rate master and fill in the rate, level and department"
-    size="lg"
-    onClose={onClose}
-    footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}
-  >
-    {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
-    {!masterFields ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>
-      <LocalizedText text={"This database has no rate code, role or ERP default yet. Rates and their amounts are correct; the extra master fields arrive with migration 044."} />
-    </span></div> : null}
-    <div className="row" style={{ gap: 8 }}>
-      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search code, level, department or role" />
-      <label className="check-inline">
-        <input type="checkbox" checked={onlyEffective} onChange={(event) => { setOnlyEffective(event.target.checked); setPage(1); }} />
-        <LocalizedText text={"Effective today only"} />
-      </label>
-    </div>
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading rates…"} /></div>
-      : rates.length ? <div className="table-wrap" style={{ maxHeight: 340, marginTop: 10 }}><table>
-        <thead><tr>
-          <th><LocalizedText text={"Rate"} /></th>
-          <th style={{ width: 180 }}><LocalizedText text={"Effective"} /></th>
-          <th className="num" style={{ width: 120 }}><LocalizedText text={"Per hour"} /></th>
-          <th className="num" style={{ width: 120 }}><LocalizedText text={"Per day"} /></th>
-          <th style={{ width: 120 }}><LocalizedText text={"ERP"} /></th>
-          <th style={{ width: 90 }} />
-        </tr></thead>
-        <tbody>{rates.map((rate) => <tr key={rate.id}>
-          <td><div className="cell-primary"><strong>{rateLabel(rate)}</strong><span>
-            <span className={statusTone(rate.status)}><LocalizedText text={RATE_STATUS_TEXT[rate.status]} /></span> <LocalizedText text={"· version"} /> {rate.version}
-          </span></div></td>
-          <td>{rateWindowLabel(rate)}</td>
-          <td className="num">{rate.hourlyRate === null ? "—" : money(rate.hourlyRate)}</td>
-          <td className="num"><strong>{rate.dailyRate === null ? "—" : money(rate.dailyRate)}</strong></td>
-          <td>{rate.defaultErpCategory ?? "—"}</td>
-          <td><button
-            className="btn default sm"
-            type="button"
-            disabled={busy || rate.status !== "Effective"}
-            title={rate.status === "Effective" ? undefined : localizeCopy("Only an effective rate can price a new line")}
-            onClick={() => onSelect(rate)}
-          ><LocalizedText text={"Use"} /></button></td>
-        </tr>)}</tbody>
-      </table></div>
-        : <EmptyState icon="search" title="No rate found" message="No engineering rate matches this search. An Engineering Manager or Admin maintains the rate master." />}
-    <Pagination
-      page={page}
-      pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))}
-      from={total ? (page - 1) * PAGE_SIZE + 1 : 0}
-      to={Math.min(page * PAGE_SIZE, total)}
-      total={total}
-      onPage={setPage}
-    />
-  </Modal>;
-}
 
 function linePreviewShape(line: LaborPackageDetail["lines"][number]): LaborPackageLinePreview {
   return {

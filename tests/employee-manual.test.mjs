@@ -21,13 +21,9 @@ test("employee manual is wired into the authenticated application", async () => 
   assert.match(activity, /manual:'Manual document'/);
 });
 
-test("public handbook is self-contained and identical to the generated artifact", async () => {
-  const [generated, publicCopy] = await Promise.all([
-    read("output/IoT-Team-Center-Employee-Manual.html"),
-    read("public/manual/employee-operation-manual.html"),
-  ]);
+test("public handbook is self-contained", async () => {
+  const publicCopy = await read("public/manual/employee-operation-manual.html");
 
-  assert.equal(publicCopy, generated);
   assert.equal((publicCopy.match(/@font-face/g) ?? []).length, 2);
   assert.equal((publicCopy.match(/data:font\/woff2;base64,/g) ?? []).length, 2);
   assert.doesNotMatch(publicCopy, /fonts\.(?:googleapis|gstatic)\.com/);

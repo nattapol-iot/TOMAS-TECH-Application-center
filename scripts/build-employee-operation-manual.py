@@ -189,7 +189,7 @@ chapter('visits', 'Site Visit: จัดทีม นัดหมาย แล�
         'บันทึกเหตุผลและรายละเอียดที่ทีมต้องรู้ เช่น ลูกค้าเลื่อนหรือไม่มาตามนัด',
         'ตรวจการตอบรับและการยืนยันของผู้เกี่ยวข้องอีกครั้งตามสถานะใหม่'
     ], 'นัดสะท้อนเหตุการณ์จริงและมีประวัติให้ติดตาม ไม่สร้างนัดซ้ำเพื่อหลบขั้นตอน'),
-    'app/system/production/SiteVisitScreens.tsx docs/site-visit-workspace.md lib/site-visit-rules.ts', 'site-visits')
+    'app/system/production/SiteVisitScreens.tsx docs/site-visit-workspace.md backend-node/src/site-visit-common.ts', 'site-visits')
 
 chapter('assignments', 'My Assignments และรายงานผลสำรวจ', 'My Assignments / Site Visit → รายงานและตรวจ', 'วิศวกรผู้รับงาน / ผู้ตรวจรายงาน',
     proc('9.1 ตอบรับงานเข้าหน้างานของตน', [
@@ -864,11 +864,7 @@ CSS = r'''
 def build():
     from employee_manual_illustrated import build_illustrated
     page, screen_count, image_count = build_illustrated(CHAPTERS, CSS)
-    output = ROOT / 'output' / 'IoT-Team-Center-Employee-Manual.html'
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(page, encoding='utf-8')
-    # Preserve the previous download path with the same standalone content.
-    output.with_name('IoT-Team-Center-Employee-Manual-TH.html').write_text(page, encoding='utf-8')
+    # The one copy: the app serves it at /manual/ and offers it as the download.
     public_output = ROOT / 'public' / 'manual' / 'employee-operation-manual.html'
     public_output.parent.mkdir(parents=True, exist_ok=True)
     public_output.write_text(page, encoding='utf-8')
@@ -886,9 +882,7 @@ def build():
     procedure_count = sum(len(re.findall(r'<details class="procedure"', chapter['body'])) for chapter in CHAPTERS)
     coverage = f'''# Employee operation manual — coverage and maintenance
 
-Deliverable: [Multilingual illustrated HTML](../output/IoT-Team-Center-Employee-Manual.html)
-
-The former `-TH.html` path contains the same standalone multilingual edition.
+Deliverable: [Multilingual illustrated HTML](../public/manual/employee-operation-manual.html)
 
 Content baseline: 2026-09-19. Scope: current `ProductionApp.tsx` navigation,
 production screen implementations and feature completion notes, including local

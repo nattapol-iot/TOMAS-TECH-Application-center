@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { breakdownModules, breakdownLineCount, buildEstimateCostBreakdown } from "../lib/estimate-cost-breakdown.ts";
+import { breakdownModules, buildEstimateCostBreakdown } from "../lib/estimate-cost-breakdown.ts";
 
 const labels = { manhour: "Engineering man-hour", expenses: "Project expenses", other: "Other project cost", manDayUnit: "Man-day" };
 
@@ -27,7 +27,7 @@ test("sections follow ERP order: cost categories by code, then man-hour, expense
   assert.deepEqual(sections.map((section) => [section.ordinal, section.title]), [
     [1, "Hardware"], [2, "Electrical"], [3, "Engineering man-hour"], [4, "Project expenses"], [5, "Other project cost"],
   ]);
-  assert.equal(breakdownLineCount(sections), 7);
+  assert.equal(sections.reduce((count, section) => count + section.lines.length, 0), 7);
 });
 
 test("lines are numbered section-line and carry the in-house / outsourced split", () => {

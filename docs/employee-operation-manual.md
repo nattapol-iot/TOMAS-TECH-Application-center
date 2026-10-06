@@ -1,8 +1,6 @@
 # Employee operation manual — coverage and maintenance
 
-Deliverable: [Multilingual illustrated HTML](../output/IoT-Team-Center-Employee-Manual.html)
-
-The former `-TH.html` path contains the same standalone multilingual edition.
+Deliverable: [Multilingual illustrated HTML](../public/manual/employee-operation-manual.html)
 
 Content baseline: 2026-09-19. Scope: current `ProductionApp.tsx` navigation,
 production screen implementations and feature completion notes, including local

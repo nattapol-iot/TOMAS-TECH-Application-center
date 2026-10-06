@@ -56,29 +56,6 @@ export function rateHourlyFor(costType: LaborCostType, rate: Pick<LaborRateOptio
   return costType === "Installation" ? rate.installationHourly : rate.engineeringHourly;
 }
 
-/** One line of text describing a rate master row in a picker. */
-export function rateLabel(rate: LaborRateOption): string {
-  const parts = [rate.code, rate.level, rate.department].filter((part): part is string => Boolean(part && part.trim()));
-  const role = rate.roleActivity.trim();
-  return role ? `${parts.join(" · ")} — ${role}` : parts.join(" · ");
-}
-
-/** The window, said plainly. An open-ended rate has no end to show. */
-export function rateWindowLabel(rate: Pick<LaborRateOption, "effectiveFrom" | "effectiveTo">): string {
-  return rate.effectiveTo ? `${rate.effectiveFrom} → ${rate.effectiveTo}` : `${rate.effectiveFrom} → open`;
-}
-
-/**
- * Only an effective rate may seed a new line.
- *
- * A future or expired rate is shown — an estimator needs to see that a rate card
- * changes next month — but picking one would write a line the server would
- * reject, and an inactive one has no live rate at all.
- */
-export function rateSelectable(rate: Pick<LaborRateOption, "status">): boolean {
-  return rate.status === "Effective";
-}
-
 export type ManhourSeedFromRate = {
   department: string;
   level: string;
@@ -86,23 +63,6 @@ export type ManhourSeedFromRate = {
   hourlyRate: number;
   erpCategory: string | null;
 };
-
-/**
- * What selecting a rate fills in.
- *
- * The estimator still enters people and duration; the rate supplies the
- * classification and the money. dailyRate is what the server will freeze on the
- * line, so showing it here is a preview of the real value, not a guess.
- */
-export function seedFromRate(rate: LaborRateOption, costType: LaborCostType): ManhourSeedFromRate {
-  return {
-    department: rate.department,
-    level: rate.level,
-    dailyRate: rateDailyFor(costType, rate),
-    hourlyRate: rateHourlyFor(costType, rate),
-    erpCategory: rate.defaultErpCategory,
-  };
-}
 
 export type LaborPackageLinePreview = {
   id: number;

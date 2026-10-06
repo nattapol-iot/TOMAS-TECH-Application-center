@@ -1900,7 +1900,3 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
   </Modal>;
 }
-
-export function ProductionTeam({ bootstrap, teamTestMode }: Pick<CommonProps, "bootstrap"> & { teamTestMode: boolean }) {
-  return <><PageHeader eyebrow="ACCESS CONTROL" title="Team & permissions" subtitle={teamTestMode ? "ผู้ใช้และบทบาทถูกอ่านจากฐานข้อมูล ส่วนการยืนยันตัวตนใช้รหัสทดสอบชั่วคราวสำหรับ UAT" : "ผู้ใช้และบทบาทถูกอ่านจากฐานข้อมูล ส่วนการยืนยันตัวตนมาจาก Microsoft Entra ID"} /><Panel title={`${bootstrap.team.length} active users`} subtitle={`${bootstrap.permissions.length} permissions for your role`} flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><strong>{member.name}</strong></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div></Panel></>;
-}

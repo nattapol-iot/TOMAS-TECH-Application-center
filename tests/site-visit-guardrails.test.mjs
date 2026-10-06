@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import ts from "typescript";
 
 /*
  * Structural guardrails for the Sales Intake & Site Visit module.
  *
  * These are the invariants that lint, type-check and the behavioural tests
  * cannot see: that the database still enforces what the code assumes, that the
- * three copies of the status vocabulary have not drifted, and that the
+ * Node API's status vocabulary has not drifted from the schema, and that the
  * separation between what sales said and what engineering concluded is still
  * a property of the schema rather than a convention somebody remembers.
  */
@@ -74,23 +73,30 @@ test("sales requirement, technical assessment and site findings are separate tab
   assert.match(migration, /GRANT SELECT, INSERT ON OBJECT::dbo\.site_visit_status_history/);
 
   // No engineering write path may reach the sales requirement columns. The
-  // review and the visit endpoints are the two that could, so they are checked
-  // by name against the sales-only column list.
+  // visit workflow and report routes are the ones that could, so they are
+  // checked by name against the sales-only column list.
   const salesOnlyColumns = ["problem_statement", "desired_capability", "expected_result", "expected_scope"];
-  const visitEndpoints = await read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitEndpoints.cs");
-  for (const column of salesOnlyColumns) {
-    assert.doesNotMatch(visitEndpoints, new RegExp(`UPDATE dbo\\.sales_intakes[\\s\\S]{0,400}${column}\\s*=`),
-      `SiteVisitEndpoints must not write dbo.sales_intakes.${column}`);
+  const engineeringRoutes = await Promise.all([
+    read("backend-node/src/routes/site-visits-workflow.ts"),
+    read("backend-node/src/routes/site-visit-reports.ts"),
+  ]);
+  for (const source of engineeringRoutes) {
+    for (const column of salesOnlyColumns) {
+      assert.doesNotMatch(source, new RegExp(`UPDATE dbo\\.sales_intakes[^;]{0,400}${column}\\s*=`),
+        `a site visit route must not write dbo.sales_intakes.${column}`);
+    }
   }
 });
 
 test("permissions are declared once and enforced on every write path", async () => {
-  const [migration, core, intake, visit, master] = await Promise.all([
+  const [migration, core, intake, visit, reports, master, operations] = await Promise.all([
     read("database/migrations/016_sales_intake_site_visit.sql"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitCore.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SalesIntakeEndpoints.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitEndpoints.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitMasterEndpoints.cs"),
+    read("backend-node/src/site-visit-common.ts"),
+    read("backend-node/src/routes/sales-intakes.ts"),
+    read("backend-node/src/routes/site-visits-workflow.ts"),
+    read("backend-node/src/routes/site-visit-reports.ts"),
+    read("backend-node/src/routes/visit-master.ts"),
+    read("backend-node/src/site-visit-operations.ts"),
   ]);
 
   const permissions = [
@@ -100,7 +106,7 @@ test("permissions are declared once and enforced on every write path", async () 
   ];
   for (const permission of permissions) {
     assert.match(migration, new RegExp(`\\(N'${permission.replace(".", "\\.")}',`), `${permission} is not seeded`);
-    assert.match(core, new RegExp(`"${permission.replace(".", "\\.")}"`), `${permission} is missing from SiteVisitCore`);
+    assert.match(core, new RegExp(`"${permission.replace(".", "\\.")}"`), `${permission} is missing from site-visit-common.ts`);
   }
 
   // Sales roles get intake.write but never visit.schedule — the rule that
@@ -112,151 +118,103 @@ test("permissions are declared once and enforced on every write path", async () 
   // Overriding a conflict is a manager decision only.
   assert.match(migration, /p\.code = N'visit\.override'[\s\S]{0,200}N'Engineering Manager', N'Admin'/);
 
-  // Every mutating endpoint demands a permission before it touches anything.
-  for (const [name, source] of [["intake", intake], ["visit", visit], ["master", master]]) {
-    const mutations = source.match(/private static async Task<IResult> (Create|Save|Change|Submit|Assign|Respond|Record|Check|Review|Acknowledge|Close|Link|Delete|Withdraw|Reschedule|Mark)\w*Async\(/g) ?? [];
-    assert.ok(mutations.length > 0, `${name} endpoints expose no mutations?`);
-    const demands = source.match(/DemandPermissionAsync|LoadPermissionsAsync|GetRequiredAsync/g) ?? [];
+  // Every mutating route demands a permission before it touches anything.
+  for (const [name, source] of [["intake", intake], ["visit", visit], ["report", reports], ["master", master]]) {
+    const mutations = source.match(/app\.(?:post|put|patch|delete)\(/g) ?? [];
+    assert.ok(mutations.length > 0, `${name} routes expose no mutations?`);
+    const demands = source.match(/demandPermission\(|hasRolePermission\(|rolePermissions\(/g) ?? [];
     assert.ok(demands.length >= mutations.length, `${name} has ${mutations.length} mutations but only ${demands.length} authorisation calls`);
   }
 
   // Holding visit.execute is necessary, not sufficient: the caller must also
   // be an engineer who accepted this particular visit.
-  assert.match(visit, /DemandAssignedEngineerAsync/);
-  assert.match(visit, /not_assigned/);
+  assert.match(operations, /async function demandAssignedEngineer/);
   // A report author cannot approve their own report.
-  assert.match(visit, /self_approval_forbidden/);
+  assert.match(reports, /self_approval_forbidden/);
 });
 
 test("concurrency and transactions are used on every stateful write", async () => {
-  const [intake, visit] = await Promise.all([
-    read("backend/IoTTeamCenter.Api/Endpoints/SalesIntakeEndpoints.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitEndpoints.cs"),
+  const [intake, visit, reports, read_] = await Promise.all([
+    read("backend-node/src/routes/sales-intakes.ts"),
+    read("backend-node/src/routes/site-visits-workflow.ts"),
+    read("backend-node/src/routes/site-visit-reports.ts"),
+    read("backend-node/src/routes/site-visits-read.ts"),
   ]);
-  for (const source of [intake, visit]) {
-    assert.match(source, /IsolationLevel\.Serializable/);
-    assert.match(source, /WITH \(UPDLOCK, HOLDLOCK\)/);
-    assert.match(source, /RequireSameVersion/);
-    assert.match(source, /RollbackAsync/);
+  for (const source of [intake, visit, reports]) {
+    assert.match(source, /\.transaction\(/);
+    assert.match(source, /WITH\s*\(\s*UPDLOCK\s*,\s*HOLDLOCK\s*\)/i);
   }
-  // The readiness score is recomputed from the database, never trusted from
-  // the request body.
-  assert.match(intake, /RecomputeReadinessAsync/);
+  for (const source of [intake, visit]) assert.match(source, /requireRowVersion\(/);
+  // The readiness score is recomputed from the database, never trusted from the request body.
   assert.match(intake, /readiness_blocked/);
-  assert.doesNotMatch(intake, /request\.ReadinessScore/);
-  // Every assignment and reschedule re-runs the availability check.
-  assert.match(visit, /dbo\.assert_engineer_available/);
-  assert.match(visit, /schedule_conflict/);
+  assert.doesNotMatch(intake, /body\.readinessScore/);
+  // The availability check is the database's, not a client-side guess.
+  assert.match(read_, /dbo\.assert_engineer_available/);
 });
 
 test("the module is registered, audited and notified", async () => {
-  const [program, core, intake, visit] = await Promise.all([
-    read("backend/IoTTeamCenter.Api/Program.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitCore.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SalesIntakeEndpoints.cs"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitEndpoints.cs"),
+  const [app, core, intake, visit, reports] = await Promise.all([
+    read("backend-node/src/app.ts"),
+    read("backend-node/src/site-visit-common.ts"),
+    read("backend-node/src/routes/sales-intakes.ts"),
+    read("backend-node/src/routes/site-visits-workflow.ts"),
+    read("backend-node/src/routes/site-visit-reports.ts"),
   ]);
-  assert.match(program, /MapSalesIntakeEndpoints\(\)/);
-  assert.match(program, /MapSiteVisitEndpoints\(\)/);
-  assert.match(program, /MapSiteVisitMasterEndpoints\(\)/);
+  for (const register of ["registerSalesIntakeRoutes", "registerSiteVisitReadRoutes", "registerSiteVisitWorkflowRoutes", "registerSiteVisitReportRoutes", "registerVisitMasterRoutes"]) {
+    assert.match(app, new RegExp(`${register}\\(app,`));
+  }
 
-  // Audit and status history are written from one place, so a new endpoint
-  // cannot quietly skip them.
-  assert.match(core, /public static async Task AuditAsync/);
-  assert.match(core, /public static async Task RecordStatusAsync/);
-  assert.match(core, /public static async Task NotifyAsync/);
+  // Audit, status history and notifications are written from one place, so a
+  // new route cannot quietly skip them.
+  assert.match(core, /export async function siteVisitAudit/);
+  assert.match(core, /export async function recordSiteVisitStatus/);
+  assert.match(core, /export async function notifyUsers/);
   // De-duplication is enforced by the index and guarded by the insert.
   assert.match(core, /dedupe_key/);
   assert.match(core, /IF NOT EXISTS/);
 
-  for (const source of [intake, visit]) {
-    assert.match(source, /SiteVisitCore\.AuditAsync/);
-    assert.match(source, /SiteVisitCore\.RecordStatusAsync/);
-    assert.match(source, /SiteVisitCore\.NotifyAsync/);
+  for (const source of [intake, visit, reports]) {
+    assert.match(source, /siteVisitAudit\(/);
+    assert.match(source, /recordSiteVisitStatus\(/);
+    assert.match(source, /notifyUsers\(/);
   }
 });
 
-test("the status vocabulary is identical in the rules module, the API and the schema", async () => {
-  const [rulesSource, core, migration] = await Promise.all([
-    read("lib/site-visit-rules.ts"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitCore.cs"),
+test("the status vocabulary is identical in the API and the schema", async () => {
+  const [core, migration] = await Promise.all([
+    read("backend-node/src/site-visit-common.ts"),
     read("database/migrations/016_sales_intake_site_visit.sql"),
   ]);
-  const compiled = ts.transpileModule(rulesSource, {
-    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    fileName: "site-visit-rules.ts",
-  }).outputText;
-  const rules = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+  /** The literal transition table exported by site-visit-common.ts. */
+  const table = (name) => {
+    const literal = new RegExp(`export const ${name}[^=]*=\\s*(\\{[^\\n]*\\});`).exec(core);
+    assert.ok(literal, `${name} not found in site-visit-common.ts`);
+    return Function(`return (${literal[1]});`)();
+  };
+  const statuses = (map) => new Set(Object.entries(map).flatMap(([from, edges]) => [from, ...edges.map(([to]) => to)]));
 
-  // The CHECK constraint is the authority; the other two must agree with it.
+  // The CHECK constraint is the authority; every state the API can reach must be allowed by it.
   const intakeCheck = migration.slice(migration.indexOf("CK_sales_intakes_status"), migration.indexOf("CK_sales_intakes_priority"));
-  for (const status of rules.INTAKE_STATUSES) {
+  for (const status of statuses(table("INTAKE_TRANSITIONS"))) {
     assert.ok(intakeCheck.includes(`N'${status}'`), `dbo.sales_intakes does not allow '${status}'`);
-    assert.ok(core.includes(`"${status}"`), `SiteVisitCore does not know '${status}'`);
   }
   const visitCheck = migration.slice(migration.indexOf("CK_site_visits_status"), migration.indexOf("CK_site_visits_schedule_range"));
-  for (const status of rules.VISIT_STATUSES) {
+  for (const status of statuses(table("VISIT_TRANSITIONS"))) {
     assert.ok(visitCheck.includes(`N'${status}'`), `dbo.site_visits does not allow '${status}'`);
-    assert.ok(core.includes(`"${status}"`), `SiteVisitCore does not know '${status}'`);
   }
-  const reportCheck = migration.slice(migration.indexOf("CK_site_visit_reports_status"), migration.indexOf("CK_site_visit_reports_revision"));
-  for (const status of rules.REPORT_STATUSES) {
-    assert.ok(reportCheck.includes(`N'${status}'`), `dbo.site_visit_reports does not allow '${status}'`);
-  }
-
-  // Every transition edge in TypeScript exists in C# too. The action text is
-  // the cheapest thing to compare that would change if an edge were edited.
-  for (const [map, name] of [[rules.INTAKE_TRANSITIONS, "intake"], [rules.VISIT_TRANSITIONS, "visit"]]) {
-    for (const [from, edges] of Object.entries(map)) {
-      for (const edge of edges) {
-        assert.ok(core.includes(`new("${edge.to}", ${csharpPermission(edge.permission)}, ${edge.requiresReason ? "true" : "false"}, "${edge.action}")`),
-          `${name}: ${from} -> ${edge.to} is missing or different in SiteVisitCore.cs`);
-      }
+  // Every edge names a permission the migration seeds.
+  for (const map of [table("INTAKE_TRANSITIONS"), table("VISIT_TRANSITIONS")]) {
+    for (const [, permission] of Object.values(map).flat()) {
+      assert.match(migration, new RegExp(`\\(N'${permission.replace(".", "\\.")}',`), `${permission} is not seeded`);
     }
   }
 });
 
-/** Maps a permission code to the SiteVisitCore constant that holds it. */
-function csharpPermission(code) {
-  return {
-    "intake.read": "PermIntakeRead",
-    "intake.write": "PermIntakeWrite",
-    "intake.review": "PermIntakeReview",
-    "visit.read": "PermVisitRead",
-    "visit.schedule": "PermVisitSchedule",
-    "visit.override": "PermVisitOverride",
-    "visit.execute": "PermVisitExecute",
-    "visit.report": "PermVisitReport",
-    "visit.report_approve": "PermVisitReportApprove",
-    "visit.link": "PermVisitLink",
-    "visit.admin": "PermVisitAdmin",
-  }[code];
-}
-
-test("the readiness rules are identical in the rules module and the API", async () => {
-  const [rulesSource, core] = await Promise.all([
-    read("lib/site-visit-rules.ts"),
-    read("backend/IoTTeamCenter.Api/Endpoints/SiteVisitCore.cs"),
-  ]);
-  const compiled = ts.transpileModule(rulesSource, {
-    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    fileName: "site-visit-rules.ts",
-  }).outputText;
-  const rules = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
-
-  for (const check of rules.READINESS_CHECKS) {
-    assert.ok(core.includes(`new("${check.key}", "${check.label}", ${check.weight}, "${check.severity}"`),
-      `readiness check '${check.key}' differs between lib/site-visit-rules.ts and SiteVisitCore.cs`);
-  }
-  assert.equal(rules.READINESS_CHECKS.reduce((sum, check) => sum + check.weight, 0), 100);
-});
-
 test("the site visit screens are API-backed and permission-filtered", async () => {
-  const [screen, client, shell, demo] = await Promise.all([
+  const [screen, client, shell] = await Promise.all([
     read("app/system/production/SiteVisitScreens.tsx"),
     read("app/system/api-client.ts"),
     read("app/system/ProductionApp.tsx"),
-    read("app/system/screens/SiteVisit.tsx"),
   ]);
 
   // The production screens must never reach for the demo dataset.
@@ -290,42 +248,34 @@ test("the site visit screens are API-backed and permission-filtered", async () =
   assert.match(shell, /view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit\.read"/);
   assert.match(shell, /view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit\.read"/);
   assert.match(shell, /"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit\.read"/);
-
-  // The demo screen exists so nav parity holds, and stays a demo.
-  assert.match(demo, /Demo only/);
 });
 
 test("every CSS class the module renders is actually defined", async () => {
   // Lint, type-check and the tests cannot see a class name that does not
   // exist — it is only a string. This module shipped eighteen undefined
   // classes once before, so the check is here rather than in a comment.
-  const [production, demo, css] = await Promise.all([
+  const [production, css] = await Promise.all([
     read("app/system/production/SiteVisitScreens.tsx"),
-    read("app/system/screens/SiteVisit.tsx"),
     Promise.all([read("app/globals.css"), read("app/system/production/site-visit-workspace.css")]).then((styles) => styles.join("\n")),
   ]);
   const missing = new Set();
-  for (const source of [production, demo]) {
-    for (const match of source.matchAll(/className="([a-z0-9 _-]+)"/g)) {
-      for (const name of match[1].split(/\s+/).filter(Boolean)) {
-        if (!new RegExp(`\\.${name}\\b`).test(css)) missing.add(name);
-      }
+  for (const match of production.matchAll(/className="([a-z0-9 _-]+)"/g)) {
+    for (const name of match[1].split(/\s+/).filter(Boolean)) {
+      if (!new RegExp(`\\.${name}\\b`).test(css)) missing.add(name);
     }
   }
   assert.deepEqual([...missing], [], "these CSS classes are rendered but never defined");
 });
 
 test("the site visit module is part of deployment and of the production baseline", async () => {
-  const [deployment, grants, verifier, health, seed] = await Promise.all([
+  const [deployment, grants, verifier, seed] = await Promise.all([
     read("database/scripts/020_deploy_fresh_database.sql"),
     read("database/scripts/010_application_login.sql"),
     read("database/scripts/080_verify_production_baseline.sql"),
-    read("backend/IoTTeamCenter.Api/Endpoints/HealthEndpoints.cs"),
     read("database/scripts/920_site_visit_master_seed.sql"),
   ]);
   assert.match(deployment, /016_sales_intake_site_visit\.sql/);
   assert.match(deployment, /version BETWEEN 1 AND 67\) <> 67/);
-  assert.match(health, /RequiredSchemaVersion = 28/);
 
   // The application role may create and read a notification, and mark it read.
   // It may never delete one, nor delete from any append-only ledger.

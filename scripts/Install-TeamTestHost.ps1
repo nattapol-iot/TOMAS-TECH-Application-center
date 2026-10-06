@@ -62,9 +62,22 @@ $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 & icacls $RuntimeRoot /inheritance:r /grant:r "${currentIdentity}:(OI)(CI)F" 'NT AUTHORITY\SYSTEM:(OI)(CI)F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Failed to restrict the Team Test runtime directory ACL.' }
 
-& dotnet publish (Join-Path $projectRoot 'backend\IoTTeamCenter.Api\IoTTeamCenter.Api.csproj') `
-    -c Release --no-self-contained -o $releasePath
-if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
+# The same Node release Update-TeamTestHostRelease.ps1 publishes; Start-TeamTestHost.ps1
+# runs it because the release carries dist\src\server.js.
+$backendRoot = Join-Path $projectRoot 'backend-node'
+& npm --prefix $backendRoot run build
+if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath (Join-Path $backendRoot 'dist\src\server.js'))) {
+    throw 'Node API build failed.'
+}
+Copy-Item -LiteralPath (Join-Path $backendRoot 'dist') -Destination $releasePath -Recurse
+Copy-Item -LiteralPath (Join-Path $backendRoot 'package.json') -Destination $releasePath
+Copy-Item -LiteralPath (Join-Path $backendRoot 'package-lock.json') -Destination $releasePath
+Push-Location $releasePath
+try {
+    & npm ci --omit=dev
+    if ($LASTEXITCODE -ne 0) { throw 'Installing Node API production dependencies failed.' }
+}
+finally { Pop-Location }
 
 function New-RandomSecret([int] $byteCount) {
     $bytes = New-Object byte[] $byteCount
@@ -181,6 +194,7 @@ $secretsJson = $secretValues | ConvertTo-Json
 
 $settingsJson = @{
     ReleasePath = $releasePath
+    ApiRuntime = 'Node'
     SqlServer = $SqlServer
     DatabaseName = $DatabaseName
     AppLogin = $AppLogin

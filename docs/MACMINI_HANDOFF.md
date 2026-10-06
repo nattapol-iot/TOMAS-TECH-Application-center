@@ -134,9 +134,8 @@ State on 2026-09-07 evening. Everything below is live and was verified with real
   roughly migrations 001-010, zero rows in every table, empty `dbo.schema_versions`, so every
   later migration's predecessor guard throws). It was left untouched; dropping and recreating it
   under that name is still an open decision.
-- The API is `backend-node/`, not `backend/IoTTeamCenter.Api`. The .NET project stops at schema
-  version 28 and lacks every route added by migrations 014-036; `backend-node/README.md` calls
-  itself the replacement. It now uses the `mssql` default driver (tedious) instead of
+- The API is `backend-node/`. The earlier .NET API (`backend/`, schema 28) was removed from the
+  repository on 2026-10-05 together with `docker-compose.prod.yml` and `scripts/linux/`. It now uses the `mssql` default driver (tedious) instead of
   `msnodesqlv8`: that native binding hung on connect in Linux containers on both arm64 and amd64
   while `isql` with the same ODBC driver succeeded, and tedious connected on the first try.
   Windows authentication in the connection string is rejected at startup on purpose.
@@ -174,11 +173,9 @@ State on 2026-09-07 evening. Everything below is live and was verified with real
 ## Constraints that shape everything
 
 1. Only `/Users/tomastc` is mounted into either VM (`mounts: []`, virtiofs). A docker build
-   context must live under that home. The `/opt/iot-team-center` paths in
-   `PRODUCTION_DEPLOYMENT_LINUX.md` are invisible to the VM and cannot be used here.
-2. No passwordless sudo. `/etc/iot-team-center/` cannot be created without a password, which
-   rules out the `env_file` layout `docker-compose.prod.yml` expects until someone creates it
-   by hand.
+   context must live under that home; `/opt` paths are invisible to the VM.
+2. No passwordless sudo. `/etc/iot-team-center/` cannot be created without a password, so all
+   configuration lives in `~/iot-team-center/src/.env`.
 3. SQL Server is never containerized here. There is no supported arm64 image and the API uses
    `Microsoft.Data.SqlClient` throughout, so a connection string to the shared team SQL host
    is always required. The four postgres containers on this machine are unrelated.
@@ -189,8 +186,9 @@ State on 2026-09-07 evening. Everything below is live and was verified with real
    does not publish it; langfuse holds 3001.
 6. Every service this repo runs here must set `mem_limit` and a log cap, so that our own
    container is the OOM victim rather than a co-tenant's. Both compose files carry a
-   `json-file` 10m x 3 cap; the dev file sets `mem_limit` 1g (api) and 3g (frontend).
-   `docker-compose.prod.yml` still has no `mem_limit`.
+   `json-file` 10m x 3 cap; `mem_limit` is 1g (api, pdf-parser), 1g (production-built
+   frontend, set in `docker-compose.tls.yml`) and 256m (caddy). The frontend image is built on
+   this VM during deploy (`npm ci` + `vinext build`), so a deploy needs that headroom once.
 7. VM memory is configured, not reserved: Apple Virtualization grows the VM resident size on
    demand, so 10GiB + 4GiB configured on a 16GiB host works but is overcommitted. Check
    `sysctl -n vm.swapusage` and `memory_pressure` before adding a third VM.

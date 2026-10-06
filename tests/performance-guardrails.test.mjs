@@ -35,16 +35,13 @@ test("the active Node production API enforces role scope, workflow, optimistic c
   assert.match(node, /visibleManager = \(canManage && Number\(row\.user_id\) !== actor\.id\) \|\| row\.status === "COMPLETED"/);
 });
 
-test("production KPI UI is API-backed while the demo keeps isolated sample state", async () => {
-  const [screen, client, productionApp, demoApp] = await Promise.all([
+test("production KPI UI is API-backed", async () => {
+  const [screen, client, productionApp] = await Promise.all([
     source("app/system/production/PerformanceScreen.tsx"),
     source("app/system/api-client.ts"),
     source("app/system/ProductionApp.tsx"),
-    source("app/system/App.tsx"),
   ]);
   assert.match(productionApp, /<Performance[^>]*apiBacked/);
-  assert.match(demoApp, /<Performance/);
-  assert.doesNotMatch(demoApp, /<Performance[^>]*apiBacked/);
   assert.match(screen, /loadPerformanceOverview/);
   assert.match(screen, /updatePerformanceAssessment/);
   assert.match(screen, /completePerformanceAssessment/);

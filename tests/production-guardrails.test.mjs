@@ -23,25 +23,12 @@ test("production entry is API-backed and has no demo fallback", async () => {
   assert.doesNotMatch(layout, /system\/data/);
 });
 
-test("demo dependency closure stays isolated from production", async () => {
-  const [page, productionApp, authClient, layout, demoPage] = await Promise.all([
-    readFile(new URL("app/page.tsx", root), "utf8"),
-    readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
-    readFile(new URL("app/system/auth-client.ts", root), "utf8"),
-    readFile(new URL("app/layout.tsx", root), "utf8"),
-    readFile(new URL("app/demo/page.tsx", root), "utf8"),
-  ]);
-
-  assert.match(page, /ProductionApp/);
-  assert.doesNotMatch(page, /system\/App["']/);
-  assert.doesNotMatch(productionApp, /from ["']\.\/data["']/);
-  assert.doesNotMatch(productionApp, /screens\//);
-  assert.doesNotMatch(productionApp, /\/demo/);
-  assert.doesNotMatch(authClient, /\/demo/);
-  assert.match(layout, /system\/product/);
-  assert.doesNotMatch(layout, /system\/data/);
-  assert.match(demoPage, /import\(["']\.\.\/system\/App["']\)/);
-  assert.match(demoPage, /<DemoApp\s+forceDemo\s*\/>/);
+test("the in-memory demo prototype stays removed and production imports no sample stores", async () => {
+  // The /demo prototype ran on a bundled sample dataset and was reachable without sign-in.
+  for (const removed of ["app/demo/page.tsx", "app/system/App.tsx", "app/system/data.ts", "app/system/calc.ts",
+    "app/system/matstore.ts", "app/system/store.ts", "app/system/session.ts", "app/system/routes.ts", "app/system/screens/"]) {
+    await assert.rejects(access(new URL(removed, root)), `${removed} must not come back`);
+  }
 
   const productionDirectory = new URL("app/system/production/", root);
   const productionSources = [];
@@ -185,18 +172,13 @@ test("New Assignments source filtering is applied before SQL pagination", async 
 });
 
 test("My Work exposes schedule effort without changing the audited update path", async () => {
-  const [nodeRoute, dotnetRoute] = await Promise.all([
+  const [nodeRoute] = await Promise.all([
     readFile(new URL("backend-node/src/routes/schedule.ts", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ScheduleEndpoints.cs", root), "utf8"),
   ]);
   assert.match(nodeRoute, /planManDays: task\.planManDays, actualManDays: task\.actualManDays/);
-  assert.match(dotnetRoute, /task\.PlanManDays, task\.ActualManDays/);
   assert.match(nodeRoute, /pendingAcknowledgmentTaskIds/);
   assert.match(nodeRoute, /acknowledged_at IS NULL/);
   assert.match(nodeRoute, /!pendingAcknowledgmentTaskIds\.has\(item\.id\)/);
-  assert.match(dotnetRoute, /pendingAcknowledgmentTaskIds/);
-  assert.match(dotnetRoute, /acknowledged_at IS NULL/);
-  assert.match(dotnetRoute, /!pendingAcknowledgmentTaskIds\.Contains\(task\.Id\)/);
   assert.match(nodeRoute, /await appendUpdate\(transaction/);
   assert.match(nodeRoute, /await insertAudit\(transaction/);
 });
@@ -215,11 +197,9 @@ test("production Projects table defaults to 10 rows and supports page-size selec
 });
 
 test("inquiry qualification persists probability and customer interest with audited concurrency", async () => {
-  const [screen, client, endpoint, models, migration, shell] = await Promise.all([
+  const [screen, client, migration, shell] = await Promise.all([
     readFile(new URL("app/system/production/InquiryScreens.tsx", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/InquiryEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Models/ApiModels.cs", root), "utf8"),
     readFile(new URL("database/migrations/010_inquiry_qualification.sql", root), "utf8"),
     readFile(new URL("app/system/ProductionApp.tsx", root), "utf8"),
   ]);
@@ -228,11 +208,6 @@ test("inquiry qualification persists probability and customer interest with audi
   assert.match(migration, /CHECK \(project_probability BETWEEN 0 AND 100\)/);
   assert.match(migration, /CHECK \(customer_interest_grade IN \(''A'', ''B'', ''C'', ''D''\)\)/);
   assert.match(migration, /VALUES \(10, N'Inquiry project probability and customer interest qualification'\)/);
-  assert.match(models, /InquiryQualificationRequest/);
-  assert.match(endpoint, /MapPut\("\/\{id:long\}\/qualification", UpdateQualificationAsync\)/);
-  assert.match(endpoint, /FROM dbo\.inquiries WITH \(UPDLOCK, HOLDLOCK\)/);
-  assert.match(endpoint, /row_version = @row_version/);
-  assert.match(endpoint, /"Qualification updated"/);
   assert.match(client, /updateInquiryQualification/);
   assert.match(client, /interestGrade\?: string/);
   assert.match(client, /probabilityFrom\?: number/);
@@ -246,10 +221,13 @@ test("inquiry qualification persists probability and customer interest with audi
   for (const grade of ["A", "B", "C", "D"]) assert.match(screen, new RegExp(`value: "${grade}"`));
 });
 
-test("legacy unauthenticated D1 routes and binding are absent", async () => {
-  const hosting = JSON.parse(await readFile(new URL(".openai/hosting.json", root), "utf8"));
-  assert.equal(hosting.d1, null);
+test("legacy unauthenticated D1 routes, bindings and site-creator hosting are absent", async () => {
+  const vite = await readFile(new URL("vite.config.ts", root), "utf8");
+  assert.doesNotMatch(vite, /d1_databases|r2_buckets|sites-vite-plugin|nitro/);
   for (const path of [
+    ".openai/hosting.json",
+    "vercel.json",
+    "scripts/validate-vercel-env.mjs",
     "app/api/app-data/route.ts",
     "app/api/estimates/route.ts",
     "app/api/estimates/workflow/route.ts",
@@ -280,33 +258,11 @@ test("production build validates identity and HTTPS configuration", async () => 
   assert.match(validator, /real Microsoft Entra GUID/);
 });
 
-test("production API requires the delegated Entra scope", async () => {
-  const [program, settings] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/appsettings.json", root), "utf8"),
-  ]);
-  assert.match(program, /Authentication:RequiredScope/);
-  assert.match(program, /Authentication:Audience/);
-  assert.match(program, /FindAll\("scp"\)/);
-  assert.match(program, /options\.DefaultPolicy = policy\.Build\(\)/);
-  assert.doesNotMatch(program, /Audience = string\.IsNullOrWhiteSpace/);
-  assert.match(program, /wildcard hosts are not allowed/);
-  assert.match(program, /trusted HTTPS origins/);
-  assert.match(program, /Business:TimeZoneId/);
-  assert.match(program, /Guid\.Empty/);
-  assert.match(settings, /"RequiredScope": "access_as_user"/);
-});
-
 test("team-test authentication is staging-only, secret-backed, and database-scoped", async () => {
   const [
-    program,
-    handler,
-    users,
-    sql,
     frontend,
     previewValidator,
     provisioning,
-    stagingSettings,
     installer,
     starter,
     stopper,
@@ -320,14 +276,9 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     lanFirewallConfigurator,
     lanFirewallRemover,
   ] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/TeamTestAuthenticationHandler.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/CurrentUserService.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/SqlConnectionFactory.cs", root), "utf8"),
     readFile(new URL("app/system/team-test-client.ts", root), "utf8"),
     readFile(new URL("scripts/validate-team-test-env.mjs", root), "utf8"),
     readFile(new URL("database/scripts/035_provision_team_test_user.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/appsettings.Staging.json", root), "utf8"),
     readFile(new URL("scripts/Install-TeamTestHost.ps1", root), "utf8"),
     readFile(new URL("scripts/Start-TeamTestHost.ps1", root), "utf8"),
     readFile(new URL("scripts/Stop-TeamTestHost.ps1", root), "utf8"),
@@ -341,31 +292,12 @@ test("team-test authentication is staging-only, secret-backed, and database-scop
     readFile(new URL("scripts/Configure-TeamTestLanFirewall.ps1", root), "utf8"),
     readFile(new URL("scripts/Remove-TeamTestLanFirewall.ps1", root), "utf8"),
   ]);
-  assert.match(program, /IsStaging\(\).*TeamTestAuthenticationHandler\.SchemeName/s);
-  assert.match(program, /TeamTest authentication is allowed only in the Staging environment/);
-  assert.match(program, /TeamTest:AllowPrivateLanHttp is allowed only in Staging TeamTest mode/);
-  assert.match(program, /IsPrivateLanIpv4/);
-  assert.match(program, /TeamTestSigningKey.*32-256 characters/s);
-  assert.match(handler, /X-Team-Test-Code/);
-  assert.match(handler, /X-Team-Test-Email/);
-  assert.match(handler, /HMACSHA256/);
-  assert.match(handler, /CryptographicOperations\.FixedTimeEquals/);
-  assert.match(users, /u\.email = @identity/);
-  assert.match(users, /u\.deleted_at IS NULL/);
-  assert.match(sql, /TrustServerCertificateForTeamTest/);
-  assert.match(sql, /allowed only in Staging TeamTest mode/);
   assert.match(frontend, /sessionStorage/);
   assert.doesNotMatch(frontend, /process\.env\.[A-Z0-9_]*ACCESS_KEY/);
   assert.match(previewValidator, /NEXT_PUBLIC_APP_MODE.*team-test/s);
   assert.match(previewValidator, /must use HTTPS for team testing/);
   assert.match(provisioning, /ConfirmTeamTest/);
   assert.match(provisioning, /team-test:/);
-  assert.match(stagingSettings, /"Mode": "TeamTest"/);
-  assert.doesNotMatch(stagingSettings, /TeamTestSigningKey"\s*:\s*"[^"\s]+"/);
-  assert.match(sql, /Database application roles are allowed only in Staging TeamTest mode/);
-  assert.match(sql, /Pooling = !useApplicationRole/);
-  assert.match(sql, /sp_setapprole/);
-  assert.match(sql, /ApplicationRolePasswordPattern/);
   assert.match(loginGrants, /APPLICATION_ROLE/);
   assert.match(installer, /ConvertFrom-SecureString/);
   assert.match(installer, /Integrated Security/);
@@ -484,12 +416,6 @@ test("user deprovisioning is guarded by exact identity and confirmation", async 
   assert.match(provision, /canonical non-zero GUID/);
 });
 
-test("SQL parameter helper preserves MAX fields and validates row versions", async () => {
-  const helper = await readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/SqlExtensions.cs", root), "utf8");
-  assert.match(helper, /size != 0 \? parameters\.Add\(name, type, size\)/);
-  assert.match(helper, /bytes\.Length != 8/);
-});
-
 test("production baseline verifier checks schema, app role, and real identities", async () => {
   const verifier = await readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8");
   assert.match(verifier, /schema_versions WHERE version = 25/);
@@ -523,36 +449,16 @@ test("production baseline verifier checks schema, app role, and real identities"
 });
 
 test("estimate revisions remain immutable and writes are record-scoped", async () => {
-  const [workflow, costs, workspaceApi, estimateScreen, immutabilityMigration, workspaceMigration, deployment, seed] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/EstimateEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/EstimateCostEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/EstimateWorkspaceEndpoints.cs", root), "utf8"),
+  const [estimateScreen, workspaceApi, costs, workspaceWrites, immutabilityMigration, workspaceMigration, deployment, seed] = await Promise.all([
     readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/estimate-workspace-read.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/estimate-cost-write.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/estimate-workspace-write.ts", root), "utf8"),
     readFile(new URL("database/migrations/005_revision_immutability.sql", root), "utf8"),
     readFile(new URL("database/migrations/008_estimate_workspace_integrity.sql", root), "utf8"),
     readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
     readFile(new URL("database/scripts/900_optional_development_seed.sql", root), "utf8"),
   ]);
-  assert.match(workflow, /INSERT INTO dbo\.estimate_revisions/);
-  assert.match(workflow, /CloneCurrentCostsAsync/);
-  assert.match(workflow, /UPDATE dbo\.inquiries/);
-  assert.match(workflow, /estimate_owner_required/);
-  assert.match(costs, /estimate_section_forbidden/);
-  assert.match(costs, /GetCategoryAssignmentAsync/);
-  assert.match(costs, /if \(!IsAssigned\(actor, currentAssignment\)\)/);
-  assert.match(costs, /if \(!IsAssigned\(actor, assignment\)\)/);
-  assert.match(costs, /e\.revision=@revision/);
-  assert.match(costs, /"Updated", before, after/);
-  assert.doesNotMatch(workspaceApi, /HasAnyAssignmentAsync/);
-  assert.match(workspaceApi, /HasSectionAssignmentAsync/);
-  assert.match(workspaceApi, /DemandAssignedSectionWriterAsync[\s\S]*?"06"/);
-  assert.match(workspaceApi, /ExpenseSectionCode\(request\.ExpenseType\)/);
-  assert.match(workspaceApi, /"Travel" or "Transportation" => "08"/);
-  assert.match(workspaceApi, /"Accommodation" or "Per Diem" => "09"/);
-  assert.match(workspaceApi, /"Equipment Rental" or "Other" => "10"/);
-  assert.match(workspaceApi, /assignedSections\.Contains\("06"\)/);
-  assert.match(workspaceApi, /assignedSections\.Contains\(ExpenseSectionCode\(expenseType\)\)/);
-  assert.match(workspaceApi, /CanEditCostItems, bool CanEditManhour, bool CanEditExpenses, bool CanEditOtherCosts/);
   assert.match(estimateScreen, /capabilities\.canEditCostItems/);
   assert.match(estimateScreen, /capabilities\.canEditManhour/);
   assert.match(estimateScreen, /capabilities\.canEditExpenses/);
@@ -586,8 +492,6 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /EXPENSE_SECTION_BY_TYPE\[expenseType\]/);
   assert.match(estimateScreen, /issue\.severity\.trim\(\)\.toLowerCase\(\) === "error"/);
   assert.match(estimateScreen, /warning\(s\) are advisory and do not block workflow/);
-  assert.match(workspaceApi, /maximumLineCost = 999_999_999_999_999m/);
-  assert.match(workspaceApi, /ResolveDailyRateAsync[\s\S]*?ValidateManhourLineCost/);
   assert.doesNotMatch(estimateScreen, /priceDate:\s*""/);
   assert.match(estimateScreen, /update\("priceDate", event\.target\.value \|\| undefined\)/);
   for (const warning of [
@@ -601,8 +505,6 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   ]) {
     assert.match(workspaceApi, new RegExp(warning));
   }
-  assert.match(workspaceApi, /N'Warning'/);
-  assert.match(workflow, /self_revision_forbidden/);
   assert.match(immutabilityMigration, /trg_estimate_revisions_append_only/);
   assert.match(immutabilityMigration, /Historical cost items cannot be changed/);
   for (const trigger of ["cost_items", "manhour_lines", "expense_lines", "other_cost_lines"]) {
@@ -635,62 +537,21 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
   // trigger. Migration 008 puts triggers on all four estimate line tables, so
   // keep every API statement that returns an inserted row compatible with it.
-  for (const source of [costs, workspaceApi]) {
-    for (const match of source.matchAll(/(?:INSERT INTO|UPDATE)\s+dbo\.(cost_items|manhour_lines|expense_lines|other_cost_lines)\b[\s\S]*?;/gi)) {
+  // The revision-before-clone order of create-revision is pinned in estimate-create-revision-contract.test.mjs.
+  for (const source of [costs, workspaceWrites]) {
+    for (const match of source.matchAll(/(?:INSERT INTO|INSERT|UPDATE)\s+dbo\.(cost_items|manhour_lines|expense_lines|other_cost_lines)\b[\s\S]*?;/gi)) {
       if (/\bOUTPUT\b/i.test(match[0])) {
         assert.match(match[0], /\bOUTPUT\b[\s\S]*?\bINTO\s+@/i, `${match[1]} OUTPUT must target a table variable`);
       }
     }
   }
-  assert.match(workspaceApi, /UPDATE \{tableName\}[\s\S]*?OUTPUT inserted\.row_version INTO @result/);
-
-  const revisionStart = workflow.indexOf("private static async Task<IResult> RequestRevisionAsync");
-  const revisionEnd = workflow.indexOf("private static async Task<IResult> TransitionAsync", revisionStart);
-  assert.ok(revisionStart >= 0 && revisionEnd > revisionStart, "request-revision workflow must be present");
-  const revisionFlow = workflow.slice(revisionStart, revisionEnd);
-  assert.ok(
-    revisionFlow.indexOf("SET revision = @next_revision") < revisionFlow.indexOf("CloneCurrentCostsAsync"),
-    "the estimate revision must advance before migration 008 permits cloning current lines",
-  );
-});
-
-test("project portfolio listing follows the same assignment scope as project workspaces", async () => {
-  const projects = await readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ProjectEndpoints.cs", root), "utf8");
-  assert.match(projects, /var actor = await users\.GetRequiredAsync/);
-  assert.match(projects, /@elevated = 1 OR p\.manager_id = @actor OR p\.lead_engineer_id = @actor/);
-  assert.match(projects, /dbo\.project_members m WHERE m\.project_id = p\.id AND m\.user_id = @actor/);
-  assert.match(projects, /ProjectScope\.IsElevated\(actor\)/);
-});
-
-test("My Work does not treat the Project Manager role as globally project-scoped", async () => {
-  const [scope, schedule] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectScope.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ScheduleEndpoints.cs", root), "utf8"),
-  ]);
-  const myWorkPolicy = scope.match(/public static bool IsMyWorkElevated\(CurrentUser actor\) =>\s*([^;]+);/);
-  assert.ok(myWorkPolicy, "My Work must have an explicit elevation policy");
-  assert.match(myWorkPolicy[1], /Admin/);
-  assert.match(myWorkPolicy[1], /Engineering Manager/);
-  assert.doesNotMatch(myWorkPolicy[1], /Project Manager/);
-  assert.equal([...schedule.matchAll(/ProjectScope\.IsMyWorkElevated\(actor\)/g)].length, 2);
-  assert.equal([...schedule.matchAll(/ProjectScope\.DemandMyWorkAsync\(/g)].length, 4);
 });
 
 test("administrative read models are permission-gated and audit ledgers stay immutable", async () => {
-  const [program, endpoints, grants, verifier] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/AdminReadEndpoints.cs", root), "utf8"),
+  const [grants, verifier] = await Promise.all([
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
   ]);
-  assert.match(program, /MapAdminReadEndpoints/);
-  assert.match(endpoints, /MapGet\("\/engineering-rates"/);
-  assert.match(endpoints, /DemandPermissionAsync\("master\.read"/);
-  assert.match(endpoints, /MapGet\("\/audit"/);
-  assert.match(endpoints, /DemandPermissionAsync\("audit\.read"/);
-  assert.match(endpoints, /FROM dbo\.audit_log/);
-  assert.match(endpoints, /FROM dbo\.mat_audit/);
-  assert.doesNotMatch(endpoints, /Map(?:Post|Put|Delete|Patch)/);
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.audit_log/i);
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.mat_audit/i);
   assert.match(grants, /REVOKE UPDATE, DELETE ON OBJECT::dbo\.audit_log/i);
@@ -700,32 +561,19 @@ test("administrative read models are permission-gated and audit ledgers stay imm
 });
 
 test("inventory decisions revalidate live quantities under database locks", async () => {
-  const [receipts, stock, migration, deployment, health] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/GoodsReceiptEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/StockControlEndpoints.cs", root), "utf8"),
+  const [migration, deployment] = await Promise.all([
     readFile(new URL("database/migrations/006_inventory_concurrency.sql", root), "utf8"),
     readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/HealthEndpoints.cs", root), "utf8"),
   ]);
-  assert.match(receipts, /DemandConfirmableQuantitiesAsync/);
-  assert.match(receipts, /previous WITH \(UPDLOCK, HOLDLOCK, INDEX\(IX_grn_lines_po_line\)\)/);
-  assert.match(receipts, /gl\.allow_over_receipt/);
-  assert.match(receipts, /"over_receipt"/);
-  assert.match(stock, /stock_txns t WITH \(UPDLOCK, HOLDLOCK, INDEX\(IX_stock_txns_item\)\)/);
-  assert.match(stock, /resulting < 0/);
-  assert.match(stock, /"negative_balance"/);
   assert.match(migration, /ADD allow_over_receipt bit NOT NULL/);
   assert.match(migration, /schema_versions\(version, name\)[\s\S]*VALUES \(6,/);
   assert.match(deployment, /006_inventory_concurrency\.sql/);
-  assert.match(health, /RequiredSchemaVersion = 28/);
 });
 
 test("audited supplier purchase history is read-only to the application and reusable by Estimate Cost", async () => {
-  const [migration, importer, endpoint, program, client, estimateScreen, pricingScreen, grants, verifier] = await Promise.all([
+  const [migration, importer, client, estimateScreen, pricingScreen, grants, verifier] = await Promise.all([
     readFile(new URL("database/migrations/012_supplier_price_history.sql", root), "utf8"),
     readFile(new URL("scripts/Import-SupplierPriceHistory.ps1", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/SupplierPriceHistoryEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
     readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
     readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
@@ -739,9 +587,6 @@ test("audited supplier purchase history is read-only to the application and reus
   assert.match(importer, /304084\.29/);
   assert.match(importer, /WHERE NOT EXISTS \(SELECT 1 FROM dbo\.supplier_price_history target WHERE target\.source_key = source\.source_key\)/);
   assert.doesNotMatch(importer, /INSERT INTO dbo\.(?:mat_prs|mat_pos|stock_txns)/);
-  assert.match(endpoint, /DemandPermissionAsync\("estimate\.read"/);
-  assert.match(endpoint, /FROM dbo\.supplier_price_history/);
-  assert.match(program, /MapSupplierPriceHistoryEndpoints/);
   assert.match(client, /listSupplierPriceHistory/);
   assert.match(estimateScreen, /Historical Purchase/);
   assert.match(estimateScreen, /Purchase Price/);
@@ -761,11 +606,8 @@ test("audited supplier purchase history is read-only to the application and reus
 });
 
 test("supplier quotations are uploaded to secure storage and listed in the standard production grid", async () => {
-  const [migration, endpoint, storage, program, client, screen, grants, verifier] = await Promise.all([
+  const [migration, client, screen, grants, verifier] = await Promise.all([
     readFile(new URL("database/migrations/013_supplier_quotations.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/SupplierQuotationEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectDocumentStorage.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
     readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
@@ -774,13 +616,6 @@ test("supplier quotations are uploaded to secure storage and listed in the stand
   assert.match(migration, /CREATE TABLE dbo\.supplier_quotations/);
   assert.match(migration, /UQ_supplier_quotations_no/);
   assert.match(migration, /VALUES \(13, N'Supplier quotation document registry and secure attachments'\)/);
-  assert.match(endpoint, /MapPost\("\/", CreateAsync\)/);
-  assert.match(endpoint, /DemandPermissionAsync\("estimate\.write"/);
-  assert.match(endpoint, /CreateSupplierQuotationStorageKey/);
-  assert.match(endpoint, /AddParameter\("@sha256"/);
-  assert.match(endpoint, /VerifyIntegrityAndRewindAsync/);
-  assert.match(storage, /supplier-quotations/);
-  assert.match(program, /MapSupplierQuotationEndpoints/);
   assert.match(client, /createSupplierQuotation/);
   assert.match(client, /downloadSupplierQuotation/);
   assert.match(screen, /function SupplierQuotationUploadModal/);
@@ -988,14 +823,11 @@ test("a price with no document cites the page it came from, and the database kee
 });
 
 test("employee master backs assignment identities without granting login access", async () => {
-  const [migration, directoryMigration, endpoints, nodeEndpoints, bootstrap, nodeBootstrap, models, client, screen, grants] = await Promise.all([
+  const [migration, directoryMigration, nodeEndpoints, nodeBootstrap, client, screen, grants] = await Promise.all([
     readFile(new URL("database/migrations/011_employee_master.sql", root), "utf8"),
     readFile(new URL("database/migrations/022_employee_directory_assignments.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/MasterDataEndpoints.cs", root), "utf8"),
     readFile(new URL("backend-node/src/routes/master.ts", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/BootstrapEndpoints.cs", root), "utf8"),
     readFile(new URL("backend-node/src/routes/bootstrap.ts", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Models/ApiModels.cs", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
     readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
@@ -1008,21 +840,10 @@ test("employee master backs assignment identities without granting login access"
   assert.match(directoryMigration, /PROCEDURE dbo\.sync_employee_directory_user/);
   assert.match(directoryMigration, /WITH EXECUTE AS OWNER/);
   assert.match(directoryMigration, /EXEC dbo\.sync_employee_directory_user @employee_id/);
-  assert.match(endpoints, /MapGet\("\/employees", ListEmployeesAsync\)/);
-  assert.match(endpoints, /MapPost\("\/employees", CreateEmployeeAsync\)/);
-  assert.match(endpoints, /MapPut\("\/employees\/\{id:long\}", UpdateEmployeeAsync\)/);
-  assert.match(endpoints, /DemandPermissionAsync\("master\.write"/);
-  assert.match(endpoints, /row_version=@row_version/);
-  assert.match(endpoints, /"Employee"[\s\S]*?"Updated"/);
-  assert.match(endpoints, /SyncEmployeeDirectoryUserAsync/);
   assert.match(nodeEndpoints, /syncEmployeeDirectoryUser/);
-  assert.match(bootstrap, /FROM dbo\.employees employee/);
-  assert.match(bootstrap, /INNER JOIN dbo\.users app_user ON app_user\.id = employee\.user_id/);
-  assert.match(bootstrap, /employee\.employee_no/);
   assert.match(nodeBootstrap, /FROM dbo\.employees employee/);
   assert.match(nodeBootstrap, /INNER JOIN dbo\.users app_user ON app_user\.id = employee\.user_id/);
   assert.match(nodeBootstrap, /employee\.employee_no/);
-  assert.match(models, /record CreateEmployeeRequest/);
   assert.match(client, /api\/v1\/master\/employees/);
   assert.match(screen, /function EmployeeMasterTab/);
   assert.match(screen, /Creating an employee does not create a login account/);
@@ -1032,21 +853,12 @@ test("employee master backs assignment identities without granting login access"
 });
 
 test("customer master editing is audited, concurrent, and narrowly permissioned", async () => {
-  const [screen, ui, endpoint, models, bootstrap, grants, verifier] = await Promise.all([
+  const [screen, ui, grants, verifier] = await Promise.all([
     readFile(new URL("app/system/production/AdminAnalyticsScreens.tsx", root), "utf8"),
     readFile(new URL("app/system/ui.tsx", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/MasterDataEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Models/ApiModels.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/BootstrapEndpoints.cs", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
   ]);
-  assert.match(endpoint, /MapPut\("\/customers\/\{id:long\}", UpdateCustomerAsync\)/);
-  assert.match(endpoint, /FROM dbo\.customers WITH \(UPDLOCK, HOLDLOCK\)/);
-  assert.match(endpoint, /row_version=@row_version/);
-  assert.match(endpoint, /"Customer"[\s\S]*?"Updated"/);
-  assert.match(models, /record UpdateCustomerRequest/);
-  assert.match(bootstrap, /c\.row_version/);
   assert.match(screen, /title=\{customer \? "Edit customer" : "New customer"\}/);
   assert.match(screen, /method: customer \? "PUT" : "POST"/);
   assert.match(screen, /<TablePageSize value=\{pageSize\}/);
@@ -1057,12 +869,11 @@ test("customer master editing is audited, concurrent, and narrowly permissioned"
 });
 
 test("schedule day-request answers are atomic and narrowly permissioned", async () => {
-  const [migration, grants, verifier, deployment, schedule] = await Promise.all([
+  const [migration, grants, verifier, deployment] = await Promise.all([
     readFile(new URL("database/migrations/007_schedule_day_request_answers.sql", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
     readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ScheduleEndpoints.cs", root), "utf8"),
   ]);
   assert.match(migration, /PROCEDURE dbo\.answer_schedule_day_request/);
   assert.match(migration, /WITH EXECUTE AS OWNER/);
@@ -1074,23 +885,6 @@ test("schedule day-request answers are atomic and narrowly permissioned", async 
   assert.doesNotMatch(grants, /GRANT UPDATE ON OBJECT::dbo\.schedule_updates/i);
   assert.match(verifier, /answer_schedule_day_request/);
   assert.match(deployment, /007_schedule_day_request_answers\.sql/);
-  assert.match(schedule, /MapPost\("\/day-requests\/\{id:long\}\/answer"/);
-  assert.match(schedule, /DemandPermissionAsync\("schedule\.plan"/);
-
-  const answerSource = schedule.slice(
-    schedule.indexOf("private static async Task<IResult> AnswerDayRequestAsync"),
-    schedule.indexOf("private static async Task<IResult> CreateMemberDetailAsync"),
-  );
-  const requestSource = schedule.slice(
-    schedule.indexOf("private static async Task<IResult> RequestMoreDaysAsync"),
-    schedule.indexOf("private static async Task<IResult> AnswerDayRequestAsync"),
-  );
-  const answerTaskLock = answerSource.indexOf("ReadTaskAsync(connection, transaction");
-  const answerRequestLock = answerSource.indexOf("FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)");
-  const requestTaskLock = requestSource.indexOf("ReadTaskAsync(connection, transaction");
-  const requestPendingLock = requestSource.indexOf("HasPendingDayRequestAsync(connection, transaction");
-  assert.ok(answerTaskLock >= 0 && answerRequestLock > answerTaskLock, "answer path must lock task before request");
-  assert.ok(requestTaskLock >= 0 && requestPendingLock > requestTaskLock, "request path must lock task before pending requests");
   assert.ok(
     migration.indexOf("FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)")
       < migration.indexOf("FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)"),
@@ -1100,67 +894,18 @@ test("schedule day-request answers are atomic and narrowly permissioned", async 
 
 test("project documents use fail-closed NAS storage, scoped access, and append-only metadata", async () => {
   const [
-    program,
-    options,
-    storage,
-    endpoints,
-    health,
-    settings,
-    developmentSettings,
     grants,
     verifier,
     probe,
     deployment,
     gitignore,
   ] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/DocumentStorageOptions.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectDocumentStorage.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ProjectDocumentEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/HealthEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/appsettings.json", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/appsettings.Development.json", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
     readFile(new URL("scripts/Test-NasStorage.ps1", root), "utf8"),
     readFile(new URL("docs/PRODUCTION_DEPLOYMENT.md", root), "utf8"),
     readFile(new URL(".gitignore", root), "utf8"),
   ]);
-
-  assert.match(program, /MapProjectDocumentEndpoints/);
-  assert.match(program, /ClearProviders\(\)/);
-  assert.doesNotMatch(program, /AddEventLog/);
-  assert.match(program, /AddPolicy\("document-upload"/);
-  assert.match(program, /PermitLimit = 6/);
-  assert.match(options, /Mode must be 'Nas' in Production/);
-  assert.match(options, /UNC path containing a server and share/);
-  assert.match(settings, /"Mode": "Nas"/);
-  assert.match(settings, /"RootPath": ""/);
-  assert.doesNotMatch(settings, /100\.98\.152\.4/);
-  assert.match(developmentSettings, /"Mode": "Local"/);
-
-  assert.match(storage, /Guid\.NewGuid/);
-  assert.match(storage, /HashAlgorithmName\.SHA256/);
-  assert.match(storage, /outside the configured storage root/);
-  assert.match(storage, /VerifyIntegrityAndRewindAsync/);
-  assert.match(storage, /CryptographicOperations\.FixedTimeEquals/);
-  assert.match(storage, /probe\.WaitAsync\(options\.AvailabilityProbeTimeout/);
-  assert.match(endpoints, /DemandPermissionAsync\("project\.write"/);
-  assert.match(endpoints, /RequireRateLimiting\("document-upload"\)/);
-  assert.match(endpoints, /p\.manager_id = @actor/);
-  assert.match(endpoints, /p\.lead_engineer_id = @actor/);
-  assert.match(endpoints, /dbo\.project_members/);
-  assert.equal((endpoints.match(/DemandProjectAccessScopeAsync\(\w+, projectId, actor/g) ?? []).length, 3);
-  assert.match(endpoints, /MapGet\("\/"/);
-  assert.match(endpoints, /MapPost\("\/"/);
-  assert.match(endpoints, /MapGet\("\/\{documentId:long\}\/content"/);
-  assert.doesNotMatch(endpoints, /MapDelete/);
-  assert.match(endpoints, /provider_etag/);
-  assert.match(endpoints, /VerifyIntegrityAndRewindAsync/);
-  assert.match(endpoints, /commitOutcomeUnknown/);
-  assert.match(endpoints, /preserving storage key/);
-  assert.match(health, /documentStorage\.IsAvailableAsync/);
-  assert.match(health, /document_storage_unavailable/);
 
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.project_docs/i);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.project_docs/i);
@@ -1180,17 +925,14 @@ test("project documents use fail-closed NAS storage, scoped access, and append-o
 });
 
 test("Knowledge Hub is permission-filtered, revision-safe, and included in production deployment", async () => {
-  const [migration, hardening, endpoint, screen, client, program, deployment, grants, verifier, health, seed] = await Promise.all([
+  const [migration, hardening, screen, client, deployment, grants, verifier, seed] = await Promise.all([
     readFile(new URL("database/migrations/014_knowledge_hub.sql", root), "utf8"),
     readFile(new URL("database/migrations/015_knowledge_hub_workflow_hardening.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/KnowledgeEndpoints.cs", root), "utf8"),
     readFile(new URL("app/system/production/KnowledgeScreens.tsx", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Program.cs", root), "utf8"),
     readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/HealthEndpoints.cs", root), "utf8"),
     readFile(new URL("database/scripts/910_knowledge_hub_seed.sql", root), "utf8"),
   ]);
   assert.match(migration, /UX_knowledge_document_versions_one_published/);
@@ -1200,17 +942,11 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.match(migration, /knowledge\.manage_permissions/);
   assert.match(hardening, /Approved.*Published/s);
   assert.match(hardening, /extracted_text/);
-  assert.match(endpoint, /VisibilityPredicate/);
-  assert.match(endpoint, /DemandPermissionAsync\("knowledge\.publish"/);
-  assert.match(endpoint, /self_approval_forbidden/);
-  assert.match(endpoint, /IsolationLevel\.Serializable/);
-  assert.match(endpoint, /CreateKnowledgeStorageKey/);
   assert.match(screen, /Standards Register/);
   assert.match(screen, /Presentation Library/);
   assert.match(screen, /My Acknowledgements/);
   assert.match(screen, /useState\(50\)/);
   assert.match(client, /listKnowledgeDocuments/);
-  assert.match(program, /MapKnowledgeEndpoints/);
   assert.match(deployment, /014_knowledge_hub\.sql/);
   assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
   assert.match(deployment, /version BETWEEN 1 AND 67\) <> 67/);
@@ -1219,7 +955,6 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);
   assert.match(verifier, /issue_knowledge_document_number/);
   assert.match(verifier, /knowledge_audit_events/);
-  assert.match(health, /RequiredSchemaVersion = 28/);
   assert.match(seed, /Migration 015/);
   assert.match(seed, /highest_number > s\.last_number/);
 });
@@ -1448,18 +1183,14 @@ test("Master Data Customers table defaults to 10 rows and supports page-size sel
 });
 
 test("project members can be managed after creation, not only assigned at creation time", async () => {
-  const [endpoints, scope, grants, apiClient, screens, nodeRoutes] = await Promise.all([
-    readFile(new URL("backend/IoTTeamCenter.Api/Endpoints/ProjectEndpoints.cs", root), "utf8"),
-    readFile(new URL("backend/IoTTeamCenter.Api/Infrastructure/ProjectScope.cs", root), "utf8"),
+  const [grants, apiClient, screens, nodeRoutes] = await Promise.all([
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("app/system/api-client.ts", root), "utf8"),
     readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8"),
     readFile(new URL("backend-node/src/routes/projects.ts", root), "utf8"),
   ]);
 
-  // backend-node is the API this app actually talks to in production (see
-  // docs/MACMINI_HANDOFF.md: "The API is backend-node/, not backend/IoTTeamCenter.Api") --
-  // the .NET endpoints below are kept in parity but a Node-only route gap is the real outage.
+  // backend-node is the API this app talks to in production.
   assert.match(nodeRoutes, /app\.get\("\/api\/v1\/projects\/:id\/members"/);
   assert.match(nodeRoutes, /app\.post\("\/api\/v1\/projects\/:id\/members"/);
   assert.match(nodeRoutes, /app\.delete\("\/api\/v1\/projects\/:id\/members\/:userId"/);
@@ -1467,27 +1198,8 @@ test("project members can be managed after creation, not only assigned at creati
   assert.match(nodeRoutes, /manager_id = @user_id OR lead_engineer_id = @user_id/);
   assert.match(nodeRoutes, /core_member/);
 
-  // Routes exist beyond the create-time-only InsertMemberAsync calls.
-  assert.match(endpoints, /MapGet\("\/\{id:long\}\/members", ListMembersAsync\)/);
-  assert.match(endpoints, /MapPost\("\/\{id:long\}\/members", AddMemberAsync\)/);
-  assert.match(endpoints, /MapDelete\("\/\{id:long\}\/members\/\{userId:long\}", RemoveMemberAsync\)/);
-
-  // Write endpoints demand project.write and project-scope visibility, not just any authenticated user.
-  assert.match(endpoints, /AddMemberAsync[\s\S]{0,400}DemandPermissionAsync\("project\.write"/);
-  assert.match(endpoints, /RemoveMemberAsync[\s\S]{0,400}DemandPermissionAsync\("project\.write"/);
-  assert.match(endpoints, /AddMemberAsync[\s\S]{0,1200}ProjectScope\.DemandAsync/);
-  assert.match(endpoints, /RemoveMemberAsync[\s\S]{0,1200}ProjectScope\.DemandAsync/);
-
-  // The project's manager/lead engineer are structural fields, not removable as a plain membership row.
-  assert.match(endpoints, /manager_id = @user_id OR lead_engineer_id = @user_id/);
-  assert.match(endpoints, /core_member/);
-
   // dbo.project_members needs DELETE too now, not just the original INSERT from project creation.
   assert.match(grants, /GRANT INSERT, DELETE ON OBJECT::dbo\.project_members TO \[iot_team_app_role\]/);
-
-  // ProjectScope's visibility rule (elevated OR manager OR lead engineer OR project_members row)
-  // is unchanged by this feature -- it is what the new endpoints let more people satisfy.
-  assert.match(scope, /EXISTS \(SELECT 1 FROM dbo\.project_members m WHERE m\.project_id = p\.id AND m\.user_id = @actor\)/);
 
   assert.match(apiClient, /export const listProjectMembers/);
   assert.match(apiClient, /export const addProjectMember/);

@@ -35,9 +35,12 @@ Audit a stylesheet you touched: `grep -c "#[0-9a-fA-F]\{3,6\}" <file>` should be
 ## Shared components (`app/system/ui.tsx`)
 
 `Icon` `Badge` `Pill` `Avatar` `Person` `PageHeader` `Panel` `KpiCard` `SummaryTile` `Progress`
-`ProgressCell` `Tabs` `Toolbar` `SearchInput` `Select` `Field` `EmptyState` `Modal` `Drawer` `Menu`
-`BarChart` `HBarList` `Donut` `LineChart` `Sparkline` `Toast` `StatusLegend` `GridControls`
-`TablePageSize` `usePaged` `Pagination`
+`ProgressCell` `Tabs` `Toolbar` `SearchInput` `Select` `Field` `EmptyState` `Modal` `Drawer`
+`BarChart` `Toast` `StatusLegend` `GridControls` `TablePageSize` `Pagination`
+
+`Menu`, `HBarList`, `Donut`, `LineChart`, `Sparkline` and `usePaged` were removed with the `/demo`
+prototype (2026-10-05) because no production screen used them; restore one from git history
+rather than writing a second version.
 
 `Modal` sizes: `sm` 460 · `md` 640 · `lg` 940 · `xl` 1240 · `wide` 92vw · `full`. A dialog with an
 editable table of more than about six columns needs `xl`; `lg` puts the arithmetic behind a

@@ -153,10 +153,6 @@ export function buildEstimateCostBreakdown(input: BreakdownInput, labels: Breakd
   return sections;
 }
 
-export function breakdownLineCount(sections: readonly BreakdownSection[]): number {
-  return sections.reduce((total, section) => total + section.lines.length, 0);
-}
-
 /**
  * Aggregate whole modules before filtering, retaining source lines for ERP mapping.
  *

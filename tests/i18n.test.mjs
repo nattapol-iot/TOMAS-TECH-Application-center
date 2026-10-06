@@ -24,7 +24,7 @@ function load(relative) {
 }
 const { translate, DICTIONARY, LanguageContext, applyDocumentLanguage, currentLocale } = load("app/system/i18n.ts");
 const { LocalizedText } = load("app/system/LocalizedText.tsx");
-const { SearchInput, Select, Field, PageHeader, Badge, HBarList } = load("app/system/ui.tsx");
+const { SearchInput, Select, Field, PageHeader, Badge } = load("app/system/ui.tsx");
 const h = React.createElement;
 
 test("document lifecycle copy covers Thai, Japanese and readable English reasons", () => {
@@ -123,16 +123,9 @@ test("Thai-authored screens can provide English and Japanese without changing ca
   assert.equal(translate("สร้าง Task", "JP"), "タスクを作成");
 });
 
-test("chart labels use the selected language", () => {
-  for (const lang of ["TH", "JP", "EN"]) {
-    const html = render(lang, h(HBarList, { data: [{ label: "Estimated Cost", value: 10 }] }));
-    assert.ok(html.includes(translate("Estimated Cost", lang)));
-  }
-});
-
 test("every literal tab label has complete TH, EN and JP behavior", () => {
-  const roots = ["app/system/screens", "app/system/production"];
-  const tsxFiles = ["app/system/App.tsx", "app/system/ProductionApp.tsx", ...roots.flatMap((root) => readdirSync(root)
+  const roots = ["app/system/production"];
+  const tsxFiles = ["app/system/ProductionApp.tsx", ...roots.flatMap((root) => readdirSync(root)
     .filter((file) => file.endsWith(".tsx"))
     .map((file) => path.join(root, file)))];
   const labels = new Set();
@@ -183,7 +176,8 @@ test("every literal tab label has complete TH, EN and JP behavior", () => {
   assert.deepEqual(missing.sort(), []);
   // Report tabs now use their scoped document/workspace translator and are
   // exercised by report-document-form tests instead of this literal audit.
-  assert.ok(labels.size >= 70, `expected broad literal tab coverage, found ${labels.size}`);
+  // 49 production tab labels once the demo screens were removed; the floor only proves the scan still sees them.
+  assert.ok(labels.size >= 45, `expected broad literal tab coverage, found ${labels.size}`);
 });
 
 test("the Thai-authored resource workspace has no bare Thai JSX copy", () => {
