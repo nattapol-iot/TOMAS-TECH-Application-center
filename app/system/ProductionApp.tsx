@@ -5,7 +5,7 @@ import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { useActivityPresence } from "./use-activity-presence";
-import { restoredView, viewStorageKey } from "../../lib/remembered-view";
+import { hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
@@ -196,6 +196,17 @@ function landingView(next: View, permissions: readonly string[]): View {
 }
 const navView = (view: View): View => view === "crm-pipeline" ? "crm-opportunities" : view;
 
+/** The views a refresh, a link or Back may open: the person's menu entries plus the screens reached from inside them. */
+function allowedViews(data: BootstrapData): View[] {
+  const allowed: View[] = NAV.flatMap(section => section.items)
+    .filter(item => navItemAllowed(item, data.permissions, data.user.role))
+    .map(item => item.view);
+  allowed.push("profile", "signature");
+  if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
+  if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
+  return allowed;
+}
+
 const IS_AUTH_CONFIGURED = (IS_TMT_ID_MODE || IS_TEAM_TEST_MODE || IS_ENTRA_CONFIGURED) && IS_API_CONFIGURED;
 const IS_LOCAL_READ_ONLY = process.env.NEXT_PUBLIC_LOCAL_READ_ONLY === "true";
 const CONNECTED_SCHEMA_VERSION = process.env.NEXT_PUBLIC_CONNECTED_SCHEMA_VERSION ?? "unknown";
@@ -237,7 +248,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   }, [bootstrap,view]);
   const openCrmOpportunity = useCallback((id: number) => { setCrmOpportunityId(id); setViewState("crm-opportunities"); }, []);
   useEffect(() => {
-    const followCrm = () => { const match = window.location.hash.match(/^#crm\/(\d+)$/); if(match && bootstrap?.permissions.includes("crm.read")) openCrmOpportunity(Number(match[1])); };
+    // Cleared once followed, like the estimate and inquiry links, so the address effect can name the screen again.
+    const followCrm = () => { const match = window.location.hash.match(/^#crm\/(\d+)$/); if(!match || !bootstrap) return; window.history.replaceState(null, "", window.location.pathname + window.location.search); if(bootstrap.permissions.includes("crm.read")) openCrmOpportunity(Number(match[1])); };
     followCrm(); window.addEventListener("hashchange",followCrm); return () => window.removeEventListener("hashchange",followCrm);
   }, [bootstrap,openCrmOpportunity]);
   const [taskAcknowledgmentCount, setTaskAcknowledgmentCount] = useState(0);
@@ -267,9 +279,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const t = languageValue.t;
   useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));
   const confirmReportNavigation = useCallback(() => (!reportDirty.current && !supportDirty.current) || window.confirm(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?")), [t, language]);
+  /** The open screen's URL fragment; Support keeps its ticket form so its links stay valid. */
+  const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view);
+  // Returns false when the person keeps unsaved changes. A #support/<id> fragment is left for the address
+  // effect to replace with the next screen's, so Back reopens that ticket.
   const setView = useCallback((next: View) => {
-    if (next !== view && !confirmReportNavigation()) return;
-    if (next !== "support" && /^#support(?:\/|$)/.test(window.location.hash)) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    if (next !== view && !confirmReportNavigation()) return false;
     if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
     setCollapsedActiveGroup(null);
@@ -278,6 +293,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setViewState(target);
     const activeGroup = NAV.find(section => section.items.some(item => item.view === navView(target)))?.group;
     if (activeGroup) setCollapsedNavGroups(groups => groups.filter(group => group !== activeGroup));
+    return true;
   }, [view, confirmReportNavigation, bootstrap]);
 
   useEffect(() => {
@@ -302,7 +318,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       const match = window.location.hash.match(/^#support(?:\/(\d+))?$/);
       if (!match) return;
       if (!confirmReportNavigation()) {
-        window.history.replaceState(null, "", window.location.pathname + window.location.search + (view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : ""));
+        window.history.replaceState(null, "", window.location.pathname + window.location.search + address);
         return;
       }
       const id = Number(match[1]);
@@ -311,7 +327,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     };
     window.addEventListener("hashchange", followSupportLink);
     return () => window.removeEventListener("hashchange", followSupportLink);
-  }, [confirmReportNavigation, view, supportTicketId]);
+  }, [confirmReportNavigation, address]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -375,18 +391,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   };
 
   const restoreWorkspace = useCallback((data: BootstrapData) => {
-    const allowed: View[] = NAV.flatMap(section => section.items)
-      .filter(item => navItemAllowed(item, data.permissions, data.user.role))
-      .map(item => item.view);
-    allowed.push("profile", "signature");
-    if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
-    if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
-
+    const allowed = allowedViews(data);
     let saved: string | null = null;
     try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
     catch { /* Storage may be disabled; normal navigation still works. */ }
     const dailyLanding: View = allowed.includes("my-work") ? "my-work" : "dashboard";
-    setViewState(restoredView(saved ? landingView(saved as View, data.permissions) : saved, allowed, window.location.hash, initialVerifyCode, dailyLanding));
+    setViewState(restoredView(saved, allowed, window.location.hash, initialVerifyCode, dailyLanding, requested => landingView(requested as View, data.permissions)));
     setBootstrap(data);
   }, [initialVerifyCode]);
 
@@ -395,6 +405,38 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     try { window.sessionStorage.setItem(viewStorageKey(bootstrap.user.id), view); }
     catch { /* Remembering the page is optional when browser storage is blocked. */ }
   }, [bootstrap, view]);
+
+  // The address bar names the open screen: a refresh, a copied link or a menu entry opened in a new tab
+  // lands there, and every screen change is a history entry for Back. The first write replaces the
+  // entry it arrived on, and so does rewriting an older link to the same screen (#activity -> #/activity).
+  const addressed = useRef(false);
+  useEffect(() => {
+    if (!bootstrap) return;
+    const hash = window.location.hash;
+    if (RECORD_LINK.test(hash)) return;
+    if (hash !== address) {
+      const replace = !addressed.current || hashView(hash) === view;
+      window.history[replace ? "replaceState" : "pushState"](null, "", window.location.pathname + window.location.search + address);
+    }
+    addressed.current = true;
+  }, [bootstrap, view, address]);
+
+  // Back, Forward and an edited address. A screen this person cannot open, or a change they decline
+  // to discard, puts the open screen's address back.
+  useEffect(() => {
+    if (!bootstrap) return;
+    const follow = () => {
+      const requested = viewFromHash(window.location.hash);
+      if (!requested) return;
+      const target = landingView(requested as View, bootstrap.permissions);
+      if (target === view) return;
+      if (!allowedViews(bootstrap).includes(target) || !setView(target)) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search + address);
+      }
+    };
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [bootstrap, view, address, setView]);
 
   useEffect(() => {
     if (!IS_AUTH_CONFIGURED) {
@@ -681,7 +723,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <button key={item.view} type="button" className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount))}</em> : null}</button>;
+                    return <a key={item.view} href={viewHash(item.view)} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={(event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount))}</em> : null}</a>;
                   })}
                 </div>
               </div>

@@ -358,8 +358,9 @@ test("refresh falls back safely for revoked permissions or blocked storage", asy
 });
 
 function navLeaf(tree, label) {
-  return findNode(tree, node => node.type === "button" && findNode(node, child => child.type === "span" && child.props.children === label));
+  return findNode(tree, node => node.type === "a" && findNode(node, child => child.type === "span" && child.props.children === label));
 }
+const plainClick = () => ({ button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, defaultPrevented: false, prevented: false, preventDefault() { this.prevented = true; } });
 
 test("master leaves restore directly and legacy master still opens customers", async (t) => {
   for (const [savedView, destination] of [["master", "customers"], ["suppliers", "suppliers"], ["employees", "employees"], ["material-master", "inventory"], ["user-accounts", "team"]]) {
@@ -397,7 +398,7 @@ test("reports have distinct restored destinations and preserve the dirty exit gu
       const label=savedView==="reports"?"Operational Reports":"Summary Reports";
       assert.equal(navLeaf(tree,label).props["aria-current"],"page");
       assert.ok(findNode(tree,n=>n.type===(savedView==="reports"?"ReportScreens":"ProductionReports")));
-      if(savedView==="reports") {findNode(tree,n=>n.type==="ReportScreens").props.onDirtyChange(true);globalThis.window.confirm=()=>false;navLeaf(tree,"Summary Reports").props.onClick();assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"));}
+      if(savedView==="reports") {findNode(tree,n=>n.type==="ReportScreens").props.onDirtyChange(true);globalThis.window.confirm=()=>false;navLeaf(tree,"Summary Reports").props.onClick(plainClick());assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"));}
     }finally{harness.cleanup();}
   });}
 });
@@ -421,8 +422,26 @@ test("mobile leaf navigation closes the drawer only after accepting navigation",
   try {
     globalThis.window.matchMedia=()=>({matches:true});
     harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
-    const tree=harness.render();navLeaf(tree,"Summary Reports").props.onClick();
+    const tree=harness.render();navLeaf(tree,"Summary Reports").props.onClick(plainClick());
     assert.ok(findNode(harness.render(),n=>n.props.className==="app sidebar-collapsed"));
+    assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
+  }finally{harness.cleanup();}
+});
+
+test("a menu entry is a link: Ctrl/Cmd+Click is left to the browser, a plain click stays in the app",async()=>{
+  const harness=createHarness({mode:"team-test",savedView:"reports",loadBootstrap:async()=>({...bootstrap,permissions:["report.read"]})});
+  try {
+    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(navLeaf(harness.render(),"Summary Reports").props.href,"#/summary-reports");
+    for(const modifier of ["ctrlKey","metaKey","shiftKey"]){
+      const event={...plainClick(),[modifier]:true};
+      navLeaf(harness.render(),"Summary Reports").props.onClick(event);
+      assert.equal(event.prevented,false,modifier);
+      assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"),modifier);
+    }
+    const event=plainClick();
+    navLeaf(harness.render(),"Summary Reports").props.onClick(event);
+    assert.equal(event.prevented,true);
     assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
   }finally{harness.cleanup();}
 });
