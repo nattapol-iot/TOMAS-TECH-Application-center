@@ -14,6 +14,7 @@ import {
 import { useT } from "../i18n";
 import { Badge, Icon } from "../ui";
 import { SearchMultiPicker } from "./SearchMultiPicker";
+import { estimateBusinessDate } from "../../../lib/estimate-ux";
 
 /*
  * The parts of a project that Create project and Edit project share: its Master Plan, who
@@ -58,7 +59,7 @@ export function planPayload(masterPlan: MasterPlanDraft[], teamPlan: TeamPlanDra
 export function MasterPlanSection({ rows, onChange, templates = [] }: { rows: MasterPlanDraft[]; onChange: (update: (rows: MasterPlanDraft[]) => MasterPlanDraft[]) => void; templates?: ScheduleTemplate[] }) {
   const t = useT();
   const [templateId, setTemplateId] = useState(0);
-  const [templateStart, setTemplateStart] = useState(() => new Date().toISOString().slice(0, 10));
+  const [templateStart, setTemplateStart] = useState(() => estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"));
   const chosen = templates.find(item => item.id === templateId);
   const update = (key: string, change: Partial<MasterPlanDraft>) => onChange(current => current.map(row => row.key === key ? { ...row, ...change } : row));
   return <section className="project-plan" aria-labelledby="project-master-plan-title">

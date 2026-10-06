@@ -5,6 +5,7 @@ import { ApiClientError, apiRequest, assignmentDeliveryNote, downloadCrmDocument
 import { useLanguage, useT } from "../i18n";
 import { Badge, EmptyState, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SummaryTile, TablePageSize, Tabs, type IconName, type Tone } from "../ui";
 import { CustomerModal } from "./AdminAnalyticsScreens";
+import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import "./crm.css";
 import { ProjectHandover } from "./ProjectHandover";
 import { CRM_COPY } from "./crm-copy";
@@ -20,7 +21,7 @@ const activityTypes=["Meeting","Call","Email","SiteVisit","CustomerUpdate","Inte
 const statuses=["Open","WaitingCustomer","WaitingInternal","WaitingSupplier","Done","Cancelled"];
 const text=(v:unknown)=>v==null?"":String(v);
 const date=(v:unknown)=>text(v).slice(0,10);
-const futureDate=(days:number)=>{const value=new Date();value.setDate(value.getDate()+days);return value.toISOString().slice(0,10);};
+const futureDate=(days:number)=>estimateBusinessDate(new Date(Date.now()+days*86_400_000),process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE??"Asia/Bangkok");
 const money=(v:unknown)=>v==null?"—":new Intl.NumberFormat(undefined,{style:"currency",currency:"THB",maximumFractionDigits:0}).format(Number(v));
 /* Stage, follow-up status and attention flag all say "what state is this in",
    so they take the shared badge tones instead of a CRM-only palette. */

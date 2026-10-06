@@ -9,6 +9,7 @@ import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
+import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import "./my-work.css";
 import {
   ApiClientError,
@@ -315,11 +316,8 @@ const dateTime = (value: string) => new Intl.DateTimeFormat(currentLocale(), {
   dateStyle: "short",
   timeStyle: "short",
 }).format(new Date(value));
-const isoToday = () => {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-};
+// The business day in the configured zone, whatever zone the reader's device is set to.
+const isoToday = () => estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
 const isBeforeToday = (value: string | null) => Boolean(value && value.slice(0, 10) < isoToday());
 const ageInDays = (value: string | null) => {
   if (!value) return null;

@@ -4,6 +4,7 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { HistoricalPrPanel } from "./HistoricalPrPanel";
+import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
 import {
@@ -433,14 +434,8 @@ const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style:
 const quantity = (value: number) => Number(value).toLocaleString(currentLocale(), { maximumFractionDigits: 4 });
 const date = (value: string | null) => value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "—";
 const dateTime = (value: string | null) => value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
-const isoDate = (offsetDays = 0) => {
-  const value = new Date();
-  value.setDate(value.getDate() + offsetDays);
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+// The business day in the configured zone (no DST in Bangkok, so whole days are exact).
+const isoDate = (offsetDays = 0) => estimateBusinessDate(new Date(Date.now() + offsetDays * 86_400_000), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
 const contains = (value: string, search: string) => value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
 const hasPermission = (bootstrap: BootstrapData, permission: string) => bootstrap.permissions.includes(permission);
 const isOpenPurchaseOrder = (item: PurchaseOrder) =>

@@ -5,6 +5,7 @@ import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SigningPreview, SignedFilePreview } from "./SigningPreview";
+import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import "./signing-stamp-form.css";
 import { signPositionedStep, type PlacementConfirmation } from "./signing-preview-client";
 import {
@@ -83,7 +84,8 @@ const date = (value: string | null) => value
 const dateTime = (value: string | null) => value
   ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
   : "—";
-const isoToday = () => new Date().toISOString().slice(0, 10);
+// The business day, not the UTC date: between 00:00 and 07:00 in Bangkok the UTC date is still yesterday.
+const isoToday = () => estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
 const hasPermission = (bootstrap: BootstrapData, permission: string) => bootstrap.permissions.includes(permission);
 const shortHash = (value: string | null) => value ? `${value.slice(0, 6)}…${value.slice(-2)}` : "—";
 
