@@ -33,6 +33,7 @@ const modules = [
  ['knowledge','Knowledge Hub','บทความ เอกสาร collaboration workflow และ sales materials','knowledge-admin knowledge-articles knowledge-collaboration knowledge-documents knowledge-workflow knowledge-sales-materials','production/KnowledgeScreens.tsx','knowledge'],
  ['performance','KPI / Growth / Team Activity','ประเมิน performance หลักฐาน insights และ activity','performance activity','production/PerformanceScreen.tsx production/TeamActivityScreen.tsx','performance|activity'],
  ['support','Support / Employee Manual','แจ้งปัญหา ticket การตอบรับ และคู่มือ','support','production/SupportScreens.tsx production/EmployeeManualScreen.tsx','support|employee-manual'],
+ ['downloads','Download Center','โปรแกรมและไฟล์ของแผนกจากโฟลเดอร์ download-center บน NAS (รายการและดาวน์โหลด)','download-center','production/DownloadCenterScreen.tsx','download-center'],
  ['master','Master Data / Customers / Admin','ลูกค้า supplier พนักงาน role audit และ settings','master sales-customers admin','production/CoreScreens.tsx production/AdminAnalyticsScreens.tsx','customer|user-role|admin|business-card'],
  ['platform','Platform / Health / Storage','config database migration authentication และ document storage','health record-presence','','migration|database|startup|network|audit|http'],
 ];

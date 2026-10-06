@@ -59,7 +59,7 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
   const productionApp = await readFile(new URL("app/system/ProductionApp.tsx", root), "utf8");
   const navSource = productionApp.slice(productionApp.indexOf("const NAV"), productionApp.indexOf("const IS_AUTH_CONFIGURED"));
   const menuLabels = [
-    "Dashboard", "My Work", "RFQ intake & estimating", "Estimate Cost", "Projects", "Knowledge Hub",
+    "Dashboard", "My Work", "RFQ intake & estimating", "Estimate Cost", "Projects", "Knowledge Hub", "Download Center",
     // Every label is a dictionary key, never a literal in one language: the
     // intake and opportunity entries once carried raw Thai and showed Thai to
     // English and Japanese readers.

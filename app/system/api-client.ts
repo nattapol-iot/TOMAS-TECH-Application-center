@@ -2906,6 +2906,35 @@ export const markNotificationsRead = (input: { ids?: number[]; all?: boolean }) 
     method: "POST", body: JSON.stringify({ ids: input.ids ?? [], all: input.all ?? false }),
   });
 
+/* Download Center: department software and files published from the NAS share. */
+export type DownloadCenterFile = {
+  name: string;
+  title: string;
+  description: string;
+  version: string;
+  recommended: boolean;
+  sizeBytes: number;
+  modifiedAt: string;
+};
+export type DownloadCenterCategory = { folder: string; title: string; description: string; order: number; files: DownloadCenterFile[] };
+
+export const getDownloadCenter = () =>
+  apiRequest<{ categories: DownloadCenterCategory[] }>("/api/v1/download-center");
+
+/** Installers are tens of MB and may come over VPN, so allow far longer than a document download. */
+export async function downloadCenterFile(category: string, file: string): Promise<void> {
+  const query = new URLSearchParams({ category, file });
+  const response = await authorizedFetch(`/api/v1/download-center/content?${query}`, { headers: { Accept: "application/octet-stream" } }, 15 * 60_000);
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = file;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 /**
  * Content-Disposition carries the real file name, which may be Thai. The
  * RFC 5987 form is preferred and the quoted form is the fallback, the same

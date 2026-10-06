@@ -75,4 +75,5 @@ export const ProductionMyAssignments = dynamic(() => import("./SiteVisitScreens"
 export const ProductionSalesIntake = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionSalesIntake), screen);
 export const ProductionSiteVisits = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionSiteVisits), screen);
 export const ProductionVisitMasterData = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionVisitMasterData), screen);
+export const DownloadCenterScreen = dynamic(() => import("./DownloadCenterScreen").then((m) => m.DownloadCenterScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);

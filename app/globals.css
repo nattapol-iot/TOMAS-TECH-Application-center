@@ -5170,3 +5170,12 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .record-viewer.more { align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-3xs); font-weight: 600; }
 .record-viewers-names { min-width: 0; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
 @media (max-width: 720px) { .record-viewers-names { display: none; } }
+
+/* Download Center (DownloadCenterScreen). New selectors only, built from the shared tokens. */
+.download-center-note { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--blue-line); border-radius: var(--r-md); background: var(--blue-soft); color: var(--blue-text); font-size: var(--fs-sm); }
+.download-center-note code { padding: 1px 6px; border: 1px solid var(--blue-line); border-radius: var(--r-xs); background: var(--surface); color: var(--ink); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.download-center-count { margin-left: auto; color: var(--muted); font-size: var(--fs-sm); white-space: nowrap; }
+.download-center-table { width: 100%; min-width: 640px; table-layout: fixed; }
+.download-center-table .cell-primary span.download-center-description { white-space: normal; color: var(--ink-soft); }
+.download-center-table .badge { vertical-align: middle; }
+@media (max-width: 720px) { .download-center-note { align-items: flex-start; } }

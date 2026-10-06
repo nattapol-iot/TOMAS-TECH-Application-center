@@ -20,7 +20,7 @@ const uuid=(v:unknown)=>{const key=requiredText(v,36,'Request key');if(!/^[\da-f
 // Every navigable view in app/system/ProductionApp.tsx; a view missing here is refused with 400,
 // which the client swallows, so that page silently never counts (tests/activity-presence-modules.test.mjs).
 // "<view>-<tab>" keys are the sub-views screens report through useActivitySubView (app/system/use-activity-presence.ts).
-const modules=new Set(['sales-intake','labor','signature','dashboard','my-work','inquiries','estimates','projects','knowledge','site-visits','my-assignments','price','quotations','missing','project-timeline','resources','procurement','boms','purchase','pos','inventory','receiving','issues','approvals','signing','documents','performance','reports','master','rates','audit','settings','profile','support','activity','module-templates','stamps','visit-master','signature',
+const modules=new Set(['downloads','sales-intake','labor','signature','dashboard','my-work','inquiries','estimates','projects','knowledge','site-visits','my-assignments','price','quotations','missing','project-timeline','resources','procurement','boms','purchase','pos','inventory','receiving','issues','approvals','signing','documents','performance','reports','master','rates','audit','settings','profile','support','activity','module-templates','stamps','visit-master','signature',
  'crm-dashboard','crm-customers','crm-contacts','crm-opportunities','crm-activities','crm-pipeline','customers','suppliers','employees','material-master','user-accounts','labor-packages','schedule-templates','summary-reports','manual',
  'projects-portfolio','projects-timeline','projects-schedule','projects-punchlist','resources-tasks','resources-gantt','resources-workload','resources-items']);
 
