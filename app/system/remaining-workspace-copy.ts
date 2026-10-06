@@ -1326,6 +1326,34 @@ export const REMAINING_WORKSPACE_COPY: Record<string, {th: string; jp: string; e
     "th": "ยังไม่อัปโหลด",
     "jp": "未アップロード"
   },
+  "Upload artwork": {
+    "th": "อัปโหลดภาพตรา",
+    "jp": "印影をアップロード"
+  },
+  "Replace artwork": {
+    "th": "เปลี่ยนภาพตรา",
+    "jp": "印影を差し替え"
+  },
+  "Artwork saved": {
+    "th": "บันทึกภาพตราแล้ว",
+    "jp": "印影を保存しました"
+  },
+  "Selected artwork": {
+    "th": "ภาพตราที่เลือก",
+    "jp": "選択した印影"
+  },
+  "Only PNG images are accepted.": {
+    "th": "รองรับเฉพาะไฟล์ PNG",
+    "jp": "PNG画像のみ対応しています。"
+  },
+  "The image must be 2 MB or smaller.": {
+    "th": "ไฟล์ภาพต้องมีขนาดไม่เกิน 2 MB",
+    "jp": "画像は2MB以下にしてください。"
+  },
+  "This image is printed wherever this stamp is applied. It cannot be downloaded again after upload, so keep the original file.": {
+    "th": "ภาพนี้จะถูกพิมพ์ลงบนเอกสารทุกครั้งที่ประทับตรานี้ หลังอัปโหลดแล้วจะดาวน์โหลดไฟล์คืนไม่ได้ กรุณาเก็บไฟล์ต้นฉบับไว้",
+    "jp": "この画像は、この印を押すたびに書類に印刷されます。アップロード後はファイルを再ダウンロードできないため、元のファイルを保管してください。"
+  },
   "Valid": {
     "th": "มีผล",
     "jp": "有効"

@@ -3338,6 +3338,13 @@ export const revokeStampAuthority = (stampId: number, authorityId: number, reaso
     `/api/v1/master/company-stamps/${stampId}/authorities/${authorityId}/revoke`,
     { method: "POST", body: JSON.stringify({ reason }) });
 
+/** Replaces a stamp's seal artwork (PNG, data URL or bare base64); needs signing.stamp.grant. */
+export const setCompanyStampImage = (stampId: number, imageBase64: string, rowVersion: string) =>
+  apiRequest<{ id: number }>(`/api/v1/master/company-stamps/${stampId}/image`, {
+    method: "PUT",
+    body: JSON.stringify({ imageBase64, rowVersion }),
+  });
+
 export const listSignatureFlows = () => apiRequest<SignFlowTemplateSummary[]>("/api/v1/master/signature-flows");
 
 /* Master module templates — a reusable group of equipment an engineer drops into an

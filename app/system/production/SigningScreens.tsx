@@ -33,6 +33,7 @@ import {
   replaceMySignature,
   returnStep,
   revokeStampAuthority,
+  setCompanyStampImage,
   signStep,
   verifySignedDocument,
   type BootstrapData,
@@ -1571,6 +1572,7 @@ function renderTypedSignature(name: string): string | null {
 // ---------------------------------------------------------------------------
 
 export function ProductionCompanyStamps({ bootstrap, notify }: SigningScreenProps) {
+  const t = useStaticCopy();
   const canRead = hasPermission(bootstrap, "signing.read");
   const canMaster = hasPermission(bootstrap, "signing.master");
   const canGrant = hasPermission(bootstrap, "signing.stamp.grant");
@@ -1580,6 +1582,7 @@ export function ProductionCompanyStamps({ bootstrap, notify }: SigningScreenProp
   const [createOpen, setCreateOpen] = useState(false);
   const [grantFor, setGrantFor] = useState<CompanyStampSummary | null>(null);
   const [revokeFor, setRevokeFor] = useState<{ stamp: CompanyStampSummary; authorityId: number } | null>(null);
+  const [artworkFor, setArtworkFor] = useState<CompanyStampSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -1624,7 +1627,11 @@ export function ProductionCompanyStamps({ bootstrap, notify }: SigningScreenProp
           <Panel key={stamp.id} title={`${stamp.code} · ${stamp.nameEn}`}
             subtitle={`${stamp.legalEntity} · custodian ${stamp.custodianRole} · applied ${stamp.appliedCount} times`}
             actions={canGrant && stamp.status === "ACTIVE"
-              ? <button className="btn ghost sm" type="button" onClick={() => setGrantFor(stamp)}><Icon name="plus" /><LocalizedText text={"Grant authority"} /></button>
+              ? <>
+                {/* The seal's artwork needs the same manager permission as granting it. */}
+                <button className="btn ghost sm" type="button" onClick={() => setArtworkFor(stamp)}><Icon name="upload" /><LocalizedText text={stamp.hasImage ? "Replace artwork" : "Upload artwork"} /></button>
+                <button className="btn ghost sm" type="button" onClick={() => setGrantFor(stamp)}><Icon name="plus" /><LocalizedText text={"Grant authority"} /></button>
+              </>
               : undefined}>
             <div className="detail-grid">
               <div><span><LocalizedText text={"Status"} /></span><strong><Badge tone={stamp.status === "ACTIVE" ? "green" : "slate"}>{stamp.status}</Badge></strong></div>
@@ -1712,11 +1719,63 @@ export function ProductionCompanyStamps({ bootstrap, notify }: SigningScreenProp
         onCreated={(message) => { setCreateOpen(false); notify(message); stamps.reload(); }} /> : null}
       {grantFor ? <GrantAuthorityModal bootstrap={bootstrap} stamp={grantFor} onClose={() => setGrantFor(null)}
         onGranted={(message) => { setGrantFor(null); notify(message); stamps.reload(); }} /> : null}
+      {artworkFor ? <StampArtworkModal stamp={artworkFor} onClose={() => setArtworkFor(null)}
+        onSaved={() => { notify(`${artworkFor.code} · ${t("Artwork saved")}`); setArtworkFor(null); stamps.reload(); }} /> : null}
       {revokeFor ? <ReasonPrompt title={`Revoke authority on ${revokeFor.stamp.code}`}
         description="การยกเลิกไม่มีผลย้อนหลัง เอกสารที่ประทับไปแล้วยังคงมีตราประทับและยังอ้างอิงสิทธิ์ที่อนุญาตไว้"
         confirmLabel="Revoke authority" busy={busy} onClose={() => setRevokeFor(null)}
         onConfirm={(reason) => { void revoke(reason); }} /> : null}
     </>
+  );
+}
+
+const MAX_STAMP_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The seal artwork PUT /api/v1/master/company-stamps/:id/image stores. The server refuses
+ * anything but a PNG of at most 2 MB, so the same rules are checked here before the upload;
+ * the stored file is never served back, so the preview is of the chosen file only.
+ */
+function StampArtworkModal({ stamp, onClose, onSaved }: { stamp: CompanyStampSummary; onClose: () => void; onSaved: () => void }) {
+  const localizeCopy = useStaticCopy();
+  const [image, setImage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const choose = (file: File | undefined) => {
+    setImage(null); setError("");
+    if (!file) return;
+    if (file.type !== "image/png") { setError(localizeCopy("Only PNG images are accepted.")); return; }
+    if (file.size > MAX_STAMP_IMAGE_BYTES) { setError(localizeCopy("The image must be 2 MB or smaller.")); return; }
+    const reader = new FileReader();
+    reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  const submit = async () => {
+    if (!image) return;
+    setBusy(true); setError("");
+    try { await setCompanyStampImage(stamp.id, image, stamp.rowVersion); onSaved(); }
+    catch (requestError) { setError(toError(requestError)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Modal title="Artwork" subtitle={`${stamp.code} · ${stamp.nameEn}`} size="md" onClose={onClose}
+      footer={<>
+        <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
+        <button className="btn primary" type="button" disabled={busy || !image} onClick={() => { void submit(); }}>
+          <Icon name="upload" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={stamp.hasImage ? "Replace artwork" : "Upload artwork"} />}
+        </button>
+      </>}>
+      <ActionError message={error} />
+      <Field label="ไฟล์ PNG พื้นหลังโปร่งใส" hint="กว้างอย่างน้อย 600 px และไม่เกิน 2 MB">
+        <input type="file" accept="image/png" aria-label={localizeCopy("ไฟล์ PNG พื้นหลังโปร่งใส")} onChange={(event) => choose(event.target.files?.[0])} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {image ? <img src={image} alt={localizeCopy("Selected artwork")} style={{ maxHeight: 160, marginTop: 8 }} /> : null}
+      </Field>
+      <p className="muted"><LocalizedText text={"This image is printed wherever this stamp is applied. It cannot be downloaded again after upload, so keep the original file."} /></p>
+    </Modal>
   );
 }
 
