@@ -77,9 +77,9 @@ try {
   assert.equal(added.siteId, directory.sites[0].id);
   directory = await api('reader', `${base}/${customer.id}/contacts`);
   assert.equal(directory.contacts.length, 2);
-  // Existing Site Visit consumes precisely the same contact rows.
-  const visit = await api('sales', `/api/v1/visit-master/customers/${customer.id}/sites`);
-  assert.ok(JSON.stringify(visit).includes('second@test.invalid'));
+  // CRM reads precisely the same contact rows (the visit-master copy of this read was removed).
+  const crm = await api('sales', `/api/v1/crm/customers/${customer.id}`);
+  assert.ok(JSON.stringify(crm.contacts).includes('second@test.invalid'));
   const bootstrap = await api('sales', '/api/v1/bootstrap');
   const customerRow = bootstrap.customers.find((row: { id: number }) => row.id === customer.id);
   assert.equal(customerRow.contactTitleTh,'นาย'); assert.equal(customerRow.contactTitleEn,'Mr.'); assert.equal(customerRow.contactTitleJa,'様');
