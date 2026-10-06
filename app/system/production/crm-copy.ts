@@ -236,7 +236,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["MasterSchedule.emptyMessage", "Create one to reuse its milestones when creating a project.", "สร้างแผนเพื่อดึงไมล์สโตนไปใช้ตอนสร้าง Project", "作成すると、プロジェクト作成時にマイルストーンを再利用できます。"],
  ["MasterSchedule.saved", "Master schedule saved", "บันทึก Master Schedule แล้ว", "マスタースケジュールを保存しました"],
  ["MasterSchedule.deleted", "Master schedule deleted", "ลบ Master Schedule แล้ว", "マスタースケジュールを削除しました"],
- ["MasterSchedule.editorHint", "Anyone can keep and change master schedules.", "ทุกคนสร้างและแก้ไข Master Schedule ได้", "誰でもマスタースケジュールを作成・変更できます。"],
+ ["MasterSchedule.editorHint", "Only people who plan project schedules can change master schedules.", "เฉพาะผู้มีสิทธิ์วางแผนตารางงานโครงการเท่านั้นที่แก้ไข Master Schedule ได้", "マスタースケジュールを変更できるのは、プロジェクト日程を計画する権限を持つ人だけです。"],
  ["MasterSchedule.daysHint", "Start day counts from the project start (0 = the first day). Leave both empty to copy only the name.", "วันที่เริ่ม นับจากวันเริ่มโปรเจกต์ (0 = วันแรก) · เว้นว่างทั้งสองช่องถ้าต้องการดึงแค่ชื่อ", "開始日はプロジェクト開始日から数えます（0＝初日）。両方空欄なら名前だけをコピーします。"],
  ["MasterSchedule.startDay", "Start day", "เริ่มวันที่", "開始日（日目）"],
  ["MasterSchedule.duration", "Days", "จำนวนวัน", "日数"],

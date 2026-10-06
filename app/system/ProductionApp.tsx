@@ -775,7 +775,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
-          {view === "schedule-templates" ? <ScheduleTemplateMaster notify={setToast} /> : null}
+          {view === "schedule-templates" ? <ScheduleTemplateMaster bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
           {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
           {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}

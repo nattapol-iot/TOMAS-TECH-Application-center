@@ -8,10 +8,12 @@ import { bodyObject, parseRowVersion, positiveLong, requiredText } from "../http
 import type { CurrentUserService } from "../users.js";
 
 /*
- * Master schedules: named Master Plans anyone keeps and reuses when creating a project.
+ * Master schedules: named Master Plans reused when creating a project.
  * A row's start offset and duration count days from the project start. A row may carry
  * neither, in which case applying the template copies only its name and leaves the dates
- * to be typed. Every signed-in user may manage them.
+ * to be typed. Every signed-in user may read them; changing them needs schedule.plan, the
+ * permission that creating a project with a plan already requires (projects.ts), and a
+ * change or delete must name the rowVersion it was based on.
  */
 
 export type TemplateRow = { name: string; startOffsetDays: number | null; durationDays: number | null };
@@ -57,6 +59,15 @@ async function writeRows(transaction: TransactionType, templateId: number, rows:
   }
 }
 
+/** Locks a template and checks the caller saw its current version. */
+async function lockTemplate(transaction: TransactionType, id: number, rowVersion: Buffer): Promise<{ name: string }> {
+  const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
+  const current = (await lookup.query<{ name: string; row_version: Buffer }>(`SELECT name,row_version FROM dbo.schedule_templates WITH(UPDLOCK,HOLDLOCK) WHERE id=@id;`)).recordset[0];
+  if (!current) throw new ApiError(404, "schedule_template_not_found", "Master schedule not found.");
+  if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "Someone else changed this master schedule. Reload it and try again.");
+  return { name: current.name };
+}
+
 async function demandUniqueName(transaction: TransactionType, name: string, exceptId: number | null): Promise<void> {
   const check = new sql.Request(transaction); check.input("name", sql.NVarChar(200), name).input("except", sql.BigInt, exceptId);
   const taken = (await check.query(`SELECT id FROM dbo.schedule_templates WITH(UPDLOCK,HOLDLOCK) WHERE name=@name AND (@except IS NULL OR id<>@except);`)).recordset[0];
@@ -84,6 +95,7 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
   });
 
   app.post("/api/v1/schedule-templates", async (request, reply) => {
+    await users.demandPermission(request, "schedule.plan");
     const actor = await users.required(request);
     const input = parseTemplate(request.body);
     const created = await database.transaction(async (transaction) => {
@@ -101,15 +113,13 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
   });
 
   app.put("/api/v1/schedule-templates/:id", async (request) => {
+    await users.demandPermission(request, "schedule.plan");
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Template id");
     const input = parseTemplate(request.body);
     const rowVersion = parseRowVersion(bodyObject(request.body).rowVersion);
     return database.transaction(async (transaction) => {
-      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
-      const current = (await lookup.query<{ name: string; row_version: Buffer }>(`SELECT name,row_version FROM dbo.schedule_templates WITH(UPDLOCK,HOLDLOCK) WHERE id=@id;`)).recordset[0];
-      if (!current) throw new ApiError(404, "schedule_template_not_found", "Master schedule not found.");
-      if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "Someone else changed this master schedule. Reload it and try again.");
+      const current = await lockTemplate(transaction, id, rowVersion);
       await demandUniqueName(transaction, input.name, id);
       const update = new sql.Request(transaction);
       update.input("id", sql.BigInt, id).input("name", sql.NVarChar(200), input.name).input("actor", sql.BigInt, actor.id);
@@ -123,13 +133,14 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
   });
 
   app.delete("/api/v1/schedule-templates/:id", async (request) => {
+    await users.demandPermission(request, "schedule.plan");
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Template id");
+    const rowVersion = parseRowVersion(bodyObject(request.body).rowVersion);
     return database.transaction(async (transaction) => {
+      const removed = await lockTemplate(transaction, id, rowVersion);
       const remove = new sql.Request(transaction); remove.input("id", sql.BigInt, id);
-      const removed = (await remove.query<{ name: string }>(`DECLARE @gone TABLE(name nvarchar(200));
-        DELETE FROM dbo.schedule_templates OUTPUT deleted.name INTO @gone WHERE id=@id; SELECT name FROM @gone;`)).recordset[0];
-      if (!removed) throw new ApiError(404, "schedule_template_not_found", "Master schedule not found.");
+      await remove.query(`DELETE FROM dbo.schedule_templates WHERE id=@id;`);
       await insertAudit(transaction, actor.id, "Schedule Template", id, `ST-${id}`, "Deleted", { name: removed.name }, null);
       return { id, deleted: true };
     });

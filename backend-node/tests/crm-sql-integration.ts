@@ -286,19 +286,23 @@ try {
  const recreated=await call("POST","/projects","Admin",lockedBody,201);
  assert.equal(recreated.number,"PJ-CRM-LOCKED");
 
- // Master schedules: every signed-in user keeps and reuses them.
+ // Master schedules: everyone reads them; schedule planners (schedule.plan) change them.
  const seeded=(await call("GET","/schedule-templates","Other")).find((t:{name:string})=>t.name==="Standard project");
  assert.equal(seeded.rows.length,8);assert.equal(seeded.rows[0].name,"Kick-off meeting");assert.equal(seeded.rows[0].startOffsetDays,null);
  const templateRows=[{name:"Kick-off",startOffsetDays:0,durationDays:1},{name:"Install",startOffsetDays:30,durationDays:5},{name:"Handover",startOffsetDays:null,durationDays:null}];
- const template=await call("POST","/schedule-templates","Other",{name:"Line upgrade",rows:templateRows},201);
+ await call("POST","/schedule-templates","Other",{name:"Line upgrade",rows:templateRows},403);
+ // Sales holds schedule.plan through its additional Project Manager role.
+ const template=await call("POST","/schedule-templates","Sales",{name:"Line upgrade",rows:templateRows},201);
  assert.equal((await call("POST","/schedule-templates","Sales",{name:"Line upgrade",rows:[{name:"Kick-off"}]},409)).code,"schedule_template_name_taken");
  await call("POST","/schedule-templates","Sales",{name:"Half period",rows:[{name:"Kick-off",startOffsetDays:1}]},400);
  const listedTemplate=(await call("GET","/schedule-templates","Sales")).find((t:{id:number})=>t.id===template.id);
  assert.deepEqual(listedTemplate.rows,templateRows);
  await call("PUT",`/schedule-templates/${template.id}`,"Sales",{name:"Line upgrade v2",rows:[{name:"Only"}],rowVersion:Buffer.alloc(8).toString("base64")},409);
- await call("PUT",`/schedule-templates/${template.id}`,"Sales",{name:"Line upgrade v2",rows:[{name:"Only"}],rowVersion:listedTemplate.rowVersion});
+ const savedTemplate=await call("PUT",`/schedule-templates/${template.id}`,"Sales",{name:"Line upgrade v2",rows:[{name:"Only"}],rowVersion:listedTemplate.rowVersion});
  assert.deepEqual((await call("GET","/schedule-templates","Other")).find((t:{id:number})=>t.id===template.id).rows,[{name:"Only",startOffsetDays:null,durationDays:null}]);
- await call("DELETE",`/schedule-templates/${template.id}`,"Other");
+ await call("DELETE",`/schedule-templates/${template.id}`,"Other",{rowVersion:savedTemplate.rowVersion},403);
+ await call("DELETE",`/schedule-templates/${template.id}`,"Sales",{rowVersion:listedTemplate.rowVersion},409);
+ await call("DELETE",`/schedule-templates/${template.id}`,"Sales",{rowVersion:savedTemplate.rowVersion});
  assert.ok(!(await call("GET","/schedule-templates","Other")).some((t:{id:number})=>t.id===template.id));
  assert.equal((await run(`SELECT COUNT(*) n FROM dbo.schedule_template_rows WHERE template_id=${template.id}`)).recordset[0]!.n,0);
  console.log("CRM + project handover SQL integration passed: permissions, stale links, direct RFQ follow-up, existing opportunity link, Won blocked until cost approval, PO required, additional manager role, Approved/Locked handover, WON-only project creation, project scope, duplicate prevention, deleting unstarted projects, master schedules, editing the plan, team, payments and contacts.");

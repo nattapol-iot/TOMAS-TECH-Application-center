@@ -1650,8 +1650,8 @@ export const createScheduleTemplate = (input: ScheduleTemplateInput) =>
   apiRequest<{ id: number; rowVersion: string }>("/api/v1/schedule-templates", { method: "POST", body: JSON.stringify(input) });
 export const updateScheduleTemplate = (id: number, input: ScheduleTemplateInput & { rowVersion: string }) =>
   apiRequest<{ id: number; rowVersion: string }>(`/api/v1/schedule-templates/${id}`, { method: "PUT", body: JSON.stringify(input) });
-export const deleteScheduleTemplate = (id: number) =>
-  apiRequest<{ id: number; deleted: true }>(`/api/v1/schedule-templates/${id}`, { method: "DELETE" });
+export const deleteScheduleTemplate = (id: number, rowVersion: string) =>
+  apiRequest<{ id: number; deleted: true }>(`/api/v1/schedule-templates/${id}`, { method: "DELETE", body: JSON.stringify({ rowVersion }) });
 
 export type UpdateProjectInput = {
   rowVersion: string;

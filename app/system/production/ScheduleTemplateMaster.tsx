@@ -6,6 +6,7 @@ import {
   deleteScheduleTemplate,
   listScheduleTemplates,
   updateScheduleTemplate,
+  type BootstrapData,
   type ScheduleTemplate,
 } from "../api-client";
 import { useT } from "../i18n";
@@ -13,7 +14,8 @@ import { LocalizedText } from "../LocalizedText";
 import { EmptyState, Icon, Modal, PageHeader, Panel } from "../ui";
 
 /*
- * Master Schedule: named Master Plans anyone keeps here and pulls into Create project.
+ * Master Schedule: named Master Plans pulled into Create project. Everyone may read them;
+ * changing them needs schedule.plan, the permission that creating a project with a plan needs.
  * A row's start day and duration count from the project start; leaving both empty keeps
  * only the milestone name, and the dates are typed when the project is created.
  */
@@ -26,8 +28,9 @@ const rowValid = (row: RowDraft) => Boolean(row.name.trim()) && ((!row.startOffs
   || (wholeDays(row.startOffsetDays, 0) && wholeDays(row.durationDays, 1)));
 const blankRow = (): RowDraft => ({ key: crypto.randomUUID(), name: "", startOffsetDays: "", durationDays: "" });
 
-export function ScheduleTemplateMaster({ notify }: { notify: (message: string) => void }) {
+export function ScheduleTemplateMaster({ bootstrap, notify }: { bootstrap: BootstrapData; notify: (message: string) => void }) {
   const t = useT();
+  const canManage = bootstrap.permissions.includes("schedule.plan");
   const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,7 +44,7 @@ export function ScheduleTemplateMaster({ notify }: { notify: (message: string) =
 
   return <>
     <PageHeader eyebrow="MASTER DATA" title={t("MasterSchedule.title")} subtitle={t("MasterSchedule.subtitle")}
-      actions={<button className="btn primary" type="button" onClick={() => setEditing("new")}><Icon name="plus" />{t("MasterSchedule.create")}</button>} />
+      actions={canManage ? <button className="btn primary" type="button" onClick={() => setEditing("new")}><Icon name="plus" />{t("MasterSchedule.create")}</button> : undefined} />
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
     <Panel title={`${templates.length} ${t("MasterSchedule.count")}`} flush>
       {templates.length ? <div className="table-wrap"><table>
@@ -50,20 +53,20 @@ export function ScheduleTemplateMaster({ notify }: { notify: (message: string) =
           <td className="wrap"><strong>{template.name}</strong><small className="muted schedule-template-preview">{template.rows.map(row => row.name).join(" → ")}</small></td>
           <td>{template.rows.length}</td>
           <td className="muted">{template.updatedBy ?? "—"}</td>
-          <td><div className="row-actions">
+          <td>{canManage ? <div className="row-actions">
             <button className="btn ghost sm" type="button" onClick={() => setEditing(template)}><Icon name="edit" />{t("MasterSchedule.edit")}</button>
             <button className="btn ghost sm danger" type="button" aria-label={`${t("MasterSchedule.delete")} ${template.name}`} title={t("MasterSchedule.delete")} onClick={() => setRemoving(template)}><Icon name="trash" /></button>
-          </div></td>
+          </div> : null}</td>
         </tr>)}</tbody>
       </table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div>
         : <EmptyState icon="calendar" title="MasterSchedule.emptyTitle" message="MasterSchedule.emptyMessage" />}
     </Panel>
-    {editing ? <TemplateEditor template={editing === "new" ? null : editing} onClose={() => setEditing(null)}
+    {editing && canManage ? <TemplateEditor template={editing === "new" ? null : editing} onClose={() => setEditing(null)}
       onSaved={async (name) => { setEditing(null); notify(`${name} · ${t("MasterSchedule.saved")}`); await load(); }} /> : null}
-    {removing ? <Modal title="MasterSchedule.delete" subtitle={removing.name} size="sm" onClose={() => setRemoving(null)} footer={<>
+    {removing && canManage ? <Modal title="MasterSchedule.delete" subtitle={removing.name} size="sm" onClose={() => setRemoving(null)} footer={<>
       <button className="btn ghost" type="button" onClick={() => setRemoving(null)}><LocalizedText text={"Cancel"} /></button>
       <button className="btn danger" type="button" onClick={() => { const target = removing; setRemoving(null);
-        void deleteScheduleTemplate(target.id).then(async () => { notify(`${target.name} · ${t("MasterSchedule.deleted")}`); await load(); }).catch(failure => setError(errorText(failure))); }}>
+        void deleteScheduleTemplate(target.id, target.rowVersion).then(async () => { notify(`${target.name} · ${t("MasterSchedule.deleted")}`); await load(); }).catch(failure => setError(errorText(failure))); }}>
         <Icon name="trash" />{t("MasterSchedule.delete")}</button>
     </>}><p>{t("MasterSchedule.deleteConfirm")}</p></Modal> : null}
   </>;
