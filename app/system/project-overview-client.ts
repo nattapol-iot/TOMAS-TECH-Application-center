@@ -58,9 +58,6 @@ export type PendingDayRequest = {
 };
 export const listPendingDayRequests = () => apiRequest<PendingDayRequest[]>("/api/v1/schedule/day-requests/pending");
 
-/** Open projects in scope that need attention (Delayed or At Risk), for the Projects menu badge. */
-export const projectAttention = () => apiRequest<{ delayed: number; atRisk: number; attention: number }>("/api/v1/projects/attention");
-
 /** Schedule rows whose task name, PIC or external PIC matches, across the projects in scope. */
 export const searchScheduleTasks = (query: string, includeClosed = false) =>
   apiRequest<{ matches: { projectId: number; taskId: number }[]; truncated: boolean }>(`/api/v1/schedule/search?q=${encodeURIComponent(query)}${includeClosed ? "&includeClosed=1" : ""}`);

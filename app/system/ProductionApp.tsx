@@ -240,6 +240,15 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [myWorkUrgentCount, setMyWorkUrgentCount] = useState(0);
   const [crmOpportunityId, setCrmOpportunityId] = useState<number|null>(null);
   const [crmActionableCount, setCrmActionableCount] = useState(0);
+  // Projects badge: open projects in scope that are Delayed or At Risk, by the portfolio's own health rule
+  // (GET /api/v1/projects/attention). Read again on each screen change, so it follows a status change.
+  const [projectAttentionCount, setProjectAttentionCount] = useState(0);
+  useEffect(() => {
+    if (!bootstrap?.permissions.includes("project.read")) return;
+    let cancelled = false;
+    void apiRequest<{ attention: number }>("/api/v1/projects/attention").then((result) => { if (!cancelled) setProjectAttentionCount(Number(result.attention) || 0); }).catch(() => { if (!cancelled) setProjectAttentionCount(0); });
+    return () => { cancelled = true; };
+  }, [bootstrap, view]);
   useEffect(() => {
     if(!bootstrap?.permissions.includes("crm.read")) return;
     let cancelled=false;
@@ -723,7 +732,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <a key={item.view} href={viewHash(item.view)} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={(event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount))}</em> : null}</a>;
+                    return <a key={item.view} href={viewHash(item.view)} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={(event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount))}</em> : null}</a>;
                   })}
                 </div>
               </div>
@@ -907,11 +916,12 @@ function myWorkNeedsAttention(item: MyWorkUrgencyItem) {
   return needsAttention(item, estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"), Date.now());
 }
 
-function badgeFor(view: View, bootstrap: BootstrapData, myWorkUrgentCount = 0) {
+/** A number on a menu entry is something to act on: Projects counts the Delayed and At Risk ones, not every open project. */
+function badgeFor(view: View, bootstrap: BootstrapData, myWorkUrgentCount = 0, projectAttentionCount = 0) {
   if (view === "my-work") return myWorkUrgentCount;
   if (view === "inquiries") return bootstrap.counts.inquiries;
   if (view === "estimates") return bootstrap.counts.estimates;
-  if (view === "projects") return bootstrap.counts.activeProjects;
+  if (view === "projects") return projectAttentionCount;
   if (view === "approvals") return bootstrap.counts.approvals;
   return 0;
 }

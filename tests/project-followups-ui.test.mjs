@@ -182,6 +182,19 @@ test("review fixes: one progress-report definition, a locked signing read and a 
   assert.doesNotMatch(read("backend-node/src/errors.ts") + read("backend-node/src/routes/schedule.ts"), /primary role is Engineering Manager/);
 });
 
+test("the Projects menu badge counts open Delayed and At Risk projects, not every open project", () => {
+  const shell = read("app/system/ProductionApp.tsx");
+  assert.match(shell, /apiRequest<\{ attention: number \}>\("\/api\/v1\/projects\/attention"\)/);
+  assert.match(shell, /if \(!bootstrap\?\.permissions\.includes\("project\.read"\)\) return;/);
+  assert.match(shell, /if \(view === "projects"\) return projectAttentionCount;/);
+  assert.doesNotMatch(shell, /if \(view === "projects"\) return bootstrap\.counts\.activeProjects;/);
+  assert.equal((shell.match(/badgeFor\(item\.view, bootstrap, myWorkUrgentCount \+ taskAcknowledgmentCount, projectAttentionCount\)/g) ?? []).length, 2, "the condition and the number agree");
+  // The endpoint the badge reads uses the portfolio's own health rule and scope.
+  const routes = read("backend-node/src/routes/projects.ts");
+  assert.match(routes, /app\.get\("\/api\/v1\/projects\/attention"/);
+  assert.match(routes, /AND p\.status NOT IN \(N'Closed',N'On Hold'\)/);
+});
+
 test("every new follow-up string has English, Thai and Japanese copy", () => {
   const { translate } = load("app/system/i18n.ts");
   const keys = [
