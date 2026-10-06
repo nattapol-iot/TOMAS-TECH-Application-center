@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LocalizedText } from "../LocalizedText";
 import { useLanguage, useT } from "../i18n";
 import { ActivityKpiSummary } from "./ActivityKpiSummary";
@@ -21,7 +21,6 @@ import {
 type TeamMember = {
   id: string | number;
   name: string;
-  initials?: string;
   department: string;
   role: string;
   level: string;
@@ -29,10 +28,8 @@ type TeamMember = {
 };
 
 type Props = {
-  team: TeamMember[];
   currentUser: TeamMember;
   notify: (message: string) => void;
-  apiBacked?: boolean;
   openProjectSchedule?: (projectId: number) => void;
   openInquiry?: (inquiryId: number) => void;
   openMyWork?: () => void;
@@ -111,37 +108,21 @@ function emptyReview(member: TeamMember): ReviewRecord {
   return {employeeId: memberKey(member), role: member.role, score: 0, status: "Not started", updated: "Not updated", scores, selfScores: [...scores], managerScores: [...scores], evidence, selfEvidence: [...evidence], managerEvidence: [...evidence], selfSummary: "", managerSummary: "", developmentGoal: "", rowVersion: null};
 }
 
-function seedReviews(team: TeamMember[]): ReviewRecord[] {
-  const scores = [4.4, 3.8, 4.1, 3.5, 4.6, 4.0, 3.9, 4.2];
-  const statuses: ReviewStatus[] = ["Manager review", "Completed", "Calibration", "Self review", "Completed", "Manager review", "Not started", "Calibration"];
-  return team.map((member, index) => ({
-    role: member.role,
-    employeeId: memberKey(member),
-    score: scores[index % scores.length],
-    status: statuses[index % statuses.length],
-    updated: index % 3 === 0 ? "Today" : index % 3 === 1 ? "Yesterday" : "3 days ago",
-    scores: areasForRole(member.role).map((_, scoreIndex) => Math.max(1, Math.min(5, 4 - ((index + scoreIndex) % 3 === 0 ? 1 : 0)))),
-    selfScores: areasForRole(member.role).map(() => 4), managerScores: areasForRole(member.role).map(() => 4), evidence: areasForRole(member.role).map(() => ""), selfEvidence: areasForRole(member.role).map(() => ""), managerEvidence: areasForRole(member.role).map(() => ""),
-    selfSummary: "", managerSummary: "", developmentGoal: isSalesRole(member.role) ? "Strengthen opportunity qualification and customer follow-up." : "Lead two cross-discipline architecture reviews.", rowVersion: null,
-  }));
-}
-
-export default function Performance({ team, currentUser, notify, apiBacked = false, openProjectSchedule, openInquiry, openMyWork }: Props) {
+export default function Performance({ currentUser, notify, openProjectSchedule, openInquiry, openMyWork }: Props) {
   const t = useT();
   const { lang } = useLanguage();
-  const [apiMembers, setApiMembers] = useState<TeamMember[]>([]);
-  const members = useMemo(() => apiBacked ? apiMembers : team.filter((member) => ["Engineer", "Engineering Manager", "Project Manager", "Sales Engineer", "Sales Manager"].includes(member.role)), [apiBacked, apiMembers, team]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const currentMember = members.find((member) => String(member.id) === String(currentUser.id)) ?? currentUser;
-  const hasOwnAssessment = !apiBacked || members.some((member) => String(member.id) === String(currentUser.id));
-  const [reviews, setReviews] = useState<ReviewRecord[]>(() => apiBacked ? [] : seedReviews(members));
+  const hasOwnAssessment = members.some((member) => String(member.id) === String(currentUser.id));
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  // The API decides who manages (canManage); the primary role only picks the landing tab.
   const roleCanManage = ["Admin", "Engineering Manager", "Project Manager", "Sales Manager"].includes(currentUser.role);
-  const [apiCanManage, setApiCanManage] = useState(roleCanManage);
-  const managerView = apiBacked ? apiCanManage : roleCanManage;
+  const [managerView, setManagerView] = useState(roleCanManage);
   const [tab, setTab] = useState<"mine" | "team" | "framework">(roleCanManage ? "team" : "mine");
-  const [cycle, setCycle] = useState("H2 2026");
+  const [cycle, setCycle] = useState("");
   const [cycles, setCycles] = useState<PerformanceCycle[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<PerformanceCycle | null>(null);
-  const [loading, setLoading] = useState(apiBacked);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [department, setDepartment] = useState("All departments");
@@ -173,13 +154,13 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
   const evidenceEmployeeId = tab === "team" && managerView ? Number(memberKey(selected)) : Number(memberKey(currentMember));
 
   const applyOverview = useCallback((data: Awaited<ReturnType<typeof loadPerformanceOverview>>) => {
-    setApiMembers(data.assessments.map(review => ({id: review.userId, employeeId: review.employeeId, name: review.name, department: review.department, role: review.role, level: review.level})));
+    setMembers(data.assessments.map(review => ({id: review.userId, employeeId: review.employeeId, name: review.name, department: review.department, role: review.role, level: review.level})));
     setSelectedId(current => data.assessments.some(review => String(review.employeeId) === current) ? current : String(data.assessments[0]?.employeeId ?? ""));
     setReviews(data.assessments.map(fromApi));
     setCycles(data.cycles);
     setSelectedCycle(data.selectedCycle);
     setCycle(data.selectedCycle.code);
-    setApiCanManage(data.canManage);
+    setManagerView(data.canManage);
     if (!data.canManage) setTab("mine");
   }, []);
 
@@ -191,13 +172,12 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
   }, [applyOverview]);
 
   useEffect(() => {
-    if (!apiBacked) return;
     let cancelled = false;
     void loadPerformanceOverview().then((data) => { if (!cancelled) applyOverview(data); })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Unable to load KPI reviews."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [apiBacked, applyOverview]); // the production endpoint owns the initial cycle selection
+  }, [applyOverview]); // the production endpoint owns the initial cycle selection
 
   const evidenceRequest = useRef(0);
   const reloadWorkEvidence = useCallback(async (employeeId: number, cycleId: number) => {
@@ -210,14 +190,14 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
   }, []);
 
   useEffect(() => {
-    if (!apiBacked || !selectedCycle || tab === "framework" || !members.some(member => Number(memberKey(member)) === evidenceEmployeeId)) return;
+    if (!selectedCycle || tab === "framework" || !members.some(member => Number(memberKey(member)) === evidenceEmployeeId)) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
       void reloadWorkEvidence(evidenceEmployeeId, selectedCycle.id);
     });
     return () => { cancelled = true; evidenceRequest.current += 1; };
-  }, [apiBacked, evidenceEmployeeId, members, reloadWorkEvidence, selectedCycle, tab]);
+  }, [evidenceEmployeeId, members, reloadWorkEvidence, selectedCycle, tab]);
 
   const openEvidenceSource = (sourceType: PerformanceEvidence["areas"][number]["signals"][number]["sourceType"], sourceId: number) => {
     if (!sourceId) return;
@@ -226,34 +206,25 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
     else openMyWork?.();
   };
 
-  const updateReview = async (employeeId: string, nextScores: number[], nextEvidence: string[], nextStatus: ReviewStatus, summary: string, developmentGoal: string, submit: boolean, asManager: boolean) => {
-    if (apiBacked) {
-      const review = reviews.find((entry) => entry.employeeId === employeeId);
-      if (!selectedCycle) throw new Error("No KPI review cycle is selected.");
-      const areas = areasForRole(review?.role ?? currentMember.role);
-      await updatePerformanceAssessment(Number(employeeId), {
-        cycleId: selectedCycle.id,
-        scores: nextScores.map((score, index) => ({ areaCode: areas[index].code, score, evidence: nextEvidence[index] ?? "" })),
-        summary, developmentGoal, submit, rowVersion: review?.rowVersion,
-      });
-      await reload(selectedCycle.id);
-      return;
-    }
-    const targetRole = reviews.find((entry) => entry.employeeId === employeeId)?.role ?? currentMember.role;
-    const weighted = scoreAverage(nextScores, areasForRole(targetRole));
-    setReviews((current) => current.map((review) => review.employeeId === employeeId
-      ? { ...review, scores: nextScores, selfScores: asManager ? review.selfScores : nextScores, managerScores: asManager ? nextScores : review.managerScores, evidence: nextEvidence, selfEvidence: asManager ? review.selfEvidence : nextEvidence, managerEvidence: asManager ? nextEvidence : review.managerEvidence, score: Number(weighted.toFixed(1)), status: nextStatus, updated: "Just now", selfSummary: asManager ? review.selfSummary : summary, managerSummary: asManager ? summary : review.managerSummary, developmentGoal }
-      : review));
+  const updateReview = async (employeeId: string, nextScores: number[], nextEvidence: string[], summary: string, developmentGoal: string, submit: boolean) => {
+    const review = reviews.find((entry) => entry.employeeId === employeeId);
+    if (!selectedCycle) throw new Error("No KPI review cycle is selected.");
+    const areas = areasForRole(review?.role ?? currentMember.role);
+    await updatePerformanceAssessment(Number(employeeId), {
+      cycleId: selectedCycle.id,
+      scores: nextScores.map((score, index) => ({ areaCode: areas[index].code, score, evidence: nextEvidence[index] ?? "" })),
+      summary, developmentGoal, submit, rowVersion: review?.rowVersion,
+    });
+    await reload(selectedCycle.id);
   };
 
   const changeCycle = (code: string) => {
     setCycle(code);
-    if (!apiBacked) return;
     const target = cycles.find((entry) => entry.code === code);
     if (target) void reload(target.id);
   };
 
-  if (apiBacked && (loading || loadError)) {
+  if (loading || loadError) {
     return (
       <div className="performance-page">
         <PageHeader eyebrow="PEOPLE & PERFORMANCE" title="KPI & Growth" subtitle="Fair, evidence-based reviews connected to the work each role delivers." />
@@ -274,8 +245,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
         subtitle="Fair, evidence-based reviews connected to the work each role delivers."
         actions={
           <>
-            <Select label="Review cycle" value={cycle} onChange={changeCycle} options={apiBacked ? cycles.map((entry) => entry.code) : ["H2 2026", "H1 2026", "H2 2025"]} width={130} />
-            <button className="btn default" type="button" onClick={() => notify("KPI summary exported")}> <Icon name="download" /><LocalizedText text={"Export summary"} /></button>
+            <Select label="Review cycle" value={cycle} onChange={changeCycle} options={cycles.map((entry) => entry.code)} width={130} />
           </>
         }
       />
@@ -285,7 +255,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
         <div className="performance-cycle-copy">
           <span><LocalizedText text={"CURRENT CYCLE"} /></span>
           <strong>{cycle} · {selectedCycle?.name ?? t("Performance review")}</strong>
-          <p>{selectedCycle ? `${performanceEvidenceText("Performance period", lang, t)} ${performanceDate(selectedCycle.periodStart, lang)}–${performanceDate(selectedCycle.periodEnd, lang)} · ${performanceEvidenceText("Reviews due", lang, t)} ${performanceDate(selectedCycle.reviewDueDate, lang)}` : <LocalizedText text={"Performance period 1 Jul–31 Dec · Reviews due 18 Jan 2027"} />}</p>
+          <p>{selectedCycle ? `${performanceEvidenceText("Performance period", lang, t)} ${performanceDate(selectedCycle.periodStart, lang)}–${performanceDate(selectedCycle.periodEnd, lang)} · ${performanceEvidenceText("Reviews due", lang, t)} ${performanceDate(selectedCycle.reviewDueDate, lang)}` : null}</p>
         </div>
         <div className="performance-cycle-progress">
           <span><b>{complete}</b>  <LocalizedText text={"of"} /> {reviews.length}  <LocalizedText text={"completed"} /></span>
@@ -308,7 +278,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
         <MyKpi
           member={currentMember}
           review={mine}
-          canEdit={!apiBacked || (selectedCycle?.status !== "CLOSED" && ["Not started", "Self review"].includes(mine.status))}
+          canEdit={selectedCycle?.status !== "CLOSED" && ["Not started", "Self review"].includes(mine.status)}
           onEdit={() => setEditingId(memberKey(currentMember))}
           evidence={workEvidence?.employeeId === Number(memberKey(currentMember)) ? workEvidence : null}
           evidenceLoading={evidenceLoading}
@@ -343,7 +313,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
                       const active = memberKey(member) === memberKey(selected);
                       return (
                         <tr key={member.id} className={active ? "selected" : undefined}>
-                          <td><button className="performance-person" type="button" onClick={() => setSelectedId(memberKey(member))}><span className="avatar md">{member.initials ?? initialsFor(member.name)}</span><span><strong>{member.name}</strong><small>{member.department}</small></span></button></td>
+                          <td><button className="performance-person" type="button" onClick={() => setSelectedId(memberKey(member))}><span className="avatar md">{initialsFor(member.name)}</span><span><strong>{member.name}</strong><small>{member.department}</small></span></button></td>
                           <td><strong className="performance-role">{t(member.level || member.role)}</strong><small className="performance-meta">{t(member.role)}</small></td>
                           <td><Score value={review.score} /></td>
                           <td><Badge tone={statusTone(review.status)} dot>{review.status}</Badge></td>
@@ -360,7 +330,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
 
             {members.length ? <aside className="panel performance-profile">
               <div className="performance-profile-head">
-                <span className="avatar md">{selected.initials ?? initialsFor(selected.name)}</span>
+                <span className="avatar md">{initialsFor(selected.name)}</span>
                 <div><strong>{selected.name}</strong><span>{t(selected.level || selected.role)} · {t(selected.department)}</span></div>
                 <Badge tone={statusTone(selectedReview.status)}>{selectedReview.status}</Badge>
               </div>
@@ -377,9 +347,9 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
                   </div>
                 ))}
               </div>
-              {selectedReview.status === "Calibration" && apiBacked && selectedCycle?.status !== "CLOSED" && memberKey(selected) !== memberKey(currentMember)
+              {selectedReview.status === "Calibration" && selectedCycle?.status !== "CLOSED" && memberKey(selected) !== memberKey(currentMember)
                 ? <button className="btn success block" type="button" onClick={() => setCompletingId(memberKey(selected))}><Icon name="checkCircle" /><LocalizedText text={"Complete calibration"} /></button>
-                : <button className="btn primary block" type="button" disabled={selectedCycle?.status === "CLOSED" || memberKey(selected) === memberKey(currentMember) || selectedReview.status === "Completed" || (apiBacked && !["Manager review", "Calibration"].includes(selectedReview.status))} onClick={() => setEditingId(memberKey(selected))}><Icon name={selectedReview.status === "Completed" ? "lock" : "edit"} />{selectedReview.status === "Completed" ? <LocalizedText text={"Review completed"} /> : apiBacked && !["Manager review", "Calibration"].includes(selectedReview.status) ? t("Awaiting self review") : t("Open assessment")}</button>}
+                : <button className="btn primary block" type="button" disabled={selectedCycle?.status === "CLOSED" || memberKey(selected) === memberKey(currentMember) || selectedReview.status === "Completed" || !["Manager review", "Calibration"].includes(selectedReview.status)} onClick={() => setEditingId(memberKey(selected))}><Icon name={selectedReview.status === "Completed" ? "lock" : "edit"} />{selectedReview.status === "Completed" ? <LocalizedText text={"Review completed"} /> : !["Manager review", "Calibration"].includes(selectedReview.status) ? t("Awaiting self review") : t("Open assessment")}</button>}
               <p className="performance-private"><Icon name="lock" /><LocalizedText text={"Only the employee and review managers can see written feedback."} /></p>
             </aside> : null}
           </div>
@@ -405,7 +375,7 @@ export default function Performance({ team, currentUser, notify, apiBacked = fal
           workEvidence={workEvidence?.employeeId === Number(editingId) ? workEvidence : null}
           onClose={() => setEditingId(null)}
           onSave={async (scores, evidence, submit, summary, developmentGoal) => {
-            await updateReview(editingId, scores, evidence, submit ? (editingAsManager ? "Calibration" : "Manager review") : (editingAsManager ? "Manager review" : "Self review"), summary, developmentGoal, submit, editingAsManager);
+            await updateReview(editingId, scores, evidence, summary, developmentGoal, submit);
             notify(submit ? "Assessment submitted for the next review step" : "Assessment draft saved");
             setEditingId(null);
           }}
@@ -450,7 +420,7 @@ function MyKpi({ member, review, canEdit, onEdit, evidence, evidenceLoading, evi
     <div className="performance-my-layout">
       <section className="performance-my-hero">
         <div className="performance-my-copy">
-          <span className="avatar md">{member.initials ?? initialsFor(member.name)}</span>
+          <span className="avatar md">{initialsFor(member.name)}</span>
           <div><p><LocalizedText text={"MY PERFORMANCE SNAPSHOT"} /></p><h2>{member.name}</h2><span>{t(member.level || member.role)} · {t(member.department)}</span></div>
         </div>
         <div className="performance-my-result"><span><LocalizedText text={"Weighted score"} /></span><strong>{performanceScoreText(review.score)}<small>/5.0</small></strong><Badge tone={statusTone(review.status)} dot>{review.status}</Badge></div>

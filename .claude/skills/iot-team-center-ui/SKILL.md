@@ -168,6 +168,14 @@ exact match count and fails loudly, not with a loose regex:
 - Anchoring on `"<th"` also matches `<thead>`. Anchor on something unambiguous and verify the
   match count before writing.
 
+## Adding a top-level screen
+
+A screen that is not a landing (Dashboard, My Work) goes in `app/system/production/LazyScreens.tsx`
+under its own component name, and ProductionApp imports it from there. Never import a lazy screen
+statically from an eager one (CoreScreens, PlanningPricingScreens, CrmScreens, SigningScreens,
+AdminAnalyticsScreens): that puts its whole module back on the first load. `tests/lazy-screens.test.mjs`
+checks this.
+
 ## Finishing
 
 Run once, at the end, one at a time — this machine has 15 GB RAM:

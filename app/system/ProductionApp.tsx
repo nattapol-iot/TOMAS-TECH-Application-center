@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TeamActivityScreen } from "./production/TeamActivityScreen";
 import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
@@ -25,22 +24,7 @@ import {
   ProductionMasterData,
   ProductionProjects,
 } from "./production/CoreScreens";
-import { ProductionInquiries } from "./production/InquiryScreens";
-import { ProductionResourcePlan } from "./production/ResourcePlanningScreen";
-import { ProductionProjectTimeline } from "./production/ProjectTimelineScreen";
 import { ResourceTaskWorkspace } from "./production/ResourceTaskWorkspace";
-import { ReportScreens } from "./production/ReportScreens";
-import { ProductionEstimates } from "./production/EstimateScreens";
-import {
-  ProductionApprovals,
-  ProductionBoms,
-  ProductionGoodsReceiving,
-  ProductionInventoryOperations,
-  ProductionMaterialIssues,
-  ProductionProcurementDashboard,
-  ProductionPurchaseOrders,
-  ProductionPurchaseRequisitions,
-} from "./production/MaterialScreens";
 import {
   ProductionMyWork,
   ProductionPriceLibrary,
@@ -60,21 +44,36 @@ import {
   ProductionReports,
   ProductionSettings,
 } from "./production/AdminAnalyticsScreens";
-import { ProductionKnowledgeHub } from "./production/KnowledgeScreens";
-import { ProductionModuleTemplates } from "./production/ModuleTemplateScreens";
-import { LaborPackageMaster } from "./production/LaborPackageMaster";
-import { ScheduleTemplateMaster } from "./production/ScheduleTemplateMaster";
 import { ProductionProfile } from "./production/ProfileScreen";
 import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens";
 import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
 import { supportLabel } from "./support-copy";
-import Performance from "./production/PerformanceScreen";
+// Screens off the landing path load on first visit; LazyScreens.tsx says which stay eager and why.
 import {
+  LaborPackageMaster,
+  Performance,
+  ProductionApprovals,
+  ProductionBoms,
+  ProductionEstimates,
+  ProductionGoodsReceiving,
+  ProductionInquiries,
+  ProductionInventoryOperations,
+  ProductionKnowledgeHub,
+  ProductionMaterialIssues,
+  ProductionModuleTemplates,
   ProductionMyAssignments,
+  ProductionProcurementDashboard,
+  ProductionProjectTimeline,
+  ProductionPurchaseOrders,
+  ProductionPurchaseRequisitions,
+  ProductionResourcePlan,
   ProductionSalesIntake,
   ProductionSiteVisits,
   ProductionVisitMasterData,
-} from "./production/SiteVisitScreens";
+  ReportScreens,
+  ScheduleTemplateMaster,
+  TeamActivityScreen,
+} from "./production/LazyScreens";
 
 import { CrmScreen, type CrmView } from "./production/CrmScreens";
 
@@ -772,7 +771,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => setView("summary-reports")} /> : null}
           {view === "summary-reports" ? <><button className="btn ghost" type="button" onClick={() => setView("reports")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
           {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={(type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else setView("my-work");}}/> : null}
-          {view === "performance" ? <Performance team={bootstrap.team} currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} apiBacked openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
+          {view === "performance" ? <Performance currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
           {view === "schedule-templates" ? <ScheduleTemplateMaster bootstrap={bootstrap} notify={setToast} /> : null}

@@ -14,7 +14,7 @@ const link = (from, to, label=to) => `[${label}](<${path.relative(path.dirname(f
 const sha = execFileSync('git',['rev-parse','--short','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const modules = [
  ['crm','CRM / Sales','ลูกค้า Contact Opportunity กิจกรรมและการติดตาม เชื่อม Inquiry และ My Work','crm crm-customers crm-documents','production/CrmScreens.tsx','crm'],
- ['shell','Application shell / Login / Profile','เมนู ภาษา session bootstrap และโปรไฟล์','auth-tmt-id bootstrap','ProductionApp.tsx production/ProfileScreen.tsx','auth|tmt-id|routing|remembered-view'],
+ ['shell','Application shell / Login / Profile','เมนู ภาษา session bootstrap และโปรไฟล์','auth-tmt-id bootstrap','ProductionApp.tsx production/LazyScreens.tsx production/ProfileScreen.tsx','auth|tmt-id|routing|remembered-view'],
  ['dashboard','Dashboard / Executive','ภาพรวมผู้บริหารและข้อมูลทีม','executive-dashboard','production/ExecutiveDashboard.tsx production/CoreScreens.tsx','executive-dashboard'],
  ['inquiry','Inquiry / Sales intake','รับงาน ลูกค้า end user และส่งต่อสำรวจ','inquiries inquiry-attachments sales-intakes document-lifecycle','production/InquiryScreens.tsx production/ExistingRfqWork.tsx production/DocumentLifecycle.tsx','inquiry|end-user|document-lifecycle'],
  ['site-visit','Site Visit / My Assignments','นัดหมาย มอบหมาย สำรวจ รายงาน และอนุมัติ','site-visits-read site-visits-workflow site-visit-reports visit-master','production/SiteVisitScreens.tsx','site-visit|inquiry-visit'],

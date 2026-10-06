@@ -180,6 +180,16 @@ test("every literal tab label has complete TH, EN and JP behavior", () => {
   assert.ok(labels.size >= 45, `expected broad literal tab coverage, found ${labels.size}`);
 });
 
+test("the screen loader's loading and failure copy exists in Thai and Japanese", () => {
+  const source = readFileSync("app/system/production/LazyScreens.tsx", "utf8");
+  const keys = [...source.matchAll(/(?:title|message)="([^"]+)"|text=\{"([^"]+)"\}/g)].map((match) => match[1] ?? match[2]);
+  assert.ok(keys.length >= 5, `expected the loader's copy, found ${keys.length} keys`);
+  for (const key of keys) {
+    assert.notEqual(translate(key, "TH"), key, `${key} has no Thai`);
+    assert.notEqual(translate(key, "JP"), key, `${key} has no Japanese`);
+  }
+});
+
 test("the Thai-authored resource workspace has no bare Thai JSX copy", () => {
   const filename = "app/system/production/ResourceTaskWorkspace.tsx";
   const source = ts.createSourceFile(filename, readFileSync(filename, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

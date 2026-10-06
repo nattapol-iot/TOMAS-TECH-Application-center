@@ -41,7 +41,9 @@ test("production KPI UI is API-backed", async () => {
     source("app/system/api-client.ts"),
     source("app/system/ProductionApp.tsx"),
   ]);
-  assert.match(productionApp, /<Performance[^>]*apiBacked/);
+  assert.match(productionApp, /<Performance currentUser=/);
+  // The demo-era sample mode and its fake export button are gone; the screen only reads the API.
+  assert.doesNotMatch(screen, /apiBacked|seedReviews|KPI summary exported/);
   assert.match(screen, /loadPerformanceOverview/);
   assert.match(screen, /updatePerformanceAssessment/);
   assert.match(screen, /completePerformanceAssessment/);

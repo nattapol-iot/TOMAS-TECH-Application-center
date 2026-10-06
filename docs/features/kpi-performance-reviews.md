@@ -1,6 +1,6 @@
 # KPI performance reviews
 
-The KPI workspace stores employee self reviews, manager scoring, calibration and the final outcome in SQL Server. The demo route retains sample data; the production route uses `/api/v1/performance` exclusively.
+The KPI workspace stores employee self reviews, manager scoring, calibration and the final outcome in SQL Server. The screen reads and writes only through `/api/v1/performance`; there is no sample-data mode.
 
 ## Role-specific review frameworks
 

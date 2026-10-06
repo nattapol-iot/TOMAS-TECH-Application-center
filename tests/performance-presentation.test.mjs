@@ -33,13 +33,12 @@ function harness(overview,lang='EN'){
 function nodes(value,out=[]){if(Array.isArray(value)){value.forEach(x=>nodes(x,out));return out;}if(value&&typeof value==='object'&&value.props){out.push(value);nodes(value.props.children,out);}return out;}
 function text(value){if(Array.isArray(value))return value.map(text).join(' ');if(value&&typeof value==='object'&&value.props)return text(value.props.children??value.props.text??'');return typeof value==='string'||typeof value==='number'?String(value):'';}
 const bootstrap=[{id:55,employeeId:155,name:'Unauthorized Engineer',department:'Engineering',role:'Engineer',level:'Senior'},{id:56,employeeId:156,name:'Bootstrap Sample Sales',department:'Sales',role:'Sales Engineer',level:'Sales'}];
-const props={team:bootstrap,currentUser:{id:9,employeeId:109,name:'Sales Manager',department:'Sales',role:'Sales Manager',level:'Manager'},notify:()=>{},apiBacked:true};
+const props={currentUser:{id:9,employeeId:109,name:'Sales Manager',department:'Sales',role:'Sales Manager',level:'Manager'},notify:()=>{}};
 test('real production component renders only API-authorized people and never demo scores or identities',async()=>{
  const h=harness({assessments:[baseReview],cycles:[cycle],selectedCycle:cycle,canManage:true});h.render(h.screen.default,props);await h.settle();const tree=h.render(h.screen.default,props),copy=text(tree);
  assert.match(copy,/Authorized Sales/);assert.doesNotMatch(copy,/Unauthorized Engineer|Bootstrap Sample Sales|4\.4/);assert.match(copy,/—/);assert.doesNotMatch(copy,/0\.0/);
  const h2=harness({assessments:[],cycles:[cycle],selectedCycle:cycle,canManage:true});h2.render(h2.screen.default,props);await h2.settle();const empty=text(h2.render(h2.screen.default,props));assert.doesNotMatch(empty,/Unauthorized Engineer|Bootstrap Sample Sales|4\.4/);
 });
-test('demo mode still renders its own isolated team',()=>{const h=harness(null);const tree=h.render(h.screen.default,{...props,apiBacked:false});assert.match(text(tree),/Unauthorized Engineer|Bootstrap Sample Sales/);});
 test('real assessment modal saves an incomplete draft while submission stays disabled',async()=>{
  const h=harness(null),member=bootstrap[1],review=h.screen.emptyReview(member),saved=[];
  const tree=h.render(h.screen.AssessmentModal,{member,review,isManager:false,workEvidence:null,onClose:()=>{},onSave:async(...args)=>saved.push(args)});
