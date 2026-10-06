@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { AppConfig } from "../config.js";
 import { insertAudit } from "../audit.js";
+import { businessToday } from "../business-date.js";
 import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
 import { createStoredDirectory, deleteStoredFile, removeEmptyStoredDirectory } from "../document-storage.js";
 import { transferProjectDocuments } from "../project-handover.js";
@@ -9,9 +10,10 @@ import { ApiError } from "../errors.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
-import { checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
+import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
 import { insertInitialPlan, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
-import { projectHealth, type HealthTask } from "../project-health.js";
+import type { ProjectHealth } from "../project-health.js";
+import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import { currentScheduleVersion, permissionFor, validateScheduleVersion } from "../schedule-service.js";
 import { hasRole } from "../user-roles.js";
@@ -34,12 +36,6 @@ type ProjectRow = Record<string, unknown> & {
   po_no: string; po_date: Date | string; actual_delivery: Date | string | null; site: string; remark: string | null;
   customer_id: number | string; end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
 };
-
-function businessToday(timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
 
 function shiftDate(value: string, unit: "day" | "year", amount: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -104,23 +100,6 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       : !row.won ? "awaitWon" : "recordPo";
     return { reason, estimateId:row.estimateId ? Number(row.estimateId) : null, projectId:row.projectId ? Number(row.projectId) : null, projectNo:row.projectNo ?? null };
   });
-  // Plan health for a page of projects, from the leaf rows that carry their own start date.
-  async function healthByProject(projects: { id: number; status: string; targetDelivery: string | null }[]) {
-    const byProject = new Map<number, HealthTask[]>(projects.map((project) => [project.id, []]));
-    if (projects.length) {
-      const rows = (await database.query<Record<string, unknown>>(`
-        SELECT t.project_id,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.status,t.percent_done,CONVERT(char(10),t.forecast_end,23) forecast_end
-        FROM dbo.schedule_tasks t WHERE t.project_id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','))
-          AND t.deleted_at IS NULL AND t.kind<>N'phase' AND t.plan_start IS NOT NULL
-          AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.deleted_at IS NULL);`,
-        (q) => q.input("ids", sql.NVarChar(sql.MAX), projects.map((project) => project.id).join(",")))).recordset;
-      for (const row of rows) byProject.get(Number(row.project_id))?.push({ planStart: String(row.plan_start), planDays: Number(row.plan_days),
-        status: String(row.status), percentComplete: Number(row.percent_done), forecastFinish: row.forecast_end === null ? null : String(row.forecast_end) });
-    }
-    const today = businessToday(config.businessTimeZone);
-    return new Map(projects.map((project) => [project.id, projectHealth(project, byProject.get(project.id) ?? [], today)]));
-  }
-
   // The customer's own site contacts, for ticking who the project talks to.
   app.get("/api/v1/projects/contact-options", async (request) => {
     await users.demandPermission(request, "project.write");
@@ -143,18 +122,9 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const search = optionalText(query.search, 200, "Search");
     const status = optionalText(query.status, 50, "Status");
     const result = await database.query<ProjectRow>(`
-      SELECT p.id,p.project_no,p.name,p.customer_id,c.name AS customer_name,p.status,p.project_type,u.name AS manager_name,
-        p.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
-        p.manager_id,p.lead_engineer_id,le.name AS lead_engineer_name,p.po_no,p.po_date,p.actual_delivery,p.site,p.remark,
-        p.start_date,p.target_delivery,p.progress,p.updated_at,p.row_version,p.team,
-        (SELECT STRING_AGG(m.milestone,N',') FROM dbo.project_payment_milestones m WHERE m.project_id=p.id) payments_received,
-        (SELECT STRING_AGG(CONVERT(nvarchar(20),pc.contact_id),N',') FROM dbo.project_contacts pc WHERE pc.project_id=p.id) contact_ids,
+      SELECT ${PROJECT_COLUMNS},
         COUNT_BIG(*) OVER() AS total_count
-      FROM dbo.projects p INNER JOIN dbo.customers c ON c.id=p.customer_id INNER JOIN dbo.users u ON u.id=p.manager_id
-      LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id
-      INNER JOIN dbo.users le ON le.id=p.lead_engineer_id
-      WHERE p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
-        OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))
+      ${PROJECT_SOURCE}
         AND (@status IS NULL OR p.status=@status)
         AND (@search IS NULL OR p.project_no LIKE N'%'+@search+N'%' OR p.name LIKE N'%'+@search+N'%'
           OR p.po_no LIKE N'%'+@search+N'%' OR c.name LIKE N'%'+@search+N'%'
@@ -165,22 +135,94 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, isProjectElevated(actor));
       sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize);
     });
-    const health = await healthByProject(result.recordset.map((row) => ({ id: Number(row.id), status: String(row.status), targetDelivery: dateOnly(row.target_delivery) })));
+    const summaries = await loadProjectScheduleSummaries(database, result.recordset.map(projectInput), businessToday(config.businessTimeZone));
     return {
-      items: result.recordset.map((row) => ({
-        id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
-        team: row.team ?? null, health: health.get(Number(row.id)) ?? "No plan",
-        paymentsReceived: typeof row.payments_received === "string" && row.payments_received ? row.payments_received.split(",") : [],
-        contactIds: typeof row.contact_ids === "string" && row.contact_ids ? row.contact_ids.split(",").map(Number) : [],
-        customerId: Number(row.customer_id), endUserCustomerId: row.end_user_customer_id === null ? null : Number(row.end_user_customer_id),
-        endUserName: row.end_user_name, endUserCode: row.end_user_code,
-        status: row.status, projectType: row.project_type, managerName: row.manager_name,
-        managerId: Number(row.manager_id), leadEngineerId: Number(row.lead_engineer_id), leadEngineerName: row.lead_engineer_name,
-        purchaseOrderNumber: row.po_no, purchaseOrderDate: dateOnly(row.po_date), actualDelivery: dateOnly(row.actual_delivery),
-        site: row.site, remark: row.remark ?? "",
-        startDate: dateOnly(row.start_date), targetDelivery: dateOnly(row.target_delivery), progress: Number(row.progress),
-        updatedAt: row.updated_at, rowVersion: row.row_version.toString("base64"),
-      })), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
+      items: result.recordset.map((row) => projectItem(row, summaries.get(Number(row.id))?.health ?? "No plan")),
+      page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
+    };
+  });
+
+  // The list above and the portfolio overview below return the same row, so the portfolio can open
+  // every project dialog the list opens. Scope: elevated, or the project's manager, lead or member.
+  const PROJECT_COLUMNS = `p.id,p.project_no,p.name,p.customer_id,c.name AS customer_name,p.status,p.project_type,u.name AS manager_name,
+        p.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
+        p.manager_id,p.lead_engineer_id,le.name AS lead_engineer_name,p.po_no,p.po_date,p.actual_delivery,p.site,p.remark,
+        p.start_date,p.target_delivery,p.progress,p.updated_at,p.row_version,p.team,
+        (SELECT STRING_AGG(m.milestone,N',') FROM dbo.project_payment_milestones m WHERE m.project_id=p.id) payments_received,
+        (SELECT STRING_AGG(CONVERT(nvarchar(20),pc.contact_id),N',') FROM dbo.project_contacts pc WHERE pc.project_id=p.id) contact_ids`;
+  const PROJECT_SOURCE = `FROM dbo.projects p INNER JOIN dbo.customers c ON c.id=p.customer_id INNER JOIN dbo.users u ON u.id=p.manager_id
+      LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id
+      INNER JOIN dbo.users le ON le.id=p.lead_engineer_id
+      WHERE p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
+        OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))`;
+  function projectInput(row: ProjectRow) { return { id: Number(row.id), status: String(row.status), targetDelivery: dateOnly(row.target_delivery) }; }
+  function projectItem(row: ProjectRow, health: ProjectHealth) {
+    return {
+      id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
+      team: row.team ?? null, health,
+      paymentsReceived: typeof row.payments_received === "string" && row.payments_received ? row.payments_received.split(",") : [],
+      contactIds: typeof row.contact_ids === "string" && row.contact_ids ? row.contact_ids.split(",").map(Number) : [],
+      customerId: Number(row.customer_id), endUserCustomerId: row.end_user_customer_id === null ? null : Number(row.end_user_customer_id),
+      endUserName: row.end_user_name, endUserCode: row.end_user_code,
+      status: row.status, projectType: row.project_type, managerName: row.manager_name,
+      managerId: Number(row.manager_id), leadEngineerId: Number(row.lead_engineer_id), leadEngineerName: row.lead_engineer_name,
+      purchaseOrderNumber: row.po_no, purchaseOrderDate: dateOnly(row.po_date), actualDelivery: dateOnly(row.actual_delivery),
+      site: row.site, remark: row.remark ?? "",
+      startDate: dateOnly(row.start_date), targetDelivery: dateOnly(row.target_delivery), progress: Number(row.progress),
+      updatedAt: row.updated_at, rowVersion: row.row_version.toString("base64"),
+    };
+  }
+
+  // The Projects portfolio: every project in scope with its schedule summary, unpaged, for the
+  // screen to sort and filter in memory. Closed projects only when asked for.
+  app.get("/api/v1/projects/overview", async (request) => {
+    await users.demandPermission(request, "project.read");
+    const actor = await users.required(request);
+    const query = request.query as Record<string, unknown>;
+    const includeClosed = query.includeClosed === "1" || query.includeClosed === "true";
+    const elevated = isProjectElevated(actor);
+    const result = await database.query<ProjectRow>(`
+      SELECT ${PROJECT_COLUMNS}
+      ${PROJECT_SOURCE}
+        AND (@include_closed=1 OR p.status<>N'Closed')
+      ORDER BY p.project_no,p.id;
+    `, (sqlRequest) => {
+      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, elevated);
+      sqlRequest.input("include_closed", sql.Bit, includeClosed);
+    });
+    const today = businessToday(config.businessTimeZone);
+    const rows = result.recordset;
+    if (!rows.length) return { today, items: [] };
+    const summaries = await loadProjectScheduleSummaries(database, rows.map(projectInput), today);
+    // Unanswered day requests and the latest progress entry per project, in one grouped read.
+    // 'progress' is what Resource Plan writes when it updates a task it manages.
+    const activity = new Map((await database.query<{ project_id: number | string; pending_requests: number | string; last_progress_at: Date | null }>(`
+      SELECT u.project_id,
+        SUM(CASE WHEN u.field=N'request' AND u.request_days>0 AND u.answer IS NULL THEN 1 ELSE 0 END) pending_requests,
+        MAX(CASE WHEN u.field IN(N'percent_complete',N'status',N'actual_start',N'actual_finish',N'forecast_finish',N'progress') THEN u.occurred_at END) last_progress_at
+      FROM dbo.schedule_updates u WHERE u.project_id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','))
+      GROUP BY u.project_id;`, (sqlRequest) => sqlRequest.input("ids", sql.NVarChar(sql.MAX), rows.map((row) => Number(row.id)).join(",")),
+    )).recordset.map((row) => [Number(row.project_id), row] as const));
+    // The same people PUT /api/v1/projects/:id lets move a project along its lifecycle.
+    const canWrite = await permissionFor(database, actor.id, "project.write");
+    return {
+      today,
+      items: rows.map((row) => {
+        const id = Number(row.id), summary = summaries.get(id), counts = activity.get(id);
+        const progress = summary?.progress ?? null;
+        return {
+          ...projectItem(row, summary?.health ?? "No plan"),
+          progress: progress ?? Number(row.progress), progressSource: progress === null ? "manual" : "schedule", typedProgress: Number(row.progress),
+          plannedProgress: summary?.plannedProgress ?? null, planStart: summary?.planStart ?? null, planFinish: summary?.planFinish ?? null,
+          forecastFinish: summary?.forecastFinish ?? null, slipDays: summary?.slipDays ?? null,
+          taskCount: summary?.taskCount ?? 0, doneCount: summary?.doneCount ?? 0, overdueCount: summary?.overdueCount ?? 0,
+          blockedCount: summary?.blockedCount ?? 0, slippedCount: summary?.slippedCount ?? 0, nextMilestone: summary?.nextMilestone ?? null,
+          scheduleError: summary?.scheduleError ?? false,
+          pendingRequests: Number(counts?.pending_requests ?? 0), lastProgressAt: counts?.last_progress_at ?? null,
+          canChangeStatus: canWrite && (elevated || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),
+          allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, elevated) : [],
+        };
+      }),
     };
   });
 

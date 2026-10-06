@@ -3,7 +3,7 @@ import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   addProjectMember,
   createEmployee,
@@ -63,7 +63,13 @@ import {
   deleteProject,
   listScheduleTemplates,
   updateProject,
+  ApiClientError,
+  type ProjectHealth,
 } from "../api-client";
+import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
+import { useActivitySubView } from "../use-activity-presence";
+import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
+  type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
 import { ContactPicker, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, useDepartments,
@@ -74,9 +80,14 @@ import { BusinessCardScanner } from "./BusinessCardScanner";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { supplierCodeFromName } from "../../../lib/supplier-code";
 import "./master-data.css";
+// SegmentBar and FilterChips are shared (ui.tsx), but ui.tsx stays free of stylesheet imports; this
+// eager screen module loads their styles on the first page.
+import "../segment-filters.css";
+import "./project-portfolio.css";
 import {
   Badge,
   EmptyState,
+  FilterChips,
   Field,
   Icon,
   KpiCard,
@@ -86,6 +97,7 @@ import {
   Panel,
   ProgressCell,
   SearchInput,
+  SegmentBar,
   Select,
   TablePageSize,
   Tabs,
@@ -789,35 +801,256 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
   </Modal>;
 }
 
-export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode }: CommonProps & { teamTestMode: boolean }) {
+const PORTFOLIO_HEALTH_TONE: Record<ProjectHealth, Tone> = { Delayed: "red", "At Risk": "amber", "No plan": "slate", "On Track": "green", "On Hold": "slate", Completed: "blue" };
+const PORTFOLIO_CHIP_COPY: Record<PortfolioChip, { label: string; tone: Tone }> = {
+  overdue: { label: "Portfolio.chipOverdue", tone: "red" }, blocked: { label: "Portfolio.chipBlocked", tone: "red" },
+  waiting: { label: "Portfolio.chipWaiting", tone: "amber" }, stale: { label: "Portfolio.chipStale", tone: "slate" },
+  pastTarget: { label: "Portfolio.chipPastTarget", tone: "amber" },
+};
+const PROJECT_STAGE_FILTERS = ["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"];
+const formatDay = (value: string) => new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(value));
+
+function PortfolioSortHeader({ column, label, sort, onSort, className }: { column: PortfolioSortKey; label: string; sort: PortfolioSort; onSort: (key: PortfolioSortKey) => void; className?: string }) {
+  const t = useUiText();
+  const active = sort.key === column;
+  return <th className={className} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+    <button type="button" className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)}>{t(label)}<Icon name="chevronDown" className={active ? sort.direction : "idle"} /></button>
+  </th>;
+}
+
+// Actual against where the plan says the project should be today; the tick is the plan.
+function PortfolioProgress({ item }: { item: ProjectOverviewItem }) {
+  const t = useUiText();
+  const actual = Math.round(Number(item.progress) || 0);
+  const planned = item.plannedProgress === null || item.plannedProgress === undefined ? null : Math.round(item.plannedProgress);
+  const tone: Tone = actual >= 100 ? "green" : planned !== null && actual < planned ? "amber" : "blue";
+  const label = planned === null ? `${actual}%` : `${actual}% · ${t("Portfolio.plannedToday")} ${planned}%`;
+  return <div className="portfolio-progress" title={planned === null ? undefined : t("Portfolio.actualVsPlanned")}>
+    <span className="portfolio-progress-track"><span className="progress" role="img" aria-label={label}><b className={tone} style={{ width: `${Math.max(0, Math.min(100, actual))}%` }} /></span>
+      {planned !== null ? <i className="portfolio-progress-tick" aria-hidden="true" style={{ left: `${Math.max(0, Math.min(100, planned))}%` }} /> : null}</span>
+    <span className="portfolio-progress-text">{planned === null ? `${actual}%` : `${actual} / ${planned}`}</span>
+    {item.progressSource === "manual" ? <small className="portfolio-manual" title={t("Portfolio.manualHint")}>{t("Portfolio.manual")}</small> : null}
+  </div>;
+}
+
+type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; onSelect: () => void };
+// A row's choices (the overflow actions, the next stages) open as a disclosure: a button with
+// aria-expanded and a group of plain buttons that Tab walks through, so arrow keys never commit
+// anything. The group is position: fixed from the trigger's box, which keeps the table's scroll
+// area and the panel from clipping it; it flips above the trigger when the room below is short and
+// closes on scroll or resize instead of drifting away from its row.
+function RowDisclosure({ label, trigger, triggerClassName, disabled = false, actions }: { label: string; trigger: ReactNode; triggerClassName: string; disabled?: boolean; actions: PortfolioAction[] }) {
+  const t = useUiText();
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  // Measured before paint, written straight to the element: the menu's real height decides the side.
+  useLayoutEffect(() => {
+    const anchor = button.current, menu = panel.current;
+    if (!open || !anchor || !menu) return;
+    // The layout viewport, which a position:fixed box is measured against; innerWidth would include the page scrollbar.
+    const viewport = document.documentElement;
+    const place = rowMenuPlacement(anchor.getBoundingClientRect(), { width: viewport.clientWidth, height: viewport.clientHeight }, menu.offsetHeight);
+    const px = (value: number | null) => value === null ? "auto" : `${value}px`;
+    menu.style.top = px(place.top);
+    menu.style.bottom = px(place.bottom);
+    menu.style.right = `${place.right}px`;
+    menu.style.maxHeight = place.maxHeight === null ? "" : `${place.maxHeight}px`;
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = () => setOpen(false);
+    const onMouseDown = (event: MouseEvent) => { if (!wrap.current?.contains(event.target as Node)) dismiss(); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { dismiss(); button.current?.focus(); } };
+    // Any scroll outside the menu moves the row under a fixed menu, so the menu goes.
+    const onScroll = (event: Event) => { if (!panel.current?.contains(event.target as Node)) dismiss(); };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [open]);
+  if (!actions.length) return null;
+  return <div className="menu-wrap" ref={wrap} onBlur={(event) => {
+    // Tab moved focus past the group. A null target (focus left the window, or a browser that does
+    // not focus a clicked button) is left to the mousedown handler, so a click on an item still lands.
+    const next = event.relatedTarget;
+    if (open && next instanceof Node && !event.currentTarget.contains(next)) setOpen(false);
+  }}>
+    <button ref={button} type="button" className={triggerClassName} disabled={disabled} aria-expanded={open} aria-controls={open ? panelId : undefined} aria-label={label} title={label} onClick={() => setOpen((value) => !value)}>{trigger}</button>
+    {open ? <div ref={panel} id={panelId} className="menu portfolio-menu" role="group" aria-label={label}>{actions.map((action) => <button key={action.key} type="button" className={action.danger ? "danger" : undefined} onClick={() => { setOpen(false); button.current?.focus(); action.onSelect(); }}>{action.icon ? <Icon name={action.icon} /> : null}{t(action.label)}</button>)}</div> : null}
+  </div>;
+}
+
+// Closing needs the date the customer took delivery; the API refuses a close without it.
+function CloseProjectModal({ project, busy, onClose, onConfirm }: { project: ProjectOverviewItem; busy: boolean; onClose: () => void; onConfirm: (actualDelivery: string) => void }) {
+  const t = useUiText();
+  const [date, setDate] = useState(() => project.actualDelivery ?? today());
+  const tooEarly = Boolean(project.startDate && date && date < project.startDate);
+  return <Modal title="Portfolio.closeTitle" subtitle={`${project.number} · ${project.name}`} size="sm" onClose={onClose} footer={<>
+    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn primary" type="button" disabled={busy || !date || tooEarly} onClick={() => onConfirm(date)}><Icon name="check" />{busy ? t("Saving…") : t("Portfolio.closeConfirm")}</button>
+  </>}>
+    <p>{t("Portfolio.closeHint")}</p>
+    <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><input type="date" required min={project.startDate || undefined} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+  </Modal>;
+}
+
+export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode, openProjectSchedule }: CommonProps & { teamTestMode: boolean; openProjectSchedule?: (id: number) => void }) {
+  useActivitySubView("projects-portfolio");
   const uiText = useUiText();
-  const [result, setResult] = useState<PagedResult<ProjectSummary>>(EMPTY_PAGE);
+  const [overview, setOverview] = useState<{ items: ProjectOverviewItem[]; loadedAt: number } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
+  const [managerId, setManagerId] = useState<number | null>(null);
+  const [team, setTeam] = useState<string | null>(null);
+  const [mine, setMine] = useState(false);
+  const [includeClosed, setIncludeClosed] = useState(false);
+  const [health, setHealth] = useState<ProjectHealth | null>(null);
+  const [chip, setChip] = useState<PortfolioChip | null>(null);
+  const sortStorageKey = portfolioSortStorageKey(bootstrap.user.id);
+  const [sort, setSort] = useState<PortfolioSort>(() => { try { return parsePortfolioSort(window.localStorage.getItem(sortStorageKey)); } catch { return DEFAULT_PORTFOLIO_SORT; } });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [stageBusy, setStageBusy] = useState<number | null>(null);
+  const [closingProject, setClosingProject] = useState<ProjectOverviewItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [documentsProject, setDocumentsProject] = useState<ProjectSummary | null>(null);
   const [endUserProject, setEndUserProject] = useState<ProjectSummary | null>(null);
   const [membersProject, setMembersProject] = useState<ProjectSummary | null>(null);
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null);
   const [deletingProject, setDeletingProject] = useState<ProjectSummary | null>(null);
-  const load = useCallback(async () => { setLoading(true); setError(""); try { setResult(await listProjects({ page, pageSize, search, status: status === "All status" ? undefined : status })); } catch (requestError) { setError(toError(requestError)); } finally { setLoading(false); } }, [page, pageSize, search, status]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
+  // Only the newest request may land: toggling "Show closed" twice must not show the older answer.
+  const latestRequest = useRef(0);
+  const load = useCallback(async () => {
+    const request = ++latestRequest.current;
+    setLoading(true); setError("");
+    try { const data = await listProjectOverview({ includeClosed }); if (request === latestRequest.current) setOverview({ items: data.items, loadedAt: Date.now() }); }
+    catch (requestError) { if (request === latestRequest.current) setError(toError(requestError)); }
+    finally { if (request === latestRequest.current) setLoading(false); }
+  }, [includeClosed]);
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
   const canWrite = bootstrap.permissions.includes("project.write");
   // The API has the final say (work recorded, role); this only hides a button that could never work.
   const canDelete = (project: ProjectSummary) => canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
-  const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
+  const items = useMemo(() => overview?.items ?? [], [overview]);
+  const managers = useMemo(() => [...new Map(items.map((item) => [item.managerId, item.managerName] as const)).entries()].sort((a, b) => a[1].localeCompare(b[1])), [items]);
+  const teams = useMemo(() => [...new Set(items.map((item) => item.team ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
+  // The PM and team lists come from the loaded rows, so a reload can drop the chosen value; Closed
+  // means nothing while closed projects are not loaded. The filter and the controls use these.
+  const managerIds = useMemo(() => managers.map(([id]) => id), [managers]);
+  const activeManagerId = effectiveOption(managerId, managerIds);
+  const activeTeam = effectiveOption(team, teams);
+  const activeStatus = effectiveStatusFilter(status, includeClosed);
+  const filters = useMemo<PortfolioFilters>(() => ({ search, managerId: activeManagerId, team: activeTeam, mineUserId: mine ? bootstrap.user.id : null, status: activeStatus, health, chip }),
+    [search, activeManagerId, activeTeam, mine, bootstrap.user.id, activeStatus, health, chip]);
+  const view = useMemo(() => portfolioView(items, filters, overview?.loadedAt ?? 0), [items, filters, overview?.loadedAt]);
+  const sorted = useMemo(() => sortPortfolio(view.rows, sort), [view.rows, sort]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const filtered = filters.search !== "" || filters.managerId !== null || filters.team !== null || mine || filters.status !== null || health !== null || chip !== null;
+  const clearFilters = () => { setSearch(""); setManagerId(null); setTeam(null); setMine(false); setStatus("All status"); setHealth(null); setChip(null); setPage(1); };
+  const changeSort = (key: PortfolioSortKey) => {
+    const next = nextPortfolioSort(sort, key);
+    setSort(next); setPage(1);
+    try { window.localStorage.setItem(sortStorageKey, JSON.stringify(next)); } catch { /* The sort is a convenience when storage is blocked. */ }
+  };
+  const healthItems = PORTFOLIO_HEALTH_ORDER.filter((value) => (value !== "On Hold" && value !== "Completed") || view.healthCounts[value] > 0 || health === value)
+    .map((value) => ({ key: value, label: `ProjectHealth.${value}`, value: view.healthCounts[value], tone: PORTFOLIO_HEALTH_TONE[value] }));
+  const chipItems = PORTFOLIO_CHIPS.map((key) => ({ key, ...PORTFOLIO_CHIP_COPY[key], value: view.chipCounts[key] }));
+  // One step along the lifecycle, saved with the row's version so a stale row is refused, not overwritten.
+  const saveStage = async (item: ProjectOverviewItem, next: string, actualDelivery?: string) => {
+    setStageBusy(item.id); setActionError("");
+    try {
+      await updateProject(item.id, { rowVersion: item.rowVersion, status: next, ...(actualDelivery ? { actualDelivery } : {}) });
+      setClosingProject(null);
+      notify(`${item.number} · ${uiText(next)}`);
+      await load();
+    } catch (failure) {
+      setClosingProject(null);
+      if (failure instanceof ApiClientError && failure.status === 409) {
+        notify(`${item.number} · ${failure.code === "concurrency_conflict" ? uiText("Portfolio.stageConflict") : uiText(failure.message)}`);
+        await load();
+      } else setActionError(`${item.number} · ${uiText(toError(failure))}`);
+    } finally { setStageBusy(null); }
+  };
+  const changeStage = (item: ProjectOverviewItem, next: string) => {
+    if (next === item.status) return;
+    if (next === "Closed") setClosingProject(item); else void saveStage(item, next);
+  };
+  const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
+    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
+    ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
+    { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembersProject(item) },
+    { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },
+    ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
+  ];
   return <>
-    <PageHeader eyebrow="APPROVED WORK" title={uiText("Projects")} subtitle={teamTestMode ? "สร้างได้จาก Estimate ที่อนุมัติแล้ว และเก็บเอกสารชั่วคราวในเครื่องทดสอบ (ยังไม่เชื่อม NAS)" : "สร้างได้จาก Estimate ที่อนุมัติแล้ว พร้อมเอกสารโครงการบน NAS ตามโฟลเดอร์มาตรฐาน 15 รายการ"} actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Create project"} /></button> : undefined} />
-    <Toolbar><SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search project, customer or end user…" /><Select label="Status" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"]} /><button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
+    <PageHeader eyebrow="APPROVED WORK" title={uiText("Projects")} subtitle="Portfolio.subtitle" actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Create project"} /></button> : undefined} />
+    <section className="portfolio-overview" aria-label={uiText("Portfolio.overview")}>
+      <SegmentBar label="Portfolio.healthBar" items={healthItems} active={health} onPick={(key) => { setHealth(key as ProjectHealth | null); setPage(1); }}
+        lead={<><strong>{view.barTotal}</strong><span>{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span></>} />
+      <FilterChips label="Portfolio.attention" items={chipItems} active={chip} onPick={(key) => { setChip(key as PortfolioChip | null); setPage(1); }} />
+    </section>
+    <Toolbar>
+      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Portfolio.search" />
+      <label className="select-field"><span className="sr-only">{uiText("Portfolio.pm")}</span><select value={activeManagerId ?? ""} aria-label={uiText("Portfolio.pm")} onChange={(event) => { setManagerId(event.target.value ? Number(event.target.value) : null); setPage(1); }}><option value="">{uiText("Portfolio.allPms")}</option>{managers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><Icon name="chevronDown" /></label>
+      <label className="select-field"><span className="sr-only">{uiText("Portfolio.team")}</span><select value={activeTeam ?? ""} aria-label={uiText("Portfolio.team")} onChange={(event) => { setTeam(event.target.value || null); setPage(1); }}><option value="">{uiText("Portfolio.allTeams")}</option>{teams.map((value) => <option key={value} value={value}>{value}</option>)}</select><Icon name="chevronDown" /></label>
+      <Select label="Status" value={activeStatus ?? "All status"} onChange={(value) => { setStatus(value); setPage(1); if (value === "Closed") setIncludeClosed(true); }} options={PROJECT_STAGE_FILTERS} />
+      <label className="checkbox-row"><input type="checkbox" checked={mine} onChange={(event) => { setMine(event.target.checked); setPage(1); }} /><span>{uiText("Portfolio.mine")}</span></label>
+      <label className="checkbox-row"><input type="checkbox" checked={includeClosed} onChange={(event) => { setIncludeClosed(event.target.checked); if (!event.target.checked && status === "Closed") setStatus("All status"); setPage(1); }} /><span>{uiText("Portfolio.showClosed")}</span></label>
+      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+    </Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${result.total} projects`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-      {result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr><th><LocalizedText text={"Project No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"บริษัทที่รับงานด้วย / Contracting customer"} /></th><th><LocalizedText text={"End user / ผู้ใช้งานปลายทาง"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Manager"} /></th><th><LocalizedText text={"Start"} /></th><th><LocalizedText text={"Target delivery"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{result.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.name}</strong>{item.team ? <small className="muted project-team-label">{item.team}</small> : null}</td><td>{item.customerName}</td><td>{item.endUserName || <span className="muted"><LocalizedText text={"ยังไม่ระบุ / Not specified"} /></span>}</td><td>{item.projectType}</td><td>{item.managerName}</td><td>{formatDate(item.startDate)}</td><td>{formatDate(item.targetDelivery)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td><td><div className="project-status-cell"><Badge>{item.status}</Badge>{item.health ? <HealthBadge health={item.health} /> : null}</div></td><td className="muted">{formatDateTime(item.updatedAt)}</td><td>{canWrite ? <button className="btn ghost sm" type="button" onClick={() => setEditingProject(item)}><Icon name="edit" /><LocalizedText text={"Edit project"} /></button> : null}{canWrite && canEditEndUser(item.status) ? <button className="btn ghost sm" type="button" onClick={() => setEndUserProject(item)}><LocalizedText text={"แก้ไข End user / Edit"} /></button> : null}<button className="btn ghost sm" type="button" aria-label={`Documents for ${item.number}`} onClick={() => setDocumentsProject(item)}><Icon name="paperclip" /><LocalizedText text={"Documents"} /></button><button className="btn ghost sm" type="button" aria-label={`Team for ${item.number}`} onClick={() => setMembersProject(item)}><Icon name="users" /><LocalizedText text={"Team"} /></button>{canDelete(item) ? <button className="btn ghost sm danger" type="button" aria-label={`${uiText("CRM.deleteProject")} ${item.number}`} title={uiText("CRM.deleteProject")} onClick={() => setDeletingProject(item)}><Icon name="trash" /></button> : null}</td></tr>)}</tbody></table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
+    {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{actionError}</span></div> : null}
+    <Panel flush className="portfolio-panel">
+      {sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
+        <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
+        <PortfolioSortHeader column="project" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
+        <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" />
+        <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
+        <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
+        <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
+        <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
+        <th>{uiText("Portfolio.colStage")}</th><th><span className="sr-only">{uiText("Actions")}</span></th>
+      </tr></thead><tbody>{paged.map((item) => {
+        const slip = formatSlip(item.slipDays);
+        const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
+        return <tr key={item.id}>
+          <td><HealthBadge health={item.health ?? "No plan"} />{item.scheduleError ? <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>{uiText("Portfolio.scheduleError")}</small> : null}</td>
+          <td className="portfolio-col-project"><div className="portfolio-project">
+            {openProjectSchedule ? <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}><strong className="mono">{item.number}</strong> <strong>{item.name}</strong></button> : <span><strong className="mono">{item.number}</strong> <strong>{item.name}</strong></span>}
+            <small className="muted">{customerLine}{item.team ? ` · ${item.team}` : ""}</small>
+          </div></td>
+          <td className="portfolio-col-pm">{item.managerName}</td>
+          <td>{item.targetDelivery ? formatDate(item.targetDelivery) : "—"}</td>
+          <td className={`portfolio-col-slip portfolio-slip${(item.slipDays ?? 0) > 0 ? " late" : ""}`}>{slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}</td>
+          <td><PortfolioProgress item={item} /></td>
+          <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
+          <td>{item.canChangeStatus && item.allowedStatuses.length
+            ? <RowDisclosure label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`} triggerClassName="portfolio-stage-trigger" disabled={stageBusy !== null}
+              trigger={<><span>{uiText(item.status)}</span><Icon name="chevronDown" /></>} actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))} />
+            : <Badge>{item.status}</Badge>}</td>
+          <td><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
+        </tr>;
+      })}</tbody></table><Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, sorted.length)} total={sorted.length} onPage={setPage} /></div>
+        : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Portfolio.loading"} /></div>
+        : items.length && filtered ? <EmptyState icon="filter" title="Portfolio.noMatch" message="Portfolio.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={clearFilters}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />
+        : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
     </Panel>
-    {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} created with folder metadata`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
+    {closingProject ? <CloseProjectModal project={closingProject} busy={stageBusy !== null} onClose={() => setClosingProject(null)} onConfirm={(actualDelivery) => { void saveStage(closingProject, "Closed", actualDelivery); }} /> : null}
+    {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} · ${uiText("Portfolio.created")}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
     {endUserProject ? <EndUserEditModal kind="projects" record={endUserProject} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserProject(null)} onSaved={load} reloadRecord={async () => { const page = await listProjects({ search: endUserProject.number, pageSize: 100 }); const latest = page.items.find((item) => item.id === endUserProject.id); if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable"); return latest; }} /> : null}
     {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
     {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
@@ -1051,7 +1284,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
       <TeamSelect value={form.department} departments={departments} onChange={(department) => set("department", department)} />
       <div className="field"><span>{t("CRM.planHealth")}</span><div className="project-health-cell">{project.health ? <HealthBadge health={project.health} /> : "—"}</div></div>
       <label className="field"><span><LocalizedText text={"Status"} /></span><select value={form.status} onChange={(event) => set("status", event.target.value)}>{statusChoices.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Progress %"} /></span><input type="number" min={0} max={100} step={1} disabled={closing} value={closing ? 100 : form.progress} onChange={(event) => set("progress", Number(event.target.value))} /></label>
+      <label className="field"><span><LocalizedText text={"Portfolio.typedProgress"} /></span><input type="number" min={0} max={100} step={1} disabled={closing} value={closing ? 100 : form.progress} onChange={(event) => set("progress", Number(event.target.value))} /></label>
       <label className="field"><span><LocalizedText text={"Project manager"} /></span><select value={form.managerId} onChange={(event) => set("managerId", Number(event.target.value))}>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Lead engineer"} /></span><select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Project type"} /></span><input maxLength={100} value={form.projectType} onChange={(event) => set("projectType", event.target.value)} /></label>

@@ -6,8 +6,10 @@ import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { rolesOf } from "../user-roles.js";
 import { dateOnly } from "../http.js";
-import { taskRow, resolveTasks } from "../schedule-service.js";
-import { DASHBOARD_ROLES, overdueTask, type ExecutiveData, type ExecutiveTask } from "../executive-dashboard-model.js";
+import { taskRow } from "../schedule-service.js";
+import { summarizeProjects } from "../project-overview.js";
+import { countedLeaves } from "../project-health.js";
+import { DASHBOARD_ROLES, type ExecutiveData } from "../executive-dashboard-model.js";
 
 type Row = Record<string, unknown>;
 const n = (r: Row, key: string) => Number(r[key] ?? 0);
@@ -46,17 +48,17 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       INSERT @estimates SELECT e.id FROM dbo.estimates e WHERE e.deleted_at IS NULL AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'estimate.read'))
       AND EXISTS(SELECT 1 FROM @inquiries i WHERE i.id=e.inquiry_id);
       SELECT p.id,p.inquiry_id,p.project_no number,p.name,p.customer_id,c.name customer,u.department,p.manager_id,u.name manager,p.status,p.start_date,p.target_delivery,p.progress,
-        CASE WHEN @executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'estimate.read') THEN totals.total END budget,
-        CASE WHEN @executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'estimate.read') THEN totals.material_total END material_budget
+        CASE WHEN @executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'estimate.read') THEN totals.total END budget
       FROM @projects scope JOIN dbo.projects p ON p.id=scope.id JOIN dbo.customers c ON c.id=p.customer_id JOIN dbo.users u ON u.id=p.manager_id
       LEFT JOIN dbo.v_estimate_totals totals ON totals.estimate_id=p.estimate_id;
       SELECT i.id,i.inquiry_no number,i.project_name name,i.customer_id,c.name customer,u.department,i.estimate_owner_id owner_id,u.name owner,
-        i.status,i.inquiry_date date,i.due_date,i.project_probability probability
+        i.status,i.inquiry_date date,i.due_date
       FROM @inquiries scope JOIN dbo.inquiries i ON i.id=scope.id JOIN dbo.customers c ON c.id=i.customer_id JOIN dbo.users u ON u.id=i.estimate_owner_id;
       SELECT e.id,e.inquiry_id,e.estimate_no number,e.project_name name,e.customer_id,u.department,u.name owner,e.status,e.created_date date,e.due_date,t.total cost
       FROM @estimates scope JOIN dbo.estimates e ON e.id=scope.id JOIN dbo.users u ON u.id=e.owner_id JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id;
-      SELECT t.* FROM dbo.schedule_tasks t JOIN @projects p ON p.id=t.project_id WHERE t.deleted_at IS NULL
-        AND (@executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'schedule.read'));
+      -- Every project in scope gets its schedule summary, as GET /projects/overview does under project.read alone;
+      -- only the task detail rows depend on schedule.read (can_read_schedule, the last recordset).
+      SELECT t.* FROM dbo.schedule_tasks t JOIN @projects p ON p.id=t.project_id WHERE t.deleted_at IS NULL;
       SELECT pic.task_id,pic.user_id FROM dbo.schedule_task_pics pic JOIN dbo.schedule_tasks t ON t.id=pic.task_id JOIN @projects p ON p.id=t.project_id WHERE t.deleted_at IS NULL;
       SELECT holiday_date FROM dbo.holidays;
       SELECT pr.id,pr.project_id,pr.pr_no number,N'PR' kind,N'' supplier,u.name owner,pr.status,pr.created_at date,pr.required_date due_date,
@@ -116,6 +118,7 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
           OR (EXISTS(SELECT 1 FROM @roles WHERE code IN(N'Engineering Manager',N'Sales Manager')) AND @department<>N'' AND u.department=@department)
           OR EXISTS(SELECT 1 FROM dbo.projects p JOIN @projects scope ON scope.id=p.id WHERE p.manager_id=u.id))
       ORDER BY u.name,u.id;
+      SELECT CAST(CASE WHEN @executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'schedule.read') THEN 1 ELSE 0 END AS bit) can_read_schedule;
     `, q => q.input("actor", sql.BigInt, actor.id)
       .input("department", sql.NVarChar(100), actor.department.trim()).input("executive", sql.Bit, executive));
     const rows = (index: number) => result.recordsets[index] as Row[];
@@ -123,8 +126,8 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
     const holidays = new Set(rows(5).map(r => d(r,"holiday_date")!));
     const data: ExecutiveData = {
       asOf: new Date().toISOString(), today, mode: executive ? "executive" : "manager", scope: executive ? "Company" : hasRole(actor, "Project Manager") ? "Managed projects" : actor.department || "Assigned records",
-      projects: rows(0).map(r => ({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),managerId:n(r,"manager_id"),manager:s(r,"manager"),status:s(r,"status"),start:d(r,"start_date")!,due:d(r,"target_delivery")!,progress:n(r,"progress"),budget:r.budget==null?null:n(r,"budget"),materialBudget:r.material_budget==null?null:n(r,"material_budget"),forecast:null,overdue:0,blocked:0,taskCount:0,unknownSchedule:false,plannedProgress:null})),
-      inquiries:rows(1).map(r=>({id:n(r,"id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),ownerId:n(r,"owner_id"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!,probability:n(r,"probability")})),
+      projects: rows(0).map(r => ({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),managerId:n(r,"manager_id"),manager:s(r,"manager"),status:s(r,"status"),start:d(r,"start_date")!,due:d(r,"target_delivery")!,progress:n(r,"progress"),budget:r.budget==null?null:n(r,"budget"),forecast:null,overdue:0,blocked:0,taskCount:0,unknownSchedule:false,plannedProgress:null,health:"No plan"})),
+      inquiries:rows(1).map(r=>({id:n(r,"id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),ownerId:n(r,"owner_id"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!})),
       estimates:rows(2).map(r=>({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),department:s(r,"department"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!,cost:n(r,"cost")})),
       tasks:[],procurement:rows(6).map(r=>({id:n(r,"id"),projectId:n(r,"project_id"),number:s(r,"number"),kind:s(r,"kind") as "PR"|"PO"|"GRN",supplier:s(r,"supplier"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date"),value:n(r,"value"),openValue:n(r,"open_value"),held:n(r,"held"),waitingMe:Boolean(r.waiting_me)})),
       team:rows(7).map(r=>({id:n(r,"id"),name:s(r,"name"),department:s(r,"department"),capacity:r.capacity==null?null:n(r,"capacity")})),
@@ -134,21 +137,25 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       holidays:[...holidays],warnings:[],
     };
     const schedule = rows(3).map(r=>taskRow(r as Row & {row_version:Buffer}));
+    // Progress, plan %, health and the late / blocked counts come from the shared schedule summary,
+    // so this dashboard and the Projects portfolio never disagree about a project.
+    const sources = new Map(schedule.map(t=>[t.id,t]));
+    const pics = new Map<number,number[]>();
+    for (const pic of rows(4)) pics.set(n(pic,"task_id"),[...(pics.get(n(pic,"task_id"))??[]),n(pic,"user_id")]);
+    const outcomes = summarizeProjects(data.projects.map(p=>({id:p.id,status:p.status,targetDelivery:p.due})),schedule,holidays,today);
+    const canReadSchedule = Boolean(rows(12)?.[0]?.can_read_schedule);
     for (const p of data.projects) {
-      const source = schedule.filter(t=>t.projectId===p.id);
-      try {
-        const resolved=resolveTasks(source,holidays);
-        const leaves:ExecutiveTask[]=source.filter(t=>!resolved.byId.get(t.id)!.children.length && t.kind!=="phase").map(t=>{
-          const r=resolved.byId.get(t.id)!;
-          return {id:t.id,projectId:p.id,inquiryId:null,name:t.name,status:r.status,start:r.planStart,due:r.planFinish,baselineDue:t.baselineFinish,forecast:r.forecastFinish,completed:r.actualFinish,milestone:t.isMilestone,progress:r.percentComplete,manDays:t.planManDays,owners:rows(4).filter(pic=>n(pic,"task_id")===t.id).map(pic=>n(pic,"user_id"))};
-        });
-        data.tasks.push(...leaves); p.taskCount=leaves.length; p.overdue=leaves.filter(t=>overdueTask(t,today)).length; p.blocked=leaves.filter(t=>t.status==="Blocked").length;
-        p.forecast=leaves.map(t=>t.completed??t.forecast??t.due).filter((v):v is string=>!!v).sort().at(-1)??null;
-        p.unknownSchedule=leaves.some(t=>!t.start||!t.due);
-        const weights=leaves.reduce((sum,t)=>sum+Math.max(1,t.manDays),0);
-        if(weights) { p.progress=leaves.reduce((sum,t)=>sum+t.progress*Math.max(1,t.manDays),0)/weights;
-          p.plannedProgress=leaves.every(t=>t.start&&t.due)?leaves.reduce((sum,t)=>sum+Math.max(0,Math.min(1,(Date.parse(today)-Date.parse(t.start!)+86400000)/(Date.parse(t.due!)-Date.parse(t.start!)+86400000)))*100*Math.max(1,t.manDays),0)/weights:null; }
-      } catch { p.unknownSchedule=true;data.warnings.push(p.number); }
+      const {summary,leaves}=outcomes.get(p.id)!;
+      p.health=summary.health;p.taskCount=summary.taskCount;p.overdue=summary.overdueCount;p.blocked=summary.blockedCount;
+      p.forecast=summary.forecastFinish;p.plannedProgress=summary.plannedProgress;if(summary.progress!==null)p.progress=summary.progress;
+      // A Closed project has no plan comparison by design, so its missing plan % is not an unknown schedule.
+      p.unknownSchedule=summary.scheduleError||(summary.taskCount>0&&summary.plannedProgress===null&&p.status!=="Closed");
+      if(summary.scheduleError){data.warnings.push(p.number);continue;}
+      if(!canReadSchedule)continue;
+      // Every leaf stays listed for milestones and drill-down; Master Plan frame rows are flagged so the
+      // Overdue tasks KPI and the risk list leave them out, as p.overdue does.
+      const counted=new Set(countedLeaves(leaves).map(l=>l.id));
+      data.tasks.push(...leaves.map(l=>({frame:!counted.has(l.id),id:l.id,projectId:p.id,inquiryId:null,name:l.name,status:l.status,start:l.planStart,due:l.planFinish,baselineDue:l.baselineFinish,forecast:l.forecastFinish,completed:l.actualFinish,milestone:l.isMilestone,progress:l.percentComplete,manDays:sources.get(l.id)!.planManDays,owners:pics.get(l.id)??[]})));
     }
     for(const r of rows(9)) data.tasks.push({id:-n(r,"id"),projectId:null,inquiryId:n(r,"inquiry_id"),name:s(r,"title"),status:s(r,"execution_status"),start:d(r,"plan_start"),due:d(r,"plan_end"),baselineDue:null,forecast:null,completed:d(r,"actual_end"),milestone:false,progress:n(r,"percent_done"),manDays:n(r,"man_days"),owners:[n(r,"assignee_id")]});
     return data;

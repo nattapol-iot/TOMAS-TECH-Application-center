@@ -3,6 +3,7 @@ import type { Transaction as TransactionType } from "mssql";
 import { ApiError } from "./errors.js";
 import { parseDateOnly, requiredInteger, requiredText } from "./http.js";
 import { appendUpdate, calendarDays, replacePics } from "./schedule-service.js";
+import { MASTER_PLAN_PHASE } from "./schedule-phases.js";
 
 /*
  * The plan a project is created with: the customer-facing milestones (Master Plan) and who
@@ -12,7 +13,7 @@ import { appendUpdate, calendarDays, replacePics } from "./schedule-service.js";
  * from them.
  */
 
-export const MASTER_PLAN_PHASE = "Master Plan";
+export { MASTER_PLAN_PHASE };
 export const TEAM_PLAN_PHASE = "Team plan";
 export const PROJECT_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{1,29}$/;
 const MAX_ROWS = 50;

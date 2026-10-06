@@ -3,12 +3,10 @@ import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   apiRequest,
-  assignInquiryOwner,
   listInquiries,
   listEstimates,
   loadEstimateCostWorkspace,
   type BootstrapData,
-  type InquirySummary,
   type PagedResult,
 } from "../api-client";
 import {
@@ -30,6 +28,7 @@ import {
   type Tone,
 } from "../ui";
 import { useLanguage } from "../i18n";
+import { useActivitySubView } from "../use-activity-presence";
 import { loadSchedules } from "./PlanningPricingScreens";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
 import {
@@ -62,6 +61,7 @@ type Props = {
   openProjectSchedule?: (id: number) => void;
   openEstimate?: (id: number) => void;
   openInquiry?: (id: number) => void;
+  /** Accepted for the shell's shared props; inquiry ownership is assigned on the Inquiry screen. */
   refreshBootstrap?: () => Promise<void>;
 };
 const tones: Record<Commitment["type"], Tone> = {
@@ -114,17 +114,14 @@ export function ProductionResourcePlan({
   openProjectSchedule,
   openEstimate,
   openInquiry,
-  refreshBootstrap,
 }: Props) {
   const { t } = useLanguage();
   const [state, setState] = useState<{
     items: Commitment[];
-    inquiries: InquirySummary[];
     planning: Planning;
     warnings: string[];
   }>({
     items: [],
-    inquiries: [],
     planning: { efforts: [], capacities: [], holidays: [] },
     warnings: [],
   });
@@ -134,6 +131,8 @@ export function ProductionResourcePlan({
     [search, setSearch] = useState(""),
     [department, setDepartment] = useState("All departments"),
     [type, setType] = useState("All work");
+  // Team Activity sees which Resource Plan tab is open (keys follow the tab ids below).
+  useActivitySubView(`resources-${tab}`);
   const [start, setStart] = useState(() =>
       dateFromDay(dayNumber(today()) - 14),
     ),
@@ -145,8 +144,7 @@ export function ProductionResourcePlan({
     [page, setPage] = useState(1),
     [pageSize, setPageSize] = useState(50);
   const [edit, setEdit] = useState<Commitment | null>(null),
-    [capacityUser, setCapacityUser] = useState<number | null>(null),
-    [assign, setAssign] = useState(false);
+    [capacityUser, setCapacityUser] = useState<number | null>(null);
   const canRead =
     bootstrap.permissions.includes("schedule.read") &&
     bootstrap.permissions.includes("project.read");
@@ -270,7 +268,7 @@ export function ProductionResourcePlan({
         warnings.push(
           t("Schedules unavailable") + ": " + scheduleData.skippedSchedules,
         );
-      setState({ items, inquiries, planning, warnings });
+      setState({ items, planning, warnings });
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -539,16 +537,6 @@ export function ProductionResourcePlan({
                 disabled={loading || !!error}
               >
                 {t("Weekly capacity")}
-              </button>
-            )}
-            {bootstrap.permissions.includes("inquiry.write") && (
-              <button
-                className="btn primary"
-                disabled={loading || !!error}
-                onClick={() => setAssign(true)}
-              >
-                <Icon name="inbox" />
-                {t("Inquiry owner")}
               </button>
             )}
           </>
@@ -1330,17 +1318,6 @@ export function ProductionResourcePlan({
           onSaved={saved}
         />
       )}
-      {assign && (
-        <AssignModal
-          inquiries={state.inquiries}
-          team={bootstrap.team}
-          onClose={() => setAssign(false)}
-          onSaved={async () => {
-            await saved();
-            await refreshBootstrap?.();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -1513,94 +1490,6 @@ function CapacityModal({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
-        </Field>
-        {error && (
-          <p role="alert" className="red-text">
-            {error}
-          </p>
-        )}
-        <button className="btn primary" disabled={busy}>
-          {t("Save")}
-        </button>
-      </form>
-    </Modal>
-  );
-}
-function AssignModal({
-  inquiries,
-  team,
-  onClose,
-  onSaved,
-}: {
-  inquiries: InquirySummary[];
-  team: BootstrapData["team"];
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const { t } = useLanguage(),
-    [id, setId] = useState(""),
-    [owner, setOwner] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  return (
-    <Modal title={t("Assign an inquiry")} onClose={onClose}>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError("");
-          try {
-            const item = inquiries.find((i) => i.id === Number(id));
-            if (!item) throw new Error("Select an inquiry.");
-            await assignInquiryOwner(item.id, Number(owner), item.rowVersion);
-            await onSaved();
-            onClose();
-          } catch (e) {
-            setError(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <Field label={t("Inquiry")}>
-          <select
-            required
-            value={id}
-            onChange={(e) => {
-              setId(e.target.value);
-              setOwner(
-                String(
-                  inquiries.find((i) => i.id === Number(e.target.value))
-                    ?.estimateOwnerId ?? "",
-                ),
-              );
-            }}
-          >
-            <option value="">—</option>
-            {inquiries.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.number} <LocalizedText text={"·"} /> {i.projectName}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t("Estimate Owner")}>
-          <select
-            required
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-          >
-            <option value="">—</option>
-            {team
-              .filter((u) =>
-                ["Engineer", "Engineering Manager", "Admin"].includes(u.role),
-              )
-              .map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-          </select>
         </Field>
         {error && (
           <p role="alert" className="red-text">

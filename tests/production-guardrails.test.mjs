@@ -115,7 +115,8 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /\/api\/v1\/schedule\/day-requests\/\$\{request\.id\}\/answer/);
   assert.match(screen, /Review request for more days/);
   assert.match(screen, /item\.isOwnDetail/);
-  assert.match(screen, /item\.canAddDetail/);
+  assert.match(screen, /offersPersonalTask\(item\)/);
+  assert.match(myWorkRules, /item\.canAddDetail && !item\.managedByResourcePlan/);
   assert.match(screen, /item\.canDeleteDetail/);
   assert.match(screen, /const scheduleGroups = useMemo/);
   assert.match(screen, /function groupScheduleWork/);
@@ -163,6 +164,42 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(assignmentInbox, /View My Active Work/);
 });
 
+test("schedule screens follow the API's progress and Resource Plan flags", async () => {
+  const screen = await readFile(new URL("app/system/production/PlanningPricingScreens.tsx", root), "utf8");
+  const schedule = screen.slice(screen.indexOf("export function ProductionProjectSchedule"), screen.indexOf("function PriceAgeBadge"));
+  assert.ok(schedule.length > 1000, "ProductionProjectSchedule moved");
+  assert.match(schedule, /useActivitySubView\("projects-schedule"\)/);
+  // Update follows canProgress (PIC, PM or Admin), with the PIC rule only as the fallback.
+  assert.match(schedule, /const canProgress = canProgressScheduleRow\(task, \{/);
+  assert.doesNotMatch(schedule, /task\.pics\.some\(\(pic\) => pic\.id === bootstrap\.user\.id\)/, "the PIC-only rule must not bypass canProgress");
+  // The server refuses plan edits and drawings on a managed row, so the screen does not offer them.
+  assert.match(schedule, /const managed = Boolean\(task\.managedByResourcePlan\)/);
+  assert.match(schedule, /activeSchedule\.projectStatus !== "Closed" && !managed \? <button/);
+  // Import Drawing follows the drawing rule (assigned PIC), not canProgress: the PM/Admin may post
+  // progress on a row they are not PIC of, but the server refuses them a drawing there.
+  assert.match(schedule, /const canImportDrawing = canImportDrawingRow\(task, \{\s*scheduleAllowsProgress: activeSchedule\.canUpdateProgress,\s*hasSigningRequest: bootstrap\.permissions\.includes\("signing\.request"\),\s*userId: bootstrap\.user\.id,/);
+  assert.match(schedule, /\{canImportDrawing \? <button className="btn sm default" type="button" onClick=\{\(\) => setDrawingTask\(/);
+  assert.doesNotMatch(schedule, /canProgress && !managed && bootstrap\.permissions\.includes\("signing\.request"\)/);
+  // Day-request answers follow the API's canAnswerRequests (canPlan on an older API), in both places.
+  assert.match(screen, /canAnswerRequests\?: boolean;/);
+  assert.match(schedule, /const canAnswerRequests = activeSchedule \? canAnswerDayRequests\(activeSchedule, bootstrap\.permissions\.includes\("schedule\.plan"\)\) : false;/);
+  assert.match(schedule, /\{canAnswerRequests && pendingDayRequests\.length \? <Panel/);
+  assert.match(schedule, /pendingRequest && requestedTask && canAnswerRequests \? <button/);
+  assert.doesNotMatch(schedule, /canPlan && pendingDayRequests|requestedTask && canPlan \?/);
+  assert.match(schedule, /<ResourcePlanLock \/>/);
+  // My Work: managed rows show the lock and offer neither a day request nor a personal task.
+  assert.match(screen, /managedByResourcePlan\?: boolean;/);
+  assert.match(screen, /canRequestDays\?: boolean;/);
+  assert.match(screen, /canProgress\?: boolean;/);
+  assert.match(screen, /\{item\.managedByResourcePlan \? <ResourcePlanLock \/> : null\}/);
+  assert.match(screen, /items\.filter\(offersPersonalTask\)/);
+  assert.match(screen, /\{offersPersonalTask\(item\) \? <button/);
+  assert.equal((screen.match(/offersDayRequest\((?:item|focus)\) \? <button/g) ?? []).length, 3, "every Request more days button checks offersDayRequest");
+  assert.equal((screen.match(/!canRequestMoreDays\((?:item|focus)\)/g) ?? []).length, 3, "every Request more days button follows canRequestDays");
+  // The old Resource Plan screen and its loaders live in ResourcePlanningScreen.tsx now.
+  assert.doesNotMatch(screen, /function ProductionResourcePlan|function useSchedules|const leafTasks/);
+});
+
 test("New Assignments source filtering is applied before SQL pagination", async () => {
   const route = await readFile(new URL("backend-node/src/routes/resource-tasks.ts", root), "utf8");
   assert.match(route, /invalid_source/);
@@ -192,7 +229,9 @@ test("production Projects table defaults to 10 rows and supports page-size selec
   );
 
   assert.match(projects, /const \[pageSize, setPageSize\] = useState\(10\)/);
-  assert.match(projects, /listProjects\(\{ page, pageSize, search/);
+  // The portfolio loads every project in scope once and pages in memory.
+  assert.match(projects, /listProjectOverview\(\{ includeClosed \}\)/);
+  assert.match(projects, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
   assert.match(projects, /<TablePageSize value=\{pageSize\}/);
   assert.match(projects, /setPageSize\(value\); setPage\(1\)/);
 });

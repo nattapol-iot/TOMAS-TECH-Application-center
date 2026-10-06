@@ -276,6 +276,68 @@ export function Tabs<T extends string>({ tabs, active, onChange }: {
   );
 }
 
+/* --------------------------------------------------------------------------
+   Filter overviews — a distribution belongs in one bar, not one card per
+   value, and every segment or chip is also the filter it names. Labels are
+   dictionary keys: both components translate them. Styles live in
+   app/system/segment-filters.css.
+   -------------------------------------------------------------------------- */
+
+export type FilterItem = { key: string; label: string; value: number; tone: Tone };
+
+/** A stacked bar with a legend; picking the active segment again clears the filter. */
+export function SegmentBar({ items, active, onPick, lead, label }: {
+  items: FilterItem[]; active: string | null; onPick: (key: string | null) => void;
+  /** Shown before the bar, e.g. the total it describes. */
+  lead?: React.ReactNode;
+  /** Accessible name of the group; a dictionary key. */
+  label?: string;
+}) {
+  const t = useT();
+  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0);
+  const pick = (key: string) => onPick(active === key ? null : key);
+  return (
+    <div className="segment-bar" role="group" aria-label={label ? t(label) : undefined}>
+      {lead ? <div className="segment-bar-lead">{lead}</div> : null}
+      <div className="segment-bar-track">
+        {total ? items.filter((item) => item.value > 0).map((item) => (
+          <button key={item.key} type="button" style={{ flexGrow: item.value }} aria-pressed={active === item.key}
+            className={`segment-bar-seg ${item.tone}${active === item.key ? " active" : ""}`}
+            title={`${t(item.label)} · ${item.value}`} aria-label={`${t(item.label)} ${item.value}`} onClick={() => pick(item.key)} />
+        )) : <span className="segment-bar-empty" />}
+      </div>
+      <ul className="segment-bar-legend">
+        {items.map((item) => (
+          <li key={item.key}>
+            <button type="button" aria-pressed={active === item.key} className={active === item.key ? "active" : ""} onClick={() => pick(item.key)}>
+              <i aria-hidden="true" className={`segment-bar-dot ${item.tone}`} />{t(item.label)}<strong>{item.value}</strong>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Counted shortcuts; a chip with nothing behind it is disabled unless it is the active filter. */
+export function FilterChips({ items, active, onPick, label }: {
+  items: FilterItem[]; active: string | null; onPick: (key: string | null) => void; label?: string;
+}) {
+  const t = useT();
+  return (
+    <ul className="filter-chips" aria-label={label ? t(label) : undefined}>
+      {items.map((item) => (
+        <li key={item.key}>
+          <button type="button" aria-pressed={active === item.key} disabled={item.value === 0 && active !== item.key}
+            className={`filter-chip ${item.tone}${active === item.key ? " active" : ""}`} onClick={() => onPick(active === item.key ? null : item.key)}>
+            <span>{t(item.label)}</span><strong>{item.value}</strong>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function Toolbar({ children }: { children: React.ReactNode }) {
   return <div className="toolbar">{children}</div>;
 }

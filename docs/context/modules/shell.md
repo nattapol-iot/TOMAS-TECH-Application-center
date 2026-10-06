@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `8b394fcc`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `d3966892`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,14 +17,15 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 184–190 |
-| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 193–196 |
-| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 197–197 |
-| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 208–792 |
-| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 794–846 |
-| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 848–850 |
-| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 852–863 |
-| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 865–872 |
+| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 183–189 |
+| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 192–195 |
+| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 196–196 |
+| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 207–791 |
+| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 793–845 |
+| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 847–849 |
+| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 851–862 |
+| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 864–871 |
+| `ScreenLoading` | [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>) | 27–53 |
 | `initials` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 25–27 |
 | `permissionVerb` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 29–32 |
 | `ProductionProfile` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 34–133 |
@@ -38,7 +39,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/tmt-id/user-provisioning.ts](<../../../backend-node/src/tmt-id/user-provisioning.ts>)
 - [backend-node/src/tmt-id/types.ts](<../../../backend-node/src/tmt-id/types.ts>)
 - [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
-- [app/system/production/TeamActivityScreen.tsx](<../../../app/system/production/TeamActivityScreen.tsx>)
 - [app/system/production/ExecutiveDashboard.tsx](<../../../app/system/production/ExecutiveDashboard.tsx>)
 - [backend-node/src/executive-dashboard-model.ts](<../../../backend-node/src/executive-dashboard-model.ts>)
 - [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
@@ -57,26 +57,15 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/ui.tsx](<../../../app/system/ui.tsx>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/production/CoreScreens.tsx](<../../../app/system/production/CoreScreens.tsx>)
-- [app/system/production/InquiryScreens.tsx](<../../../app/system/production/InquiryScreens.tsx>)
-- [app/system/production/ResourcePlanningScreen.tsx](<../../../app/system/production/ResourcePlanningScreen.tsx>)
-- [app/system/production/ProjectTimelineScreen.tsx](<../../../app/system/production/ProjectTimelineScreen.tsx>)
 - [app/system/production/ResourceTaskWorkspace.tsx](<../../../app/system/production/ResourceTaskWorkspace.tsx>)
-- [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>)
-- [app/system/production/EstimateScreens.tsx](<../../../app/system/production/EstimateScreens.tsx>)
-- [app/system/production/MaterialScreens.tsx](<../../../app/system/production/MaterialScreens.tsx>)
 - [app/system/production/PlanningPricingScreens.tsx](<../../../app/system/production/PlanningPricingScreens.tsx>)
 - [app/system/production/SigningScreens.tsx](<../../../app/system/production/SigningScreens.tsx>)
 - [app/system/production/AdminAnalyticsScreens.tsx](<../../../app/system/production/AdminAnalyticsScreens.tsx>)
-- [app/system/production/KnowledgeScreens.tsx](<../../../app/system/production/KnowledgeScreens.tsx>)
-- [app/system/production/ModuleTemplateScreens.tsx](<../../../app/system/production/ModuleTemplateScreens.tsx>)
-- [app/system/production/LaborPackageMaster.tsx](<../../../app/system/production/LaborPackageMaster.tsx>)
-- [app/system/production/ScheduleTemplateMaster.tsx](<../../../app/system/production/ScheduleTemplateMaster.tsx>)
 - [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>)
 - [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>)
 - [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>)
 - [app/system/support-copy.ts](<../../../app/system/support-copy.ts>)
-- [app/system/production/PerformanceScreen.tsx](<../../../app/system/production/PerformanceScreen.tsx>)
-- [app/system/production/SiteVisitScreens.tsx](<../../../app/system/production/SiteVisitScreens.tsx>)
+- [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>)
 - [app/system/production/CrmScreens.tsx](<../../../app/system/production/CrmScreens.tsx>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
 

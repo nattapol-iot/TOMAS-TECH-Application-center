@@ -2,22 +2,22 @@
 
 [Module](../modules/dashboard.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `8b394fcc`; generated, do not edit. [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d3966892`; generated, do not edit. [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/dashboard/management` | 18–155 |
+| GET | `/api/v1/dashboard/management` | 20–162 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `n` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 13–13 |
-| `s` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 14–14 |
-| `d` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 15–15 |
-| `registerExecutiveDashboardRoutes` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 17–156 |
+| `n` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 15–15 |
+| `s` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 16–16 |
+| `d` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 17–17 |
+| `registerExecutiveDashboardRoutes` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 19–163 |
 
 ## Direct local dependencies
 
@@ -28,6 +28,8 @@ Evidence: source snapshot `8b394fcc`; generated, do not edit. [backend-node/src/
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
+- [backend-node/src/project-overview.ts](<../../../backend-node/src/project-overview.ts>)
+- [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/executive-dashboard-model.ts](<../../../backend-node/src/executive-dashboard-model.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)

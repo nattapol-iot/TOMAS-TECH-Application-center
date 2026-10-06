@@ -8,7 +8,7 @@ import { dateOnly } from "./http.js";
 import { resolveSchedule, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
 import type { CurrentUser } from "./types.js";
 
-export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; status: string };
+export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; status: string; targetDelivery: string | null };
 export type PicRow = { id: number; name: string; email: string };
 export type TaskRow = {
   id: number; projectId: number; parentId: number | null; sortOrder: number; kind: string; name: string; isMilestone: boolean;
@@ -125,9 +125,9 @@ export async function readTask(transaction: TransactionType, id: number): Promis
 }
 export async function readProject(transaction: TransactionType, projectId: number, lock = false): Promise<ProjectRow> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const row = (await request.query<Record<string, unknown>>(`SELECT id,project_no,name,manager_id,status FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`)).recordset[0];
+  const row = (await request.query<Record<string, unknown>>(`SELECT id,project_no,name,manager_id,status,target_delivery FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`)).recordset[0];
   if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
-  return { id: Number(row.id), projectNo: String(row.project_no), name: String(row.name), managerId: Number(row.manager_id), status: String(row.status) };
+  return { id: Number(row.id), projectNo: String(row.project_no), name: String(row.name), managerId: Number(row.manager_id), status: String(row.status), targetDelivery: dateOnly((row.target_delivery ?? null) as Date | string | null) };
 }
 export async function demandPlanOwner(transaction: TransactionType, projectId: number, actor: CurrentUser): Promise<ProjectRow> {
   const project = await readProject(transaction, projectId, true);
@@ -179,6 +179,35 @@ export async function demandAssignedLeaf(transaction: TransactionType, task: Tas
   const allowed = Boolean((await request.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) allowed;`)).recordset[0]?.allowed);
   if (!allowed || task.kind === "phase") throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC can change a non-phase leaf task.");
 }
+export type ProgressRights = { isLeaf: boolean; isPic: boolean; isManager: boolean; isAdmin: boolean; managed: boolean };
+/** Who may post progress on a row: a PIC, the project manager or an Admin, on a non-phase leaf. A row Resource Plan manages stays with its PIC (its assignee). */
+export function canPostProgress(rights: ProgressRights): boolean { return rights.isLeaf && (rights.isPic || (!rights.managed && (rights.isManager || rights.isAdmin))); }
+/** The progress route's check. Day requests, member details and drawing workflow keep demandAssignedLeaf (PIC only). */
+export async function demandProgressWriter(transaction: TransactionType, task: TaskRow, project: ProjectRow, actor: CurrentUser): Promise<void> {
+  const request = new sql.Request(transaction); request.input("task", sql.BigInt, task.id); request.input("actor", sql.BigInt, actor.id);
+  const row = (await request.query<{ is_pic: boolean; has_children: boolean; managed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed;`)).recordset[0];
+  const rights = { isLeaf: task.kind !== "phase" && !row?.has_children, isPic: Boolean(row?.is_pic), isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"), managed: Boolean(row?.managed) };
+  if (!canPostProgress(rights)) throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager or an Admin can update this task's progress.");
+}
+/**
+ * Who may answer a day request. dbo.answer_schedule_day_request (migration 007) checks the PRIMARY role only (users.role_id),
+ * so an Engineering Manager or Admin held as an additional role would be refused there with THROW 51125.
+ */
+export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId">, actor: Pick<CurrentUser, "id" | "role">): boolean {
+  return project.managerId === actor.id || actor.role === "Engineering Manager" || actor.role === "Admin";
+}
+/** A Resource Plan task linked to a schedule row (dbo.resource_tasks.schedule_task_id is unique). */
+export type ManagedTask = { state: string; acknowledged: boolean; assigneeId: number };
+/** Schedule rows a Resource Plan task manages: their plan and progress go through Resource Plan approval. */
+export async function readManagedTaskIds(transaction: TransactionType, projectId: number): Promise<Map<number, ManagedTask>> {
+  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  const rows = (await request.query<{ schedule_task_id: number | string; state: string; acknowledged_at: unknown; assignee_id: number | string }>(`SELECT schedule_task_id,state,acknowledged_at,assignee_id FROM dbo.resource_tasks WHERE project_id=@project AND schedule_task_id IS NOT NULL;`)).recordset;
+  return new Map(rows.map((row) => [Number(row.schedule_task_id), { state: String(row.state), acknowledged: row.acknowledged_at != null, assigneeId: Number(row.assignee_id) }]));
+}
+/** The resource-tasks.ts preHandler's rule for progress on a managed row: an Approved task its assignee has acknowledged. */
+export function managedProgressReady(managed: ManagedTask, actorId: number): boolean {
+  return managed.state === "Approved" && managed.acknowledged && managed.assigneeId === actorId;
+}
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
   if (taskId && (input.parentId === taskId || input.predecessorId === taskId)) throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
@@ -196,8 +225,14 @@ export async function validateGraphAndHierarchy(transaction: TransactionType, pr
 export function scheduleCalculation(tasks: TaskRow[]) {
   return tasks.map((task): ScheduleCalculationTask => ({ id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, planStart: task.planStart, planDays: task.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, percentComplete: task.percentComplete, status: task.status }));
 }
-export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, TaskRow>, pics: Map<number, PicRow[]>): Record<string, unknown> {
+/** What the reader may do on each row. projectCanProgress = the project is not Closed and the reader has schedule.progress. */
+export type TaskAccess = { actorId: number; managed: Map<number, ManagedTask>; projectCanProgress: boolean; isManager: boolean; isAdmin: boolean };
+export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, TaskRow>, pics: Map<number, PicRow[]>, access?: TaskAccess): Record<string, unknown> {
   const task = tasks.get(resolved.source.id)!;
+  const managedTask = access?.managed.get(task.id), managed = managedTask !== undefined;
+  // A managed row also needs what the resource-tasks.ts preHandler demands, or the POST is refused with acknowledgment_required.
+  const flags = access ? { managedByResourcePlan: managed, canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
+    isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed }) } : {};
   return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
     isMilestone: task.isMilestone, origin: task.origin, visibility: task.visibility, planStart: resolved.planStart, planFinish: resolved.planFinish,
     // The start as stored, for an edit to send back unchanged; planStart above is the resolved one.
@@ -207,7 +242,7 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
     baselineFinish: task.baselineFinish, baselineDays: task.baselineDays, baselineRevision: task.baselineRevision, actualStart: resolved.actualStart,
     actualFinish: resolved.actualFinish, forecastFinish: resolved.forecastFinish, percentComplete: resolved.percentComplete, status: resolved.status,
     remark: task.remark, actualManDays: task.actualManDays, rowVersion: task.rowVersion.toString("base64"), updatedAt: task.updatedAt,
-    updatedBy: task.updatedBy, children: resolved.children.map((child) => taskResponse(child, tasks, pics)) };
+    updatedBy: task.updatedBy, ...flags, children: resolved.children.map((child) => taskResponse(child, tasks, pics, access)) };
 }
 export function resolveTasks(tasks: TaskRow[], holidays: Set<string>) { return resolveSchedule(scheduleCalculation(tasks), holidays); }
 export function concurrency(): ApiError { return new ApiError(409, "concurrency_conflict", "The schedule changed. Reload it and try again."); }

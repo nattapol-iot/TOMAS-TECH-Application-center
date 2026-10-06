@@ -4,6 +4,7 @@ import { useLanguage, useT, type Translator } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, type BootstrapData, type PagedResult } from '../api-client';
 import { Badge, EmptyState, Field, Icon, Modal, Pagination, Panel, SearchInput, TablePageSize, Toolbar } from '../ui';
+import { useActivitySubView } from '../use-activity-presence';
 import './resource-tasks.css';
 
 type Plan={assigneeId:number;start:string;workDays:number;manDays:number;note:string;scheduleVersion?:string|null};
@@ -22,6 +23,8 @@ const taskLabel=(task:ResourceTask,t:Translator)=>t(task.state==='Closed'?'à¸›à¸
 export function ResourceTaskWorkspace({bootstrap,notify,mine=false,issues=false,onChanged,openProjectSchedule,initialFilter='All',variant='default',onViewActive,sourceFilter='all',isGroupExpanded,onToggleGroup}:Props) {
   const t=useT();
   const {lang}=useLanguage();
+  // Only the Projects punchlist is a sub-view of its own; My Work and Resource Plan report their parent screen.
+  useActivitySubView(issues?'projects-punchlist':null);
   const [result,setResult]=useState<PagedResult<ResourceTask>>({items:[],page:1,pageSize:50,total:0});
   const [sources,setSources]=useState<Source[]>([]),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(variant==='new-assignments'?100:50),[search,setSearch]=useState(''),[filter,setFilter]=useState(initialFilter),[project,setProject]=useState('');
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<ResourceTask|'new'|null>(null);

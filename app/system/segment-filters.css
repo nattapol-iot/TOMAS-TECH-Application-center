@@ -1,0 +1,83 @@
+/* SegmentBar and FilterChips (app/system/ui.tsx): a stacked bar whose segments are filters, and a
+   row of counted filter chips. Modelled on CRM's pipeline bar and attention chips. Tokens only. */
+
+.segment-bar { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 12px; }
+.segment-bar-lead { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.segment-bar-lead strong { font-size: var(--fs-xl); font-weight: 660; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.segment-bar-lead span { color: var(--muted); font-size: var(--fs-xs); }
+.segment-bar-track { display: flex; gap: 2px; height: 10px; min-width: 0; }
+.segment-bar-empty { flex: 1; border-radius: var(--r-xs); background: var(--n-150); }
+.segment-bar-seg {
+  min-width: 6px;
+  border: 0;
+  border-radius: var(--r-xs);
+  padding: 0;
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: opacity 120ms ease, outline-color 120ms ease;
+}
+.segment-bar-seg:hover { opacity: 0.78; }
+.segment-bar-seg:focus-visible { outline-color: var(--blue); }
+.segment-bar-seg.active { outline-color: var(--ink); }
+.segment-bar-legend { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; }
+.segment-bar-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 1px 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.segment-bar-legend button:hover, .segment-bar-legend button.active { color: var(--ink); }
+.segment-bar-legend button.active { font-weight: 650; }
+.segment-bar-legend strong { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 650; }
+.segment-bar-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.segment-bar-seg.green, .segment-bar-dot.green { background: var(--green); }
+.segment-bar-seg.amber, .segment-bar-dot.amber { background: var(--amber); }
+.segment-bar-seg.red, .segment-bar-dot.red { background: var(--red); }
+.segment-bar-seg.blue, .segment-bar-dot.blue { background: var(--blue); }
+.segment-bar-seg.violet, .segment-bar-dot.violet { background: var(--violet); }
+.segment-bar-seg.slate, .segment-bar-dot.slate { background: var(--n-400); }
+
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: 550;
+  cursor: pointer;
+}
+.filter-chip strong { font-variant-numeric: tabular-nums; font-weight: 700; }
+.filter-chip:hover:not(:disabled) { border-color: var(--n-300); }
+.filter-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.filter-chip:disabled { opacity: 0.5; cursor: default; }
+.filter-chip.amber { border-color: var(--amber-line); color: var(--amber-text); }
+.filter-chip.red { border-color: var(--red-line); color: var(--red-text); }
+.filter-chip.blue { border-color: var(--blue-line); color: var(--blue-text); }
+.filter-chip.violet { border-color: var(--violet-line); color: var(--violet-text); }
+.filter-chip.green { border-color: var(--green-line); color: var(--green-text); }
+.filter-chip.active { font-weight: 650; }
+.filter-chip.amber.active { background: var(--amber-soft); }
+.filter-chip.red.active { background: var(--red-soft); }
+.filter-chip.blue.active { background: var(--blue-soft); }
+.filter-chip.violet.active { background: var(--violet-soft); }
+.filter-chip.green.active { background: var(--green-soft); }
+.filter-chip.slate.active { background: var(--n-100); }
+
+@media (max-width: 620px) {
+  .segment-bar { grid-template-columns: minmax(0, 1fr); }
+  .segment-bar-legend { grid-column: 1; }
+}

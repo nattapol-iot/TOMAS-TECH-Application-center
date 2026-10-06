@@ -45,13 +45,7 @@ import {
 } from "../signing-core.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
-
-/** The calendar date in the business time zone (same signature as the shared helper it will become). */
-function businessToday(timeZone: string, now: Date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
+import { businessToday } from "../business-date.js";
 
 const DOCUMENT_ENTITY = "SignableDocument";
 

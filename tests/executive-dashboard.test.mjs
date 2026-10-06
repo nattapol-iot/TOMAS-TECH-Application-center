@@ -7,7 +7,7 @@ const modelUrl=compile(await readFile(new URL('../backend-node/src/executive-das
 const {overdueTask,projectHealth}=await import(modelUrl);
 const source=await readFile(new URL('../app/system/production/executive-metrics.ts',import.meta.url),'utf8');
 const {periodRange,businessDays,teamWorkload,projectManagerOptions}=await import(compile(source.replaceAll('../../../backend-node/src/executive-dashboard-model',modelUrl)));
-const project={id:1,status:'Active',due:'2026-10-01',forecast:'2026-09-30',blocked:0,overdue:0,taskCount:3,unknownSchedule:false};
+const project={id:1,status:'Installation',due:'2026-10-01',forecast:'2026-09-30',blocked:0,overdue:0,taskCount:3,unknownSchedule:false,health:'On Track'};
 const task={id:1,projectId:1,status:'In Progress',start:'2026-09-07',due:'2026-09-11',baselineDue:'2026-09-04',manDays:10,owners:[1,2]};
 const data={holidays:[],team:[{id:1,name:'A',capacity:5},{id:2,name:'B',capacity:5}],efforts:[]};
 test('manager filter includes unassigned role PMs, keeps assigned non-PMs and deduplicates IDs',()=>{
@@ -27,19 +27,15 @@ test('forecast shifts cannot hide baseline overdue work; completed work is exclu
   assert.equal(overdueTask({...task,status:'Done'},'2026-09-07'),false);
   assert.equal(overdueTask({...task,baselineDue:null,due:null},'2026-09-07'),false);
 });
-test('health is unknown for missing plans and escalates blocked or late delivery',()=>{
-  assert.equal(projectHealth(project,[],'2026-09-07'),'healthy');
-  assert.equal(projectHealth({...project,taskCount:0},[],'2026-09-07'),'unknown');
-  assert.equal(projectHealth({...project,blocked:1},[],'2026-09-07'),'critical');
-  assert.equal(projectHealth({...project,forecast:'2026-10-02'},[],'2026-09-07'),'critical');
-  assert.equal(projectHealth({...project,status:'On Hold'},[],'2026-09-07'),'watch');
-  assert.equal(projectHealth({...project,status:'Closed',blocked:1},[],'2026-09-07'),'closed');
+test('health shows the shared schedule health in the dashboard tones',()=>{
+  const tones={'Delayed':'critical','At Risk':'watch','On Hold':'watch','No plan':'unknown','On Track':'healthy','Completed':'closed'};
+  for(const [health,tone] of Object.entries(tones))assert.equal(projectHealth({...project,health}),tone,health);
 });
-test('material risk excludes cancelled POs and unrelated projects',()=>{
+test('procurement problems no longer change a project health',()=>{
+  // Overdue POs and held receipts stay listed under procurement; the schedule alone decides health.
   const po={kind:'PO',projectId:1,status:'Issued',openValue:100,due:'2026-09-01',held:0};
-  assert.equal(projectHealth(project,[po],'2026-09-07'),'watch');
-  assert.equal(projectHealth(project,[{...po,status:'Cancelled'}],'2026-09-07'),'healthy');
-  assert.equal(projectHealth(project,[{...po,projectId:2}],'2026-09-07'),'healthy');
+  assert.equal(projectHealth({...project,health:'On Track'},[po],'2026-09-07'),'healthy');
+  assert.equal(projectHealth.length,1);
 });
 test('capacity splits shared effort rather than double-counting owners',()=>{
   const result=teamWorkload(data,[task],new Set(),new Set(),'2026-09-07',4);

@@ -2,36 +2,33 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `8b394fcc`; generated, do not edit. [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d3966892`; generated, do not edit. [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/visit-master/` | 63–197 |
-| POST | `/api/v1/visit-master/visit-types` | 199–265 |
-| POST | `/api/v1/visit-master/skills` | 267–310 |
-| POST | `/api/v1/visit-master/checklist-templates` | 312–411 |
-| POST | `/api/v1/visit-master/sla-policies` | 413–462 |
-| POST | `/api/v1/visit-master/engineer-skills` | 464–499 |
-| DELETE | `/api/v1/visit-master/engineer-skills/:id` | 500–530 |
-| POST | `/api/v1/visit-master/availability` | 532–616 |
-| DELETE | `/api/v1/visit-master/availability/:id` | 617–670 |
-| GET | `/api/v1/visit-master/customers/:customerId/sites` | 672–728 |
-| POST | `/api/v1/visit-master/customers/:customerId/sites` | 730–808 |
-| POST | `/api/v1/visit-master/sites/:siteId/contacts` | 810–881 |
-| GET | `/api/v1/me/notifications/` | 883–907 |
-| POST | `/api/v1/me/notifications/read` | 908–931 |
+| GET | `/api/v1/visit-master/` | 62–196 |
+| POST | `/api/v1/visit-master/visit-types` | 198–264 |
+| POST | `/api/v1/visit-master/skills` | 266–309 |
+| POST | `/api/v1/visit-master/checklist-templates` | 311–410 |
+| POST | `/api/v1/visit-master/sla-policies` | 412–461 |
+| POST | `/api/v1/visit-master/engineer-skills` | 463–498 |
+| DELETE | `/api/v1/visit-master/engineer-skills/:id` | 499–529 |
+| POST | `/api/v1/visit-master/availability` | 531–615 |
+| DELETE | `/api/v1/visit-master/availability/:id` | 616–669 |
+| GET | `/api/v1/me/notifications/` | 671–695 |
+| POST | `/api/v1/me/notifications/read` | 696–719 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `clean` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 23–24 |
-| `code` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 25–36 |
-| `bool` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 37–48 |
-| `timestamp` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 49–56 |
-| `registerVisitMasterRoutes` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 58–932 |
+| `clean` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 22–23 |
+| `code` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 24–35 |
+| `bool` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 36–47 |
+| `timestamp` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 48–55 |
+| `registerVisitMasterRoutes` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 57–720 |
 
 ## Direct local dependencies
 
@@ -39,12 +36,11 @@ Evidence: source snapshot `8b394fcc`; generated, do not edit. [backend-node/src/
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/site-visit-common.ts](<../../../backend-node/src/site-visit-common.ts>)
-- [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.engineer_availability`, `dbo.engineer_skills`, `dbo.notifications`, `dbo.site_visit_assignments`, `dbo.site_visit_checklist_responses`, `dbo.site_visits`, `dbo.users`, `dbo.visit_checklist_items`, `dbo.visit_checklist_templates`, `dbo.visit_skills`, `dbo.visit_sla_policies`, `dbo.visit_types`
+`dbo.engineer_availability`, `dbo.engineer_skills`, `dbo.notifications`, `dbo.site_visit_assignments`, `dbo.site_visit_checklist_responses`, `dbo.site_visits`, `dbo.users`, `dbo.visit_checklist_items`, `dbo.visit_checklist_templates`, `dbo.visit_skills`, `dbo.visit_sla_policies`, `dbo.visit_types`
 
 ## Change boundary
 

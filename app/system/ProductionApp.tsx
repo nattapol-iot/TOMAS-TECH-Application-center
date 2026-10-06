@@ -736,7 +736,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "projects" ? <>
             <Tabs tabs={[{ id: "portfolio", label: t("Project Portfolio") }, { id: "schedule", label: t("Project Schedule") }, {id:"punchlist",label:"Punchlist · Issue ลูกค้า"}]} active={projectTab} onChange={setProjectTab} />
             <div style={{ marginTop: 14 }}>
-              {projectTab === "portfolio" ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule {...moduleProps} />}
+              {projectTab === "portfolio" ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule {...moduleProps} />}
             </div>
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}

@@ -19,8 +19,10 @@ const periodDays=(start:string,end:string)=>(Date.parse(`${end}T00:00:00Z`)-Date
 const uuid=(v:unknown)=>{const key=requiredText(v,36,'Request key');if(!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(key))throw invalid('Invalid request key.');return key;};
 // Every navigable view in app/system/ProductionApp.tsx; a view missing here is refused with 400,
 // which the client swallows, so that page silently never counts (tests/activity-presence-modules.test.mjs).
+// "<view>-<tab>" keys are the sub-views screens report through useActivitySubView (app/system/use-activity-presence.ts).
 const modules=new Set(['sales-intake','labor','signature','dashboard','my-work','inquiries','estimates','projects','knowledge','site-visits','my-assignments','price','quotations','missing','project-timeline','resources','procurement','boms','purchase','pos','inventory','receiving','issues','approvals','signing','documents','performance','reports','master','rates','audit','settings','profile','support','activity','module-templates','stamps','visit-master','signature',
- 'crm-dashboard','crm-customers','crm-contacts','crm-opportunities','crm-activities','crm-pipeline','customers','suppliers','employees','material-master','user-accounts','labor-packages','schedule-templates','summary-reports','manual']);
+ 'crm-dashboard','crm-customers','crm-contacts','crm-opportunities','crm-activities','crm-pipeline','customers','suppliers','employees','material-master','user-accounts','labor-packages','schedule-templates','summary-reports','manual',
+ 'projects-portfolio','projects-schedule','projects-punchlist','resources-tasks','resources-gantt','resources-workload','resources-items']);
 
 export function registerActivityRoutes(app:FastifyInstance,db:Database,users:CurrentUserService){
  const actorFor=async(request:Parameters<CurrentUserService['required']>[0])=>{await users.demandPermission(request,'activity.read');return users.required(request);};
@@ -38,9 +40,14 @@ export function registerActivityRoutes(app:FastifyInstance,db:Database,users:Cur
  };
  app.post('/api/v1/activity/presence',async request=>{
   const actor=await actorFor(request),b=bodyObject(request.body),moduleName=requiredText(b.module,60,'Module');if(!modules.has(moduleName))throw invalid('Unknown application module.');
+  if(b.page!==undefined&&b.page!==null&&typeof b.page!=='boolean')throw invalid('Page flag must be true or false.');
+  // page=true: this window opened the page; false: an interaction or visibility ping, never a PAGE row.
+  // Without the flag (a client cached before it existed) a module change against the session still counts as a page open.
+  const page=typeof b.page==='boolean'?b.page:null;
   // No client timestamps, durations or identity. Tabs/devices share a server-side session.
+  // Inside 45 s the session keeps last_at (no ACTIVE credit) but still records the page, so the next ping sees it as current and logs no second PAGE.
   return db.transaction(async tx=>{
-   const q=new sql.Request(tx);q.input('user',sql.BigInt,actor.id).input('module',sql.NVarChar(60),moduleName);
+   const q=new sql.Request(tx);q.input('user',sql.BigInt,actor.id).input('module',sql.NVarChar(60),moduleName).input('page',sql.Bit,page);
    const result=await q.query<Row>(`DECLARE @now datetimeoffset(0)=SYSUTCDATETIME(),@id bigint,@last datetimeoffset(0),@module_before nvarchar(60);
     SELECT TOP(1) @id=id,@last=last_at,@module_before=module FROM dbo.activity_sessions WITH(UPDLOCK,HOLDLOCK) WHERE user_id=@user ORDER BY last_at DESC,id DESC;
     IF @id IS NULL OR DATEDIFF(second,@last,@now)>=1800 BEGIN
@@ -50,8 +57,9 @@ export function registerActivityRoutes(app:FastifyInstance,db:Database,users:Cur
     END ELSE IF DATEDIFF(second,@last,@now)>=45 BEGIN
      UPDATE dbo.activity_sessions SET last_at=@now,module=@module WHERE id=@id;
      INSERT dbo.activity_events(actor_id,session_id,kind,module,summary) VALUES(@user,@id,N'ACTIVE',@module,N'Active interaction');
-    END;
-    IF @module_before IS NULL OR @module_before<>@module BEGIN
+    END ELSE IF @module_before IS NULL OR @module_before<>@module
+     UPDATE dbo.activity_sessions SET module=@module WHERE id=@id;
+    IF @page=1 OR (@page IS NULL AND (@module_before IS NULL OR @module_before<>@module)) BEGIN
      IF NOT EXISTS(SELECT 1 FROM dbo.activity_events WHERE actor_id=@user AND kind=N'PAGE' AND module=@module AND occurred_at>DATEADD(second,-45,@now))
       INSERT dbo.activity_events(actor_id,session_id,kind,module,summary) VALUES(@user,@id,N'PAGE',@module,N'Page opened');
     END;

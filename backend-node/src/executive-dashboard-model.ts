@@ -1,15 +1,19 @@
 /** Read-only management reporting contract. Amounts are costs, never revenue. */
 export const DASHBOARD_ROLES = ["Admin", "Management", "CEO", "Engineering Manager", "Project Manager", "Sales Manager"];
+/** ProjectHealth from project-health.ts, repeated so the screen that imports this file pulls in no server code. */
+export type ScheduleHealth = "On Track" | "At Risk" | "Delayed" | "No plan" | "On Hold" | "Completed";
 export type DashboardLink = "projects" | "inquiries" | "estimates" | "resources" | "purchase" | "pos" | "receiving" | "signing" | "reports";
 export type ExecutiveProject = {
   id: number; inquiryId: number; number: string; name: string; customerId: number; customer: string; department: string;
   managerId: number; manager: string; status: string; start: string; due: string; progress: number;
-  budget: number | null; materialBudget: number | null; forecast: string | null; overdue: number;
+  budget: number | null; forecast: string | null; overdue: number;
   blocked: number; taskCount: number; unknownSchedule: boolean; plannedProgress: number | null;
+  /** The shared schedule health, the same one Projects and Project Schedule show. */
+  health: ScheduleHealth;
 };
 export type ExecutiveInquiry = {
   id: number; number: string; name: string; customerId: number; customer: string; department: string;
-  ownerId: number; owner: string; status: string; date: string; due: string; probability: number;
+  ownerId: number; owner: string; status: string; date: string; due: string;
 };
 export type ExecutiveEstimate = {
   id: number; inquiryId: number; number: string; name: string; customerId: number; department: string;
@@ -19,6 +23,8 @@ export type ExecutiveTask = {
   id: number; projectId: number | null; inquiryId: number | null; name: string; status: string;
   start: string | null; due: string | null; baselineDue: string | null; forecast: string | null;
   completed: string | null; milestone: boolean; progress: number; manDays: number; owners: number[];
+  /** A Master Plan row kept for milestones and drill-down; it is a timeline frame, so it is never overdue. */
+  frame?: boolean;
 };
 export type ExecutiveProcurement = {
   id: number; projectId: number; number: string; kind: "PR" | "PO" | "GRN";
@@ -40,11 +46,12 @@ export type ExecutiveData = {
 };
 
 export const shiftDay = (date: string, amount: number) => new Date(Date.parse(date + "T00:00:00Z") + amount * 86400000).toISOString().slice(0, 10);
-export const overdueTask = (task: ExecutiveTask, today: string) => task.status !== "Done" && !!(task.baselineDue ?? task.due) && (task.baselineDue ?? task.due)! < today;
-export function projectHealth(project: ExecutiveProject, procurement: ExecutiveProcurement[], today: string): "critical" | "watch" | "unknown" | "healthy" | "closed" {
-  if (project.status === "Closed") return "closed";
-  if (project.blocked || project.due < today || (project.forecast && project.forecast > project.due)) return "critical";
-  if (project.status === "On Hold" || project.overdue || procurement.some(p => p.projectId === project.id && p.status !== "Cancelled" && ((p.kind === "PO" && p.status !== "Draft" && p.openValue > 0 && p.due !== null && p.due < today) || p.held > 0))) return "watch";
-  if (project.unknownSchedule || !project.taskCount) return "unknown";
-  return "healthy";
+export const overdueTask = (task: ExecutiveTask, today: string) => !task.frame && task.status !== "Done" && !!(task.baselineDue ?? task.due) && (task.baselineDue ?? task.due)! < today;
+export type ExecutiveHealth = "critical" | "watch" | "unknown" | "healthy" | "closed";
+const HEALTH_TONES: Record<ScheduleHealth, ExecutiveHealth> = {
+  Delayed: "critical", "At Risk": "watch", "On Hold": "watch", "No plan": "unknown", "On Track": "healthy", Completed: "closed",
+};
+/** The schedule health in the dashboard's tones. Procurement is listed on its own and never changes it. */
+export function projectHealth(project: Pick<ExecutiveProject, "health">): ExecutiveHealth {
+  return HEALTH_TONES[project.health];
 }

@@ -20,6 +20,38 @@ function sqlErrorNumber(error: RequestError): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+/**
+ * THROW numbers of dbo.answer_schedule_day_request (database/migrations/007_schedule_day_request_answers.sql).
+ * The estimate revision triggers (migrations 008/058) reuse 51112-51115 at runtime, so these numbers are not mapped in
+ * the global handler: only the answer route translates them, through dayRequestAnswerError().
+ */
+const DAY_REQUEST_ANSWER_ERRORS: Readonly<Record<number, readonly [status: number, code: string, message: string]>> = {
+  51110: [400, "validation_failed", "Request, task, project and answer actor identifiers are required."],
+  51111: [400, "validation_failed", "Day request answer is invalid."],
+  51112: [400, "value_too_long", "Answer note cannot exceed 20000 characters."],
+  51113: [400, "validation_failed", "Expected task row version is required."],
+  51114: [403, "schedule_day_request_answer_forbidden", "Answer actor must be an active user."],
+  51115: [404, "project_not_found", "Project not found."],
+  51116: [404, "schedule_task_not_found", "Schedule task not found."],
+  51117: [409, "schedule_day_request_invalid", "The day request no longer matches its task."],
+  51118: [404, "schedule_day_request_not_found", "Schedule day request not found."],
+  51119: [409, "schedule_day_request_invalid", "The day request no longer matches its task."],
+  51120: [409, "schedule_day_request_invalid", "The schedule update is not a valid day request."],
+  51121: [409, "schedule_day_request_answered", "This day request has already been answered."],
+  51122: [409, "concurrency_conflict", "The schedule changed. Reload it and try again."],
+  51123: [409, "project_closed", "A closed project's schedule cannot be changed."],
+  51124: [400, "validation_failed", "Accepting this request would make the task longer than 3650 calendar days."],
+  51125: [403, "schedule_day_request_answer_forbidden", "Only the project manager, or a user whose primary role is Engineering Manager or Admin, can answer this request."],
+  51126: [409, "schedule_day_request_not_leaf", "A day request can only be answered while its task remains a non-phase leaf row."],
+};
+
+/** The 4xx ApiError for a dbo.answer_schedule_day_request THROW, or null when the error is anything else. */
+export function dayRequestAnswerError(error: unknown): ApiError | null {
+  if (!(error instanceof sql.RequestError)) return null;
+  const mapped = DAY_REQUEST_ANSWER_ERRORS[sqlErrorNumber(error) ?? 0];
+  return mapped ? new ApiError(mapped[0], mapped[1], mapped[2]) : null;
+}
+
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error: FastifyError | ApiError | ConnectionError | RequestError | DatabaseReadOnlyViolationError, request, reply) => {
     if (error instanceof ApiError) {
