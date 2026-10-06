@@ -67,8 +67,9 @@ import {
   type ProjectHealth,
 } from "../api-client";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
+import { ProjectPortfolioGantt } from "./ProjectPortfolioGantt";
 import { useActivitySubView } from "../use-activity-presence";
-import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
+import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFOLIO_SORT_KEYS, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
   type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
@@ -217,7 +218,8 @@ const dashboardDayDistance = (value: string | null, todayKey: string) => {
   if (!key) return null;
   return Math.round((Date.parse(`${key}T00:00:00Z`) - Date.parse(`${todayKey}T00:00:00Z`)) / 86_400_000);
 };
-const dashboardEffectiveFinish = (item: DashboardWorkItem) => item.actualFinish ?? item.forecastFinish ?? item.planFinish;
+// Open work is due on its current plan finish; a later forecast does not move it (lib/my-work.ts late rule).
+const dashboardDueDate = (item: DashboardWorkItem) => item.planFinish;
 const dashboardClampedDate = (year: number, month: number, day: number) => {
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   return new Date(Date.UTC(year, month, Math.min(day, lastDay)));
@@ -250,7 +252,7 @@ const dashboardTenure = (startKey: string | null | undefined, todayKey: string) 
 const dashboardTaskTone = (item: DashboardWorkItem): Tone => {
   if (item.status === "Done") return "green";
   if (item.status === "Blocked") return "red";
-  const due = dashboardDayDistance(dashboardEffectiveFinish(item), businessDate(new Date()));
+  const due = dashboardDayDistance(dashboardDueDate(item), businessDate(new Date()));
   if (due !== null && due < 0) return "red";
   return item.status === "In Progress" ? "blue" : "slate";
 };
@@ -326,12 +328,12 @@ export function ProductionDashboard({
   const openWork = workItems.filter((item) => item.status !== "Done" && item.canUpdate);
   const todayWork = openWork.filter((item) => {
     const start = dashboardDayDistance(item.planStart, todayKey);
-    const finish = dashboardDayDistance(dashboardEffectiveFinish(item), todayKey);
+    const finish = dashboardDayDistance(dashboardDueDate(item), todayKey);
     return item.status === "In Progress" || item.status === "Blocked" || finish === 0
       || (start !== null && start <= 0 && (finish === null || finish >= 0));
   });
   const weekWork = openWork.filter((item) => {
-    const distance = dashboardDayDistance(dashboardEffectiveFinish(item), todayKey);
+    const distance = dashboardDayDistance(dashboardDueDate(item), todayKey);
     return distance !== null && distance >= 0 && distance <= 7;
   });
   const doneWork = workItems.filter((item) => item.status === "Done")
@@ -341,7 +343,7 @@ export function ProductionDashboard({
     return distance !== null && distance >= -7 && distance <= 0;
   });
   const lateWork = openWork.filter((item) => {
-    const distance = dashboardDayDistance(dashboardEffectiveFinish(item), todayKey);
+    const distance = dashboardDayDistance(dashboardDueDate(item), todayKey);
     return distance !== null && distance < 0;
   });
   const displayedWork = (taskTab === "today" ? todayWork : taskTab === "week" ? weekWork : doneWork).slice(0, 6);
@@ -449,7 +451,7 @@ export function ProductionDashboard({
             {!loading && !canReadSchedule ? <EmptyState icon="lock" title="ไม่มีสิทธิ์ดู Project Schedule" message="ทางลัดโมดูลอื่นที่คุณใช้งานได้ยังแสดงอยู่ด้านล่าง" /> : null}
             {!loading && canReadSchedule && !displayedWork.length ? <EmptyState icon="checkCircle" title={taskTab === "done" ? "ยังไม่มีงานที่ปิดแล้ว" : "ไม่มีงานในช่วงนี้"} message={taskTab === "done" ? "งานที่ทำเสร็จจะกลับมาแสดงที่นี่" : "คุณไม่มีงานที่ต้องทำในช่วงเวลานี้"} /> : null}
             {displayedWork.map((item) => {
-              const distance = dashboardDayDistance(dashboardEffectiveFinish(item), todayKey);
+              const distance = dashboardDayDistance(dashboardDueDate(item), todayKey);
               const dateLabel = item.status === "Done"
                 ? `${t("เสร็จ")} ${formatDate(dashboardDateKey(item.actualFinish ?? item.updatedAt) ?? todayKey)}`
                 : distance !== null && distance < 0 ? `${t("เลยกำหนด")} ${Math.abs(distance)} ${t("วัน")}`
@@ -903,9 +905,31 @@ function CloseProjectModal({ project, busy, onClose, onConfirm }: { project: Pro
   </Modal>;
 }
 
-export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode, openProjectSchedule }: CommonProps & { teamTestMode: boolean; openProjectSchedule?: (id: number) => void }) {
-  useActivitySubView("projects-portfolio");
+type PortfolioMode = "list" | "timeline";
+const PORTFOLIO_SORT_LABEL: Record<PortfolioSortKey, string> = {
+  health: "Portfolio.colHealth", number: "Portfolio.colNumber", name: "Portfolio.colProject", pm: "Portfolio.colPm",
+  target: "Portfolio.colTarget", slip: "Portfolio.colSlip", progress: "Portfolio.colProgress", lastUpdate: "Portfolio.colLastUpdate",
+};
+const portfolioModeStorageKey = (userId: number) => `tomas-tech-project-portfolio-mode:${userId}`;
+
+export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode, openProjectSchedule, initialMode }: CommonProps & {
+  teamTestMode: boolean;
+  openProjectSchedule?: (id: number, taskId?: number) => void;
+  /** The old Project Timeline menu opens the portfolio straight in Timeline mode. */
+  initialMode?: PortfolioMode;
+}) {
   const uiText = useUiText();
+  const modeStorageKey = portfolioModeStorageKey(bootstrap.user.id);
+  const [mode, setMode] = useState<PortfolioMode>(() => {
+    if (initialMode) return initialMode;
+    try { return window.localStorage.getItem(modeStorageKey) === "timeline" ? "timeline" : "list"; } catch { return "list"; }
+  });
+  const timelineMode = mode === "timeline";
+  useActivitySubView(timelineMode ? "projects-timeline" : "projects-portfolio");
+  const changeMode = (next: PortfolioMode) => {
+    setMode(next);
+    try { window.localStorage.setItem(modeStorageKey, next); } catch { /* The mode is a convenience when storage is blocked. */ }
+  };
   const [overview, setOverview] = useState<{ items: ProjectOverviewItem[]; loadedAt: number } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -1010,14 +1034,26 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
       <Select label="Status" value={activeStatus ?? "All status"} onChange={(value) => { setStatus(value); setPage(1); if (value === "Closed") setIncludeClosed(true); }} options={PROJECT_STAGE_FILTERS} />
       <label className="checkbox-row"><input type="checkbox" checked={mine} onChange={(event) => { setMine(event.target.checked); setPage(1); }} /><span>{uiText("Portfolio.mine")}</span></label>
       <label className="checkbox-row"><input type="checkbox" checked={includeClosed} onChange={(event) => { setIncludeClosed(event.target.checked); if (!event.target.checked && status === "Closed") setStatus("All status"); setPage(1); }} /><span>{uiText("Portfolio.showClosed")}</span></label>
+      <div className="chip-select" role="group" aria-label={uiText("Portfolio.view")}>
+        {(["list", "timeline"] as const).map((value) => <button key={value} type="button" className={mode === value ? "chip on" : "chip"} aria-pressed={mode === value} onClick={() => changeMode(value)}><Icon name={value === "list" ? "table" : "chart"} />{uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}</button>)}
+      </div>
       <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{actionError}</span></div> : null}
     <Panel flush className="portfolio-panel">
-      {sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
+      {sorted.length && mode === "timeline" ? <>
+        <div className="portfolio-gantt-sort">
+          <label className="select-field"><span className="sr-only">{uiText("Portfolio.sortBy")}</span><select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>{PORTFOLIO_SORT_KEYS.map((key) => <option key={key} value={key}>{uiText(PORTFOLIO_SORT_LABEL[key])}</option>)}</select><Icon name="chevronDown" /></label>
+          <button type="button" className="btn ghost sm" onClick={() => changeSort(sort.key)} aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")} title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}><Icon name="chevronDown" className={sort.direction} />{uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}</button>
+        </div>
+        {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
+        <ProjectPortfolioGantt key={overview?.loadedAt ?? 0} rows={sorted} today={today()} canReadSchedule={bootstrap.permissions.includes("schedule.read")} {...(openProjectSchedule ? { openProjectSchedule } : {})} />
+      </>
+        : sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
         <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
-        <PortfolioSortHeader column="project" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
+        <PortfolioSortHeader column="number" label="Portfolio.colNumber" sort={sort} onSort={changeSort} />
+        <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
         <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" />
         <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
         <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
@@ -1029,8 +1065,9 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
         const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
         return <tr key={item.id}>
           <td><HealthBadge health={item.health ?? "No plan"} />{item.scheduleError ? <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>{uiText("Portfolio.scheduleError")}</small> : null}</td>
+          <td><strong className="mono">{item.number}</strong></td>
           <td className="portfolio-col-project"><div className="portfolio-project">
-            {openProjectSchedule ? <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}><strong className="mono">{item.number}</strong> <strong>{item.name}</strong></button> : <span><strong className="mono">{item.number}</strong> <strong>{item.name}</strong></span>}
+            {openProjectSchedule ? <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}><strong>{item.name}</strong></button> : <strong>{item.name}</strong>}
             <small className="muted">{customerLine}{item.team ? ` · ${item.team}` : ""}</small>
           </div></td>
           <td className="portfolio-col-pm">{item.managerName}</td>

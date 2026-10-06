@@ -374,3 +374,58 @@
   .work-group-metrics { grid-template-columns: minmax(0, 1fr); }
   .new-assignment-child { align-items: stretch; flex-direction: column; }
 }
+
+/* The one-click progress control sits on the card face; a Blocked choice asks for its reason in place. */
+.my-task-card > .quick-controls { padding: 8px 0 2px; }
+.blocked-reason { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.blocked-reason input { height: 28px; min-width: 220px; border: 1px solid var(--red); border-radius: var(--r-sm); padding: 0 8px; font-size: var(--fs-2xs); }
+
+/* Progress dialog: the first rule an entry breaks, beside the disabled Save. */
+.progress-problem { display: inline-flex; align-items: center; gap: 6px; color: var(--amber-text, var(--ink-soft)); font-size: var(--fs-xs); }
+.progress-problem .icon { width: 14px; height: 14px; }
+
+/* Projects > Plan: a compact summary line over the Gantt, not a row of KPI cards. */
+.plan-project-picker { min-width: 280px; }
+.plan-project-picker select { width: 100%; max-width: 520px; }
+.plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.plan-summary > span { display: inline-flex; align-items: baseline; gap: 6px; font-size: var(--fs-xs); }
+.plan-summary small { color: var(--muted); font-size: var(--fs-2xs); }
+.plan-summary strong { font-variant-numeric: tabular-nums; }
+.plan-summary em { color: var(--muted); font-style: normal; font-size: var(--fs-2xs); }
+.plan-summary em.late { color: var(--red); font-weight: 650; }
+.plan-summary-loading { margin-left: auto; color: var(--muted); }
+.plan-gantt { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
+.plan-gantt-controls, .plan-gantt > .gantt-legend { padding: 0 14px; }
+.plan-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+
+/* The task drawer. */
+.plan-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0 0 14px; font-size: var(--fs-xs); }
+.plan-facts > div { display: contents; }
+.plan-facts dt { color: var(--muted); }
+.plan-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.plan-facts dd .progress { min-width: 120px; }
+.plan-drawer-section { margin: 0 0 14px; }
+.plan-drawer-section h3 { margin: 0 0 8px; font-size: var(--fs-sm); }
+.plan-drawer-actions { margin: 0 0 16px; }
+.plan-history { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); }
+.plan-history li { display: flex; flex-direction: column; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
+.plan-history li > button { align-self: flex-start; }
+.plan-history-when { color: var(--muted); font-size: var(--fs-2xs); }
+.plan-project-history { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.plan-project-history summary { cursor: pointer; font-size: var(--fs-xs); font-weight: 650; }
+.plan-project-history .plan-history { margin-top: 10px; }
+
+@media (max-width: 720px) {
+  .plan-project-picker { min-width: 0; width: 100%; }
+  .blocked-reason input { min-width: 0; width: 100%; }
+}

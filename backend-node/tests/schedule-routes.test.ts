@@ -314,6 +314,16 @@ test("GET schedule: summary uses the shared work-day weighted rule without the M
   } finally { await app.close(); }
 });
 
+test("GET schedule: the Master Plan frame leaf does not count toward health, every other row does", async (t) => {
+  const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  installSqlMock(t, scheduleAnswers([{ task: 5, user: 30 }]));
+  try {
+    const tasks = flatten((await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json().tasks as TaskNode[]) as Array<TaskNode & { countsTowardHealth: boolean }>;
+    // Milestone 2 sits under the Master Plan phase and the project has other leaves, so the screens leave it out of Late and Blocked.
+    assert.deepEqual(Object.fromEntries(tasks.map((task) => [task.id, task.countsTowardHealth])), { 1: true, 2: false, 3: true, 4: true, 5: true, 6: true, 7: true });
+  } finally { await app.close(); }
+});
+
 test("GET schedule: canProgress and managedByResourcePlan per row", async (t) => {
   await t.test("project manager", async (sub) => {
     const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
@@ -526,4 +536,14 @@ test("dayRequestAnswerError maps only the 007 procedure's numbers and leaves the
     const response = await app.inject({ method: "GET", url: "/estimate-trigger" });
     assert.notEqual(response.json().code, "value_too_long");
   } finally { await app.close(); }
+});
+
+test("GET schedule returns baseline headers without the frozen snapshot JSON", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../src/routes/schedule.ts", import.meta.url), "utf8");
+  const reader = source.slice(source.indexOf("async function readBaselines"), source.indexOf("async function readUpdates"));
+  assert.ok(reader.length > 100, "readBaselines moved");
+  // The snapshot stays in dbo.schedule_baselines for audit; no screen reads it, so the per-project schedule stays small.
+  assert.doesNotMatch(reader, /snapshot_json|JSON\.parse/);
+  assert.match(reader, /b\.revision,b\.label,b\.taken_at/);
 });

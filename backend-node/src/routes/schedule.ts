@@ -10,7 +10,7 @@ import { demandProjectScope, isMyWorkElevated } from "../project-scope.js";
 import { networkDays } from "../schedule-calculator.js";
 import { businessToday } from "../business-date.js";
 import { normalizeBusinessTimeZone } from "../config.js";
-import { scheduleLeaves, summarizeProjectSchedule } from "../project-health.js";
+import { countedLeaves, scheduleLeaves, summarizeProjectSchedule } from "../project-health.js";
 import {
   appendUpdate, calendarDays, canAnswerDayRequests, concurrency, currentScheduleVersion, demandAssignedLeaf, demandPlanOwner, demandProgressWriter,
   hasChildren, hasPendingRequest, permissionFor, planInput, progressInput, readHolidays, readManagedTaskIds, readPics, readProject,
@@ -44,11 +44,13 @@ function existingPlan(task: TaskRow, picUserIds: number[]): Record<string, unkno
     predecessorId: task.predecessorId, lagDays: task.lagDays, picUserIds, picExternal: task.picExternal, planManDays: task.planManDays };
 }
 
+// Baseline headers only: the frozen snapshot_json is kept for audit, and no screen reads it, so the
+// schedule a timeline expands per project stays small.
 async function readBaselines(transaction: TransactionType, projectId: number) {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  return (await request.query<Record<string, unknown>>(`SELECT b.id,b.revision,b.label,b.taken_at,u.name taken_by,b.reason,b.task_count,b.promised_finish,b.snapshot_json FROM dbo.schedule_baselines b INNER JOIN dbo.users u ON u.id=b.taken_by WHERE b.project_id=@project ORDER BY b.revision DESC;`)).recordset.map((row) => ({
+  return (await request.query<Record<string, unknown>>(`SELECT b.id,b.revision,b.label,b.taken_at,u.name taken_by,b.reason,b.task_count,b.promised_finish FROM dbo.schedule_baselines b INNER JOIN dbo.users u ON u.id=b.taken_by WHERE b.project_id=@project ORDER BY b.revision DESC;`)).recordset.map((row) => ({
     id: Number(row.id), revision: Number(row.revision), label: row.label, takenAt: row.taken_at, takenBy: row.taken_by,
-    reason: row.reason, taskCount: Number(row.task_count), promisedFinish: row.promised_finish, snapshot: JSON.parse(String(row.snapshot_json)),
+    reason: row.reason, taskCount: Number(row.task_count), promisedFinish: row.promised_finish,
   }));
 }
 
@@ -71,7 +73,8 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const tasks = await readTasks(transaction, projectId); const holidays = await readHolidays(transaction); const pics = await readPics(transaction, projectId); const managed = await readManagedTaskIds(transaction, projectId);
   const calculation = resolveTasks(tasks, holidays);
   // One progress and health rule for every screen: work-day weighted, Master Plan frame rows left out (project-health.ts).
-  const shared = summarizeProjectSchedule({ status: project.status, targetDelivery: project.targetDelivery }, scheduleLeaves(tasks, calculation), today);
+  const leaves = scheduleLeaves(tasks, calculation), counted = new Set(countedLeaves(leaves).map((leaf) => leaf.id));
+  const shared = summarizeProjectSchedule({ status: project.status, targetDelivery: project.targetDelivery }, leaves, today);
   const starts = calculation.roots.map((item) => item.planStart).filter((value): value is string => Boolean(value)).sort();
   const finishes = calculation.roots.map((item) => item.planFinish).filter((value): value is string => Boolean(value)).sort();
   const baselines = await readBaselines(transaction, projectId);
@@ -88,7 +91,8 @@ async function projectSchedule(transaction: TransactionType, database: Database,
       health: shared.health, plannedProgress: shared.plannedProgress, overdueCount: shared.overdueCount, slipDays: shared.slipDays },
     latestBaseline: baselines[0] ?? null, baselines, recentUpdates: await readUpdates(transaction, projectId),
     tasks: calculation.roots.map((item) => taskResponse(item, new Map(tasks.map((task) => [task.id, task])), pics, {
-      actorId: actor.id, managed, projectCanProgress: canProgressPermission && project.status !== "Closed", isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin") })) };
+      actorId: actor.id, managed, projectCanProgress: canProgressPermission && project.status !== "Closed", isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"),
+      frameIds: new Set(leaves.filter((leaf) => !counted.has(leaf.id)).map((leaf) => leaf.id)) })) };
 }
 
 /** timeZone: the business time zone (config.businessTimeZone); without it, the same Business__TimeZoneId setting loadConfig reads. */

@@ -45,7 +45,7 @@ test("the portfolio loads the unpaged overview endpoint once per closed toggle",
 test("sortable headers are buttons with aria-sort and the sort is remembered per user", () => {
   assert.match(portfolio, /aria-sort=\{active \? \(sort\.direction === "asc" \? "ascending" : "descending"\) : "none"\}/);
   assert.match(portfolio, /<button type="button" className=\{`th-sort/);
-  for (const column of ["health", "project", "pm", "target", "slip", "progress", "lastUpdate"]) {
+  for (const column of ["health", "number", "name", "pm", "target", "slip", "progress", "lastUpdate"]) {
     assert.match(portfolio, new RegExp(`<PortfolioSortHeader column="${column}"`), column);
   }
   assert.match(portfolio, /portfolioSortStorageKey\(bootstrap\.user\.id\)/);
@@ -106,10 +106,14 @@ test("SegmentBar and FilterChips press, clear and skip empty values accessibly",
 });
 
 test("the portfolio reports its sub-view, opens the schedule and changes stage one step at a time", () => {
-  assert.match(portfolio, /useActivitySubView\("projects-portfolio"\)/);
+  // List and Timeline are separate sub-views, so the usage data can tell them apart.
+  assert.match(portfolio, /useActivitySubView\(timelineMode \? "projects-timeline" : "projects-portfolio"\)/);
   assert.match(screens, /import \{ useActivitySubView \} from "\.\.\/use-activity-presence";/);
-  assert.match(portfolio, /openProjectSchedule\?: \(id: number\) => void/);
-  assert.match(portfolio, /openProjectSchedule \? <button type="button" className="portfolio-project-link" onClick=\{\(\) => openProjectSchedule\(item\.id\)\}>/);
+  assert.match(portfolio, /openProjectSchedule\?: \(id: number, taskId\?: number\) => void/);
+  assert.match(portfolio, /openProjectSchedule \? <button type="button" className="portfolio-project-link" onClick=\{\(\) => openProjectSchedule\(item\.id\)\}><strong>\{item\.name\}<\/strong><\/button>/);
+  // The project number is its own sortable column, so sorting by number is one click.
+  assert.match(portfolio, /<PortfolioSortHeader column="number" label="Portfolio\.colNumber"/);
+  assert.match(portfolio, /<td><strong className="mono">\{item\.number\}<\/strong><\/td>/);
   // The stage is a button listing the next stages; picking one saves. A native select would save on
   // every arrow key, so no stage select remains. Non-editors still see a badge.
   assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.length\s*\? <RowDisclosure label=\{`\$\{uiText\("Portfolio\.changeStage"\)\}/);
@@ -165,7 +169,27 @@ test("the project name opens the schedule only for users who can read it", () =>
   const shell = read("app/system/ProductionApp.tsx");
   assert.match(shell, /<ProductionProjects \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} openProjectSchedule=\{bootstrap\.permissions\.includes\("schedule\.read"\) \? openProjectSchedule : undefined\} \/>/);
   // Without the prop the name is plain text.
-  assert.match(portfolio, /: <span><strong className="mono">\{item\.number\}<\/strong> <strong>\{item\.name\}<\/strong><\/span>\}/);
+  assert.match(portfolio, /\{item\.name\}<\/strong><\/button> : <strong>\{item\.name\}<\/strong>\}/);
+});
+
+test("Overview has a List | Timeline toggle on the shared Gantt, remembered per user", () => {
+  const shell = read("app/system/ProductionApp.tsx");
+  assert.match(portfolio, /tomas-tech-project-portfolio-mode:\$\{userId\}/);
+  assert.match(portfolio, /aria-pressed=\{mode === value\} onClick=\{\(\) => changeMode\(value\)\}/);
+  // Timeline draws the same filtered, sorted rows as the list.
+  assert.match(portfolio, /<ProjectPortfolioGantt key=\{overview\?\.loadedAt \?\? 0\} rows=\{sorted\}/);
+  // The timeline sorts with the same sort as the list (it has no column headers of its own).
+  assert.match(portfolio, /PORTFOLIO_SORT_KEYS\.map\(\(key\) => <option key=\{key\} value=\{key\}>/);
+  const gantt = read("app/system/production/ProjectPortfolioGantt.tsx");
+  assert.match(gantt, /from "\.\/GanttChart"/);
+  // Tasks load only when a project is expanded, one schedule per expanded project.
+  assert.match(gantt, /apiRequest<ProjectSchedule>\(`\/api\/v1\/projects\/\$\{projectId\}\/schedule`\)/);
+  assert.match(gantt, /if \(opening && \(!loaded \|\| loaded\.status === "error"\)\) void load\(projectId\);/);
+  // A task bar opens the plan on that task.
+  assert.match(gantt, /onOpen: \(\) => openProjectSchedule\(item\.id, task\.id\)/);
+  // The old Project Timeline menu opens the portfolio in Timeline mode; the old screen is gone.
+  assert.match(shell, /view === "project-timeline" \? <ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/);
+  assert.doesNotMatch(shell, /ProductionProjectTimeline/);
 });
 
 test("the portfolio's PM and slip columns give way on a phone", () => {

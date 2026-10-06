@@ -356,7 +356,7 @@ chapter('resources', 'Resource Plan และ Project Timeline', 'Planning → R
         'ตรวจช่วงแผน วันส่งมอบ ความคืบหน้า และงานที่เลื่อน/เกินกำหนดตามข้อมูลที่แสดง',
         'เปิดโครงการจากรายการเพื่อไปยัง Project Schedule แล้วปรับแผนผ่านขั้นตอนที่มีสิทธิ์'
     ], 'การตัดสินใจจัดคนและวันส่งมอบอ้างอิงแผนโครงการเดียวกัน'),
-    'app/system/production/ResourcePlanningScreen.tsx app/system/production/ResourceTaskWorkspace.tsx app/system/production/ProjectTimelineScreen.tsx docs/resource-planning.md docs/resource-task-workflow.md', 'resources project-timeline')
+    'app/system/production/ResourcePlanningScreen.tsx app/system/production/ResourceTaskWorkspace.tsx app/system/production/ProjectPortfolioGantt.tsx app/system/production/GanttChart.tsx docs/resource-planning.md docs/resource-task-workflow.md', 'resources project-timeline')
 
 chapter('my-work', 'My Work และ Team Activity: รับงาน รายงาน และติดตามคะแนน', 'My Work → Task inbox / Project schedule tasks · Team Activity', 'สมาชิกผู้รับผิดชอบงาน / หัวหน้าทีม',
     proc('18.1 ตอบรับและดำเนินการ Task', [

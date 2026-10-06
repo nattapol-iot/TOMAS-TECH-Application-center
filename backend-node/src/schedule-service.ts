@@ -226,12 +226,16 @@ export function scheduleCalculation(tasks: TaskRow[]) {
   return tasks.map((task): ScheduleCalculationTask => ({ id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, planStart: task.planStart, planDays: task.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, percentComplete: task.percentComplete, status: task.status }));
 }
 /** What the reader may do on each row. projectCanProgress = the project is not Closed and the reader has schedule.progress. */
-export type TaskAccess = { actorId: number; managed: Map<number, ManagedTask>; projectCanProgress: boolean; isManager: boolean; isAdmin: boolean };
+export type TaskAccess = {
+  actorId: number; managed: Map<number, ManagedTask>; projectCanProgress: boolean; isManager: boolean; isAdmin: boolean;
+  /** Master Plan frame leaves that the shared summary leaves out (project-health.ts countedLeaves); the screens' late and blocked rules skip them too. */
+  frameIds?: Set<number>;
+};
 export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, TaskRow>, pics: Map<number, PicRow[]>, access?: TaskAccess): Record<string, unknown> {
   const task = tasks.get(resolved.source.id)!;
   const managedTask = access?.managed.get(task.id), managed = managedTask !== undefined;
   // A managed row also needs what the resource-tasks.ts preHandler demands, or the POST is refused with acknowledgment_required.
-  const flags = access ? { managedByResourcePlan: managed, canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
+  const flags = access ? { managedByResourcePlan: managed, countsTowardHealth: !access.frameIds?.has(task.id), canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
     isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed }) } : {};
   return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
     isMilestone: task.isMilestone, origin: task.origin, visibility: task.visibility, planStart: resolved.planStart, planFinish: resolved.planFinish,

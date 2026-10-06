@@ -6,6 +6,8 @@ import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-mode
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { useActivityPresence } from "./use-activity-presence";
 import { restoredView, viewStorageKey } from "../../lib/remembered-view";
+import { estimateBusinessDate } from "../../lib/estimate-ux";
+import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
@@ -63,7 +65,6 @@ import {
   ProductionModuleTemplates,
   ProductionMyAssignments,
   ProductionProcurementDashboard,
-  ProductionProjectTimeline,
   ProductionPurchaseOrders,
   ProductionPurchaseRequisitions,
   ProductionResourcePlan,
@@ -220,6 +221,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [projectTab, setProjectTab] = useState<"portfolio" | "schedule" | "punchlist">("portfolio");
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
+  const [preferredScheduleTaskId, setPreferredScheduleTaskId] = useState<number | null>(null);
+  // Bumped by every deep link: the Plan remounts for a link, not when the link is cleared after use.
+  const [scheduleLinkCount, setScheduleLinkCount] = useState(0);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
   const [myWorkUrgentCount, setMyWorkUrgentCount] = useState(0);
@@ -554,8 +558,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     }))
     .filter((section) => section.items.length > 0), [bootstrap]);
 
-  const openProjectSchedule = useCallback((projectId: number) => {
+  const clearPreferredSchedule = useCallback(() => { setPreferredScheduleProjectId(null); setPreferredScheduleTaskId(null); }, []);
+  // Opens a project's plan, optionally on one task (a bar clicked in the portfolio timeline).
+  const openProjectSchedule = useCallback((projectId: number, taskId?: number) => {
     setPreferredScheduleProjectId(projectId);
+    setPreferredScheduleTaskId(taskId ?? null);
+    setScheduleLinkCount((count) => count + 1);
     setProjectTab("schedule");
     setView("projects");
     window.scrollTo({ top: 0 });
@@ -647,6 +655,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     notify: setToast,
     openProjectSchedule,
     preferredProjectId: preferredScheduleProjectId,
+    preferredTaskId: preferredScheduleTaskId,
+    onPreferredConsumed: clearPreferredSchedule,
     openEstimate,
     onMyWorkUrgentCountChange: setMyWorkUrgentCount,
   };
@@ -734,9 +744,10 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
           {view === "projects" ? <>
-            <Tabs tabs={[{ id: "portfolio", label: t("Project Portfolio") }, { id: "schedule", label: t("Project Schedule") }, {id:"punchlist",label:"Punchlist · Issue ลูกค้า"}]} active={projectTab} onChange={setProjectTab} />
+            {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
+            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={setProjectTab} /> : null}
             <div style={{ marginTop: 14 }}>
-              {projectTab === "portfolio" ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule {...moduleProps} />}
+              {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
             </div>
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
@@ -747,7 +758,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "price" ? <ProductionPriceLibrary {...moduleProps} /> : null}
           {view === "quotations" ? <ProductionSupplierQuotations {...moduleProps} /> : null}
           {view === "missing" ? <ProductionWaitingSupplierPrice {...moduleProps} /> : null}
-          {view === "project-timeline" ? <ProductionProjectTimeline openProjectSchedule={openProjectSchedule} /> : null}
+          {/* The Project Timeline menu entry stays until the usage data decides; it opens the portfolio's Timeline mode. */}
+          {view === "project-timeline" ? <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} /> : null}
           {view === "resources" ? <ProductionResourcePlan {...moduleProps} refreshBootstrap={refreshBootstrap} openInquiry={openInquiry} openEstimate={openEstimate} /> : null}
           {view === "procurement" ? <ProductionProcurementDashboard {...moduleProps} /> : null}
           {view === "boms" ? <ProductionBoms {...moduleProps} /> : null}
@@ -848,17 +860,9 @@ function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
 }
 
+/** The badge counts what My Work's "Needs update" counts (lib/my-work.ts), on the business day. */
 function myWorkNeedsAttention(item: MyWorkUrgencyItem) {
-  if (!item.canUpdate || item.status === "Done") return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const effectiveFinish = item.actualFinish ?? item.forecastFinish ?? item.planFinish;
-  const late = Boolean(effectiveFinish && new Date(`${effectiveFinish.slice(0, 10)}T00:00:00`) < today);
-  const needsForecast = !item.actualFinish && !item.forecastFinish
-    && Boolean(item.planFinish && new Date(`${item.planFinish.slice(0, 10)}T00:00:00`) < today);
-  const stale = item.status === "In Progress"
-    && Date.now() - Date.parse(item.updatedAt) > 5 * 86_400_000;
-  return late || item.status === "Blocked" || needsForecast || stale;
+  return needsAttention(item, estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"), Date.now());
 }
 
 function badgeFor(view: View, bootstrap: BootstrapData, myWorkUrgentCount = 0) {

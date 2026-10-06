@@ -6,11 +6,17 @@ import {
   canImportDrawingRow,
   canProgressScheduleRow,
   canRequestMoreDays,
+  isLateAgainstPlan,
+  isStaleInProgress,
+  myWorkNeedsAttention,
+  needsForecastDate,
   needsZeroProgressFinishConfirmation,
   offersDayRequest,
   offersPersonalTask,
   parseMyWorkExpansion,
+  percentChangePatch,
   sortMyWorkGroups,
+  statusChangePatch,
 } from "../lib/my-work.ts";
 
 test("saved group expansion accepts only boolean entries and survives damaged storage", () => {
@@ -100,4 +106,64 @@ test("day requests are answered by whom the API says, and by plan owners on an o
   assert.equal(canAnswerDayRequests({ canPlan: true }, true), true, "no flag: canPlan decides");
   assert.equal(canAnswerDayRequests({ canPlan: false }, true), false);
   assert.equal(canAnswerDayRequests({ canPlan: true, canAnswerRequests: true }, false), false, "the answer route requires schedule.plan");
+});
+
+test("late means past the current plan finish; a later forecast does not clear it", () => {
+  const today = "2026-10-06";
+  assert.equal(isLateAgainstPlan({ status: "In Progress", planFinish: "2026-10-05" }, today), true);
+  assert.equal(isLateAgainstPlan({ status: "In Progress", planFinish: "2026-10-05", forecastFinish: "2026-10-20" }, today), true, "the PM owns dates; a forecast only tells when");
+  assert.equal(isLateAgainstPlan({ status: "In Progress", planFinish: "2026-10-06" }, today), false, "due today is not late");
+  assert.equal(isLateAgainstPlan({ status: "Done", planFinish: "2026-10-01" }, today), false);
+  assert.equal(isLateAgainstPlan({ status: "Not Started", planFinish: null }, today), false);
+  assert.equal(needsForecastDate({ status: "In Progress", planFinish: "2026-10-05", forecastFinish: null, actualFinish: null }, today), true);
+  assert.equal(needsForecastDate({ status: "In Progress", planFinish: "2026-10-05", forecastFinish: "2026-10-09", actualFinish: null }, today), false);
+  const now = Date.parse("2026-10-06T03:00:00Z");
+  assert.equal(isStaleInProgress({ status: "In Progress", updatedAt: "2026-09-30T03:00:00Z" }, now), true);
+  assert.equal(isStaleInProgress({ status: "In Progress", updatedAt: "2026-10-02T03:00:00Z" }, now), false);
+  assert.equal(isStaleInProgress({ status: "Blocked", updatedAt: "2026-09-01T03:00:00Z" }, now), false);
+  const base = { canUpdate: true, status: "In Progress", planFinish: "2026-10-20", forecastFinish: null, actualFinish: null, updatedAt: "2026-10-05T03:00:00Z" };
+  assert.equal(myWorkNeedsAttention(base, today, now), false);
+  assert.equal(myWorkNeedsAttention({ ...base, planFinish: "2026-10-01", forecastFinish: "2026-10-30" }, today, now), true, "late with a forecast still needs attention");
+  assert.equal(myWorkNeedsAttention({ ...base, status: "Blocked" }, today, now), true);
+  assert.equal(myWorkNeedsAttention({ ...base, canUpdate: false, status: "Blocked" }, today, now), false);
+});
+
+test("the percent strip saves the dates and status the server requires, and nothing for the current value", () => {
+  const today = "2026-10-06";
+  const notStarted = { status: "Not Started", percentComplete: 0, actualStart: null, actualFinish: null };
+  assert.equal(percentChangePatch(notStarted, 0, today), null);
+  assert.deepEqual(percentChangePatch(notStarted, 25, today), { percentComplete: 25, status: "In Progress", actualFinish: null, actualStart: today });
+  assert.deepEqual(percentChangePatch(notStarted, 100, today), { percentComplete: 100, status: "Done", actualStart: today, actualFinish: today });
+  const started = { status: "In Progress", percentComplete: 50, actualStart: "2026-10-01", actualFinish: null };
+  assert.deepEqual(percentChangePatch(started, 75, today), { percentComplete: 75, actualStart: "2026-10-01" });
+  // In progress without a start (old data) gets one stamped once.
+  assert.deepEqual(percentChangePatch({ ...started, actualStart: null }, 75, today), { percentComplete: 75, actualStart: today });
+  assert.deepEqual(percentChangePatch(started, 0, today), { percentComplete: 0 });
+  assert.deepEqual(percentChangePatch({ ...started, status: "Blocked" }, 75, today), { percentComplete: 75, actualStart: "2026-10-01" }, "a blocked task stays blocked");
+});
+
+test("a status change carries the percent and dates its rules need", () => {
+  const today = "2026-10-06";
+  const task = { status: "In Progress", percentComplete: 40, actualStart: "2026-10-01", actualFinish: null };
+  assert.equal(statusChangePatch(task, "In Progress", today), null);
+  assert.deepEqual(statusChangePatch(task, "Not Started", today), { status: "Not Started", percentComplete: 0, actualStart: null, actualFinish: null });
+  assert.deepEqual(statusChangePatch(task, "Done", today), { status: "Done", percentComplete: 100, actualStart: "2026-10-01", actualFinish: today });
+  assert.deepEqual(statusChangePatch(task, "Blocked", today), { status: "Blocked", actualStart: "2026-10-01", actualFinish: null, percentComplete: 40 });
+  // Reopening finished work keeps it below 100 and clears the finish date.
+  assert.deepEqual(statusChangePatch({ status: "Done", percentComplete: 100, actualStart: "2026-10-01", actualFinish: "2026-10-03" }, "In Progress", today),
+    { status: "In Progress", actualStart: "2026-10-01", actualFinish: null, percentComplete: 99 });
+  assert.deepEqual(statusChangePatch({ status: "Not Started", percentComplete: 0, actualStart: null, actualFinish: null }, "In Progress", today),
+    { status: "In Progress", actualStart: today, actualFinish: null, percentComplete: 0 });
+});
+
+test("a start stamped by one click clears a forecast the server would reject as earlier than the start", () => {
+  const today = "2026-10-06";
+  // Late and never started, with an old forecast of 2026-10-02.
+  const stale = { status: "Not Started", percentComplete: 0, actualStart: null, actualFinish: null, forecastFinish: "2026-10-02" };
+  assert.deepEqual(percentChangePatch(stale, 50, today), { percentComplete: 50, status: "In Progress", actualFinish: null, actualStart: today, forecastFinish: null });
+  assert.deepEqual(percentChangePatch(stale, 100, today), { percentComplete: 100, status: "Done", actualStart: today, actualFinish: today, forecastFinish: null });
+  assert.deepEqual(statusChangePatch(stale, "In Progress", today), { status: "In Progress", actualStart: today, actualFinish: null, percentComplete: 0, forecastFinish: null });
+  // A forecast on or after the start stays; an existing start is never moved.
+  assert.deepEqual(percentChangePatch({ ...stale, forecastFinish: "2026-10-09" }, 50, today), { percentComplete: 50, status: "In Progress", actualFinish: null, actualStart: today });
+  assert.deepEqual(percentChangePatch({ ...stale, status: "In Progress", actualStart: "2026-09-30", percentComplete: 25 }, 50, today), { percentComplete: 50, actualStart: "2026-09-30" });
 });

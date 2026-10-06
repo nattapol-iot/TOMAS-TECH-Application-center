@@ -1,0 +1,113 @@
+/* The shared Projects Gantt (GanttChart.tsx). Tokens only; the chart fits its container, so the label
+   column is fixed and the track takes the rest. */
+
+.gantt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.gantt-nav { display: flex; align-items: center; gap: 4px; }
+
+.gantt-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-2xs); }
+.gantt-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.gantt-key { display: inline-block; width: 18px; height: 8px; border-radius: var(--r-xs); background: var(--blue-soft); border: 1px solid var(--blue-line); }
+.gantt-key.done { background: var(--blue); border-color: var(--blue); }
+.gantt-key.slip { background: var(--amber-soft); border: 1px dashed var(--amber); }
+.gantt-key.baseline { height: 4px; background: var(--n-300); border: 0; }
+.gantt-key.milestone { width: 9px; height: 9px; border: 0; border-radius: 1px; background: var(--violet); transform: rotate(45deg); }
+.gantt-key.target { width: 2px; height: 12px; border: 0; border-radius: 0; background: var(--red); }
+.gantt-key.today { width: 2px; height: 12px; border: 0; border-radius: 0; background: var(--blue); }
+
+.gantt { --gantt-side: 300px; display: flex; flex-direction: column; min-width: 0; max-height: 70vh; overflow-y: auto; font-size: var(--fs-xs); }
+.gantt-head, .gantt-row { display: grid; grid-template-columns: var(--gantt-side) minmax(0, 1fr); }
+.gantt-head { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); }
+.gantt-side-head { padding: 8px 10px; color: var(--muted); font-size: var(--fs-2xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid var(--line); }
+.gantt-scale { position: relative; height: 32px; overflow: hidden; }
+.gantt-scale span { position: absolute; top: 0; bottom: 0; padding: 9px 6px 0; border-left: 1px solid var(--line-soft); color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.gantt-scale span.current { color: var(--blue-text); font-weight: 650; background: var(--blue-soft); }
+
+.gantt-row { min-height: 38px; border-bottom: 1px solid var(--line-soft); }
+.gantt-row:hover { background: var(--n-25); }
+.gantt-row.project, .gantt-row.phase { background: var(--n-50); }
+.gantt-row.project:hover, .gantt-row.phase:hover { background: var(--n-100); }
+/* After the row kinds, so a selected phase or project row shows it too. */
+.gantt-row.selected, .gantt-row.project.selected, .gantt-row.phase.selected { background: var(--blue-soft); }
+.gantt-side { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px; border-right: 1px solid var(--line); }
+.gantt-toggle, .gantt-toggle-spacer { flex: none; width: 22px; height: 22px; }
+.gantt-toggle { display: grid; place-items: center; border: 0; border-radius: var(--r-xs); background: none; color: var(--muted); cursor: pointer; padding: 0; }
+.gantt-toggle:hover { background: var(--n-150); color: var(--ink); }
+.gantt-toggle .icon { width: 14px; height: 14px; }
+.gantt-label { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; border: 0; background: none; padding: 2px 0; color: var(--ink); font: inherit; text-align: left; }
+button.gantt-label { cursor: pointer; }
+button.gantt-label:hover .gantt-label-main { color: var(--blue-text); text-decoration: underline; }
+button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: var(--r-xs); }
+.gantt-label-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); }
+.gantt-row.project .gantt-label-main, .gantt-row.phase .gantt-label-main { font-weight: 650; }
+.gantt-label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-3xs); }
+.gantt-status { flex: none; }
+
+.gantt-track { position: relative; min-width: 0; overflow: hidden; }
+.gantt-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }
+.gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--blue); opacity: 0.55; pointer-events: none; z-index: 1; }
+.gantt-target { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; background: var(--red); pointer-events: none; z-index: 1; }
+.gantt-target::before { content: ""; position: absolute; top: 0; left: 2px; border-left: 7px solid var(--red); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+.gantt-baseline { position: absolute; bottom: 5px; height: 4px; border-radius: var(--r-pill); background: var(--n-300); pointer-events: none; }
+
+.gantt-bar {
+  position: absolute;
+  top: 9px;
+  height: 18px;
+  min-width: 4px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-xs);
+  background: var(--blue-soft);
+  cursor: pointer;
+  z-index: 2;
+}
+.gantt-bar:disabled { cursor: default; }
+.gantt-bar:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.gantt-bar i { position: absolute; inset: 0 auto 0 0; background: var(--blue); opacity: 0.85; }
+.gantt-bar span { position: relative; padding: 0 6px; color: var(--ink); font-size: var(--fs-3xs); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gantt-bar.summary { top: 12px; height: 12px; }
+.gantt-bar.summary span { display: none; }
+.gantt-bar.clip-start { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-style: dashed; }
+.gantt-bar.clip-end { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-style: dashed; }
+.gantt-bar.green { border-color: var(--green); background: var(--green-soft); }
+.gantt-bar.green i { background: var(--green); }
+.gantt-bar.amber { border-color: var(--amber); background: var(--amber-soft); }
+.gantt-bar.amber i { background: var(--amber); }
+.gantt-bar.red { border-color: var(--red); background: var(--red-soft); }
+.gantt-bar.red i { background: var(--red); }
+.gantt-bar.violet { border-color: var(--violet); background: var(--violet-soft); }
+.gantt-bar.violet i { background: var(--violet); }
+.gantt-bar.slate { border-color: var(--n-300); background: var(--n-100); }
+.gantt-bar.slate i { background: var(--n-400); }
+.gantt-slip { position: absolute; top: 12px; height: 12px; border: 1px dashed var(--amber); border-left: 0; border-radius: 0 var(--r-xs) var(--r-xs) 0; background: var(--amber-soft); pointer-events: none; z-index: 1; }
+.gantt-diamond {
+  position: absolute;
+  top: 12px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--violet);
+  transform: rotate(45deg);
+  cursor: pointer;
+  z-index: 2;
+}
+.gantt-diamond.red { background: var(--red); }
+.gantt-diamond.amber { background: var(--amber); }
+.gantt-diamond.done { background: var(--green); }
+.gantt-diamond:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.gantt-undated { position: absolute; left: 8px; top: 11px; color: var(--muted); font-size: var(--fs-3xs); }
+
+@media (max-width: 980px) {
+  .gantt { --gantt-side: 220px; }
+}
+@media (max-width: 720px) {
+  .gantt { --gantt-side: 150px; }
+  .gantt-label small { display: none; }
+  .gantt-status { display: none; }
+}

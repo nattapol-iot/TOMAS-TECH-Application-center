@@ -3,7 +3,7 @@ import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CreateSignableDocumentModal } from "./SigningScreens";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
 import { SearchMultiPicker } from "./SearchMultiPicker";
@@ -11,6 +11,10 @@ import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedu
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
+import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
+import { ganttFitWindow, ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
+import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { HealthBadge } from "./ProjectPlanFields";
 import "./my-work.css";
 import {
   ApiClientError,
@@ -41,6 +45,7 @@ import {
   type EstimateCostItem,
   type EstimateSummary,
   type MyEstimateAssignment,
+  type ProjectHealth,
   type ProjectSummary,
   type QuotationLineForPriceLibrary,
   type QuotationLineItem,
@@ -50,8 +55,10 @@ import {
 } from "../api-client";
 import {
   Badge,
+  Drawer,
   EmptyState,
   Field,
+  FilterChips,
   Icon,
   KpiCard,
   Modal,
@@ -71,7 +78,7 @@ import {
   assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue,
 } from "../../../lib/estimate-assignment-queue";
 import {
-  canAnswerDayRequests, canFinishWork, canImportDrawingRow, canProgressScheduleRow, canRequestMoreDays, needsZeroProgressFinishConfirmation, offersDayRequest, offersPersonalTask, parseMyWorkExpansion, sortMyWorkGroups, type MyWorkExpansion,
+  canAnswerDayRequests, canFinishWork, canImportDrawingRow, canProgressScheduleRow, canRequestMoreDays, isLateAgainstPlan, percentChangePatch, statusChangePatch, isStaleInProgress, myWorkNeedsAttention, needsForecastDate, needsZeroProgressFinishConfirmation, offersDayRequest, offersPersonalTask, parseMyWorkExpansion, sortMyWorkGroups, type MyWorkExpansion,
 } from "../../../lib/my-work";
 
 import { CrmMyWork } from "./CrmScreens";
@@ -81,9 +88,13 @@ type ProductionPlanningProps = {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   refreshBootstrap?: () => Promise<void>;
-  openProjectSchedule?: (projectId: number) => void;
+  openProjectSchedule?: (projectId: number, taskId?: number) => void;
   openEstimate?: (estimateId: number) => void;
   preferredProjectId?: number | null;
+  /** Opens the plan with this task's drawer, e.g. from a bar in the portfolio timeline. */
+  preferredTaskId?: number | null;
+  /** Called once the Plan has used the preferred project and task, so a later visit does not reopen them. */
+  onPreferredConsumed?: () => void;
   onMyWorkUrgentCountChange?: (count: number) => void;
   newAssignmentCount?: number;
   onNewAssignmentChanged?: () => void;
@@ -196,6 +207,8 @@ export type ScheduleTask = {
   managedByResourcePlan?: boolean;
   /** Server verdict for the signed-in user: PIC, or the PM/Admin on a row Resource Plan does not manage. */
   canProgress?: boolean;
+  /** False for a Master Plan frame leaf, which the shared summary leaves out of late and blocked counts. */
+  countsTowardHealth?: boolean;
   children: ScheduleTask[];
 };
 
@@ -245,6 +258,11 @@ export type ProjectSchedule = {
     taskCount: number;
     doneCount: number;
     blockedCount: number;
+    /** The shared health and progress summary (backend-node/src/project-health.ts); an older API omits these. */
+    health?: ProjectHealth;
+    plannedProgress?: number | null;
+    overdueCount?: number;
+    slipDays?: number | null;
   };
   latestBaseline: ScheduleBaseline | null;
   baselines: ScheduleBaseline[];
@@ -308,6 +326,10 @@ type ProgressTarget = {
   actualFinish: string | null;
   forecastFinish: string | null;
   remark: string | null;
+  /** The note as stored, when the form shows a cleaned-up version of it; sent back unchanged unless edited. */
+  originalRemark?: string | null;
+  /** The version the dialog opened on; it saves against this, not a newer one a background reload brought. */
+  rowVersion: string;
 };
 
 const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
@@ -329,7 +351,6 @@ const dateTime = (value: string) => new Intl.DateTimeFormat(currentLocale(), {
 }).format(new Date(value));
 // The business day in the configured zone, whatever zone the reader's device is set to.
 const isoToday = () => estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
-const isBeforeToday = (value: string | null) => Boolean(value && value.slice(0, 10) < isoToday());
 const ageInDays = (value: string | null) => {
   if (!value) return null;
   const parsed = Date.parse(`${value.slice(0, 10)}T00:00:00Z`);
@@ -549,10 +570,27 @@ function usePrices(enabled: boolean) {
   return { ...state, loading, error, load };
 }
 
-function ProgressModal({ target, onClose, onSubmit, onConflict }: {
+/** The first rule a progress entry breaks, as a dictionary key; null when it can be saved. Mirrors progressInput() on the server. */
+function progressProblem(input: { initialStatus: string; percent: number; status: string; actualStart: string; actualFinish: string; forecastFinish: string; remark: string }): string | null {
+  const { percent, status, actualStart, actualFinish, forecastFinish } = input;
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return "Progress.percentRange";
+  if (status === "Done" && !canFinishWork(input.initialStatus)) return "Progress.doneWhileBlocked";
+  if (status === "Done" && (percent !== 100 || !actualStart || !actualFinish)) return "Progress.doneNeeds";
+  if (status === "Not Started" && (percent !== 0 || actualStart || actualFinish)) return "Progress.notStartedNeeds";
+  if (status !== "Done" && percent === 100) return input.initialStatus === "Blocked" ? "Progress.doneWhileBlocked" : "Progress.hundredNeedsDone";
+  if (status === "Blocked" && !input.remark.trim()) return "Progress.blockedNeedsReason";
+  if (actualFinish && (!actualStart || actualFinish < actualStart)) return "Progress.finishBeforeStart";
+  if (forecastFinish && actualStart && forecastFinish < actualStart) return "Progress.forecastBeforeStart";
+  return null;
+}
+
+function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict }: {
   target: ProgressTarget;
+  /** The row's version in the latest data; adopted only after this dialog's own save met a conflict. */
+  latestRowVersion?: string | undefined;
   onClose: () => void;
-  onSubmit: (input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; forecastFinish: string | null; remark: string }) => Promise<void>;
+  onSubmit: (input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; forecastFinish: string | null; remark: string }, rowVersion: string) => Promise<void>;
+  /** Reloads the latest task; the dialog stays open with the user's entry so they can check it and save again. */
   onConflict?: () => Promise<void>;
 }) {
   const localizeCopy = useStaticCopy();
@@ -563,8 +601,10 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
   const [actualFinish, setActualFinish] = useState(target.actualFinish ?? "");
   const [forecastFinish, setForecastFinish] = useState(target.forecastFinish ?? "");
   const [remark, setRemark] = useState(target.remark ?? "");
+  const [remarkEdited, setRemarkEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
   const changeStatus = (next: string) => {
     if (!canFinishWork(target.status) && next === "Done") return;
     setStatus(next);
@@ -574,16 +614,26 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
       setPercent(100);
       setActualStart((value) => value || isoToday());
       setActualFinish((value) => value || isoToday());
-    } else if (next === "In Progress") {
-      setPercent((value) => value === 0 || value === 100 ? 1 : value);
+    } else if (next === "In Progress" || next === "Blocked") {
+      setPercent((value) => value === 100 ? 99 : next === "In Progress" && value === 0 ? 1 : value);
       setActualStart((value) => value || isoToday());
       setActualFinish("");
     }
   };
+  // A typed percent moves the status with it, the way the one-click strip does.
+  const changePercent = (value: number) => {
+    setPercent(value);
+    if (value === 100 && status !== "Blocked" && canFinishWork(target.status)) {
+      setStatus("Done"); setActualStart((current) => current || isoToday()); setActualFinish((current) => current || isoToday());
+    } else if (value > 0 && value < 100 && (status === "Not Started" || status === "Done")) {
+      setStatus("In Progress"); setActualStart((current) => current || isoToday()); setActualFinish("");
+    }
+  };
+  const problem = progressProblem({ initialStatus: target.status, percent, status, actualStart, actualFinish, forecastFinish, remark });
   const submit = async () => {
     if (needsZeroProgressFinishConfirmation(Number(target.percentComplete), status)
       && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setConflict(false);
     try {
       await onSubmit({
         percentComplete: percent,
@@ -591,14 +641,15 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
         actualStart: actualStart || null,
         actualFinish: actualFinish || null,
         forecastFinish: forecastFinish || null,
-        remark: remark.trim(),
-      });
+        // An untouched note keeps what was stored, including a provenance line the form does not show.
+        remark: remarkEdited ? remark.trim() : (target.originalRemark ?? remark).trim(),
+      }, conflict ? latestRowVersion ?? target.rowVersion : target.rowVersion);
       onClose();
     } catch (requestError) {
       if (isConcurrencyConflict(requestError) && onConflict) {
         try {
           await onConflict();
-          onClose();
+          setConflict(true);
         } catch (reloadError) {
           setError(toError(reloadError));
         }
@@ -609,44 +660,39 @@ function ProgressModal({ target, onClose, onSubmit, onConflict }: {
       setBusy(false);
     }
   };
-  const invalid = percent < 0 || percent > 100
-    || (status === "Done" && (!canFinishWork(target.status) || percent !== 100 || !actualStart || !actualFinish))
-    || (status === "Not Started" && (percent !== 0 || Boolean(actualStart) || Boolean(actualFinish)))
-    || (status !== "Done" && percent === 100)
-    || (status === "Blocked" && !remark.trim())
-    || Boolean(actualFinish && (!actualStart || actualFinish < actualStart))
-    || Boolean(forecastFinish && actualStart && forecastFinish < actualStart);
   return <Modal
     title={`${uiText("Update")} ${target.wbs} · ${target.name}`}
-    subtitle={`${target.projectNo} · ${localizeCopy("Saved to SQL Server and audit log")}`}
+    subtitle={target.projectNo}
     onClose={onClose}
     footer={<>
+      {problem ? <span className="progress-problem" role="status"><Icon name="alertCircle" />{uiText(problem)}</span> : null}
+      <span className="spacer" />
       <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || invalid}>
+      <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || problem !== null}>
         <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save progress"} />}
       </button>
     </>}
   >
+    {conflict ? <div className="callout warning" role="alert"><Icon name="alertTriangle" /><span>{uiText("Progress.conflict")}</span></div> : null}
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
       <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option></select></label>
-      <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => setPercent(Number(event.target.value))} /></label>
+      <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => changePercent(Number(event.target.value))} /></label>
       <label className="field"><span><LocalizedText text={"Actual start"} /></span><input type="date" value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Actual finish"} /></span><input type="date" min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><input type="date" min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
-      <label className="field span-2"><span>{status === "Blocked" ? <LocalizedText text={"Blocked reason *"} /> : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => setRemark(event.target.value)} /></label>
+      <label className="field span-2"><span>{status === "Blocked" ? <LocalizedText text={"Blocked reason *"} /> : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => { setRemark(event.target.value); setRemarkEdited(true); }} /></label>
     </div>
   </Modal>;
 }
 
-const workEffectiveFinish = (item: MyWorkItem) => item.actualFinish ?? item.forecastFinish ?? item.planFinish;
-const workIsLate = (item: MyWorkItem) => item.status !== "Done" && isBeforeToday(workEffectiveFinish(item));
-const workNeedsForecast = (item: MyWorkItem) => item.status !== "Done" && !item.actualFinish
-  && isBeforeToday(item.planFinish) && !item.forecastFinish;
-const workIsStale = (item: MyWorkItem) => item.status === "In Progress"
-  && Date.now() - Date.parse(item.updatedAt) > 5 * 86_400_000;
-const workNeedsUpdate = (item: MyWorkItem) => workIsLate(item) || item.status === "Blocked"
-  || workNeedsForecast(item) || workIsStale(item);
+// The due date that counts: the plan finish while the work is open (a forecast does not move it), the actual finish once done.
+const workEffectiveFinish = (item: MyWorkItem) => item.status === "Done" ? item.actualFinish ?? item.planFinish : item.planFinish;
+// The shared rules in lib/my-work.ts: late against the current plan, a forecast owed, quiet too long.
+const workIsLate = (item: MyWorkItem) => isLateAgainstPlan(item, isoToday());
+const workNeedsForecast = (item: MyWorkItem) => needsForecastDate(item, isoToday());
+const workIsStale = (item: MyWorkItem) => isStaleInProgress(item, Date.now());
+const workNeedsUpdate = (item: MyWorkItem) => myWorkNeedsAttention({ ...item, canUpdate: true }, isoToday(), Date.now());
 const workUserNote = (value: string | null) => value?.trim().startsWith("Imported from Overall Project Plan") ? "" : value ?? "";
 const daysFromToday = (value: string | null) => value
   ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
@@ -993,10 +1039,10 @@ export function ProductionMyWork({
   const [tab, setTab] = useState<MyWorkTab>("active");
   const [saving, setSaving] = useState<Set<number>>(() => new Set());
   const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
-  const [addingFor, setAddingFor] = useState<MyWorkItem | null>(null);
+  // The dialog saves against the row it opened on; the latest row is offered only after its own conflict.
   const [editingFor, setEditingFor] = useState<MyWorkItem | null>(null);
-  const [forecastFor, setForecastFor] = useState<MyWorkItem | null>(null);
-  const [personalTaskOpen, setPersonalTaskOpen] = useState(false);
+  const editingLatest = editingFor ? items.find((item) => item.taskId === editingFor.taskId) ?? null : null;
+  const [personalTaskFor, setPersonalTaskFor] = useState<{ parentId: number | null } | null>(null);
   const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("open");
   const [sourceFilter, setSourceFilter] = useState<MyWorkSource>("all");
   const [expandedGroups, setExpandedGroups] = useState<MyWorkExpansion>({});
@@ -1047,20 +1093,25 @@ export function ProductionMyWork({
     />
     : null;
 
+  // Only the newest reload may land: a quick save starts one in the background, and an older one
+  // finishing later must not bring back the values (and row version) the save just replaced.
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
     if (!allowed) return;
+    const request = ++loadSequence.current;
     setLoading(true); setError("");
     try {
       const [loadedItems, loadedUpdates] = await Promise.all([
         apiRequest<MyWorkItem[]>("/api/v1/me/work"),
         apiRequest<MyWorkUpdate[]>("/api/v1/me/work/updates"),
       ]);
+      if (request !== loadSequence.current) return;
       setItems(loadedItems);
       setUpdates(loadedUpdates);
     } catch (requestError) {
-      setError(toError(requestError));
+      if (request === loadSequence.current) setError(toError(requestError));
     } finally {
-      setLoading(false);
+      if (request === loadSequence.current) setLoading(false);
     }
   }, [allowed]);
 
@@ -1132,12 +1183,15 @@ export function ProductionMyWork({
   const saveProgress = useCallback(async (item: MyWorkItem, input: MyWorkProgressInput, message: string) => {
     setSaving((current) => new Set(current).add(item.taskId));
     try {
-      await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/updates`, {
+      const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${item.taskId}/updates`, {
         method: "POST",
         body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, ...input }),
       });
+      // Show the saved values at once; the reload behind it brings the server's derived flags and times.
+      loadSequence.current += 1;
+      setItems((current) => current.map((entry) => entry.taskId === item.taskId ? { ...entry, ...input, rowVersion: saved.rowVersion } : entry));
       notify(message);
-      await load();
+      void load();
     } catch (requestError) {
       if (isConcurrencyConflict(requestError)) {
         notify(`${item.projectNo} · ${item.wbs} changed by another user; reloaded the latest data`);
@@ -1179,7 +1233,7 @@ export function ProductionMyWork({
       title={uiText("My Work")}
       subtitle={uiText("Your daily work queue across assignments, project schedules and Estimate sections.")}
       actions={<>
-        <button className="btn primary" type="button" disabled={loading || !personalTaskParents.length} title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")} onClick={() => setPersonalTaskOpen(true)}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button>
+        <button className="btn primary" type="button" disabled={loading || !personalTaskParents.length} title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")} onClick={() => setPersonalTaskFor({ parentId: null })}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button>
         <button className="btn ghost" type="button" disabled={loading || estimateQueue.loading} onClick={() => { void load(); estimateQueue.reload(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       </>}
     />
@@ -1268,9 +1322,8 @@ export function ProductionMyWork({
               patchProgress={patchProgress}
               openProjectSchedule={openProjectSchedule}
               onEdit={setEditingFor}
-              onForecast={setForecastFor}
               onRequest={setRequestFor}
-              onAdd={setAddingFor}
+              onAdd={(item) => setPersonalTaskFor({ parentId: item.taskId })}
               onDelete={async (item) => {
               if (!window.confirm(`${localizeCopy("Delete your task")} “${item.name}”?`)) return;
               setSaving((current) => new Set(current).add(item.taskId));
@@ -1323,30 +1376,22 @@ export function ProductionMyWork({
       notify(localizeCopy("Request sent to the project manager"));
       await load();
     }} /> : null}
-    {addingFor ? <ProductionAddDetailModal item={addingFor} onClose={() => setAddingFor(null)} onCreated={async () => {
-      setAddingFor(null);
-      notify(localizeCopy("Your task was added to the live schedule"));
-      await load();
-    }} /> : null}
     {editingFor ? <ProgressModal
-      target={{ ...editingFor, remark: workUserNote(editingFor.remark) }}
+      target={{ ...editingFor, remark: workUserNote(editingFor.remark), originalRemark: editingFor.remark }}
+      latestRowVersion={editingLatest?.rowVersion}
       onClose={() => setEditingFor(null)}
       onConflict={load}
-      onSubmit={async (input) => {
+      onSubmit={async (input, rowVersion) => {
         await apiRequest(`/api/v1/schedule/tasks/${editingFor.taskId}/updates`, {
           method: "POST",
-          body: JSON.stringify({ scheduleVersion: editingFor.scheduleVersion, rowVersion: editingFor.rowVersion, ...input }),
+          body: JSON.stringify({ scheduleVersion: editingFor.scheduleVersion, rowVersion, ...input }),
         });
         notify(`${editingFor.wbs} ${localizeCopy("progress updated")}`);
         await load();
       }}
     /> : null}
-    {forecastFor ? <ProductionForecastModal item={forecastFor} onClose={() => setForecastFor(null)} onSave={(forecastFinish) => {
-      patchProgress(forecastFor, { forecastFinish }, `${forecastFor.wbs} ${localizeCopy("forecast updated")}`);
-      setForecastFor(null);
-    }} /> : null}
-    {personalTaskOpen ? <ProductionPersonalTaskModal items={personalTaskParents} onClose={() => setPersonalTaskOpen(false)} onCreated={async () => {
-      setPersonalTaskOpen(false);
+    {personalTaskFor ? <ProductionPersonalTaskModal items={personalTaskParents} initialParentId={personalTaskFor.parentId} onClose={() => setPersonalTaskFor(null)} onCreated={async () => {
+      setPersonalTaskFor(null);
       notify(localizeCopy("Your personal task was added to the live schedule"));
       await load();
     }} /> : null}
@@ -1359,6 +1404,115 @@ function MyWorkStat({ label, value, tone, active, onClick }: { label: string; va
   </button>;
 }
 
+type QuickProgressTarget = {
+  key: string;
+  wbs: string;
+  percentComplete: number;
+  status: string;
+  actualStart: string | null;
+  actualFinish: string | null;
+  forecastFinish: string | null;
+  planFinish: string | null;
+  remark: string | null;
+  updatedAt: string;
+};
+
+/**
+ * The one-click progress control, on every My Work card and in the plan's task drawer: the percent
+ * strip, the status, a forecast once the task is late, and the note. Choosing Blocked without a note
+ * asks for the reason in place and saves once. Rules: percentChangePatch / statusChangePatch in lib/my-work.ts.
+ */
+function QuickProgressControls({ target, editable, notify, onPatch, extra }: {
+  target: QuickProgressTarget;
+  editable: boolean;
+  notify: (message: string) => void;
+  onPatch: (patch: Partial<MyWorkProgressInput>, message: string) => void;
+  extra?: ReactNode;
+}) {
+  const localizeCopy = useStaticCopy();
+  const uiText = useUiText();
+  const today = isoToday();
+  const userNote = workUserNote(target.remark);
+  const percent = Number(target.percentComplete);
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
+  const late = isLateAgainstPlan(target, today);
+  const saveBlocked = () => {
+    const reason = blockedReason?.trim() ?? "";
+    if (!reason) return;
+    const patch = statusChangePatch(target, "Blocked", today);
+    setBlockedReason(null);
+    if (patch) onPatch({ ...patch, remark: reason }, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy("Blocked")}`);
+  };
+  return <div className="quick-controls">
+    <div className="pct-strip" role="group" aria-label={uiText("Percent done")}>
+      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && value === 100)} className={percent === value ? "on" : undefined} onClick={() => {
+        const patch = percentChangePatch(target, value, today);
+        if (!patch) return;
+        if (needsZeroProgressFinishConfirmation(percent, value === 100 ? "Done" : target.status)
+          && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
+        onPatch(patch, `${target.wbs} ${localizeCopy("progress updated to")} ${value}%`);
+      }}>{value}</button>)}
+    </div>
+    <select disabled={!editable} value={target.status} aria-label={uiText("Status")} onChange={(event) => {
+      const status = event.target.value;
+      if (status === "Done" && !canFinishWork(target.status)) return;
+      if (needsZeroProgressFinishConfirmation(percent, status)
+        && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
+      if (status === "Blocked" && !userNote.trim()) { setBlockedReason(""); return; }
+      const patch = statusChangePatch(target, status, today);
+      if (patch) onPatch(patch, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy(status)}`);
+    }}>
+      <option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option>
+    </select>
+    {blockedReason !== null ? <span className="blocked-reason">
+      <input maxLength={20000} aria-label={localizeCopy("What is blocking it? (required)")} placeholder={localizeCopy("What is blocking it? (required)")} value={blockedReason} onChange={(event) => setBlockedReason(event.target.value)} onKeyDown={(event) => {
+        if (event.key === "Enter") saveBlocked();
+        // Escape cancels the reason only; preventDefault keeps the drawer underneath open.
+        if (event.key === "Escape") { event.preventDefault(); setBlockedReason(null); }
+      }} />
+      <button className="btn sm primary" type="button" disabled={!blockedReason.trim()} onClick={saveBlocked}><Icon name="check" />{uiText("MyWork.saveBlocked")}</button>
+      <button className="btn sm ghost" type="button" onClick={() => setBlockedReason(null)}><LocalizedText text={"Cancel"} /></button>
+    </span> : null}
+    {late || target.forecastFinish ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input
+      key={`${target.key}:forecast:${target.forecastFinish ?? ""}`}
+      type="date"
+      disabled={!editable}
+      defaultValue={target.forecastFinish ?? ""}
+      className={workNeedsForecastFor(target) ? "needs-input" : undefined}
+      min={target.actualStart ?? undefined}
+      onBlur={(event) => {
+        // A half-typed date reads as empty; keep the stored forecast instead of clearing it.
+        if (event.target.validity.badInput) { event.target.value = target.forecastFinish ?? ""; return; }
+        const value = event.target.value || null;
+        if (value === (target.forecastFinish ?? null)) return;
+        onPatch({ forecastFinish: value }, `${target.wbs} ${localizeCopy("forecast updated")}`);
+      }}
+    /></label> : null}
+    <input
+      key={`${target.key}:note:${userNote}`}
+      className="note-inline"
+      disabled={!editable}
+      placeholder={localizeCopy(target.status === "Blocked" ? "What is blocking it? (required)" : "Note…")}
+      defaultValue={userNote}
+      onBlur={(event) => {
+        const value = event.target.value.trim();
+        if (value === userNote) return;
+        if (target.status === "Blocked" && !value) { notify(localizeCopy("Blocked tasks require a reason")); return; }
+        onPatch({ remark: value }, `${target.wbs} ${localizeCopy("note updated")}`);
+      }}
+    />
+    {extra}
+  </div>;
+}
+
+const workNeedsForecastFor = (target: QuickProgressTarget) => needsForecastDate(target, isoToday());
+
+const myWorkProgressTarget = (item: MyWorkItem): QuickProgressTarget => ({
+  key: String(item.taskId), wbs: item.wbs, percentComplete: Number(item.percentComplete), status: item.status,
+  actualStart: item.actualStart, actualFinish: item.actualFinish, forecastFinish: item.forecastFinish,
+  planFinish: item.planFinish, remark: item.remark, updatedAt: item.updatedAt,
+});
+
 function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }: {
   item: MyWorkItem;
   busy: boolean;
@@ -1367,69 +1521,20 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
   onRequest: () => void;
 }) {
   const localizeCopy = useStaticCopy();
-  const uiText = useUiText();
-  const today = isoToday();
   const editable = item.canUpdate && !busy;
-  const userNote = workUserNote(item.remark);
-  return <div className="quick-controls">
-    <div className="pct-strip" role="group" aria-label={uiText("Percent done")}>
-      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" disabled={!editable || (item.status === "Done" && value !== 100) || (item.status === "Blocked" && value === 100)} className={Number(item.percentComplete) === value ? "on" : undefined} onClick={() => {
-        if (needsZeroProgressFinishConfirmation(Number(item.percentComplete), value === 100 ? "Done" : item.status)
-          && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
-        patchProgress(item, {
-          percentComplete: value,
-          ...(value === 100 ? { status: "Done", actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
-          ...(value > 0 && value < 100 && item.status === "Not Started" ? { status: "In Progress", actualStart: item.actualStart ?? today } : {}),
-        }, `${item.wbs} ${localizeCopy("progress updated to")} ${value}%`);
-      }}>{value}</button>)}
-    </div>
-    <select disabled={!editable} value={item.status} onChange={(event) => {
-      const status = event.target.value;
-      if (status === "Done" && !canFinishWork(item.status)) return;
-      if (needsZeroProgressFinishConfirmation(Number(item.percentComplete), status)
-        && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
-      if (status === "Blocked" && !userNote.trim()) {
-        notify(localizeCopy("Enter the blocking reason in Note first, then choose Blocked"));
-        return;
-      }
-      patchProgress(item, {
-        status,
-        ...(status === "Not Started" ? { percentComplete: 0, actualStart: null, actualFinish: null } : {}),
-        ...(status === "In Progress" ? { actualStart: item.actualStart ?? today, actualFinish: null, percentComplete: Number(item.percentComplete) === 100 ? 99 : Number(item.percentComplete) } : {}),
-        ...(status === "Blocked" ? { actualStart: item.actualStart ?? today, actualFinish: null, percentComplete: Number(item.percentComplete) === 100 ? 99 : Number(item.percentComplete) } : {}),
-        ...(status === "Done" ? { percentComplete: 100, actualStart: item.actualStart ?? today, actualFinish: item.actualFinish ?? today } : {}),
-      }, `${item.wbs} ${localizeCopy("status changed to")} ${localizeCopy(status)}`);
-    }}>
-      <option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={item.status === "Blocked"}><LocalizedText text={"Done"} /></option>
-    </select>
-    {workNeedsForecast(item) || workIsLate(item) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input type="date" disabled={!editable} value={item.forecastFinish ?? ""} className={workNeedsForecast(item) ? "needs-input" : undefined} min={item.actualStart ?? undefined} onChange={(event) => patchProgress(item, { forecastFinish: event.target.value || null }, `${item.wbs} ${localizeCopy("forecast updated")}`)} /></label> : null}
-    <input
-      key={`${item.taskId}:${item.updatedAt}:note`}
-      className="note-inline"
-      disabled={!editable}
-      placeholder={localizeCopy(item.status === "Blocked" ? "What is blocking it? (required)" : "Note…")}
-      defaultValue={userNote}
-      onBlur={(event) => {
-        const value = event.target.value.trim();
-        if (value === userNote) return;
-        if (item.status === "Blocked" && !value) { notify(localizeCopy("Blocked tasks require a reason")); return; }
-        patchProgress(item, { remark: value }, `${item.wbs} ${localizeCopy("note updated")}`);
-      }}
-    />
-    {offersDayRequest(item) ? <button className="row-action" type="button" disabled={!editable || !canRequestMoreDays(item)} title={localizeCopy(item.pendingRequest ? "A request is already waiting for the PM" : "Request more days")} onClick={onRequest}><Icon name="clock" /></button> : null}
-  </div>;
+  return <QuickProgressControls target={myWorkProgressTarget(item)} editable={editable} notify={notify} onPatch={(patch, message) => patchProgress(item, patch, message)}
+    extra={offersDayRequest(item) ? <button className="row-action" type="button" disabled={!editable || !canRequestMoreDays(item)} title={localizeCopy(item.pendingRequest ? "A request is already waiting for the PM" : "Request more days")} aria-label={localizeCopy("Request more days")} onClick={onRequest}><Icon name="clock" /></button> : null} />;
 }
 
-function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify, patchProgress, openProjectSchedule, onEdit, onForecast, onRequest, onAdd, onDelete }: {
+function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify, patchProgress, openProjectSchedule, onEdit, onRequest, onAdd, onDelete }: {
   group: ScheduleWorkGroup;
   expanded: boolean;
   onToggle: () => void;
   saving: Set<number>;
   notify: (message: string) => void;
   patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
-  openProjectSchedule?: (projectId: number) => void;
+  openProjectSchedule?: (projectId: number, taskId?: number) => void;
   onEdit: (item: MyWorkItem) => void;
-  onForecast: (item: MyWorkItem) => void;
   onRequest: (item: MyWorkItem) => void;
   onAdd: (item: MyWorkItem) => void;
   onDelete: (item: MyWorkItem) => Promise<void>;
@@ -1477,7 +1582,6 @@ function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify
       patchProgress={patchProgress}
       openProjectSchedule={openProjectSchedule}
       onEdit={() => onEdit(item)}
-      onForecast={() => onForecast(item)}
       onRequest={() => onRequest(item)}
       onAdd={() => onAdd(item)}
       onDelete={() => onDelete(item)}
@@ -1485,14 +1589,13 @@ function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify
   </article>;
 }
 
-function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSchedule, onEdit, onForecast, onRequest, onAdd, onDelete }: {
+function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSchedule, onEdit, onRequest, onAdd, onDelete }: {
   item: MyWorkItem;
   busy: boolean;
   notify: (message: string) => void;
   patchProgress: (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => void;
-  openProjectSchedule?: (projectId: number) => void;
+  openProjectSchedule?: (projectId: number, taskId?: number) => void;
   onEdit: () => void;
-  onForecast: () => void;
   onRequest: () => void;
   onAdd: () => void;
   onDelete: () => Promise<void>;
@@ -1500,20 +1603,16 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
   const localizeCopy = useStaticCopy();
   const late = workIsLate(item);
   const needsForecast = workNeedsForecast(item);
-  const dueDays = daysFromToday(workEffectiveFinish(item));
+  // Due is the plan finish; a forecast is shown beside it but does not move the due date.
+  const dueDays = daysFromToday(item.planFinish);
   const silentDays = quietDays(item.updatedAt);
-  const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : needsForecast ? "Forecast needed" : workIsStale(item) ? "Update due" : null;
+  const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : workIsStale(item) ? "Update due" : null;
   const timing = item.status === "Done" ? <LocalizedText text={"Completed"} />
     : dueDays === null ? <LocalizedText text={"No due date"} />
       : dueDays < 0 ? <>{Math.abs(dueDays)} <LocalizedText text={"days late"} /></>
         : dueDays === 0 ? <LocalizedText text={"Due today"} />
           : dueDays <= 7 ? <><LocalizedText text={"Due in"} /> {dueDays} <LocalizedText text={"days"} /></>
-            : <><LocalizedText text={"Due Date"} /> {date(workEffectiveFinish(item))}</>;
-  const finishToday = () => {
-    if (item.status === "Blocked") return;
-    if (Number(item.percentComplete) === 0 && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
-    patchProgress(item, { actualStart: item.actualStart ?? isoToday(), actualFinish: isoToday(), percentComplete: 100, status: "Done" }, `${item.wbs} ${localizeCopy("finished today")}`);
-  };
+            : <><LocalizedText text={"Due Date"} /> {date(item.planFinish)}</>;
   return <article className={`my-task-card${late ? " late" : ""}${item.status === "Blocked" ? " blocked" : ""}`}>
     <div className="my-task-card-main">
       <div className="my-task-identity">
@@ -1528,6 +1627,7 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
         <div className="my-task-meta">
           <span><Icon name="calendar" />{date(item.planStart)} → {date(item.planFinish)}</span>
           <span>{item.workDays} <LocalizedText text={"work days"} /></span>
+          {item.forecastFinish ? <span><LocalizedText text={"Forecast"} /> {date(item.forecastFinish)}</span> : null}
           {item.planManDays > 0 ? <span><Icon name="users" />{item.planManDays} <LocalizedText text={"estimated man-days"} />{item.actualManDays > 0 ? <> · {item.actualManDays} <LocalizedText text={"actual"} /></> : null}</span> : null}
           <span><Icon name="clock" /><LocalizedText text={"Last update"} /> {dateTime(item.updatedAt)} · {silentDays} <LocalizedText text={"quiet days"} /></span>
         </div>
@@ -1539,27 +1639,22 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
     </div>
 
     {item.pendingRequest ? <div className="my-task-request"><Icon name="clock" /><strong><LocalizedText text={"Awaiting the PM"} /></strong><span>{item.pendingRequest.requestDays} <LocalizedText text={"more days requested"} />{item.pendingRequest.comment ? ` · ${item.pendingRequest.comment}` : ""}</span></div> : null}
-    {needsForecast ? <div className="my-task-alert"><Icon name="alertTriangle" /><span><LocalizedText text={"This was due"} /> {date(item.planFinish)}<LocalizedText text={". Add a forecast date in Update details."} /></span></div> : null}
+    {needsForecast ? <div className="my-task-alert"><Icon name="alertTriangle" /><span><LocalizedText text={"This was due"} /> {date(item.planFinish)}<LocalizedText text={"MyWork.forecastBelow"} /></span></div> : null}
+
+    {item.canUpdate ? <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} /> : null}
 
     <div className="my-task-actions">
-      {item.canUpdate ? <button className="btn primary sm" type="button" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
-      {item.canUpdate && needsForecast ? <button className="btn default sm" type="button" disabled={busy} onClick={onForecast}><Icon name="calendar" /><LocalizedText text={"Set forecast date"} /></button> : null}
+      {item.canUpdate ? <button className="btn default sm" type="button" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
+      <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId, item.taskId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
       <span className="spacer" />
-      <details className="my-task-more-actions">
+      {offersDayRequest(item) || offersPersonalTask(item) || item.canDeleteDetail ? <details className="my-task-more-actions">
         <summary><LocalizedText text={"More actions"} /><Icon name="chevronDown" /></summary>
         <div>
-          {item.canUpdate && !item.actualStart ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => patchProgress(item, { actualStart: isoToday(), status: "In Progress" }, `${item.wbs} ${localizeCopy("started today")}`)}><Icon name="play" /><LocalizedText text={"Start today"} /></button> : null}
-          {item.canUpdate && item.status !== "Done" ? <button className="btn ghost sm" type="button" disabled={busy || item.status === "Blocked"} title={item.status === "Blocked" ? localizeCopy("Resolve the blocker before finishing this task") : undefined} onClick={finishToday}><Icon name="checkCircle" /><LocalizedText text={"Finish today"} /></button> : null}
           {offersDayRequest(item) ? <button className="btn ghost sm" type="button" disabled={busy || !canRequestMoreDays(item)} onClick={onRequest}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
-          <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
           {offersPersonalTask(item) ? <button className="btn ghost sm" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button> : null}
           {item.canDeleteDetail ? <button className="btn ghost sm danger-text" type="button" disabled={busy} title={localizeCopy("Delete my task")} onClick={() => { void onDelete(); }}><Icon name="trash" /><LocalizedText text={"Delete my task"} /></button> : null}
-          {item.canUpdate ? <details className="my-task-quick-update">
-            <summary><Icon name="settings" /><LocalizedText text={"Quick update"} /></summary>
-            <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} />
-          </details> : null}
         </div>
-      </details>
+      </details> : null}
     </div>
   </article>;
 }
@@ -1592,41 +1687,20 @@ function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
   </Modal>;
 }
 
-function ProductionForecastModal({ item, onClose, onSave }: {
-  item: MyWorkItem;
-  onClose: () => void;
-  onSave: (forecastFinish: string) => void;
-}) {
-  const uiText = useUiText();
-  const minimumDate = item.actualStart ?? isoToday();
-  const [forecastFinish, setForecastFinish] = useState(item.forecastFinish ?? minimumDate);
-  return <Modal
-    title={uiText("Set forecast date")}
-    subtitle={`${item.projectNo} · WBS ${item.wbs} · ${item.name}`}
-    onClose={onClose}
-    footer={<>
-      <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" disabled={!forecastFinish} onClick={() => onSave(forecastFinish)}><Icon name="calendar" /><LocalizedText text={"Save forecast date"} /></button>
-    </>}
-  >
-    <div className="form-grid">
-      <Field label={uiText("Current plan finish")}><input value={date(item.planFinish)} readOnly /></Field>
-      <Field label={uiText("Forecast finish")}><input type="date" min={minimumDate} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></Field>
-    </div>
-  </Modal>;
-}
-
-function ProductionPersonalTaskModal({ items, onClose, onCreated }: {
+function ProductionPersonalTaskModal({ items, initialParentId = null, onClose, onCreated }: {
   items: MyWorkItem[];
+  /** The task a card opened the dialog from; the header button leaves it empty. */
+  initialParentId?: number | null;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
   const uiText = useUiText();
-  const [parentId, setParentId] = useState(String(items[0]?.taskId ?? ""));
+  const [parentId, setParentId] = useState(String(initialParentId ?? items[0]?.taskId ?? ""));
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const item = items.find((candidate) => String(candidate.taskId) === parentId) ?? items[0];
+  // No fallback to another task: a parent that stopped qualifying must not silently become a different one.
+  const item = items.find((candidate) => String(candidate.taskId) === parentId);
   const planSpan = item?.planStart && item.planFinish
     ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1
     : 1;
@@ -1653,40 +1727,14 @@ function ProductionPersonalTaskModal({ items, onClose, onCreated }: {
     </>}
   >
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
+    {!item ? <div className="callout warning" role="alert"><Icon name="alertTriangle" /><span>{uiText("MyWork.parentUnavailable")}</span></div> : null}
     <div className="form-grid">
-      <Field label={uiText("Project task")} span={3}><select value={parentId} onChange={(event) => setParentId(event.target.value)}>{items.map((candidate) => <option key={candidate.taskId} value={candidate.taskId}>{candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}</option>)}</select></Field>
+      <Field label={uiText("Project task")} span={3}><select value={parentId} onChange={(event) => setParentId(event.target.value)}>{!item ? <option value={parentId}>—</option> : null}{items.map((candidate) => <option key={candidate.taskId} value={candidate.taskId}>{candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}</option>)}</select></Field>
       <Field label={uiText("Personal task")} span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} placeholder={uiText("What will you do?")} /></Field>
       <Field label={uiText("Schedule window")}><input value={item ? `${date(item.planStart)} → ${date(item.planFinish)}` : "—"} readOnly /></Field>
       <Field label={uiText("Days")}><input className="num" type="number" value={planDays} readOnly /></Field>
     </div>
     <div className="info-strip"><Icon name="alertCircle" /><LocalizedText text={"The personal task follows the selected project task dates and does not add workload effort."} /></div>
-  </Modal>;
-}
-
-function ProductionAddDetailModal({ item, onClose, onCreated }: {
-  item: MyWorkItem;
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const uiText = useUiText();
-  const [name, setName] = useState("");
-  const planSpan = item.planStart && item.planFinish
-    ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1
-    : 1;
-  const planDays = Number.isFinite(planSpan) ? Math.max(1, planSpan) : 1;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, { method: "POST", body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, name: name.trim(), planDays }) });
-      await onCreated();
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
-  };
-  return <Modal title={uiText("Add my task")} subtitle={`${item.projectNo} · inside ${item.wbs} ${item.name} · internal visibility`} onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim() || planDays < 1} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? "Adding…" : <LocalizedText text={"Add task"} />}</button></>}>
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="form-grid"><Field label="What will you do inside this task?" span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></Field><Field label="Days (fixed to the parent plan)"><input className="num" type="number" value={planDays} readOnly /></Field></div>
   </Modal>;
 }
 
@@ -1977,45 +2025,94 @@ function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAns
   </Modal>;
 }
 
-export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId }: ProductionPlanningProps) {
+type PlanFilter = "late" | "blocked" | "mine" | "waiting";
+const PLAN_FILTERS: { key: PlanFilter; label: string; tone: "red" | "amber" | "blue" }[] = [
+  { key: "late", label: "Plan.filterLate", tone: "red" },
+  { key: "blocked", label: "Plan.filterBlocked", tone: "red" },
+  { key: "waiting", label: "Plan.filterWaiting", tone: "amber" },
+  { key: "mine", label: "Plan.filterMine", tone: "blue" },
+];
+const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${userId}`;
+/** Project numbers in natural order: PJ26009 before PJ26010. */
+const byProjectNumber = (a: { number: string }, b: { number: string }) => a.number.localeCompare(b.number, "en", { numeric: true, sensitivity: "base" });
+const isLeafTask = (task: ScheduleTask) => task.kind !== "phase" && task.children.length === 0;
+const taskOrDescendantMatches = (task: ScheduleTask, matches: (task: ScheduleTask) => boolean): boolean =>
+  matches(task) || task.children.some((child) => taskOrDescendantMatches(child, matches));
+
+/** The rows the plan draws: collapsed branches hidden; under a quick filter, matching tasks with their parents. */
+function planRows(tasks: ScheduleTask[], collapsed: Set<number>, matches: ((task: ScheduleTask) => boolean) | null): ScheduleTask[] {
+  const rows: ScheduleTask[] = [];
+  const visit = (list: ScheduleTask[]) => {
+    for (const task of list) {
+      if (matches && !taskOrDescendantMatches(task, matches)) continue;
+      rows.push(task);
+      if (task.children.length && (matches || !collapsed.has(task.id))) visit(task.children);
+    }
+  };
+  visit(tasks);
+  return rows;
+}
+
+/**
+ * Projects > Plan: a project's schedule as a Gantt. The bars come from the API's resolved dates; a
+ * bar or a row opens the task drawer, where the PIC, the PM or an Admin updates progress (canProgress)
+ * and the plan owner edits the row. Reloads keep the plan on screen instead of blanking it.
+ */
+export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
   const allowed = bootstrap.permissions.includes("schedule.read");
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const storageKey = planProjectStorageKey(bootstrap.user.id);
+  const today = isoToday();
+  const [projects, setProjects] = useState<ProjectOverviewItem[]>([]);
+  const [projectQuery, setProjectQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [schedule, setSchedule] = useState<ProjectSchedule | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(allowed);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [error, setError] = useState("");
+  const [zoom, setZoom] = useState<GanttZoomChoice>("fit");
+  const [anchor, setAnchor] = useState(today);
+  const [filter, setFilter] = useState<PlanFilter | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
+  const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? null);
   const [createOpen, setCreateOpen] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
+  // Dialogs keep the row they opened on, so a background reload never swaps in a newer version unseen.
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
   const [editTask, setEditTask] = useState<ScheduleTask | null>(null);
+  const [drawerError, setDrawerError] = useState("");
   const [drawingTask, setDrawingTask] = useState<{projectId:number;taskId:number} | null>(null);
   const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
+  const [saving, setSaving] = useState(false);
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
     setLoadingProjects(true); setError("");
     try {
-      const loaded = await loadAllProjects();
+      const loaded = [...(await listProjectOverview({ includeClosed: true })).items].sort(byProjectNumber);
       setProjects(loaded);
+      // The current pick wins, so Refresh never snaps back; a deep link only seeds the first pick.
       setSelectedId((current) => {
-        if (preferredProjectId && loaded.some((project) => project.id === preferredProjectId)) return preferredProjectId;
-        return current && loaded.some((project) => project.id === current) ? current : loaded[0]?.id ?? null;
+        if (current && loaded.some((project) => project.id === current)) return current;
+        if (preferredProjectId && loaded.some((project) => project.id === preferredProjectId)) {
+          try { window.localStorage.setItem(storageKey, String(preferredProjectId)); } catch { /* Remembering the project is a convenience. */ }
+          return preferredProjectId;
+        }
+        let remembered: number | null = null;
+        try { remembered = Number(window.localStorage.getItem(storageKey)) || null; } catch { remembered = null; }
+        if (remembered && loaded.some((project) => project.id === remembered)) return remembered;
+        return loaded.find((project) => project.status !== "Closed")?.id ?? loaded[0]?.id ?? null;
       });
+      // Used once: a later visit to the Plan opens the remembered project, not this link's drawer again.
+      if (preferredProjectId || preferredTaskId) onPreferredConsumed?.();
     } catch (requestError) { setError(toError(requestError)); }
     finally { setLoadingProjects(false); }
-  }, [allowed, preferredProjectId]);
+  }, [allowed, preferredProjectId, preferredTaskId, onPreferredConsumed, storageKey]);
+  // A reload keeps the current plan on screen; only switching projects clears it.
   const loadSchedule = useCallback(async () => {
     const requestId = ++scheduleRequestId.current;
-    setCreateOpen(false);
-    setBaselineOpen(false);
-    setProgressTask(null);
-    setEditTask(null);
-    setAnswerRequest(null);
-    setSchedule(null);
-    if (!selectedId) { setLoadingSchedule(false); return; }
+    if (!selectedId) { setSchedule(null); setLoadingSchedule(false); return; }
     setLoadingSchedule(true); setError("");
     try {
       const loaded = await apiRequest<ProjectSchedule>(`/api/v1/projects/${selectedId}/schedule`);
@@ -2039,26 +2136,85 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       scheduleRequestId.current += 1;
     };
   }, [loadSchedule]);
-  if (!allowed) return <><PageHeader eyebrow="PROJECT CONTROL" title={uiText("Project Schedule")} subtitle="แผนงานและความคืบหน้าจากฐานข้อมูลจริง" /><PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" /></>;
-  const activeSchedule = schedule?.projectId === selectedId && !loadingSchedule ? schedule : null;
+  const selectProject = (nextId: number | null) => {
+    scheduleRequestId.current += 1;
+    setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
+    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError("");
+    setLoadingSchedule(Boolean(nextId));
+    setSelectedId(nextId);
+    try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
+  };
+  if (!allowed) return <><PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" /><PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" /></>;
+  const activeSchedule = schedule?.projectId === selectedId ? schedule : null;
+  const selectedProject = projects.find((project) => project.id === selectedId) ?? null;
   const rows = activeSchedule ? flattenTasks(activeSchedule.tasks) : [];
+  const taskById = new Map(rows.map((task) => [task.id, task] as const));
   const canPlan = Boolean(activeSchedule?.canPlan && bootstrap.permissions.includes("schedule.plan"));
   const canAnswerRequests = activeSchedule ? canAnswerDayRequests(activeSchedule, bootstrap.permissions.includes("schedule.plan")) : false;
   const pendingDayRequests = activeSchedule?.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer) ?? [];
+  const pendingTaskIds = new Set(pendingDayRequests.map((request) => request.taskId));
+  const filterRules: Record<PlanFilter, (task: ScheduleTask) => boolean> = {
+    // A Master Plan frame row is left out, as the summary's Overdue and Blocked counts leave it out.
+    late: (task) => isLeafTask(task) && task.countsTowardHealth !== false && isLateAgainstPlan(task, today),
+    blocked: (task) => isLeafTask(task) && task.countsTowardHealth !== false && task.status === "Blocked",
+    waiting: (task) => pendingTaskIds.has(task.id),
+    mine: (task) => isLeafTask(task) && task.pics.some((pic) => pic.id === bootstrap.user.id),
+  };
+  const filterItems = PLAN_FILTERS.map((item) => ({ ...item, value: rows.filter(filterRules[item.key]).length }));
+  const visible = activeSchedule ? planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null) : [];
+  const target = selectedProject?.targetDelivery ?? null;
+  const range = zoom === "fit"
+    ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today)
+    : ganttWindow(zoom, anchor);
+  const toggleRow = (taskId: number) => setCollapsed((current) => { const next = new Set(current); if (next.has(taskId)) next.delete(taskId); else next.add(taskId); return next; });
+  const ganttRows: GanttRowSpec[] = visible.map((task) => {
+    const summaryRow = task.kind === "phase" || task.children.length > 0;
+    const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : null;
+    return {
+      key: `task:${task.id}`, depth: task.depth, kind: summaryRow ? "phase" : "task",
+      label: <><span className="mono">{task.wbs}</span> {task.name}</>,
+      meta: [task.pics.map((pic) => pic.name).join(", ") || task.picExternal, uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].filter(Boolean).join(" · "),
+      ...(lock ? { status: lock } : {}),
+      ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
+      onOpen: () => setDrawerTaskId(task.id),
+      start: task.planStart, finish: task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
+      baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
+      milestone: task.isMilestone, target, selected: drawerTaskId === task.id,
+      title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
+    };
+  });
+  const drawerTask = drawerTaskId === null ? null : taskById.get(drawerTaskId) ?? null;
+  const filteredProjects = projects.filter((project) => project.id === selectedId || !projectQuery.trim()
+    || `${project.number} ${project.name} ${project.customerName}`.toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase()));
+  const saveTaskProgress = async (task: ScheduleTask, patch: Partial<MyWorkProgressInput>, message: string) => {
+    if (!activeSchedule) return;
+    setSaving(true); setDrawerError("");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${task.id}/updates`, { method: "POST", body: JSON.stringify({
+        scheduleVersion: activeSchedule.scheduleVersion, rowVersion: task.rowVersion,
+        percentComplete: Number(task.percentComplete), status: task.status, actualStart: task.actualStart, actualFinish: task.actualFinish,
+        forecastFinish: task.forecastFinish, remark: task.remark ?? "", ...patch,
+      }) });
+      notify(`${activeSchedule.projectNo} · ${message}`);
+      await loadSchedule();
+    } catch (failure) {
+      if (isConcurrencyConflict(failure)) { notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`); await loadSchedule(); }
+      else {
+        // Shown in the drawer, where the user is; the page-level error sits behind its backdrop.
+        setDrawerError(toError(failure));
+        notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.saveFailed")}`);
+        await loadSchedule();
+      }
+    } finally { setSaving(false); }
+  };
+  const summary = activeSchedule?.summary;
+  const planned = summary?.plannedProgress === null || summary?.plannedProgress === undefined ? null : Math.round(summary.plannedProgress);
+  const slip = summary?.slipDays ?? selectedProject?.slipDays ?? null;
   return <>
-    <PageHeader eyebrow="PROJECT CONTROL" title={uiText("Project Schedule")} subtitle="จัดทำแผน อัปเดตความคืบหน้า และเก็บ Baseline พร้อม concurrency control" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
+    <PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <Toolbar>
-      <label className="select-field" style={{ minWidth: 320 }}><select style={{ maxWidth: 520, width: "100%" }} value={selectedId ?? ""} onChange={(event) => {
-        const nextId = event.target.value ? Number(event.target.value) : null;
-        scheduleRequestId.current += 1;
-        setCreateOpen(false);
-        setBaselineOpen(false);
-        setProgressTask(null);
-        setAnswerRequest(null);
-        setSchedule(null);
-        setLoadingSchedule(Boolean(nextId));
-        setSelectedId(nextId);
-      }} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>)}</select><Icon name="chevronDown" /></label>
+      <SearchInput value={projectQuery} onChange={setProjectQuery} placeholder="Plan.findProject" />
+      <label className="select-field plan-project-picker"><select value={selectedId ?? ""} onChange={(event) => selectProject(event.target.value ? Number(event.target.value) : null)} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{filteredProjects.map((project) => <option key={project.id} value={project.id}>{project.number} · {project.name}{project.status === "Closed" ? ` (${uiText("Closed")})` : ""}</option>)}</select><Icon name="chevronDown" /></label>
       <span className="spacer" />
       {activeSchedule ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => {
         const exportedOn = isoToday();
@@ -2079,79 +2235,146 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       {canPlan ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
-    {activeSchedule ? <>
-      <div className="kpi-grid four">
-        <KpiCard label="Plan period" value={activeSchedule.summary.planStart ? `${date(activeSchedule.summary.planStart)} – ${date(activeSchedule.summary.planFinish)}` : "Not planned"} note={`${activeSchedule.summary.workDays} work days`} tone="blue" icon="calendar" />
-        <KpiCard label="Progress" value={`${number(activeSchedule.summary.percentComplete)}%`} note={`${activeSchedule.summary.doneCount}/${activeSchedule.summary.taskCount} done`} tone="green" icon="trendingUp" />
-        <KpiCard label="Blocked" value={activeSchedule.summary.blockedCount} note="leaf tasks" tone={activeSchedule.summary.blockedCount ? "red" : "green"} icon="alertTriangle" />
-        <KpiCard label="Baseline" value={activeSchedule.latestBaseline ? `R${activeSchedule.latestBaseline.revision}` : "None"} note={activeSchedule.latestBaseline?.label ?? "ยังไม่มี baseline"} tone="violet" icon="gitBranch" />
-      </div>
-      <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} schedule rows · ${activeSchedule.projectStatus}`} flush>
-        {rows.length ? <div className="table-wrap"><table><thead><tr><th>WBS</th><th><LocalizedText text={"Task"} /></th><th><LocalizedText text={"Visibility"} /></th><th><LocalizedText text={"Plan"} /></th><th><LocalizedText text={"Work days"} /></th><th><LocalizedText text={"PIC"} /></th><th><LocalizedText text={"Effort"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th /></tr></thead><tbody>{rows.map((task) => {
-          const canProgress = canProgressScheduleRow(task, {
-            scheduleAllowsProgress: activeSchedule.canUpdateProgress,
-            hasProgressPermission: bootstrap.permissions.includes("schedule.progress"),
-            userId: bootstrap.user.id,
-          });
-          const managed = Boolean(task.managedByResourcePlan);
-          const canImportDrawing = canImportDrawingRow(task, {
-            scheduleAllowsProgress: activeSchedule.canUpdateProgress,
-            hasSigningRequest: bootstrap.permissions.includes("signing.request"),
-            userId: bootstrap.user.id,
-          });
-          return <tr key={task.id}>
-            <td><strong className="mono">{task.wbs}</strong></td>
-            <td style={{ paddingLeft: 10 + task.depth * 18 }}><div className="cell-primary"><strong>{task.name}</strong><span>{task.kind}{task.isMilestone ? " · Milestone" : ""} <LocalizedText text={"·"} /> {task.origin}{managed ? <> <ResourcePlanLock /></> : null}</span></div></td>
-            <td><Badge tone={task.visibility === "Customer" ? "blue" : "slate"}>{task.visibility}</Badge></td>
-            <td>{date(task.planStart)} – {date(task.planFinish)}</td>
-            <td className="num">{task.workDays}</td>
-            <td>{task.pics.length ? task.pics.map((pic) => pic.name).join(", ") : task.picExternal || "—"}</td>
-            <td className="num">{number(task.planManDays)} <LocalizedText text={"MD"} /></td>
-            <td style={{ minWidth: 120 }}><ProgressCell value={Number(task.percentComplete)} /></td>
-            <td><Badge>{task.status}</Badge></td>
-            <td><div className="row-actions">{canPlan && activeSchedule.projectStatus !== "Closed" && !managed ? <button className="btn sm ghost" type="button" aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={() => setEditTask(task)}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
-              {canProgress ? <button className="btn sm default" type="button" onClick={() => setProgressTask(task)}><Icon name="edit" /><LocalizedText text={"Update"} /></button> : null}
-              {canImportDrawing ? <button className="btn sm default" type="button" onClick={() => setDrawingTask({projectId:activeSchedule.projectId,taskId:task.id})}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
-            </div></td>
-          </tr>;
-        })}</tbody></table></div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
+    {activeSchedule && summary ? <>
+      <section className="plan-summary" aria-label={uiText("Plan.summary")}>
+        <HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} />
+        <span><small>{uiText("Progress")}</small><strong>{number(Number(summary.percentComplete), 0)}%</strong>{planned !== null ? <em>{uiText("Portfolio.plannedToday")} {planned}%</em> : null}</span>
+        <span><small>{uiText("Plan period")}</small><strong>{summary.planStart ? `${date(summary.planStart)} – ${date(summary.planFinish)}` : uiText("Not planned")}</strong></span>
+        <span><small>{uiText("Target delivery")}</small><strong>{target ? date(target) : "—"}</strong>{slip !== null ? <em className={slip > 0 ? "late" : undefined}>{uiText("Portfolio.slipDays").replace("{n}", slip > 0 ? `+${slip}` : String(slip))}</em> : null}</span>
+        <span><small>{uiText("Plan.overdue")}</small><strong className={summary.overdueCount ? "danger-text" : undefined}>{summary.overdueCount ?? "—"}</strong></span>
+        <span><small>{uiText("Blocked")}</small><strong className={summary.blockedCount ? "danger-text" : undefined}>{summary.blockedCount}</strong></span>
+        <span><small>{uiText("Baseline")}</small><strong>{activeSchedule.latestBaseline ? `R${activeSchedule.latestBaseline.revision}` : "—"}</strong></span>
+        {loadingSchedule ? <span className="plan-summary-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
+      </section>
+      <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
+        {rows.length ? <div className="plan-gantt">
+          <div className="plan-gantt-controls">
+            <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />
+            <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
+          </div>
+          <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} />
+          {visible.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" />
+            : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
+        </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
+      {(() => {
+        const projectHistory = activeSchedule.recentUpdates.filter((update) => update.taskId === null || !taskById.has(update.taskId)).slice(0, 20);
+        return projectHistory.length ? <details className="plan-project-history"><summary>{uiText("Plan.projectHistory")} ({projectHistory.length})</summary><ul className="plan-history">{projectHistory.map((update) => <li key={update.id}>
+          <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
+          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.fromValue || update.toValue ? ` · ${update.fromValue ?? "—"} → ${update.toValue ?? "—"}` : ""}{update.comment ? ` · “${update.comment}”` : ""}</span>
+        </li>)}</ul></details> : null;
+      })()}
       {canAnswerRequests && pendingDayRequests.length ? <Panel title="Requests waiting for the PM" subtitle="Accepting extends the task plan; rejecting leaves the dates unchanged" flush><div className="panel-body">
         {pendingDayRequests.map((request) => {
-          const requestedTask = request.taskId ? rows.find((task) => task.id === request.taskId) : null;
+          const requestedTask = request.taskId ? taskById.get(request.taskId) ?? null : null;
           return <div className="request-row" key={`pending:${request.id}`}><div className="request-head"><Badge tone="amber">+{request.requestDays} {"days"}</Badge><strong>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : `Task ${request.taskId ?? "—"}`}</strong><span className="muted"><LocalizedText text={"requested by"} /> {request.actor.name} <LocalizedText text={"·"} /> {dateTime(request.occurredAt)}</span></div><p className="muted">{request.comment || "No reason provided"}</p><button className="btn primary sm" type="button" disabled={!requestedTask} onClick={() => setAnswerRequest(request)}><Icon name="checkCircle" /><LocalizedText text={"Review request"} /></button></div>;
         })}
       </div></Panel> : null}
-      {activeSchedule.recentUpdates.length ? <Panel title="Recent schedule activity" subtitle="100 รายการล่าสุดจาก audit trail ของ Schedule" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"When"} /></th><th><LocalizedText text={"Actor"} /></th><th><LocalizedText text={"Task"} /></th><th><LocalizedText text={"Field"} /></th><th><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Decision"} /></th></tr></thead><tbody>{activeSchedule.recentUpdates.slice(0, 20).map((update) => {
-        const requestedTask = update.taskId ? rows.find((task) => task.id === update.taskId) : null;
-        const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
-        return <tr key={update.id}>
-          <td>{dateTime(update.occurredAt)}</td><td>{update.actor.name}</td><td>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : update.taskId ?? "Schedule"}</td><td><Badge>{update.field}</Badge></td>
-          <td className="wrap">{update.requestDays > 0 ? `+${update.requestDays} days requested` : `${update.fromValue ?? "—"} → ${update.toValue ?? "—"}`}</td>
-          <td className="wrap">{update.comment || "—"}</td>
-          <td>{pendingRequest && requestedTask && canAnswerRequests ? <button className="btn sm primary" type="button" onClick={() => setAnswerRequest(update)}><Icon name="checkCircle" /><LocalizedText text={"Review"} /></button> : update.answer ? <div className="cell-primary"><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge><span>{update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span></div> : "—"}</td>
-        </tr>;
-      })}</tbody></table></div></Panel> : null}
     </> : loadingProjects || loadingSchedule ? <Panel><div className="empty"><span className="spinner" /><LocalizedText text={"Loading schedule…"} /></div></Panel> : <Panel><EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" /></Panel>}
+    {drawerTask && activeSchedule ? <PlanTaskDrawer
+      task={drawerTask}
+      schedule={activeSchedule}
+      bootstrap={bootstrap}
+      canPlan={canPlan}
+      canAnswerRequests={canAnswerRequests}
+      saving={saving || loadingSchedule}
+      error={drawerError}
+      notify={notify}
+      onClose={() => { setDrawerTaskId(null); setDrawerError(""); }}
+      onPatch={(patch, message) => { void saveTaskProgress(drawerTask, patch, message); }}
+      onDetails={() => setProgressTask(drawerTask)}
+      onEditPlan={() => setEditTask(drawerTask)}
+      onImportDrawing={() => setDrawingTask({ projectId: activeSchedule.projectId, taskId: drawerTask.id })}
+      onReview={setAnswerRequest}
+    /> : null}
     {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} onClose={() => setCreateOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} schedule row created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {editTask && activeSchedule ? <EditScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} task={editTask} onClose={() => setEditTask(null)}
       onSaved={async () => { notify(`${activeSchedule.projectNo} · ${editTask.wbs} ${uiText("Schedule.rowSaved")}`); await loadSchedule(); }}
       onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {drawingTask ? <CreateSignableDocumentModal initialProjectId={drawingTask.projectId} initialTaskId={drawingTask.taskId} onClose={() => setDrawingTask(null)} onCreated={message => {setDrawingTask(null);notify(`${message} · Open Signed Documents to request approval`);}} /> : null}
     {baselineOpen && activeSchedule ? <BaselineModal schedule={activeSchedule} onClose={() => setBaselineOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} baseline created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
-    {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, forecastFinish: progressTask.forecastFinish, remark: progressTask.remark }} onClose={() => setProgressTask(null)} onSubmit={async (input) => {
-      await apiRequest(`/api/v1/schedule/tasks/${progressTask.id}/updates`, { method: "POST", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: progressTask.rowVersion, ...input }) });
+    {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, forecastFinish: progressTask.forecastFinish, remark: workUserNote(progressTask.remark), originalRemark: progressTask.remark, rowVersion: progressTask.rowVersion }} latestRowVersion={taskById.get(progressTask.id)?.rowVersion} onClose={() => setProgressTask(null)} onSubmit={async (input, rowVersion) => {
+      await apiRequest(`/api/v1/schedule/tasks/${progressTask.id}/updates`, { method: "POST", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion, ...input }) });
       notify(`${activeSchedule.projectNo} · ${progressTask.wbs} progress updated`);
       await loadSchedule();
-    }} onConflict={async () => { notify(`${activeSchedule.projectNo} · ${progressTask.wbs} changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
+    }} onConflict={loadSchedule} /> : null}
     {answerRequest && activeSchedule ? <ScheduleDayRequestAnswerModal
       request={answerRequest}
       schedule={activeSchedule}
-      task={rows.find((task) => task.id === answerRequest.taskId) ?? null}
+      task={answerRequest.taskId ? taskById.get(answerRequest.taskId) ?? null : null}
       onClose={() => setAnswerRequest(null)}
       onAnswered={async (answer) => { notify(`${activeSchedule.projectNo} day request ${answer.toLowerCase()}`); await loadSchedule(); }}
     /> : null}
   </>;
+}
+
+/** One task of the plan: its dates, the quick progress control, the plan owner's edit, and its history. */
+function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, canAnswerRequests, saving, error, notify, onClose, onPatch, onDetails, onEditPlan, onImportDrawing, onReview }: {
+  task: ScheduleTask;
+  schedule: ProjectSchedule;
+  bootstrap: BootstrapData;
+  canPlan: boolean;
+  canAnswerRequests: boolean;
+  /** A save or a reload is running; the actions wait for the latest row. */
+  saving: boolean;
+  error: string;
+  notify: (message: string) => void;
+  onClose: () => void;
+  onPatch: (patch: Partial<MyWorkProgressInput>, message: string) => void;
+  onDetails: () => void;
+  onEditPlan: () => void;
+  onImportDrawing: () => void;
+  onReview: (request: ScheduleUpdate) => void;
+}) {
+  const uiText = useUiText();
+  const canProgress = canProgressScheduleRow(task, {
+    scheduleAllowsProgress: activeSchedule.canUpdateProgress,
+    hasProgressPermission: bootstrap.permissions.includes("schedule.progress"),
+    userId: bootstrap.user.id,
+  });
+  const managed = Boolean(task.managedByResourcePlan);
+  const canImportDrawing = canImportDrawingRow(task, {
+    scheduleAllowsProgress: activeSchedule.canUpdateProgress,
+    hasSigningRequest: bootstrap.permissions.includes("signing.request"),
+    userId: bootstrap.user.id,
+  });
+  const leaf = isLeafTask(task);
+  const history = activeSchedule.recentUpdates.filter((update) => update.taskId === task.id);
+  const pic = task.pics.map((person) => person.name).join(", ") || task.picExternal || "—";
+  return <Drawer title={`${task.wbs} · ${task.name}`} subtitle={activeSchedule.projectNo} onClose={onClose} width={560}>
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+    {managed ? <div className="info-strip"><ResourcePlanLock /><span>{uiText("Plan.managedHint")}</span></div> : null}
+    <dl className="plan-facts">
+      <div><dt>{uiText("Plan")}</dt><dd>{date(task.planStart)} – {date(task.planFinish)} · {task.workDays} {uiText("work days")}</dd></div>
+      {task.baselineFinish ? <div><dt>{uiText("Baseline")}</dt><dd>{date(task.baselineStart)} – {date(task.baselineFinish)}</dd></div> : null}
+      {task.forecastFinish ? <div><dt>{uiText("Forecast")}</dt><dd>{date(task.forecastFinish)}</dd></div> : null}
+      {task.actualStart ? <div><dt>{uiText("Plan.actualDates")}</dt><dd>{date(task.actualStart)} → {task.actualFinish ? date(task.actualFinish) : "…"}</dd></div> : null}
+      <div><dt>{uiText("PIC")}</dt><dd>{pic}</dd></div>
+      {task.planManDays > 0 ? <div><dt>{uiText("Plan man-days")}</dt><dd>{number(Number(task.planManDays))} <LocalizedText text={"MD"} /></dd></div> : null}
+      <div><dt>{uiText("Status")}</dt><dd><Badge tone={scheduleTone(task, isoToday())}>{uiText(task.status)}</Badge> <ProgressCell value={Number(task.percentComplete)} /></dd></div>
+    </dl>
+    {leaf && canProgress ? <section className="plan-drawer-section"><h3>{uiText("Plan.updateProgress")}</h3>
+      <QuickProgressControls target={{ key: String(task.id), wbs: task.wbs, percentComplete: Number(task.percentComplete), status: task.status, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, planFinish: task.planFinish, remark: task.remark, updatedAt: String(task.updatedAt) }}
+        editable={!saving} notify={notify} onPatch={onPatch} />
+    </section> : null}
+    <div className="row-actions plan-drawer-actions">
+      {leaf && canProgress ? <button className="btn sm default" type="button" disabled={saving} onClick={onDetails}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
+      {canPlan && activeSchedule.projectStatus !== "Closed" && !managed ? <button className="btn sm ghost" type="button" disabled={saving} aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={onEditPlan}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
+      {canImportDrawing ? <button className="btn sm default" type="button" disabled={saving} onClick={onImportDrawing}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
+    </div>
+    <section className="plan-drawer-section"><h3>{uiText("Plan.history")}</h3>
+      {history.length ? <ul className="plan-history">{history.map((update) => {
+        const requestedTask = update.taskId === task.id ? task : null;
+        const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
+        return <li key={update.id}>
+          <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
+          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.requestDays > 0 ? ` · +${update.requestDays} ${uiText("days")}` : update.field === "plan" ? "" : ` · ${update.fromValue ?? "—"} → ${update.toValue ?? "—"}`}{update.comment ? ` · “${update.comment}”` : ""}</span>
+          {pendingRequest && requestedTask && canAnswerRequests ? <button className="btn sm primary" type="button" onClick={() => onReview(update)}><Icon name="checkCircle" /><LocalizedText text={"Review"} /></button>
+            : update.answer ? <span><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge> {update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span> : null}
+        </li>;
+      })}</ul> : <p className="muted">{uiText("Plan.noHistory")}</p>}
+    </section>
+  </Drawer>;
 }
 
 function PriceAgeBadge({ record }: { record: PriceRecord }) {

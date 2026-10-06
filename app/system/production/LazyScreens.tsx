@@ -56,7 +56,6 @@ const screen = { loading: ScreenLoading };
 
 export const ProductionInquiries = dynamic(() => import("./InquiryScreens").then((m) => m.ProductionInquiries), screen);
 export const ProductionResourcePlan = dynamic(() => import("./ResourcePlanningScreen").then((m) => m.ProductionResourcePlan), screen);
-export const ProductionProjectTimeline = dynamic(() => import("./ProjectTimelineScreen").then((m) => m.ProductionProjectTimeline), screen);
 export const ReportScreens = dynamic(() => import("./ReportScreens").then((m) => m.ReportScreens), screen);
 export const ProductionEstimates = dynamic(() => import("./EstimateScreens").then((m) => m.ProductionEstimates), screen);
 export const ProductionApprovals = dynamic(() => import("./MaterialScreens").then((m) => m.ProductionApprovals), screen);

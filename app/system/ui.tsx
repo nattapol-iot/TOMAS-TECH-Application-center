@@ -5,7 +5,7 @@
    modals and the small SVG charts used by the dashboard and the reports.
    ========================================================================== */
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useT } from "./i18n";
 
 /* --------------------------------------------------------------------------
@@ -395,12 +395,35 @@ export function EmptyState({ icon, title, message, action }: { icon: IconName; t
    Overlays
    -------------------------------------------------------------------------- */
 
-function useEscape(onClose: () => void) {
+/*
+ * Overlays stack (a Modal opened from the Plan's task drawer): Escape closes only the one on top, and
+ * a key handler that already handled Escape (event.preventDefault) closes nothing. Focus moves to the
+ * overlay's close button when it opens and returns to where it was when it closes.
+ */
+const overlayStack: symbol[] = [];
+function useOverlay(onClose: () => void) {
+  const token = useRef<symbol | null>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const own = Symbol("overlay");
+    token.current = own;
+    overlayStack.push(own);
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButton.current?.focus();
+    return () => {
+      const index = overlayStack.indexOf(own);
+      if (index >= 0) overlayStack.splice(index, 1);
+      if (previous && previous.isConnected) previous.focus();
+    };
+  }, []);
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented && overlayStack[overlayStack.length - 1] === token.current) onClose();
+    };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+  return closeButton;
 }
 
 export function Modal({ title, subtitle, onClose, children, footer, size = "md" }: {
@@ -408,7 +431,7 @@ export function Modal({ title, subtitle, onClose, children, footer, size = "md" 
   children: React.ReactNode; footer?: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" | "wide" | "full";
 }) {
   const t = useT();
-  useEscape(onClose);
+  const closeButton = useOverlay(onClose);
   const labelId = useId();
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby={labelId}>
@@ -419,7 +442,7 @@ export function Modal({ title, subtitle, onClose, children, footer, size = "md" 
             <h2 id={labelId}>{t(title)}</h2>
             {subtitle ? <p>{t(subtitle)}</p> : null}
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}><Icon name="x" /></button>
+          <button ref={closeButton} type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}><Icon name="x" /></button>
         </header>
         <div className="overlay-body">{children}</div>
         {footer ? <footer className="overlay-foot">{footer}</footer> : null}
@@ -433,7 +456,7 @@ export function Drawer({ title, subtitle, onClose, children, footer, width = 520
   children: React.ReactNode; footer?: React.ReactNode; width?: number;
 }) {
   const t = useT();
-  useEscape(onClose);
+  const closeButton = useOverlay(onClose);
   const labelId = useId();
   return (
     <div className="overlay drawer-overlay" role="dialog" aria-modal="true" aria-labelledby={labelId}>
@@ -444,7 +467,7 @@ export function Drawer({ title, subtitle, onClose, children, footer, width = 520
             <h2 id={labelId}>{t(title)}</h2>
             {subtitle ? <p>{t(subtitle)}</p> : null}
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}><Icon name="x" /></button>
+          <button ref={closeButton} type="button" className="icon-btn" onClick={onClose} aria-label={t("Close")}><Icon name="x" /></button>
         </header>
         <div className="overlay-body">{children}</div>
         {footer ? <footer className="overlay-foot">{footer}</footer> : null}

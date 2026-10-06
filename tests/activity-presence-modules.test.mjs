@@ -87,7 +87,7 @@ test("every sub-view a screen reports is accepted, named after its parent view a
   assert.deepEqual(used.filter(({ key }) => !accepted.has(key)), []);
   // The approved Projects and Resource Plan tabs; Resource Plan keys follow its real tab ids (tasks, gantt, workload, items).
   const subViews = [...accepted].filter((key) => !views.has(key) && /^(projects|resources)-/.test(key));
-  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "resources-gantt", "resources-items", "resources-tasks", "resources-workload"]);
+  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "projects-timeline", "resources-gantt", "resources-items", "resources-tasks", "resources-workload"]);
   const resourceTabs = tabIds(await source("app/system/production/ResourcePlanningScreen.tsx"));
   assert.deepEqual(subViews.filter((key) => key.startsWith("resources-")).map((key) => key.slice("resources-".length)).sort(), [...resourceTabs].sort());
   for (const key of subViews) {

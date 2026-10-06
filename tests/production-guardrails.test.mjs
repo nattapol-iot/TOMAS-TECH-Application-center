@@ -99,11 +99,11 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   ]);
   for (const label of [
     "Needs update", "Late", "Blocked", "Due this week", "Awaiting the PM",
-    "New Assignments", "My Active Work", "My Updates", "Needs your update", "Start today", "Finish today",
+    "New Assignments", "My Active Work", "My Updates", "Needs your update",
     "Forecast", "Request more days", "Add Personal Task", "Open plan",
     "Search project, WBS or task", "All projects", "Priority first", "Update details",
-    "Quick update", "No work groups match these filters", "Clear filters", "Last update", "quiet days", "estimated man-days",
-    "Filter by source", "Inquiry / Estimate", "Service", "Personal", "More actions", "Set forecast date",
+    "No work groups match these filters", "Clear filters", "Last update", "quiet days", "estimated man-days",
+    "Filter by source", "Inquiry / Estimate", "Service", "Personal", "More actions",
   ]) {
     assert.match(screen, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -131,9 +131,16 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /window\.localStorage\.setItem\(expansionStorageKey/);
   assert.match(screen, /item\.status === "Blocked"/);
   assert.match(screen, /window\.confirm\(localizeCopy\("This task is at 0%/);
-  assert.match(screen, /function ProductionForecastModal/);
-  assert.match(screen, /disabled=\{target\.status === "Blocked"\}/);
-  assert.match(screen, /disabled=\{item\.status === "Blocked"\}/);
+  // One-click progress sits on the card face (no Quick update fold, no Start/Finish today, no forecast modal);
+  // the forecast date is entered inline once a task is late.
+  assert.match(screen, /\{item\.canUpdate \? <ProductionWorkControls item=\{item\}/);
+  assert.doesNotMatch(screen, /function ProductionForecastModal|my-task-quick-update|"Start today"|"Finish today"/);
+  assert.match(screen, /const patch = percentChangePatch\(target, value, today\);\s*if \(!patch\) return;/, "tapping the current percent sends nothing");
+  // One personal-task dialog; a card opens it on its own task.
+  assert.doesNotMatch(screen, /function ProductionAddDetailModal/);
+  assert.match(screen, /onAdd=\{\(item\) => setPersonalTaskFor\(\{ parentId: item\.taskId \}\)\}/);
+  // Done stays unavailable while a task is blocked, in the dialog and in the card's quick control.
+  assert.equal((screen.match(/<option value=\{"Done"\} disabled=\{target\.status === "Blocked"\}>/g) ?? []).length, 2);
   assert.match(screen, /const activeEstimateError =/);
   assert.match(screen, /<LoadError message=\{activeEstimateError\} retry=\{estimateQueue\.reload\}/);
   assert.match(screen, /const activeLoading =/);
@@ -171,14 +178,26 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   assert.match(schedule, /useActivitySubView\("projects-schedule"\)/);
   // Update follows canProgress (PIC, PM or Admin), with the PIC rule only as the fallback.
   assert.match(schedule, /const canProgress = canProgressScheduleRow\(task, \{/);
-  assert.doesNotMatch(schedule, /task\.pics\.some\(\(pic\) => pic\.id === bootstrap\.user\.id\)/, "the PIC-only rule must not bypass canProgress");
+  const drawer = screen.slice(screen.indexOf("function PlanTaskDrawer"), screen.indexOf("function PriceAgeBadge"));
+  assert.ok(drawer.length > 500, "PlanTaskDrawer moved");
+  assert.match(drawer, /\{leaf && canProgress \? <section/);
+  assert.doesNotMatch(drawer, /task\.pics\.some\(\(pic\) => pic\.id === bootstrap\.user\.id\)/, "the PIC-only rule must not bypass canProgress");
   // The server refuses plan edits and drawings on a managed row, so the screen does not offer them.
   assert.match(schedule, /const managed = Boolean\(task\.managedByResourcePlan\)/);
   assert.match(schedule, /activeSchedule\.projectStatus !== "Closed" && !managed \? <button/);
   // Import Drawing follows the drawing rule (assigned PIC), not canProgress: the PM/Admin may post
   // progress on a row they are not PIC of, but the server refuses them a drawing there.
   assert.match(schedule, /const canImportDrawing = canImportDrawingRow\(task, \{\s*scheduleAllowsProgress: activeSchedule\.canUpdateProgress,\s*hasSigningRequest: bootstrap\.permissions\.includes\("signing\.request"\),\s*userId: bootstrap\.user\.id,/);
-  assert.match(schedule, /\{canImportDrawing \? <button className="btn sm default" type="button" onClick=\{\(\) => setDrawingTask\(/);
+  // The drawer's actions wait while a save or reload runs, so they never act on a row being replaced.
+  assert.match(schedule, /\{canImportDrawing \? <button className="btn sm default" type="button" disabled=\{saving\} onClick=\{onImportDrawing\}>/);
+  assert.match(schedule, /saving=\{saving \|\| loadingSchedule\}/);
+  assert.match(schedule, /onImportDrawing=\{\(\) => setDrawingTask\(\{ projectId: activeSchedule\.projectId, taskId: drawerTask\.id \}\)\}/);
+  // The plan is a Gantt on the shared component, and a reload keeps it on screen.
+  assert.match(schedule, /<GanttChart rows=\{ganttRows\} range=\{range\}/);
+  assert.match(schedule, /onOpen: \(\) => setDrawerTaskId\(task\.id\)/);
+  assert.doesNotMatch(schedule.slice(schedule.indexOf("const loadSchedule"), schedule.indexOf("useEffect(")), /setSchedule\(null\);\s*if \(!selectedId\)/, "a reload must not blank the plan");
+  // The project picker lists projects by number.
+  assert.match(schedule, /\.sort\(byProjectNumber\)/);
   assert.doesNotMatch(schedule, /canProgress && !managed && bootstrap\.permissions\.includes\("signing\.request"\)/);
   // Day-request answers follow the API's canAnswerRequests (canPlan on an older API), in both places.
   assert.match(screen, /canAnswerRequests\?: boolean;/);

@@ -103,3 +103,9 @@
   .portfolio-project { min-width: 160px; }
   .portfolio-progress { min-width: 120px; }
 }
+
+/* Overview > Timeline: the shared Gantt (gantt.css) under its zoom bar and legend. */
+.portfolio-gantt { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+.portfolio-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 0 14px; }
+.portfolio-gantt-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px 0; }
+.portfolio-gantt-sort .icon.asc { transform: rotate(180deg); }

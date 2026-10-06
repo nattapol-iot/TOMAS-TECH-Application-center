@@ -65,7 +65,9 @@ test("the other sortable columns order by their own value", () => {
     row({ id: 3, number: "P-11", managerName: "Malee", targetDelivery: "2026-10-20", progress: 55, lastProgressAt: "2026-10-05T03:00:00Z" }),
   ];
   const order = (sort) => sortPortfolio(rows, sort).map((item) => item.number);
-  assert.deepEqual(order({ key: "project", direction: "asc" }), ["P-9", "P-10", "P-11"]);
+  // The project number sorts naturally (P-9 before P-10), both ways.
+  assert.deepEqual(order({ key: "number", direction: "asc" }), ["P-9", "P-10", "P-11"]);
+  assert.deepEqual(order({ key: "number", direction: "desc" }), ["P-11", "P-10", "P-9"]);
   assert.deepEqual(order({ key: "pm", direction: "asc" }), ["P-9", "P-11", "P-10"]);
   assert.deepEqual(order({ key: "target", direction: "asc" }), ["P-11", "P-10", "P-9"]);
   assert.deepEqual(order({ key: "progress", direction: "desc" }), ["P-10", "P-11", "P-9"]);
@@ -81,6 +83,8 @@ test("clicking a header toggles its direction and a new column starts ascending"
 test("a remembered sort survives a reload and damaged storage falls back to the default", () => {
   assert.equal(portfolioSortStorageKey(42), "tomas-tech-project-portfolio-sort:42");
   assert.deepEqual(parsePortfolioSort('{"key":"slip","direction":"desc"}'), { key: "slip", direction: "desc" });
+  // A sort saved before the number and name had their own columns keeps sorting by the number.
+  assert.deepEqual(parsePortfolioSort('{"key":"project","direction":"desc"}'), { key: "number", direction: "desc" });
   for (const raw of [null, "", "not-json", "[]", "null", '{"key":"margin","direction":"asc"}', '{"key":"slip","direction":"up"}']) {
     assert.deepEqual(parsePortfolioSort(raw), DEFAULT_PORTFOLIO_SORT, String(raw));
   }
@@ -196,4 +200,9 @@ test("row menus open below their trigger, flip up when only the space above fits
     { top: null, bottom: 104, right: 80, maxHeight: 188 });
   // A trigger hard against the right edge keeps the menu inside the margin.
   assert.equal(rowMenuPlacement({ top: 100, bottom: 130, right: 1279 }, viewport, 100).right, 8);
+});
+
+test("the name column sorts by project name, separately from the number", () => {
+  const rows = [row({ id: 1, number: "P-1", name: "Zeta line" }), row({ id: 2, number: "P-2", name: "Alpha cold room" }), row({ id: 3, number: "P-3", name: "line 10" })];
+  assert.deepEqual(sortPortfolio(rows, { key: "name", direction: "asc" }).map((item) => item.number), ["P-2", "P-3", "P-1"]);
 });

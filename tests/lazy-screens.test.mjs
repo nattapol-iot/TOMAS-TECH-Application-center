@@ -7,7 +7,7 @@ const source = (path) => readFile(new URL(path, root), "utf8");
 
 /** Screen modules that load on first visit (app/system/production/LazyScreens.tsx). */
 const LAZY = [
-  "InquiryScreens", "ResourcePlanningScreen", "ProjectTimelineScreen", "ReportScreens", "EstimateScreens",
+  "InquiryScreens", "ResourcePlanningScreen", "ReportScreens", "EstimateScreens",
   "MaterialScreens", "KnowledgeScreens", "ModuleTemplateScreens", "LaborPackageMaster", "ScheduleTemplateMaster",
   "PerformanceScreen", "SiteVisitScreens", "TeamActivityScreen",
 ];

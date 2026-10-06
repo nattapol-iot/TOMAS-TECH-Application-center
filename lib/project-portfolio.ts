@@ -15,7 +15,7 @@ export type PortfolioRow = {
 /** Worst first: the order the portfolio opens in and the order of the health bar. */
 export const PORTFOLIO_HEALTH_ORDER: readonly PortfolioHealth[] = ["Delayed", "At Risk", "No plan", "On Track", "On Hold", "Completed"];
 
-export const PORTFOLIO_SORT_KEYS = ["health", "project", "pm", "target", "slip", "progress", "lastUpdate"] as const;
+export const PORTFOLIO_SORT_KEYS = ["health", "number", "name", "pm", "target", "slip", "progress", "lastUpdate"] as const;
 export type PortfolioSortKey = (typeof PORTFOLIO_SORT_KEYS)[number];
 export type PortfolioSort = { key: PortfolioSortKey; direction: "asc" | "desc" };
 /** Health ascending means worst first, then the largest slip, then the project number. */
@@ -48,7 +48,8 @@ function compareTail(a: PortfolioRow, b: PortfolioRow) {
 export function comparePortfolio(a: PortfolioRow, b: PortfolioRow, sort: PortfolioSort = DEFAULT_PORTFOLIO_SORT): number {
   const direction = sort.direction === "asc" ? 1 : -1;
   const primary = sort.key === "health" ? (healthRank(a.health) - healthRank(b.health)) * direction
-    : sort.key === "project" ? byText(a.number, b.number) * direction
+    : sort.key === "number" ? byText(a.number, b.number) * direction
+    : sort.key === "name" ? byText(a.name, b.name) * direction
     : sort.key === "pm" ? compareNullable(a.managerName, b.managerName, byText, direction)
     : sort.key === "target" ? compareNullable(a.targetDelivery, b.targetDelivery, byText, direction)
     : sort.key === "slip" ? compareNullable(a.slipDays, b.slipDays, byNumber, direction)
@@ -70,8 +71,10 @@ export function nextPortfolioSort(current: PortfolioSort, key: PortfolioSortKey)
 export function parsePortfolioSort(raw: string | null): PortfolioSort {
   if (!raw) return DEFAULT_PORTFOLIO_SORT;
   try {
-    const value = JSON.parse(raw) as Partial<PortfolioSort> | null;
-    const key = PORTFOLIO_SORT_KEYS.find((candidate) => candidate === value?.key);
+    const value = JSON.parse(raw) as { key?: unknown; direction?: unknown } | null;
+    // "project" sorted by the project number before the number and the name had a column each.
+    const stored = value?.key === "project" ? "number" : value?.key;
+    const key = PORTFOLIO_SORT_KEYS.find((candidate) => candidate === stored);
     return key && (value?.direction === "asc" || value?.direction === "desc") ? { key, direction: value.direction } : DEFAULT_PORTFOLIO_SORT;
   } catch {
     return DEFAULT_PORTFOLIO_SORT;
