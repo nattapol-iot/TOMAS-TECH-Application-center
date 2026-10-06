@@ -24,6 +24,7 @@ function harness(overview,lang='EN'){
   if(name==='../ui')return controls;
   if(name==='../api-client')return api;
   if(name==='../LocalizedText')return{LocalizedText:()=>null};
+  if(name.endsWith('.css'))return{};
   if(name.startsWith('.')){const p=resolve(dirname(file),name);return load(existsSync(p+'.ts')?p+'.ts':p+'.tsx');}
   return require(name);
  },mod,mod.exports);cache.set(file,mod.exports);return mod.exports;}

@@ -46,6 +46,13 @@ import {
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 
+/** The calendar date in the business time zone (same signature as the shared helper it will become). */
+function businessToday(timeZone: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 const DOCUMENT_ENTITY = "SignableDocument";
 
 type ProjectDocumentSource = {
@@ -560,7 +567,6 @@ export function registerSigningRoutes(
     const actor = await users.required(request);
 
     const waiting = (await database.query<Record<string, unknown>>(`
-      DECLARE @today date = CONVERT(date, SYSUTCDATETIME());
       SELECT s.id AS step_id, s.step_no, total.step_count, s.block_code, s.required_mark,
              stamp.code AS stamp_code, s.due_date, s.row_version,
              rq.id AS request_id, rq.created_at, rq.due_date AS request_due,
@@ -597,6 +603,7 @@ export function registerSigningRoutes(
     `, (bind) => {
       bind.input("actor", sql.BigInt, actor.id);
       bind.input("role", sql.NVarChar(50), actor.role);
+      bind.input("today", sql.Date, businessToday(config.businessTimeZone));
     })).recordset.map((row) => ({
       stepId: Number(row.step_id),
       stepNo: Number(row.step_no),
@@ -872,7 +879,7 @@ export function registerSigningRoutes(
         // Resolve using the actual manager's role, not the submitting member's role.
         const roleQuery = new sql.Request(transaction); roleQuery.input("id", sql.BigInt, approver.id);
         approver.role = (await roleQuery.query<{code: string}>(`SELECT r.code FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id;`)).recordset[0]!.code;
-        if (!await resolveStampAuthority(transaction, drawingStampId, "DRAWING", approver)) throw new ApiError(409, "drawing_stamp_authority_missing", "The project Manager does not hold authority for this stamp.");
+        if (!await resolveStampAuthority(transaction, drawingStampId, "DRAWING", approver, businessToday(config.businessTimeZone))) throw new ApiError(409, "drawing_stamp_authority_missing", "The project Manager does not hold authority for this stamp.");
       }
       const steps = template.steps.filter((step) => appliesToAmount(step, document.amount)).sort((a, b) => a.stepNo - b.stepNo);
       if (steps.length === 0) throw new ApiError(409, "no_applicable_steps", "No step of the active flow applies to this document.");
@@ -1007,7 +1014,7 @@ export function registerSigningRoutes(
           specimen={id:specimenId,imageBase64:(await readFile(resolveStoragePath(config.documentStorage,image.image_key))).toString("base64")};
         }
         if(step.companyStampId && step.requiredMark==="SIGNATURE_STAMP") {
-          const authority=await resolveStampAuthority(transaction,step.companyStampId,document.documentClass,actor);
+          const authority=await resolveStampAuthority(transaction,step.companyStampId,document.documentClass,actor,businessToday(config.businessTimeZone));
           if(authority===null) throw new ApiError(403,"stamp_authority_missing","You cannot preview/apply this stamp without current authority.");
           const stampQuery=new sql.Request(transaction);stampQuery.input("id",sql.BigInt,step.companyStampId);
           const stamp=(await stampQuery.query<{image_key:string}>("SELECT image_key FROM dbo.company_stamps WHERE id=@id;")).recordset[0]!;
@@ -1066,7 +1073,7 @@ export function registerSigningRoutes(
           if (step.companyStampId === null) {
             throw new ApiError(500, "stamp_missing", "This block requires a company stamp but names none.");
           }
-          stampAuthorityId = await resolveStampAuthority(transaction, step.companyStampId, document.documentClass, actor);
+          stampAuthorityId = await resolveStampAuthority(transaction, step.companyStampId, document.documentClass, actor, businessToday(config.businessTimeZone));
           if (stampAuthorityId === null) {
             throw new ApiError(403, "stamp_authority_missing",
               "You do not hold a live authority to apply this company stamp to this document class.");

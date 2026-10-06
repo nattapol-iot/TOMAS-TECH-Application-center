@@ -1,6 +1,8 @@
 "use client";
 import {useLanguage} from "../i18n";
 import {Icon} from "../ui";
+// Its .activity-inline/.activity-status rules live with Team Activity, which now loads in its own chunk.
+import "./team-activity.css";
 const useCopy=()=>{const {lang}=useLanguage();return {s:(th:string,en:string,jp:string)=>lang==="TH"?th:lang==="JP"?jp:en};};
 const number=(v:number|null|undefined)=>v==null?"—":v.toFixed(1);
 

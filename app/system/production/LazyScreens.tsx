@@ -21,7 +21,22 @@ import { EmptyState, Icon, Panel } from "../ui";
  * login screen until bootstrap arrives in the browser), and vinext's ssr:false path shows the
  * loading state for one commit on every mount, cached chunk or not.
  */
-function ScreenLoading({ error }: DynamicOptionsLoadingProps) {
+/** Chrome, Firefox and Safari wording for a module or its CSS that could not be fetched. */
+const CHUNK_FAILURE = /dynamically imported module|Importing a module script failed|Unable to preload CSS|ChunkLoadError/i;
+
+function ScreenLoading({ error, retry }: DynamicOptionsLoadingProps) {
+  // vinext's boundary also catches errors thrown while the screen renders. Those are not a
+  // stale deploy, and reloading would only reopen the same view, so they get a retry instead.
+  if (error && !CHUNK_FAILURE.test(error.message)) {
+    return (
+      <div role="alert">
+        <Panel>
+          <EmptyState icon="alertTriangle" title="Unexpected error" message={error.message || "Unexpected error"}
+            action={<button className="btn default" type="button" onClick={() => retry?.()}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>} />
+        </Panel>
+      </div>
+    );
+  }
   // A chunk that fails is almost always a tab opened before a deploy: the old file is gone, so
   // only a reload helps, and the remembered view brings the reader back to this screen.
   if (error) {

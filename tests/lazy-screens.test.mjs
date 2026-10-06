@@ -40,3 +40,19 @@ test("screens off the landing path load on first visit and stay out of the eager
   assert.match(shell, /from "\.\/production\/CoreScreens"/);
   assert.match(shell, /from "\.\/production\/PlanningPricingScreens"/);
 });
+
+test("a lazy screen's error panel tells a missing chunk from a crash", async () => {
+  const lazy = await source("app/system/production/LazyScreens.tsx");
+  // A crash gets a retry with its own message; only a missing module or CSS asks for a reload.
+  assert.match(lazy, /const CHUNK_FAILURE = \/dynamically imported module\|Importing a module script failed\|Unable to preload CSS/);
+  assert.match(lazy, /if \(error && !CHUNK_FAILURE\.test\(error\.message\)\)/);
+  assert.match(lazy, /onClick=\{\(\) => retry\?\.\(\)\}/);
+});
+
+test("a component shared by two lazy screens imports the stylesheet it renders with", async () => {
+  // KPI & Growth renders the Team Activity summary row; with separate chunks the row's CSS
+  // must come with the component, not with Team Activity.
+  const summary = await source("app/system/production/ActivityKpiSummary.tsx");
+  assert.match(summary, /import "\.\/team-activity\.css";/);
+  assert.match(summary, /className="activity-inline"/);
+});

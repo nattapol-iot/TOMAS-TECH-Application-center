@@ -422,19 +422,23 @@ export async function verifyChain(
  * Does this person hold a live authority to apply this stamp to this class of
  * document today? Returns the grant that permitted it, because at audit time the
  * question is whether they were allowed to, not only whether they did.
+ * `today` is the business-day date (yyyy-mm-dd): the stamp and grant forms date
+ * validity in the business time zone, so a UTC date would refuse a stamp made
+ * before 07:00 in Bangkok until UTC caught up.
  */
 export async function resolveStampAuthority(
   transaction: TransactionType,
   companyStampId: number,
   documentClass: string,
   actor: CurrentUser,
+  today: string,
 ): Promise<number | null> {
   const request = new sql.Request(transaction);
   request.input("stamp_id", sql.BigInt, companyStampId);
   request.input("doc_class", sql.NVarChar(30), documentClass);
   request.input("actor", sql.BigInt, actor.id);
+  request.input("today", sql.Date, today);
   const row = (await request.query<{ id: number }>(`
-    DECLARE @today date = CONVERT(date, SYSUTCDATETIME());
     SELECT TOP (1) a.id
     FROM dbo.stamp_authorities a
     INNER JOIN dbo.company_stamps s ON s.id = a.company_stamp_id

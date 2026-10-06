@@ -28,3 +28,19 @@ test("form defaults take today from the configured business day", async () => {
     assert.match(source, /estimateBusinessDate\(.*process\.env\.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?\?\? ?"Asia\/Bangkok"\)/, path);
   }
 });
+
+test("stamp authority is checked against the same business day the stamp forms default to", async () => {
+  const [core, routes] = await Promise.all([
+    readFile(new URL("backend-node/src/signing-core.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/signing.ts", root), "utf8"),
+  ]);
+  const resolver = core.slice(core.indexOf("export async function resolveStampAuthority"), core.indexOf("ORDER BY CASE WHEN a.user_id IS NOT NULL"));
+  assert.match(resolver, /today: string,/);
+  assert.match(resolver, /request\.input\("today", sql\.Date, today\);/);
+  for (const source of [core, routes]) assert.doesNotMatch(source, /DECLARE @today date = CONVERT\(date, SYSUTCDATETIME\(\)\)/);
+  // The inbox and every caller pass the business day, never the UTC date.
+  assert.match(routes, /bind\.input\("today", sql\.Date, businessToday\(config\.businessTimeZone\)\);/);
+  const calls = [...routes.matchAll(/resolveStampAuthority\(([^)]*\))?[^)]*\)/g)].map((match) => match[0]);
+  assert.equal(calls.length, 3);
+  for (const call of calls) assert.match(call, /businessToday\(config\.businessTimeZone\)/, call);
+});

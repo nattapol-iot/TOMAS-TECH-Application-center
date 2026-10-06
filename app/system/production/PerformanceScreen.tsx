@@ -161,8 +161,11 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
     setSelectedCycle(data.selectedCycle);
     setCycle(data.selectedCycle.code);
     setManagerView(data.canManage);
-    if (!data.canManage) setTab("mine");
-  }, []);
+    // The landing tab follows the API's answer, which counts additional roles: a manager with
+    // no assessment of their own would otherwise land on an empty "mine".
+    const ownAssessment = data.assessments.some(review => String(review.userId) === String(currentUser.id));
+    setTab(current => !data.canManage ? "mine" : current === "mine" && !ownAssessment ? "team" : current);
+  }, [currentUser.id]);
 
   const reload = useCallback(async (cycleId?: number) => {
     setLoading(true); setLoadError("");
