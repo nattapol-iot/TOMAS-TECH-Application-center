@@ -25,6 +25,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM Opportunities","Opportunities / sales follow-up","โอกาสขาย / ติดตามงานขาย","商談・営業フォロー"],
  ["CRM Activities","Activities","กิจกรรมลูกค้า","顧客活動"],
  ["CRM Pipeline","Pipeline","กระดานงานขาย","商談パイプライン"],
+ ["CRM.listView","List","มุมมองรายการ","一覧"], ["CRM.boardView","Board by stage","กระดานตามขั้นตอน","ステージ別ボード"],
  ["CRM.title","Customer relationships","ความสัมพันธ์กับลูกค้า","顧客関係"],
  ["CRM.new","New opportunity","เพิ่มโอกาสทางการขาย","商談を作成"],
  ["CRM.search","Search customer, contact, opportunity or owner","ค้นหาลูกค้า ผู้ติดต่อ โอกาสขาย หรือผู้รับผิดชอบ","顧客・連絡先・商談・担当者を検索"],

@@ -63,7 +63,8 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     // Every label is a dictionary key, never a literal in one language: the
     // intake and opportunity entries once carried raw Thai and showed Thai to
     // English and Japanese readers.
-    "CRM Dashboard", "CRM Customers", "CRM Contacts", "CRM Opportunities", "CRM Activities", "CRM Pipeline",
+    // Pipeline is the board mode inside CRM Opportunities, not a menu entry of its own.
+    "CRM Dashboard", "CRM Customers", "CRM Contacts", "CRM Opportunities", "CRM Activities",
     "Site Visit", "My Assignments",
     "Price Library", "Supplier Quotation", "Waiting Supplier Price", "Project Timeline", "Resource Plan",
     "Procurement Dashboard", "BOM", "Purchase Requisition", "Purchase Orders", "Inventory",

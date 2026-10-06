@@ -87,7 +87,8 @@ type View = CrmView
   | "suppliers" | "employees" | "material-master" | "user-accounts" | "summary-reports"
   | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "schedule-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support";
 
-type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; rateAccess?: boolean };
+/** unlessPermission hides an item from people who hold that permission, because they have a fuller screen for the same records. */
+type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; unlessPermission?: string; rateAccess?: boolean };
 type MyWorkUrgencyItem = {
   status: string;
   canUpdate: boolean;
@@ -121,7 +122,6 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "crm-contacts", label: "CRM Contacts", icon: "user", permission: "crm.read" },
     { view: "crm-opportunities", label: "CRM Opportunities", icon: "folder", permission: "crm.read" },
     { view: "crm-activities", label: "CRM Activities", icon: "calendar", permission: "crm.read" },
-    { view: "crm-pipeline", label: "CRM Pipeline", icon: "chart", permission: "crm.read" },
 
     { view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit.read" },
     { view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit.read" },
@@ -157,7 +157,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     {"view":"summary-reports","label":"Summary Reports","icon":"chart","permission":"report.read"},
   ] },
   { group: "MASTER DATA", items: [
-    {"view":"customers","label":"Customers","icon":"users","permission":"master.read"},
+    {"view":"customers","label":"Customers","icon":"users","permission":"master.read","unlessPermission":"crm.read"},
     {"view":"suppliers","label":"Suppliers","icon":"truck","permission":"master.read"},
     {"view":"employees","label":"Employees","icon":"user","permission":"master.read"},
     {"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"},
@@ -179,6 +179,22 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     {"view":"support","label":"Report & Track Issues","icon":"inbox"},
   ] },
 ];
+
+/** The one rule for which menu entries a person sees, and so which views a remembered session may restore. */
+function navItemAllowed(item: NavItem, permissions: readonly string[], role: string): boolean {
+  return (!item.permission || permissions.includes(item.permission))
+    && (!item.permissions || item.permissions.every((permission) => permissions.includes(permission)))
+    && (!item.anyPermissions || item.anyPermissions.some((permission) => permissions.includes(permission)))
+    && (!item.unlessPermission || !permissions.includes(item.unlessPermission))
+    && (!item.rateAccess || canViewEngineeringRates(role));
+}
+
+/** Pipeline is the board mode of Opportunities, and CRM users keep customers in CRM; both are sub-views, not menu entries. */
+function landingView(next: View, permissions: readonly string[]): View {
+  const target = next === "master" ? "customers" : next;
+  return target === "customers" && permissions.includes("crm.read") ? "crm-customers" : target;
+}
+const navView = (view: View): View => view === "crm-pipeline" ? "crm-opportunities" : view;
 
 const IS_AUTH_CONFIGURED = (IS_TMT_ID_MODE || IS_TEAM_TEST_MODE || IS_ENTRA_CONFIGURED) && IS_API_CONFIGURED;
 const IS_LOCAL_READ_ONLY = process.env.NEXT_PUBLIC_LOCAL_READ_ONLY === "true";
@@ -255,10 +271,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
     setCollapsedActiveGroup(null);
     setCrmOpportunityId(null);
-    setViewState(next === "master" ? "customers" : next);
-    const activeGroup = NAV.find(section => section.items.some(item => item.view === next))?.group;
+    const target = landingView(next, bootstrap?.permissions ?? []);
+    setViewState(target);
+    const activeGroup = NAV.find(section => section.items.some(item => item.view === navView(target)))?.group;
     if (activeGroup) setCollapsedNavGroups(groups => groups.filter(group => group !== activeGroup));
-  }, [view, confirmReportNavigation]);
+  }, [view, confirmReportNavigation, bootstrap]);
 
   useEffect(() => {
     const follow = () => { if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) setView("activity"); };
@@ -356,19 +373,17 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 
   const restoreWorkspace = useCallback((data: BootstrapData) => {
     const allowed: View[] = NAV.flatMap(section => section.items)
-      .filter(item => (!item.permission || data.permissions.includes(item.permission))
-        && (!item.permissions || item.permissions.every(permission => data.permissions.includes(permission)))
-        && (!item.anyPermissions || item.anyPermissions.some(permission => data.permissions.includes(permission)))
-        && (!item.rateAccess || canViewEngineeringRates(data.user.role)))
+      .filter(item => navItemAllowed(item, data.permissions, data.user.role))
       .map(item => item.view);
     allowed.push("profile", "signature");
     if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
+    if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
 
     let saved: string | null = null;
     try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
     catch { /* Storage may be disabled; normal navigation still works. */ }
     const dailyLanding: View = allowed.includes("my-work") ? "my-work" : "dashboard";
-    setViewState(restoredView(saved === "master" ? "customers" : saved, allowed, window.location.hash, initialVerifyCode, dailyLanding));
+    setViewState(restoredView(saved ? landingView(saved as View, data.permissions) : saved, allowed, window.location.hash, initialVerifyCode, dailyLanding));
     setBootstrap(data);
   }, [initialVerifyCode]);
 
@@ -536,10 +551,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const allowedNav = useMemo(() => NAV
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => (!item.permission || bootstrap?.permissions.includes(item.permission))
-        && (!item.permissions || item.permissions.every((permission) => bootstrap?.permissions.includes(permission)))
-        && (!item.anyPermissions || item.anyPermissions.some((permission) => bootstrap?.permissions.includes(permission)))
-        && (!item.rateAccess || canViewEngineeringRates(bootstrap?.user.role ?? ""))),
+      items: section.items.filter((item) => navItemAllowed(item, bootstrap?.permissions ?? [], bootstrap?.user.role ?? "")),
     }))
     .filter((section) => section.items.length > 0), [bootstrap]);
 
@@ -595,7 +607,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 
   const startInquiry = () => { setStartInquiryCreate(true); setPreferredInquiryId(null); setView("inquiries"); };
   const toggleNavGroup = (group: string) => {
-    const active = NAV.find(section => section.group === group)?.items.some(item => item.view === view);
+    const active = NAV.find(section => section.group === group)?.items.some(item => item.view === navView(view));
     const isCollapsed = collapsedNavGroups.includes(group) && (!active || collapsedActiveGroup === group);
     setCollapsedActiveGroup(isCollapsed ? null : group);
     setCollapsedNavGroups(current => isCollapsed ? current.filter(value => value !== group) : [...new Set([...current, group])]);
@@ -648,7 +660,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <nav className="nav" aria-label={t("Main navigation")}>
           <p className="nav-label">{t(WORKSPACE_LABEL)}</p>
           {allowedNav.map((section, sectionIndex) => {
-            const activeGroup = section.items.some(item => item.view === view);
+            const activeGroup = section.items.some(item => item.view === navView(view));
             const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group) && (!activeGroup || collapsedActiveGroup === section.group));
             return (
               <div className={activeGroup ? "nav-group active-group" : "nav-group"} key={section.group ?? `primary-${sectionIndex}`}>
@@ -660,7 +672,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <button key={item.view} type="button" className={view === item.view ? "nav-item active" : "nav-item"} aria-current={view === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount))}</em> : null}</button>;
+                    return <button key={item.view} type="button" className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={() => { if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount))}</em> : null}</button>;
                   })}
                 </div>
               </div>
@@ -719,7 +731,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             else { setView(destination); window.scrollTo({ top: 0 }); }
           }} /> : personalDashboard : null}
           {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
-          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} bootstrap={bootstrap} view={view as CrmView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
+          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
           {view === "projects" ? <>
@@ -773,7 +785,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
-      {supportCreate ? <SupportCreateDialog context={{ module: view === "manual" ? employeeManualLabel(language) : NAV.flatMap(group => group.items).find(item => item.view === view)?.label ?? view }} onClose={() => setSupportCreate(false)} onCreated={() => { setSupportRevision(value => value + 1); void refreshNotifications(); }} onOpen={openSupport} /> : null}
+      {supportCreate ? <SupportCreateDialog context={{ module: view === "manual" ? employeeManualLabel(language) : NAV.flatMap(group => group.items).find(item => item.view === navView(view))?.label ?? view }} onClose={() => setSupportCreate(false)} onCreated={() => { setSupportRevision(value => value + 1); void refreshNotifications(); }} onOpen={openSupport} /> : null}
     </div>
     </LanguageContext.Provider>
   );

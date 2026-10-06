@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ApiClientError, apiRequest, assignmentDeliveryNote, downloadCrmDocument, uploadCrmDocument, type AssignmentNotificationResult, type BootstrapData } from "../api-client";
 import { useLanguage, useT } from "../i18n";
-import { Badge, EmptyState, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SummaryTile, TablePageSize, type IconName, type Tone } from "../ui";
+import { Badge, EmptyState, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, SummaryTile, TablePageSize, Tabs, type IconName, type Tone } from "../ui";
 import { CustomerModal } from "./AdminAnalyticsScreens";
 import "./crm.css";
 import { ProjectHandover } from "./ProjectHandover";
@@ -14,7 +14,7 @@ type Page = {items:CrmRecord[];total:number;page:number;pageSize:number};
 type Detail = {opportunity:CrmRecord;activities:CrmRecord[];followups:CrmRecord[];history:CrmRecord[];links:CrmRecord[]};
 type CustomerDetail = {service:CrmRecord[];customer:CrmRecord;sites:CrmRecord[];contacts:CrmRecord[];inquiries:CrmRecord[];estimates:CrmRecord[];projects:CrmRecord[]};
 export type CrmView = "crm-dashboard"|"crm-customers"|"crm-contacts"|"crm-opportunities"|"crm-activities"|"crm-pipeline";
-type Props = {refreshBootstrap?:()=>Promise<void>;notify?:(message:string)=>void;bootstrap:BootstrapData;view:CrmView;preferredOpportunityId?:number|null;openInquiry:(id:number)=>void;openEstimate:(id:number)=>void;openProject:(id:number)=>void};
+type Props = {refreshBootstrap?:()=>Promise<void>;notify?:(message:string)=>void;bootstrap:BootstrapData;view:CrmView;onViewChange?:(view:CrmView)=>void;preferredOpportunityId?:number|null;openInquiry:(id:number)=>void;openEstimate:(id:number)=>void;openProject:(id:number)=>void};
 const stages=["NEW","QUALIFICATION","REQUIREMENT","ESTIMATING","PROPOSAL","NEGOTIATION","WON","LOST","ON_HOLD"];
 const activityTypes=["Meeting","Call","Email","SiteVisit","CustomerUpdate","InternalDiscussion","MessageLINE","Note","Other"];
 const statuses=["Open","WaitingCustomer","WaitingInternal","WaitingSupplier","Done","Cancelled"];
@@ -134,10 +134,10 @@ export function CrmScreen(props:Props) {
   useEffect(()=>{const timer=setTimeout(()=>{setOpportunityId(preferredOpportunityId??null);setCustomerId(null);},0);return()=>clearTimeout(timer);},[view,preferredOpportunityId]);
   const write=bootstrap.permissions.includes("crm.write");
   if(!bootstrap.permissions.includes("crm.read"))return <p>{t("CRM.permissions")}</p>;
-  const title=opportunityId?"CRM Opportunities":customerId?"CRM Customers":({"crm-dashboard":"CRM Dashboard","crm-customers":"CRM Customers","crm-contacts":"CRM Contacts","crm-opportunities":"CRM Opportunities","crm-activities":"CRM Activities","crm-pipeline":"CRM Pipeline"})[view];
+  const title=opportunityId?"CRM Opportunities":customerId?"CRM Customers":({"crm-dashboard":"CRM Dashboard","crm-customers":"CRM Customers","crm-contacts":"CRM Contacts","crm-opportunities":"CRM Opportunities","crm-activities":"CRM Activities","crm-pipeline":"CRM Opportunities"})[view];
   const descriptions:Record<CrmView,string>={"crm-dashboard":"CRM.introDashboard","crm-customers":"CRM.introCustomers","crm-contacts":"CRM.introContacts","crm-opportunities":"CRM.introOpportunities","crm-activities":"CRM.introActivities","crm-pipeline":"CRM.introPipeline"};
   const showNew=!opportunityId&&!customerId&&["crm-dashboard","crm-opportunities","crm-pipeline"].includes(view);
-  return <div className="crm-workspace"><PageHeader eyebrow="CRM & SALES" title={title} subtitle={!opportunityId&&!customerId?descriptions[view]:undefined} actions={<>{(opportunityId||customerId)?<button className="btn default" onClick={()=>{setOpportunityId(null);setCustomerId(null);}}><Icon name="arrowLeft"/>{t("CRM.back")}</button>:null}{write&&showNew?<button className="btn primary" onClick={()=>setCreate(true)}><Icon name="plus"/>{t("CRM.new")}</button>:null}{bootstrap.permissions.includes("crm.configure")&&view==="crm-dashboard"?<button className="btn default" onClick={()=>setConfig(true)}><Icon name="settings"/>{t("CRM.configuration")}</button>:null}</>}/><Notice error={options.error}/>
+  return <div className="crm-workspace"><PageHeader eyebrow="CRM & SALES" title={title} subtitle={!opportunityId&&!customerId?descriptions[view]:undefined} actions={<>{(opportunityId||customerId)?<button className="btn default" onClick={()=>{setOpportunityId(null);setCustomerId(null);}}><Icon name="arrowLeft"/>{t("CRM.back")}</button>:null}{write&&showNew?<button className="btn primary" onClick={()=>setCreate(true)}><Icon name="plus"/>{t("CRM.new")}</button>:null}{bootstrap.permissions.includes("crm.configure")&&view==="crm-dashboard"?<button className="btn default" onClick={()=>setConfig(true)}><Icon name="settings"/>{t("CRM.configuration")}</button>:null}</>}/>{!opportunityId&&!customerId&&props.onViewChange&&(view==="crm-opportunities"||view==="crm-pipeline")?<Tabs<CrmView> tabs={[{id:"crm-opportunities",label:"CRM.listView"},{id:"crm-pipeline",label:"CRM.boardView"}]} active={view} onChange={props.onViewChange}/>:null}<Notice error={options.error}/>
     {opportunityId?<OpportunityWorkspace {...props} id={opportunityId} options={options.data??[]} openCustomer={setCustomerId} onCustomer={()=>setOpportunityId(null)}/>:customerId?<CustomerWorkspace {...props} id={customerId} openOpportunity={setOpportunityId}/>:view==="crm-customers"?<CustomerList bootstrap={bootstrap} refreshBootstrap={props.refreshBootstrap} open={setCustomerId}/>:view==="crm-contacts"?<ContactList bootstrap={bootstrap}/>:view==="crm-activities"?<ActivityList bootstrap={bootstrap} options={options.data??[]}/>:<OpportunityList openInquiry={props.openInquiry} bootstrap={bootstrap} mode={view} options={options.data??[]} open={setOpportunityId}/>}
     {create?<OpportunityEditor bootstrap={bootstrap} options={options.data??[]} onClose={()=>setCreate(false)} onSaved={r=>setOpportunityId(Number(r.id))}/>:null}
     {config?<Configuration options={options.data??[]} onClose={()=>setConfig(false)} refresh={options.refresh}/>:null}
@@ -314,9 +314,4 @@ function Configuration({options,onClose,refresh}:{options:CrmRecord[];onClose:()
 export function CrmMyWork({openOpportunity}:{openOpportunity?:(id:number)=>void}) {
   const t=useT(),state=useCrmData<{actions:CrmRecord[];attention:CrmRecord[]}>("/api/v1/crm/my-work"),[error,setError]=useState(false),[busy,setBusy]=useState(false);
   return <Panel title={t("CRM.followups")}><Notice error={state.error||error} loading={state.loading}/>{!state.data?.actions.length&&!state.data?.attention.length?<EmptyState icon="checkCircle" title="CRM.empty" message="CRM.emptyHint"/>:null}{state.data?.actions.map(r=><div className="crm-action" key={text(r.id)}><div><button className="crm-link" onClick={()=>openOpportunity?.(Number(r.opportunityId))}>{text(r.action)}</button><p>{text(r.opportunityName)} · {date(r.dueDate)} · {t(`CRM.${r.status}`)}</p></div><button className="btn default" disabled={busy} onClick={()=>{setBusy(true);setError(false);void crmRequest(`/api/v1/crm/opportunities/${r.opportunityId}/followups/${r.id}`,"PUT",{rowVersion:r.rowVersion,status:"Done"}).then(state.refresh).catch(()=>setError(true)).finally(()=>setBusy(false));}}>{t("CRM.Done")}</button></div>)}{state.data?.attention.map(r=><div className="crm-action" key={`attention-${r.id}`}><button className="crm-link" onClick={()=>openOpportunity?.(Number(r.id))}>{text(r.name)}</button><span>{(r.attention as string[]).map(a=>t(`CRM.${a}`)).join(" · ")}</span></div>)}</Panel>;
-}
-
-export function CrmInquirySource({inquiryId,enabled}:{inquiryId:number;enabled:boolean}) {
-  const t=useT(),state=useCrmData<CrmRecord>(enabled?`/api/v1/crm/inquiries/${inquiryId}/source`:null);
-  return state.data?<div className="alert info"><a href={`#crm/${state.data.id}`}>{t("CRM.sourceOpportunity")}: {text(state.data.opportunityNo)} · {text(state.data.name)}</a><p>{text(state.data.salesOwnerName)} · {text(state.data.technicalOwnerName)}</p><small>{t("CRM.filesInherited")}</small></div>:null;
 }
