@@ -72,9 +72,24 @@ test("the labor and expense dialogs require a discipline and derive the cost typ
 test("a new estimate can start from any previous estimate the person chooses", async () => {
   const [screen, client] = await Promise.all([source("app/system/production/EstimateScreens.tsx"), source("app/system/api-client.ts")]);
   const modal = screen.match(/function CreateEstimateModal\([\s\S]*?\n\}\n/)?.[0] ?? "";
+  const picker = screen.match(/function EstimateSourcePicker\([\s\S]*?\n\}\n/)?.[0] ?? "";
   // The person searches; nothing ranks or picks for them.
-  assert.match(modal, /listEstimates\(\{ page: 1, pageSize: 8, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
+  assert.match(picker, /listEstimates\(\{ page: 1, pageSize: 8, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
+  assert.match(modal, /<EstimateSourcePicker excludeId=\{null\} source=\{source\} onSource=\{setSource\}/);
   assert.match(modal, /copyFrom = startFrom === "copy" && source \? \{ sourceEstimateId: source\.id, includeCostItems: ledgers\.costItems, includeManhour: ledgers\.manhour, includeExpenses: ledgers\.expenses, includeOtherCosts: ledgers\.otherCosts \}/);
   assert.match(modal, /const copyReady = startFrom === "blank" \|\| \(source !== null && anyLedger\);/);
   assert.match(client, /copyFrom\?: EstimateStartFrom;/);
+});
+
+test("an empty estimate offers the same start, however it was created", async () => {
+  // Estimates are also created from the inquiry screen and from site-visit reports; those
+  // open the workspace, so the offer lives there for any estimate with no line yet.
+  const screen = await source("app/system/production/EstimateScreens.tsx");
+  assert.match(screen, /const lineCount = workspace\.costItems\.length \+ workspace\.manhourLines\.length \+ workspace\.expenseLines\.length \+ workspace\.otherCostLines\.length;/);
+  assert.match(screen, /\{lineCount === 0 && capabilities\.canEditAllSections && !startDismissed \? <EstimateStartPanel workspace=\{workspace\} busy=\{busy\} onCopy=\{copyFromEstimate\}/);
+  const panel = screen.match(/function EstimateStartPanel\([\s\S]*?\n\}\n/)?.[0] ?? "";
+  assert.match(panel, /sections: COST_CATEGORIES\.map\(\(\[code\]\) => code\)/, "every section, so labor (06) and travel come across too");
+  assert.match(panel, /<EstimateSourcePicker excludeId=\{workspace\.header\.id\}/);
+  // Copying into an existing estimate still goes through the transactional copy-from route.
+  assert.match(screen, /const copyFromEstimate = async \(input: Omit<EstimateCopyInput, "estimateRowVersion" \| "ownerId">\) => \{[\s\S]*?copyEstimateContent\(estimateId,/);
 });
