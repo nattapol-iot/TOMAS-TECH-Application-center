@@ -699,6 +699,10 @@ const workIsStale = (item: MyWorkItem) => isStaleInProgress({ status: item.statu
 const workLastReport = (item: MyWorkItem) => item.lastProgressAt ?? item.updatedAt;
 const workNeedsUpdate = (item: MyWorkItem) => myWorkNeedsAttention({ ...item, canUpdate: true, updatedAt: workLastReport(item) }, isoToday(), Date.now());
 const workUserNote = (value: string | null) => value?.trim().startsWith("Imported from Overall Project Plan") ? "" : value ?? "";
+/** A progress save copies the task's note onto every field it changes, so in a history only a day request, its answer and a baseline carry words written for that event. */
+const historyReason = (entry: { field: string; comment: string | null }) => entry.comment && ["request", "request_answer", "baseline"].includes(entry.field) ? ` · “${entry.comment}”` : "";
+/** The importer's provenance text is not a note anyone wrote; a note change shows it as empty. */
+const historyValue = (field: string, value: string | null) => field === "remark" ? workUserNote(value) || null : value;
 const daysFromToday = (value: string | null) => value
   ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
   : null;
@@ -1420,8 +1424,8 @@ export function ProductionMyWork({
             <p className="muted">
               {entry.field === "request" || entry.requestDays > 0
                 ? <><LocalizedText text={"Requested"} /> {entry.requestDays} <LocalizedText text={"more days"} /> · <LocalizedText text={entry.answer ?? "waiting"} /></>
-                : <><LocalizedText text={myWorkAuditFieldLabel(entry.field)} />: {entry.fromValue ?? "—"} → {entry.toValue ?? "—"}</>}
-              {entry.comment ? ` · “${entry.comment}”` : ""}
+                : <><LocalizedText text={myWorkAuditFieldLabel(entry.field)} />: {historyValue(entry.field, entry.fromValue) ?? "—"} → {historyValue(entry.field, entry.toValue) ?? "—"}</>}
+              {historyReason(entry)}
               {entry.answerNote ? ` · PM: “${entry.answerNote}”` : ""}
             </p>
           </div>
@@ -2325,7 +2329,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         const projectHistory = activeSchedule.recentUpdates.filter((update) => update.taskId === null || !taskById.has(update.taskId)).slice(0, 20);
         return projectHistory.length ? <details className="plan-project-history"><summary>{uiText("Plan.projectHistory")} ({projectHistory.length})</summary><ul className="plan-history">{projectHistory.map((update) => <li key={update.id}>
           <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
-          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.fromValue || update.toValue ? ` · ${update.fromValue ?? "—"} → ${update.toValue ?? "—"}` : ""}{update.comment ? ` · “${update.comment}”` : ""}</span>
+          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.fromValue || update.toValue ? ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}` : ""}{historyReason(update)}</span>
         </li>)}</ul></details> : null;
       })()}
       {canAnswerRequests && pendingDayRequests.length ? <Panel title="Requests waiting for the PM" subtitle="Accepting extends the task plan; rejecting leaves the dates unchanged" flush><div className="panel-body">
@@ -2432,7 +2436,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
         const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
         return <li key={update.id}>
           <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
-          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.requestDays > 0 ? ` · +${update.requestDays} ${uiText("days")}` : update.field === "plan" ? "" : ` · ${update.fromValue ?? "—"} → ${update.toValue ?? "—"}`}{update.comment ? ` · “${update.comment}”` : ""}</span>
+          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.requestDays > 0 ? ` · +${update.requestDays} ${uiText("days")}` : update.field === "plan" ? "" : ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}`}{historyReason(update)}</span>
           {pendingRequest && requestedTask && canAnswerRequests ? <button className="btn sm primary" type="button" onClick={() => onReview(update)}><Icon name="checkCircle" /><LocalizedText text={"Review"} /></button>
             : update.answer ? <span><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge> {update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span> : null}
         </li>;

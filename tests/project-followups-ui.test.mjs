@@ -277,3 +277,26 @@ test("every new follow-up string has English, Thai and Japanese copy", () => {
     assert.ok(text.includes("{tasks}") && text.includes("{projects}"), lang);
   }
 });
+
+test("a task history shows the change; only a day request, its answer and a baseline keep a quoted reason", () => {
+  const planning = read("app/system/production/PlanningPricingScreens.tsx");
+  const helpers = ["workUserNote", "historyReason", "historyValue"].map((name) => {
+    const line = planning.match(new RegExp(`^const ${name} = .*$`, "m"))?.[0];
+    assert.ok(line, name);
+    return line;
+  }).join("\n");
+  const code = ts.transpileModule(`${helpers}\nreturn { historyReason, historyValue };`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const { historyReason, historyValue } = new Function(code)();
+  const imported = "Imported from Overall Project Plan row 1054; source WBS 3.3; source status Delay";
+  assert.equal(historyReason({ field: "status", comment: imported }), "");
+  assert.equal(historyReason({ field: "percent_complete", comment: "Waiting for parts" }), "");
+  assert.equal(historyReason({ field: "request", comment: "Supplier late" }), " · “Supplier late”");
+  assert.equal(historyReason({ field: "request_answer", comment: "OK, two days" }), " · “OK, two days”");
+  assert.equal(historyReason({ field: "baseline", comment: null }), "");
+  assert.equal(historyValue("remark", imported), null);
+  assert.equal(historyValue("remark", "Site closed"), "Site closed");
+  assert.equal(historyValue("status", "Done"), "Done");
+  // The project history, the task drawer and My Updates all go through the helpers.
+  assert.doesNotMatch(planning, /(?:update|entry)\.comment \? ` · “/);
+  assert.equal(planning.match(/\{historyReason\((?:update|entry)\)\}/g)?.length, 3);
+});
