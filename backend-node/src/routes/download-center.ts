@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
@@ -22,6 +22,11 @@ export const DOWNLOAD_CENTER_ROOT = "download-center";
 const INFO_FILE = "_info.json";
 const MAX_CATEGORIES = 100;
 const MAX_FILES_PER_CATEGORY = 500;
+/**
+ * The files sit on an SMB share behind the VM mount, where every read is a network round trip.
+ * The default 64 KB stream chunk makes installer downloads crawl; 1 MB reads keep the pipe full.
+ */
+const STREAM_CHUNK_BYTES = 1024 * 1024;
 
 export type DownloadFile = {
   name: string;
@@ -145,6 +150,26 @@ export async function readDownloadCatalog(rootPath: string): Promise<DownloadCat
   return categories.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "th"));
 }
 
+/** A single "bytes=start-end" range (the only form browsers send to resume). null = whole file. */
+export function parseByteRange(header: string | undefined, size: number): { start: number; end: number } | null | "invalid" {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (!match[1] && !match[2])) return null; // multiple or odd ranges: send the whole file
+  let start: number;
+  let end: number;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (suffix === 0) return "invalid";
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  }
+  if (start >= size || start > end) return "invalid";
+  return { start, end };
+}
+
 export function registerDownloadCenterRoutes(app: FastifyInstance, config: AppConfig, _database: Database, users: CurrentUserService): void {
   const rootPath = resolveStoragePath(config.documentStorage, DOWNLOAD_CENTER_ROOT);
 
@@ -154,7 +179,7 @@ export function registerDownloadCenterRoutes(app: FastifyInstance, config: AppCo
     return { categories: await readDownloadCatalog(rootPath) };
   });
 
-  app.get("/api/v1/download-center/content", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, async (request, reply) => {
+  const sendFile = async (request: FastifyRequest, reply: FastifyReply) => {
     const actor = await users.required(request);
     const query = request.query as Record<string, unknown>;
     const folder = typeof query.category === "string" ? query.category : "";
@@ -173,12 +198,35 @@ export function registerDownloadCenterRoutes(app: FastifyInstance, config: AppCo
     } catch {
       throw new ApiError(404, "download_not_found", "The file is no longer available in the Download Center.");
     }
-    request.log.info({ actorId: actor.id, category: category.folder, file: file.name, sizeBytes: size }, "Download Center file downloaded");
     const asciiName = file.name.replace(/[^\x20-\x7e]/g, "_").replaceAll('"', "'");
     reply.header("Content-Type", contentTypeFor(file.name));
-    reply.header("Content-Length", String(size));
     reply.header("Content-Disposition", `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(file.name)}`);
     reply.header("Cache-Control", "private, no-store");
-    return reply.send(createReadStream(path));
-  });
+    reply.header("Accept-Ranges", "bytes");
+    reply.header("Last-Modified", new Date(file.modifiedAt).toUTCString());
+    // The page checks with HEAD before handing the link to the browser. Answer it here: Fastify's
+    // automatic HEAD route would drain a whole stream, i.e. read the file from the NAS for nothing.
+    if (request.method === "HEAD") {
+      reply.header("Content-Length", String(size));
+      return reply.send();
+    }
+    request.log.info({ actorId: actor.id, category: category.folder, file: file.name, sizeBytes: size, range: request.headers.range }, "Download Center file downloaded");
+    // Browsers resume an interrupted download with a Range request; honour it unless the file changed.
+    const range = parseByteRange(request.headers.range, size);
+    const ifRange = request.headers["if-range"];
+    if (range === "invalid") {
+      reply.header("Content-Range", `bytes */${size}`);
+      return reply.code(416).send();
+    }
+    if (range && (!ifRange || ifRange === new Date(file.modifiedAt).toUTCString())) {
+      reply.code(206);
+      reply.header("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
+      reply.header("Content-Length", String(range.end - range.start + 1));
+      return reply.send(createReadStream(path, { start: range.start, end: range.end, highWaterMark: STREAM_CHUNK_BYTES }));
+    }
+    reply.header("Content-Length", String(size));
+    return reply.send(createReadStream(path, { highWaterMark: STREAM_CHUNK_BYTES }));
+  };
+  app.get("/api/v1/download-center/content", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT }, exposeHeadRoute: false }, sendFile);
+  app.head("/api/v1/download-center/content", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, sendFile);
 }

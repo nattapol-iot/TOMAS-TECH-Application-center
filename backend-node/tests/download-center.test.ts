@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { isPublishedName, parseFolderInfo, readDownloadCatalog } from "../src/routes/download-center.js";
+import { isPublishedName, parseByteRange, parseFolderInfo, readDownloadCatalog } from "../src/routes/download-center.js";
 
 test("download center hides files nobody means to publish", () => {
   for (const name of ["TMTDesk-Setup.exe", "คู่มือ.pdf", "driver v2.zip"]) assert.equal(isPublishedName(name), true, name);
@@ -52,4 +52,15 @@ test("download center lists categories and files with their metadata", async () 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("download center resumes interrupted downloads with a byte range", () => {
+  assert.equal(parseByteRange(undefined, 100), null);
+  assert.equal(parseByteRange("bytes=0-9,20-29", 100), null);
+  assert.deepEqual(parseByteRange("bytes=40-", 100), { start: 40, end: 99 });
+  assert.deepEqual(parseByteRange("bytes=10-19", 100), { start: 10, end: 19 });
+  assert.deepEqual(parseByteRange("bytes=90-500", 100), { start: 90, end: 99 });
+  assert.deepEqual(parseByteRange("bytes=-10", 100), { start: 90, end: 99 });
+  assert.equal(parseByteRange("bytes=100-", 100), "invalid");
+  assert.equal(parseByteRange("bytes=20-10", 100), "invalid");
 });

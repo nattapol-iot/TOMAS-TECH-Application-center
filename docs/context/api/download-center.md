@@ -2,26 +2,28 @@
 
 [Module](../modules/downloads.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d31769b`; generated, do not edit. [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `1dd38b9`; generated, do not edit. [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/download-center` | 152–155 |
-| GET | `/api/v1/download-center/content` | 157–183 |
+| GET | `/api/v1/download-center` | 177–180 |
+| GET | `/api/v1/download-center/content` | 230–230 |
+| HEAD | `/api/v1/download-center/content` | 231–231 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `isPublishedName` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 48–52 |
-| `text` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 54–56 |
-| `order` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 58–60 |
-| `parseFolderInfo` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 63–84 |
-| `readInfo` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 86–92 |
-| `readDownloadCatalog` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 95–146 |
-| `registerDownloadCenterRoutes` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 148–184 |
+| `isPublishedName` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 53–57 |
+| `text` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 59–61 |
+| `order` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 63–65 |
+| `parseFolderInfo` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 68–89 |
+| `readInfo` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 91–97 |
+| `readDownloadCatalog` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 100–151 |
+| `parseByteRange` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 154–171 |
+| `registerDownloadCenterRoutes` | [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>) | 173–232 |
 
 ## Direct local dependencies
 

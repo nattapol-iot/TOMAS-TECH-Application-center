@@ -2921,18 +2921,33 @@ export type DownloadCenterCategory = { folder: string; title: string; descriptio
 export const getDownloadCenter = () =>
   apiRequest<{ categories: DownloadCenterCategory[] }>("/api/v1/download-center");
 
-/** Installers are tens of MB and may come over VPN, so allow far longer than a document download. */
+/**
+ * Installers are tens of MB and may come over VPN. With TMT ID the session is a cookie, so the
+ * browser downloads the file itself: it streams straight to disk with the browser's own progress
+ * bar and can resume. A HEAD request first turns an expired session or a removed file into an
+ * error message instead of a page of JSON. Bearer-token modes cannot put the token on a link and
+ * keep the in-memory download.
+ */
 export async function downloadCenterFile(category: string, file: string): Promise<void> {
-  const query = new URLSearchParams({ category, file });
-  const response = await authorizedFetch(`/api/v1/download-center/content?${query}`, { headers: { Accept: "application/octet-stream" } }, 15 * 60_000);
+  const path = `/api/v1/download-center/content?${new URLSearchParams({ category, file })}`;
+  if (IS_TMT_ID_MODE) {
+    await authorizedFetch(path, { method: "HEAD", headers: { Accept: "application/octet-stream" } });
+    clickDownload(`${API_BASE_URL}${path}`, file);
+    return;
+  }
+  const response = await authorizedFetch(path, { headers: { Accept: "application/octet-stream" } }, 15 * 60_000);
   const url = URL.createObjectURL(await response.blob());
+  clickDownload(url, file);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function clickDownload(href: string, file: string) {
   const anchor = document.createElement("a");
-  anchor.href = url;
+  anchor.href = href;
   anchor.download = file;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /**
