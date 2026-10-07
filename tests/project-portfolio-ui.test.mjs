@@ -105,7 +105,7 @@ test("SegmentBar and FilterChips press, clear and skip empty values accessibly",
   assert.match(ui, /onPick\(active === item\.key \? null : item\.key\)/);
 });
 
-test("the portfolio reports its sub-view, opens the schedule and changes stage one step at a time", () => {
+test("the portfolio reports its sub-view, opens the schedule, changes stage and closes from the row menu", () => {
   // List and Timeline are separate sub-views, so the usage data can tell them apart.
   assert.match(portfolio, /useActivitySubView\(timelineMode \? "projects-timeline" : "projects-portfolio"\)/);
   assert.match(screens, /import \{ useActivitySubView \} from "\.\.\/use-activity-presence";/);
@@ -114,13 +114,17 @@ test("the portfolio reports its sub-view, opens the schedule and changes stage o
   // The project number is its own sortable column, so sorting by number is one click.
   assert.match(portfolio, /<PortfolioSortHeader column="number" label="Portfolio\.colNumber"/);
   assert.match(portfolio, /<td><strong className="mono">\{item\.number\}<\/strong><\/td>/);
-  // The stage is a button listing the next stages; picking one saves. A native select would save on
+  // The stage is a button listing every other stage; picking one saves. A native select would save on
   // every arrow key, so no stage select remains. Non-editors still see a badge.
   assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.length\s*\? <RowDisclosure label=\{`\$\{uiText\("Portfolio\.changeStage"\)\}/);
   assert.match(portfolio, /actions=\{item\.allowedStatuses\.map\(\(value\) => \(\{ key: value, label: value, onSelect: \(\) => changeStage\(item, value\) \}\)\)\}/);
   assert.match(portfolio, /: <Badge>\{item\.status\}<\/Badge>\}/);
   assert.doesNotMatch(portfolio, /portfolio-stage"|onChange=\{\(event\) => changeStage\(/);
   assert.match(portfolio, /if \(next === "Closed"\) setClosingProject\(item\)/);
+  // Closing is its own row action from any open stage, and the dialog says how much work is left.
+  assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.includes\("Closed"\) \? \[\{ key: "close", label: "Portfolio\.closeTitle", icon: "checkCircle" as const, onSelect: \(\) => setClosingProject\(item\) \}\]/);
+  assert.match(portfolio, /const unfinished = project\.taskCount - project\.doneCount;/);
+  assert.match(portfolio, /unfinished > 0 \? <div className="info-strip" role="note"><Icon name="alertTriangle" \/><span>\{t\("Portfolio\.closeUnfinished"\)\.replace\("\{open\}", String\(unfinished\)\)\.replace\("\{total\}", String\(project\.taskCount\)\)\}/);
   assert.match(portfolio, /updateProject\(item\.id, \{ rowVersion: item\.rowVersion, status: next/);
   assert.match(portfolio, /failure instanceof ApiClientError && failure\.status === 409/);
   // Edit, end user, members, documents and delete live in one overflow menu, the same disclosure.

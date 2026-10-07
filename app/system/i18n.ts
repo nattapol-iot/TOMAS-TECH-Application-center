@@ -2287,6 +2287,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Portfolio.closeTitle": { en: "Close the project", th: "ปิดโครงการ", jp: "プロジェクトを完了する" },
   "Portfolio.closeHint": { en: "Record the date the customer took delivery. Closing sets progress to 100%.", th: "ระบุวันที่ลูกค้ารับมอบงานจริง เมื่อปิดโครงการความคืบหน้าจะเป็น 100%", jp: "顧客が引き渡しを受けた日を記録してください。完了すると進捗は100%になります。" },
   "Portfolio.closeConfirm": { en: "Close the project", th: "ยืนยันปิดโครงการ", jp: "完了を確定" },
+  "Portfolio.closeUnfinished": { en: "{open} of {total} tasks are not done. Closing locks the plan, so they can no longer be updated.", th: "ยังมีงานที่ไม่เสร็จ {open} จาก {total} งาน เมื่อปิดโครงการแผนงานจะถูกล็อกและอัปเดตต่อไม่ได้", jp: "{total} 件中 {open} 件のタスクが未完了です。完了にすると計画がロックされ、更新できなくなります。" },
   "Portfolio.stageConflict": { en: "This project changed meanwhile. The list was reloaded; try again.", th: "โครงการนี้ถูกแก้ไขระหว่างนั้น โหลดรายการใหม่แล้ว กรุณาลองอีกครั้ง", jp: "このプロジェクトは他で更新されました。一覧を再読み込みしたので、もう一度お試しください。" },
   "Portfolio.more": { en: "More actions for", th: "คำสั่งเพิ่มเติมของ", jp: "その他の操作:" },
   "Portfolio.editEndUser": { en: "Edit end user", th: "แก้ไขผู้ใช้ปลายทาง", jp: "エンドユーザーを編集" },

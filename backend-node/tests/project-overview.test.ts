@@ -223,9 +223,9 @@ test("each overview item carries the list fields plus its schedule summary and s
     }
     assert.equal(first.pendingRequests, 2);
     assert.equal(first.lastProgressAt, "2026-10-03T08:00:00.000Z");
-    // The caller manages project 1, so the stage can move one step either way or be put on hold.
+    // The caller manages project 1, so it can move to any other stage, be put on hold or be closed.
     assert.equal(first.canChangeStatus, true);
-    assert.deepEqual(first.allowedStatuses, ["Development", "Commissioning", "On Hold"]);
+    assert.deepEqual(first.allowedStatuses, ["Planning", "Design", "Development", "Commissioning", "Handover", "Closed", "On Hold"]);
 
     // Project 5 has no plan: the typed progress stands and is labelled as such.
     assert.equal(closed.progressSource, "manual");
@@ -274,6 +274,13 @@ test("without project.write nobody gets the stage control, and an elevated write
     assert.ok(items.every((item: { canChangeStatus: boolean }) => item.canChangeStatus));
     assert.deepEqual(items[2].allowedStatuses, ["Handover", "On Hold"]);
   } finally { await manager.server.close(); }
+  // Stores see every project but do not run them: a writer there neither moves others' stages nor reopens.
+  const stores = overviewServer({ id: 77, roles: ["Warehouse"] });
+  try {
+    const items = (await stores.server.inject({ method: "GET", url: "/api/v1/projects/overview?includeClosed=1" })).json().items;
+    assert.ok(items.every((item: { canChangeStatus: boolean }) => !item.canChangeStatus));
+    assert.deepEqual(items[2].allowedStatuses, []);
+  } finally { await stores.server.close(); }
 });
 
 test("the paged project list takes its health from the same schedule summary", async () => {

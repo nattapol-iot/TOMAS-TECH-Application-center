@@ -7,9 +7,15 @@ import { rolesOf } from "./user-roles.js";
 
 const ELEVATED_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager", "Purchasing", "Warehouse", "Inventory Controller"]);
 const MY_WORK_ELEVATED_ROLES = new Set(["Admin", "Engineering Manager"]);
+const PROJECT_MANAGER_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager"]);
 
 export function isProjectElevated(user: CurrentUser): boolean {
   return rolesOf(user).some((role) => ELEVATED_ROLES.has(role));
+}
+
+/** Who may move any project's stage and reopen a closed one. Purchasing and stores see every project but do not run them. */
+export function isProjectManagerRole(user: CurrentUser): boolean {
+  return rolesOf(user).some((role) => PROJECT_MANAGER_ROLES.has(role));
 }
 
 export function isMyWorkElevated(user: CurrentUser): boolean {

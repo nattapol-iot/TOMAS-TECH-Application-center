@@ -17,30 +17,30 @@ test("the eight statuses match the database constraint and nothing else is accep
   for (const value of ["planning", "Done", "", 1, null, undefined, {}]) assert.equal(isProjectStatus(value), false);
 });
 
-test("work moves one step either way along the active flow", () => {
-  // Forward is the normal path.
-  for (const [index, status] of PROJECT_ACTIVE_FLOW.entries()) {
-    const next = PROJECT_ACTIVE_FLOW[index + 1];
-    if (next) assert.ok(allowedProjectTransitions(status).includes(next), `${status} should reach ${next}`);
+test("an open project moves to any other stage, forwards, back or skipping", () => {
+  for (const from of PROJECT_ACTIVE_FLOW) {
+    for (const to of PROJECT_ACTIVE_FLOW) {
+      if (from === to) continue;
+      assert.ok(allowedProjectTransitions(from).includes(to), `${from} should reach ${to}`);
+      assert.ok(checkProjectTransition({ current: from, next: to }).ok, `${from} -> ${to}`);
+    }
   }
-  // Rework sends a project back one stage, which happens often enough that blocking it is a lie.
-  assert.ok(allowedProjectTransitions("Commissioning").includes("Installation"));
-  assert.ok(checkProjectTransition({ current: "Commissioning", next: "Installation" }).ok);
-  // Skipping stages is not allowed.
-  assert.equal(checkProjectTransition({ current: "Planning", next: "Installation" }).ok, false);
-  assert.equal(checkProjectTransition({ current: "Planning", next: "Handover" }).ok, false);
+  // Every other status and never the current one, in the order the statuses are listed.
+  assert.deepEqual(allowedProjectTransitions("Installation"), ["Planning", "Design", "Development", "Commissioning", "Handover", "Closed", "On Hold"]);
 });
 
 test("a project can pause from any active stage and resume anywhere", () => {
   for (const status of PROJECT_ACTIVE_FLOW) assert.ok(allowedProjectTransitions(status).includes("On Hold"));
   for (const status of PROJECT_ACTIVE_FLOW) assert.ok(checkProjectTransition({ current: "On Hold", next: status }).ok);
   assert.equal(checkProjectTransition({ current: "On Hold", next: "Closed" }).ok, false);
+  assert.ok(checkProjectTransition({ current: "On Hold", next: "Closed", actualDelivery: "2026-09-14" }).ok);
 });
 
-test("closing happens only from Handover and only with an actual delivery date", () => {
-  for (const status of PROJECT_ACTIVE_FLOW) {
-    const allowed = allowedProjectTransitions(status).includes("Closed");
-    assert.equal(allowed, status === "Handover", `${status} closing should be ${status === "Handover"}`);
+test("closing works from every open status, and only with an actual delivery date", () => {
+  for (const status of [...PROJECT_ACTIVE_FLOW, "On Hold" as const]) {
+    assert.ok(allowedProjectTransitions(status).includes("Closed"), `${status} should close`);
+    assert.equal(checkProjectTransition({ current: status, next: "Closed" }).ok, false);
+    assert.ok(checkProjectTransition({ current: status, next: "Closed", actualDelivery: "2026-09-14" }).ok);
   }
   const missing = checkProjectTransition({ current: "Handover", next: "Closed" });
   assert.equal(missing.ok, false);
@@ -55,8 +55,9 @@ test("reopening a closed project needs elevated standing", () => {
   assert.match(refused.ok ? "" : refused.reason, /manager or an administrator/i);
   assert.deepEqual(allowedProjectTransitions("Closed", true), ["Handover", "On Hold"]);
   assert.ok(checkProjectTransition({ current: "Closed", next: "Handover", elevated: true }).ok);
-  // Elevated standing adds the reopen and nothing else: it cannot skip stages either.
-  assert.equal(checkProjectTransition({ current: "Planning", next: "Closed", elevated: true }).ok, false);
+  // Elevated standing adds the reopen and nothing else: a reopen lands on Handover or On Hold.
+  assert.equal(checkProjectTransition({ current: "Closed", next: "Planning", elevated: true }).ok, false);
+  assert.deepEqual(allowedProjectTransitions("Design", true), allowedProjectTransitions("Design"));
 });
 
 test("staying on the same status is accepted and reports no change", () => {

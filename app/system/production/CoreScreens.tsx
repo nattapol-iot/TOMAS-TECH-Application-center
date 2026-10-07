@@ -892,16 +892,19 @@ function RowDisclosure({ label, trigger, triggerClassName, disabled = false, act
   </div>;
 }
 
-// Closing needs the date the customer took delivery; the API refuses a close without it.
+// Closing needs the date the customer took delivery; the API refuses a close without it. Unfinished
+// tasks warn rather than block: closing locks the plan, so the person closing should know what is left.
 function CloseProjectModal({ project, busy, onClose, onConfirm }: { project: ProjectOverviewItem; busy: boolean; onClose: () => void; onConfirm: (actualDelivery: string) => void }) {
   const t = useUiText();
   const [date, setDate] = useState(() => project.actualDelivery ?? today());
   const tooEarly = Boolean(project.startDate && date && date < project.startDate);
+  const unfinished = project.taskCount - project.doneCount;
   return <Modal title="Portfolio.closeTitle" subtitle={`${project.number} · ${project.name}`} size="sm" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
     <button className="btn primary" type="button" disabled={busy || !date || tooEarly} onClick={() => onConfirm(date)}><Icon name="check" />{busy ? t("Saving…") : t("Portfolio.closeConfirm")}</button>
   </>}>
     <p>{t("Portfolio.closeHint")}</p>
+    {unfinished > 0 ? <div className="info-strip" role="note"><Icon name="alertTriangle" /><span>{t("Portfolio.closeUnfinished").replace("{open}", String(unfinished)).replace("{total}", String(project.taskCount))}</span></div> : null}
     <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><input type="date" required min={project.startDate || undefined} value={date} onChange={(event) => setDate(event.target.value)} /></label>
   </Modal>;
 }
@@ -1026,6 +1029,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   };
   const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
     ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
+    ...(item.canChangeStatus && item.allowedStatuses.includes("Closed") ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }] : []),
     ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
     { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembersProject(item) },
     { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },

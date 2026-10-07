@@ -14,7 +14,7 @@ import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, pro
 import { insertInitialPlan, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
-import { demandProjectScope, isProjectElevated } from "../project-scope.js";
+import { demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, validateScheduleVersion } from "../schedule-service.js";
 import { hasRole } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
@@ -203,6 +203,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const query = request.query as Record<string, unknown>;
     const includeClosed = query.includeClosed === "1" || query.includeClosed === "true";
     const elevated = isProjectElevated(actor);
+    const manages = isProjectManagerRole(actor);
     const result = await database.query<ProjectRow>(`
       SELECT ${PROJECT_COLUMNS}
       ${PROJECT_SOURCE}
@@ -241,8 +242,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           blockedCount: summary?.blockedCount ?? 0, slippedCount: summary?.slippedCount ?? 0, nextMilestone: summary?.nextMilestone ?? null,
           scheduleError: summary?.scheduleError ?? false,
           pendingRequests: Number(counts?.pending_requests ?? 0), lastProgressAt: counts?.last_progress_at ?? null,
-          canChangeStatus: canWrite && (elevated || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),
-          allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, elevated) : [],
+          canChangeStatus: canWrite && (manages || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),
+          allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, manages) : [],
         };
       }),
     };
@@ -518,7 +519,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
     const body = bodyObject(request.body);
     const rowVersion = parseRowVersion(body.rowVersion);
-    const elevated = isProjectElevated(actor);
+    const manages = isProjectManagerRole(actor);
     // Being on the project is what grants the edit, not the permission alone.
     await demandProjectScope(database, actor, id);
     const given = <T>(key: string, read: () => T, fallback: T): T => (body[key] === undefined ? fallback : read());
@@ -544,7 +545,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         return body.status;
       }, currentStatus);
       // Only the people answerable for the project move it along the lifecycle.
-      if (statusValue !== currentStatus && !elevated
+      if (statusValue !== currentStatus && !manages
         && Number(before.manager_id) !== actor.id && Number(before.lead_engineer_id) !== actor.id) {
         throw new ApiError(403, "project_status_forbidden", "Only the project manager, the lead engineer or a manager can change the project status.");
       }
@@ -575,7 +576,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         throw new ApiError(400, "validation_failed", "Actual delivery cannot be earlier than the start date.");
       }
 
-      const transition = checkProjectTransition({ current: currentStatus, next: statusValue, elevated, actualDelivery: input.actualDelivery });
+      const transition = checkProjectTransition({ current: currentStatus, next: statusValue, elevated: manages, actualDelivery: input.actualDelivery });
       if (!transition.ok) throw new ApiError(409, "invalid_status_transition", transition.reason);
       const progress = progressForStatus(statusValue, input.progress);
 

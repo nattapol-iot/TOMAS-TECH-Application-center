@@ -22,10 +22,10 @@ export function isProjectStatus(value: unknown): value is ProjectStatus {
 /**
  * The statuses a project may move to next.
  *
- * Integration work goes backwards as well as forwards -- commissioning sends a panel back to
- * installation often enough that blocking it would only teach people to lie to the system -- so one
- * step either way along the active flow is allowed. Closing is deliberately narrow: it happens from
- * Handover, the stage that means the customer already has the system.
+ * An open project moves to any other status. The stage is a label the team keeps, and making people
+ * click through stages they skipped only teaches them to record stages that never happened. Closing
+ * works from every open status: it still needs the actual delivery date (checkProjectTransition), and
+ * the close dialog says how many tasks are unfinished instead of gating on Handover.
  *
  * `elevated` is the caller's Admin / Engineering Manager / Project Manager standing. It only ever
  * adds the reopen move, so a closed project cannot be quietly revived by whoever passes by.
@@ -34,15 +34,7 @@ export function allowedProjectTransitions(current: ProjectStatus, elevated = fal
   if (current === PROJECT_TERMINAL_STATUS) {
     return elevated ? ["Handover", PROJECT_PAUSED_STATUS] : [];
   }
-  if (current === PROJECT_PAUSED_STATUS) return [...PROJECT_ACTIVE_FLOW];
-  const index = PROJECT_ACTIVE_FLOW.indexOf(current);
-  if (index < 0) return [];
-  const next: ProjectStatus[] = [];
-  if (index > 0) next.push(PROJECT_ACTIVE_FLOW[index - 1]!);
-  if (index < PROJECT_ACTIVE_FLOW.length - 1) next.push(PROJECT_ACTIVE_FLOW[index + 1]!);
-  if (current === "Handover") next.push(PROJECT_TERMINAL_STATUS);
-  next.push(PROJECT_PAUSED_STATUS);
-  return next;
+  return PROJECT_STATUSES.filter((status) => status !== current);
 }
 
 export type ProjectTransitionCheck = {
