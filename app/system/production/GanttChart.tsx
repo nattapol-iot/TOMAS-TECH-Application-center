@@ -1,9 +1,11 @@
 "use client";
 /* The shared Gantt for the Projects screens: the portfolio timeline (one row per project, expanding
    into its plan) and a project's Plan tab draw with this one component and lib/gantt.ts, so a bar
-   means the same thing everywhere. Bars are buttons that open the row; the chart fits its container. */
+   means the same thing everywhere. Bars are buttons that open the row; the chart fits its container.
+   The label column's edge can be dragged (or moved with the arrow keys on its grip) to show longer
+   names; each chart remembers its width in this browser, and a double-click on the grip resets it. */
 
-import { type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { GANTT_ZOOMS, ganttPoint, ganttSlip, ganttSpan, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
 import { currentLocale, useT } from "../i18n";
 import { Icon, type Tone } from "../ui";
@@ -86,6 +88,25 @@ export function GanttLegend({ baseline = false, target = false }: { baseline?: b
   </ul>;
 }
 
+/** The label column's width limits in pixels; the track always keeps at least TRACK_MIN of the chart. */
+const SIDE_MIN = 160;
+const SIDE_MAX = 900;
+const SIDE_STEP = 24;
+const TRACK_MIN = 160;
+const sideStorageKey = (label: string) => `tomas-tech-gantt-side:${label}`;
+function readSide(label: string): number | null {
+  try {
+    const value = Number(window.localStorage.getItem(sideStorageKey(label)));
+    return Number.isFinite(value) && value >= SIDE_MIN && value <= SIDE_MAX ? value : null;
+  } catch { return null; }
+}
+function saveSide(label: string, value: number | null) {
+  try {
+    if (value === null) window.localStorage.removeItem(sideStorageKey(label));
+    else window.localStorage.setItem(sideStorageKey(label), String(value));
+  } catch { /* storage blocked: the width lasts for this visit only */ }
+}
+
 export function GanttChart({ rows, range, today, sideHeader, label }: {
   rows: GanttRowSpec[];
   range: GanttWindow;
@@ -99,9 +120,52 @@ export function GanttChart({ rows, range, today, sideHeader, label }: {
   const locale = currentLocale();
   const columnLabel = (start: string, kind: "week" | "month") => new Intl.DateTimeFormat(locale, kind === "week" ? { day: "numeric", month: "short", timeZone: "UTC" } : { month: "short", year: "2-digit", timeZone: "UTC" }).format(new Date(`${start}T00:00:00Z`));
   const todayAt = ganttPoint(today, range);
-  return <div className="gantt" role="region" aria-label={t(label)}>
+  const chartRef = useRef<HTMLDivElement>(null);
+  // null keeps the stylesheet's width, which already narrows on small screens.
+  const [side, setSide] = useState<number | null>(() => typeof window === "undefined" ? null : readSide(label));
+  const [resizing, setResizing] = useState(false);
+  const sideHead = () => chartRef.current?.querySelector<HTMLElement>(".gantt-side-head") ?? null;
+  const maxSide = () => Math.max(SIDE_MIN, Math.min(SIDE_MAX, (chartRef.current?.clientWidth ?? 0) - TRACK_MIN));
+  const resizeTo = (width: number) => { const next = Math.round(Math.min(maxSide(), Math.max(SIDE_MIN, width))); setSide(next); saveSide(label, next); };
+  const onEdge = (clientX: number) => { const head = sideHead(); return head !== null && Math.abs(clientX - head.getBoundingClientRect().right) <= 5; };
+  // A drag captures the pointer on the chart, so a double-click lands here rather than on the grip.
+  const resetSide = (event: { clientX: number }) => { if (!onEdge(event.clientX)) return; setSide(null); saveSide(label, null); };
+  // A press on the column edge (each row's 8px edge strip, or the header grip) drags it; anywhere else is a normal click.
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const chart = chartRef.current, head = sideHead();
+    if (event.button !== 0 || !chart || !head || !onEdge(event.clientX)) return;
+    const box = head.getBoundingClientRect();
+    event.preventDefault();
+    const max = maxSide();
+    let width = box.width;
+    chart.setPointerCapture(event.pointerId);
+    setResizing(true);
+    // While dragging, only the CSS variable moves (no re-render of every row); the width is kept on release.
+    const move = (moveEvent: PointerEvent) => {
+      width = Math.round(Math.min(max, Math.max(SIDE_MIN, moveEvent.clientX - box.left)));
+      chart.style.setProperty("--gantt-side", `${width}px`);
+    };
+    const end = () => {
+      chart.removeEventListener("pointermove", move); chart.removeEventListener("pointerup", end); chart.removeEventListener("pointercancel", end);
+      setResizing(false); setSide(width); saveSide(label, width);
+    };
+    chart.addEventListener("pointermove", move); chart.addEventListener("pointerup", end); chart.addEventListener("pointercancel", end);
+  };
+  const resizeByKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const current = side ?? sideHead()?.getBoundingClientRect().width ?? 300;
+    const next = event.key === "ArrowLeft" ? current - SIDE_STEP : event.key === "ArrowRight" ? current + SIDE_STEP
+      : event.key === "Home" ? SIDE_MIN : event.key === "End" ? maxSide() : null;
+    if (next === null) return;
+    event.preventDefault();
+    resizeTo(next);
+  };
+  // The track keeps TRACK_MIN even when a wide saved width meets a narrower window.
+  const sideStyle = side === null ? undefined : { "--gantt-side": `min(${side}px, calc(100% - ${TRACK_MIN}px))` } as CSSProperties;
+  return <div ref={chartRef} className={`gantt${resizing ? " resizing" : ""}`} role="region" aria-label={t(label)} style={sideStyle} onPointerDown={startResize} onDoubleClick={resetSide}>
     <div className="gantt-head">
-      <div className="gantt-side-head">{t(sideHeader)}</div>
+      <div className="gantt-side-head">{t(sideHeader)}
+        <button type="button" className="gantt-resizer" aria-label={t("Gantt.resizeColumn")} title={t("Gantt.resizeColumnHint")} onKeyDown={resizeByKey} />
+      </div>
       <div className="gantt-scale">
         {range.columns.map((column) => {
           const span = ganttSpan(column.start, column.end, range);
@@ -124,8 +188,8 @@ export function GanttChart({ rows, range, today, sideHeader, label }: {
             ? <button type="button" className="gantt-toggle" aria-expanded={Boolean(row.expanded)} aria-label={t(row.expanded ? "Collapse" : "Expand")} onClick={row.onToggle}><Icon name={row.expanded ? "chevronDown" : "chevronRight"} /></button>
             : <span className="gantt-toggle-spacer" />}
           {row.onOpen
-            ? <button type="button" className="gantt-label" onClick={row.onOpen}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</button>
-            : <span className="gantt-label"><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</span>}
+            ? <button type="button" className="gantt-label" title={row.title} onClick={row.onOpen}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</button>
+            : <span className="gantt-label" title={row.title}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</span>}
           {row.status ? <span className="gantt-status">{row.status}</span> : null}
         </div>
         <div className="gantt-track">

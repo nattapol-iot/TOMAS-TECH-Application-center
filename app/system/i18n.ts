@@ -2368,6 +2368,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Gantt.collapseAll": { en: "Collapse all", th: "ยุบทั้งหมด", jp: "すべて折りたたむ" },
   "Gantt.fullScreen": { en: "Full screen", th: "เต็มจอ", jp: "全画面表示" },
   "Gantt.exitFullScreen": { en: "Exit full screen", th: "ออกจากเต็มจอ", jp: "全画面を終了" },
+  "Gantt.resizeColumn": { en: "Resize the name column", th: "ปรับความกว้างคอลัมน์ชื่อ", jp: "名前列の幅を調整" },
+  "Gantt.resizeColumnHint": { en: "Drag to widen or narrow the names; double-click to reset", th: "ลากเพื่อขยายหรือย่อคอลัมน์ชื่อ ดับเบิลคลิกเพื่อคืนค่าเดิม", jp: "ドラッグで名前列の幅を変更、ダブルクリックで元に戻す" },
   "Gantt.taskSearch": { en: "Find a task or person in these projects", th: "ค้นหางานหรือผู้รับผิดชอบในโครงการเหล่านี้", jp: "これらのプロジェクトでタスク・担当者を検索" },
   "Gantt.findTasks": { en: "Find tasks", th: "ค้นหางาน", jp: "タスクを検索" },
   "Gantt.clearSearch": { en: "Clear search", th: "ล้างการค้นหา", jp: "検索をクリア" },

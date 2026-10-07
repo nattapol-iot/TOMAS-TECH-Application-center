@@ -230,6 +230,36 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
   assert.equal(translate("Gantt.fullScreen", "TH"), "เต็มจอ");
 });
 
+test("the Gantt name column can be dragged wider, keyed, remembered per chart and reset", () => {
+  const chart = read("app/system/production/GanttChart.tsx");
+  // Only a press on the column edge starts a drag; anywhere else stays a normal click.
+  assert.match(chart, /const onEdge = \(clientX: number\) => \{ const head = sideHead\(\); return head !== null && Math\.abs\(clientX - head\.getBoundingClientRect\(\)\.right\) <= 5; \};/);
+  assert.match(chart, /if \(event\.button !== 0 \|\| !chart \|\| !head \|\| !onEdge\(event\.clientX\)\) return;/);
+  assert.match(chart, /chart\.setPointerCapture\(event\.pointerId\);/);
+  // The drag moves only the CSS variable and commits the width on release; the track never drops below TRACK_MIN.
+  assert.match(chart, /chart\.style\.setProperty\("--gantt-side", `\$\{width\}px`\);/);
+  assert.match(chart, /setResizing\(false\); setSide\(width\); saveSide\(label, width\);/);
+  assert.match(chart, /"--gantt-side": `min\(\$\{side\}px, calc\(100% - \$\{TRACK_MIN\}px\)\)`/);
+  assert.match(chart, /const SIDE_MIN = 160;\r?\nconst SIDE_MAX = 900;/);
+  // Remembered per chart in this browser, read and written behind try/catch.
+  assert.match(chart, /const sideStorageKey = \(label: string\) => `tomas-tech-gantt-side:\$\{label\}`;/);
+  assert.match(chart, /function readSide\(label: string\): number \| null \{\r?\n\s+try \{/);
+  // The grip is a real button: arrow keys, Home and End resize it; a double-click on the edge resets.
+  assert.match(chart, /<button type="button" className="gantt-resizer" aria-label=\{t\("Gantt\.resizeColumn"\)\} title=\{t\("Gantt\.resizeColumnHint"\)\} onKeyDown=\{resizeByKey\} \/>/);
+  assert.match(chart, /event\.key === "ArrowLeft" \? current - SIDE_STEP : event\.key === "ArrowRight" \? current \+ SIDE_STEP/);
+  assert.match(chart, /onPointerDown=\{startResize\} onDoubleClick=\{resetSide\}/);
+  // A cut-off name shows in full on hover.
+  assert.match(chart, /className="gantt-label" title=\{row\.title\} onClick=\{row\.onOpen\}/);
+  const css = read("app/system/production/gantt.css");
+  assert.match(css, /\.gantt-side::after \{ content: ""; position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize;/);
+  assert.match(css, /\.gantt-resizer \{[^}]*touch-action: none;/);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
+  const { translate } = load("app/system/i18n.ts");
+  for (const key of ["Gantt.resizeColumn", "Gantt.resizeColumnHint"]) {
+    for (const lang of ["EN", "TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
+  }
+});
+
 test("every new follow-up string has English, Thai and Japanese copy", () => {
   const { translate } = load("app/system/i18n.ts");
   const keys = [

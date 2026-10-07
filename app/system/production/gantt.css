@@ -29,6 +29,16 @@
 /* After the row kinds, so a selected phase or project row shows it too. */
 .gantt-row.selected, .gantt-row.project.selected, .gantt-row.phase.selected { background: var(--blue-soft); }
 .gantt-side { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px; border-right: 1px solid var(--line); }
+
+/* The label column's edge is draggable (GanttChart): every row edge is an 8px grab strip and the header
+   holds the visible grip, which also takes the arrow keys and resets on a double-click. */
+.gantt-side-head, .gantt-side { position: relative; }
+.gantt-side::after { content: ""; position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; z-index: 3; }
+.gantt-resizer { position: absolute; top: 0; right: -5px; bottom: 0; width: 10px; padding: 0; border: 0; background: none; cursor: col-resize; touch-action: none; z-index: 4; }
+.gantt-resizer::before { content: ""; position: absolute; top: 6px; bottom: 6px; left: 4px; width: 2px; border-radius: var(--r-pill); background: var(--n-300); }
+.gantt-resizer:hover::before, .gantt-resizer:focus-visible::before, .gantt.resizing .gantt-resizer::before { background: var(--blue); }
+.gantt-resizer:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; border-radius: var(--r-xs); }
+.gantt.resizing, .gantt.resizing * { cursor: col-resize; user-select: none; }
 .gantt-toggle, .gantt-toggle-spacer { flex: none; width: 22px; height: 22px; }
 .gantt-toggle { display: grid; place-items: center; border: 0; border-radius: var(--r-xs); background: none; color: var(--muted); cursor: pointer; padding: 0; }
 .gantt-toggle:hover { background: var(--n-150); color: var(--ink); }
