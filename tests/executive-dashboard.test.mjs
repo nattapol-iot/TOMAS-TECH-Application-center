@@ -6,9 +6,10 @@ const compile=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileMod
 const modelUrl=compile(await readFile(new URL('../backend-node/src/executive-dashboard-model.ts',import.meta.url),'utf8'));
 const {overdueTask,projectHealth}=await import(modelUrl);
 const source=await readFile(new URL('../app/system/production/executive-metrics.ts',import.meta.url),'utf8');
-const {periodRange,businessDays,teamWorkload,projectManagerOptions}=await import(compile(source.replaceAll('../../../backend-node/src/executive-dashboard-model',modelUrl)));
+const planningUrl=compile(await readFile(new URL('../lib/resource-planning.ts',import.meta.url),'utf8'));
+const {periodRange,businessDays,teamWorkload,projectManagerOptions}=await import(compile(source.replaceAll('../../../backend-node/src/executive-dashboard-model',modelUrl).replaceAll('../../../lib/resource-planning',planningUrl)));
 const project={id:1,status:'Installation',due:'2026-10-01',forecast:'2026-09-30',blocked:0,overdue:0,taskCount:3,unknownSchedule:false,health:'On Track'};
-const task={id:1,projectId:1,status:'In Progress',start:'2026-09-07',due:'2026-09-11',baselineDue:'2026-09-04',manDays:10,owners:[1,2]};
+const task={id:1,projectId:1,status:'In Progress',start:'2026-09-07',due:'2026-09-11',baselineDue:'2026-09-04',manDays:10,progress:0,owners:[1,2]};
 const data={holidays:[],team:[{id:1,name:'A',capacity:5},{id:2,name:'B',capacity:5}],efforts:[]};
 test('manager filter includes unassigned role PMs, keeps assigned non-PMs and deduplicates IDs',()=>{
   const input={projects:[{managerId:1,manager:'Assigned lead',department:'Engineering'},{managerId:1,manager:'Assigned lead',department:'Engineering'},{managerId:2,manager:'PM',department:'Sales'}],projectManagers:[{id:2,name:'PM',department:'Sales'},{id:3,name:'Unassigned PM',department:'Engineering'}]};
@@ -42,11 +43,11 @@ test('capacity splits shared effort rather than double-counting owners',()=>{
   assert.equal(result[0].weeks[0].assigned,5);assert.equal(result[1].weeks[0].assigned,5);
   assert.equal(result[0].weeks[1].assigned,0);assert.equal(result[0].weeks[0].overloaded,false);
 });
-test('holidays reduce capacity; missing and zero capacities stay distinct',()=>{
+test('holidays reduce capacity; zero capacity stays zero and a missing one works the default 5 days',()=>{
   assert.equal(businessDays('2026-09-07','2026-09-13',new Set(['2026-09-08'])).length,4);
   const result=teamWorkload({...data,holidays:['2026-09-08'],team:[{id:1,capacity:0},{id:2,capacity:null}]},[task],new Set(),new Set(),'2026-09-07',1);
   assert.equal(result[0].weeks[0].available,0);assert.equal(result[0].weeks[0].overloaded,true);
-  assert.equal(result[1].weeks[0].available,null);assert.equal(result[1].weeks[0].percent,null);
+  assert.equal(result[1].weeks[0].available,4);assert.equal(result[1].weeks[0].percent,125);
 });
 test('done work and filtered-out inquiry efforts cannot inflate workload',()=>{
   const efforts=[{kind:'Inquiry',id:9,ownerId:1,start:task.start,end:task.due,manDays:4}];

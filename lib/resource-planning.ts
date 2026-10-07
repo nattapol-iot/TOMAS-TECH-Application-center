@@ -14,6 +14,14 @@ export type Commitment = {
   status: string;
 };
 const DAY = 86400000;
+/** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */
+export const DEFAULT_WEEKLY_CAPACITY = 5;
+/** A saved capacity, or the default when nobody saved one. */
+export const weeklyCapacity = (saved: number | null | undefined) => saved ?? DEFAULT_WEEKLY_CAPACITY;
+/** Work in these statuses, or at 100%, no longer takes anyone's time; the server filters with the same list. */
+export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Rejected"];
+export const isOpenWork = (item: Pick<Commitment, "progress" | "status">) =>
+  item.progress < 100 && !FINISHED_WORK_STATUSES.includes(item.status);
 export const dayNumber = (value: string) =>
   Date.parse(value.slice(0, 10) + "T00:00:00Z") / DAY;
 export const dateFromDay = (value: number) =>
@@ -56,8 +64,8 @@ export function planningLoad(
   today: string,
   holidays: readonly string[] = [],
 ) {
-  const activeItems = items.filter(item => item.progress < 100 && !["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Rejected"].includes(item.status));
-  const entries = activeItems.map((item) => ({
+  const open = items.filter(isOpenWork);
+  const entries = open.map((item) => ({
     item,
     days:
       item.start && item.end ? workingDays(item.start, item.end, holidays) : [],
@@ -87,18 +95,6 @@ export function planningLoad(
   const known = weekly.filter((w) => w.utilisation !== null);
   const committed = weekly.reduce((s, w) => s + w.manDays, 0),
     available = weekly.reduce((s, w) => s + (w.available ?? 0), 0);
-  const open = items.filter(
-    (i) =>
-      i.progress < 100 &&
-      ![
-        "Closed",
-        "Cancelled",
-        "Approved",
-        "Locked",
-        "Done",
-        "Completed",
-      ].includes(i.status),
-  );
   return {
     weekly,
     committed,
@@ -118,22 +114,6 @@ export function planningLoad(
       .sort((a, b) => a.end!.localeCompare(b.end!))[0],
     unknown: entries.filter((e) => e.item.manDays === null || !e.days.length)
       .length,
-  };
-}
-export function planningBar(
-  item: Commitment,
-  weeks: ReturnType<typeof planningWeeks>,
-) {
-  if (!item.start || !item.end || !weeks.length) return null;
-  const first = dayNumber(weeks[0].start),
-    last = dayNumber(weeks.at(-1)!.end) + 1;
-  const start = Math.max(dayNumber(item.start), first),
-    end = Math.min(dayNumber(item.end) + 1, last);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
-    return null;
-  return {
-    left: ((start - first) / (last - first)) * 100,
-    width: ((end - start) / (last - first)) * 100,
   };
 }
 /** Protect exported spreadsheet cells from formula injection. */

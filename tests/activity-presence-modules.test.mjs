@@ -85,9 +85,9 @@ test("every sub-view a screen reports is accepted, named after its parent view a
   }
   // A key missing from the allowlist answers 400, so that tab would silently never count.
   assert.deepEqual(used.filter(({ key }) => !accepted.has(key)), []);
-  // The approved Projects and Resource Plan tabs; Resource Plan keys follow its real tab ids (tasks, gantt, workload, items).
+  // The approved Projects and Resource Plan tabs; Resource Plan keys follow its real tab ids (workload, tasks).
   const subViews = [...accepted].filter((key) => !views.has(key) && /^(projects|resources)-/.test(key));
-  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "projects-timeline", "resources-gantt", "resources-items", "resources-tasks", "resources-workload"]);
+  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "projects-timeline", "resources-tasks", "resources-workload"]);
   const resourceTabs = tabIds(await source("app/system/production/ResourcePlanningScreen.tsx"));
   assert.deepEqual(subViews.filter((key) => key.startsWith("resources-")).map((key) => key.slice("resources-".length)).sort(), [...resourceTabs].sort());
   for (const key of subViews) {
@@ -214,11 +214,11 @@ test("switching tabs re-records as navigation and only the owning screen clears 
   h.advance(h.hooks.activitySubViewWaitMs);
   assert.deepEqual(h.writes.slice(2), ["presence:projects"]);
   // A sub-view of another view never leaks into this one.
-  h.mount("resources-gantt");
+  h.mount("resources-workload");
   h.commit("projects");
   assert.equal(h.writes.length, 3);
   h.commit("resources");
-  assert.deepEqual(h.writes.slice(3), ["presence:resources-gantt"]);
+  assert.deepEqual(h.writes.slice(3), ["presence:resources-workload"]);
 });
 
 test("only views whose screens report sub-views hold a page open, and only while no sub-view is known", async () => {
@@ -228,7 +228,7 @@ test("only views whose screens report sub-views hold a page open, and only while
   assert.equal(hooks.activityPageOpenDelay("projects", "projects"), wait);
   assert.equal(hooks.activityPageOpenDelay("resources", "resources"), wait);
   assert.equal(hooks.activityPageOpenDelay("projects", "projects-schedule"), 0);
-  assert.equal(hooks.activityPageOpenDelay("resources", "resources-gantt"), 0);
+  assert.equal(hooks.activityPageOpenDelay("resources", "resources-workload"), 0);
   assert.equal(hooks.activityPageOpenDelay("dashboard", "dashboard"), 0);
   assert.equal(hooks.activityPageOpenDelay("labor", "labor"), 0, "labor-packages is its own view, not a sub-view of labor");
   // The parents are exactly the views that own "<view>-<tab>" sub-view keys in the allowlist and in Team Activity's roll-up.
@@ -268,9 +268,9 @@ test("a chunk slower than the fallback still logs one page open, and later tab c
   assert.deepEqual(h.writes, ["presence:resources"]);
   assert.equal(h.ref.current.page, "resources-tasks");
   // A real tab change afterwards is a new page open.
-  h.mount("resources-gantt");
+  h.mount("resources-workload");
   h.commit("resources");
-  assert.deepEqual(h.writes, ["presence:resources", "presence:resources-gantt"]);
+  assert.deepEqual(h.writes, ["presence:resources", "presence:resources-workload"]);
 });
 
 test("a bare view with sub-views is reported after the fallback when no sub-view registers", async () => {

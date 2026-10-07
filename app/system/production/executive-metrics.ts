@@ -1,5 +1,6 @@
 import type { ExecutiveData, ExecutiveTask } from "../../../backend-node/src/executive-dashboard-model";
 import { shiftDay } from "../../../backend-node/src/executive-dashboard-model";
+import { weeklyCapacity } from "../../../lib/resource-planning";
 
 export function projectManagerOptions(data:Pick<ExecutiveData,"projects"|"projectManagers">,department:string) {
   const assigned=data.projects.map(p=>({id:p.managerId,name:p.manager,department:p.department}));
@@ -23,12 +24,13 @@ export function businessDays(start:string,end:string,holidays:Set<string>) {
 /** Scoped planned effort, excluding Done work. It is not recorded attendance or total company utilization. */
 export function teamWorkload(data:ExecutiveData,tasks:ExecutiveTask[],inquiryIds:Set<number>,estimateIds:Set<number>,from:string,weeks:number) {
   const holidays=new Set(data.holidays);
-  const allocations=[...tasks.filter(t=>t.status!=="Done").flatMap(t=>t.owners.map(id=>({id,start:t.start,end:t.due,effort:t.manDays/t.owners.length}))),
+  // Finished work and the default capacity follow the Resource Plan's Workload (lib/resource-planning.ts).
+  const allocations=[...tasks.filter(t=>t.status!=="Done"&&t.progress<100).flatMap(t=>t.owners.map(id=>({id,start:t.start,end:t.due,effort:t.manDays/t.owners.length}))),
     ...data.efforts.filter(e=>e.kind==="Inquiry"?inquiryIds.has(e.id):estimateIds.has(e.id)).map(e=>({id:e.ownerId,start:e.start,end:e.end,effort:e.manDays}))];
   const prepared=allocations.map(a=>({...a,days:a.start&&a.end?businessDays(a.start,a.end,holidays):[]}));
   return data.team.map(person=>({...person,unknown:prepared.filter(a=>a.id===person.id&&(a.effort===null||!a.days.length)).length,
     weeks:Array.from({length:weeks},(_,i)=>{const start=shiftDay(from,i*7),end=shiftDay(start,6);
       const assigned=prepared.filter(a=>a.id===person.id).reduce((sum,a)=>sum+(a.days.length&&a.effort!==null?a.effort*a.days.filter(d=>within(d,start,end)).length/a.days.length:0),0);
-      const available=person.capacity===null?null:person.capacity*businessDays(start,end,holidays).length/5;
+      const available=weeklyCapacity(person.capacity)*businessDays(start,end,holidays).length/5;
       return {start,assigned,available,percent:available===null||available===0?null:assigned/available*100,overloaded:available!==null&&assigned>available+0.00001};})}));
 }

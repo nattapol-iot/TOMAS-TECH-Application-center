@@ -22,7 +22,7 @@ async function presence(t:import('node:test').TestContext,module:string,extra:Re
 }
 
 test('presence accepts every Projects and Resource Plan sub-view key and stores it as the module',async t=>{
- for(const key of ['projects-portfolio','projects-schedule','projects-punchlist','resources-tasks','resources-gantt','resources-workload','resources-items']){
+ for(const key of ['projects-portfolio','projects-schedule','projects-punchlist','resources-tasks','resources-workload']){
   const {response,captured}=await presence(t,key);
   assert.equal(response.statusCode,200,key);assert.deepEqual(response.json(),{recordedAt:'2026-10-06T02:00:00.000Z'});
   assert.equal(captured.length,1);assert.equal(captured[0]!.module,key);assert.equal(captured[0]!.user,7);

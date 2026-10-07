@@ -22,7 +22,7 @@ const uuid=(v:unknown)=>{const key=requiredText(v,36,'Request key');if(!/^[\da-f
 // "<view>-<tab>" keys are the sub-views screens report through useActivitySubView (app/system/use-activity-presence.ts).
 const modules=new Set(['downloads','sales-intake','labor','signature','dashboard','my-work','inquiries','estimates','projects','knowledge','site-visits','my-assignments','price','quotations','missing','project-timeline','resources','procurement','boms','purchase','pos','inventory','receiving','issues','approvals','signing','documents','performance','reports','master','rates','audit','settings','profile','support','activity','module-templates','stamps','visit-master','signature',
  'crm-dashboard','crm-customers','crm-contacts','crm-opportunities','crm-activities','crm-pipeline','customers','suppliers','employees','material-master','user-accounts','labor-packages','schedule-templates','summary-reports','manual',
- 'projects-portfolio','projects-timeline','projects-schedule','projects-punchlist','resources-tasks','resources-gantt','resources-workload','resources-items']);
+ 'projects-portfolio','projects-timeline','projects-schedule','projects-punchlist','resources-tasks','resources-workload']);
 
 export function registerActivityRoutes(app:FastifyInstance,db:Database,users:CurrentUserService){
  const actorFor=async(request:Parameters<CurrentUserService['required']>[0])=>{await users.demandPermission(request,'activity.read');return users.required(request);};

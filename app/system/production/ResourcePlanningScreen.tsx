@@ -1,60 +1,38 @@
 "use client";
-import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  apiRequest,
-  listInquiries,
-  listEstimates,
-  loadEstimateCostWorkspace,
-  type BootstrapData,
-  type PagedResult,
-} from "../api-client";
+import { apiRequest, type BootstrapData } from "../api-client";
 import {
   Badge,
-  BarChart,
+  Drawer,
   EmptyState,
   Field,
+  FilterChips,
   Icon,
-  KpiCard,
   Modal,
   PageHeader,
   Pagination,
   Panel,
-  Progress,
   SearchInput,
   Select,
-  TablePageSize,
   Tabs,
+  type FilterItem,
   type Tone,
 } from "../ui";
 import { useLanguage } from "../i18n";
 import { useActivitySubView } from "../use-activity-presence";
-import { loadSchedules } from "./PlanningPricingScreens";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
+import { loadWorkload, type Workload, type WorkloadCapacity, type WorkloadEffort } from "../resource-workload-client";
 import {
-  planningBar,
   planningLoad,
   planningWeeks,
   dayNumber,
   dateFromDay,
   resourceCsv,
+  weeklyCapacity,
   type Commitment,
 } from "../../../lib/resource-planning";
+import "./workload.css";
 
-type Effort = {
-  entityType: string;
-  entityId: number;
-  start: string;
-  end: string;
-  manDays: number;
-  rowVersion: string;
-};
-type Capacity = { userId: number; daysPerWeek: number; rowVersion: string };
-type Planning = {
-  efforts: Effort[];
-  capacities: Capacity[];
-  holidays: string[];
-};
 type Props = {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
@@ -64,6 +42,10 @@ type Props = {
   /** Accepted for the shell's shared props; inquiry ownership is assigned on the Inquiry screen. */
   refreshBootstrap?: () => Promise<void>;
 };
+type ResourceTab = "workload" | "tasks";
+type Focus = "over" | "overdue" | "missing";
+const ALL_DEPARTMENTS = "All departments";
+const PAGE_SIZE = 50;
 const tones: Record<Commitment["type"], Tone> = {
   Inquiry: "blue",
   Estimate: "violet",
@@ -95,18 +77,17 @@ const errorText = (e: unknown) =>
     : e instanceof Error
       ? e.message
       : String(e);
-async function all<T>(
-  fetch: (p: { page: number; pageSize: number }) => Promise<PagedResult<T>>,
-) {
-  const items: T[] = [];
-  for (let page = 1; ; page++) {
-    const result = await fetch({ page, pageSize: 100 });
-    items.push(...result.items);
-    if (items.length >= result.total) return items;
-    if (!result.items.length)
-      throw new Error("Incomplete result. Refresh the resource plan.");
+const tabStorageKey = (userId: number) => `tomas-tech-resource-plan-tab:${userId}`;
+// The tab a person last used, so a lead who works in Tasks lands there; everyone else starts on the workload.
+function readTab(userId: number): ResourceTab {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(tabStorageKey(userId)) === "tasks" ? "tasks" : "workload";
+  } catch {
+    return "workload";
   }
 }
+const byDueDate = (a: Commitment, b: Commitment) =>
+  (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
 
 export function ProductionResourcePlan({
   bootstrap,
@@ -116,323 +97,109 @@ export function ProductionResourcePlan({
   openInquiry,
 }: Props) {
   const { t } = useLanguage();
-  const [state, setState] = useState<{
-    items: Commitment[];
-    planning: Planning;
-    warnings: string[];
-  }>({
-    items: [],
-    planning: { efforts: [], capacities: [], holidays: [] },
-    warnings: [],
-  });
-  const [loading, setLoading] = useState(true),
-    [error, setError] = useState("");
-  const [tab, setTab] = useState("tasks"),
-    [search, setSearch] = useState(""),
-    [department, setDepartment] = useState("All departments"),
-    [type, setType] = useState("All work");
-  // Team Activity sees which Resource Plan tab is open (keys follow the tab ids below).
+  const [tab, setTab] = useState<ResourceTab>(() => readTab(bootstrap.user.id));
+  // Team Activity sees which Resource Plan tab is open (keys follow the tab ids).
   useActivitySubView(`resources-${tab}`);
-  const [start, setStart] = useState(() =>
-      dateFromDay(dayNumber(today()) - 14),
-    ),
+  const [data, setData] = useState<Workload | null>(null);
+  const [loading, setLoading] = useState(false),
+    [error, setError] = useState("");
+  const [search, setSearch] = useState(""),
+    [department, setDepartment] = useState(ALL_DEPARTMENTS),
+    [focus, setFocus] = useState<Focus | null>(null),
+    [showIdle, setShowIdle] = useState(false),
+    [page, setPage] = useState(1);
+  const [start, setStart] = useState(() => dateFromDay(dayNumber(today()) - 14)),
     [horizon, setHorizon] = useState("12");
-  const [sort, setSort] = useState("Name"),
-    [focus, setFocus] = useState("All"),
-    [showEmptyTimelineRows, setShowEmptyTimelineRows] = useState(false),
-    [showIdleWorkloadRows, setShowIdleWorkloadRows] = useState(false),
-    [page, setPage] = useState(1),
-    [pageSize, setPageSize] = useState(50);
-  const [edit, setEdit] = useState<Commitment | null>(null),
+  const [personId, setPersonId] = useState<number | null>(null),
+    [unassignedOpen, setUnassignedOpen] = useState(false),
+    [edit, setEdit] = useState<Commitment | null>(null),
     [capacityUser, setCapacityUser] = useState<number | null>(null);
   const canRead =
     bootstrap.permissions.includes("schedule.read") &&
     bootstrap.permissions.includes("project.read");
   const canPlan = bootstrap.permissions.includes("schedule.plan");
   const load = useCallback(async () => {
-    if (!canRead) {
-      setLoading(false);
-      return;
-    }
+    if (!canRead) return;
     setLoading(true);
     setError("");
-    const warnings: string[] = [],
-      items: Commitment[] = [];
     try {
-      const planning = await apiRequest<Planning>("/api/v1/resource-planning");
-      const [inquiries, estimates, scheduleData] = await Promise.all([
-        bootstrap.permissions.includes("inquiry.read")
-          ? all(listInquiries)
-          : Promise.resolve([]),
-        bootstrap.permissions.includes("estimate.read")
-          ? all(listEstimates)
-          : Promise.resolve([]),
-        loadSchedules(),
-      ]);
-      const effort = (type: string, id: number) =>
-        planning.efforts.find(
-          (e) => e.entityType === type && e.entityId === id,
-        );
-      const taskPlanning = bootstrap.permissions.includes("inquiry.read")
-        ? await apiRequest<{ taskInquiryIds: number[]; items: Commitment[] }>("/api/v1/resource-tasks/commitments")
-        : { taskInquiryIds: [], items: [] };
-      items.push(...taskPlanning.items);
-      for (const i of inquiries) {
-        if (taskPlanning.taskInquiryIds.includes(i.id)) continue;
-        const e = effort("Inquiry", i.id);
-        items.push({
-          key: "Inquiry-" + i.id,
-          type: "Inquiry",
-          entityId: i.id,
-          ownerId: i.estimateOwnerId,
-          reference: i.number,
-          title: i.projectName,
-          customer: i.customerName,
-          start: e?.start ?? i.inquiryDate,
-          end: e?.end ?? i.dueDate,
-          manDays: e?.manDays ?? null,
-          progress: i.progress,
-          status: i.status,
-        });
-      }
-      // Bounded concurrency; no artificial limit truncates a large portfolio.
-      for (let offset = 0; offset < estimates.length; offset += 4) {
-        await Promise.all(
-          estimates.slice(offset, offset + 4).map(async (i) => {
-            let owners = [i.ownerId];
-            try {
-              const workspace = await loadEstimateCostWorkspace(i.id);
-              const assigned = workspace.assignments.flatMap((a) => [
-                a.ownerId,
-                ...(a.supportId ? [a.supportId] : []),
-              ]);
-              if (assigned.length) owners = [...new Set(assigned)];
-            } catch {
-              warnings.push(
-                i.number +
-                  ": " +
-                  t("Assignment details unavailable; estimate owner shown."),
-              );
-            }
-            const e = effort("Estimate", i.id);
-            for (const ownerId of owners)
-              items.push({
-                key: "Estimate-" + i.id + "-" + ownerId,
-                type: "Estimate",
-                entityId: i.id,
-                ownerId,
-                reference: i.number,
-                title: i.projectName,
-                customer: i.customerName,
-                start: e?.start ?? i.createdDate,
-                end: e?.end ?? i.dueDate,
-                manDays: e ? e.manDays / owners.length : null,
-                progress: i.progress,
-                status: i.status,
-              });
-          }),
-        );
-      }
-      for (const s of scheduleData.schedules) {
-        type Task = (typeof s.tasks)[number];
-        const leaves = (tasks: Task[]): Task[] =>
-          tasks.flatMap((task) =>
-            task.children.length
-              ? leaves(task.children)
-              : task.kind === "phase"
-                ? []
-                : [task],
-          );
-        for (const task of leaves(s.tasks)) {
-          const pics = task.pics.length ? task.pics.map((p) => p.id) : [null];
-          for (const ownerId of pics)
-            items.push({
-              key: "Project-" + task.id + "-" + ownerId,
-              type: "Project",
-              entityId: s.projectId,
-              ownerId,
-              reference: s.projectNo + " · " + task.wbs,
-              title: task.name,
-              customer:
-                scheduleData.projects.find((p) => p.id === s.projectId)
-                  ?.customerName ?? "",
-              start: task.planStart,
-              end: task.planFinish,
-              manDays: Number(task.planManDays) / pics.length,
-              progress: task.percentComplete,
-              status: task.status,
-            });
-        }
-      }
-      if (scheduleData.skippedSchedules)
-        warnings.push(
-          t("Schedules unavailable") + ": " + scheduleData.skippedSchedules,
-        );
-      setState({ items, planning, warnings });
+      setData(await loadWorkload());
     } catch (e) {
       setError(errorText(e));
     } finally {
       setLoading(false);
     }
-  }, [bootstrap.permissions, canRead, t]);
+  }, [canRead]);
+  // The workload is read when its tab is first shown; a failed read waits for Refresh.
+  const wantsData = canRead && tab === "workload" && data === null && !error;
   useEffect(() => {
+    if (!wantsData) return;
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
-  }, [load]);
-  const weeks = useMemo(
-    () => planningWeeks(start || today(), Number(horizon)),
-    [start, horizon],
-  );
+  }, [wantsData, load]);
+  const changeTab = (next: ResourceTab) => {
+    setTab(next);
+    try { window.localStorage.setItem(tabStorageKey(bootstrap.user.id), next); } catch { /* The tab is a convenience when storage is blocked. */ }
+  };
+  const todayIso = today();
+  const weeks = useMemo(() => planningWeeks(start || todayIso, Number(horizon)), [start, horizon, todayIso]);
   const rows = useMemo(() => {
+    if (!data) return [];
     const query = search.trim().toLocaleLowerCase();
     return bootstrap.team
-      .filter(
-        (u) => department === "All departments" || u.department === department,
-      )
+      .filter((user) => department === ALL_DEPARTMENTS || user.department === department)
       .map((user) => {
-        const items = state.items
-          .filter(
-            (i) =>
-              i.ownerId === user.id && (type === "All work" || i.type === type),
-          )
-          .filter(
-            (i) =>
-              !query ||
-              user.name.toLocaleLowerCase().includes(query) ||
-              [i.reference, i.title, i.customer]
-                .join(" ")
-                .toLocaleLowerCase()
-                .includes(query),
-          );
-        const capacity =
-          state.planning.capacities.find((c) => c.userId === user.id)
-            ?.daysPerWeek ?? null;
-        return {
-          user,
-          items,
-          capacity,
-          ...planningLoad(
-            items,
-            weeks,
-            capacity,
-            today(),
-            state.planning.holidays,
-          ),
-        };
+        const items = data.items.filter((item) => item.ownerId === user.id);
+        const saved = data.capacities.find((c) => c.userId === user.id)?.daysPerWeek ?? null;
+        const capacity = weeklyCapacity(saved);
+        return { user, items, saved, capacity, ...planningLoad(items, weeks, capacity, todayIso, data.holidays) };
       })
-      .filter(
-        (row) =>
-          !query ||
-          row.items.length ||
-          row.user.name.toLocaleLowerCase().includes(query),
-      )
       .filter((row) =>
-        focus === "All" || focus === "Over capacity"
-          ? focus === "All" || (row.peak ?? 0) > 100
-          : focus === "Overdue"
-            ? row.overdue > 0
-            : row.unknown > 0,
-      )
-      .sort((a, b) =>
-        sort === "Peak load"
-          ? (b.peak ?? -1) - (a.peak ?? -1) ||
-            a.user.name.localeCompare(b.user.name)
-          : sort === "Committed man-days"
-            ? b.committed - a.committed
-            : a.user.name.localeCompare(b.user.name),
-      );
-  }, [bootstrap.team, state, department, search, type, weeks, sort, focus]);
-  const itemRows = rows.flatMap((r) => r.items.map((i) => ({ r, i })));
-  const rowHasWorkInWindow = (row: (typeof rows)[number]) =>
-    row.items.some((item) => planningBar(item, weeks));
-  const emptyTimelineRows = rows.filter((row) => !rowHasWorkInWindow(row)).length;
-  const timelineRows = showEmptyTimelineRows
-    ? rows
-    : rows.filter(rowHasWorkInWindow);
-  const rowHasWorkloadActivity = (row: (typeof rows)[number]) =>
-    row.items.length > 0 ||
-    row.committed > 0 ||
-    row.unknown > 0 ||
-    row.overdue > 0 ||
-    (row.peak ?? 0) > 0;
-  const activeWorkloadRows = rows.filter(rowHasWorkloadActivity);
-  const workloadRows = showIdleWorkloadRows ? rows : activeWorkloadRows;
-  const hiddenWorkloadRows = rows.length - activeWorkloadRows.length;
-  const decisionRows = rows.filter(
-    (row) =>
-      rowHasWorkloadActivity(row) &&
-      ((row.peak ?? 0) > 100 ||
-        row.overdue > 0 ||
-        row.unknown > 0 ||
-        row.capacity === null),
-  );
-  const departmentLoad = [...new Set(rows.map((row) => row.user.department))]
-    .map((department) => ({
-      label: department,
-      value: rows
-        .filter((row) => row.user.department === department)
-        .reduce((sum, row) => sum + row.committed, 0),
-    }))
-    .filter((department) => department.value > 0);
-  const pagedRows =
-    tab === "gantt" ? timelineRows : tab === "workload" ? workloadRows : rows;
-  const totalRows = tab === "items" ? itemRows.length : pagedRows.length;
-  const pageCount = Math.max(1, Math.ceil(totalRows / pageSize)),
-    currentPage = Math.min(page, pageCount),
-    visible = pagedRows.slice(
-      (currentPage - 1) * pageSize,
-      currentPage * pageSize,
-    );
-  const visibleItems = itemRows.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
-  const unique = [
-    ...new Map(
-      rows
-        .flatMap((r) => r.items)
-        .map((i) => [
-          i.type +
-            "-" +
-            i.entityId +
-            "-" +
-            (i.type === "Project" ? i.reference : ""),
-          i,
-        ]),
-    ).values(),
+        !query ||
+        row.user.name.toLocaleLowerCase().includes(query) ||
+        row.items.some((item) => [item.reference, item.title, item.customer].join(" ").toLocaleLowerCase().includes(query)))
+      // The busiest people first, so the decisions sit at the top.
+      .sort((a, b) => (b.peak ?? -1) - (a.peak ?? -1) || b.open - a.open || a.user.name.localeCompare(b.user.name));
+  }, [bootstrap.team, data, department, search, weeks, todayIso]);
+  type Row = (typeof rows)[number];
+  const matches: Record<Focus, (row: Row) => boolean> = {
+    over: (row) => (row.peak ?? 0) > 100,
+    overdue: (row) => row.overdue > 0,
+    missing: (row) => row.unknown > 0,
+  };
+  const chipItems: FilterItem[] = [
+    { key: "over", label: "Workload.overCapacity", value: rows.filter(matches.over).length, tone: "red" },
+    { key: "overdue", label: "Workload.overdue", value: rows.filter(matches.overdue).length, tone: "amber" },
+    { key: "missing", label: "Workload.missingEffort", value: rows.filter(matches.missing).length, tone: "slate" },
   ];
+  const focused = focus ? rows.filter(matches[focus]) : rows;
+  const busy = focused.filter((row) => row.items.length > 0);
+  const shown = showIdle ? focused : busy;
+  const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE)),
+    currentPage = Math.min(page, pageCount),
+    visible = shown.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const unassigned = (data?.items ?? []).filter((item) => item.ownerId === null);
+  const person = personId === null ? null : rows.find((row) => row.user.id === personId) ?? null;
+  const currentWeek = weeks.find((week) => week.start <= todayIso && todayIso <= week.end)?.start;
+  const departments = [...new Set(bootstrap.team.map((user) => user.department))].sort();
   const open = (item: Commitment) =>
     item.type === "Project"
       ? openProjectSchedule?.(item.entityId)
       : item.type === "Estimate"
         ? openEstimate?.(item.entityId)
         : openInquiry?.(item.entityId);
-  const shiftWindow = (direction: -1 | 1) => {
-    setStart(
-      dateFromDay(
-        dayNumber(start || today()) + direction * Number(horizon) * 7,
-      ),
-    );
+  // Whole-inquiry and estimate effort is planned here; tasks and plan rows carry their own effort.
+  const canPlanEffort = (item: Commitment) =>
+    item.type !== "Project" &&
+    !item.key.startsWith("InquiryTask-") &&
+    canPlan &&
+    bootstrap.permissions.includes(item.type === "Inquiry" ? "inquiry.write" : "estimate.write");
+  const filtered = (apply: () => void) => {
+    apply();
     setPage(1);
   };
-  const showToday = () => {
-    setStart(dateFromDay(dayNumber(today()) - 14));
-    setPage(1);
-  };
-  const clearFilters = () => {
-    setSearch("");
-    setDepartment("All departments");
-    setType("All work");
-    setSort("Name");
-    setFocus("All");
-    setPage(1);
-  };
-  const hasFilters =
-    !!search ||
-    department !== "All departments" ||
-    type !== "All work" ||
-    sort !== "Name" ||
-    focus !== "All";
+  const shiftWindow = (direction: -1 | 1) =>
+    filtered(() => setStart(dateFromDay(dayNumber(start || todayIso) + direction * Number(horizon) * 7)));
   const saved = async () => {
     await load();
     notify(t("Saved"));
@@ -468,13 +235,7 @@ export function ProductionResourcePlan({
           item.manDays ?? "Not planned",
           item.progress,
           item.status,
-          ...planningLoad(
-            [item],
-            weeks,
-            row.capacity,
-            today(),
-            state.planning.holidays,
-          ).weekly.map((w) => w.manDays),
+          ...planningLoad([item], weeks, row.capacity, todayIso, data?.holidays ?? []).weekly.map((w) => w.manDays),
         ]);
     const blob = new Blob([resourceCsv(rowsOut)], {
       type: "text/csv;charset=utf-8",
@@ -482,20 +243,10 @@ export function ProductionResourcePlan({
     const url = URL.createObjectURL(blob),
       a = document.createElement("a");
     a.href = url;
-    a.download = "resource-plan-" + today() + ".csv";
+    a.download = "resource-plan-" + todayIso + ".csv";
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const pageControls = (
-    <Pagination
-      page={currentPage}
-      pageCount={pageCount}
-      from={totalRows ? (currentPage - 1) * pageSize + 1 : 0}
-      to={Math.min(currentPage * pageSize, totalRows)}
-      total={totalRows}
-      onPage={setPage}
-    />
-  );
   if (!canRead)
     return (
       <EmptyState
@@ -505,806 +256,216 @@ export function ProductionResourcePlan({
       />
     );
   return (
-    <div className="resource-plan-page">
+    <div className="workload-page">
       <PageHeader
-        eyebrow={t("ENGINEERING RESOURCE")}
-        title="Resource Plan · Tasks & Workload"
-        subtitle={t(
-          "ดูภาระงานก่อนมอบหมาย · อนุมัติแผน · สมาชิกตอบรับและติดตามผล",
-        )}
+        eyebrow="ENGINEERING RESOURCE"
+        title="Workload.title"
+        subtitle="Workload.subtitle"
         actions={
-          <>
-            <button
-              className="btn default"
-              disabled={loading || !!error}
-              onClick={exportPlan}
-            >
-              <Icon name="download" />
-              {t("Export plan")} CSV
-            </button>
-            <button
-              className="btn default"
-              disabled={loading}
-              onClick={() => void load()}
-            >
-              <Icon name="refresh" />
-              {t("Refresh")}
-            </button>
-            {canPlan && (
-              <button
-                className="btn default"
-                onClick={() => setCapacityUser(bootstrap.user.id)}
-                disabled={loading || !!error}
-              >
-                {t("Weekly capacity")}
+          tab === "workload" ? (
+            <>
+              <button className="btn default" type="button" disabled={!data} onClick={exportPlan}>
+                <Icon name="download" />
+                {t("Export plan")} CSV
               </button>
-            )}
-          </>
+              <button className="btn default" type="button" disabled={loading} onClick={() => void load()}>
+                <Icon name="refresh" />
+                {t("Refresh")}
+              </button>
+            </>
+          ) : null
         }
       />
-      {error && (
-        <div className="callout danger" role="alert">
-          {error} <LocalizedText text={"·"} /> {t("Displayed data may be stale. Refresh before planning.")}
-        </div>
-      )}
-      {state.warnings.length > 0 && (
-        <div className="callout warning" role="status">
-          {state.warnings.join(" · ")}
-        </div>
-      )}
       <Tabs
         active={tab}
-        onChange={(value) => {
-          setTab(value);
-          setPage(1);
-        }}
+        onChange={changeTab}
         tabs={[
-          { id: "tasks", label: "Tasks · อนุมัติและตอบรับ" },
-          {
-            id: "gantt",
-            label: t("Assignment timeline"),
-            count: unique.length,
-          },
-          { id: "workload", label: t("Workload") },
-          { id: "items", label: t("Work items") },
+          { id: "workload", label: "Workload.title" },
+          { id: "tasks", label: "Workload.tabTasks" },
         ]}
       />
-      <div className="kpi-grid four">
-        <KpiCard
-          label={t("Engineers on the plan")}
-          value={rows.length}
-          note={unique.length + " " + t("work items")}
-          tone="blue"
-          icon="users"
-        />
-        <KpiCard
-          label={t("Committed man-days")}
-          value={fmt(rows.reduce((s, r) => s + r.committed, 0))}
-          note={t("Within selected horizon")}
-          tone="slate"
-          icon="clock"
-        />
-        <KpiCard
-          label={t("Over capacity")}
-          value={rows.filter((r) => (r.peak ?? 0) > 100).length}
-          note={t("Peak week above 100%")}
-          tone="red"
-          icon="alertTriangle"
-          onClick={() => {
-            setTab("workload");
-            setFocus("Over capacity");
-            setPage(1);
-          }}
-        />
-        <KpiCard
-          label={t("Overdue work")}
-          value={rows.reduce((s, r) => s + r.overdue, 0)}
-          note={t("Past the committed end date")}
-          tone="amber"
-          icon="calendar"
-          onClick={() => {
-            setTab("workload");
-            setFocus("Overdue");
-            setPage(1);
-          }}
-        />
-      </div>
-      {tab !== "tasks" && <><div className="toolbar resource-plan-toolbar" aria-label={t("Resource plan filters")}>
-        <div className="resource-filter-row primary">
-          <div className="resource-filter resource-search-filter">
-            <span className="resource-filter-label">{t("Search")}</span>
+      {tab === "tasks" ? (
+        <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} onChanged={() => setData(null)} openProjectSchedule={openProjectSchedule} />
+      ) : (
+        <>
+          {error ? (
+            <div className="callout danger" role="alert">
+              {error} {t("Displayed data may be stale. Refresh before planning.")}
+              <button className="btn ghost sm" type="button" onClick={() => void load()}>{t("Refresh")}</button>
+            </div>
+          ) : null}
+          {data?.warnings.length ? (
+            <div className="callout warning" role="status">
+              {t("Workload.schedulesSkipped")}: {data.warnings.join(", ")}
+            </div>
+          ) : null}
+          <div className="toolbar workload-toolbar">
             <SearchInput
               value={search}
-              onChange={(v) => {
-                setSearch(v);
-                setPage(1);
-              }}
+              onChange={(value) => filtered(() => setSearch(value))}
               placeholder={t("Search engineer, inquiry, project or customer…")}
             />
-          </div>
-          <div className="resource-filter">
-            <span className="resource-filter-label">{t("Department")}</span>
             <Select
               label="Department"
               value={department}
-              onChange={(v) => {
-                setDepartment(v);
-                setPage(1);
-              }}
-              options={[
-                "All departments",
-                ...[...new Set(bootstrap.team.map((u) => u.department))].sort(),
-              ]}
+              onChange={(value) => filtered(() => setDepartment(value))}
+              options={[ALL_DEPARTMENTS, ...departments]}
             />
-          </div>
-          <div className="resource-filter">
-            <span className="resource-filter-label">{t("Work type")}</span>
-            <Select
-              label="Work type"
-              value={type}
-              onChange={(v) => {
-                setType(v);
-                setPage(1);
-              }}
-              options={["All work", "Inquiry", "Estimate", "Project"]}
-            />
-          </div>
-          <div className="resource-window-filter">
-            <span className="resource-filter-label">{t("Planning window")}</span>
-            <div className="resource-window-controls">
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => shiftWindow(-1)}
-                title={t("Previous period")}
-                aria-label={t("Previous period")}
-              >
+            <div className="workload-window" role="group" aria-label={t("Planning window")}>
+              <button type="button" className="icon-btn" onClick={() => shiftWindow(-1)} title={t("Previous period")} aria-label={t("Previous period")}>
                 <Icon name="chevronLeft" />
               </button>
-              <label className="resource-date-input">
-                <span className="sr-only">{t("Start date")}</span>
-                <input
-                  type="date"
-                  value={start}
-                  onChange={(e) => {
-                    setStart(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </label>
-              <div className="resource-weeks-select">
-                <Select
-                  label="Weeks"
-                  value={horizon}
-                  onChange={(value) => {
-                    setHorizon(value);
-                    setPage(1);
-                  }}
-                  options={["8", "12", "16", "24"]}
-                />
-                <span>{t("weeks")}</span>
-              </div>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => shiftWindow(1)}
-                title={t("Next period")}
-                aria-label={t("Next period")}
-              >
-                <Icon name="chevronRight" />
-              </button>
-              <button type="button" className="btn default sm" onClick={showToday}>
-                <Icon name="calendar" />
+              <button type="button" className="btn default sm" onClick={() => filtered(() => setStart(dateFromDay(dayNumber(todayIso) - 14)))}>
                 {t("Today")}
               </button>
+              <button type="button" className="icon-btn" onClick={() => shiftWindow(1)} title={t("Next period")} aria-label={t("Next period")}>
+                <Icon name="chevronRight" />
+              </button>
+              <Select label="Weeks" value={horizon} onChange={(value) => filtered(() => setHorizon(value))} options={["8", "12", "16", "24"]} />
+              <span className="muted">{t("weeks")}</span>
             </div>
           </div>
-        </div>
-        <div className="resource-filter-row secondary">
-          <div className="resource-page-size">
-            <TablePageSize
-              value={pageSize}
-              onChange={(value) => {
-                setPageSize(value);
-                setPage(1);
-              }}
-            />
-          </div>
-          <div className="resource-filter compact">
-            <span className="resource-filter-label">{t("Sort by")}</span>
-            <Select
-              label="Sort"
-              value={sort}
-              onChange={setSort}
-              options={["Name", "Peak load", "Committed man-days"]}
-            />
-          </div>
-          <div className="resource-filter compact">
-            <span className="resource-filter-label">{t("Focus")}</span>
-            <Select
-              label="Focus"
-              value={focus}
-              onChange={(v) => {
-                setFocus(v);
-                setPage(1);
-              }}
-              options={["All", "Over capacity", "Overdue", "Missing effort"]}
-            />
-          </div>
-          {hasFilters && (
-            <button type="button" className="btn ghost sm resource-clear" onClick={clearFilters}>
-              <Icon name="x" />
-              {t("Clear filters")}
-            </button>
-          )}
-          <span className="resource-legend" aria-label={t("Work type legend")}>
-            <span>{t("Legend")}</span>
-            {Object.entries(tones).map(([label, color]) => (
-              <Badge key={label} tone={color}>
-                {t(label)}
-              </Badge>
-            ))}
-          </span>
-        </div>
-      </div>
-      <details className="resource-method">
-        <summary>
-          <Icon name="alertCircle" />
-          {t("How workload is calculated")}
-        </summary>
-        <p>
-          {t(
-            "Capacity uses saved working days/week, Monday–Friday, excluding company holidays. Personal leave is not deducted.",
-          )}{" "}
-          {t("Unplanned effort and capacity are shown as —, not zero.")}{" "}
-          {t(
-            "Incomplete plans are excluded from totals; utilisation is a lower bound until effort is complete.",
-          )}{" "}
-          {t(
-            "Estimate effort is shared equally among its assigned owners/support; Project effort is split across PICs.",
-          )}
-        </p>
-      </details></>}
-      {loading ? (
-        <div role="status" className="callout info">
-          {t("Loading from SQL Server…")}
-        </div>
-      ) : null}
-      {tab === "tasks" ? <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} onChanged={() => { void load(); }} openProjectSchedule={openProjectSchedule} /> : !rows.length ? (
-        <EmptyState
-          icon="users"
-          title={t("Nobody matches the filter")}
-          message={t(
-            "Clear the department or search filter to see the team again.",
-          )}
-        />
-      ) : (
-        <>
-          {tab === "gantt" && (
-            <Panel
-              title={t("Assignment timeline")}
-              subtitle={t(
-                "Each bar is one commitment; the shaded part is progress",
-              )}
-              actions={
-                emptyTimelineRows ? (
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    onClick={() => {
-                      setShowEmptyTimelineRows((value) => !value);
-                      setPage(1);
-                    }}
-                  >
-                    <Icon name="eye" />
-                    {showEmptyTimelineRows
-                      ? t("Hide people without work")
-                      : `${t("Show all engineers")} (${rows.length})`}
+          <FilterChips label="Workload.chips" items={chipItems} active={focus} onPick={(key) => filtered(() => setFocus(key as Focus | null))} />
+          <Panel
+            title="Workload.byWeek"
+            subtitle="Planned man-days / available man-days · green under 85%, amber up to 100%, red above"
+            actions={
+              <div className="workload-panel-actions">
+                {unassigned.length ? (
+                  <button type="button" className="btn ghost sm" onClick={() => setUnassignedOpen(true)}>
+                    <Icon name="alertCircle" />
+                    {t("Workload.unassigned").replace("{n}", String(unassigned.length))}
                   </button>
-                ) : null
-              }
-              flush
-            >
-              {!timelineRows.length ? (
-                <EmptyState
-                  icon="calendar"
-                  title={t("No scheduled work in this period")}
-                  message={t("Move the planning window or show all engineers.")}
-                  action={
-                    <button
-                      type="button"
-                      className="btn default"
-                      onClick={() => setShowEmptyTimelineRows(true)}
-                    >
-                      {t("Show all engineers")}
-                    </button>
-                  }
-                />
-              ) : (
-              <div className="gantt-wrap" aria-label={t("Assignment timeline table")}>
-                <div
-                  className="gantt"
-                  style={{
-                    ["--weeks" as string]: weeks.length,
-                    ["--timeline-width" as string]: `${weeks.length * 74}px`,
-                  }}
-                >
-                  <div className="gantt-head">
-                    <div className="gantt-side">{t("Engineer")}</div>
-                    <div className="gantt-weeks">
-                      {weeks.map((w) => (
-                        <span
-                          key={w.start}
-                          className={
-                            w.start <= today() && w.end >= today()
-                              ? "current"
-                              : ""
-                          }
-                        >
-                          <b>{w.start.slice(5)}</b>
-                          <em>{w.start.slice(0, 4)}</em>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  {visible.map((row) => (
-                    <div className="gantt-row" key={row.user.id}>
-                      <div className="gantt-side">
-                        <span className="avatar sm">
-                          {initials(row.user.name)}
-                        </span>
-                        <div>
-                          <strong>{row.user.name}</strong>
-                          <small>
-                            {row.user.department} <LocalizedText text={"·"} /> {row.items.length} <LocalizedText text={"·"} />{" "}
-                            {fmt(row.committed)} <LocalizedText text={"MD"} /> </small>
-                        </div>
-                        <Badge tone={tone(row.peak)}>{percent(row.peak)}</Badge>
-                      </div>
-                      <div className="gantt-track">
-                        {today() >= weeks[0].start &&
-                          today() <= weeks.at(-1)!.end && (
-                            <span
-                              className="gantt-today"
-                              style={{
-                                left:
-                                  ((dayNumber(today()) -
-                                    dayNumber(weeks[0].start)) /
-                                    (weeks.length * 7)) *
-                                    100 +
-                                  "%",
-                              }}
-                            />
-                          )}
-                        {row.items
-                          .filter((i) => planningBar(i, weeks))
-                          .map((i) => {
-                            const pos = planningBar(i, weeks)!;
-                            return (
-                              <div className="gantt-line" key={i.key}>
-                                <button
-                                  type="button"
-                                  className={
-                                    "gantt-bar " +
-                                    tones[i.type] +
-                                    (i.end &&
-                                    i.end < today() &&
-                                    i.progress < 100
-                                      ? " late"
-                                      : "")
-                                  }
-                                  style={{
-                                    left: pos.left + "%",
-                                    width: pos.width + "%",
-                                  }}
-                                  onClick={() => open(i)}
-                                  title={[
-                                    i.reference,
-                                    i.title,
-                                    i.start + " → " + i.end,
-                                    (i.manDays === null
-                                      ? "—"
-                                      : fmt(i.manDays)) + " MD",
-                                    i.status,
-                                  ].join("\n")}
-                                >
-                                  <i
-                                    style={{
-                                      width:
-                                        Math.max(0, Math.min(100, i.progress)) +
-                                        "%",
-                                    }}
-                                  />
-                                  <span>
-                                    {i.reference} <LocalizedText text={"·"} /> {i.title}
-                                  </span>
-                                </button>
-                              </div>
-                            );
-                          })}
-                        {!row.items.some((i) => planningBar(i, weeks)) && (
-                          <div className="gantt-line">
-                            <span className="gantt-empty">
-                              {t("No scheduled work in this horizon")}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                ) : null}
+                {focused.length > busy.length ? (
+                  <button type="button" className="btn default sm" onClick={() => filtered(() => setShowIdle((value) => !value))}>
+                    {t(showIdle ? "Hide people without work" : "Show all engineers")}
+                  </button>
+                ) : null}
               </div>
-              )}
-              {pageControls}
-            </Panel>
-          )}
-          {tab === "workload" && (
-            <>
-              <Panel
-                title={t("Weekly load")}
-                subtitle={t(
-                  "Planned man-days / available man-days · green under 85%, amber up to 100%, red above",
-                )}
-                actions={
-                  <div className="workload-view-actions">
-                    <span>
-                      {workloadRows.length} <LocalizedText text={"of"} /> {rows.length} {t("engineers")}
-                    </span>
-                    {hiddenWorkloadRows > 0 && (
-                      <button
-                        type="button"
-                        className="btn default sm"
-                        onClick={() => {
-                          setShowIdleWorkloadRows((shown) => !shown);
-                          setPage(1);
-                        }}
-                      >
-                        {t(
-                          showIdleWorkloadRows
-                            ? "Hide people without work"
-                            : "Show all engineers",
-                        )}
-                      </button>
-                    )}
-                  </div>
-                }
-                flush
-              >
+            }
+            flush
+          >
+            {!data ? (
+              <div className="empty">{loading ? <><span className="spinner" />{t("Loading from SQL Server…")}</> : null}</div>
+            ) : !rows.length ? (
+              <EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." />
+            ) : (
+              <>
                 <div className="table-wrap workload-heat-wrap">
                   <table className="heat workload-heat">
                     <thead>
                       <tr>
-                        <th>{t("Engineer")}</th>
-                        {weeks.map((w) => (
-                          <th key={w.start} className="num" title={w.start}>
-                            {w.start.slice(5).replace("-", "/")}
+                        <th>{t("Workload.person")}</th>
+                        <th className="num">{t("Workload.open")}</th>
+                        {weeks.map((week) => (
+                          <th key={week.start} className={`num${week.start === currentWeek ? " current" : ""}`} title={`${week.start} – ${week.end}`}>
+                            {week.start.slice(5).replace("-", "/")}
                           </th>
                         ))}
+                        <th>{t("Workload.capacity")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {visible.map((row) => (
                         <tr key={row.user.id}>
                           <td>
-                            <div className="workload-person">
-                              <span className="workload-avatar">
-                                {initials(row.user.name)}
-                              </span>
+                            <button type="button" className="workload-person" onClick={() => setPersonId(row.user.id)}>
+                              <span className="workload-avatar">{initials(row.user.name)}</span>
                               <span>
                                 <strong>{row.user.name}</strong>
                                 <small>{row.user.department}</small>
                               </span>
-                            </div>
+                            </button>
+                          </td>
+                          <td className="num">
+                            <strong>{row.open}</strong>
+                            {row.overdue ? <small className="workload-late">{row.overdue} {t("overdue")}</small> : null}
                           </td>
                           {row.weekly.map((w) => (
                             <td key={w.week.start} className="num">
                               <span
-                                className={
-                                  "heat-cell " +
-                                  (w.manDays > 0 ? tone(w.utilisation) : "slate")
-                                }
-                                title={
-                                  fmt(w.manDays) +
-                                  " / " +
-                                  (w.available === null
-                                    ? "—"
-                                    : fmt(w.available)) +
-                                  " MD"
-                                }
+                                className={"heat-cell " + (w.manDays > 0 ? tone(w.utilisation) : "slate")}
+                                title={`${fmt(w.manDays)} / ${w.available === null ? "—" : fmt(w.available)} MD`}
                               >
                                 {w.manDays > 0 ? percent(w.utilisation) : "—"}
                               </span>
-                              {w.manDays > 0 && (
-                                <small className="workload-days">
-                                  {fmt(w.manDays)} <LocalizedText text={"MD"} /> </small>
-                              )}
+                              {w.manDays > 0 ? <small className="workload-days">{fmt(w.manDays)} MD</small> : null}
                             </td>
                           ))}
+                          <td>
+                            <button
+                              type="button"
+                              className="capacity-button"
+                              disabled={!canPlan}
+                              title={t("Weekly capacity")}
+                              onClick={() => setCapacityUser(row.user.id)}
+                            >
+                              {fmt(row.capacity)} MD
+                              {row.saved === null ? <small>{t("Workload.defaultCapacity")}</small> : null}
+                            </button>
+                          </td>
                         </tr>
                       ))}
-                      {!visible.length && (
+                      {!visible.length ? (
                         <tr>
-                          <td colSpan={weeks.length + 1}>
+                          <td colSpan={weeks.length + 3}>
                             <div className="workload-empty">
                               <Icon name="users" />
                               <span>{t("No planned workload in this period")}</span>
                             </div>
                           </td>
                         </tr>
-                      )}
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
-                {pageControls}
-              </Panel>
-              <div className="workload-overview-grid">
-                <Panel
-                  title={t("Engineer workload")}
-                  subtitle={t("Work, load and due dates at a glance")}
-                  flush
-                >
-                  <div className="table-wrap">
-                    <table className="workload-summary-table">
-                      <thead>
-                        <tr>
-                          {[
-                            "Engineer",
-                            "Work / effort",
-                            "Committed",
-                            "Load",
-                            "Due / risk",
-                            "Weekly capacity",
-                          ].map((h) => (
-                            <th key={h}>{t(h)}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visible.map((r) => (
-                          <tr key={r.user.id}>
-                            <td>
-                              <div className="workload-person workload-person-summary">
-                                <span className="workload-avatar">
-                                  {initials(r.user.name)}
-                                </span>
-                                <span>
-                                  <strong>{r.user.name}</strong>
-                                  <small>
-                                    {r.user.department} <LocalizedText text={"·"} /> {r.user.level}
-                                  </small>
-                                </span>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="workload-work-count">
-                                <strong>{r.open}</strong>
-                                <span>{t("open items")}</span>
-                                {r.unknown > 0 && (
-                                  <Badge tone="amber">
-                                    {r.unknown} {t("missing effort")}
-                                  </Badge>
-                                )}
-                              </div>
-                            </td>
-                            <td className="workload-committed">
-                              <strong>{fmt(r.committed)}</strong>
-                              <span><LocalizedText text={"MD"} /></span>
-                            </td>
-                            <td>
-                              <div className="workload-load">
-                                <div>
-                                  <span>{t("Average")}</span>
-                                  <strong>{percent(r.average)}</strong>
-                                </div>
-                                <Progress
-                                  value={Math.min(r.average ?? 0, 100)}
-                                  tone={tone(r.average)}
-                                />
-                                <div>
-                                  <span>{t("Peak")}</span>
-                                  <Badge tone={tone(r.peak)}>
-                                    {percent(r.peak)}
-                                  </Badge>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="workload-due">
-                                {r.nextDue ? (
-                                  <button
-                                    className="workload-due-link"
-                                    onClick={() => open(r.nextDue!)}
-                                  >
-                                    <strong>{r.nextDue.end}</strong>
-                                    <span>{r.nextDue.reference}</span>
-                                  </button>
-                                ) : (
-                                  <span className="muted">—</span>
-                                )}
-                                {r.overdue > 0 && (
-                                  <Badge tone="red">
-                                    {r.overdue} {t("overdue")}
-                                  </Badge>
-                                )}
-                              </div>
-                            </td>
-                            <td>
-                              <button
-                                className={
-                                  "capacity-button" +
-                                  (r.capacity === null ? " missing" : "")
-                                }
-                                disabled={!canPlan}
-                                onClick={() => setCapacityUser(r.user.id)}
-                              >
-                                {r.capacity === null
-                                  ? t("Set capacity")
-                                  : fmt(r.capacity) + " MD"}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-                <div className="stack workload-side-stack">
-                  <Panel
-                    title={t("Needs a decision")}
-                    subtitle={t("Only people with work that needs planning input")}
-                  >
-                    {decisionRows.length ? (
-                      <ul className="workload-decision-list">
-                        {decisionRows.map((r) => (
-                          <li key={r.user.id}>
-                            <span className="workload-alert-icon">
-                              <Icon name="alertTriangle" />
-                            </span>
-                            <div>
-                              <strong>{r.user.name}</strong>
-                              <div className="workload-issue-tags">
-                                {(r.peak ?? 0) > 100 && (
-                                  <Badge tone="red">
-                                    {t("Peak")} {percent(r.peak)}
-                                  </Badge>
-                                )}
-                                {r.overdue > 0 && (
-                                  <Badge tone="red">
-                                    {r.overdue} {t("overdue")}
-                                  </Badge>
-                                )}
-                                {r.unknown > 0 && (
-                                  <Badge tone="amber">
-                                    {r.unknown} {t("missing effort")}
-                                  </Badge>
-                                )}
-                                {r.capacity === null && (
-                                  <button
-                                    type="button"
-                                    className="badge amber workload-capacity-link"
-                                    disabled={!canPlan}
-                                    onClick={() => setCapacityUser(r.user.id)}
-                                  >
-                                    {t("Set weekly capacity")}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="workload-all-clear">
-                        <Icon name="checkCircle" />
-                        <span>{t("No planning decisions needed")}</span>
-                      </div>
-                    )}
-                  </Panel>
-                  <Panel title={t("Load by department")}>
-                    {departmentLoad.length ? (
-                      <BarChart unit=" MD" data={departmentLoad} height={150} />
-                    ) : (
-                      <div className="workload-empty compact">
-                        <Icon name="chart" />
-                        <span>{t("No committed workload in this period")}</span>
-                      </div>
-                    )}
-                  </Panel>
-                </div>
-              </div>
-            </>
-          )}
-          {tab === "items" && (
-            <Panel
-              title={t("Work items")}
-              subtitle={t(
-                "Open the source to change owners or project dates; plan pre-sales effort here.",
-              )}
-              flush
-            >
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      {[
-                        "Engineer",
-                        "Type",
-                        "Reference",
-                        "Description",
-                        "Start date",
-                        "Due date",
-                        "Man-days",
-                        "Status",
-                        "Actions",
-                      ].map((h) => (
-                        <th key={h}>{t(h)}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleItems.map(({ r, i }) => (
-                      <tr key={i.key}>
-                        <td>{r.user.name}</td>
-                        <td>
-                          <Badge tone={tones[i.type]}>{t(i.type)}</Badge>
-                        </td>
-                        <td>
-                          <button className="btn ghost" onClick={() => open(i)}>
-                            {i.reference}
-                          </button>
-                        </td>
-                        <td>{i.title}</td>
-                        <td>{i.start ?? "—"}</td>
-                        <td>{i.end ?? "—"}</td>
-                        <td>{i.manDays === null ? "—" : fmt(i.manDays)}</td>
-                        <td>{t(i.status)}</td>
-                        <td>
-                          {i.type !== "Project" && !i.key.startsWith("InquiryTask-") &&
-                            canPlan &&
-                            bootstrap.permissions.includes(
-                              i.type === "Inquiry"
-                                ? "inquiry.write"
-                                : "estimate.write",
-                            ) && (
-                              <button
-                                className="btn default"
-                                onClick={() => setEdit(i)}
-                              >
-                                {t("Plan effort")}
-                              </button>
-                            )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {pageControls}
-            </Panel>
-          )}
+                <Pagination
+                  page={currentPage}
+                  pageCount={pageCount}
+                  from={shown.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}
+                  to={Math.min(currentPage * PAGE_SIZE, shown.length)}
+                  total={shown.length}
+                  onPage={setPage}
+                />
+              </>
+            )}
+          </Panel>
+          <p className="workload-method">{t("Workload.method")}</p>
         </>
       )}
-      {state.items.some((i) => i.ownerId === null) && (
-        <Panel title={t("Unassigned")}>
-          <ul>
-            {state.items
-              .filter((i) => i.ownerId === null)
-              .map((i) => (
-                <li key={i.key}>
-                  <button className="btn ghost" onClick={() => open(i)}>
-                    {i.reference} <LocalizedText text={"·"} /> {i.title}
-                  </button>
-                </li>
-              ))}
-          </ul>
-        </Panel>
-      )}
+      {person ? (
+        <Drawer title={person.user.name} subtitle={person.user.department} onClose={() => setPersonId(null)} width={620}>
+          <p className="workload-drawer-summary">
+            {t("Workload.personSummary")
+              .replace("{open}", String(person.open))
+              .replace("{md}", fmt(person.committed))
+              .replace("{peak}", percent(person.peak))}
+          </p>
+          <div className="workload-drawer-capacity">
+            <span>
+              {t("Weekly capacity")}: <strong>{fmt(person.capacity)} MD</strong>
+              {person.saved === null ? <small> ({t("Workload.defaultCapacity")})</small> : null}
+            </span>
+            {canPlan ? (
+              <button type="button" className="btn ghost sm" onClick={() => setCapacityUser(person.user.id)}>
+                <Icon name="edit" />
+                {t("Workload.changeCapacity")}
+              </button>
+            ) : null}
+          </div>
+          <WorkList items={person.items} today={todayIso} canPlanEffort={canPlanEffort} onOpen={open} onEffort={setEdit} />
+        </Drawer>
+      ) : null}
+      {unassignedOpen ? (
+        <Drawer title="Workload.unassignedTitle" subtitle="Workload.unassignedHint" onClose={() => setUnassignedOpen(false)} width={620}>
+          <WorkList items={unassigned} today={todayIso} canPlanEffort={() => false} onOpen={open} onEffort={setEdit} />
+        </Drawer>
+      ) : null}
       {edit && (
         <EffortModal
           item={edit}
-          current={state.planning.efforts.find(
-            (e) => e.entityType === edit.type && e.entityId === edit.entityId,
-          )}
+          current={data?.efforts.find((e) => e.entityType === edit.type && e.entityId === edit.entityId)}
           onClose={() => setEdit(null)}
           onSaved={saved}
         />
@@ -1313,12 +474,59 @@ export function ProductionResourcePlan({
         <CapacityModal
           initialUser={capacityUser}
           team={bootstrap.team}
-          capacities={state.planning.capacities}
+          capacities={data?.capacities ?? []}
           onClose={() => setCapacityUser(null)}
           onSaved={saved}
         />
       )}
     </div>
+  );
+}
+
+/** One person's open work, soonest due first: where it comes from, its dates, its effort and the way to it. */
+function WorkList({
+  items,
+  today,
+  canPlanEffort,
+  onOpen,
+  onEffort,
+}: {
+  items: Commitment[];
+  today: string;
+  canPlanEffort: (item: Commitment) => boolean;
+  onOpen: (item: Commitment) => void;
+  onEffort: (item: Commitment) => void;
+}) {
+  const { t } = useLanguage();
+  if (!items.length) return <EmptyState icon="checkCircle" title="Workload.noOpenWork" message="Workload.noOpenWorkHint" />;
+  return (
+    <ul className="workload-items">
+      {[...items].sort(byDueDate).map((item) => (
+        <li key={item.key}>
+          <div className="workload-item-head">
+            <Badge tone={tones[item.type]}>{t(item.type)}</Badge>
+            <button type="button" className="workload-item-link" onClick={() => onOpen(item)}>
+              {item.reference}
+            </button>
+            {item.end && item.end < today ? <Badge tone="red">{t("overdue")}</Badge> : null}
+          </div>
+          <strong>{item.title}</strong>
+          <small>
+            {item.customer ? `${item.customer} · ` : ""}
+            {item.start ?? "—"} → {item.end ?? "—"} · {fmt(item.progress)}% · {t(item.status)}
+          </small>
+          <div className="workload-item-effort">
+            {item.manDays === null ? <Badge tone="amber">{t("Workload.missingEffort")}</Badge> : <span>{fmt(item.manDays)} MD</span>}
+            {canPlanEffort(item) ? (
+              <button type="button" className="btn ghost sm" onClick={() => onEffort(item)}>
+                <Icon name="edit" />
+                {t("Plan effort")}
+              </button>
+            ) : null}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1329,7 +537,7 @@ function EffortModal({
   onSaved,
 }: {
   item: Commitment;
-  current?: Effort;
+  current?: WorkloadEffort;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -1422,16 +630,14 @@ function CapacityModal({
 }: {
   initialUser: number;
   team: BootstrapData["team"];
-  capacities: Capacity[];
+  capacities: WorkloadCapacity[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useLanguage(),
     [user, setUser] = useState(initialUser),
     [amount, setAmount] = useState(
-      String(
-        capacities.find((c) => c.userId === initialUser)?.daysPerWeek ?? 5,
-      ),
+      String(weeklyCapacity(capacities.find((c) => c.userId === initialUser)?.daysPerWeek)),
     ),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -1460,17 +666,14 @@ function CapacityModal({
           }
         }}
       >
+        <p>{t("Workload.capacityHint")}</p>
         <Field label={t("Engineer")}>
           <select
             value={user}
             onChange={(e) => {
               const id = Number(e.target.value);
               setUser(id);
-              setAmount(
-                String(
-                  capacities.find((c) => c.userId === id)?.daysPerWeek ?? 5,
-                ),
-              );
+              setAmount(String(weeklyCapacity(capacities.find((c) => c.userId === id)?.daysPerWeek)));
             }}
           >
             {team.map((u) => (

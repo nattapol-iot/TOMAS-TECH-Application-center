@@ -11,6 +11,9 @@ import {
 } from "../http.js";
 import { ApiError } from "../errors.js";
 import { insertAudit } from "../audit.js";
+import { isProjectElevated } from "../project-scope.js";
+import { elevated } from "../resource-task-service.js";
+import { WORKLOAD_SQL, workloadItems } from "../resource-workload.js";
 
 type Row = Record<string, unknown> & { row_version: Buffer };
 const map = (r: Row) => ({
@@ -38,6 +41,16 @@ function decimal(value: unknown, max: number): number {
     );
   return value;
 }
+// Capacities, effort and holidays: shared by the planning read and the Workload read. Binds @actor.
+const PLANNING_SQL = `
+      SELECT * FROM dbo.resource_capacity;
+      SELECT e.* FROM dbo.resource_effort e
+      WHERE EXISTS(SELECT 1 FROM dbo.user_effective_permissions p WHERE p.user_id=@actor
+        AND p.code=CASE e.entity_type WHEN N'Inquiry' THEN N'inquiry.read' ELSE N'estimate.read' END)
+      AND ((e.entity_type=N'Inquiry' AND EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=e.entity_id AND i.deleted_at IS NULL))
+        OR (e.entity_type=N'Estimate' AND EXISTS(SELECT 1 FROM dbo.estimates i WHERE i.id=e.entity_id AND i.deleted_at IS NULL)));
+      SELECT holiday_date FROM dbo.holidays;`;
+const holidayDates = (rows: unknown) => (rows as { holiday_date: Date }[]).map((r) => dateOnly(r.holiday_date)!);
 export function registerResourcePlanningRoutes(
   app: FastifyInstance,
   db: Database,
@@ -46,24 +59,29 @@ export function registerResourcePlanningRoutes(
   app.get("/api/v1/resource-planning", async (request) => {
     await users.demandPermission(request, "schedule.read");
     const actor = await users.required(request);
-    const result = await db.query<Row>(
-      `
-      SELECT * FROM dbo.resource_capacity;
-      SELECT e.* FROM dbo.resource_effort e
-      WHERE EXISTS(SELECT 1 FROM dbo.user_effective_permissions p WHERE p.user_id=@actor_user
-        AND p.code=CASE e.entity_type WHEN N'Inquiry' THEN N'inquiry.read' ELSE N'estimate.read' END)
-      AND ((e.entity_type=N'Inquiry' AND EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=e.entity_id AND i.deleted_at IS NULL))
-        OR (e.entity_type=N'Estimate' AND EXISTS(SELECT 1 FROM dbo.estimates i WHERE i.id=e.entity_id AND i.deleted_at IS NULL)));
-      SELECT holiday_date FROM dbo.holidays;
-    `,
-      (q) => q.input("actor_user", sql.BigInt, actor.id),
-    );
+    const result = await db.query<Row>(PLANNING_SQL, (q) => q.input("actor", sql.BigInt, actor.id));
     return {
       capacities: (result.recordsets[0] as Row[]).map(map),
       efforts: (result.recordsets[1] as Row[]).map(map),
-      holidays: (
-        result.recordsets[2] as unknown as { holiday_date: Date }[]
-      ).map((r) => dateOnly(r.holiday_date)),
+      holidays: holidayDates(result.recordsets[2]),
+    };
+  });
+  // Everything the Workload screen shows, in one read; the page needs both schedule.read and project.read.
+  app.get("/api/v1/resource-planning/workload", async (request) => {
+    await users.demandPermission(request, "schedule.read");
+    await users.demandPermission(request, "project.read");
+    const actor = await users.required(request);
+    const result = await db.query<Row>(`SET NOCOUNT ON;${PLANNING_SQL}${WORKLOAD_SQL}`, (q) => q
+      .input("actor", sql.BigInt, actor.id)
+      .input("project_elevated", sql.Bit, isProjectElevated(actor))
+      .input("task_elevated", sql.Bit, elevated(actor)));
+    const sets = result.recordsets as unknown as Record<string, unknown>[][];
+    const holidays = holidayDates(sets[2]);
+    return {
+      capacities: (sets[0] as Row[]).map(map),
+      efforts: (sets[1] as Row[]).map(map),
+      holidays,
+      ...workloadItems(sets.slice(3), new Set(holidays)),
     };
   });
   app.put("/api/v1/resource-planning/:kind/:id", async (request) => {

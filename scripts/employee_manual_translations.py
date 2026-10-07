@@ -425,13 +425,13 @@ C('schedule', 'Project plan and baselines || プロジェクト計画（Plan）�
 
 C('resources', 'Resource Plan and Project Timeline || Resource PlanとProject Timeline', 'Planning → Resource Plan / Project Timeline || Planning → Resource Plan / Project Timeline', 'Planners / team leads / PM || 計画担当・チームリーダー・PM',
   P('17.1 Check team capacity || 17.1 人員の対応可能量を確認', [
-    'Open Resource Plan and check the period, people, work type and status filters. || Resource Planで期間、人、業務種類、状態のフィルターを確認します。',
-    'Authorized users set members’ Weekly capacity in working days per week. || 権限者はメンバーのWeekly capacityを週当たり稼働日数で設定します。',
-    'In Work items, use Plan effort for inquiries/estimates still using aggregate planning; enter dates and man-days. || 全体計画を使用中のInquiry・EstimateはWork itemsのPlan effortで日付と人日を入力します。',
-    'For projects, open the source to change dates/PIC. Inspect Timeline and Workload for overlaps or overload. || Projectは元画面で日付・PICを変更します。TimelineとWorkloadで重複・過負荷を確認します。',
+    'Open Resource Plan: it opens on <b>Team workload</b>, busiest people first. Use search, department and the week arrows. || Resource Planを開くと<b>チームの負荷</b>が負荷の高い人から表示されます。検索、部署、週の矢印を使います。',
+    'Click <b>Over capacity / Has overdue work / Missing effort</b> to see only the people who need a decision; click again to clear. || <b>能力超過・期限超過あり・工数未設定</b>を押すと判断が必要な人だけを表示し、もう一度押すと解除します。',
+    'Click a name to open that person’s open work, soonest due first. Click a reference to open its source, and use <b>Plan effort</b> on inquiries/estimates without effort. || 名前を押すとその人の未完了作業が期限順に表示されます。参照番号で元画面を開き、工数のないInquiry・Estimateは<b>Plan effort</b>で入力します。',
+    'Anyone without a saved <b>Weekly capacity</b> works 5 days a week. Authorized users click the capacity cell to save less for part-time work or long leave. || <b>Weekly capacity</b>未設定の人は週5日稼働とみなします。権限者は稼働欄を押し、短時間勤務や長期休暇の人に少ない値を保存します。',
     'Export the filtered plan as CSV and verify the exported row count. || 絞り込んだ計画をCSV出力し、件数を確認します。'
-  ], 'Workload can be compared with capacity; missing effort/capacity is shown as incomplete data. || 負荷と対応可能量を比較でき、工数・capacity不足は情報未完として表示されます。',
-    'Man-days measure labor; duration measures elapsed working days. Calculations use Monday–Friday and company holidays. Personal leave is not automatically deducted. Unknown capacity is not zero workload. || 人日は労働量、期間は稼働日の長さです。月～金と会社休日を使って計算し、個人休暇は自動控除されません。capacity不明を負荷0と解釈しないでください。') +
+  ], 'Each week’s load is compared with capacity; work without effort is counted separately as Missing effort. || 週ごとの負荷を稼働と比較し、工数のない作業は工数未設定として別に数えます。',
+    'Man-days measure labor; duration measures elapsed working days. Calculations use Monday–Friday and company holidays. Personal leave is not automatically deducted. Plan tasks without a PIC count towards nobody; see them under the “without a PIC” button. || 人日は労働量、期間は稼働日の長さです。月～金と会社休日を使って計算し、個人休暇は自動控除されません。PICのない計画タスクは誰の負荷にもならず、「担当者未設定」ボタンで確認できます。') +
   P('17.2 Create a task and submit its plan || 17.2 Task作成と計画承認申請', [
     'Open Resource Plan → Tasks → create, then select an accessible Inquiry or Project. || Resource Plan → Tasksで新規作成し、アクセス可能なInquiryまたはProjectを選びます。',
     'Enter title, expected output, priority, one assignee, start, working-day duration and effort in MD. || 名称、成果物、優先度、担当者1人、開始日、稼働日数、MD工数を入力します。',
@@ -916,7 +916,7 @@ C('troubleshooting', 'Troubleshooting when work is blocked || 作業できない
     ['Cannot Submit / Approve || 提出・承認できない', 'Read Validation/Readiness and verify mandatory fields, owner, state, approval step and permission. || Validation・Readiness、必須項目、担当、状態、承認工程、権限を確認。'],
     ['Rate missing or price invalid || 単価なし・価格不正', 'Check department/level/cost type/effective date and supplier/price/price date in Estimate; contact the master maintainer. || 部署・レベル・原価種類・適用日、見積の仕入先・価格・価格日を確認し、マスター担当へ連絡。'],
     ['Task visible but not editable || Taskは見えるが更新不可', 'Check that you are the assignee, membership is Active and the current plan is accepted. Closed work is read-only. || 本人担当、Active所属、現計画受諾を確認。完了業務は閲覧専用。'],
-    ['Workload is a dash/incomplete || 負荷が「—」・情報不足', 'Set weekly capacity and missing dates/effort. Missing data does not mean no workload. || 週capacity、日付、工数の不足を入力。不明は負荷なしではありません。'],
+    ['Workload shows Missing effort || 負荷に工数未設定と表示', 'Click the person, then Plan effort, or fix the dates and MD in that task’s plan. Missing data does not mean no workload. || その人を押してPlan effortで入力するか、計画のタスクで日付と人日を直します。不明は負荷なしではありません。'],
     ['Receipt did not increase usable stock || 入庫しても使用可能在庫が増えない', 'Check GRN Confirm and accepted versus quarantine quantities; compare the same item in Stock Balances. Ask the controller for ledger details. || GRN確定、合格・隔離数量、同じ品目のStock Balancesを確認。台帳詳細は管理者へ依頼。'],
     ['Cannot reserve or issue || 引当・払出できない', 'Check Released BOM, Available stock, other project reservations and prior/net issues, not only on-hand stock. || Released BOM、Available、他Project引当、既払出・純払出を確認し、手元数量だけで判断しない。'],
     ['Cannot sign / approver absent || 署名不可・承認者が出ない', 'Check Active specimen, your step, named approver and valid permission. Drawings need distinct member, lead engineer and manager on the correct project. || Active見本、自分の工程、指定承認者、権限を確認。図面は正しいProjectのMember・Lead・Managerが別人で必要。'],

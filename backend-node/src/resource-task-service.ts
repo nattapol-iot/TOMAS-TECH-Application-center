@@ -7,6 +7,7 @@ import { readTasks, readPics, readHolidays, resolveTasks, readProject, validateP
 import { hasRole } from './user-roles.js';
 import { planDates, workloadImpact, workDates, type TaskPlan, type Allocation } from './resource-task-math.js';
 import type { Database } from './db.js';
+import { DEFAULT_WEEKLY_CAPACITY } from './resource-workload.js';
 
 export type WorkRow = {
  id: number; inquiry_id: number|null; project_id: number|null; schedule_task_id: number|null;
@@ -91,7 +92,8 @@ export async function impact(tx:Transaction,plan:TaskPlan,exclude:WorkRow|null,k
       (task.id===Number(exclude?.schedule_task_id)?replaced:allocations).push({key:`Project-${task.id}`,start:r.planStart,end:r.planFinish,manDays:task.planManDays/owners.length});
     }
   }
-  return {...workloadImpact(allocations,plan,capacityRow?Number(capacityRow.days_per_week):null,holidays,replaced),replacesInquiryAggregate:kind==='Inquiry',countedTasks:allocations.length};
+  // Nobody saved a capacity for this person: they work Monday to Friday, as the Workload screen assumes.
+  return {...workloadImpact(allocations,plan,capacityRow?Number(capacityRow.days_per_week):DEFAULT_WEEKLY_CAPACITY,holidays,replaced),replacesInquiryAggregate:kind==='Inquiry',countedTasks:allocations.length};
 }
 
 export async function saveApprovedProjectPlan(tx:Transaction,r:WorkRow,plan:TaskPlan,actor:CurrentUser) {
