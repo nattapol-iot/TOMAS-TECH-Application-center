@@ -74,7 +74,10 @@ test("a new estimate can start from any previous estimate the person chooses", a
     source("app/system/production/EstimateStartFrom.tsx"), source("app/system/production/InquiryScreens.tsx"), source("app/system/api-client.ts")]);
   const modal = screen.match(/function CreateEstimateModal\([\s\S]*?\n\}\n/)?.[0] ?? "";
   // The person searches; nothing ranks or picks for them.
-  assert.match(startFrom, /listEstimates\(\{ page: 1, pageSize: 8, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
+  assert.match(startFrom, /listEstimates\(\{ page: 1, pageSize: 24, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
+  // An estimate with no cost has nothing to copy and is not offered; the list stays eight rows.
+  assert.match(startFrom, /result\.items\.filter\(\(item\) => item\.id !== excludeId && Number\(item\.total\) > 0\)\.slice\(0, SOURCE_ROWS\)/);
+  assert.match(startFrom, /const SOURCE_ROWS = 8;/);
   assert.match(startFrom, /export function startFromInput\(source: EstimateSummary, ledgers: StartLedgers\): EstimateStartFrom \{\s*return \{ sourceEstimateId: source\.id, includeCostItems: ledgers\.costItems, includeManhour: ledgers\.manhour, includeExpenses: ledgers\.expenses, includeOtherCosts: ledgers\.otherCosts \};/);
   assert.match(modal, /<StartFromChoice idPrefix="estimate-start"/);
   assert.match(modal, /const copyFrom = startFrom === "copy" && source \? startFromInput\(source, ledgers\) : undefined;/);

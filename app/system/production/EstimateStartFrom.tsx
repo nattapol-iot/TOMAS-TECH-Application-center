@@ -35,6 +35,7 @@ const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocal
 const formatMoney = (value: number | string | null | undefined) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(Number(value ?? 0));
 const revisionCode = (revision: number) => `R${String(revision).padStart(2, "0")}`;
 const errorText = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const SOURCE_ROWS = 8;
 
 /** What the toast says once a new estimate exists, with what came across from the source. */
 export function startFromCreatedMessage(number: string, copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null): string {
@@ -55,8 +56,9 @@ export function EstimateSourcePicker({ excludeId, source, onSource, ledgers, onL
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setSources((current) => ({ ...current, loading: true, error: "" }));
-      void listEstimates({ page: 1, pageSize: 8, search: sourceSearch.trim() || undefined })
-        .then((result) => { if (!cancelled) setSources({ items: result.items.filter((item) => item.id !== excludeId), loading: false, error: "" }); })
+      // An estimate with no cost yet has nothing to copy, so it is not offered; read a few more to still show eight.
+      void listEstimates({ page: 1, pageSize: 24, search: sourceSearch.trim() || undefined })
+        .then((result) => { if (!cancelled) setSources({ items: result.items.filter((item) => item.id !== excludeId && Number(item.total) > 0).slice(0, SOURCE_ROWS), loading: false, error: "" }); })
         .catch((requestError) => { if (!cancelled) setSources({ items: [], loading: false, error: errorText(requestError) }); });
     }, 250);
     return () => { cancelled = true; window.clearTimeout(timer); };
@@ -81,7 +83,7 @@ export function EstimateSourcePicker({ excludeId, source, onSource, ledgers, onL
       </tr>)}</tbody>
     </table></div>
     {sources.loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div>
-      : !sources.items.length ? <div className="info-strip">{copy("ไม่พบ Estimate ที่ตรงกับคำค้น", "No estimate matches the search", "検索に一致する見積はありません")}</div> : null}
+      : !sources.items.length ? <div className="info-strip">{copy("ไม่พบ Estimate ที่มีข้อมูลตรงกับคำค้น", "No estimate with costs matches the search", "検索に一致する費用入りの見積はありません")}</div> : null}
     {source ? <div className="settings-list">{ledgerChoices.map(([ledger, label]) => <div key={ledger} className="check-row"><input id={`estimate-source-${key}-${ledger}`} type="checkbox" checked={ledgers[ledger]} onChange={(event) => onLedgers({ ...ledgers, [ledger]: event.target.checked })} /><label htmlFor={`estimate-source-${key}-${ledger}`}><strong>{label}</strong></label></div>)}</div> : null}
     <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} /></span></div>
   </div>;
