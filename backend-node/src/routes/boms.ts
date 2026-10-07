@@ -7,10 +7,14 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, optionalBodyText, optionalPositiveLong, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
+import { MATERIAL_CATEGORY_CODES, remainingToRequest } from "../procurement-rules.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
 
 type BomHeader = { id: number | string; bom_no: string; revision: number; status: string; project_id: number | string; estimate_id: number | string };
+// BOMs generated before only material categories were copied still carry engineering, travel and other costs as SVC lines.
+const MATERIAL_LINE = "l.section_code<>N'SVC'";
+const MATERIAL_CATEGORIES = MATERIAL_CATEGORY_CODES.map((code) => `'${code}'`).join(",");
 
 function todayIn(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -32,8 +36,8 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     await users.demandPermission(request, "procurement.read"); const actor = await users.required(request); const projectId = optionalPositiveLong((request.query as Record<string, unknown>).projectId, "Project id");
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT b.id,b.bom_no,b.revision,b.status,b.project_id,p.project_no,p.name project_name,
       b.estimate_id,e.estimate_no,e.revision estimate_revision,b.created_at,cu.name created_by_name,b.released_at,ru.name released_by_name,
-      (SELECT COUNT(*) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL) line_count,
-      (SELECT COALESCE(SUM(l.qty_required*l.est_unit_cost),0) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL) bom_budget,b.row_version
+      (SELECT COUNT(*) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE}) line_count,
+      (SELECT COALESCE(SUM(l.qty_required*l.est_unit_cost),0) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE}) bom_budget,b.row_version
       FROM dbo.boms b INNER JOIN dbo.projects p ON p.id=b.project_id INNER JOIN dbo.estimates e ON e.id=b.estimate_id
       INNER JOIN dbo.users cu ON cu.id=b.created_by LEFT JOIN dbo.users ru ON ru.id=b.released_by WHERE b.deleted_at IS NULL
       AND (@project IS NULL OR b.project_id=@project) AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
@@ -68,12 +72,12 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
           AND m.status IN(N'Issued',N'Received',N'Completed') WHERE ml.bom_line_id=l.id),0) net_issued
       FROM dbo.bom_lines l LEFT JOIN dbo.mat_items i ON i.id=l.item_id LEFT JOIN dbo.v_item_balances vb ON vb.item_id=l.item_id
       LEFT JOIN dbo.cost_items ci ON ci.id=l.estimate_line_id INNER JOIN dbo.users u ON u.id=l.owner_id
-      WHERE l.bom_id=@id AND l.deleted_at IS NULL ORDER BY l.section_code,l.sort_order,l.id;`, (r) => r.input("id", sql.BigInt, id));
+      WHERE l.bom_id=@id AND l.deleted_at IS NULL AND ${MATERIAL_LINE} ORDER BY l.section_code,l.sort_order,l.id;`, (r) => r.input("id", sql.BigInt, id));
     const h = result.recordsets[0]?.[0] as (Record<string, unknown> & { row_version: Buffer }) | undefined; if (!h) throw new ApiError(404, "bom_not_found", "BOM not found.");
     const lines = (result.recordsets[1] ?? []).map((raw) => { const row = raw as Record<string, unknown> & { row_version: Buffer }; const required = Number(row.qty_required);
       const customer = Number(row.customer_supplied_qty); const nonStock = Boolean(row.non_stock); const allocated = Number(row.allocated);
       const active = Number(row.active_reserved); const onOrder = Number(row.on_order); const onOpenPr = Number(row.on_open_pr); const issued = Number(row.net_issued);
-      const covered = Math.max(allocated, issued + active); const purchaseRequired = nonStock ? 0 : Math.max(0, required - covered - customer - onOrder - onOpenPr);
+      const purchaseRequired = remainingToRequest({ required, customerSupplied: customer, allocated, activeReserved: active, netIssued: issued, onOrder, onOpenPr });
       return { id: Number(row.id), sectionCode: row.section_code, itemId: row.item_id === null ? null : Number(row.item_id), itemCode: row.item_code,
         partNumber: row.part_no, description: row.description, brand: row.brand, quantityRequired: required, unit: row.unit, estimatedUnitCost: Number(row.est_unit_cost),
         customerSuppliedQuantity: customer, nonStock, estimateLineId: row.estimate_line_id === null ? null : Number(row.estimate_line_id), estimateItemCode: row.estimate_item_code,
@@ -106,8 +110,8 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
         SELECT @bom,CASE ci.category_code WHEN '01' THEN N'HW.STD' WHEN '02' THEN N'SW' WHEN '03' THEN N'HW.EL' WHEN '04' THEN N'HW.ME' WHEN '05' THEN N'HW.STD' ELSE N'SVC' END,
         ROW_NUMBER() OVER(ORDER BY ci.category_code,ci.id),mi.id,ci.id,ci.description,ci.qty,ci.unit,ci.unit_cost,0,ci.owner_id,CASE WHEN mi.id IS NULL THEN 1 ELSE 0 END,@actor,@actor
         FROM dbo.cost_items ci INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision LEFT JOIN dbo.mat_items mi ON mi.item_code=ci.item_code AND mi.deleted_at IS NULL AND mi.is_active=1
-        WHERE ci.estimate_id=@estimate AND ci.revision=@revision AND ci.deleted_at IS NULL AND ci.qty>0;`); const lineCount = copied.rowsAffected[0] ?? 0;
-      if (!lineCount) throw new ApiError(409, "estimate_has_no_lines", "The finalized estimate revision has no cost lines to generate a BOM from.");
+        WHERE ci.estimate_id=@estimate AND ci.revision=@revision AND ci.deleted_at IS NULL AND ci.qty>0 AND ci.category_code IN(${MATERIAL_CATEGORIES});`); const lineCount = copied.rowsAffected[0] ?? 0;
+      if (!lineCount) throw new ApiError(409, "estimate_has_no_lines", "The finalized estimate revision has no material lines (hardware, software, electrical, mechanical or robot) to generate a BOM from.");
       await insertMaterialAudit(transaction, actor, "Generated BOM from estimate", "BOM", id, number, null, { estimate: estimate.estimate_no, estimateRevision: estimate.revision, lines: lineCount }, { projectId });
       return { id, number, revision: 1, status: "Draft", lineCount, rowVersion: bom.row_version.toString("base64") }; });
     return reply.status(201).header("Location", `/api/v1/boms/${created.id}`).send(created);

@@ -188,7 +188,7 @@ test("the Projects menu badge counts open Delayed and At Risk projects, not ever
   assert.match(shell, /if \(!bootstrap\?\.permissions\.includes\("project\.read"\)\) return;/);
   assert.match(shell, /if \(view === "projects"\) return projectAttentionCount;/);
   assert.doesNotMatch(shell, /if \(view === "projects"\) return bootstrap\.counts\.activeProjects;/);
-  assert.equal((shell.match(/badgeFor\(item\.view, bootstrap, myWorkUrgentCount \+ taskAcknowledgmentCount, projectAttentionCount\)/g) ?? []).length, 2, "the condition and the number agree");
+  assert.equal((shell.match(/badgeFor\(item\.view, bootstrap, myWorkUrgentCount \+ taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount\)/g) ?? []).length, 2, "the condition and the number agree");
   // The endpoint the badge reads uses the portfolio's own health rule and scope.
   const routes = read("backend-node/src/routes/projects.ts");
   assert.match(routes, /app\.get\("\/api\/v1\/projects\/attention"/);

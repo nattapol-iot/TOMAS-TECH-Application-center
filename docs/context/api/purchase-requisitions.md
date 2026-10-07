@@ -2,18 +2,20 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c2f7d169`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/purchase-requisitions` | 87–103 |
-| GET | `/api/v1/purchase-requisitions/:id` | 105–127 |
-| POST | `/api/v1/purchase-requisitions` | 129–144 |
-| POST | `/api/v1/purchase-requisitions/:id/submit` | 146–156 |
-| POST | `/api/v1/purchase-requisitions/:id/decide` | 158–176 |
-| POST | `/api/v1/purchase-requisitions/:id/convert` | 178–192 |
+| GET | `/api/v1/purchase-requisitions` | 81–97 |
+| GET | `/api/v1/purchase-requisitions/:id` | 99–121 |
+| POST | `/api/v1/purchase-requisitions` | 123–138 |
+| POST | `/api/v1/purchase-requisitions/:id/submit` | 140–150 |
+| POST | `/api/v1/purchase-requisitions/:id/decide` | 152–171 |
+| POST | `/api/v1/purchase-requisitions/:id/cancel` | 174–184 |
+| GET | `/api/v1/procurement/approvals/attention` | 187–200 |
+| POST | `/api/v1/purchase-requisitions/:id/convert` | 202–216 |
 
 ## Named functions
 
@@ -23,9 +25,9 @@ Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/
 | `decimal` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 24–25 |
 | `readHeader` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 26–28 |
 | `parseLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 30–35 |
-| `insertLine` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 37–67 |
-| `buildApprovalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 69–84 |
-| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 86–193 |
+| `insertLine` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 37–68 |
+| `buildApprovalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 70–78 |
+| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 80–217 |
 
 ## Direct local dependencies
 
@@ -44,7 +46,7 @@ Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.bom_lines`, `dbo.boms`, `dbo.cost_items`, `dbo.grn_lines`, `dbo.grns`, `dbo.mat_items`, `dbo.mat_po_lines`, `dbo.mat_pos`, `dbo.mat_pr_approval_steps`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.mir_lines`, `dbo.mirs`, `dbo.project_members`, `dbo.projects`, `dbo.reservations`, `dbo.suppliers`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_item_balances`
+`dbo.bom_lines`, `dbo.boms`, `dbo.cost_items`, `dbo.grn_lines`, `dbo.grns`, `dbo.mat_items`, `dbo.mat_po_lines`, `dbo.mat_pos`, `dbo.mat_pr_approval_steps`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.mir_lines`, `dbo.mirs`, `dbo.project_members`, `dbo.projects`, `dbo.reservations`, `dbo.stock_adjustments`, `dbo.suppliers`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_item_balances`
 
 ## Change boundary
 

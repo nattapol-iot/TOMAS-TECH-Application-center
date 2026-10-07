@@ -9,13 +9,13 @@ import { hasRole } from "../user-roles.js";
 import { rolesOf } from "../user-roles.js";
 import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { budgetPicture, procurementRuleFlags, type RuleFlag } from "../procurement-rules.js";
+import { approvalSteps, budgetPicture, PO_CREATION_STEP as poCreationStep, procurementRuleFlags, remainingToRequest, type RuleFlag } from "../procurement-rules.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 
-const priceSources = ["Price Library", "Supplier Quotation", "Previous Purchase", "Manual"];
-const poCreationStep = "PO Creation";
+// "Estimate" is the estimate's own unit cost: the planner's default, and honest about where the price came from.
+const priceSources = ["Estimate", "Price Library", "Supplier Quotation", "Previous Purchase", "Manual"];
 type PrHeader = { id: number | string; pr_no: string; project_id: number | string; bom_id: number | string; requested_by: number | string; status: string; priority: string; required_date: Date | string };
 type PrLineInput = { bomLineId: number; supplierId: number; quantity: number; unitPrice: number; priceSource: string; isUnplanned: boolean; buyDespiteStock: boolean; remark: string | null; itemCodeOverride: string | null };
 
@@ -50,9 +50,10 @@ async function insertLine(transaction: TransactionType, prId: number, bomId: num
   if (!row) throw new ApiError(404, "bom_line_not_found", `BOM line ${line.bomLineId} does not belong to this BOM.`);
   let itemCode = String(row.item_code); if (!itemCode) { if (!line.itemCodeOverride) throw new ApiError(400, "item_code_required", `BOM line ${line.bomLineId} has no authoritative item code; provide itemCodeOverride.`); itemCode = line.itemCodeOverride; }
   else if (line.itemCodeOverride && line.itemCodeOverride.toLowerCase() !== itemCode.toLowerCase()) throw new ApiError(400, "item_code_override_mismatch", `BOM line ${line.bomLineId} is '${itemCode}', not '${line.itemCodeOverride}'. Reload the BOM and try again.`, { bomLineId: line.bomLineId, authoritativeItemCode: itemCode });
-  const covered = Math.max(Number(row.allocated), Number(row.net_issued) + Number(row.active_reserved)); const shortage = Math.max(0, Number(row.qty_required) - covered - Number(row.customer_supplied_qty) - Number(row.on_order) - Number(row.on_open_pr));
+  const shortage = remainingToRequest({ required: Number(row.qty_required), customerSupplied: Number(row.customer_supplied_qty), allocated: Number(row.allocated),
+    activeReserved: Number(row.active_reserved), netIssued: Number(row.net_issued), onOrder: Number(row.on_order), onOpenPr: Number(row.on_open_pr) });
   if (!line.isUnplanned && line.quantity > shortage) throw new ApiError(409, "quantity_exceeds_shortage", `${itemCode}: the line is short of ${shortage} ${row.unit}, so ${line.quantity} cannot be requested. Flag it as unplanned with a reason if this is deliberate.`, { shortage, requested: line.quantity });
-  if (!row.non_stock && Number(row.available) >= line.quantity && !line.buyDespiteStock) throw new ApiError(409, "stock_available", `${itemCode}: ${row.available} is available in stock. Allocate it, or set buyDespiteStock with a reason.`, { available: Number(row.available) });
+  // Stock lives in the company ERP, so this app's stock balance no longer blocks a purchase; it is kept on the line as a snapshot only.
   if ((line.buyDespiteStock || line.isUnplanned) && !line.remark) throw new ApiError(400, "reason_required", `${itemCode}: ${line.isUnplanned ? "an unplanned line" : "buying despite available stock"} needs a business reason.`);
   const supplier = new sql.Request(transaction); supplier.input("id", sql.BigInt, line.supplierId); const valid = (await supplier.query<{ allowed: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.suppliers WHERE id=@id AND is_active=1 AND deleted_at IS NULL) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)).recordset[0]?.allowed;
   if (!valid) throw new ApiError(400, "validation_failed", "The selected supplier is inactive or does not exist.");
@@ -67,16 +68,9 @@ async function insertLine(transaction: TransactionType, prId: number, bomId: num
 }
 
 async function buildApprovalRoute(transaction: TransactionType, prId: number, projectId: number, actor: CurrentUser, flags: RuleFlag[]): Promise<void> {
-  const project = new sql.Request(transaction); project.input("id", sql.BigInt, projectId); const row = (await project.query<{ lead_engineer_id: number | string; manager_id: number | string }>(`SELECT lead_engineer_id,manager_id FROM dbo.projects WHERE id=@id AND deleted_at IS NULL;`)).recordset[0]!;
+  const project = new sql.Request(transaction); project.input("id", sql.BigInt, projectId); const row = (await project.query<{ manager_id: number | string | null }>(`SELECT manager_id FROM dbo.projects WHERE id=@id AND deleted_at IS NULL;`)).recordset[0]!;
   const clear = new sql.Request(transaction); clear.input("pr", sql.BigInt, prId); await clear.query(`DELETE FROM dbo.mat_pr_approval_steps WHERE pr_id=@pr;`);
-  const lead = Number(row.lead_engineer_id), manager = Number(row.manager_id); const steps: Array<{ name: string; role: string | null; approver: number | null; rule: string | null; status: string }> = [
-    { name: "Submitted by Requester", role: null, approver: actor.id, rule: null, status: "Completed" },
-    { name: "Section Owner Review", role: lead === actor.id ? "Engineering Manager" : null, approver: lead === actor.id ? null : lead, rule: null, status: "Current" },
-    { name: "Budget Owner Approval", role: manager === actor.id ? "Engineering Manager" : null, approver: manager === actor.id ? null : manager, rule: null, status: "Pending" },
-    { name: "Purchasing Review", role: "Purchasing", approver: null, rule: null, status: "Pending" },
-  ];
-  if (flags.length) steps.push({ name: "Management Approval", role: "Engineering Manager", approver: null, rule: flags.map((x) => x.text).join(" · ").slice(0, 100), status: "Pending" });
-  steps.push({ name: poCreationStep, role: "Purchasing", approver: null, rule: null, status: "Pending" });
+  const steps = approvalSteps(actor.id, row.manager_id === null ? null : Number(row.manager_id), flags);
   for (let index = 0; index < steps.length; index++) { const step = steps[index]!; const insert = new sql.Request(transaction); insert.input("pr", sql.BigInt, prId); insert.input("sequence", sql.Int, index + 1);
     insert.input("name", sql.NVarChar(100), step.name); insert.input("role", sql.NVarChar(50), step.role); insert.input("approver", sql.BigInt, step.approver); insert.input("rule", sql.NVarChar(100), step.rule);
     insert.input("status", sql.NVarChar(30), step.status); await insert.query(`INSERT INTO dbo.mat_pr_approval_steps(pr_id,sequence,name,approver_role,approver_id,rule_code,status,decision,acted_at)
@@ -156,7 +150,8 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   });
 
   app.post("/api/v1/purchase-requisitions/:id/decide", async (request) => { await users.demandPermission(request, "procurement.approve"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
-    const body = bodyObject(request.body); const decision = oneOf(requiredText(body.decision, 30, "Decision"), "Decision", ["Approve", "Reject", "Request Changes"]); const comment = optionalBodyText(body.comment, 20_000, "Comment");
+    // No "Request Changes": a PR's lines cannot be edited, so one sent back to Draft could only be resubmitted as it was. Reject it with the reason instead.
+    const body = bodyObject(request.body); const decision = oneOf(requiredText(body.decision, 30, "Decision"), "Decision", ["Approve", "Reject"]); const comment = optionalBodyText(body.comment, 20_000, "Comment");
     return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
       if (h.status !== "In Approval") throw new ApiError(409, "pr_not_in_approval", `This requisition is '${h.status}' and has no step waiting for a decision.`); if (Number(h.requested_by) === actor.id) throw new ApiError(403, "self_approval_forbidden", "The requester cannot decide their own requisition.");
       const currentRequest = new sql.Request(transaction); currentRequest.input("pr", sql.BigInt, id); const current = (await currentRequest.query<Record<string, unknown>>(`SELECT TOP(1) id,sequence,name,approver_role,approver_id,status FROM dbo.mat_pr_approval_steps WITH (UPDLOCK,HOLDLOCK) WHERE pr_id=@pr AND status=N'Current' ORDER BY sequence;`)).recordset[0];
@@ -165,14 +160,43 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       const flags = await procurementRuleFlags(transaction, id); if ((decision !== "Approve" || flags.length) && !comment) throw new ApiError(400, "comment_required", flags.length && decision === "Approve" ? "This requisition is flagged; approving it requires a comment for the audit trail." : "A comment is required for this decision.");
       const step = new sql.Request(transaction); step.input("decision", sql.NVarChar(30), decision); step.input("comment", sql.NVarChar(sql.MAX), comment); step.input("actor", sql.BigInt, actor.id); step.input("step", sql.BigInt, Number(current.id));
       if ((await step.query(`UPDATE dbo.mat_pr_approval_steps SET status=N'Completed',decision=@decision,comment=@comment,acted_at=SYSUTCDATETIME(),approver_id=COALESCE(approver_id,@actor) WHERE id=@step AND status=N'Current';`)).rowsAffected[0] === 0) throw new ApiError(409, "concurrency_conflict", "This step was already decided. Reload and try again.");
-      let nextStatus: string; if (decision === "Reject" || decision === "Request Changes") { nextStatus = decision === "Reject" ? "Rejected" : "Draft"; const cancel = new sql.Request(transaction); cancel.input("status", sql.NVarChar(30), decision === "Reject" ? "Not Required" : "Pending"); cancel.input("pr", sql.BigInt, id); cancel.input("sequence", sql.Int, Number(current.sequence));
-        await cancel.query(`UPDATE dbo.mat_pr_approval_steps SET status=@status WHERE pr_id=@pr AND sequence>@sequence AND status IN(N'Pending',N'Current');`); }
+      let nextStatus: string; if (decision === "Reject") { nextStatus = "Rejected"; const cancel = new sql.Request(transaction); cancel.input("pr", sql.BigInt, id); cancel.input("sequence", sql.Int, Number(current.sequence));
+        await cancel.query(`UPDATE dbo.mat_pr_approval_steps SET status=N'Not Required' WHERE pr_id=@pr AND sequence>@sequence AND status IN(N'Pending',N'Current');`); }
       else { const advance = new sql.Request(transaction); advance.input("pr", sql.BigInt, id); advance.input("po", sql.NVarChar(100), poCreationStep); const result = await advance.query(`UPDATE s SET s.status=N'Current' FROM dbo.mat_pr_approval_steps s WHERE s.pr_id=@pr AND s.status=N'Pending' AND s.name<>@po
         AND s.sequence=(SELECT MIN(x.sequence) FROM dbo.mat_pr_approval_steps x WHERE x.pr_id=@pr AND x.status=N'Pending' AND x.name<>@po);`); nextStatus = (result.rowsAffected[0] ?? 0) > 0 ? "In Approval" : "Approved"; }
       const update = new sql.Request(transaction); update.input("status", sql.NVarChar(30), nextStatus); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id);
       const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET status=@status,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL;`)).recordset[0]!;
       await insertMaterialAudit(transaction, actor, `${decision} — ${current.name}`, "PR", id, h.pr_no, { step: current.name, status: h.status }, { status: nextStatus }, { projectId: Number(h.project_id), reason: comment, approverId: actor.id });
       return { id, status: nextStatus, step: current.name, decision, rowVersion: row.row_version.toString("base64") }; });
+  });
+
+  // A draft nobody will submit still counts as an open PR against its BOM lines, which blocks a new request for them. Its requester can withdraw it.
+  app.post("/api/v1/purchase-requisitions/:id/cancel", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
+    const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const reason = optionalBodyText(body.reason, 20_000, "Reason");
+    return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
+      if (h.status !== "Draft") throw new ApiError(409, "pr_not_draft", `Only a draft requisition can be cancelled; this one is '${h.status}'.`);
+      if (Number(h.requested_by) !== actor.id && !hasRole(actor, "Admin")) throw new ApiError(403, "requester_required", "Only the requester can cancel this requisition.");
+      const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
+      const row = (await update.query<{ id: number | string }>(`UPDATE dbo.mat_prs SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.id WHERE id=@id AND status=N'Draft' AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
+      if (!row) throw new ApiError(409, "concurrency_conflict", "This requisition changed. Reload and try again.");
+      await insertMaterialAudit(transaction, actor, "Cancelled draft purchase requisition", "PR", id, h.pr_no, { status: "Draft" }, { status: "Cancelled" }, { projectId: Number(h.project_id), reason });
+      return { id, status: "Cancelled" }; });
+  });
+
+  // The Approvals menu badge: exactly what the Approvals screen lists for this user (PRs waiting for them, others' material issues and stock adjustments).
+  app.get("/api/v1/procurement/approvals/attention", async (request) => { const actor = await users.required(request);
+    const result = await database.query<{ waiting: number | string }>(`DECLARE @approve bit=CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'procurement.approve') THEN 1 ELSE 0 END;
+      DECLARE @adjust bit=CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'inventory.adjust') THEN 1 ELSE 0 END;
+      SELECT (SELECT COUNT(*) FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id
+          OUTER APPLY(SELECT TOP(1) s.approver_role,s.approver_id FROM dbo.mat_pr_approval_steps s WHERE s.pr_id=pr.id AND s.status=N'Current' ORDER BY s.sequence) cs
+          WHERE @approve=1 AND pr.deleted_at IS NULL AND pr.status=N'In Approval' AND pr.requested_by<>@actor
+          AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))
+          AND (cs.approver_id=@actor OR (cs.approver_id IS NULL AND cs.approver_role IN(SELECT code FROM dbo.user_effective_roles WHERE user_id=@actor))))
+        +(SELECT COUNT(*) FROM dbo.mirs m INNER JOIN dbo.projects p ON p.id=m.project_id WHERE @approve=1 AND m.status=N'Pending Approval' AND m.requested_by<>@actor
+          AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members pm WHERE pm.project_id=p.id AND pm.user_id=@actor)))
+        +(SELECT COUNT(*) FROM dbo.stock_adjustments a WHERE @adjust=1 AND a.status=N'Pending Approval' AND a.requested_by<>@actor) waiting;`, (r) => {
+      r.input("actor", sql.BigInt, actor.id); r.input("elevated", sql.Bit, isProjectElevated(actor)); });
+    return { waiting: Number(result.recordset[0]?.waiting ?? 0) };
   });
 
   app.post("/api/v1/purchase-requisitions/:id/convert", async (request) => { await users.demandPermission(request, "procurement.order"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");

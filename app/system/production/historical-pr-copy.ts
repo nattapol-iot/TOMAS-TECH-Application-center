@@ -523,5 +523,45 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "ยังไม่มีงบสำหรับเปรียบเทียบ",
     "en": "No budget available for comparison",
     "jp": "比較用の予算がありません"
+  },
+  "Cancel PR": {
+    "th": "ยกเลิก PR",
+    "en": "Cancel PR",
+    "jp": "購買申請を取消"
+  },
+  "PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก": {
+    "th": "PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก",
+    "en": "This draft PR will be cancelled and will no longer count as an open PR on its BOM",
+    "jp": "この下書き購買申請は取り消され、BOMの未完了申請として数えられなくなります"
+  },
+  "รวมอุปกรณ์เดียวกันจากทุก Module และขอซื้อเฉพาะจำนวนที่ยังไม่ได้ขอ (สต็อกจริงอยู่ใน ERP)": {
+    "th": "รวมอุปกรณ์เดียวกันจากทุก Module และขอซื้อเฉพาะจำนวนที่ยังไม่ได้ขอ (สต็อกจริงอยู่ใน ERP)",
+    "en": "Merges the same item across modules and requests only what has not been requested yet (stock is kept in the ERP)",
+    "jp": "全モジュールの同一品目をまとめ、未申請の数量のみ申請します（在庫はERPで管理）"
+  },
+  "กำลังสร้าง PR…": {
+    "th": "กำลังสร้าง PR…",
+    "en": "Creating PR…",
+    "jp": "購買申請を作成中…"
+  },
+  "ยังไม่ได้เลือก Supplier": {
+    "th": "ยังไม่ได้เลือก Supplier",
+    "en": "Supplier not chosen",
+    "jp": "仕入先が未選択"
+  },
+  "ต้องเลือกให้ครบก่อนสร้าง PR": {
+    "th": "ต้องเลือกให้ครบก่อนสร้าง PR",
+    "en": "Choose one for every selected line before creating the PR",
+    "jp": "購買申請の作成前に選択した全明細で選んでください"
+  },
+  "Comment (required)": {
+    "th": "ความเห็น (จำเป็น)",
+    "en": "Comment (required)",
+    "jp": "コメント（必須）"
+  },
+  "Comment / note": {
+    "th": "ความเห็น / หมายเหตุ",
+    "en": "Comment / note",
+    "jp": "コメント／メモ"
   }
 };

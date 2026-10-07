@@ -2,27 +2,27 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c2f7d169`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/boms` | 31–46 |
-| GET | `/api/v1/boms/:id` | 48–86 |
-| POST | `/api/v1/boms` | 88–114 |
-| POST | `/api/v1/boms/:id/release` | 116–125 |
-| POST | `/api/v1/boms/:id/reservations` | 127–153 |
-| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 155–164 |
+| GET | `/api/v1/boms` | 35–50 |
+| GET | `/api/v1/boms/:id` | 52–90 |
+| POST | `/api/v1/boms` | 92–118 |
+| POST | `/api/v1/boms/:id/release` | 120–129 |
+| POST | `/api/v1/boms/:id/reservations` | 131–157 |
+| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 159–168 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 15–18 |
-| `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 19–23 |
-| `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 24–28 |
-| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 30–165 |
+| `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 19–22 |
+| `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 23–27 |
+| `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 28–32 |
+| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 34–169 |
 
 ## Direct local dependencies
 
@@ -32,6 +32,7 @@ Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/material-audit.ts](<../../../backend-node/src/material-audit.ts>)
+- [backend-node/src/procurement-rules.ts](<../../../backend-node/src/procurement-rules.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 

@@ -513,6 +513,7 @@ function CommentPrompt({
   confirmLabel,
   requireComment,
   busy,
+  error,
   onClose,
   onConfirm,
 }: {
@@ -521,6 +522,8 @@ function CommentPrompt({
   confirmLabel: string;
   requireComment?: boolean;
   busy: boolean;
+  // Shown inside the dialog: the server asks for a comment only on a flagged or over-BOM approval, and the page behind is hidden.
+  error?: string;
   onClose: () => void;
   onConfirm: (comment: string) => void;
 }) {
@@ -528,6 +531,7 @@ function CommentPrompt({
   const [comment, setComment] = useState("");
   return (
     <Modal title={title} subtitle={description} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" onClick={() => onConfirm(comment.trim())} disabled={busy || (requireComment && !comment.trim())}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : confirmLabel}</button></>}>
+      <ActionError message={error ?? ""} />
       <Field label={requireComment ? "Comment (required)" : "Comment / note"}>
         <textarea rows={4} maxLength={20_000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={localizeCopy("เหตุผลหรือข้อมูลประกอบสำหรับ audit trail")} />
       </Field>
@@ -681,7 +685,7 @@ function GenerateBomModal({ onClose, onCreated }: { onClose: () => void; onCreat
   );
 }
 
-type PrAction = { item: PurchaseRequisition; decision: "Approve" | "Reject" | "Request Changes" };
+type PrAction = { item: PurchaseRequisition; decision: "Approve" | "Reject" };
 
 export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialScreenProps) {
   const uiText = useUiText();
@@ -692,11 +696,15 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const [detailId, setDetailId] = useState<number | null>(null);
   const [decision, setDecision] = useState<PrAction | null>(null);
   const [convertItem, setConvertItem] = useState<PurchaseRequisition | null>(null);
+  const [cancelItem, setCancelItem] = useState<PurchaseRequisition | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
   const canRequest = hasPermission(bootstrap, "procurement.request");
   const canApprove = hasPermission(bootstrap, "procurement.approve");
   const canOrder = hasPermission(bootstrap, "procurement.order");
+  // Every held role counts, as on the server: an approver by additional role must see the buttons too.
+  const roles = bootstrap.user.roles;
+  const isAdmin = roles.includes("Admin");
   const visible = useMemo(() => endpoint.data.filter((item) => (status === "All status" || item.status === status)
     && (!search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.bomNumber} ${item.requestedByName}`, search))), [endpoint.data, search, status]);
 
@@ -723,6 +731,18 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
     finally { setBusyId(null); }
   };
 
+  const cancel = async (reason: string) => {
+    if (!cancelItem) return;
+    setBusyId(cancelItem.id); setActionError("");
+    try {
+      await apiRequest(`/api/v1/purchase-requisitions/${cancelItem.id}/cancel`, body({ rowVersion: cancelItem.rowVersion, reason: reason || undefined }));
+      notify(`${cancelItem.number}: ${uiText("Cancelled")}`);
+      setCancelItem(null);
+      endpoint.reload();
+    } catch (error) { setActionError(toError(error)); }
+    finally { setBusyId(null); }
+  };
+
   return (
     <>
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="PR, approval route, budget flags และการแปลงเป็น PO ทำงานผ่าน API / SQL จริง" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
@@ -734,13 +754,15 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
         {visible.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project / BOM"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Lines"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Variance"} /></th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => {
           const isCurrentApprover = item.status === "In Approval" && canApprove
             && item.requestedById !== bootstrap.user.id
-            && (bootstrap.user.role === "Admin" || item.currentApproverId === bootstrap.user.id || (!item.currentApproverId && item.currentApproverRole === bootstrap.user.role));
-          return <tr key={item.id}><td><strong className="mono">{item.number}</strong><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span></div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canRequest && item.status === "Draft" && (item.requestedById === bootstrap.user.id || bootstrap.user.role === "Admin") ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => { void submit(item); }}><Icon name="send" /><LocalizedText text={"Submit"} /></button> : null}{isCurrentApprover ? <><button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></> : null}{canOrder && item.status === "Approved" ? <button className="btn primary sm" type="button" onClick={() => setConvertItem(item)}><Icon name="truck" /><LocalizedText text={"Create PO"} /></button> : null}</div></td></tr>;
+            && (isAdmin || item.currentApproverId === bootstrap.user.id || (!item.currentApproverId && roles.includes(item.currentApproverRole ?? "")));
+          const isOwnDraft = canRequest && item.status === "Draft" && (item.requestedById === bootstrap.user.id || isAdmin);
+          return <tr key={item.id}><td><strong className="mono">{item.number}</strong><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span></div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{isOwnDraft ? <><button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => { void submit(item); }}><Icon name="send" /><LocalizedText text={"Submit"} /></button><button className="btn ghost sm" type="button" disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }}><Icon name="x" /><LocalizedText text={"Cancel PR"} /></button></> : null}{isCurrentApprover ? <><button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></> : null}{canOrder && item.status === "Approved" ? <button className="btn primary sm" type="button" onClick={() => setConvertItem(item)}><Icon name="truck" /><LocalizedText text={"Create PO"} /></button> : null}</div></td></tr>;
         })}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="package" title="No purchase requisition found" message="Release a BOM, then create a requisition for its shortage lines" />}
       </Panel>
       {createOpen ? <CreatePrModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={(number) => { setCreateOpen(false); notify(`${number} created`); endpoint.reload(); }} /> : null}
       {detailId ? <PrDetailModal id={detailId} onClose={() => setDetailId(null)} /> : null}
-      {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description={`${decision.item.currentStep || "Current approval step"} · ใส่เหตุผลเพื่อให้ audit trail ครบทุก approval rule`} confirmLabel={decision.decision} requireComment busy={busyId === decision.item.id} onClose={() => setDecision(null)} onConfirm={(comment) => { void decide(comment); }} /> : null}
+      {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description={`${decision.item.currentStep || "Current approval step"} · ใส่เหตุผลเพื่อให้ audit trail ครบทุก approval rule`} confirmLabel={decision.decision} requireComment={decision.decision === "Reject"} busy={busyId === decision.item.id} error={actionError} onClose={() => { setDecision(null); setActionError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
+      {cancelItem ? <CommentPrompt title={`${uiText("Cancel PR")} ${cancelItem.number}`} description="PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก" confirmLabel={uiText("Cancel PR")} busy={busyId === cancelItem.id} error={actionError} onClose={() => { setCancelItem(null); setActionError(""); }} onConfirm={(reason) => { void cancel(reason); }} /> : null}
       {convertItem ? <ConvertPrModal item={convertItem} onClose={() => setConvertItem(null)} onConverted={(count) => { notify(`${convertItem.number} converted to ${count} purchase order(s)`); setConvertItem(null); endpoint.reload(); }} /> : null}
     </>
   );
@@ -766,11 +788,8 @@ function PrDetailModal({ id, onClose }: { id: number; onClose: () => void }) {
 type PrLineDraft = {
   selected: boolean;
   supplierId: number;
-  quantity: number;
   unitPrice: number;
   priceSource: string;
-  isUnplanned: boolean;
-  buyDespiteStock: boolean;
   remark: string;
 };
 
@@ -782,14 +801,13 @@ type PrPlanningGroup = {
   unit: string;
   lines: BomLine[];
   demand: number;
-  available: number;
   onOrder: number;
   openPr: number;
-  allocateFromStock: number;
   purchaseQuantity: number;
   estimatedUnitCost: number;
 };
 
+// Stock is held in the company ERP, so the plan requests what each line still needs and reserves nothing here.
 function buildPrPlanningGroups(lines: BomLine[]): PrPlanningGroup[] {
   const grouped = new Map<string, BomLine[]>();
   for (const line of lines) {
@@ -799,11 +817,6 @@ function buildPrPlanningGroups(lines: BomLine[]): PrPlanningGroup[] {
     grouped.set(identity, [...(grouped.get(identity) ?? []), line]);
   }
   return [...grouped.entries()].map(([key, sourceLines]) => {
-    const shortageBeforeStock = sourceLines.reduce((sum, line) => sum + Math.max(0, Number(line.purchaseRequired)), 0);
-    // Available is an item-level balance repeated on every BOM line. Count it
-    // once; the other commitments are tied to individual source lines.
-    const available = Math.max(0, ...sourceLines.map((line) => Number(line.available)));
-    const allocateFromStock = Math.min(available, shortageBeforeStock);
     const estimatedQuantity = sourceLines.reduce((sum, line) => sum + Number(line.quantityRequired), 0);
     const estimatedValue = sourceLines.reduce((sum, line) => sum + Number(line.quantityRequired) * Number(line.estimatedUnitCost), 0);
     const first = sourceLines[0]!;
@@ -815,11 +828,9 @@ function buildPrPlanningGroups(lines: BomLine[]): PrPlanningGroup[] {
       unit: first.unit,
       lines: sourceLines,
       demand: sourceLines.reduce((sum, line) => sum + Number(line.quantityRequired) - Number(line.customerSuppliedQuantity), 0),
-      available,
       onOrder: sourceLines.reduce((sum, line) => sum + Number(line.onOrder), 0),
       openPr: sourceLines.reduce((sum, line) => sum + Number(line.onOpenPr), 0),
-      allocateFromStock,
-      purchaseQuantity: Math.max(0, shortageBeforeStock - allocateFromStock),
+      purchaseQuantity: sourceLines.reduce((sum, line) => sum + Math.max(0, Number(line.purchaseRequired)), 0),
       estimatedUnitCost: estimatedQuantity > 0 ? estimatedValue / estimatedQuantity : Number(first.estimatedUnitCost),
     };
   }).sort((a, b) => Number(b.purchaseQuantity > 0) - Number(a.purchaseQuantity > 0) || a.itemCode.localeCompare(b.itemCode));
@@ -840,11 +851,12 @@ function CreatePrModal({ bootstrap, onClose, onCreated }: { bootstrap: Bootstrap
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const groups = useMemo(() => buildPrPlanningGroups(workspace.data?.lines ?? []), [workspace.data]);
-  const defaultGroup = (group: PrPlanningGroup): PrLineDraft => ({ selected: group.purchaseQuantity > 0, supplierId: bootstrap.suppliers[0]?.id ?? 0, quantity: group.purchaseQuantity, unitPrice: Math.max(0, group.estimatedUnitCost), priceSource: "Price Library", isUnplanned: false, buyDespiteStock: false, remark: "" });
+  // No supplier is preselected: the first one in the list was silently put on every line. The price is the estimate's own cost until someone changes it.
+  const defaultGroup = (group: PrPlanningGroup): PrLineDraft => ({ selected: group.purchaseQuantity > 0, supplierId: 0, unitPrice: Math.max(0, group.estimatedUnitCost), priceSource: "Estimate", remark: "" });
   const draftFor = (group: PrPlanningGroup) => drafts[group.key] ?? defaultGroup(group);
   const updateGroup = (group: PrPlanningGroup, patch: Partial<PrLineDraft>) => setDrafts((current) => ({ ...current, [group.key]: { ...defaultGroup(group), ...current[group.key], ...patch } }));
-  const selectedGroups = groups.filter((group) => { const draft = draftFor(group); return draft.selected && group.purchaseQuantity > 0 && draft.supplierId > 0; });
-  const stockToReserve = selectedGroups.reduce((sum, group) => sum + group.allocateFromStock, 0);
+  const selectedGroups = groups.filter((group) => draftFor(group).selected && group.purchaseQuantity > 0);
+  const missingSupplier = selectedGroups.filter((group) => draftFor(group).supplierId <= 0).length;
   const purchaseTotal = selectedGroups.reduce((sum, group) => sum + group.purchaseQuantity * draftFor(group).unitPrice, 0);
   const duplicateLinesMerged = groups.reduce((sum, group) => sum + Math.max(0, group.lines.length - 1), 0);
 
@@ -852,22 +864,14 @@ function CreatePrModal({ bootstrap, onClose, onCreated }: { bootstrap: Bootstrap
     if (!workspace.data) return;
     setBusy(true); setError("");
     try {
-      const selectedLines: Array<Record<string, unknown>> = [];
-      for (const group of selectedGroups) {
+      const selectedLines = selectedGroups.flatMap((group) => {
         const draft = draftFor(group);
-        let stockRemaining = group.allocateFromStock;
-        for (const line of group.lines) {
-          const lineShortage = Math.max(0, Number(line.purchaseRequired));
-          const allocation = Math.min(stockRemaining, lineShortage);
-          if (allocation > 0 && line.itemId !== null) {
-            await apiRequest(`/api/v1/boms/${effectiveBomId}/reservations`, body({ bomLineId: line.id, quantity: allocation, requiredDate }));
-            stockRemaining -= allocation;
-          }
-          const quantityToBuy = Math.max(0, lineShortage - allocation);
-          if (quantityToBuy <= 0) continue;
-          selectedLines.push({ bomLineId: line.id, supplierId: draft.supplierId, quantity: quantityToBuy, unitPrice: draft.unitPrice, priceSource: draft.priceSource, isUnplanned: false, buyDespiteStock: false, remark: draft.remark || `Consolidated from ${group.lines.length} BOM source line(s)`, itemCodeOverride: line.itemCode || line.estimateItemCode || `NONSTOCK-${line.id}` });
-        }
-      }
+        return group.lines.filter((line) => Number(line.purchaseRequired) > 0).map((line) => ({
+          bomLineId: line.id, supplierId: draft.supplierId, quantity: Number(line.purchaseRequired), unitPrice: draft.unitPrice, priceSource: draft.priceSource,
+          isUnplanned: false, buyDespiteStock: false, remark: draft.remark || (group.lines.length > 1 ? `Consolidated from ${group.lines.length} BOM source lines` : undefined),
+          itemCodeOverride: line.itemCode || line.estimateItemCode || `NONSTOCK-${line.id}`,
+        }));
+      });
       const created = await apiRequest<{ number: string }>("/api/v1/purchase-requisitions/", body({ bomId: effectiveBomId, priority, requiredDate, purpose: purpose || undefined, lines: selectedLines }));
       onCreated(created.number);
     } catch (requestError) { setError(toError(requestError)); }
@@ -875,7 +879,7 @@ function CreatePrModal({ bootstrap, onClose, onCreated }: { bootstrap: Bootstrap
   };
 
   return (
-    <Modal title="วางแผนและรวมรายการ PR" subtitle="รวมอุปกรณ์เดียวกันจากทุก Module, ใช้ Stock ที่มีอยู่ก่อน และสร้าง PR เฉพาะจำนวนที่ต้องซื้อจริง" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !effectiveBomId || !selectedGroups.length || !bootstrap.suppliers.length} onClick={() => { void submit(); }}><Icon name="check" />{busy ? "กำลังจอง Stock และสร้าง PR…" : `สร้าง PR รวม ${selectedGroups.length} รายการ`}</button></>}>
+    <Modal title="วางแผนและรวมรายการ PR" subtitle="รวมอุปกรณ์เดียวกันจากทุก Module และขอซื้อเฉพาะจำนวนที่ยังไม่ได้ขอ (สต็อกจริงอยู่ใน ERP)" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !effectiveBomId || !selectedGroups.length || missingSupplier > 0 || !bootstrap.suppliers.length} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"กำลังสร้าง PR…"} /> : `สร้าง PR รวม ${selectedGroups.length} รายการ`}</button></>}>
       {boms.error || workspace.error ? <LoadError message={boms.error || workspace.error} retry={() => { boms.reload(); workspace.reload(); }} /> : null}
       <ActionError message={error} />
       {!bootstrap.suppliers.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Supplier master is empty"} /></strong><LocalizedText text={"เพิ่ม supplier ใน Master Data ก่อนสร้าง PR"} /></span></div> : null}
@@ -889,14 +893,14 @@ function CreatePrModal({ bootstrap, onClose, onCreated }: { bootstrap: Bootstrap
         <div className="pr-plan-summary" aria-label={localizeCopy("Purchase plan summary")}>
           <div><span><LocalizedText text={"Module lines"} /></span><strong>{workspace.data.lines.length}</strong><small><LocalizedText text={"ต้นทางจาก Estimate/BOM"} /></small></div>
           <div><span><LocalizedText text={"รายการหลังรวม"} /></span><strong>{groups.length}</strong><small><LocalizedText text={"รวมซ้ำ"} /> {duplicateLinesMerged} <LocalizedText text={"บรรทัด"} /></small></div>
-          <div><span><LocalizedText text={"จองจาก Stock"} /></span><strong>{quantity(stockToReserve)}</strong><small><LocalizedText text={"จองอัตโนมัติก่อนสร้าง PR"} /></small></div>
+          <div><span><LocalizedText text={"ยังไม่ได้เลือก Supplier"} /></span><strong>{missingSupplier}</strong><small><LocalizedText text={"ต้องเลือกให้ครบก่อนสร้าง PR"} /></small></div>
           <div className="accent"><span><LocalizedText text={"ยอดสั่งซื้อ"} /></span><strong>{money(purchaseTotal)}</strong><small>{selectedGroups.length} <LocalizedText text={"รายการ · แยก PO ตาม Supplier"} /></small></div>
         </div>
         <div className="info-strip blue"><Icon name="layers" /><span><strong><LocalizedText text={"รายการซ้ำถูกรวมให้แล้ว"} /></strong> <LocalizedText text={"แต่ละรายการยังเปิดดู Module และ Estimate source เดิมได้ครบ"} /></span><span className="spacer" /><label className="checkbox"><input type="checkbox" checked={showCovered} onChange={(event) => setShowCovered(event.target.checked)} /><span><LocalizedText text={"แสดงรายการที่ไม่ต้องซื้อ"} /></span></label></div>
       </> : null}
-      {workspace.loading ? <Loading /> : groups.length ? <div className="table-wrap tall"><table className="pr-plan-table"><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"อุปกรณ์ที่รวมแล้ว"} /></th><th className="num"><LocalizedText text={"ต้องใช้"} /></th><th className="num"><LocalizedText text={"Stock ว่าง"} /></th><th className="num"><LocalizedText text={"จองให้"} /></th><th className="num"><LocalizedText text={"On order / PR"} /></th><th className="num"><LocalizedText text={"ต้องซื้อ"} /></th><th><LocalizedText text={"ต้นทาง"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Source"} /></th></tr></thead><tbody>{groups.filter((group) => showCovered || group.purchaseQuantity > 0).map((group) => {
+      {workspace.loading ? <Loading /> : groups.length ? <div className="table-wrap tall"><table className="pr-plan-table"><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"อุปกรณ์ที่รวมแล้ว"} /></th><th className="num"><LocalizedText text={"ต้องใช้"} /></th><th className="num"><LocalizedText text={"On order / PR"} /></th><th className="num"><LocalizedText text={"ต้องซื้อ"} /></th><th><LocalizedText text={"ต้นทาง"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Source"} /></th></tr></thead><tbody>{groups.filter((group) => showCovered || group.purchaseQuantity > 0).map((group) => {
         const draft = draftFor(group);
-        return <tr key={group.key} className={draft.selected ? undefined : "row-muted"}><td><input type="checkbox" checked={draft.selected} disabled={group.purchaseQuantity <= 0} onChange={(event) => updateGroup(group, { selected: event.target.checked })} aria-label={`Include ${group.description}`} /></td><td><strong className="mono">{group.itemCode}</strong><small className="muted">{group.partNumber} <LocalizedText text={"·"} /> {group.description} <LocalizedText text={"·"} /> {group.unit}</small></td><td className="num">{quantity(group.demand)}</td><td className="num"><strong className={group.available > 0 ? "green-text" : undefined}>{quantity(group.available)}</strong></td><td className="num">{group.allocateFromStock > 0 ? <Badge tone="green">{quantity(group.allocateFromStock)}</Badge> : "0"}</td><td className="num">{quantity(group.onOrder + group.openPr)}</td><td className="num">{group.purchaseQuantity > 0 ? <Badge tone="amber">{quantity(group.purchaseQuantity)} {group.unit}</Badge> : <Badge tone="green"><LocalizedText text={"ครบแล้ว"} /></Badge>}</td><td><details className="source-breakdown"><summary>{group.lines.length} <LocalizedText text={"Module line"} />{group.lines.length > 1 ? "s" : ""}</summary>{group.lines.map((line) => <div key={line.id}><strong>{line.sectionCode}</strong><span>{line.estimateItemCode || line.itemCode || `BOM-${line.id}`}</span><em>{quantity(line.quantityRequired)} {line.unit}</em></div>)}</details></td><td><select value={draft.supplierId} disabled={!draft.selected} onChange={(event) => updateGroup(group, { supplierId: Number(event.target.value) })}><option value={0}><LocalizedText text={"Select…"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} <LocalizedText text={"·"} /> {supplier.name}</option>)}</select></td><td><input style={{ width: 118 }} type="number" min="0" step="0.0001" disabled={!draft.selected} value={draft.unitPrice} onChange={(event) => updateGroup(group, { unitPrice: Number(event.target.value) })} /></td><td><select value={draft.priceSource} disabled={!draft.selected} onChange={(event) => updateGroup(group, { priceSource: event.target.value })}><option value={"Price Library"}><LocalizedText text={"Price Library"} /></option><option value={"Supplier Quotation"}><LocalizedText text={"Supplier Quotation"} /></option><option value={"Previous Purchase"}><LocalizedText text={"Previous Purchase"} /></option><option value={"Manual"}><LocalizedText text={"Manual"} /></option></select></td></tr>;
+        return <tr key={group.key} className={draft.selected ? undefined : "row-muted"}><td><input type="checkbox" checked={draft.selected} disabled={group.purchaseQuantity <= 0} onChange={(event) => updateGroup(group, { selected: event.target.checked })} aria-label={`Include ${group.description}`} /></td><td><strong className="mono">{group.itemCode}</strong><small className="muted">{group.partNumber} <LocalizedText text={"·"} /> {group.description} <LocalizedText text={"·"} /> {group.unit}</small></td><td className="num">{quantity(group.demand)}</td><td className="num">{quantity(group.onOrder + group.openPr)}</td><td className="num">{group.purchaseQuantity > 0 ? <Badge tone="amber">{quantity(group.purchaseQuantity)} {group.unit}</Badge> : <Badge tone="green"><LocalizedText text={"ครบแล้ว"} /></Badge>}</td><td><details className="source-breakdown"><summary>{group.lines.length} <LocalizedText text={"Module line"} />{group.lines.length > 1 ? "s" : ""}</summary>{group.lines.map((line) => <div key={line.id}><strong>{line.sectionCode}</strong><span>{line.estimateItemCode || line.itemCode || `BOM-${line.id}`}</span><em>{quantity(line.quantityRequired)} {line.unit}</em></div>)}</details></td><td><select value={draft.supplierId} disabled={!draft.selected} aria-invalid={draft.selected && draft.supplierId <= 0} onChange={(event) => updateGroup(group, { supplierId: Number(event.target.value) })}><option value={0}>{localizeCopy("Select…")}</option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} <LocalizedText text={"·"} /> {supplier.name}</option>)}</select></td><td><input style={{ width: 118 }} type="number" min="0" step="0.0001" disabled={!draft.selected} value={draft.unitPrice} onChange={(event) => updateGroup(group, { unitPrice: Number(event.target.value) })} /></td><td><select value={draft.priceSource} disabled={!draft.selected} onChange={(event) => updateGroup(group, { priceSource: event.target.value })}><option value={"Estimate"}>{localizeCopy("Estimate")}</option><option value={"Price Library"}>{localizeCopy("Price Library")}</option><option value={"Supplier Quotation"}>{localizeCopy("Supplier Quotation")}</option><option value={"Previous Purchase"}>{localizeCopy("Previous Purchase")}</option><option value={"Manual"}>{localizeCopy("Manual")}</option></select></td></tr>;
       })}</tbody></table></div> : bomId && !workspace.error ? <EmptyState icon="layers" title="No BOM line available" message="This released BOM has no shortage or material line" /> : !released.length && !boms.loading ? <EmptyState icon="layers" title="No released BOM" message="Release a BOM before creating a requisition" /> : null}
     </Modal>
   );
@@ -1132,7 +1136,7 @@ export function ProductionMaterialIssues({ bootstrap, notify }: MaterialScreenPr
       </Panel>
       {createOpen ? <CreateMirModal onClose={() => setCreateOpen(false)} onCreated={(number) => { setCreateOpen(false); notify(`${number} requested`); endpoint.reload(); }} /> : null}
       {detailId ? <MirDetailModal id={detailId} bootstrap={bootstrap} notify={notify} onChanged={endpoint.reload} onClose={() => setDetailId(null)} /> : null}
-      {action ? <CommentPrompt title={`${action.kind}: ${action.item.number}`} description={action.kind === "Issue" ? "การ issue จะ debit stock ledger และ consume reservation ของ project" : action.kind === "Receipt" ? "ยืนยันว่าผู้ขอได้รับวัสดุจริงครบตาม MIR" : "ใส่เหตุผลเพื่อรองรับกรณีที่ระบบตรวจพบการขอเกินยอดคงเหลือของ BOM"} confirmLabel={action.kind === "Receipt" ? "Confirm receipt" : action.kind} requireComment={["Approve", "Reject"].includes(action.kind)} busy={busyId === action.item.id} onClose={() => setAction(null)} onConfirm={(comment) => { void runAction(comment); }} /> : null}
+      {action ? <CommentPrompt title={`${action.kind}: ${action.item.number}`} description={action.kind === "Issue" ? "การ issue จะ debit stock ledger และ consume reservation ของ project" : action.kind === "Receipt" ? "ยืนยันว่าผู้ขอได้รับวัสดุจริงครบตาม MIR" : "ใส่เหตุผลเพื่อรองรับกรณีที่ระบบตรวจพบการขอเกินยอดคงเหลือของ BOM"} confirmLabel={action.kind === "Receipt" ? "Confirm receipt" : action.kind} requireComment={action.kind === "Reject"} busy={busyId === action.item.id} error={actionError} onClose={() => { setAction(null); setActionError(""); }} onConfirm={(comment) => { void runAction(comment); }} /> : null}
     </>
   );
 }
@@ -1218,7 +1222,7 @@ type ApprovalAction = {
   source: "PR" | "MIR" | "ADJUSTMENT";
   id: number;
   number: string;
-  decision: "Approve" | "Reject" | "Request Changes";
+  decision: "Approve" | "Reject";
 };
 
 export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) {
@@ -1253,7 +1257,7 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
       <div className="kpi-grid three"><KpiCard label="Waiting for me" value={total} icon="checkCircle" tone={total ? "amber" : "green"} /><KpiCard label="Purchase requisitions" value={prs.data.length} icon="package" tone="blue" /><KpiCard label="Stock controls" value={adjustments.data.length} note={`${mirs.data.length} material issue requests`} icon="shield" tone="violet" /></div>
       {prs.error || mirs.error || adjustments.error ? <LoadError message={prs.error || mirs.error || adjustments.error} retry={reload} /> : null}<ActionError message={error} />
       <Panel title="Purchase requisition approvals" subtitle="Approval route and current approver are calculated by the API" flush>
-        {prs.data.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Variance"} /></th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{prs.data.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td className="num"><strong>{money(item.amount)}</strong></td><td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td><td>{item.currentStep}<small className="muted">{item.currentApproverName || item.currentApproverRole}</small></td><td>{date(item.requiredDate)}</td><td><div className="table-actions"><button className="btn success sm" type="button" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn ghost sm" type="button" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Request Changes" })}><Icon name="refresh" /><LocalizedText text={"Changes"} /></button><button className="btn danger sm" type="button" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></div></td></tr>)}</tbody></table></div> : prs.loading ? <Loading /> : <EmptyState icon="checkCircle" title="No purchase requisition waiting" message="ไม่มี PR ที่กำลังรอ user / role ปัจจุบัน" />}
+        {prs.data.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Variance"} /></th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{prs.data.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td className="num"><strong>{money(item.amount)}</strong></td><td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td><td>{item.currentStep}<small className="muted">{item.currentApproverName || item.currentApproverRole}</small></td><td>{date(item.requiredDate)}</td><td><div className="table-actions"><button className="btn success sm" type="button" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></div></td></tr>)}</tbody></table></div> : prs.loading ? <Loading /> : <EmptyState icon="checkCircle" title="No purchase requisition waiting" message="ไม่มี PR ที่กำลังรอ user / role ปัจจุบัน" />}
       </Panel>
       <Panel title="Material issue approvals" subtitle="Requester cannot approve their own MIR" flush>
         {mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? <div className="table-wrap"><table><thead><tr><th>MIR</th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Lines"} /></th><th><LocalizedText text={"Quantity"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num">{quantity(item.requestedQuantity)}</td><td><div className="table-actions"><button className="btn success sm" type="button" onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></div></td></tr>)}</tbody></table></div> : mirs.loading ? <Loading /> : <EmptyState icon="upload" title="No material issue waiting" message="ไม่มี MIR ที่รออนุมัติจากผู้ใช้ปัจจุบัน" />}
@@ -1261,7 +1265,7 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
       {canAdjust ? <Panel title="Stock adjustment approvals" subtitle="Stock changes only after Inventory Controller approval" flush>
         {adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Adjustment"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Current usable"} /></th><th><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.itemCode}</strong><small className="muted">{item.description}</small></td><td className="num">{quantity(item.currentUsable)}</td><td className="num"><Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>{Number(item.quantityChange) >= 0 ? "+" : ""}{quantity(item.quantityChange)}</Badge></td><td>{item.reason}</td><td>{item.requestedByName}</td><td><div className="table-actions"><button className="btn success sm" type="button" onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></div></td></tr>)}</tbody></table></div> : adjustments.loading ? <Loading /> : <EmptyState icon="database" title="No stock adjustment waiting" message="ไม่มี stock discrepancy ที่รอ Inventory Controller" />}
       </Panel> : null}
-      {action ? <CommentPrompt title={`${action.decision}: ${action.number}`} description={`${action.source} decision · ข้อความจะถูกเก็บใน audit trail`} confirmLabel={action.decision} requireComment busy={busy} onClose={() => setAction(null)} onConfirm={(comment) => { void decide(comment); }} /> : null}
+      {action ? <CommentPrompt title={`${action.decision}: ${action.number}`} description={`${action.source} decision · ข้อความจะถูกเก็บใน audit trail`} confirmLabel={action.decision} requireComment={action.decision === "Reject"} busy={busy} error={error} onClose={() => { setAction(null); setError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
     </>
   );
 }
@@ -1296,7 +1300,7 @@ export function ProductionInventoryOperations({ bootstrap, notify }: MaterialScr
       {tab === "adjustments" ? <Panel title={`${adjustments.data.length} stock adjustments`} subtitle="Approved adjustments append a ledger event; balances are never edited directly" flush>{adjustments.data.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Adjustment"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Current usable"} /></th><th><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{adjustments.data.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.itemCode}</strong><small className="muted">{item.partNumber} <LocalizedText text={"·"} /> {item.description}</small></td><td className="num">{quantity(item.currentUsable)}</td><td className="num"><Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>{Number(item.quantityChange) >= 0 ? "+" : ""}{quantity(item.quantityChange)}</Badge></td><td>{item.reason}</td><td>{item.requestedByName}</td><td>{item.approvedByName || "—"}</td><td><Badge>{item.status}</Badge></td><td>{canAdjust && item.status === "Pending Approval" && item.requestedById !== bootstrap.user.id ? <div className="table-actions"><button className="btn success sm" type="button" onClick={() => setDecision({ item, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" onClick={() => setDecision({ item, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></div> : "—"}</td></tr>)}</tbody></table></div> : adjustments.loading ? <Loading /> : <EmptyState icon="database" title="No stock adjustment" message="No discrepancy has been raised" />}</Panel> : <Panel title={`${quarantine.data.length} items on hold`} subtitle="Damaged / rejected receipts stay unavailable until an explicit decision" flush>{quarantine.data.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Held"} /></th><th><LocalizedText text={"Usable"} /></th><th><LocalizedText text={"Avg. cost"} /></th><th><LocalizedText text={"Held since"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead><tbody>{quarantine.data.map((item) => <tr key={item.itemId}><td><strong className="mono">{item.itemCode}</strong><small className="muted">{item.partNumber}</small></td><td>{item.description}</td><td>{item.brand}</td><td className="num"><Badge tone="amber">{quantity(item.quarantineQuantity)} {item.unit}</Badge></td><td className="num">{quantity(item.usableQuantity)}</td><td className="num">{money(item.averageUnitCost)}</td><td>{dateTime(item.heldSince)}</td><td>{canAdjust ? <button className="btn primary sm" type="button" onClick={() => setReleaseItem(item)}><Icon name="shield" /><LocalizedText text={"Decide"} /></button> : "—"}</td></tr>)}</tbody></table></div> : quarantine.loading ? <Loading /> : <EmptyState icon="shield" title="Quarantine is clear" message="No damaged or rejected material is currently on hold" />}</Panel>}
       {createOpen ? <CreateAdjustmentModal onClose={() => setCreateOpen(false)} onCreated={(number) => { setCreateOpen(false); notify(`${number} requested`); adjustments.reload(); }} /> : null}
       {releaseItem ? <ReleaseQuarantineModal item={releaseItem} onClose={() => setReleaseItem(null)} onReleased={(message) => { setReleaseItem(null); notify(message); quarantine.reload(); }} /> : null}
-      {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description="Inventory Controller decision; requester cannot approve their own adjustment" confirmLabel={decision.decision} requireComment busy={busy} onClose={() => setDecision(null)} onConfirm={(comment) => { void decide(comment); }} /> : null}
+      {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description="Inventory Controller decision; requester cannot approve their own adjustment" confirmLabel={decision.decision} requireComment={decision.decision === "Reject"} busy={busy} error={error} onClose={() => { setDecision(null); setError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
     </>
   );
 }

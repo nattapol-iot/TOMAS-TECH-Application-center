@@ -5,6 +5,32 @@ import { ApiError } from "./errors.js";
 export type BudgetPicture = { approvedBudget: number; actualConsumed: number; openCommitment: number; reservedValue: number;
   siblingOpenPrValue: number; amount: number; forecastBefore: number; forecastAfter: number; remainingAfter: number; withinBudget: boolean };
 export type RuleFlag = { code: string; text: string };
+export type ApprovalStepPlan = { name: string; role: string | null; approver: number | null; rule: string | null; status: "Completed" | "Current" | "Pending" };
+
+/** Estimate categories bought on a PR: Hardware, Software, Electrical, Mechanical, Robot. Engineering, outsource, travel and other costs are not material. */
+export const MATERIAL_CATEGORY_CODES = ["01", "02", "03", "04", "05"] as const;
+export const PO_CREATION_STEP = "PO Creation";
+
+/** What a BOM line still needs requested. A line without an inventory item is bought like any other; the company ERP holds the stock. */
+export function remainingToRequest(line: { required: number; customerSupplied: number; allocated: number; activeReserved: number; netIssued: number; onOrder: number; onOpenPr: number }): number {
+  const covered = Math.max(line.allocated, line.netIssued + line.activeReserved);
+  return Math.max(0, line.required - covered - line.customerSupplied - line.onOrder - line.onOpenPr);
+}
+
+/** Two approvals: the project's PM, then Purchasing. Management joins only when a rule flags the PR, and never as a second step for the same role. */
+export function approvalSteps(requesterId: number, projectManagerId: number | null, flags: RuleFlag[]): ApprovalStepPlan[] {
+  const rule = flags.length ? flags.map((flag) => flag.text).join(" · ").slice(0, 100) : null;
+  // A PM raising their own PR, or a project without a PM, goes to the Engineering Manager role instead.
+  const managerDecides = !projectManagerId || projectManagerId === requesterId;
+  const steps: ApprovalStepPlan[] = [
+    { name: "Submitted by Requester", role: null, approver: requesterId, rule: null, status: "Completed" },
+    { name: "Project Manager Approval", role: managerDecides ? "Engineering Manager" : null, approver: managerDecides ? null : projectManagerId, rule: managerDecides ? rule : null, status: "Current" },
+    { name: "Purchasing Review", role: "Purchasing", approver: null, rule: null, status: "Pending" },
+  ];
+  if (rule && !managerDecides) steps.push({ name: "Management Approval", role: "Engineering Manager", approver: null, rule, status: "Pending" });
+  steps.push({ name: PO_CREATION_STEP, role: "Purchasing", approver: null, rule: null, status: "Pending" });
+  return steps;
+}
 
 export async function budgetPicture(transaction: TransactionType, projectId: number, excludePrId: number | null): Promise<BudgetPicture> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("exclude", sql.BigInt, excludePrId);
@@ -30,15 +56,13 @@ export async function procurementRuleFlags(transaction: TransactionType, prId: n
   const request = new sql.Request(transaction); request.input("pr", sql.BigInt, prId);
   const result = await request.query<Record<string, unknown>>(`SELECT pr.project_id,pr.priority,COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) amount
     FROM dbo.mat_prs pr WHERE pr.id=@pr AND pr.deleted_at IS NULL;
-    SELECT l.item_code,l.unit_price,l.est_unit_cost,l.price_source,l.is_unplanned,l.qty,COALESCE(vb.available,0) available
-    FROM dbo.mat_pr_lines l LEFT JOIN dbo.v_item_balances vb ON vb.item_id=l.item_id WHERE l.pr_id=@pr;`);
+    SELECT l.item_code,l.unit_price,l.est_unit_cost,l.price_source,l.is_unplanned FROM dbo.mat_pr_lines l WHERE l.pr_id=@pr;`);
   const header = result.recordsets[0]?.[0] as Record<string, unknown> | undefined; if (!header) throw new ApiError(404, "pr_not_found", "Purchase requisition not found.");
   const flags: RuleFlag[] = []; for (const raw of result.recordsets[1] ?? []) { const row = raw as Record<string, unknown>; const item = String(row.item_code);
     const estimate = Number(row.est_unit_cost); if (estimate > 0) { const variance = (Number(row.unit_price) - estimate) / estimate * 100;
       if (variance > 10) flags.push({ code: "price_variance", text: `${item} unit price is ${variance.toFixed(1)}% above the estimate (limit 10%)` }); }
     if (row.is_unplanned) flags.push({ code: "unplanned_item", text: `${item} is not in the approved estimate` });
     if (String(row.price_source).toLowerCase() === "manual") flags.push({ code: "manual_price", text: `${item} uses a manual price` });
-    if (Number(row.available) >= Number(row.qty) && Number(row.qty) > 0) flags.push({ code: "stock_available", text: `${item}: available stock covers this line — buying anyway needs a reason` });
   }
   const budget = await budgetPicture(transaction, Number(header.project_id), prId); if (!budget.withinBudget) flags.push({ code: "over_budget", text: "The requisition pushes the project forecast over its approved budget" });
   if (Number(header.amount) > 1_000_000) flags.push({ code: "high_value", text: "Requisition value exceeds 1,000,000 THB" });
