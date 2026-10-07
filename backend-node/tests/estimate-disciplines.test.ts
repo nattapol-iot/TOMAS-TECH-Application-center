@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { ESTIMATE_DISCIPLINES, costTypeOfDiscipline, inferredDiscipline, lineDiscipline } from "../src/estimate-disciplines.js";
+import { ESTIMATE_DISCIPLINES, costTypeOfDiscipline, disciplineNamedIn, inferredDiscipline, lineDiscipline } from "../src/estimate-disciplines.js";
+import { STANDARD_LABOR_PACKAGES } from "../src/standard-labor-cost-masters.js";
 import { laborCategorySql } from "../src/estimate-labor-category.js";
 import { ApiError } from "../src/errors.js";
 
@@ -27,6 +28,24 @@ test("a line without a chosen discipline reads as the one migration 070 backfill
   assert.equal(inferredDiscipline("Engineering", null), null);
 });
 
+test("an estimate written before disciplines reads as the discipline its work package names", () => {
+  // Real lines: every rate is "IoT Engineer Dept.", and the package says the discipline.
+  assert.equal(inferredDiscipline("Engineering", "IoT Engineer Dept.", "Electrical design & in-house wiring", "Assembly + wiring (in-house)"), "Electrical");
+  assert.equal(inferredDiscipline("Engineering", "IoT Engineer Dept.", "Mechanical design & in-house test", "Drawing design"), "Mechanical");
+  assert.equal(inferredDiscipline("Engineering", "IoT Engineer Dept.", "Software development / Warehouse Control System", "Specification design"), "Software");
+  assert.equal(inferredDiscipline("Engineering", "IoT Engineer Dept.", "งานออกแบบระบบไฟฟ้า", ""), "Electrical");
+  // The package speaks first; the activity only when the package names nothing.
+  assert.equal(inferredDiscipline("Engineering", "IoT Engineer Dept.", "Design & Engineering", "Software design & Application development"), "Software");
+  assert.equal(inferredDiscipline("Engineering", "IoT Engineer Dept.", "Electro-mechanical design", "Mechanical drawing"), "Mechanical", "a package naming two disciplines gives way to the activity");
+  assert.equal(disciplineNamedIn("Electrical & mechanical integration"), null, "two disciplines named: nobody guesses");
+  assert.equal(inferredDiscipline("Engineering", "Software", "Mechanical design & in-house test"), "Software", "a department that is a discipline still wins");
+  assert.equal(inferredDiscipline("Installation", "IoT Engineer Dept.", "Software development — in-house"), "Installation");
+  // Every engineering package of the standard library is placed by its own name.
+  for (const pkg of STANDARD_LABOR_PACKAGES.filter((entry) => entry.costType === "Engineering")) {
+    assert.notEqual(inferredDiscipline("Engineering", "IoT Engineer Dept.", pkg.name), null, pkg.name);
+  }
+});
+
 test("a write keeps a chosen discipline only when its cost type allows it", () => {
   assert.equal(lineDiscipline(undefined, "Engineering", "Software"), "Software", "an older client gets the inferred discipline");
   assert.equal(lineDiscipline("", "Installation"), "Installation");
@@ -48,8 +67,8 @@ test("the ERP labor rule reads the discipline first and keeps the department fal
 test("every route that writes a labor or expense line writes its discipline", async () => {
   const [write, read, estimates, copy, labor, excel] = await Promise.all([route("estimate-workspace-write"), route("estimate-workspace-read"),
     route("estimates"), route("estimate-copy"), route("labor-packages"), route("estimate-excel-import")]);
-  assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType, department\)/);
-  assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType\)/);
+  assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType, department, packageName, activity\)/);
+  assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType, null, packageName, description\)/);
   assert.match(write, /INSERT INTO dbo\.manhour_lines\(estimate_id,revision,package,activity,department,level,cost_type,discipline,/);
   assert.match(write, /cost_type=@cost_type,discipline=@discipline,provider=@provider/);
   assert.match(write, /INSERT INTO dbo\.expense_lines\(estimate_id,revision,package,expense_type,description,cost_type,discipline,/);
@@ -58,13 +77,18 @@ test("every route that writes a labor or expense line writes its discipline", as
   assert.match(read, /l\.cost_type,l\.discipline,l\.supplier_id/);
   assert.match(read, /N'labor_discipline_missing'[\s\S]*l\.discipline IS NULL/);
   assert.match(read, /N'expense_discipline_missing'[\s\S]*l\.discipline IS NULL/);
+  // Older lines show the discipline their names give, without a write, and lose the warning.
+  assert.match(read, /\.\.\.shownDiscipline\(row, row\.package, row\.activity\)/);
+  assert.match(read, /\.\.\.shownDiscipline\(row, row\.package, row\.description\)/);
+  assert.match(read, /issue\.code === "labor_discipline_missing" \|\| issue\.code === "expense_discipline_missing"\) && placed\.has/);
   // A new revision carries the discipline of every line it copies.
   assert.match(estimates, /INSERT\(estimate_id,revision,package,activity,department,level,cost_type,discipline,provider,[\s\S]*source\.cost_type,source\.discipline,source\.provider/);
   assert.match(estimates, /INSERT\(estimate_id,revision,package,expense_type,description,cost_type,discipline,supplier_id,[\s\S]*source\.cost_type,source\.discipline,source\.supplier_id/);
-  assert.match(copy, /row\.discipline \?\? inferredDiscipline\(row\.cost_type, row\.department\)/);
+  assert.match(copy, /row\.discipline \?\? inferredDiscipline\(row\.cost_type, row\.department, row\.package, row\.activity\)/);
+  assert.match(copy, /row\.discipline \?\? inferredDiscipline\(row\.cost_type, null, row\.package, row\.description\)/);
   assert.match(copy, /INSERT INTO dbo\.expense_lines\(estimate_id,revision,package,expense_type,description,cost_type,discipline,/);
-  assert.match(labor, /insert\.input\("discipline", sql\.NVarChar\(20\), disciplineOf\(line\.cost_type, line\.department\)\)/);
-  assert.match(excel, /cmd\.input\("discipline", sql\.NVarChar\(20\), inferredDiscipline\(l\.costType, l\.department\)\)/);
+  assert.match(labor, /insert\.input\("discipline", sql\.NVarChar\(20\), disciplineOf\(line\.cost_type, line\.department, targetPackage, pkg\.name, activity\)\)/);
+  assert.match(excel, /cmd\.input\("discipline", sql\.NVarChar\(20\), inferredDiscipline\(l\.costType, l\.department, l\.module, l\.description\)\)/);
 });
 
 test("submitting keeps a labor category a person chose on the ERP sheet", async () => {

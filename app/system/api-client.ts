@@ -719,6 +719,8 @@ export type EstimateManhourLine = {
   costType: "Engineering" | "Installation";
   /** Null for a line written before disciplines existed that no rule could place. */
   discipline: EstimateDiscipline | null;
+  /** True when no discipline is stored yet and the one shown is read from the work package or activity name. */
+  disciplineInferred?: boolean;
   provider: "Internal" | "Supplier";
   supplierId: number | null;
   supplierName: string | null;
@@ -745,6 +747,7 @@ export type EstimateExpenseLine = {
   description: string;
   costType: "Engineering" | "Installation";
   discipline: EstimateDiscipline | null;
+  disciplineInferred?: boolean;
   supplierId: number | null;
   supplierName: string | null;
   referenceNumber: string | null;

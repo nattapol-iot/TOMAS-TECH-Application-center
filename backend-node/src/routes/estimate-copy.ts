@@ -266,7 +266,7 @@ export async function copyEstimateLines(transaction: TransactionType, input: {
     insert.input("package", sql.NVarChar(200), row.package); insert.input("activity", sql.NVarChar(300), row.activity);
     insert.input("department", sql.NVarChar(100), row.department); insert.input("level", sql.NVarChar(100), row.level);
     insert.input("cost_type", sql.NVarChar(30), row.cost_type); insert.input("provider", sql.NVarChar(30), row.provider);
-    insert.input("discipline", sql.NVarChar(20), row.discipline ?? inferredDiscipline(row.cost_type, row.department));
+    insert.input("discipline", sql.NVarChar(20), row.discipline ?? inferredDiscipline(row.cost_type, row.department, row.package, row.activity));
     insert.input("supplier", sql.BigInt, isSupplier ? supplier.supplierId : null);
     insert.input("quotation", sql.NVarChar(100), isSupplier ? row.quotation_no : null);
     insert.input("price_date", sql.Date, isSupplier ? dateInput(row.price_date) : today);
@@ -293,7 +293,7 @@ export async function copyEstimateLines(transaction: TransactionType, input: {
     insert.input("estimate", sql.BigInt, targetId); insert.input("revision", sql.Int, estimate.revision);
     insert.input("package", sql.NVarChar(200), row.package); insert.input("expense_type", sql.NVarChar(100), row.expense_type);
     insert.input("description", sql.NVarChar(500), row.description); insert.input("cost_type", sql.NVarChar(30), row.cost_type);
-    insert.input("discipline", sql.NVarChar(20), row.discipline ?? inferredDiscipline(row.cost_type, null));
+    insert.input("discipline", sql.NVarChar(20), row.discipline ?? inferredDiscipline(row.cost_type, null, row.package, row.description));
     insert.input("supplier", sql.BigInt, supplier.supplierId); insert.input("reference", sql.NVarChar(200), row.reference_no);
     insert.input("qty", sql.Decimal(19, 4), Number(row.qty)); insert.input("unit", sql.NVarChar(50), row.unit);
     insert.input("unit_cost", sql.Decimal(19, 4), Number(row.unit_cost)); insert.input("owner", sql.BigInt, lineOwnerId);

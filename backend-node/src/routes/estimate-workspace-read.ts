@@ -5,6 +5,7 @@ import sql from "mssql";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { inferredDiscipline, type EstimateDiscipline } from "../estimate-disciplines.js";
 import { hasRole } from "../user-roles.js";
 import { dateOnly, positiveLong } from "../http.js";
 import type { CurrentUserService } from "../users.js";
@@ -170,8 +171,16 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       referenceNumber: row.reference_no, referenceProject: row.reference_project, priceDate: row.price_date ? dateOnly(row.price_date as Date | string) : null,
       remark: row.remark, ownerId: number(row.owner_id), ownerName: row.owner_name, status: row.status, updatedAt: row.updated_at,
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated || isAssignee) }));
+    /* A line written before disciplines existed reads as the discipline its work package or activity
+       names ("Electrical design & in-house wiring"). Nothing is written here: saving the line in the
+       labor dialog stores the discipline it shows, and `disciplineInferred` tells the screen which is which. */
+    const shownDiscipline = (row: Record<string, unknown>, ...names: unknown[]): { discipline: EstimateDiscipline | null; disciplineInferred: boolean } => {
+      if (row.discipline) return { discipline: row.discipline as EstimateDiscipline, disciplineInferred: false };
+      const inferred = inferredDiscipline(String(row.cost_type ?? ""), row.department === undefined ? null : String(row.department ?? ""), ...names.map((name) => String(name ?? "")));
+      return { discipline: inferred, disciplineInferred: inferred !== null };
+    };
     const manhourLines = (result.recordsets[4] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), package: row.package,
-      activity: row.activity, department: row.department, level: row.level, costType: row.cost_type, discipline: row.discipline ?? null, provider: row.provider,
+      activity: row.activity, department: row.department, level: row.level, costType: row.cost_type, ...shownDiscipline(row, row.package, row.activity), provider: row.provider,
       supplierId: nullableNumber(row.supplier_id), supplierName: row.supplier_name, quotationNumber: row.quotation_no,
       priceDate: row.price_date ? dateOnly(row.price_date as Date | string) : null, engineers: number(row.engineers), manDays: number(row.man_days),
       hoursPerDay: number(row.hours_per_day), dailyRate: number(row.daily_rate), manHours: number(row.engineers) * number(row.man_days) * number(row.hours_per_day),
@@ -179,7 +188,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable
         && (elevated || (isAssignee && number(row.owner_id) === actor.id)) }));
     const expenseLines = (result.recordsets[5] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), package: row.package,
-      expenseType: row.expense_type, description: row.description, costType: row.cost_type, discipline: row.discipline ?? null, supplierId: nullableNumber(row.supplier_id),
+      expenseType: row.expense_type, description: row.description, costType: row.cost_type, ...shownDiscipline(row, row.package, row.description), supplierId: nullableNumber(row.supplier_id),
       supplierName: row.supplier_name, referenceNumber: row.reference_no, quantity: number(row.qty), unit: row.unit, unitCost: number(row.unit_cost),
       lineTotal: number(row.line_total), ownerId: number(row.owner_id), ownerName: row.owner_name, remark: row.remark, updatedAt: row.updated_at,
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated
@@ -194,6 +203,13 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       status: row.status, total: number(row.total) }));
     const validationIssues = withoutLegacyDuplicateErrors((result.recordsets[8] as unknown as Array<Record<string, unknown>>).map((row) => ({ code: row.code, message: row.message,
       entityType: row.entity_type, entityId: number(row.entity_id), severity: row.severity })));
+    // A line the screen can already place by its name needs no "choose the discipline" warning.
+    const placed = new Set([...manhourLines.filter((line) => line.discipline).map((line) => `ManhourLine:${line.id}`),
+      ...expenseLines.filter((line) => line.discipline).map((line) => `ExpenseLine:${line.id}`)]);
+    for (let index = validationIssues.length - 1; index >= 0; index -= 1) {
+      const issue = validationIssues[index]!;
+      if ((issue.code === "labor_discipline_missing" || issue.code === "expense_discipline_missing") && placed.has(`${String(issue.entityType)}:${issue.entityId}`)) validationIssues.splice(index, 1);
+    }
     validationIssues.push(...estimateDuplicateWarnings(costItems.map(item => ({
       id: item.id, categoryCode: String(item.categoryCode ?? ""), module: String(item.module ?? ""),
       itemCode: String(item.itemCode ?? ""), model: String(item.model ?? ""), description: String(item.description ?? ""),

@@ -808,8 +808,8 @@ export function registerLaborPackageRoutes(
     // The labor-sheet section the package was applied from; Installation lines always stay Installation.
     if (body.discipline !== undefined && body.discipline !== null && !isEstimateDiscipline(body.discipline)) throw validation("Discipline is not recognised.");
     const targetDiscipline = (body.discipline ?? null) as EstimateDiscipline | null;
-    const disciplineOf = (costType: string, department: string): EstimateDiscipline | null => costType === "Installation" ? "Installation"
-      : targetDiscipline && targetDiscipline !== "Installation" ? targetDiscipline : inferredDiscipline(costType, department);
+    const disciplineOf = (costType: string, department: string, ...names: string[]): EstimateDiscipline | null => costType === "Installation" ? "Installation"
+      : targetDiscipline && targetDiscipline !== "Installation" ? targetDiscipline : inferredDiscipline(costType, department, ...names);
     const rawOverrides = body.lines;
     if (rawOverrides !== undefined && rawOverrides !== null && !Array.isArray(rawOverrides)) {
       throw validation("Line overrides must be a list.");
@@ -914,7 +914,7 @@ export function registerLaborPackageRoutes(
         insert.input("department", sql.NVarChar(100), line.department);
         insert.input("level", sql.NVarChar(100), line.level);
         insert.input("cost_type", sql.NVarChar(30), line.cost_type);
-        insert.input("discipline", sql.NVarChar(20), disciplineOf(line.cost_type, line.department));
+        insert.input("discipline", sql.NVarChar(20), disciplineOf(line.cost_type, line.department, targetPackage, pkg.name, activity));
         insert.input("provider", sql.NVarChar(30), provider);
         insert.input("supplier", sql.BigInt, supplierId);
         insert.input("quotation", sql.NVarChar(100), quotationNumber);

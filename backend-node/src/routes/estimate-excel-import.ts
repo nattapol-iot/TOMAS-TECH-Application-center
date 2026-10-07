@@ -143,7 +143,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
         cmd.input("brand", sql.NVarChar(100), l.brand); cmd.input("model", sql.NVarChar(200), l.model);
         cmd.input("reference", sql.NVarChar(200), input.sourceName.slice(0, 200));
         cmd.input("hours", sql.Decimal(9, 2), input.hoursPerDay); cmd.input("department", sql.NVarChar(100), l.department); cmd.input("cost_type", sql.NVarChar(30), l.costType);
-        cmd.input("discipline", sql.NVarChar(20), inferredDiscipline(l.costType, l.department));
+        cmd.input("discipline", sql.NVarChar(20), inferredDiscipline(l.costType, l.department, l.module, l.description));
         const valid = (await cmd.query(`SELECT CASE WHEN @supplier IS NULL OR EXISTS(SELECT 1 FROM dbo.suppliers WHERE id=@supplier AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END valid;`)).recordset[0].valid;
         if (!valid) throw new ApiError(400, "invalid_supplier", "Selected supplier is no longer active.");
         const duplicates = (await cmd.query(`SELECT id FROM dbo.cost_items WHERE estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND (module=@module AND description=@description AND model=@model AND brand=@brand);`)).recordset;

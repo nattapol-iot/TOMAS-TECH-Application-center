@@ -167,10 +167,10 @@ function parseManhour(request: FastifyRequest, requireLine: boolean): ManhourInp
   if (engineers * manDays * dailyRate > 999_999_999_999_999) throw new ApiError(400, "validation_failed", "Man-hour line cost exceeds the maximum amount supported by the estimate ledger.");
   const department = requiredText(body.department, 100, "Department");
   const costType = oneOf(requiredText(body.costType, 30, "Cost type"), "Cost type", ["Engineering", "Installation"]);
+  const packageName = requiredText(body.package, 200, "Work package"); const activity = requiredText(body.activity, 300, "Activity");
   return { estimateVersion: parseRowVersion(body.estimateRowVersion), lineVersion: optionalLineVersion(body.lineRowVersion, requireLine),
-    packageName: requiredText(body.package, 200, "Work package"), activity: requiredText(body.activity, 300, "Activity"),
-    department, level: requiredText(body.level, 100, "Engineer level"),
-    costType, discipline: lineDiscipline(body.discipline, costType, department), provider, supplierId,
+    packageName, activity, department, level: requiredText(body.level, 100, "Engineer level"),
+    costType, discipline: lineDiscipline(body.discipline, costType, department, packageName, activity), provider, supplierId,
     quotationNumber, priceDate, engineers, manDays, hoursPerDay: decimal(body.hoursPerDay, 0.01, 24, 2, "Hours per day"), dailyRate,
     ownerId: requiredInteger(body.ownerId, "Owner", 1), remark: optionalBodyText(body.remark, 20_000, "Remark") };
 }
@@ -219,9 +219,10 @@ function parseExpense(request: FastifyRequest, requireLine: boolean): ExpenseInp
   const unitCost = decimal(body.unitCost, 0, 1_000_000_000, 4, "Unit cost");
   if (quantity * unitCost > 999_999_999_999_999) throw new ApiError(400, "validation_failed", "Line total exceeds the supported monetary range.");
   const costType = oneOf(requiredText(body.costType, 30, "Cost type"), "Cost type", ["Engineering", "Installation"]);
+  const packageName = requiredText(body.package, 200, "Work package"); const description = requiredText(body.description, 500, "Description");
   return { estimateVersion: parseRowVersion(body.estimateRowVersion), lineVersion: optionalLineVersion(body.lineRowVersion, requireLine),
-    packageName: requiredText(body.package, 200, "Work package"), expenseType: oneOf(requiredText(body.expenseType, 100, "Expense type"), "Expense type", expenseTypes),
-    description: requiredText(body.description, 500, "Description"), costType, discipline: lineDiscipline(body.discipline, costType),
+    packageName, expenseType: oneOf(requiredText(body.expenseType, 100, "Expense type"), "Expense type", expenseTypes),
+    description, costType, discipline: lineDiscipline(body.discipline, costType, null, packageName, description),
     supplierId: optionalId(body.supplierId, "Supplier"), referenceNumber: optionalBodyText(body.referenceNumber, 200, "Reference number"), quantity,
     unit: requiredText(body.unit, 50, "Unit"), unitCost, ownerId: requiredInteger(body.ownerId, "Owner", 1), remark: optionalBodyText(body.remark, 20_000, "Remark") };
 }
