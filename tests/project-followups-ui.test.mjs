@@ -278,15 +278,15 @@ test("every new follow-up string has English, Thai and Japanese copy", () => {
   }
 });
 
-test("a task history shows the change; only a day request, its answer and a baseline keep a quoted reason", () => {
+test("a task history shows the change, drops the importer's text, and only a day request, its answer and a baseline keep a quoted reason", () => {
   const planning = read("app/system/production/PlanningPricingScreens.tsx");
-  const helpers = ["workUserNote", "historyReason", "historyValue"].map((name) => {
+  const helpers = ["historyReason", "historyNoteFields", "historyValue", "historyShown"].map((name) => {
     const line = planning.match(new RegExp(`^const ${name} = .*$`, "m"))?.[0];
     assert.ok(line, name);
     return line;
   }).join("\n");
-  const code = ts.transpileModule(`${helpers}\nreturn { historyReason, historyValue };`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-  const { historyReason, historyValue } = new Function(code)();
+  const code = ts.transpileModule(`${helpers}\nreturn { historyReason, historyValue, historyShown };`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const { historyReason, historyValue, historyShown } = new Function(code)();
   const imported = "Imported from Overall Project Plan row 1054; source WBS 3.3; source status Delay";
   assert.equal(historyReason({ field: "status", comment: imported }), "");
   assert.equal(historyReason({ field: "percent_complete", comment: "Waiting for parts" }), "");
@@ -296,7 +296,19 @@ test("a task history shows the change; only a day request, its answer and a base
   assert.equal(historyValue("remark", imported), null);
   assert.equal(historyValue("remark", "Site closed"), "Site closed");
   assert.equal(historyValue("status", "Done"), "Done");
+  assert.equal(historyValue("blocked_reason", imported), null);
+  assert.equal(historyValue("blocked_reason", "Imported source status: Delay"), null);
+  assert.equal(historyValue("blocked_reason", "No access to site"), "No access to site");
+  // A row that only moved the importer's text is left out; a real reason still shows.
+  assert.equal(historyShown({ field: "blocked_reason", fromValue: imported, toValue: null }), false);
+  assert.equal(historyShown({ field: "blocked_reason", fromValue: "Imported source status: Delay", toValue: imported }), false);
+  assert.equal(historyShown({ field: "blocked_reason", fromValue: null, toValue: "No access to site" }), true);
+  assert.equal(historyShown({ field: "remark", fromValue: imported, toValue: "Cable on order" }), true);
+  assert.equal(historyShown({ field: "status", fromValue: "Blocked", toValue: "In Progress" }), true);
   // The project history, the task drawer and My Updates all go through the helpers.
   assert.doesNotMatch(planning, /(?:update|entry)\.comment \? ` · “/);
   assert.equal(planning.match(/\{historyReason\((?:update|entry)\)\}/g)?.length, 3);
+  assert.match(planning, /const visibleUpdates = updates\.filter\(historyShown\);/);
+  assert.match(planning, /!taskById\.has\(update\.taskId\)\) && historyShown\(update\)\)\.slice\(0, 20\)/);
+  assert.match(planning, /update\.taskId === task\.id && historyShown\(update\)\)/);
 });

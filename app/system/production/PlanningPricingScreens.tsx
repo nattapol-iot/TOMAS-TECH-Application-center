@@ -701,8 +701,11 @@ const workNeedsUpdate = (item: MyWorkItem) => myWorkNeedsAttention({ ...item, ca
 const workUserNote = (value: string | null) => value?.trim().startsWith("Imported from Overall Project Plan") ? "" : value ?? "";
 /** A progress save copies the task's note onto every field it changes, so in a history only a day request, its answer and a baseline carry words written for that event. */
 const historyReason = (entry: { field: string; comment: string | null }) => entry.comment && ["request", "request_answer", "baseline"].includes(entry.field) ? ` · “${entry.comment}”` : "";
-/** The importer's provenance text is not a note anyone wrote; a note change shows it as empty. */
-const historyValue = (field: string, value: string | null) => field === "remark" ? workUserNote(value) || null : value;
+/** The plan importer wrote its provenance into the note and the blocked reason; nobody typed it, so a history shows it as empty. */
+const historyNoteFields = ["remark", "blocked_reason"];
+const historyValue = (field: string, value: string | null) => historyNoteFields.includes(field) && /^\s*Imported (?:from Overall Project Plan|source status:)/.test(value ?? "") ? null : value;
+/** A note or blocked-reason row that only moved the importer's text says nothing. */
+const historyShown = (entry: { field: string; fromValue: string | null; toValue: string | null }) => !historyNoteFields.includes(entry.field) || historyValue(entry.field, entry.fromValue) !== historyValue(entry.field, entry.toValue);
 const daysFromToday = (value: string | null) => value
   ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
   : null;
@@ -1195,7 +1198,7 @@ export function ProductionMyWork({
       return entry.kind === "schedule" ? `${entry.group.projectNo}:${entry.group.phaseWbs ?? ""}` : entry.group.estimateNumber;
     });
   }, [scheduleGroups, taskSort, visibleEstimateGroups]);
-  const visibleUpdates = updates;
+  const visibleUpdates = updates.filter(historyShown);
   const activeLoading = loading || ((sourceFilter === "all" || sourceFilter === "estimate") && estimateQueue.loading);
   const activeEstimateError = sourceFilter === "all" || sourceFilter === "estimate" ? estimateQueue.error : "";
 
@@ -2326,7 +2329,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
       {(() => {
-        const projectHistory = activeSchedule.recentUpdates.filter((update) => update.taskId === null || !taskById.has(update.taskId)).slice(0, 20);
+        const projectHistory = activeSchedule.recentUpdates.filter((update) => (update.taskId === null || !taskById.has(update.taskId)) && historyShown(update)).slice(0, 20);
         return projectHistory.length ? <details className="plan-project-history"><summary>{uiText("Plan.projectHistory")} ({projectHistory.length})</summary><ul className="plan-history">{projectHistory.map((update) => <li key={update.id}>
           <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
           <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.fromValue || update.toValue ? ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}` : ""}{historyReason(update)}</span>
@@ -2407,7 +2410,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
     userId: bootstrap.user.id,
   });
   const leaf = isLeafTask(task);
-  const history = activeSchedule.recentUpdates.filter((update) => update.taskId === task.id);
+  const history = activeSchedule.recentUpdates.filter((update) => update.taskId === task.id && historyShown(update));
   const pic = task.pics.map((person) => person.name).join(", ") || task.picExternal || "—";
   return <Drawer title={`${task.wbs} · ${task.name}`} subtitle={activeSchedule.projectNo} onClose={onClose} width={560}>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
