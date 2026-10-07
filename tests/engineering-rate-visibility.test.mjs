@@ -8,6 +8,7 @@ const masterRoute = read("../backend-node/src/routes/master.ts");
 const masterScreen = read("../app/system/production/CoreScreens.tsx");
 const ratesScreen = read("../app/system/production/AdminAnalyticsScreens.tsx");
 const estimateScreen = read("../app/system/production/EstimateScreens.tsx");
+const laborSheet = read("../app/system/production/EstimateLaborSheet.tsx");
 
 test("engineering rate master is hidden and API-protected below management level", () => {
   const listRoute = adminRoute.match(/app\.get\("\/api\/v1\/admin\/engineering-rates"[\s\S]*?\n {2}\}\);/)?.[0] ?? "";
@@ -27,6 +28,9 @@ test("estimate editing uses a limited rate-option endpoint instead of the manage
   const optionRoute = adminRoute.match(/app\.get\("\/api\/v1\/estimates\/engineering-rate-options"[\s\S]*?\n {2}\}\);/)?.[0] ?? "";
   assert.match(optionRoute, /demandPermission\(request, "estimate\.write"\)/);
   assert.doesNotMatch(optionRoute, /engineering_hourly|installation_hourly|created_by_name|row_version/);
-  assert.match(estimateScreen, /\/api\/v1\/estimates\/engineering-rate-options/);
-  assert.doesNotMatch(estimateScreen.match(/const loadRates = async \(\) => \{[\s\S]*?\n {4}\};/)?.[0] ?? "", /\/api\/v1\/admin\/engineering-rates/);
+  // The labor sheet and the labor dialog share one loader for the limited options.
+  assert.match(estimateScreen, /useEngineeringRateOptions\(/);
+  const loader = laborSheet.match(/export function useEngineeringRateOptions[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(loader, /\/api\/v1\/estimates\/engineering-rate-options/);
+  assert.doesNotMatch(loader, /\/api\/v1\/admin\/engineering-rates/);
 });

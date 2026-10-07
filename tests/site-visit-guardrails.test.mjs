@@ -275,7 +275,7 @@ test("the site visit module is part of deployment and of the production baseline
     read("database/scripts/920_site_visit_master_seed.sql"),
   ]);
   assert.match(deployment, /016_sales_intake_site_visit\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 69\) <> 69/);
+  assert.match(deployment, /version BETWEEN 1 AND 70\) <> 70/);
 
   // The application role may create and read a notification, and mark it read.
   // It may never delete one, nor delete from any append-only ledger.

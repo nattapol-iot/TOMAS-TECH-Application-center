@@ -508,8 +508,9 @@ test("production baseline verifier checks schema, app role, and real identities"
 });
 
 test("estimate revisions remain immutable and writes are record-scoped", async () => {
+  // The labor sheet is part of the estimate screen; it lives in its own file.
   const [estimateScreen, workspaceApi, costs, workspaceWrites, immutabilityMigration, workspaceMigration, deployment, seed] = await Promise.all([
-    readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
+    Promise.all(["EstimateScreens.tsx", "EstimateLaborSheet.tsx"].map((file) => readFile(new URL(`app/system/production/${file}`, root), "utf8"))).then((files) => files.join("\n")),
     readFile(new URL("backend-node/src/routes/estimate-workspace-read.ts", root), "utf8"),
     readFile(new URL("backend-node/src/routes/estimate-cost-write.ts", root), "utf8"),
     readFile(new URL("backend-node/src/routes/estimate-workspace-write.ts", root), "utf8"),
@@ -528,7 +529,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   for (const tab of ["Cost summary", "Cost Items", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
     assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add expense", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add item to this module", "Add module"]) {
+  for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add travel, hotel or per diem", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add item to this module", "Add module"]) {
     assert.match(estimateScreen, new RegExp(action));
   }
   assert.match(estimateScreen, /loadPriceLibraryRecords/);
@@ -545,7 +546,9 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /className="cost-inline-sheet cost-sheet"/);
   assert.match(estimateScreen, /Cost item created · press Enter to continue adding rows/);
   assert.match(estimateScreen, /aria-label=\{uiText\("Item code"\)\}/);
-  assert.match(estimateScreen, /workspace\.expenseLines\.map\(\(line\) => `\$\{line\.costType\}\\u0000\$\{line\.package\}`\)/);
+  // Labor and travel are grouped by discipline; each discipline keeps its own travel, hotel and per diem.
+  assert.match(estimateScreen, /const sectionOf = \(line: \{ discipline: EstimateDiscipline \| null \}\): SectionKey => line\.discipline \?\? "unassigned";/);
+  assert.match(estimateScreen, /workspace\.expenseLines\.filter\(\(line\) => sectionOf\(line\) === section\)/);
   assert.match(estimateScreen, /setManhourSeed\(seed\)/);
   assert.match(estimateScreen, /setExpenseSeed\(seed\)/);
   assert.match(estimateScreen, /EXPENSE_SECTION_BY_TYPE\[expenseType\]/);
@@ -590,7 +593,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(deployment, /026_performance_reviews\.sql/);
   // Migration 017 extended the list. The assertion still pins an exact count,
   // so a migration added to the runner but never applied still fails the build.
-  assert.match(deployment, /version BETWEEN 1 AND 69\) <> 69/);
+  assert.match(deployment, /version BETWEEN 1 AND 70\) <> 70/);
   assert.match(seed, /schema_versions WHERE version = 15/);
 
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
@@ -1008,7 +1011,7 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.match(client, /listKnowledgeDocuments/);
   assert.match(deployment, /014_knowledge_hub\.sql/);
   assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 69\) <> 69/);
+  assert.match(deployment, /version BETWEEN 1 AND 70\) <> 70/);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.knowledge_audit_events/);
   assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.knowledge_document_approvals/);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);

@@ -131,11 +131,12 @@ GO
 :r database/migrations/067_department_teams.sql
 :r database/migrations/068_day_request_effective_roles.sql
 :r database/migrations/069_withdraw_project_document.sql
+:r database/migrations/070_estimate_labor_discipline.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 69) <> 69
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 70) <> 70
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -185,7 +186,8 @@ IF EXISTS (
         (66, N'Application role grants for existing API statements'),
         (67, N'Department teams for manager scope'),
         (68, N'Day-request answers accept additional roles'),
-        (69, N'Withdraw a mistaken project document upload')
+        (69, N'Withdraw a mistaken project document upload'),
+        (70, N'Estimate labor and site expense disciplines')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

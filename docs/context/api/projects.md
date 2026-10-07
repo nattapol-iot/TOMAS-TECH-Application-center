@@ -2,7 +2,7 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c580425a`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -13,21 +13,21 @@ Evidence: source snapshot `c580425a`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/contact-options` | 104–114 |
 | GET | `/api/v1/projects` | 116–143 |
 | GET | `/api/v1/projects/attention` | 178–196 |
-| GET | `/api/v1/projects/overview` | 200–249 |
-| POST | `/api/v1/projects` | 251–386 |
-| GET | `/api/v1/projects/:id/members` | 388–413 |
-| POST | `/api/v1/projects/:id/members` | 415–438 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 440–461 |
-| GET | `/api/v1/projects/:id/deletion` | 481–488 |
-| DELETE | `/api/v1/projects/:id` | 490–513 |
-| PUT | `/api/v1/projects/:id` | 515–635 |
+| GET | `/api/v1/projects/overview` | 200–250 |
+| POST | `/api/v1/projects` | 252–387 |
+| GET | `/api/v1/projects/:id/members` | 389–414 |
+| POST | `/api/v1/projects/:id/members` | 416–439 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 441–462 |
+| GET | `/api/v1/projects/:id/deletion` | 482–489 |
+| DELETE | `/api/v1/projects/:id` | 491–514 |
+| PUT | `/api/v1/projects/:id` | 516–636 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 40–45 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–636 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–637 |
 
 ## Direct local dependencies
 

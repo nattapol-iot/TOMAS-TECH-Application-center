@@ -2,24 +2,26 @@
 
 [Module](../modules/estimate-copy.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c580425a`; generated, do not edit. [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/estimates/:id/copy-from` | 120–341 |
+| POST | `/api/v1/estimates/:id/copy-from` | 346–365 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `businessToday` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 61–65 |
-| `dateInput` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 67–68 |
-| `readSource` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 71–78 |
-| `resolveInternalRate` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 85–100 |
-| `copyErpCategory` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 105–117 |
-| `registerEstimateCopyRoutes` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 119–342 |
+| `businessToday` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 63–67 |
+| `dateInput` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 69–70 |
+| `readSource` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 73–80 |
+| `resolveInternalRate` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 87–102 |
+| `copyErpCategory` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 107–119 |
+| `copyLedgersFrom` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 124–130 |
+| `copyEstimateLines` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 137–343 |
+| `registerEstimateCopyRoutes` | [backend-node/src/routes/estimate-copy.ts](<../../../backend-node/src/routes/estimate-copy.ts>) | 345–366 |
 
 ## Direct local dependencies
 
@@ -28,8 +30,10 @@ Evidence: source snapshot `c580425a`; generated, do not edit. [backend-node/src/
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/estimate-copy-plan.ts](<../../../backend-node/src/estimate-copy-plan.ts>)
+- [backend-node/src/estimate-disciplines.ts](<../../../backend-node/src/estimate-disciplines.ts>)
 - [backend-node/src/estimate-total-guard.ts](<../../../backend-node/src/estimate-total-guard.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/types.ts](<../../../backend-node/src/types.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>)
 

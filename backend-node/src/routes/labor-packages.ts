@@ -5,6 +5,7 @@ import { insertAudit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
+import { inferredDiscipline, isEstimateDiscipline, type EstimateDiscipline } from "../estimate-disciplines.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import {
   bodyObject,
@@ -804,6 +805,11 @@ export function registerLaborPackageRoutes(
     const packageId = requiredInteger(body.packageId, "Package id", 1);
     const ownerId = requiredInteger(body.ownerId, "Owner", 1);
     const workPackageName = optionalBodyText(body.package, 200, "Work package");
+    // The labor-sheet section the package was applied from; Installation lines always stay Installation.
+    if (body.discipline !== undefined && body.discipline !== null && !isEstimateDiscipline(body.discipline)) throw validation("Discipline is not recognised.");
+    const targetDiscipline = (body.discipline ?? null) as EstimateDiscipline | null;
+    const disciplineOf = (costType: string, department: string): EstimateDiscipline | null => costType === "Installation" ? "Installation"
+      : targetDiscipline && targetDiscipline !== "Installation" ? targetDiscipline : inferredDiscipline(costType, department);
     const rawOverrides = body.lines;
     if (rawOverrides !== undefined && rawOverrides !== null && !Array.isArray(rawOverrides)) {
       throw validation("Line overrides must be a list.");
@@ -908,6 +914,7 @@ export function registerLaborPackageRoutes(
         insert.input("department", sql.NVarChar(100), line.department);
         insert.input("level", sql.NVarChar(100), line.level);
         insert.input("cost_type", sql.NVarChar(30), line.cost_type);
+        insert.input("discipline", sql.NVarChar(20), disciplineOf(line.cost_type, line.department));
         insert.input("provider", sql.NVarChar(30), provider);
         insert.input("supplier", sql.BigInt, supplierId);
         insert.input("quotation", sql.NVarChar(100), quotationNumber);
@@ -921,10 +928,10 @@ export function registerLaborPackageRoutes(
         insert.input("actor", sql.BigInt, actor.id);
         const inserted = (await insert.query<{ id: number | string }>(`
           DECLARE @created TABLE(id bigint NOT NULL);
-          INSERT INTO dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,provider,
+          INSERT INTO dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,discipline,provider,
             supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by)
           OUTPUT inserted.id INTO @created(id)
-          VALUES(@estimate,@revision,@package,@activity,@department,@level,@cost_type,@provider,@supplier,@quotation,
+          VALUES(@estimate,@revision,@package,@activity,@department,@level,@cost_type,@discipline,@provider,@supplier,@quotation,
             @price_date,@engineers,@man_days,@hours,@rate,@owner,@remark,@actor,@actor);
           SELECT id FROM @created;
         `)).recordset[0]!;

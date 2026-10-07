@@ -2,7 +2,7 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c580425a`; generated, do not edit. [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `aa4e8e9a`; generated, do not edit. [backend-node/src/routes/estimate-price-sets.ts](<../../../backend-node/src/routes/estimate-price-sets.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

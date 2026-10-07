@@ -16,6 +16,9 @@ import { bodyObject, clampedInteger, dateOnly, firstQueryValue, optionalBodyText
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import { snapshotOverheadPolicy } from "../overhead.js";
+import { ESTIMATE_SECTION_CODES } from "../estimate-copy-plan.js";
+import { lockEditableEstimate } from "./estimate-cost-write.js";
+import { copyEstimateLines, copyLedgersFrom } from "./estimate-copy.js";
 
 type EstimateRow = Record<string, unknown> & {
   id: number | string; estimate_no: string; inquiry_no: string; customer_id: number | string; customer_name: string;
@@ -102,10 +105,10 @@ async function snapshotSubmission(transaction: TransactionType, estimateId: numb
       JSON_QUERY((SELECT category_code categoryCode,category,subcategory,module,item_code itemCode,description,brand,model,specification,supplier_id supplierId,
         qty quantity,unit,unit_cost unitCost,price_source priceSource,reference_no referenceNumber,reference_project referenceProject,price_date priceDate,
         remark,price_set_key priceSetKey,is_price_set isPriceSet,qty_per_set quantityPerSet,owner_id ownerId,status FROM dbo.cost_items WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,category_code,module,id FOR JSON PATH)) costItems,
-      JSON_QUERY((SELECT package,activity,department,level,cost_type costType,provider,supplier_id supplierId,quotation_no quotationNumber,price_date priceDate,
+      JSON_QUERY((SELECT package,activity,department,level,cost_type costType,discipline,provider,supplier_id supplierId,quotation_no quotationNumber,price_date priceDate,
         engineers,man_days manDays,hours_per_day hoursPerDay,daily_rate dailyRate,owner_id ownerId,remark FROM dbo.manhour_lines
         WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,package,id FOR JSON PATH)) manhourLines,
-      JSON_QUERY((SELECT package,expense_type expenseType,description,cost_type costType,supplier_id supplierId,reference_no referenceNumber,qty quantity,
+      JSON_QUERY((SELECT package,expense_type expenseType,description,cost_type costType,discipline,supplier_id supplierId,reference_no referenceNumber,qty quantity,
         unit,unit_cost unitCost,owner_id ownerId,remark FROM dbo.expense_lines WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,package,id FOR JSON PATH)) expenseLines,
       JSON_QUERY((SELECT category,description,qty quantity,unit,unit_cost unitCost,remark FROM dbo.other_cost_lines
         WHERE estimate_id=e.id AND revision=e.revision AND deleted_at IS NULL ORDER BY sort_order,category,id FOR JSON PATH)) otherCostLines,
@@ -198,8 +201,8 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
     DECLARE @copiedManhours TABLE(old_id bigint,new_id bigint);
     MERGE dbo.manhour_lines AS target
     USING (SELECT * FROM dbo.manhour_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
-    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,package,activity,department,level,cost_type,provider,supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by,sort_order)
-    VALUES(source.estimate_id,@next_revision,source.package,source.activity,source.department,source.level,source.cost_type,source.provider,source.supplier_id,source.quotation_no,source.price_date,source.engineers,source.man_days,source.hours_per_day,source.daily_rate,source.owner_id,source.remark,@actor,@actor,source.sort_order)
+    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,package,activity,department,level,cost_type,discipline,provider,supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by,sort_order)
+    VALUES(source.estimate_id,@next_revision,source.package,source.activity,source.department,source.level,source.cost_type,source.discipline,source.provider,source.supplier_id,source.quotation_no,source.price_date,source.engineers,source.man_days,source.hours_per_day,source.daily_rate,source.owner_id,source.remark,@actor,@actor,source.sort_order)
     OUTPUT source.id,inserted.id INTO @copiedManhours;
     INSERT dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,after_json)
     SELECT @actor,N'ManhourLine',copied.new_id,a.entity_no,N'Created',JSON_MODIFY(a.after_json,'$.copiedFromLineId',copied.old_id)
@@ -212,8 +215,8 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
     DECLARE @copiedExpenses TABLE(old_id bigint,new_id bigint);
     MERGE dbo.expense_lines AS target
     USING (SELECT * FROM dbo.expense_lines WITH(HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@current_revision AND deleted_at IS NULL) AS source ON 1=0
-    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by,sort_order)
-    VALUES(source.estimate_id,@next_revision,source.package,source.expense_type,source.description,source.cost_type,source.supplier_id,source.reference_no,source.qty,source.unit,source.unit_cost,source.owner_id,source.remark,@actor,@actor,source.sort_order)
+    WHEN NOT MATCHED THEN INSERT(estimate_id,revision,package,expense_type,description,cost_type,discipline,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by,sort_order)
+    VALUES(source.estimate_id,@next_revision,source.package,source.expense_type,source.description,source.cost_type,source.discipline,source.supplier_id,source.reference_no,source.qty,source.unit,source.unit_cost,source.owner_id,source.remark,@actor,@actor,source.sort_order)
     OUTPUT source.id,inserted.id INTO @copiedExpenses;
     DECLARE @copiedOtherCosts TABLE(old_id bigint,new_id bigint);
     MERGE dbo.other_cost_lines AS target
@@ -264,7 +267,9 @@ async function materializeErpMappings(transaction: TransactionType, estimateId: 
       AND line.estimate_id=mapping.estimate_id AND line.revision=mapping.revision
     WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'ManhourLine'
       AND line.deleted_at IS NULL AND ${laborCategorySql('line')} IS NOT NULL
-      AND mapping.erp_category<>${laborCategorySql('line')};
+      AND mapping.erp_category<>${laborCategorySql('line')}
+      -- A category a person chose on the ERP sheet is what the sheet shows; submitting keeps it.
+      AND COALESCE(mapping.manual_override,0)=0;
     INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
     SELECT @estimate_id,@revision,N'ManhourLine',line.id,
       COALESCE(${laborCategorySql('line')},N'Unmapped'),@actor,@actor
@@ -428,6 +433,10 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const contingencyRate = percentage(body.contingencyRate, "Contingency rate"); const dueDate = parseDateOnly(body.dueDate, "Due date")!;
     if (!managerOverride(actor) && ownerId !== actor.id) throw new ApiError(403, "estimate_owner_required", "Only an engineering manager or administrator can create an estimate for another owner.");
     const today = todayIn(config.businessTimeZone); if (dueDate < today || dueDate > addYears(today, 5)) throw new ApiError(400, "validation_failed", "Due date must be between today and five years from today.");
+    // "Start from a previous estimate": the new R00 is filled from the chosen estimate in the same transaction.
+    const copyFrom = body.copyFrom === undefined || body.copyFrom === null ? null : bodyObject(body.copyFrom);
+    const copySourceId = copyFrom ? requiredInteger(copyFrom.sourceEstimateId, "Source estimate", 1) : null;
+    if (copyFrom) await users.demandPermission(request, "estimate.read");
     const created = await database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, inquiryId);
       const inquiry = (await lookup.query<{ customer_id: number | string; project_name: string; project_type: string; inquiry_no: string; estimate_owner_id: number | string; status: string; estimate_id: number | string | null }>(`
@@ -458,8 +467,13 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       const changed = await updateInquiryRequest.query(`UPDATE dbo.inquiries SET estimate_id=@estimate_id,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE id=@inquiry_id AND status=N'New' AND estimate_id IS NULL AND deleted_at IS NULL;`);
       if (changed.rowsAffected[0] !== 1) throw new ApiError(409, "inquiry_not_eligible", "The inquiry can no longer be converted to an estimate.");
-      await insertAudit(transaction, actor.id, "Estimate", id, number, "Created from inquiry", inquiry.inquiry_no, { inquiryId, ownerId, dueDate, contingencyRate });
-      return { id, number, rowVersion: row.row_version.toString("base64") };
+      await insertAudit(transaction, actor.id, "Estimate", id, number, "Created from inquiry", inquiry.inquiry_no, { inquiryId, ownerId, dueDate, contingencyRate, copiedFromEstimateId: copySourceId });
+      if (!copyFrom || copySourceId === null) return { id, number, rowVersion: row.row_version.toString("base64"), copied: null };
+      const estimate = await lockEditableEstimate(transaction, id, row.row_version);
+      const copied = await copyEstimateLines(transaction, { actor, targetId: id, estimate, sourceId: copySourceId, ownerId,
+        sections: ESTIMATE_SECTION_CODES, include: copyLedgersFrom(copyFrom), today });
+      const { estimateRowVersion, ...summary } = copied;
+      return { id, number, rowVersion: estimateRowVersion, copied: summary };
     });
     return reply.status(201).header("Location", `/api/v1/estimates/${created.id}`).send(created);
   });

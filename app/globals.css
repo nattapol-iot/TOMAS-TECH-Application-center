@@ -4451,6 +4451,26 @@ tbody tr.row-late:hover td { background: #fadada; }
 .manhour-sheet tbody tr.labor-package-subtotal > td:first-child { position: static; text-align: right; white-space: normal; color: var(--muted); font-weight: 500; }
 .manhour-sheet tbody tr.labor-package-gap > td { height: 12px; padding: 0; border: 0; background: var(--surface); }
 
+/* The labor sheet is one band per discipline; its work packages and its own travel,
+   hotel and per diem are lighter sub-bands under it, pinned like the module band. */
+.manhour-sheet tbody tr.labor-discipline-row > td { font-size: var(--fs-sm); }
+.manhour-sheet tbody tr.labor-package-row > td {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  padding: 5px 10px;
+  background: var(--n-25);
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+}
+.manhour-sheet tbody tr.labor-expense-row > td { background: var(--amber-soft); }
+.labor-package-row .row.band { position: sticky; left: 34px; width: max-content; gap: 8px; flex-wrap: nowrap; padding-left: 24px; }
+.labor-package-row strong { color: var(--ink); font-weight: 600; }
+
+.estimate-start-from { min-width: 0; margin: 0; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.estimate-start-from legend { padding: 0 6px; color: var(--ink); font-size: var(--fs-sm); font-weight: 600; }
+
 /* Chevron and module name are one hit target — folding a module should not
    require aiming at a 16px icon. */
 .module-toggle {

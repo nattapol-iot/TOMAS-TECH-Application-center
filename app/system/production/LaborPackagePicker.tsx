@@ -17,6 +17,7 @@ import { currentLocale, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { EmptyState, Field, Icon, Modal, Pagination, SearchInput } from "../ui";
 import { estimateApplyOwnerId, estimateBusinessDate } from "../../../lib/estimate-ux";
+import type { EstimateDiscipline } from "../../../lib/estimate-disciplines";
 import {
   applyOverrides,
   draftFromPackageLine,
@@ -70,9 +71,11 @@ function linePreviewShape(line: LaborPackageDetail["lines"][number]): LaborPacka
  * the estimator fixes it or skips it on purpose, rather than discovering later
  * that a line quietly went missing.
  */
-export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose, onApplied, onManageLibrary }: {
+export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose, onApplied, onManageLibrary, discipline }: {
   workspace: EstimateCostWorkspace;
   currentUserId: number;
+  /** The labor-sheet section the package is applied from. */
+  discipline?: EstimateDiscipline;
   busy: boolean;
   onClose: () => void;
   onApplied: (message: string) => Promise<void>;
@@ -171,6 +174,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
            a line for somebody else. */
         ownerId: estimateApplyOwnerId(workspace.capabilities, workspace.header.ownerId, currentUserId),
         package: workPackage.trim(),
+        discipline,
         lines: applyOverrides(lines.map(linePreviewShape), drafts, today),
         estimateRowVersion: workspace.header.rowVersion,
       });

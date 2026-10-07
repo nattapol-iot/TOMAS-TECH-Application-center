@@ -50,6 +50,10 @@ export function estimateIssueMessage(issue: { code: string; message: string }, l
     internal_rate_mismatch: ["ตรวจอัตราค่าแรงให้ตรงกับแผนก ระดับ และประเภทงาน หากไม่มีอัตราให้ผู้ดูแลตั้งค่าข้อมูลกลาง", "Match the rate to the department, level and work type. Ask an administrator to configure missing rates.", "部署・職位・作業種別の単価を確認してください。未設定の場合は管理者に設定を依頼してください。"],
     supplier_quote_required: ["เลือกผู้ขายและใส่เลขใบเสนอราคาสำหรับค่าแรงจ้างภายนอก", "Select a supplier and enter the quotation number for supplier effort.", "外注工数の仕入先と見積番号を入力してください。"],
   };
+  // The line's own name is in the API message; keep it rather than a generic sentence.
+  const named = issue.message.match(/"(.+)"/)?.[1];
+  if (named && issue.code === "labor_discipline_missing") return estimateUxCopy(locale, `เลือกสาขาของงาน "${named}"`, `Choose the discipline of activity "${named}".`, `作業「${named}」の分野を選択してください。`);
+  if (named && issue.code === "expense_discipline_missing") return estimateUxCopy(locale, `เลือกสาขาของค่าใช้จ่าย "${named}"`, `Choose the discipline of expense "${named}".`, `費用「${named}」の分野を選択してください。`);
   const message = messages[issue.code];
   return message ? estimateUxCopy(locale, ...message) : issue.message;
 }

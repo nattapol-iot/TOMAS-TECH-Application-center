@@ -55,6 +55,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 67, fileName: "067_department_teams.sql", name: "Department teams for manager scope" },
   { version: 68, fileName: "068_day_request_effective_roles.sql", name: "Day-request answers accept additional roles" },
   { version: 69, fileName: "069_withdraw_project_document.sql", name: "Withdraw a mistaken project document upload" },
+  { version: 70, fileName: "070_estimate_labor_discipline.sql", name: "Estimate labor and site expense disciplines" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

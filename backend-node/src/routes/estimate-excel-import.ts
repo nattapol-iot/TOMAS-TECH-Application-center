@@ -12,6 +12,7 @@ import { ApiError } from "../errors.js";
 import { bodyObject, requiredText, optionalBodyText, positiveLong, parseRowVersion, parseDateOnly } from "../http.js";
 import { parseEstimateWorkbook } from "../estimate-workbook.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
+import { inferredDiscipline } from "../estimate-disciplines.js";
 
 const categories: Record<string, string> = { "01": "Hardware", "02": "Software", "03": "Electrical", "04": "Mechanical", "05": "Robot", "06": "Engineering", "07": "Outsource", "08": "Transportation", "09": "Accommodation", "10": "Other Cost" };
 function decimal(v: unknown, minimum: number, maximum: number, scale = 4): number {
@@ -142,6 +143,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
         cmd.input("brand", sql.NVarChar(100), l.brand); cmd.input("model", sql.NVarChar(200), l.model);
         cmd.input("reference", sql.NVarChar(200), input.sourceName.slice(0, 200));
         cmd.input("hours", sql.Decimal(9, 2), input.hoursPerDay); cmd.input("department", sql.NVarChar(100), l.department); cmd.input("cost_type", sql.NVarChar(30), l.costType);
+        cmd.input("discipline", sql.NVarChar(20), inferredDiscipline(l.costType, l.department));
         const valid = (await cmd.query(`SELECT CASE WHEN @supplier IS NULL OR EXISTS(SELECT 1 FROM dbo.suppliers WHERE id=@supplier AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END valid;`)).recordset[0].valid;
         if (!valid) throw new ApiError(400, "invalid_supplier", "Selected supplier is no longer active.");
         const duplicates = (await cmd.query(`SELECT id FROM dbo.cost_items WHERE estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND (module=@module AND description=@description AND model=@model AND brand=@brand);`)).recordset;
@@ -149,7 +151,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
         let row;
         if (l.kind === "manhour") {
           if ((await cmd.query(`SELECT id FROM dbo.manhour_lines WHERE estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND package=@module AND activity=@description;`)).recordset.length) throw new ApiError(409, "duplicate_import_line", `Existing activity: ${l.description}.`);
-          row = (await cmd.query(`DECLARE @created TABLE(id bigint); INSERT dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,provider,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by) OUTPUT inserted.id INTO @created VALUES(@estimate,@revision,@module,@description,@department,N'Imported Excel rate',@cost_type,N'Internal',@date,1,@qty,@hours,@rate,@owner,@remark,@actor,@actor); SELECT id FROM @created;`)).recordset[0];
+          row = (await cmd.query(`DECLARE @created TABLE(id bigint); INSERT dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,discipline,provider,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by) OUTPUT inserted.id INTO @created VALUES(@estimate,@revision,@module,@description,@department,N'Imported Excel rate',@cost_type,@discipline,N'Internal',@date,1,@qty,@hours,@rate,@owner,@remark,@actor,@actor); SELECT id FROM @created;`)).recordset[0];
         } else row = (await cmd.query(`DECLARE @created TABLE(id bigint); INSERT dbo.cost_items(estimate_id,revision,category_code,category,subcategory,module,item_code,description,brand,model,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,price_date,remark,owner_id,status,created_by,updated_by) OUTPUT inserted.id INTO @created VALUES(@estimate,@revision,@category_code,@category,N'',@module,@code,@description,@brand,@model,@supplier,@qty,@unit,@rate,N'Previous Estimate',@reference,N'Excel import',@date,@remark,@owner,N'Active',@actor,@actor); SELECT id FROM @created;`)).recordset[0];
         created.push({ kind: l.kind, id: Number(row.id), source: l.source });
         await insertAudit(transaction, actor.id, l.kind === "manhour" ? "ManhourLine" : "CostItem", Number(row.id), e.estimate_no, "Created", null, { ...l, sourceDate: input.sourceDate, sourceFile: input.sourceName, sourceHash: input.sourceHash });

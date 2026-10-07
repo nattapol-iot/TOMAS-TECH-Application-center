@@ -1,5 +1,17 @@
 /** Estimate workspace interface copy. Business names, part numbers and user input stay unchanged. */
 export const ESTIMATE_WORKSPACE_COPY: Record<string, {th: string; jp: string; en?: string}> = {
+  "Save changes": {
+    "th": "บันทึกการแก้ไข",
+    "jp": "変更を保存"
+  },
+  "Per Diem": {
+    "th": "เบี้ยเลี้ยง",
+    "jp": "日当"
+  },
+  "Equipment Rental": {
+    "th": "ค่าเช่าอุปกรณ์",
+    "jp": "機材レンタル"
+  },
   "ERP Sheet": {
     "th": "ใบ ERP",
     "jp": "ERPシート"

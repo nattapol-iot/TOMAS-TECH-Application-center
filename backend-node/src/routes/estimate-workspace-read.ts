@@ -65,13 +65,13 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       INNER JOIN dbo.users u ON u.id=ci.owner_id LEFT JOIN dbo.suppliers s ON s.id=ci.supplier_id
       WHERE ci.estimate_id=@id AND ci.deleted_at IS NULL ORDER BY ci.category_code,MIN(ci.sort_order) OVER(PARTITION BY ci.category_code,ci.module),ci.module,ci.sort_order,ci.id;
 
-      SELECT l.id,l.package,l.activity,l.department,l.level,l.cost_type,l.provider,l.supplier_id,s.name supplier_name,
+      SELECT l.id,l.package,l.activity,l.department,l.level,l.cost_type,l.discipline,l.provider,l.supplier_id,s.name supplier_name,
         l.quotation_no,l.price_date,l.engineers,l.man_days,l.hours_per_day,l.daily_rate,l.line_cost,l.owner_id,u.name owner_name,
         l.remark,l.updated_at,l.row_version FROM dbo.manhour_lines l
       INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision INNER JOIN dbo.users u ON u.id=l.owner_id
       LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id WHERE l.estimate_id=@id AND l.deleted_at IS NULL ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.package),l.package,l.sort_order,l.id;
 
-      SELECT l.id,l.package,l.expense_type,l.description,l.cost_type,l.supplier_id,s.name supplier_name,l.reference_no,
+      SELECT l.id,l.package,l.expense_type,l.description,l.cost_type,l.discipline,l.supplier_id,s.name supplier_name,l.reference_no,
         l.qty,l.unit,l.unit_cost,l.line_total,l.owner_id,u.name owner_name,l.remark,l.updated_at,l.row_version
       FROM dbo.expense_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
       INNER JOIN dbo.users u ON u.id=l.owner_id LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id
@@ -102,6 +102,12 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       UNION ALL SELECT N'manhour_capacity_high',N'Man-hour activity "'+l.activity+N'" exceeds 20 engineer-days.',N'ManhourLine',l.id,N'Warning'
         FROM dbo.manhour_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
         WHERE l.estimate_id=@id AND l.deleted_at IS NULL AND l.engineers*l.man_days>20
+      UNION ALL SELECT N'labor_discipline_missing',N'Choose the discipline of activity "'+l.activity+N'".',N'ManhourLine',l.id,N'Warning'
+        FROM dbo.manhour_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
+        WHERE l.estimate_id=@id AND l.deleted_at IS NULL AND l.discipline IS NULL
+      UNION ALL SELECT N'expense_discipline_missing',N'Choose the discipline of expense "'+l.description+N'".',N'ExpenseLine',l.id,N'Warning'
+        FROM dbo.expense_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
+        WHERE l.estimate_id=@id AND l.deleted_at IS NULL AND l.discipline IS NULL
       UNION ALL SELECT N'supplier_price_stale',N'Supplier man-hour activity "'+l.activity+N'" uses a quotation older than 180 days.',N'ManhourLine',l.id,N'Warning'
         FROM dbo.manhour_lines l INNER JOIN dbo.estimates e ON e.id=l.estimate_id AND e.revision=l.revision
         WHERE l.estimate_id=@id AND l.deleted_at IS NULL AND l.provider=N'Supplier' AND l.price_date<@stale_before
@@ -165,7 +171,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       remark: row.remark, ownerId: number(row.owner_id), ownerName: row.owner_name, status: row.status, updatedAt: row.updated_at,
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated || isAssignee) }));
     const manhourLines = (result.recordsets[4] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), package: row.package,
-      activity: row.activity, department: row.department, level: row.level, costType: row.cost_type, provider: row.provider,
+      activity: row.activity, department: row.department, level: row.level, costType: row.cost_type, discipline: row.discipline ?? null, provider: row.provider,
       supplierId: nullableNumber(row.supplier_id), supplierName: row.supplier_name, quotationNumber: row.quotation_no,
       priceDate: row.price_date ? dateOnly(row.price_date as Date | string) : null, engineers: number(row.engineers), manDays: number(row.man_days),
       hoursPerDay: number(row.hours_per_day), dailyRate: number(row.daily_rate), manHours: number(row.engineers) * number(row.man_days) * number(row.hours_per_day),
@@ -173,7 +179,7 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable
         && (elevated || (isAssignee && number(row.owner_id) === actor.id)) }));
     const expenseLines = (result.recordsets[5] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), package: row.package,
-      expenseType: row.expense_type, description: row.description, costType: row.cost_type, supplierId: nullableNumber(row.supplier_id),
+      expenseType: row.expense_type, description: row.description, costType: row.cost_type, discipline: row.discipline ?? null, supplierId: nullableNumber(row.supplier_id),
       supplierName: row.supplier_name, referenceNumber: row.reference_no, quantity: number(row.qty), unit: row.unit, unitCost: number(row.unit_cost),
       lineTotal: number(row.line_total), ownerId: number(row.owner_id), ownerName: row.owner_name, remark: row.remark, updatedAt: row.updated_at,
       rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: permissionRow.can_write && editable && (elevated

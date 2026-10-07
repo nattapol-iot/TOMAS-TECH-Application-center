@@ -7,6 +7,7 @@ import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { isTrustedWebProtocol } from "./network-origin";
 import type { ErpGroup } from "../../lib/erp-estimate-groups";
 import type { RecordViewer, SyncBeat } from "../../lib/record-live-sync";
+import type { EstimateDiscipline } from "../../lib/estimate-disciplines";
 
 export const IS_API_CONFIGURED = (() => {
   try {
@@ -540,11 +541,21 @@ export type CreateInquiryInput = {
   remark?: string;
 };
 
+/** "Start from a previous estimate": the ledgers to carry into the new R00 (all unless turned off). */
+export type EstimateStartFrom = {
+  sourceEstimateId: number;
+  includeCostItems?: boolean;
+  includeManhour?: boolean;
+  includeExpenses?: boolean;
+  includeOtherCosts?: boolean;
+};
+
 export type CreateEstimateInput = {
   inquiryId: number;
   ownerId: number;
   dueDate: string;
   contingencyRate: number;
+  copyFrom?: EstimateStartFrom;
 };
 
 /** id names the schedule row an edit changes; a row without one is new. */
@@ -706,6 +717,8 @@ export type EstimateManhourLine = {
   department: string;
   level: string;
   costType: "Engineering" | "Installation";
+  /** Null for a line written before disciplines existed that no rule could place. */
+  discipline: EstimateDiscipline | null;
   provider: "Internal" | "Supplier";
   supplierId: number | null;
   supplierName: string | null;
@@ -731,6 +744,7 @@ export type EstimateExpenseLine = {
   expenseType: string;
   description: string;
   costType: "Engineering" | "Installation";
+  discipline: EstimateDiscipline | null;
   supplierId: number | null;
   supplierName: string | null;
   referenceNumber: string | null;
@@ -955,6 +969,7 @@ export type EstimateManhourInput = {
   department: string;
   level: string;
   costType: "Engineering" | "Installation";
+  discipline?: EstimateDiscipline;
   provider: "Internal" | "Supplier";
   supplierId?: number;
   quotationNumber?: string;
@@ -974,6 +989,7 @@ export type EstimateExpenseInput = {
   expenseType: string;
   description: string;
   costType: "Engineering" | "Installation";
+  discipline?: EstimateDiscipline;
   supplierId?: number;
   referenceNumber?: string;
   quantity: number;
@@ -1461,7 +1477,7 @@ export async function parsePdfViaBackend(file: File): Promise<ParsedQuotationRes
 }
 
 export const createEstimate = (input: CreateEstimateInput) =>
-  apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; number: string; rowVersion: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
 
 export const estimateWorkflow = (id: number, action: "submit" | "approve" | "request-revision" | "create-revision", rowVersion: string, comment = "") =>
   apiRequest<{ id: number; status: string; rowVersion: string }>(`/api/v1/estimates/${id}/${action}`, {
@@ -3718,6 +3734,8 @@ export const applyLaborPackage = (estimateId: number, input: {
   packageId: number;
   ownerId: number;
   package?: string;
+  /** The labor-sheet section it is applied from; Installation lines stay Installation. */
+  discipline?: EstimateDiscipline;
   lines?: LaborPackageApplyOverride[];
   estimateRowVersion: string;
 }) => apiRequest<{

@@ -8,6 +8,7 @@ import type { EmailRecipient, EmailService, EstimateAssignmentEmail } from "../e
 import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { ESTIMATE_ASSIGNMENT_SECTION_CODES, ESTIMATE_ASSIGNMENT_SECTIONS } from "../estimate-sections.js";
+import { lineDiscipline, type EstimateDiscipline } from "../estimate-disciplines.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { bodyObject, dateOnly, oneOf, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUser } from "../types.js";
@@ -152,7 +153,7 @@ function removeBody(request: FastifyRequest): { estimateVersion: Buffer; lineVer
 }
 
 type ManhourInput = { estimateVersion: Buffer; lineVersion: Buffer | null; packageName: string; activity: string; department: string; level: string;
-  costType: string; provider: string; supplierId: number | null; quotationNumber: string | null; priceDate: string | null;
+  costType: string; discipline: EstimateDiscipline | null; provider: string; supplierId: number | null; quotationNumber: string | null; priceDate: string | null;
   engineers: number; manDays: number; hoursPerDay: number; dailyRate: number; ownerId: number; remark: string | null };
 
 function parseManhour(request: FastifyRequest, requireLine: boolean): ManhourInput {
@@ -164,10 +165,12 @@ function parseManhour(request: FastifyRequest, requireLine: boolean): ManhourInp
   const engineers = decimal(body.engineers, 0.01, 1_000_000, 2, "Engineers"); const manDays = decimal(body.manDays, 0.01, 1_000_000, 2, "Man-days");
   const dailyRate = decimal(body.dailyRate, 0, 1_000_000_000, 4, "Daily rate");
   if (engineers * manDays * dailyRate > 999_999_999_999_999) throw new ApiError(400, "validation_failed", "Man-hour line cost exceeds the maximum amount supported by the estimate ledger.");
+  const department = requiredText(body.department, 100, "Department");
+  const costType = oneOf(requiredText(body.costType, 30, "Cost type"), "Cost type", ["Engineering", "Installation"]);
   return { estimateVersion: parseRowVersion(body.estimateRowVersion), lineVersion: optionalLineVersion(body.lineRowVersion, requireLine),
     packageName: requiredText(body.package, 200, "Work package"), activity: requiredText(body.activity, 300, "Activity"),
-    department: requiredText(body.department, 100, "Department"), level: requiredText(body.level, 100, "Engineer level"),
-    costType: oneOf(requiredText(body.costType, 30, "Cost type"), "Cost type", ["Engineering", "Installation"]), provider, supplierId,
+    department, level: requiredText(body.level, 100, "Engineer level"),
+    costType, discipline: lineDiscipline(body.discipline, costType, department), provider, supplierId,
     quotationNumber, priceDate, engineers, manDays, hoursPerDay: decimal(body.hoursPerDay, 0.01, 24, 2, "Hours per day"), dailyRate,
     ownerId: requiredInteger(body.ownerId, "Owner", 1), remark: optionalBodyText(body.remark, 20_000, "Remark") };
 }
@@ -198,7 +201,8 @@ async function resolveRate(transaction: TransactionType, input: ManhourInput, to
 function bindManhour(request: InstanceType<typeof sql.Request>, id: number, revision: number, input: ManhourInput, rate: number, today: string, actor: number): void {
   request.input("estimate", sql.BigInt, id); request.input("revision", sql.Int, revision); request.input("package", sql.NVarChar(200), input.packageName);
   request.input("activity", sql.NVarChar(300), input.activity); request.input("department", sql.NVarChar(100), input.department); request.input("level", sql.NVarChar(100), input.level);
-  request.input("cost_type", sql.NVarChar(30), input.costType); request.input("provider", sql.NVarChar(30), input.provider);
+  request.input("cost_type", sql.NVarChar(30), input.costType); request.input("discipline", sql.NVarChar(20), input.discipline);
+  request.input("provider", sql.NVarChar(30), input.provider);
   request.input("supplier", sql.BigInt, input.provider === "Supplier" ? input.supplierId : null);
   request.input("quotation", sql.NVarChar(100), input.provider === "Supplier" ? input.quotationNumber : null);
   request.input("price_date", sql.Date, input.provider === "Supplier" ? input.priceDate : today); request.input("engineers", sql.Decimal(9, 2), input.engineers);
@@ -208,15 +212,16 @@ function bindManhour(request: InstanceType<typeof sql.Request>, id: number, revi
 }
 
 type ExpenseInput = { estimateVersion: Buffer; lineVersion: Buffer | null; packageName: string; expenseType: string; description: string;
-  costType: string; supplierId: number | null; referenceNumber: string | null; quantity: number; unit: string; unitCost: number; ownerId: number; remark: string | null };
+  costType: string; discipline: EstimateDiscipline | null; supplierId: number | null; referenceNumber: string | null; quantity: number; unit: string; unitCost: number; ownerId: number; remark: string | null };
 
 function parseExpense(request: FastifyRequest, requireLine: boolean): ExpenseInput {
   const body = bodyObject(request.body); const quantity = decimal(body.quantity, 0.0001, 1_000_000_000, 4, "Quantity");
   const unitCost = decimal(body.unitCost, 0, 1_000_000_000, 4, "Unit cost");
   if (quantity * unitCost > 999_999_999_999_999) throw new ApiError(400, "validation_failed", "Line total exceeds the supported monetary range.");
+  const costType = oneOf(requiredText(body.costType, 30, "Cost type"), "Cost type", ["Engineering", "Installation"]);
   return { estimateVersion: parseRowVersion(body.estimateRowVersion), lineVersion: optionalLineVersion(body.lineRowVersion, requireLine),
     packageName: requiredText(body.package, 200, "Work package"), expenseType: oneOf(requiredText(body.expenseType, 100, "Expense type"), "Expense type", expenseTypes),
-    description: requiredText(body.description, 500, "Description"), costType: oneOf(requiredText(body.costType, 30, "Cost type"), "Cost type", ["Engineering", "Installation"]),
+    description: requiredText(body.description, 500, "Description"), costType, discipline: lineDiscipline(body.discipline, costType),
     supplierId: optionalId(body.supplierId, "Supplier"), referenceNumber: optionalBodyText(body.referenceNumber, 200, "Reference number"), quantity,
     unit: requiredText(body.unit, 50, "Unit"), unitCost, ownerId: requiredInteger(body.ownerId, "Owner", 1), remark: optionalBodyText(body.remark, 20_000, "Remark") };
 }
@@ -229,7 +234,8 @@ function expenseSection(type: string): string {
 function bindExpense(request: InstanceType<typeof sql.Request>, id: number, revision: number, input: ExpenseInput, actor: number): void {
   request.input("estimate", sql.BigInt, id); request.input("revision", sql.Int, revision); request.input("package", sql.NVarChar(200), input.packageName);
   request.input("expense_type", sql.NVarChar(100), input.expenseType); request.input("description", sql.NVarChar(500), input.description);
-  request.input("cost_type", sql.NVarChar(30), input.costType); request.input("supplier", sql.BigInt, input.supplierId);
+  request.input("cost_type", sql.NVarChar(30), input.costType); request.input("discipline", sql.NVarChar(20), input.discipline);
+  request.input("supplier", sql.BigInt, input.supplierId);
   request.input("reference", sql.NVarChar(200), input.referenceNumber); request.input("qty", sql.Decimal(19, 4), input.quantity);
   request.input("unit", sql.NVarChar(50), input.unit); request.input("unit_cost", sql.Decimal(19, 4), input.unitCost);
   request.input("owner", sql.BigInt, input.ownerId); request.input("remark", sql.NVarChar(sql.MAX), input.remark); request.input("actor", sql.BigInt, actor);
@@ -252,8 +258,8 @@ function bindOther(request: InstanceType<typeof sql.Request>, id: number, revisi
 }
 
 export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, email: EmailService): void {
-  const manhourColumns = "id,package,activity,department,level,cost_type,provider,supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,deleted_at";
-  const expenseColumns = "id,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,deleted_at";
+  const manhourColumns = "id,package,activity,department,level,cost_type,discipline,provider,supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,deleted_at";
+  const expenseColumns = "id,package,expense_type,description,cost_type,discipline,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,deleted_at";
   const otherColumns = "id,category,description,qty,unit,unit_cost,remark,deleted_at";
   const parseIds = (request: FastifyRequest) => { const p = request.params as { id?: string; lineId?: string }; return { id: positiveLong(p.id, "Estimate id"), lineId: positiveLong(p.lineId, "Estimate line id") }; };
 
@@ -264,9 +270,9 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       await demandNewSection(transaction, id, estimate, actor, "06", input.ownerId); await validateOwnerSupplier(transaction, input.ownerId, input.supplierId);
       const rate = await resolveRate(transaction, input, today); const insert = new sql.Request(transaction); bindManhour(insert, id, estimate.revision, input, rate, today, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
-        INSERT INTO dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,provider,
+        INSERT INTO dbo.manhour_lines(estimate_id,revision,package,activity,department,level,cost_type,discipline,provider,
         supplier_id,quotation_no,price_date,engineers,man_days,hours_per_day,daily_rate,owner_id,remark,created_by,updated_by) OUTPUT inserted.id,inserted.row_version INTO @created
-        VALUES(@estimate,@revision,@package,@activity,@department,@level,@cost_type,@provider,@supplier,@quotation,@price_date,@engineers,@man_days,@hours,@rate,@owner,@remark,@actor,@actor);
+        VALUES(@estimate,@revision,@package,@activity,@department,@level,@cost_type,@discipline,@provider,@supplier,@quotation,@price_date,@engineers,@man_days,@hours,@rate,@owner,@remark,@actor,@actor);
         SELECT id,row_version FROM @created;`)).recordset[0]!;
       const lineId = Number(row.id); const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await snapshot(transaction, "dbo.manhour_lines", manhourColumns, id, estimate.revision, lineId, row.row_version, false, "This man-hour line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "ManhourLine", lineId, estimate.estimate_no, "Created", null, after);
@@ -316,7 +322,7 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       const update = new sql.Request(transaction); bindManhour(update, id, estimate.revision, input, rate, rateDate, actor.id);
       update.input("line", sql.BigInt, lineId); update.input("version", sql.VarBinary(8), input.lineVersion);
       const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8)); UPDATE dbo.manhour_lines SET package=@package,activity=@activity,department=@department,level=@level,
-        cost_type=@cost_type,provider=@provider,supplier_id=@supplier,quotation_no=@quotation,price_date=@price_date,engineers=@engineers,man_days=@man_days,
+        cost_type=@cost_type,discipline=@discipline,provider=@provider,supplier_id=@supplier,quotation_no=@quotation,price_date=@price_date,engineers=@engineers,man_days=@man_days,
         hours_per_day=@hours,daily_rate=@rate,owner_id=@owner,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @updated
         WHERE id=@line AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @updated;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This man-hour line changed or was removed. Reload and try again.");
@@ -339,8 +345,8 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       await demandNewSection(transaction, id, estimate, actor, expenseSection(input.expenseType), input.ownerId); await validateOwnerSupplier(transaction, input.ownerId, input.supplierId);
       const insert = new sql.Request(transaction); bindExpense(insert, id, estimate.revision, input, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
-        INSERT INTO dbo.expense_lines(estimate_id,revision,package,expense_type,description,cost_type,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by)
-        OUTPUT inserted.id,inserted.row_version INTO @created VALUES(@estimate,@revision,@package,@expense_type,@description,@cost_type,@supplier,@reference,@qty,@unit,@unit_cost,@owner,@remark,@actor,@actor);
+        INSERT INTO dbo.expense_lines(estimate_id,revision,package,expense_type,description,cost_type,discipline,supplier_id,reference_no,qty,unit,unit_cost,owner_id,remark,created_by,updated_by)
+        OUTPUT inserted.id,inserted.row_version INTO @created VALUES(@estimate,@revision,@package,@expense_type,@description,@cost_type,@discipline,@supplier,@reference,@qty,@unit,@unit_cost,@owner,@remark,@actor,@actor);
         SELECT id,row_version FROM @created;`)).recordset[0]!;
       const lineId = Number(row.id); const estimateVersion = await touchEstimate(transaction, id, actor.id); const after = await snapshot(transaction, "dbo.expense_lines", expenseColumns, id, estimate.revision, lineId, row.row_version, false, "This expense line changed or was removed. Reload and try again.");
       await insertAudit(transaction, actor.id, "ExpenseLine", lineId, estimate.estimate_no, "Created", null, after); return { id: lineId, rowVersion: row.row_version.toString("base64"), estimateRowVersion: estimateVersion.toString("base64") }; });
@@ -353,7 +359,7 @@ export function registerEstimateWorkspaceWriteRoutes(app: FastifyInstance, confi
       await demandExistingSection(transaction, id, estimate, actor, expenseSection(String(before.expense_type)), expenseSection(input.expenseType), Number(before.owner_id), input.ownerId);
       await validateOwnerSupplier(transaction, input.ownerId, input.supplierId); const update = new sql.Request(transaction); bindExpense(update, id, estimate.revision, input, actor.id);
       update.input("line", sql.BigInt, lineId); update.input("version", sql.VarBinary(8), input.lineVersion);
-      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8)); UPDATE dbo.expense_lines SET package=@package,expense_type=@expense_type,description=@description,cost_type=@cost_type,
+      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @updated TABLE(row_version binary(8)); UPDATE dbo.expense_lines SET package=@package,expense_type=@expense_type,description=@description,cost_type=@cost_type,discipline=@discipline,
         supplier_id=@supplier,reference_no=@reference,qty=@qty,unit=@unit,unit_cost=@unit_cost,owner_id=@owner,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version INTO @updated WHERE id=@line AND estimate_id=@estimate AND revision=@revision AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @updated;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This expense line changed or was removed. Reload and try again."); const estimateVersion = await touchEstimate(transaction, id, actor.id);

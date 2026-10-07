@@ -4,7 +4,6 @@ import type { EstimateTab } from "../../../lib/estimate-navigation";
 import { DocumentLifecycleButton, DocumentHistoryButton } from "./DocumentLifecycle";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
-import { EstimateEffortCells } from "./EstimateEffortCells";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
@@ -14,8 +13,8 @@ import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
 import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
 
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
-import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePicker";
-import { LaborPackageMaster } from "./LaborPackageMaster";
+import { EstimateLaborTab, defaultWorkPackage, disciplineLabel, disciplineRates, useEngineeringRateOptions, type LaborExpenseSeed, type LaborSeed } from "./EstimateLaborSheet";
+import { ESTIMATE_DISCIPLINES, costTypeOfDiscipline, isEstimateDiscipline, type EstimateDiscipline } from "../../../lib/estimate-disciplines";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { CostItemFields, COST_CATEGORIES, PRICE_SOURCES, UNITS } from "./CostItemFields";
@@ -58,7 +57,6 @@ import {
   updateEstimateExpense,
   updateEstimateManhour,
   updateEstimateManhourEffort,
-  type EstimateEffortInput,
   updateEstimateOtherCost,
   type BootstrapData,
   type CostItemInput,
@@ -114,8 +112,8 @@ type Props = {
 };
 
 type WorkspaceTab = EstimateTab;
-type ManhourSeed = Partial<Pick<EstimateManhourInput, "package" | "costType" | "provider">>;
-type ExpenseSeed = Partial<Pick<EstimateExpenseInput, "package" | "costType">>;
+type ManhourSeed = LaborSeed;
+type ExpenseSeed = LaborExpenseSeed;
 type CostItemSeed = Partial<Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion">>;
 type PriceLibraryRecord = {
   key: string;
@@ -127,31 +125,6 @@ type PriceLibraryRecord = {
   sourceRevision?: number;
   sourceStatus?: string;
   item: EstimateCostItem;
-};
-type QuickManhourDraft = {
-  version: number;
-  groupKey: string;
-  package: string;
-  activity: string;
-  department: string;
-  level: string;
-  costType: EstimateManhourInput["costType"];
-  engineers: number;
-  manDays: number;
-  hoursPerDay: number;
-  ownerId: number;
-  remark: string;
-};
-
-type EngineeringRateOption = {
-  id: number;
-  level: string;
-  department: string;
-  engineeringDaily: number;
-  installationDaily: number;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  isActive: boolean;
 };
 type QuickCostDraft = Omit<CostItemInput, "estimateRowVersion" | "lineRowVersion"> & { version: number; groupKey: string };
 
@@ -456,15 +429,27 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     </Panel>
     {createOpen ? <CreateEstimateModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (created) => {
       setCreateOpen(false);
-      notify(`${created.number} created`);
+      notify(created.copied
+        ? estimateUxCopy(currentLocale(),
+          `สร้าง ${created.number} แล้ว · คัดลอกจาก ${created.copied.sourceNumber}: อุปกรณ์ ${created.copied.costItems} · ค่าแรง ${created.copied.manhourLines} · ค่าเดินทาง/ที่พัก ${created.copied.expenseLines} · อื่นๆ ${created.copied.otherCostLines} รายการ`,
+          `${created.number} created · copied from ${created.copied.sourceNumber}: ${created.copied.costItems} equipment · ${created.copied.manhourLines} labor · ${created.copied.expenseLines} travel · ${created.copied.otherCostLines} other line(s)`,
+          `${created.number} を作成 · ${created.copied.sourceNumber} からコピー：機器 ${created.copied.costItems} · 工数 ${created.copied.manhourLines} · 旅費 ${created.copied.expenseLines} · その他 ${created.copied.otherCostLines} 件`)
+        : `${created.number} created`);
       await Promise.all([load(), refreshBootstrap()]);
       setSelectedEstimateId(created.id);
     }} /> : null}
   </>;
 }
 
-function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (created: { id: number; number: string }) => Promise<void> }) {
+type StartLedgers = { costItems: boolean; manhour: boolean; expenses: boolean; otherCosts: boolean };
+
+/* A new estimate no longer has to start empty. "Start from a previous estimate" lets the
+   estimator find any estimate by number, project or customer and carry its equipment,
+   labor, travel and other costs into R00; the server creates and fills it in one
+   transaction (copyEstimateLines), re-resolving internal labor at today's rates. */
+function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (created: { id: number; number: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }) => Promise<void> }) {
   const uiText = useUiText();
+  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const allOwners = useMemo(() => bootstrap.team.filter((member) => canOwnEstimate(member.role)), [bootstrap.team]);
   const owners = useMemo(() => canAssignEstimateOwner(bootstrap.user.role) ? allOwners : allOwners.filter((member) => member.id === bootstrap.user.id), [allOwners, bootstrap.user.id, bootstrap.user.role]);
   const earliestDueDate = businessDate();
@@ -474,6 +459,11 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [startFrom, setStartFrom] = useState<"blank" | "copy">("blank");
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sources, setSources] = useState<{ search: string; items: EstimateSummary[]; loading: boolean; error: string }>({ search: "", items: [], loading: false, error: "" });
+  const [source, setSource] = useState<EstimateSummary | null>(null);
+  const [ledgers, setLedgers] = useState<StartLedgers>({ costItems: true, manhour: true, expenses: true, otherCosts: true });
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -497,22 +487,69 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+  // The person chooses the source; the server searches every estimate they may read.
+  useEffect(() => {
+    if (startFrom !== "copy") return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setSources((current) => ({ ...current, loading: true, error: "" }));
+      void listEstimates({ page: 1, pageSize: 8, search: sourceSearch.trim() || undefined })
+        .then((result) => { if (!cancelled) setSources({ search: sourceSearch, items: result.items, loading: false, error: "" }); })
+        .catch((requestError) => { if (!cancelled) setSources({ search: sourceSearch, items: [], loading: false, error: toError(requestError) }); });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [startFrom, sourceSearch]);
+  const anyLedger = ledgers.costItems || ledgers.manhour || ledgers.expenses || ledgers.otherCosts;
+  const copyReady = startFrom === "blank" || (source !== null && anyLedger);
   const submit = async () => {
     setBusy(true); setError("");
-    try { await onCreated(await createEstimate(form)); }
+    try {
+      const copyFrom = startFrom === "copy" && source ? { sourceEstimateId: source.id, includeCostItems: ledgers.costItems, includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts } : undefined;
+      await onCreated(await createEstimate({ ...form, copyFrom }));
+    }
     catch (requestError) { setError(toError(requestError)); }
     finally { setBusy(false); }
   };
-  return <Modal title={uiText("New estimate from inquiry")} subtitle="SQL Server ออกเลข Estimate และสร้าง R00 ภายใน transaction เดียว" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !form.inquiryId || !form.ownerId || !form.dueDate} onClick={() => { void submit(); }}><Icon name="check" />{busy ? "Creating…" : "Create R00"}</button></>}>
+  const ledgerChoices: [keyof StartLedgers, string][] = [
+    ["costItems", copy("อุปกรณ์และวัสดุ", "Equipment and materials", "機器・材料")],
+    ["manhour", copy("ค่าแรงทุกสาขา", "Labor in every discipline", "全分野の工数")],
+    ["expenses", copy("ค่าเดินทาง ที่พัก เบี้ยเลี้ยง", "Travel, hotel and per diem", "旅費・宿泊・日当")],
+    ["otherCosts", copy("ค่าใช้จ่ายอื่น", "Other project costs", "その他費用")],
+  ];
+  return <Modal title={uiText("New estimate from inquiry")} subtitle="SQL Server ออกเลข Estimate และสร้าง R00 ภายใน transaction เดียว" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !form.inquiryId || !form.ownerId || !form.dueDate || !copyReady} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Creating…"} /> : startFrom === "copy" ? copy("สร้าง R00 จาก Estimate ที่เลือก", "Create R00 from the chosen estimate", "選択した見積からR00を作成") : copy("สร้าง R00", "Create R00", "R00を作成")}</button></>}>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading inquiries…"} /></div> : inquiries.length ? <div className="form-grid two">
-      <Field label="Registered inquiry *" span={2}><select value={form.inquiryId} onChange={(event) => { const inquiry = inquiries.find((item) => item.id === Number(event.target.value)); const requestedOwner = owners.find((owner) => owner.id === inquiry?.estimateOwnerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id; setForm((current) => ({ ...current, inquiryId: Number(event.target.value), ownerId: requestedOwner ?? current.ownerId, dueDate: normalizeEstimateDueDate(inquiry?.dueDate, earliestDueDate, latestDueDate) })); }}>{inquiries.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName} <LocalizedText text={"·"} /> {item.customerName}</option>)}</select></Field>
+      <Field label="Registered inquiry *" span={2}><select value={form.inquiryId} onChange={(event) => { const inquiry = inquiries.find((item) => item.id === Number(event.target.value)); const requestedOwner = owners.find((owner) => owner.id === inquiry?.estimateOwnerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id; setForm((current) => ({ ...current, inquiryId: Number(event.target.value), ownerId: requestedOwner ?? current.ownerId, dueDate: normalizeEstimateDueDate(inquiry?.dueDate, earliestDueDate, latestDueDate) })); }}>{inquiries.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName} · {item.customerName}</option>)}</select></Field>
       <div className="span-2 info-strip" role="status"><Icon name="check" /><span><LocalizedText text={"The estimator and due date come from the inquiry · contingency starts at 5%"} /></span></div>
       <details className="span-2"><summary><LocalizedText text={"ปรับผู้ประเมิน กำหนดส่ง หรือ Contingency"} /></summary><div className="form-grid two" style={{marginTop:12}}>
-        <Field label="Estimate owner *"><select value={form.ownerId} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>
+        <Field label="Estimate owner *"><select value={form.ownerId} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {owner.department}</option>)}</select></Field>
         <Field label="Due date *" hint="Today through five years"><input type="date" min={earliestDueDate} max={latestDueDate} value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} /></Field>
         <Field label="Contingency %"><input type="number" min="0" max="100" step="0.01" value={form.contingencyRate} onChange={(event) => setForm((current) => ({ ...current, contingencyRate: Number(event.target.value) }))} /></Field>
       </div></details>
+      <fieldset className="span-2 estimate-start-from">
+        <legend>{copy("เริ่มจาก", "Start from", "開始方法")}</legend>
+        <div className="settings-list">
+          <div className="check-row"><input id="estimate-start-blank" type="radio" name="estimate-start" checked={startFrom === "blank"} onChange={() => setStartFrom("blank")} /><label htmlFor="estimate-start-blank"><strong>{copy("เริ่มว่าง", "Start empty", "空で開始")}</strong><small>{copy("เพิ่มอุปกรณ์และค่าแรงเองทีละรายการ", "Add equipment and labor yourself", "機器と工数を自分で追加します")}</small></label></div>
+          <div className="check-row"><input id="estimate-start-copy" type="radio" name="estimate-start" checked={startFrom === "copy"} onChange={() => setStartFrom("copy")} /><label htmlFor="estimate-start-copy"><strong>{copy("คัดลอกจาก Estimate เดิมที่คล้ายกัน", "Copy from a similar previous estimate", "類似の過去見積からコピー")}</strong><small>{copy("ค้นหาด้วยเลข Estimate ชื่อโปรเจกต์ หรือชื่อลูกค้า", "Search by estimate number, project or customer", "見積番号・案件名・顧客名で検索")}</small></label></div>
+        </div>
+        {startFrom === "copy" ? <div className="stack" style={{ marginTop: 12 }}>
+          <SearchInput value={sourceSearch} onChange={setSourceSearch} placeholder="Search estimate, inquiry, project or customer…" />
+          {sources.error ? <div className="info-strip red" role="alert"><Icon name="alertTriangle" /><span>{sources.error}</span></div> : null}
+          <div className="table-wrap"><table>
+            <thead><tr><th aria-label={copy("เลือก", "Select", "選択")} /><th><LocalizedText text={"Estimate No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Status"} /></th><th className="num"><LocalizedText text={"Total"} /></th></tr></thead>
+            <tbody>{sources.items.map((item) => <tr key={item.id} className="clickable" onClick={() => setSource(item)}>
+              <td><input type="radio" name="estimate-start-source" aria-label={item.number} checked={source?.id === item.id} onChange={() => setSource(item)} /></td>
+              <td><strong className="mono">{item.number}</strong> <span className="pill">{revisionCode(item.revision)}</span></td>
+              <td><div className="cell-primary"><strong>{item.projectName}</strong><span>{item.projectType}</span></div></td>
+              <td>{item.customerName}</td><td><Badge>{item.status}</Badge></td><td className="num">{formatMoney(item.total)}</td>
+            </tr>)}</tbody>
+          </table></div>
+          {sources.loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div>
+            : !sources.items.length ? <div className="info-strip">{copy("ไม่พบ Estimate ที่ตรงกับคำค้น", "No estimate matches the search", "検索に一致する見積はありません")}</div> : null}
+          {source ? <div className="settings-list">{ledgerChoices.map(([key, label]) => <div key={key} className="check-row"><input id={`estimate-start-${key}`} type="checkbox" checked={ledgers[key]} onChange={(event) => setLedgers((current) => ({ ...current, [key]: event.target.checked }))} /><label htmlFor={`estimate-start-${key}`}><strong>{label}</strong></label></div>)}</div> : null}
+          <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} /></span></div>
+        </div> : null}
+      </fieldset>
     </div> : <EmptyState icon="inbox" title="No inquiry available" message="ทุก Inquiry มี Estimate แล้ว หรือบัญชีนี้ไม่มี Inquiry ที่อ่านได้" />}
   </Modal>;
 }
@@ -531,7 +568,7 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
   const [manhourSeed, setManhourSeed] = useState<ManhourSeed>({});
   const [expenseEditor, setExpenseEditor] = useState<EstimateExpenseLine | "new" | null>(null);
   const [expenseSeed, setExpenseSeed] = useState<ExpenseSeed>({});
-  const [packageEditorOpen, setPackageEditorOpen] = useState(false);
+  const [packageEditorFor, setPackageEditorFor] = useState<EstimateDiscipline | null>(null);
   const [otherEditor, setOtherEditor] = useState<EstimateOtherCostLine | "new" | null>(null);
   const [assignmentCreateOpen, setAssignmentCreateOpen] = useState(false);
   const [assignmentEditor, setAssignmentEditor] = useState<EstimateAssignment | null>(null);
@@ -639,7 +676,7 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
       setManhourSeed({});
       setExpenseEditor(null);
       setExpenseSeed({});
-      setPackageEditorOpen(false);
+      setPackageEditorFor(null);
       setOtherEditor(null);
       setAssignmentEditor(null);
       setWorkflowAction(null);
@@ -711,11 +748,11 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       ["Category code", "Category", "Subcategory", "Module", "Item code", "Description", "Brand", "Model", "Specification", "Supplier", "Qty", "Unit", "Unit cost", "Line total", "Price source", "Reference", "Reference project", "Price date", "Owner", "Status", "Remark", "Updated"],
       ...workspace.costItems.map((line) => [line.categoryCode, line.category, line.subcategory, line.module, line.itemCode, line.description, line.brand, line.model, line.specification, line.supplierName, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.priceSource, line.referenceNumber, line.referenceProject, line.priceDate, line.ownerName, line.status, line.remark, line.updatedAt]),
       [], ["ENGINEERING MAN-HOUR"],
-      ["Package", "Activity", "Department", "Level", "Cost type", "Provider", "Supplier", "Quotation", "Quotation date", "Engineers", "Man-days", "Hours/day", "Daily rate", "Man-hours", "Line cost", "Owner", "Remark", "Updated"],
-      ...workspace.manhourLines.map((line) => [line.package, line.activity, line.department, line.level, line.costType, line.provider, line.supplierName, line.quotationNumber, line.priceDate, numberOf(line.engineers), numberOf(line.manDays), numberOf(line.hoursPerDay), numberOf(line.dailyRate), numberOf(line.manHours), numberOf(line.lineCost), line.ownerName, line.remark, line.updatedAt]),
+      ["Discipline", "Package", "Activity", "Department", "Level", "Cost type", "Provider", "Supplier", "Quotation", "Quotation date", "Engineers", "Man-days", "Hours/day", "Daily rate", "Man-hours", "Line cost", "Owner", "Remark", "Updated"],
+      ...workspace.manhourLines.map((line) => [line.discipline, line.package, line.activity, line.department, line.level, line.costType, line.provider, line.supplierName, line.quotationNumber, line.priceDate, numberOf(line.engineers), numberOf(line.manDays), numberOf(line.hoursPerDay), numberOf(line.dailyRate), numberOf(line.manHours), numberOf(line.lineCost), line.ownerName, line.remark, line.updatedAt]),
       [], ["PROJECT EXPENSE"],
-      ["Package", "Type", "Description", "Cost type", "Supplier", "Reference", "Qty", "Unit", "Unit cost", "Line total", "Owner", "Remark", "Updated"],
-      ...workspace.expenseLines.map((line) => [line.package, line.expenseType, line.description, line.costType, line.supplierName, line.referenceNumber, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.ownerName, line.remark, line.updatedAt]),
+      ["Discipline", "Package", "Type", "Description", "Cost type", "Supplier", "Reference", "Qty", "Unit", "Unit cost", "Line total", "Owner", "Remark", "Updated"],
+      ...workspace.expenseLines.map((line) => [line.discipline, line.package, line.expenseType, line.description, line.costType, line.supplierName, line.referenceNumber, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.ownerName, line.remark, line.updatedAt]),
       [], ["OTHER PROJECT COST"],
       ["Category", "Description", "Qty", "Unit", "Unit cost", "Line total", "Remark"],
       ...workspace.otherCostLines.map((line) => [line.category, line.description, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.remark]),
@@ -842,12 +879,12 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       } catch (requestError) { await mutationError(requestError); return false; }
       finally { setBusy(false); }
     }} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /> : null}
-    {tab === "manhour" ? <EstimateManhourTab
+    {tab === "manhour" ? <EstimateLaborTab
       bootstrap={bootstrap}
       workspace={workspace}
       busy={busy}
-      onNewPackage={() => setPackageEditorOpen(true)}
-      onAddManhour={(seed = {}) => { setManhourSeed(seed); setManhourEditor("new"); }}
+      onNewPackage={setPackageEditorFor}
+      onAddManhour={(seed) => { setManhourSeed(seed); setManhourEditor("new"); }}
       onQuickAddManhour={async (input) => {
         setBusy(true); setError("");
         try { await createEstimateManhour(estimateId, input); await afterMutation("Activity created · press Enter to continue adding rows"); return true; }
@@ -863,7 +900,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       onLaborLibraryChanged={async (message) => { await afterMutation(message); }}
       onEditManhour={(line) => { setManhourSeed({}); setManhourEditor(line); }}
       onRemoveManhour={(line) => { void removeLine("manhour", line.id, line.rowVersion); }}
-      onAddExpense={(seed = {}) => { setExpenseSeed(seed); setExpenseEditor("new"); }}
+      onAddExpense={(seed) => { setExpenseSeed(seed); setExpenseEditor("new"); }}
       onEditExpense={(line) => { setExpenseSeed({}); setExpenseEditor(line); }}
       onRemoveExpense={(line) => { void removeLine("expense", line.id, line.rowVersion); }}
     /> : null}
@@ -895,8 +932,8 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       catch (requestError) { await mutationError(requestError); }
       finally { setBusy(false); }
     }} /> : null}
-    {packageEditorOpen ? <WorkPackageEditor busy={busy} onClose={() => setPackageEditorOpen(false)} onContinue={(seed) => {
-      setPackageEditorOpen(false);
+    {packageEditorFor ? <WorkPackageEditor discipline={packageEditorFor} busy={busy} onClose={() => setPackageEditorFor(null)} onContinue={(seed) => {
+      setPackageEditorFor(null);
       setManhourSeed(seed);
       setManhourEditor("new");
     }} /> : null}
@@ -1663,173 +1700,6 @@ function MainModuleEditor({ workspace, busy, onClose, onContinue }: { workspace:
   </Modal>;
 }
 
-function EstimateManhourTab({ bootstrap, workspace, busy, onNewPackage, onAddManhour, onQuickAddManhour, onEditManhour, onRemoveManhour, onAddExpense, onEditExpense, onRemoveExpense, onLaborLibraryChanged, onSaveEffort }: {
-  onSaveEffort: (line: EstimateManhourLine, effort: EstimateEffortInput, rowVersion: string) => Promise<boolean>;
-  bootstrap: BootstrapData;
-  workspace: EstimateCostWorkspace;
-  busy: boolean;
-  onNewPackage: () => void;
-  onLaborLibraryChanged: (message: string) => Promise<void>;
-  onAddManhour: (seed?: ManhourSeed) => void;
-  onQuickAddManhour: (input: EstimateManhourInput) => Promise<boolean>;
-  onEditManhour: (line: EstimateManhourLine) => void;
-  onRemoveManhour: (line: EstimateManhourLine) => void;
-  onAddExpense: (seed?: ExpenseSeed) => void;
-  onEditExpense: (line: EstimateExpenseLine) => void;
-  onRemoveExpense: (line: EstimateExpenseLine) => void;
-}) {
-  const localizeCopy = useStaticCopy();
-  const uiText = useUiText();
-  const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
-  const [costType, setCostType] = useState("all");
-  const [showAllColumns, setShowAllColumns] = useState(false);
-  const [columnsReady, setColumnsReady] = useState(false);
-  const columnsKey = "estimate-manhour-columns";
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try { setShowAllColumns(window.localStorage.getItem(columnsKey) === "true"); } catch { /* site data blocked: start collapsed */ }
-      setColumnsReady(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [columnsKey]);
-  useEffect(() => {
-    if (!columnsReady) return;
-    try { window.localStorage.setItem(columnsKey, String(showAllColumns)); } catch { /* nothing to remember it with */ }
-  }, [columnsKey, showAllColumns, columnsReady]);
-  const columnCount = showAllColumns ? 17 : 13;
-  const [quickDraft, setQuickDraft] = useState<QuickManhourDraft | null>(null);
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [laborLibraryOpen, setLaborLibraryOpen] = useState(false);
-  const [laborMasterOpen, setLaborMasterOpen] = useState(false);
-  /* The master is a destination from the sidebar and a detour from the package
-     picker; only the detour gets a way back. */
-  const [laborMasterFromLibrary, setLaborMasterFromLibrary] = useState(false);
-  const closeLaborMaster = () => { setLaborMasterOpen(false); setLaborMasterFromLibrary(false); };
-  const [savedLaborPackageId, setSavedLaborPackageId] = useState<number | undefined>();
-  const [laborSaveTarget, setLaborSaveTarget] = useState<{ name: string; costType: EstimateManhourInput["costType"]; lineCount: number } | null>(null);
-  const quickActivityRef = useRef<HTMLInputElement>(null);
-  const quickDraftGroupKey = quickDraft?.groupKey;
-  const quickDraftVersion = quickDraft?.version;
-  const quickDraftOpen = Boolean(quickDraft);
-  useEffect(() => { if (quickDraftOpen) quickActivityRef.current?.focus(); }, [quickDraftGroupKey, quickDraftOpen, quickDraftVersion]);
-  const canAddManhour = workspace.capabilities.canEditManhour;
-  const canAddExpense = workspace.capabilities.canEditExpenses;
-  const groupKeys = [...new Set([
-    ...workspace.manhourLines.map((line) => `${line.costType}\u0000${line.package}`),
-    ...workspace.expenseLines.map((line) => `${line.costType}\u0000${line.package}`),
-  ])];
-  const groups = groupKeys.map((key) => {
-    const [groupCostType, packageName] = key.split("\u0000") as [EstimateManhourInput["costType"], string];
-    return {
-      key,
-      name: packageName,
-      costType: groupCostType,
-      manhours: workspace.manhourLines.filter((line) => line.package === packageName && line.costType === groupCostType),
-      expenses: workspace.expenseLines.filter((line) => line.package === packageName && line.costType === groupCostType),
-    };
-  }).sort((left, right) => left.costType.localeCompare(right.costType) || left.name.localeCompare(right.name));
-  const visible = costType === "all" ? groups : groups.filter((group) => group.costType === costType);
-  const countOf = (value: string) => value === "all"
-    ? workspace.manhourLines.length + workspace.expenseLines.length
-    : workspace.manhourLines.filter((line) => line.costType === value).length + workspace.expenseLines.filter((line) => line.costType === value).length;
-  const engineeringCost = workspace.manhourLines.filter((line) => line.costType === "Engineering").reduce((sum, line) => sum + numberOf(line.lineCost), 0);
-  const installationCost = workspace.manhourLines.filter((line) => line.costType === "Installation").reduce((sum, line) => sum + numberOf(line.lineCost), 0);
-  const supplierCost = workspace.manhourLines.filter((line) => line.provider === "Supplier").reduce((sum, line) => sum + numberOf(line.lineCost), 0);
-  const expenseCost = workspace.expenseLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0);
-  const visibleManhours = visible.flatMap((group) => group.manhours);
-  const visibleExpenses = visible.flatMap((group) => group.expenses);
-  const visibleCost = visibleManhours.reduce((sum, line) => sum + numberOf(line.lineCost), 0) + visibleExpenses.reduce((sum, line) => sum + numberOf(line.lineTotal), 0);
-  const defaultGroup = visible[0] ?? groups[0];
-  const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
-  const defaultOwnerId = !workspace.capabilities.canEditAllSections ? bootstrap.user.id : owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
-  const departments = [...new Set(bootstrap.team.map((member) => member.department.trim()).filter(Boolean))].sort();
-  const levels = [...new Set(bootstrap.team.map((member) => member.level.trim()).filter(Boolean))].sort();
-  const startQuickRow = (group: { key: string; name: string; costType: EstimateManhourInput["costType"]; manhours?: EstimateManhourLine[] }) => {
-    const reference = group.manhours?.find(line => line.provider === "Internal");
-    setQuickDraft({
-      version: (quickDraft?.version ?? 0) + 1,
-      groupKey: group.key,
-      package: group.name,
-      activity: "",
-      department: reference?.department || bootstrap.user.department || departments[0] || "Engineering",
-      level: reference?.level || bootstrap.team.find((member) => member.id === bootstrap.user.id)?.level || levels[0] || "Middle Engineer",
-      costType: group.costType,
-      engineers: 1,
-      manDays: 1,
-      hoursPerDay: 8,
-      ownerId: defaultOwnerId,
-      remark: "",
-    });
-  };
-  const updateQuick = <K extends keyof QuickManhourDraft>(key: K, value: QuickManhourDraft[K]) => setQuickDraft((current) => current ? { ...current, [key]: value } : current);
-  const quickValid = Boolean(quickDraft && quickDraft.activity.trim() && quickDraft.department.trim() && quickDraft.level.trim() && quickDraft.engineers > 0 && quickDraft.manDays > 0 && quickDraft.hoursPerDay > 0 && quickDraft.ownerId);
-  const saveQuickRow = async (continueAdding: boolean) => {
-    if (!quickDraft || !quickValid || busy || quickSaving) return;
-    setQuickSaving(true);
-    const saved = await onQuickAddManhour({
-      estimateRowVersion: workspace.header.rowVersion,
-      package: quickDraft.package,
-      activity: quickDraft.activity.trim(),
-      department: quickDraft.department,
-      level: quickDraft.level,
-      costType: quickDraft.costType,
-      provider: "Internal",
-      engineers: quickDraft.engineers,
-      manDays: quickDraft.manDays,
-      hoursPerDay: quickDraft.hoursPerDay,
-      dailyRate: 0,
-      ownerId: quickDraft.ownerId,
-      remark: quickDraft.remark,
-    });
-    setQuickSaving(false);
-    if (!saved) return;
-    setQuickDraft(continueAdding ? { ...quickDraft, version: quickDraft.version + 1, activity: "", remark: "" } : null);
-  };
-  const addDefaultActivity = () => defaultGroup ? startQuickRow(defaultGroup) : onNewPackage();
-
-  return <Panel
-    title="Engineering Man-hour & Site Expense"
-    subtitle="Work package → activity → cost · engineering, installation, supplier man-hour และค่าเดินทางอยู่ในโครงเดียวกัน"
-    actions={canAddManhour ? <><button className="btn default sm" type="button" disabled={busy} onClick={addDefaultActivity}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button className="btn default sm" type="button" disabled={busy} onClick={() => setLaborLibraryOpen(true)}><Icon name="package" /><LocalizedText text={"Add from library"} /></button><button className="btn primary sm" type="button" disabled={busy} onClick={onNewPackage}><Icon name="layers" /><LocalizedText text={"New Work Package"} /></button></> : undefined}
-    flush
-  >
-    {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={() => onLaborLibraryChanged("Work package updated")} /> : null}
-    <div className="info-strip"><LocalizedText text={canAddManhour ? "แก้ Qty / Man-days / Hours ได้ในช่อง · Enter หรือ ✓ เพื่อบันทึก · เพิ่มแถวแล้วกด Enter เพื่อเพิ่มต่อเนื่อง" : "Revision นี้ไม่เปิดให้แก้ไขค่าแรงในสถานะปัจจุบัน หรือบัญชีนี้ไม่มีสิทธิ์แก้ไข"} /></div>
-    <div className="subtabs" role="tablist" aria-label={localizeCopy("Cost type")}>
-      <button type="button" role="tab" aria-selected={costType === "all"} className={costType === "all" ? "subtab active" : "subtab"} onClick={() => setCostType("all")}><LocalizedText text={"All work"} /><em>{countOf("all")}</em></button>
-      <button type="button" role="tab" aria-selected={costType === "Engineering"} className={costType === "Engineering" ? "subtab active" : "subtab"} onClick={() => setCostType("Engineering")}><Icon name="cpu" /><LocalizedText text={"Engineering cost"} /><em>{countOf("Engineering")}</em></button>
-      <button type="button" role="tab" aria-selected={costType === "Installation"} className={costType === "Installation" ? "subtab active" : "subtab"} onClick={() => setCostType("Installation")}><Icon name="truck" /><LocalizedText text={"Installation & Service cost"} /><em>{countOf("Installation")}</em></button>
-      <span className="spacer" /><button type="button" className="btn ghost sm" aria-pressed={showAllColumns} onClick={() => setShowAllColumns((current) => !current)}><Icon name="table" /><LocalizedText text={showAllColumns ? "Fewer columns" : "More columns"} /></button><span className="muted" style={{ fontSize: "var(--fs-2xs)" }}><LocalizedText text={"Engineering"} /> {formatMoney(engineeringCost)} <LocalizedText text={"· Installation"} /> {formatMoney(installationCost)} <LocalizedText text={"· Supplier"} /> {formatMoney(supplierCost)} <LocalizedText text={"· Expense"} /> {formatMoney(expenseCost)}</span>
-    </div>
-    <div className="table-wrap tall">
-      <table className="sheet manhour-sheet" style={{ minWidth: showAllColumns ? 2250 : 1580 }}>
-        <thead><tr><th style={{ width: 44 }}><LocalizedText text={"No."} /></th><th style={{ width: 130 }}><LocalizedText text={"Type"} /></th><th style={{ width: 250 }}><LocalizedText text={"Activity / Description"} /></th><th style={{ width: 150 }}><LocalizedText text={"Department & level"} /></th><th style={{ width: 140 }}><LocalizedText text={"Cost Type"} /></th><th className="num" style={{ width: 80 }}><LocalizedText text={"Qty"} /></th><th style={{ width: 110 }}><LocalizedText text={"Unit"} /></th><th className="num" style={{ width: 90 }}><LocalizedText text={"Man-days"} /></th><th className="num" style={{ width: 160 }}><LocalizedText text={"Hours / Day"} /></th><th className="num" style={{ width: 120 }}><LocalizedText text={"Rate"} /></th><th className="num" style={{ width: 100 }}><LocalizedText text={"Man-hours"} /></th><th className="num" style={{ width: 130 }}><LocalizedText text={"Cost"} /></th>{showAllColumns ? <th style={{ width: 190 }}><LocalizedText text={"Supplier"} /></th> : null}{showAllColumns ? <th style={{ width: 150 }}><LocalizedText text={"Quotation No."} /></th> : null}{showAllColumns ? <th style={{ width: 150 }}><LocalizedText text={"Owner"} /></th> : null}{showAllColumns ? <th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th> : null}<th style={{ width: 72 }} aria-label={uiText("Action")} /></tr></thead>
-        <tbody>{visible.flatMap((group) => {
-          const packageTotal = group.manhours.reduce((sum, line) => sum + numberOf(line.lineCost), 0) + group.expenses.reduce((sum, line) => sum + numberOf(line.lineTotal), 0);
-          const packageManDays = group.manhours.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0);
-          return [
-            <tr className="module-row" key={`package-${group.key}`}><td colSpan={columnCount}><div className="row band"><span className="module-bullet"><Icon name={group.costType === "Installation" ? "truck" : "cpu"} /></span>{group.manhours.every(line => line.canEdit) && group.expenses.every(line => line.canEdit) ? <button type="button" className="module-name-edit" disabled={busy || quickSaving} title={localizeCopy("แก้ชื่อ Main Module / Rename Main Module")} onClick={() => setModuleEditor({ key: "package:" + group.costType + ":" + group.name, title: group.name })}><strong>{group.name}</strong><Icon name="edit" /></button> : <strong>{group.name}</strong>}<Badge tone={group.costType === "Installation" ? "amber" : "blue"}>{group.costType === "Installation" ? "Installation & Service" : "Engineering"}</Badge><span className="muted">{formatNumber(packageManDays)} <LocalizedText text={"MD"} />{group.expenses.length ? ` · ${group.expenses.length} expense` : ""}</span><strong className="num">{formatMoney(packageTotal)}</strong>{canAddManhour ? <><button type="button" className="group-action" disabled={busy} onClick={() => startQuickRow(group)}><Icon name="plus" /><LocalizedText text={"Add activity"} /></button><button type="button" className="group-action" disabled={busy} onClick={() => onAddManhour({ package: group.name, costType: group.costType, provider: "Supplier" })}><Icon name="quote" /><LocalizedText text={"Supplier man-hour"} /></button>{group.manhours.length ? <button type="button" className="group-action" disabled={busy} onClick={() => setLaborSaveTarget({ name: group.name, costType: group.costType, lineCount: group.manhours.length })}><Icon name="package" /><LocalizedText text={"Save as labor package"} /></button> : null}</> : null}{canAddExpense ? <button type="button" className="group-action" disabled={busy} onClick={() => onAddExpense({ package: group.name, costType: group.costType })}><Icon name="truck" /><LocalizedText text={"Add expense"} /></button> : null}</div></td></tr>,
-            ...group.manhours.map((line, lineIndex) => <tr className="mh-row" key={`manhour-${line.id}`}><td><span className="cell-text muted">{lineIndex + 1}</span></td><td><span className="cell-text"><Badge tone={line.provider === "Supplier" ? "violet" : "slate"}>{line.provider === "Supplier" ? "Supplier MH" : "Own engineer"}</Badge></span></td><td><span className="cell-text"><strong>{line.activity}</strong>{!showAllColumns && line.provider === "Supplier" && line.supplierName ? <small className="cell-sub">{line.supplierName}</small> : null}</span></td><td><span className="cell-text">{line.department}<small className="cell-sub">{line.level}</small></span></td><td><span className="cell-text"><Badge tone={line.costType === "Installation" ? "amber" : "blue"}>{line.costType}</Badge></span></td><EstimateEffortCells line={line} busy={busy || quickSaving} money={formatMoney} number={formatNumber} onSave={(effort, rowVersion) => onSaveEffort(line, effort, rowVersion)} />{showAllColumns ? <><td><span className="cell-text">{line.supplierName ?? "TOMAS TECH"}</span></td><td><span className="cell-text">{line.quotationNumber || "—"}</span></td><td><span className="cell-text">{line.ownerName}</span></td><td><span className="cell-text">{line.remark || "—"}</span></td></> : null}<td><div className="row-actions">{line.canEdit ? <><button className="row-action" type="button" disabled={busy} onClick={() => onEditManhour(line)} aria-label={`Edit ${line.activity}`}><Icon name="edit" /></button><button className="row-action" type="button" disabled={busy} onClick={() => onRemoveManhour(line)} aria-label={`Remove ${line.activity}`}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td></tr>),
-            ...group.expenses.map((line, lineIndex) => <tr key={`expense-${line.id}`} className="expense-row mh-row"><td><span className="cell-text muted">{group.manhours.length + lineIndex + 1}</span></td><td><span className="cell-text"><Badge tone="amber">{line.expenseType}</Badge></span></td><td><span className="cell-text"><strong>{line.description}</strong>{!showAllColumns && line.supplierName ? <small className="cell-sub">{line.supplierName}</small> : null}</span></td><td><span className="cell-text muted">—</span></td><td><span className="cell-text"><Badge tone="amber">{line.costType}</Badge></span></td><td><span className="cell-text num">{formatNumber(line.quantity)}</span></td><td><span className="cell-text">{line.unit}</span></td><td><span className="cell-text muted">—</span></td><td><span className="cell-text muted">—</span></td><td className="computed">{formatMoney(line.unitCost)}</td><td><span className="cell-text muted">—</span></td><td className="computed"><strong>{formatMoney(line.lineTotal)}</strong></td>{showAllColumns ? <><td><span className="cell-text">{line.supplierName ?? "Vendor"}</span></td><td><span className="cell-text">{line.referenceNumber || "—"}</span></td></> : null}{showAllColumns ? <><td><span className="cell-text">{line.ownerName}</span></td><td><span className="cell-text">{line.remark || "—"}</span></td></> : null}<td><div className="row-actions">{line.canEdit ? <><button className="row-action" type="button" disabled={busy} onClick={() => onEditExpense(line)} aria-label={`Edit ${line.description}`}><Icon name="edit" /></button><button className="row-action" type="button" disabled={busy} onClick={() => onRemoveExpense(line)} aria-label={`Remove ${line.description}`}><Icon name="trash" /></button></> : <Icon name="lock" />}</div></td></tr>),
-            quickDraft?.groupKey === group.key ? <tr className="inline-draft-row mh-row" key={`quick-${group.key}-${quickDraft.version}`} title={localizeCopy("Enter: save and create the next row · Esc: cancel")} onKeyDown={(event) => {
-              if (event.key === "Escape") { event.preventDefault(); setQuickDraft(null); }
-              if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void saveQuickRow(true); }
-            }}><td><span className="cell-text quick-new"><LocalizedText text={"New"} /></span></td><td><span className="cell-text"><Badge tone="slate"><LocalizedText text={"Own engineer"} /></Badge></span></td><td><input ref={quickActivityRef} required aria-label={localizeCopy("New activity")} maxLength={300} placeholder={localizeCopy("Activity *")} value={quickDraft.activity} onChange={(event) => updateQuick("activity", event.target.value)} /></td><td><div className="cell-stack"><select aria-label={uiText("Department")} value={quickDraft.department} onChange={(event) => updateQuick("department", event.target.value)}>{departments.map((department) => <option key={department}>{department}</option>)}</select><select aria-label={localizeCopy("Engineer level")} value={quickDraft.level} onChange={(event) => updateQuick("level", event.target.value)}>{levels.map((level) => <option key={level}>{level}</option>)}</select></div></td><td><span className="cell-text"><Badge tone={quickDraft.costType === "Installation" ? "amber" : "blue"}>{quickDraft.costType}</Badge></span></td><td><input className="num" aria-label={localizeCopy("Engineer quantity")} type="number" min="0.01" max="10000" step="0.01" value={quickDraft.engineers} onChange={(event) => updateQuick("engineers", Number(event.target.value))} /></td><td><span className="cell-text"><LocalizedText text={"Engineer"} /></span></td><td><input className="num" aria-label={uiText("Man-days")} type="number" min="0.01" max="100000" step="0.01" value={quickDraft.manDays} onChange={(event) => updateQuick("manDays", Number(event.target.value))} /></td><td><input className="num" aria-label={localizeCopy("Hours per day")} type="number" min="0.01" max="24" step="0.01" value={quickDraft.hoursPerDay} onChange={(event) => updateQuick("hoursPerDay", Number(event.target.value))} /></td><td className="computed"><span className="muted"><LocalizedText text={"Rate master"} /></span></td><td className="computed">{formatNumber(quickDraft.engineers * quickDraft.manDays * quickDraft.hoursPerDay)} <LocalizedText text={"HR"} /></td><td className="computed"><span className="muted"><LocalizedText text={"On save"} /></span></td>{showAllColumns ? <><td><span className="cell-text">TOMAS TECH</span></td><td><span className="cell-text muted">—</span></td><td><select aria-label={localizeCopy("Activity owner")} value={quickDraft.ownerId} onChange={(event) => updateQuick("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></td><td><input aria-label={localizeCopy("Activity remark")} maxLength={20000} placeholder={uiText("Remark")} value={quickDraft.remark} onChange={(event) => updateQuick("remark", event.target.value)} /></td></> : null}<td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(true); }} aria-label={localizeCopy("Save activity")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new activity")}><Icon name="x" /></button></div></td></tr> : null,
-            <tr className="add-row" key={`add-activity-${group.key}`}><td colSpan={columnCount}><button type="button" className="add-row-btn" disabled={!canAddManhour || busy} onClick={() => startQuickRow(group)}><span><Icon name="plus" /><LocalizedText text={"Add activity to"} /> {group.name}</span></button></td></tr>,
-            <tr className="add-row" key={`add-expense-${group.key}`}><td colSpan={columnCount}><button type="button" className="add-row-btn expense" disabled={!canAddExpense || busy} onClick={() => onAddExpense({ package: group.name, costType: group.costType })}><span><Icon name="truck" /><LocalizedText text={"Add travel, accommodation or other expense to"} /> {group.name}</span></button></td></tr>,
-            <tr className="subtotal-row labor-package-subtotal" key={`subtotal-${group.key}`}><td colSpan={11} className="labor-subtotal-label">{estimateUxCopy(currentLocale(), "รวมค่าใช้จ่าย", "Total cost for", "費用合計")} {group.name}</td><td className="num"><strong>{formatMoney(packageTotal)}</strong></td><td colSpan={columnCount - 12} /></tr>,
-            <tr className="labor-package-gap" key={`gap-${group.key}`} aria-hidden="true"><td colSpan={columnCount} /></tr>,
-          ];
-        })}{!visible.length ? <tr><td colSpan={columnCount}><EmptyState icon="layers" title="No work package yet" message="สร้าง Work Package แล้วเพิ่ม Activity, Supplier man-hour หรือค่าเดินทางที่เกี่ยวข้อง" action={canAddManhour ? <button className="btn primary" type="button" disabled={busy} onClick={onNewPackage}><Icon name="layers" /><LocalizedText text={"New Work Package"} /></button> : undefined} /></td></tr> : null}</tbody>
-      </table>
-    </div>
-    {laborLibraryOpen ? <ApplyLaborPackageModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} onClose={() => setLaborLibraryOpen(false)} onApplied={onLaborLibraryChanged} onManageLibrary={() => { setLaborLibraryOpen(false); setSavedLaborPackageId(undefined); setLaborMasterFromLibrary(true); setLaborMasterOpen(true); }} /> : null}
-    {laborSaveTarget ? <SaveLaborPackageModal estimateId={workspace.header.id} packageName={laborSaveTarget.name} costType={laborSaveTarget.costType} lineCount={laborSaveTarget.lineCount} busy={busy} onClose={() => setLaborSaveTarget(null)} onSaved={onLaborLibraryChanged} onOpenSaved={(id) => { setLaborSaveTarget(null); setSavedLaborPackageId(id); setLaborMasterFromLibrary(false); setLaborMasterOpen(true); }} /> : null}
-    {laborMasterOpen ? <Modal title="Labor Package Master" size="xl" onClose={closeLaborMaster}><LaborPackageMaster bootstrap={bootstrap} initialPackageId={savedLaborPackageId} onClose={closeLaborMaster} onBack={laborMasterFromLibrary ? () => { closeLaborMaster(); setLaborLibraryOpen(true); } : undefined} /></Modal> : null}
-    <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Engineering cost"} /></span><strong>{formatMoney(engineeringCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Installation & service"} /></span><strong>{formatMoney(installationCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Supplier man-hour"} /></span><strong>{formatMoney(supplierCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Travel / hotel / per diem"} /></span><strong>{formatMoney(expenseCost)}</strong></div><div className="foot-item"><span><LocalizedText text={"Man-days"} /></span><strong>{formatNumber(visibleManhours.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0))} <LocalizedText text={"MD"} /></strong></div><div className="foot-item"><span><LocalizedText text={"Man-hours"} /></span><strong>{formatNumber(visibleManhours.reduce((sum, line) => sum + numberOf(line.manHours), 0))} <LocalizedText text={"HR"} /></strong></div><div className="foot-total"><span><LocalizedText text={costType === "all" ? "Shown" : costType === "Engineering" ? "Engineering cost" : "Installation & Service cost"} /> <LocalizedText text={"subtotal"} /></span><strong>{formatMoney(visibleCost)}</strong></div></div>
-  </Panel>;
-}
-
 function EstimateOtherCostTab({ workspace, busy, onAddOther, onEditOther, onRemoveOther, onUpdateContingency }: {
   workspace: EstimateCostWorkspace;
   busy: boolean;
@@ -1985,15 +1855,21 @@ function CostItemEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, 
   </Modal>;
 }
 
-function WorkPackageEditor({ busy, onClose, onContinue }: { busy: boolean; onClose: () => void; onContinue: (seed: ManhourSeed) => void }) {
+function WorkPackageEditor({ discipline, busy, onClose, onContinue }: { discipline: EstimateDiscipline; busy: boolean; onClose: () => void; onContinue: (seed: ManhourSeed) => void }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [name, setName] = useState("");
-  const [costType, setCostType] = useState<EstimateManhourInput["costType"]>("Engineering");
-  return <Modal title={uiText("New Work Package")} subtitle="ตั้งชื่อ Package แล้วเพิ่ม Activity แรกเพื่อบันทึกลง revision ปัจจุบัน" size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={() => onContinue({ package: name.trim(), costType, provider: "Internal" })}><Icon name="arrowRight" /><LocalizedText text={"Continue to activity"} /></button></>}>
-    <div className="form-grid two"><Field label="Work package name *"><input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder={localizeCopy("เช่น Design & Engineering หรือ Site Installation")} /></Field><Field label="Cost type *"><select value={costType} onChange={(event) => setCostType(event.target.value as EstimateManhourInput["costType"])}><option value="Engineering"><LocalizedText text={"Engineering cost"} /></option><option value="Installation"><LocalizedText text={"Installation & Service cost"} /></option></select></Field></div>
+  return <Modal title={uiText("New Work Package")} subtitle="ตั้งชื่อ Package แล้วเพิ่ม Activity แรกเพื่อบันทึกลง revision ปัจจุบัน" size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={() => onContinue({ package: name.trim(), discipline, costType: costTypeOfDiscipline(discipline), provider: "Internal" })}><Icon name="arrowRight" /><LocalizedText text={"Continue to activity"} /></button></>}>
+    <div className="form-grid two"><Field label="Work package name *"><input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder={localizeCopy("เช่น Design & Engineering หรือ Site Installation")} /></Field><Field label="Discipline"><input readOnly className="calculated" value={disciplineLabel(discipline)} /></Field></div>
     <div className="info-strip" style={{ marginTop: 12 }}><Icon name="layers" /><span><LocalizedText text={"Work Package จะเกิดขึ้นจริงเมื่อ Activity แรกถูกบันทึก เพื่อไม่สร้าง Package ว่างในฐานข้อมูล"} /></span></div>
   </Modal>;
+}
+
+function DisciplineSelect({ value, onChange }: { value: EstimateDiscipline | undefined; onChange: (discipline: EstimateDiscipline) => void }) {
+  return <select value={value ?? ""} onChange={(event) => { if (isEstimateDiscipline(event.target.value)) onChange(event.target.value); }}>
+    {value ? null : <option value="">{estimateUxCopy(currentLocale(), "เลือกสาขา", "Choose a discipline", "分野を選択")}</option>}
+    {ESTIMATE_DISCIPLINES.map((discipline) => <option key={discipline} value={discipline}>{disciplineLabel(discipline)}</option>)}
+  </select>;
 }
 
 function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; line: EstimateManhourLine | null; seed?: ManhourSeed; busy: boolean; onClose: () => void; onSave: (input: EstimateManhourInput, lineId?: number) => Promise<void> }) {
@@ -2001,97 +1877,68 @@ function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, o
   const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
-  const canReadRateMaster = bootstrap.permissions.includes("master.read");
+  // Amounts in the rate list stay with master.read; the list itself only needs estimate.write.
+  const canSeeRates = bootstrap.permissions.includes("master.read");
   const importedExcelRate = line?.provider === "Internal" && line.level === "Imported Excel rate";
-  const [rateOptions, setRateOptions] = useState<EngineeringRateOption[]>([]);
-  const [rateLoading, setRateLoading] = useState(canReadRateMaster && !importedExcelRate);
-  const [rateLoadError, setRateLoadError] = useState("");
+  const { rates: rateOptions, loading: rateLoading, error: rateLoadError } = useEngineeringRateOptions(!importedExcelRate);
   const supplierRateDraft = useRef(line?.provider === "Supplier" ? numberOf(line.dailyRate) : 0);
+  const initialDiscipline = line ? line.discipline : seed.discipline ?? null;
   const [form, setForm] = useState<EstimateManhourInput>(() => ({
     estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion,
-    package: line?.package ?? seed.package ?? "Design & Engineering", activity: line?.activity ?? "System Design", department: line?.department ?? bootstrap.user.department,
-    level: line?.level ?? bootstrap.team.find((member) => member.id === bootstrap.user.id)?.level ?? "Middle Engineer", costType: line?.costType ?? seed.costType ?? "Engineering", provider: line?.provider ?? seed.provider ?? "Internal",
+    package: line?.package ?? seed.package ?? (initialDiscipline ? defaultWorkPackage(initialDiscipline) : "Design & Engineering"), activity: line?.activity ?? "", department: line?.department ?? bootstrap.user.department,
+    level: line?.level ?? bootstrap.team.find((member) => member.id === bootstrap.user.id)?.level ?? "Middle Engineer",
+    costType: line?.costType ?? seed.costType ?? (initialDiscipline ? costTypeOfDiscipline(initialDiscipline) : "Engineering"), discipline: initialDiscipline ?? undefined, provider: line?.provider ?? seed.provider ?? "Internal",
     supplierId: line?.supplierId ?? undefined, quotationNumber: line?.quotationNumber ?? "", priceDate: line?.priceDate ? dateValue(line.priceDate) : undefined, engineers: numberOf(line?.engineers) || 1, manDays: numberOf(line?.manDays) || 1,
     hoursPerDay: numberOf(line?.hoursPerDay) || 8, dailyRate: numberOf(line?.dailyRate), ownerId: line?.ownerId ?? defaultOwner, remark: line?.remark ?? "",
   }));
-  useEffect(() => {
-    if (!canReadRateMaster || importedExcelRate) return;
-    let cancelled = false;
-    const loadRates = async () => {
-      setRateLoading(true);
-      setRateLoadError("");
-      try {
-        const firstPage = await apiRequest<PagedResult<EngineeringRateOption>>("/api/v1/estimates/engineering-rate-options?page=1&pageSize=100");
-        const pageCount = Math.ceil(firstPage.total / firstPage.pageSize);
-        const remainingPages = pageCount > 1
-          ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) => apiRequest<PagedResult<EngineeringRateOption>>(`/api/v1/estimates/engineering-rate-options?page=${index + 2}&pageSize=100`)))
-          : [];
-        if (cancelled) return;
-        const today = businessDate();
-        const available = [firstPage, ...remainingPages].flatMap((page) => page.items).filter((rate) => rate.isActive && rate.effectiveFrom <= today && (!rate.effectiveTo || rate.effectiveTo >= today));
-        setRateOptions(available);
-        setForm((current) => {
-          if (current.provider !== "Internal" || current.level === "Imported Excel rate") return current;
-          const currentRate = available.find((rate) => rate.department === current.department && rate.level === current.level);
-          return currentRate ? {
-            ...current,
-            dailyRate: current.costType === "Installation" ? currentRate.installationDaily : currentRate.engineeringDaily,
-          } : current;
-        });
-      } catch (requestError) {
-        if (!cancelled) setRateLoadError(toError(requestError));
-      } finally {
-        if (!cancelled) setRateLoading(false);
-      }
-    };
-    void loadRates();
-    return () => { cancelled = true; };
-  }, [canReadRateMaster, importedExcelRate, line]);
   const update = <K extends keyof EstimateManhourInput>(key: K, value: EstimateManhourInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const availableRateOptions = rateOptions.filter((rate) => (form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily) > 0);
+  const availableRateOptions = form.discipline ? disciplineRates(rateOptions, form.discipline)
+    : rateOptions.filter((rate) => (form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily) > 0);
   const selectedRate = availableRateOptions.find((rate) => rate.department === form.department && rate.level === form.level);
-  const rateSelectionRequired = form.provider === "Internal" && canReadRateMaster && !importedExcelRate && !rateLoadError;
-  const internalRateReady = !rateSelectionRequired || (!rateLoading && Boolean(selectedRate));
-  const supplierValid = form.provider === "Internal" || Boolean(form.supplierId && form.quotationNumber?.trim() && form.priceDate);
-  const lineCostWithinRange = form.provider === "Internal" || form.engineers * form.manDays * form.dailyRate <= MAX_LEDGER_LINE_TOTAL;
-  const valid = Boolean(form.package.trim() && form.activity.trim() && form.department.trim() && form.level.trim() && form.engineers > 0 && form.manDays > 0 && form.hoursPerDay > 0 && form.dailyRate >= 0 && form.ownerId && supplierValid && lineCostWithinRange && internalRateReady);
+  const rateDaily = (rate: { engineeringDaily: number; installationDaily: number }) => form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily;
+  const internal = form.provider === "Internal";
+  const choosingRate = internal && !importedExcelRate && !rateLoadError;
+  // The server resolves an internal line's rate on save; the form only previews it.
+  const dailyRate = internal && !importedExcelRate && selectedRate && canSeeRates ? rateDaily(selectedRate) : form.dailyRate;
+  const internalRateReady = !choosingRate || (!rateLoading && Boolean(selectedRate));
+  const supplierValid = internal || Boolean(form.supplierId && form.quotationNumber?.trim() && form.priceDate);
+  const lineCostWithinRange = internal || form.engineers * form.manDays * form.dailyRate <= MAX_LEDGER_LINE_TOTAL;
+  const valid = Boolean(form.discipline && form.package.trim() && form.activity.trim() && form.department.trim() && form.level.trim() && form.engineers > 0 && form.manDays > 0 && form.hoursPerDay > 0 && form.dailyRate >= 0 && form.ownerId && supplierValid && lineCostWithinRange && internalRateReady);
   const chooseRate = (rateId: string) => {
     const rate = availableRateOptions.find((option) => option.id === Number(rateId));
-    if (!rate) return;
-    setForm((current) => ({ ...current, department: rate.department, level: rate.level, dailyRate: current.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily }));
+    if (rate) setForm((current) => ({ ...current, department: rate.department, level: rate.level }));
   };
-  const changeCostType = (costType: EstimateManhourInput["costType"]) => setForm((current) => ({
-    ...current,
-    costType,
-    dailyRate: current.provider === "Internal" && current.level !== "Imported Excel rate"
-      ? (() => { const rate = rateOptions.find((option) => option.department === current.department && option.level === current.level); const amount = rate ? (costType === "Installation" ? rate.installationDaily : rate.engineeringDaily) : 0; return amount > 0 ? amount : 0; })()
-      : current.dailyRate,
-  }));
-  return <Modal title={line ? `Edit ${line.activity}` : "Add engineering man-hour"} subtitle={copy("เลือกอัตราที่ใช้งานได้ก่อนบันทึก ระบบจะตรวจอัตราอีกครั้งที่ API", "Choose an available rate before saving. The API verifies it again.", "保存前に利用可能な単価を選択してください。APIでも再確認します。")} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create man-hour"}</button></>}>
-    {form.provider === "Internal" && canReadRateMaster && !importedExcelRate && !rateLoading && !rateLoadError && !availableRateOptions.length ? <div className="info-strip red" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span><strong>{copy("ยังไม่มีอัตราค่าแรงที่ใช้งานได้", "No available engineering rate", "利用可能な技術単価がありません")}</strong><br />{copy("กรุณาให้ผู้ดูแลเพิ่ม Engineering Rate ที่มีผลวันนี้และมากกว่า 0 ก่อนสร้างรายการค่าแรง", "Ask an administrator to add an Engineering Rate effective today and greater than zero before creating this line.", "この工数を作成する前に、本日有効で0より大きい技術単価を管理者に登録してもらってください。")}</span></div> : null}
-    {form.provider === "Internal" && !canReadRateMaster && !importedExcelRate ? <div className="info-strip amber" role="note" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("บัญชีนี้ดู Rate Master ไม่ได้ กรุณาเลือก Department และ Level ให้ตรงกับข้อมูลกลาง โดย API จะตรวจสอบก่อนบันทึก", "This account cannot view the Rate Master. Match Department and Level to the master data; the API will verify them before saving.", "このアカウントは単価マスターを閲覧できません。部門とレベルをマスターに合わせてください。保存前にAPIが確認します。")}</span></div> : null}
-    {form.provider === "Internal" && rateLoadError ? <div className="info-strip amber" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("โหลด Rate Master ไม่สำเร็จ", "Could not load the Rate Master", "単価マスターを読み込めませんでした")}: {rateLoadError} {copy("กรุณาตรวจ Department และ Level ก่อนลองบันทึก", "Check Department and Level before trying to save.", "保存する前に部門とレベルを確認してください。")}</span></div> : null}
+  const changeDiscipline = (discipline: EstimateDiscipline) => setForm((current) => ({ ...current, discipline, costType: costTypeOfDiscipline(discipline) }));
+  return <Modal title={line ? `${copy("แก้ไข", "Edit", "編集")} ${line.activity}` : copy("เพิ่มค่าแรง", "Add labor", "工数を追加")} subtitle={copy("เลือกสาขาและอัตราที่ใช้งานได้ ระบบจะตรวจอัตราอีกครั้งตอนบันทึก", "Choose the discipline and an available rate. The API verifies the rate again on save.", "分野と利用可能な単価を選択してください。保存時にAPIが再確認します。")} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave({ ...form, dailyRate: internal ? 0 : form.dailyRate }, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? <LocalizedText text={"Save changes"} /> : copy("บันทึกค่าแรง", "Save labor", "工数を保存")}</button></>}>
+    {choosingRate && !rateLoading && !availableRateOptions.length ? <div className="info-strip red" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span><strong>{copy("ยังไม่มีอัตราค่าแรงที่ใช้งานได้", "No available engineering rate", "利用可能な技術単価がありません")}</strong><br />{copy("กรุณาให้ผู้ดูแลเพิ่ม Engineering Rate ที่มีผลวันนี้และมากกว่า 0 ก่อนสร้างรายการค่าแรง", "Ask an administrator to add an Engineering Rate effective today and greater than zero before creating this line.", "この工数を作成する前に、本日有効で0より大きい技術単価を管理者に登録してもらってください。")}</span></div> : null}
+    {internal && rateLoadError ? <div className="info-strip amber" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("โหลด Rate Master ไม่สำเร็จ", "Could not load the Rate Master", "単価マスターを読み込めませんでした")}: {rateLoadError} {copy("กรุณาตรวจ Department และ Level ก่อนลองบันทึก", "Check Department and Level before trying to save.", "保存する前に部門とレベルを確認してください。")}</span></div> : null}
+    {!line?.discipline && line ? <div className="info-strip amber" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("บรรทัดนี้ยังไม่ระบุสาขา เลือกสาขาแล้วบันทึก", "This line has no discipline yet. Choose one and save.", "この行には分野がありません。選択して保存してください。")}</span></div> : null}
     <div className="form-grid four">
-      <Field label="Work package *" span={2}><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Activity *" span={2}><input required maxLength={300} value={form.activity} onChange={(event) => update("activity", event.target.value)} /></Field>
-      <Field label="Provider *"><select value={form.provider} onChange={(event) => { const provider = event.target.value as EstimateManhourInput["provider"]; setForm((current) => ({ ...current, provider, dailyRate: provider === "Supplier" ? supplierRateDraft.current : selectedRate ? (current.costType === "Installation" ? selectedRate.installationDaily : selectedRate.engineeringDaily) : 0, ...(provider === "Internal" ? { supplierId: undefined, quotationNumber: "", priceDate: undefined } : {}) })); }}><option value="Internal"><LocalizedText text={"Own engineer"} /></option><option value="Supplier"><LocalizedText text={"Supplier man-hour"} /></option></select></Field><Field label="Cost type *"><select value={form.costType} onChange={(event) => changeCostType(event.target.value as EstimateManhourInput["costType"])}><option value={"Engineering"}><LocalizedText text={"Engineering"} /></option><option value={"Installation"}><LocalizedText text={"Installation"} /></option></select></Field>
-      {form.provider === "Internal" && canReadRateMaster && !importedExcelRate && !rateLoadError ? <Field label={copy("อัตราที่ใช้งานได้ *", "Available rate *", "利用可能な単価 *")} span={2} hint={rateLoading ? copy("กำลังโหลด Rate Master…", "Loading Rate Master…", "単価マスターを読み込み中…") : selectedRate ? `${form.department} · ${form.level}` : copy("เลือกจากอัตราที่มีผลวันนี้เท่านั้น", "Only rates effective today are shown.", "本日有効な単価のみ表示します。")}><select disabled={rateLoading || !availableRateOptions.length} value={selectedRate?.id ?? ""} onChange={(event) => chooseRate(event.target.value)}><option value="">{rateLoading ? copy("กำลังโหลดอัตรา…", "Loading rates…", "単価を読み込み中…") : copy("เลือกอัตราที่ใช้งานได้", "Select an available rate", "利用可能な単価を選択")}</option>{availableRateOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.department} — {rate.level} · {formatMoney(form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily)}/{copy("วัน", "day", "日")}</option>)}</select></Field> : <><Field label="Department *"><input required maxLength={100} value={form.department} onChange={(event) => update("department", event.target.value)} /></Field><Field label="Engineer level *"><input required maxLength={100} value={form.level} onChange={(event) => update("level", event.target.value)} /></Field></>}
-      <Field label="Supplier" hint={form.provider === "Supplier" ? "Required" : "Not used for internal rate"}><select disabled={form.provider === "Internal"} value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"Select supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Quotation number" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={form.provider === "Internal"} maxLength={100} value={form.quotationNumber ?? ""} onChange={(event) => update("quotationNumber", event.target.value)} /></Field><Field label="Quotation date" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={form.provider === "Internal"} type="date" value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>
-      <Field label="Engineer qty *"><input type="number" min="0.01" max="10000" step="0.01" value={form.engineers} onChange={(event) => update("engineers", Number(event.target.value))} /></Field><Field label="Man-days *"><input type="number" min="0.01" max="100000" step="0.01" value={form.manDays} onChange={(event) => update("manDays", Number(event.target.value))} /></Field><Field label="Hours / day *"><input type="number" min="0.01" max="24" step="0.01" value={form.hoursPerDay} onChange={(event) => update("hoursPerDay", Number(event.target.value))} /></Field><Field label={form.provider === "Internal" ? (form.level === "Imported Excel rate" ? "Daily rate (Excel)" : "Daily rate (Rate Master)") : "Daily rate (THB) *"} hint={form.provider === "Internal" ? (form.level === "Imported Excel rate" ? "Original Excel rate is retained when adjusting quantity" : "Server resolves the active rate after save") : "Supplier quotation rate"}><input type="number" readOnly={form.provider === "Internal"} className={form.provider === "Internal" ? "calculated" : undefined} min="0" max="1000000000" step="0.0001" value={form.dailyRate} onChange={(event) => { const dailyRate = Number(event.target.value); supplierRateDraft.current = dailyRate; update("dailyRate", dailyRate); }} /></Field>
-      <Field label="Man-hours"><input className="calculated" readOnly value={formatNumber(form.engineers * form.manDays * form.hoursPerDay)} /></Field><Field label="Line cost" hint={!lineCostWithinRange ? "Exceeds the maximum amount supported by the estimate ledger" : undefined}><input className="calculated" readOnly value={formatMoney(form.engineers * form.manDays * form.dailyRate)} /></Field><Field label="Remark" span={2}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field>
+      <Field label="Discipline *"><DisciplineSelect value={form.discipline} onChange={changeDiscipline} /></Field>
+      <Field label="Provider *"><select value={form.provider} onChange={(event) => { const provider = event.target.value as EstimateManhourInput["provider"]; setForm((current) => ({ ...current, provider, dailyRate: provider === "Supplier" ? supplierRateDraft.current : current.dailyRate, ...(provider === "Internal" ? { supplierId: undefined, quotationNumber: "", priceDate: undefined } : {}) })); }}><option value="Internal"><LocalizedText text={"Own engineer"} /></option><option value="Supplier"><LocalizedText text={"Supplier man-hour"} /></option></select></Field>
+      <Field label="Work package *"><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Activity *"><input required maxLength={300} value={form.activity} onChange={(event) => update("activity", event.target.value)} /></Field>
+      {choosingRate ? <Field label={copy("แผนกและระดับ *", "Department and level *", "部門とレベル *")} span={2} hint={rateLoading ? copy("กำลังโหลด Rate Master…", "Loading Rate Master…", "単価マスターを読み込み中…") : selectedRate ? `${form.department} · ${form.level}` : copy("เลือกจากอัตราที่มีผลวันนี้เท่านั้น", "Only rates effective today are shown.", "本日有効な単価のみ表示します。")}><select disabled={rateLoading || !availableRateOptions.length} value={selectedRate?.id ?? ""} onChange={(event) => chooseRate(event.target.value)}><option value="">{rateLoading ? copy("กำลังโหลดอัตรา…", "Loading rates…", "単価を読み込み中…") : copy("เลือกอัตราที่ใช้งานได้", "Select an available rate", "利用可能な単価を選択")}</option>{availableRateOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.department} — {rate.level}{canSeeRates ? ` · ${formatMoney(rateDaily(rate))}/${copy("วัน", "day", "日")}` : ""}</option>)}</select></Field> : <><Field label="Department *"><input required maxLength={100} value={form.department} onChange={(event) => update("department", event.target.value)} /></Field><Field label="Engineer level *"><input required maxLength={100} value={form.level} onChange={(event) => update("level", event.target.value)} /></Field></>}
+      <Field label="Supplier" hint={form.provider === "Supplier" ? "Required" : "Not used for internal rate"}><select disabled={internal} value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"Select supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Quotation number" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={internal} maxLength={100} value={form.quotationNumber ?? ""} onChange={(event) => update("quotationNumber", event.target.value)} /></Field><Field label="Quotation date" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={internal} type="date" value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {owner.department}</option>)}</select></Field>
+      <Field label="Engineer qty *"><input type="number" min="0.01" max="10000" step="0.01" value={form.engineers} onChange={(event) => update("engineers", Number(event.target.value))} /></Field><Field label="Man-days *"><input type="number" min="0.01" max="100000" step="0.01" value={form.manDays} onChange={(event) => update("manDays", Number(event.target.value))} /></Field><Field label="Hours / day *"><input type="number" min="0.01" max="24" step="0.01" value={form.hoursPerDay} onChange={(event) => update("hoursPerDay", Number(event.target.value))} /></Field><Field label={internal ? (importedExcelRate ? "Daily rate (Excel)" : "Daily rate (Rate Master)") : "Daily rate (THB) *"} hint={internal ? (importedExcelRate ? "Original Excel rate is retained when adjusting quantity" : "Server resolves the active rate after save") : "Supplier quotation rate"}><input type="number" readOnly={internal} className={internal ? "calculated" : undefined} min="0" max="1000000000" step="0.0001" value={dailyRate} onChange={(event) => { const next = Number(event.target.value); supplierRateDraft.current = next; update("dailyRate", next); }} /></Field>
+      <Field label="Man-hours"><input className="calculated" readOnly value={formatNumber(form.engineers * form.manDays * form.hoursPerDay)} /></Field><Field label="Line cost" hint={!lineCostWithinRange ? "Exceeds the maximum amount supported by the estimate ledger" : undefined}><input className="calculated" readOnly value={formatMoney(form.engineers * form.manDays * dailyRate)} /></Field><Field label="Remark" span={2}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field>
     </div>
   </Modal>;
 }
 
 function ExpenseEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; line: EstimateExpenseLine | null; seed?: ExpenseSeed; busy: boolean; onClose: () => void; onSave: (input: EstimateExpenseInput, lineId?: number) => Promise<void> }) {
+  const uiText = useUiText();
+  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const allowedExpenseTypes = EXPENSE_TYPES.filter((expenseType) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(EXPENSE_SECTION_BY_TYPE[expenseType]) || line?.expenseType === expenseType);
-  const [form, setForm] = useState<EstimateExpenseInput>(() => ({ estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion, package: line?.package ?? seed.package ?? "Site Installation", expenseType: line?.expenseType ?? allowedExpenseTypes[0] ?? "Other", description: line?.description ?? "", costType: line?.costType ?? seed.costType ?? "Installation", supplierId: line?.supplierId ?? undefined, referenceNumber: line?.referenceNumber ?? "", quantity: numberOf(line?.quantity) || 1, unit: line?.unit ?? "Trip", unitCost: numberOf(line?.unitCost), ownerId: line?.ownerId ?? defaultOwner, remark: line?.remark ?? "" }));
+  const initialDiscipline = line ? line.discipline : seed.discipline ?? null;
+  const [form, setForm] = useState<EstimateExpenseInput>(() => ({ estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion, package: line?.package ?? seed.package ?? (initialDiscipline ? defaultWorkPackage(initialDiscipline) : "Site Installation"), expenseType: line?.expenseType ?? allowedExpenseTypes[0] ?? "Other", description: line?.description ?? "", costType: line?.costType ?? seed.costType ?? (initialDiscipline ? costTypeOfDiscipline(initialDiscipline) : "Installation"), discipline: initialDiscipline ?? undefined, supplierId: line?.supplierId ?? undefined, referenceNumber: line?.referenceNumber ?? "", quantity: numberOf(line?.quantity) || 1, unit: line?.unit ?? "Trip", unitCost: numberOf(line?.unitCost), ownerId: line?.ownerId ?? defaultOwner, remark: line?.remark ?? "" }));
   const update = <K extends keyof EstimateExpenseInput>(key: K, value: EstimateExpenseInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const valid = Boolean(form.package.trim() && form.description.trim() && form.expenseType && form.quantity > 0 && form.unit && form.unitCost >= 0 && form.quantity * form.unitCost <= MAX_LEDGER_LINE_TOTAL && form.ownerId);
-  return <Modal title={line ? `Edit ${line.description}` : "Add project expense"} subtitle="Expense is reported under transportation, accommodation or other cost" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create expense"}</button></>}>
-    <div className="form-grid four"><Field label="Work package *" span={2}><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Expense type *" hint={workspace.capabilities.canEditAllSections ? "Mapped to canonical section 08, 09 or 10" : "Only expense types assigned to your sections"}><select value={form.expenseType} onChange={(event) => update("expenseType", event.target.value)}>{allowedExpenseTypes.map((type) => <option key={type}>{type}</option>)}</select></Field><Field label="Cost type *"><select value={form.costType} onChange={(event) => update("costType", event.target.value as EstimateExpenseInput["costType"])}><option value={"Engineering"}><LocalizedText text={"Engineering"} /></option><option value={"Installation"}><LocalizedText text={"Installation"} /></option></select></Field><Field label="Description *" span={2}><input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} /></Field><Field label="Supplier"><select value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"No supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Reference number"><input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} /></Field><Field label="Quantity *"><input type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value))} /></Field><Field label="Unit *"><select value={form.unit} onChange={(event) => update("unit", event.target.value)}>{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></Field><Field label="Unit cost (THB) *"><input type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => update("unitCost", Number(event.target.value))} /></Field><Field label="Line total"><input readOnly className="calculated" value={formatMoney(form.quantity * form.unitCost)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field><Field label="Remark" span={3}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field></div>
+  const valid = Boolean(form.discipline && form.package.trim() && form.description.trim() && form.expenseType && form.quantity > 0 && form.unit && form.unitCost >= 0 && form.quantity * form.unitCost <= MAX_LEDGER_LINE_TOTAL && form.ownerId);
+  return <Modal title={line ? `${copy("แก้ไข", "Edit", "編集")} ${line.description}` : copy("เพิ่มค่าเดินทาง ที่พัก หรือเบี้ยเลี้ยง", "Add travel, hotel or per diem", "旅費・宿泊・日当を追加")} subtitle="Expense is reported under transportation, accommodation or other cost" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? <LocalizedText text={"Save changes"} /> : copy("บันทึกค่าใช้จ่าย", "Save expense", "費用を保存")}</button></>}>
+    {!line?.discipline && line ? <div className="info-strip amber" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("บรรทัดนี้ยังไม่ระบุสาขา เลือกสาขาแล้วบันทึก", "This line has no discipline yet. Choose one and save.", "この行には分野がありません。選択して保存してください。")}</span></div> : null}
+    <div className="form-grid four"><Field label="Discipline *"><DisciplineSelect value={form.discipline} onChange={(discipline) => setForm((current) => ({ ...current, discipline, costType: costTypeOfDiscipline(discipline) }))} /></Field><Field label="Expense type *" hint={workspace.capabilities.canEditAllSections ? "Mapped to canonical section 08, 09 or 10" : "Only expense types assigned to your sections"}><select value={form.expenseType} onChange={(event) => update("expenseType", event.target.value)}>{allowedExpenseTypes.map((type) => <option key={type} value={type}>{uiText(type)}</option>)}</select></Field><Field label="Work package *" span={2}><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Description *" span={2}><input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} /></Field><Field label="Supplier"><select value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"No supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Reference number"><input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} /></Field><Field label="Quantity *"><input type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value))} /></Field><Field label="Unit *"><select value={form.unit} onChange={(event) => update("unit", event.target.value)}>{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></Field><Field label="Unit cost (THB) *"><input type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => update("unitCost", Number(event.target.value))} /></Field><Field label="Line total"><input readOnly className="calculated" value={formatMoney(form.quantity * form.unitCost)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {owner.department}</option>)}</select></Field><Field label="Remark" span={3}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field></div>
   </Modal>;
 }
 
