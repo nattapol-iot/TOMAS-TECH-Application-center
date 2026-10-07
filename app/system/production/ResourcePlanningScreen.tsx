@@ -21,10 +21,14 @@ import {
 import { useLanguage } from "../i18n";
 import { useActivitySubView } from "../use-activity-presence";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
-import { loadWorkload, type Workload, type WorkloadCapacity, type WorkloadEffort } from "../resource-workload-client";
+import { WorkQueue } from "./WorkQueue";
+import { WorkloadGantt } from "./WorkloadGantt";
+import { loadWorkload, saveWorkOrder, type Workload, type WorkloadCapacity, type WorkloadEffort } from "../resource-workload-client";
 import {
+  orderWork,
   planningLoad,
   planningWeeks,
+  projectWork,
   dayNumber,
   dateFromDay,
   resourceCsv,
@@ -43,7 +47,9 @@ type Props = {
   refreshBootstrap?: () => Promise<void>;
 };
 type ResourceTab = "workload" | "tasks";
-type Focus = "over" | "overdue" | "missing";
+type WorkloadView = "table" | "gantt";
+type Focus = "over" | "overdue" | "late" | "missing";
+const MANAGER_ROLES = ["Admin", "Engineering Manager", "Project Manager"];
 const ALL_DEPARTMENTS = "All departments";
 const PAGE_SIZE = 50;
 const tones: Record<Commitment["type"], Tone> = {
@@ -78,13 +84,18 @@ const errorText = (e: unknown) =>
       ? e.message
       : String(e);
 const tabStorageKey = (userId: number) => `tomas-tech-resource-plan-tab:${userId}`;
-// The tab a person last used, so a lead who works in Tasks lands there; everyone else starts on the workload.
-function readTab(userId: number): ResourceTab {
+const viewStorageKey = (userId: number) => `tomas-tech-workload-view:${userId}`;
+// The tab and view a person last used, so a lead who works in Tasks or the Gantt lands there.
+function readStored<T extends string>(key: string, choices: readonly T[], fallback: T): T {
   try {
-    return typeof window !== "undefined" && window.localStorage.getItem(tabStorageKey(userId)) === "tasks" ? "tasks" : "workload";
+    const value = typeof window === "undefined" ? null : window.localStorage.getItem(key);
+    return choices.find((choice) => choice === value) ?? fallback;
   } catch {
-    return "workload";
+    return fallback;
   }
+}
+function store(key: string, value: string) {
+  try { window.localStorage.setItem(key, value); } catch { /* A remembered tab is a convenience when storage is blocked. */ }
 }
 const byDueDate = (a: Commitment, b: Commitment) =>
   (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
@@ -97,7 +108,8 @@ export function ProductionResourcePlan({
   openInquiry,
 }: Props) {
   const { t } = useLanguage();
-  const [tab, setTab] = useState<ResourceTab>(() => readTab(bootstrap.user.id));
+  const [tab, setTab] = useState<ResourceTab>(() => readStored(tabStorageKey(bootstrap.user.id), ["workload", "tasks"], "workload"));
+  const [view, setView] = useState<WorkloadView>(() => readStored(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table"));
   // Team Activity sees which Resource Plan tab is open (keys follow the tab ids).
   useActivitySubView(`resources-${tab}`);
   const [data, setData] = useState<Workload | null>(null);
@@ -118,6 +130,8 @@ export function ProductionResourcePlan({
     bootstrap.permissions.includes("schedule.read") &&
     bootstrap.permissions.includes("project.read");
   const canPlan = bootstrap.permissions.includes("schedule.plan");
+  // Anyone orders their own work; Admin, Engineering Managers and Project Managers may order anyone's (the API agrees).
+  const manages = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => MANAGER_ROLES.includes(role));
   const load = useCallback(async () => {
     if (!canRead) return;
     setLoading(true);
@@ -139,7 +153,15 @@ export function ProductionResourcePlan({
   }, [wantsData, load]);
   const changeTab = (next: ResourceTab) => {
     setTab(next);
-    try { window.localStorage.setItem(tabStorageKey(bootstrap.user.id), next); } catch { /* The tab is a convenience when storage is blocked. */ }
+    store(tabStorageKey(bootstrap.user.id), next);
+  };
+  const changeView = (next: WorkloadView) => {
+    setView(next);
+    store(viewStorageKey(bootstrap.user.id), next);
+  };
+  const saveOrder = async (userId: number, keys: string[]) => {
+    await saveWorkOrder(userId, keys);
+    setData((current) => current && { ...current, priorities: [...current.priorities.filter((entry) => entry.userId !== userId), { userId, keys }] });
   };
   const todayIso = today();
   const weeks = useMemo(() => planningWeeks(start || todayIso, Number(horizon)), [start, horizon, todayIso]);
@@ -152,7 +174,12 @@ export function ProductionResourcePlan({
         const items = data.items.filter((item) => item.ownerId === user.id);
         const saved = data.capacities.find((c) => c.userId === user.id)?.daysPerWeek ?? null;
         const capacity = weeklyCapacity(saved);
-        return { user, items, saved, capacity, ...planningLoad(items, weeks, capacity, todayIso, data.holidays) };
+        // Their work in their own order, and when each item would be done if worked in that order.
+        const order = data.priorities.find((entry) => entry.userId === user.id)?.keys ?? [];
+        const ordered = orderWork(items, order);
+        const projection = projectWork(ordered, capacity, todayIso, data.holidays);
+        const projectedLate = ordered.filter((item) => (projection.get(item.key)?.lateDays ?? 0) > 0).length;
+        return { user, items, saved, capacity, order, ordered, projection, projectedLate, ...planningLoad(items, weeks, capacity, todayIso, data.holidays) };
       })
       .filter((row) =>
         !query ||
@@ -165,11 +192,13 @@ export function ProductionResourcePlan({
   const matches: Record<Focus, (row: Row) => boolean> = {
     over: (row) => (row.peak ?? 0) > 100,
     overdue: (row) => row.overdue > 0,
+    late: (row) => row.projectedLate > 0,
     missing: (row) => row.unknown > 0,
   };
   const chipItems: FilterItem[] = [
     { key: "over", label: "Workload.overCapacity", value: rows.filter(matches.over).length, tone: "red" },
     { key: "overdue", label: "Workload.overdue", value: rows.filter(matches.overdue).length, tone: "amber" },
+    { key: "late", label: "Workload.projectedLate", value: rows.filter(matches.late).length, tone: "violet" },
     { key: "missing", label: "Workload.missingEffort", value: rows.filter(matches.missing).length, tone: "slate" },
   ];
   const focused = focus ? rows.filter(matches[focus]) : rows;
@@ -311,7 +340,17 @@ export function ProductionResourcePlan({
               onChange={(value) => filtered(() => setDepartment(value))}
               options={[ALL_DEPARTMENTS, ...departments]}
             />
-            <div className="workload-window" role="group" aria-label={t("Planning window")}>
+            <div className="chip-select" role="group" aria-label={t("Workload.view")}>
+              <button type="button" className={view === "table" ? "chip on" : "chip"} aria-pressed={view === "table"} onClick={() => changeView("table")}>
+                <Icon name="table" />
+                {t("Workload.viewTable")}
+              </button>
+              <button type="button" className={view === "gantt" ? "chip on" : "chip"} aria-pressed={view === "gantt"} onClick={() => changeView("gantt")}>
+                <Icon name="calendar" />
+                {t("Workload.viewGantt")}
+              </button>
+            </div>
+            {view === "table" ? <div className="workload-window" role="group" aria-label={t("Planning window")}>
               <button type="button" className="icon-btn" onClick={() => shiftWindow(-1)} title={t("Previous period")} aria-label={t("Previous period")}>
                 <Icon name="chevronLeft" />
               </button>
@@ -323,12 +362,12 @@ export function ProductionResourcePlan({
               </button>
               <Select label="Weeks" value={horizon} onChange={(value) => filtered(() => setHorizon(value))} options={["8", "12", "16", "24"]} />
               <span className="muted">{t("weeks")}</span>
-            </div>
+            </div> : null}
           </div>
           <FilterChips label="Workload.chips" items={chipItems} active={focus} onPick={(key) => filtered(() => setFocus(key as Focus | null))} />
           <Panel
-            title="Workload.byWeek"
-            subtitle="Planned man-days / available man-days · green under 85%, amber up to 100%, red above"
+            title={view === "gantt" ? "Workload.ganttTitle" : "Workload.byWeek"}
+            subtitle={view === "gantt" ? "Workload.ganttSubtitle" : "Planned man-days / available man-days · green under 85%, amber up to 100%, red above"}
             actions={
               <div className="workload-panel-actions">
                 {unassigned.length ? (
@@ -350,6 +389,8 @@ export function ProductionResourcePlan({
               <div className="empty">{loading ? <><span className="spinner" />{t("Loading from SQL Server…")}</> : null}</div>
             ) : !rows.length ? (
               <EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." />
+            ) : view === "gantt" ? (
+              <WorkloadGantt people={shown} today={todayIso} onPerson={setPersonId} onOpen={open} />
             ) : (
               <>
                 <div className="table-wrap workload-heat-wrap">
@@ -381,6 +422,7 @@ export function ProductionResourcePlan({
                           <td className="num">
                             <strong>{row.open}</strong>
                             {row.overdue ? <small className="workload-late">{row.overdue} {t("overdue")}</small> : null}
+                            {row.projectedLate ? <small className="workload-projected">{t("WorkQueue.lateCount").replace("{n}", String(row.projectedLate))}</small> : null}
                           </td>
                           {row.weekly.map((w) => (
                             <td key={w.week.start} className="num">
@@ -454,7 +496,23 @@ export function ProductionResourcePlan({
               </button>
             ) : null}
           </div>
-          <WorkList items={person.items} today={todayIso} canPlanEffort={canPlanEffort} onOpen={open} onEffort={setEdit} />
+          <WorkQueue
+            items={person.items}
+            order={person.order}
+            capacity={person.capacity}
+            today={todayIso}
+            holidays={data?.holidays ?? []}
+            editable={person.user.id === bootstrap.user.id || manages}
+            canRequestDays={person.user.id === bootstrap.user.id && bootstrap.permissions.includes("schedule.progress")}
+            canPlanEffort={canPlanEffort}
+            onOpen={open}
+            onEffort={setEdit}
+            onSaveOrder={(keys) => saveOrder(person.user.id, keys)}
+            onRequested={() => {
+              notify(t("WorkQueue.requestSent"));
+              void load();
+            }}
+          />
         </Drawer>
       ) : null}
       {unassignedOpen ? (

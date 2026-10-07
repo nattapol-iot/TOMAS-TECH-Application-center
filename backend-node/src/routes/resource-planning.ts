@@ -11,9 +11,9 @@ import {
 } from "../http.js";
 import { ApiError } from "../errors.js";
 import { insertAudit } from "../audit.js";
-import { isProjectElevated } from "../project-scope.js";
+import { isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { elevated } from "../resource-task-service.js";
-import { WORKLOAD_SQL, workloadItems } from "../resource-workload.js";
+import { WORK_KEY, WORKLOAD_SQL, workloadItems, workOrders } from "../resource-workload.js";
 
 type Row = Record<string, unknown> & { row_version: Buffer };
 const map = (r: Row) => ({
@@ -77,12 +77,44 @@ export function registerResourcePlanningRoutes(
       .input("task_elevated", sql.Bit, elevated(actor)));
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
     const holidays = holidayDates(sets[2]);
+    const work = workloadItems(sets.slice(3), new Set(holidays));
+    // My Work asks for the caller's own work only.
+    const query = request.query as Record<string, unknown>;
+    const items = query.mine === "1" || query.mine === "true" ? work.items.filter((item) => item.ownerId === actor.id) : work.items;
     return {
       capacities: (sets[0] as Row[]).map(map),
       efforts: (sets[1] as Row[]).map(map),
       holidays,
-      ...workloadItems(sets.slice(3), new Set(holidays)),
+      items,
+      warnings: work.warnings,
+      priorities: workOrders(sets[9] ?? [], items),
     };
+  });
+  // A person's own order of work, set by them or by a manager for them. Only the order is stored: plan dates never
+  // move here, and a projected slip goes through the PM's day request.
+  app.put("/api/v1/resource-planning/work-order/:userId", async (request) => {
+    await users.demandPermission(request, "schedule.read");
+    const actor = await users.required(request);
+    const userId = positiveLong((request.params as { userId?: string }).userId, "User id");
+    if (userId !== actor.id && !isProjectManagerRole(actor))
+      throw new ApiError(403, "work_order_forbidden", "Only the person or a manager can change this work order.");
+    const keys = bodyObject(request.body).keys;
+    if (!Array.isArray(keys) || keys.length > 500 || new Set(keys).size !== keys.length
+      || keys.some((key) => typeof key !== "string" || !WORK_KEY.test(key)))
+      throw new ApiError(400, "validation_failed", "Send the work keys in order, each once, at most 500.");
+    const person = (await db.query<{ id: number }>(
+      "SELECT id FROM dbo.users WHERE id=@user AND is_active=1 AND deleted_at IS NULL;",
+      (q) => q.input("user", sql.BigInt, userId),
+    )).recordset[0];
+    if (!person) throw new ApiError(404, "user_not_found", "That person is not an active user.");
+    await db.transaction(async (transaction) => {
+      const replace = new sql.Request(transaction);
+      replace.input("user", sql.BigInt, userId).input("actor", sql.BigInt, actor.id).input("keys", sql.NVarChar(sql.MAX), JSON.stringify(keys));
+      await replace.query(`DELETE FROM dbo.work_priorities WHERE user_id=@user;
+        INSERT dbo.work_priorities(user_id,work_key,sort_order,updated_by)
+        SELECT @user,CONVERT(nvarchar(40),ordering.[value]),CONVERT(int,ordering.[key])+1,@actor FROM OPENJSON(@keys) ordering;`);
+    });
+    return { userId, keys };
   });
   app.put("/api/v1/resource-planning/:kind/:id", async (request) => {
     await users.demandPermission(request, "schedule.plan");

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
+import sql from "mssql";
 import type { Database } from "../src/db.js";
+import { registerErrorHandler } from "../src/errors.js";
 import { registerResourcePlanningRoutes } from "../src/routes/resource-planning.js";
-import { DEFAULT_WEEKLY_CAPACITY, FINISHED_WORK_STATUSES, WORKLOAD_SQL, isOpenWork, workloadItems } from "../src/resource-workload.js";
+import { DEFAULT_WEEKLY_CAPACITY, FINISHED_WORK_STATUSES, WORK_KEY, WORKLOAD_SQL, isOpenWork, workloadItems, workOrders } from "../src/resource-workload.js";
 import type { CurrentUserService } from "../src/users.js";
 
 /** A dbo.schedule_tasks row as SQL Server returns it. */
@@ -35,13 +37,18 @@ const schedule = [
   raw({ id: 13, parent_id: 10, sort_order: 3, name: "Kick-off", plan_man_days: 1, percent_done: 100, status: "Done", actual_start: "2026-10-05", actual_end: "2026-10-05" }),
 ];
 const pics = [{ task_id: 11, user_id: 7 }, { task_id: 11, user_id: 9 }];
+// Person 9 ranked the estimate first, then the wiring; Project-99 has gone and Inquiry-3 is not theirs.
+const priorities = [
+  { user_id: 9, work_key: "Estimate-6" }, { user_id: 9, work_key: "Project-99" }, { user_id: 9, work_key: "Project-11" }, { user_id: 9, work_key: "Inquiry-3" },
+  { user_id: 7, work_key: "Inquiry-3" },
+];
 
 test("every open piece of work becomes one item per person, with its effort shared", () => {
   const { items, warnings } = workloadItems([inquiries, tasks, estimates, projects, schedule, pics], new Set());
   assert.deepEqual(warnings, []);
   const byKey = new Map(items.map((item) => [item.key, item]));
   // A whole inquiry, with its saved effort and dates.
-  assert.deepEqual(byKey.get("Inquiry-3"), { key: "Inquiry-3", type: "Inquiry", entityId: 3, ownerId: 7, reference: "INQ-3", title: "Line 4", customer: "ACME",
+  assert.deepEqual(byKey.get("Inquiry-3"), { key: "Inquiry-3", workKey: "Inquiry-3", type: "Inquiry", entityId: 3, ownerId: 7, reference: "INQ-3", title: "Line 4", customer: "ACME",
     start: "2026-10-01", end: "2026-10-09", manDays: 4, progress: 20, status: "In Progress" });
   // An approved inquiry task; the finished one is left out.
   assert.equal(byKey.get("InquiryTask-8")?.reference, "INQ-5 · TASK-8");
@@ -57,6 +64,19 @@ test("every open piece of work becomes one item per person, with its effort shar
   assert.equal(byKey.get("Project-12-none")?.manDays, 2);
   assert.ok(![...byKey.keys()].some((key) => key.startsWith("Project-10-") || key.startsWith("Project-13-")));
   assert.equal(items.length, 8);
+  // The work key names the work, not the person's share, and is the only shape a work order stores.
+  assert.equal(byKey.get("Project-11-7")?.workKey, "Project-11");
+  assert.equal(byKey.get("Estimate-4-9")?.workKey, "Estimate-4");
+  for (const item of items) assert.match(item.workKey, WORK_KEY);
+  for (const bad of ["Project-0", "Project-1-7", "Task-1", "Project-", "project-1", "Project-1; DROP"]) assert.doesNotMatch(bad, WORK_KEY);
+});
+
+test("a saved work order keeps only that person's open work, in the saved order", () => {
+  const { items } = workloadItems([inquiries, tasks, estimates, projects, schedule, pics], new Set());
+  assert.deepEqual(workOrders(priorities, items), [
+    { userId: 9, keys: ["Estimate-6", "Project-11"] },
+    { userId: 7, keys: ["Inquiry-3"] },
+  ]);
 });
 
 test("a schedule that cannot be resolved is named, and the rest still counts", () => {
@@ -73,44 +93,106 @@ test("finished work and the default capacity are one rule", () => {
   assert.equal(isOpenWork({ progress: 99, status: "Blocked" }), true);
 });
 
-test("the Workload read needs schedule.read and project.read, then reads everything in one scoped batch", async () => {
+function workloadServer(actor: { id: number; roles: string[] }) {
   const demanded: string[] = [];
-  let statement = "";
+  const statements: string[] = [];
   const bound: Record<string, unknown> = {};
   const users = {
     demandPermission: async (_request: unknown, permission: string) => { demanded.push(permission); },
-    required: async () => ({ id: 7, roles: ["Engineer"], role: "Engineer" }),
+    required: async () => ({ ...actor, role: actor.roles[0] }),
   };
   const database = {
-    async query(sql: string, bind?: (request: unknown) => void) {
-      statement = sql;
+    async query(statement: string, bind?: (request: unknown) => void) {
+      statements.push(statement);
       const request = { input(key: string, _type: unknown, value: unknown) { bound[key] = value; return request; } };
       bind?.(request);
+      if (statement.includes("FROM dbo.users WHERE id=@user")) return { recordset: bound.user === 404 ? [] : [{ id: bound.user }] };
       return { recordsets: [
         [{ user_id: 9, days_per_week: 3, row_version: Buffer.alloc(8) }], [], [{ holiday_date: new Date("2026-10-13T00:00:00Z") }],
-        inquiries, tasks, estimates, projects, schedule, pics,
+        inquiries, tasks, estimates, projects, schedule, pics, priorities,
       ] };
     },
+    async transaction(action: (transaction: object) => Promise<unknown>) { return action({}); },
   };
   const app = Fastify();
+  registerErrorHandler(app);
   registerResourcePlanningRoutes(app, database as unknown as Database, users as unknown as CurrentUserService);
+  return { app, demanded, statements, bound };
+}
+
+test("the Workload read needs schedule.read and project.read, then reads everything in one scoped batch", async () => {
+  const { app, demanded, statements, bound } = workloadServer({ id: 7, roles: ["Engineer"] });
   try {
     const response = await app.inject({ method: "GET", url: "/api/v1/resource-planning/workload" });
     assert.equal(response.statusCode, 200);
     assert.deepEqual(demanded, ["schedule.read", "project.read"]);
     assert.deepEqual(bound, { actor: 7, project_elevated: false, task_elevated: false });
+    const statement = statements[0]!;
     assert.ok(statement.includes(WORKLOAD_SQL));
     // Projects as GET /projects lists them; inquiry tasks as /resource-tasks/commitments scopes them.
     assert.match(statement, /@project_elevated=1 OR p\.manager_id=@actor OR p\.lead_engineer_id=@actor/);
     assert.match(statement, /@task_elevated=1 OR i\.estimate_owner_id=@actor OR i\.created_by=@actor OR t\.assignee_id=@actor OR t\.created_by=@actor/);
     assert.match(statement, /code=N'inquiry\.read'/);
     assert.match(statement, /code=N'estimate\.read'/);
+    assert.match(statement, /SELECT user_id,work_key FROM dbo\.work_priorities ORDER BY user_id,sort_order;/);
     const body = response.json();
     assert.deepEqual(body.capacities.map((c: { userId: number; daysPerWeek: number }) => [c.userId, c.daysPerWeek]), [[9, 3]]);
     assert.deepEqual(body.holidays, ["2026-10-13"]);
     assert.equal(body.items.length, 8);
     assert.deepEqual(body.warnings, []);
+    assert.deepEqual(body.priorities, [{ userId: 9, keys: ["Estimate-6", "Project-11"] }, { userId: 7, keys: ["Inquiry-3"] }]);
   } finally {
     await app.close();
+  }
+});
+
+test("My Work's read is the caller's own work and order only", async () => {
+  const { app } = workloadServer({ id: 9, roles: ["Engineer"] });
+  try {
+    const body = (await app.inject({ method: "GET", url: "/api/v1/resource-planning/workload?mine=1" })).json();
+    assert.ok(body.items.length > 0);
+    assert.ok(body.items.every((item: { ownerId: number }) => item.ownerId === 9));
+    assert.deepEqual(body.priorities, [{ userId: 9, keys: ["Estimate-6", "Project-11"] }]);
+  } finally {
+    await app.close();
+  }
+});
+
+test("a person orders their own work; a manager may order anyone's; nobody else may", async (t) => {
+  const captured: { statement: string; user: unknown; actor: unknown; keys: unknown }[] = [];
+  t.mock.method(sql.Request.prototype, "query", async function (this: { parameters: Record<string, { value: unknown }> }, statement: string) {
+    captured.push({ statement, user: this.parameters.user?.value, actor: this.parameters.actor?.value, keys: this.parameters.keys?.value });
+    return { recordset: [] };
+  });
+  const own = workloadServer({ id: 9, roles: ["Engineer"] });
+  try {
+    const saved = await own.app.inject({ method: "PUT", url: "/api/v1/resource-planning/work-order/9", payload: { keys: ["Project-11", "Estimate-6"] } });
+    assert.equal(saved.statusCode, 200);
+    assert.deepEqual(saved.json(), { userId: 9, keys: ["Project-11", "Estimate-6"] });
+    assert.equal(captured.length, 1);
+    assert.match(captured[0]!.statement, /DELETE FROM dbo\.work_priorities WHERE user_id=@user;/);
+    assert.match(captured[0]!.statement, /CONVERT\(int,ordering\.\[key\]\)\+1,@actor FROM OPENJSON\(@keys\) ordering/);
+    assert.deepEqual([captured[0]!.user, captured[0]!.actor, captured[0]!.keys], [9, 9, JSON.stringify(["Project-11", "Estimate-6"])]);
+    // Someone else's order: refused before any write.
+    const refused = await own.app.inject({ method: "PUT", url: "/api/v1/resource-planning/work-order/7", payload: { keys: [] } });
+    assert.equal(refused.statusCode, 403);
+    assert.equal(refused.json().error?.code ?? refused.json().code, "work_order_forbidden");
+    // Malformed, repeated or too many keys are refused.
+    for (const keys of [["Project-11", "Project-11"], ["Task-1"], "Project-11", Array.from({ length: 501 }, (_, index) => `Project-${index + 1}`)]) {
+      const bad = await own.app.inject({ method: "PUT", url: "/api/v1/resource-planning/work-order/9", payload: { keys } });
+      assert.equal(bad.statusCode, 400, JSON.stringify(keys).slice(0, 40));
+    }
+    assert.equal(captured.length, 1);
+  } finally {
+    await own.app.close();
+  }
+  const manager = workloadServer({ id: 2, roles: ["Project Manager"] });
+  try {
+    assert.equal((await manager.app.inject({ method: "PUT", url: "/api/v1/resource-planning/work-order/9", payload: { keys: [] } })).statusCode, 200);
+    assert.deepEqual([captured.at(-1)!.user, captured.at(-1)!.actor, captured.at(-1)!.keys], [9, 2, "[]"]);
+    // An inactive or unknown person cannot be given an order.
+    assert.equal((await manager.app.inject({ method: "PUT", url: "/api/v1/resource-planning/work-order/404", payload: { keys: [] } })).statusCode, 404);
+  } finally {
+    await manager.app.close();
   }
 });

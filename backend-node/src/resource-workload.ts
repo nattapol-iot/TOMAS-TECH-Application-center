@@ -13,7 +13,11 @@ export const isOpenWork = (item: { progress: number; status: string }) =>
   item.progress < 100 && !(FINISHED_WORK_STATUSES as readonly string[]).includes(item.status);
 
 export type WorkloadItem = {
-  key: string; type: "Inquiry" | "Estimate" | "Project"; entityId: number; ownerId: number | null;
+  /** One row per person: the work and whose share it is. */
+  key: string;
+  /** The work itself, whoever does it: Project-<task id>, Estimate-<id>, Inquiry-<id> or InquiryTask-<id>. A person's work order names these. */
+  workKey: string;
+  type: "Inquiry" | "Estimate" | "Project"; entityId: number; ownerId: number | null;
   reference: string; title: string; customer: string; start: string | null; end: string | null;
   manDays: number | null; progress: number; status: string;
 };
@@ -21,8 +25,8 @@ export type WorkloadItem = {
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
 
 /**
- * Six recordsets, after the caller's planning recordsets: whole inquiries, inquiry tasks, estimate shares, projects,
- * their schedule rows and PICs. Binds @actor, @project_elevated and @task_elevated.
+ * Seven recordsets, after the caller's planning recordsets: whole inquiries, inquiry tasks, estimate shares, projects,
+ * their schedule rows and PICs, and every person's work order. Binds @actor, @project_elevated and @task_elevated.
  * Visibility follows the screens the Resource Plan used to read: inquiries and estimates as their lists show them to
  * inquiry.read / estimate.read, inquiry tasks as GET /resource-tasks/commitments scopes them, projects as GET /projects
  * lists them.
@@ -59,7 +63,8 @@ export const WORKLOAD_SQL = `
       SELECT p.id,p.project_no,c.name customer_name FROM @projects scope JOIN dbo.projects p ON p.id=scope.id JOIN dbo.customers c ON c.id=p.customer_id;
       SELECT t.* FROM dbo.schedule_tasks t JOIN @projects p ON p.id=t.project_id WHERE t.deleted_at IS NULL ORDER BY t.project_id,t.parent_id,t.sort_order,t.id;
       SELECT pic.task_id,pic.user_id FROM dbo.schedule_task_pics pic JOIN dbo.schedule_tasks t ON t.id=pic.task_id JOIN @projects p ON p.id=t.project_id
-      WHERE t.deleted_at IS NULL ORDER BY pic.task_id,pic.user_id;`;
+      WHERE t.deleted_at IS NULL ORDER BY pic.task_id,pic.user_id;
+      SELECT user_id,work_key FROM dbo.work_priorities ORDER BY user_id,sort_order;`;
 
 type Row = Record<string, unknown>;
 const text = (row: Row, key: string) => String(row[key] ?? "");
@@ -67,25 +72,28 @@ const id = (row: Row, key: string) => Number(row[key]);
 const optional = (row: Row, key: string) => (row[key] === null || row[key] === undefined ? null : Number(row[key]));
 const day = (row: Row, key: string) => dateOnly((row[key] ?? null) as Date | string | null);
 
+/** A work key as WorkloadItem.workKey writes it; the only shape dbo.work_priorities stores. */
+export const WORK_KEY = /^(?:Project|Estimate|Inquiry|InquiryTask)-[1-9][0-9]{0,17}$/;
+
 /** Turns WORKLOAD_SQL's recordsets into open work items. A schedule that cannot be resolved is skipped and named in warnings. */
 export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { items: WorkloadItem[]; warnings: string[] } {
   const [inquiries = [], tasks = [], estimates = [], projects = [], scheduleRows = [], pics = []] = sets;
   const items: WorkloadItem[] = [];
   const warnings: string[] = [];
   for (const r of inquiries) items.push({
-    key: `Inquiry-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
+    key: `Inquiry-${id(r, "id")}`, workKey: `Inquiry-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
     reference: text(r, "inquiry_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
     start: day(r, "start_date"), end: day(r, "end_date"), manDays: optional(r, "man_days"), progress: Number(r.progress ?? 0), status: text(r, "status"),
   });
   for (const r of tasks) items.push({
-    key: `InquiryTask-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "inquiry_id"), ownerId: optional(r, "assignee_id"),
+    key: `InquiryTask-${id(r, "id")}`, workKey: `InquiryTask-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "inquiry_id"), ownerId: optional(r, "assignee_id"),
     reference: `${text(r, "inquiry_no")} · TASK-${id(r, "id")}`, title: text(r, "title"), customer: text(r, "customer_name"),
     start: day(r, "plan_start"), end: day(r, "plan_end"), manDays: optional(r, "man_days"), progress: Number(r.percent_done ?? 0), status: text(r, "execution_status"),
   });
   for (const r of estimates) {
     const effort = optional(r, "man_days"), share = Math.max(1, Number(r.owner_count ?? 1));
     items.push({
-      key: `Estimate-${id(r, "id")}-${text(r, "owner_id")}`, type: "Estimate", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
+      key: `Estimate-${id(r, "id")}-${text(r, "owner_id")}`, workKey: `Estimate-${id(r, "id")}`, type: "Estimate", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
       reference: text(r, "estimate_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
       start: day(r, "start_date"), end: day(r, "end_date"), manDays: effort === null ? null : effort / share, progress: Number(r.progress ?? 0), status: text(r, "status"),
     });
@@ -110,7 +118,7 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
       const owners = picsByTask.get(task.id) ?? [];
       const shares: Array<number | null> = owners.length ? owners : [null];
       for (const ownerId of shares) items.push({
-        key: `Project-${task.id}-${ownerId ?? "none"}`, type: "Project", entityId: projectId, ownerId,
+        key: `Project-${task.id}-${ownerId ?? "none"}`, workKey: `Project-${task.id}`, type: "Project", entityId: projectId, ownerId,
         reference: `${project.number} · ${resolved.wbs}`, title: task.name, customer: project.customer,
         start: resolved.planStart, end: resolved.planFinish, manDays: task.planManDays / shares.length,
         progress: resolved.percentComplete, status: resolved.status,
@@ -118,4 +126,18 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
     }
   }
   return { items: items.filter(isOpenWork), warnings };
+}
+
+export type WorkOrder = { userId: number; keys: string[] };
+
+/** Each person's saved order, kept to the work they still have in the items, so finished or unseen work drops out. */
+export function workOrders(rows: Row[], items: WorkloadItem[]): WorkOrder[] {
+  const open = new Map<number, Set<string>>();
+  for (const item of items) if (item.ownerId !== null) open.set(item.ownerId, (open.get(item.ownerId) ?? new Set()).add(item.workKey));
+  const orders = new Map<number, string[]>();
+  for (const r of rows) {
+    const userId = id(r, "user_id"), key = text(r, "work_key");
+    if (open.get(userId)?.has(key)) orders.set(userId, [...(orders.get(userId) ?? []), key]);
+  }
+  return [...orders].map(([userId, keys]) => ({ userId, keys }));
 }

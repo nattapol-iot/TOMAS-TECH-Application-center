@@ -66,6 +66,42 @@
 .workload-item-link:hover { text-decoration: underline; }
 .workload-item-effort { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 
+.workload-projected { display: block; margin-top: 3px; color: var(--violet-text); font-size: var(--fs-2xs); font-weight: 600; }
+.workload-toolbar .chip-select .chip { display: inline-flex; align-items: center; gap: 5px; }
+.workload-toolbar .chip-select .icon { width: 14px; height: 14px; }
+
+/* Gantt view: people as summary rows, their work in their order beneath. */
+.workload-gantt { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 14px; background: var(--surface); }
+.workload-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.workload-gantt-note { font-size: var(--fs-xs); }
+.workload-gantt:fullscreen { width: 100%; height: 100%; overflow: hidden; }
+.workload-gantt.is-overlay { position: fixed; inset: 0; z-index: 90; overflow: hidden; }
+.workload-gantt.is-fullscreen .gantt { flex: 1; min-height: 0; max-height: none; }
+
+/* A person's work order: rank, the work, its expected finish, and the arrows that move it. */
+.work-queue { display: flex; flex-direction: column; gap: 10px; }
+.work-queue-hint { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
+.work-queue-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.work-queue-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.work-queue-list > li {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft);
+}
+.work-queue-list > li:last-child { border-bottom: 0; }
+.work-queue-rank {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-xs); font-weight: 700;
+}
+.work-queue-list > li.late .work-queue-rank { background: var(--red-soft); color: var(--red-text); }
+.work-queue-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.work-queue-body strong { color: var(--ink); font-size: var(--fs-sm); }
+.work-queue-body small { color: var(--muted); font-size: var(--fs-xs); }
+.work-queue-projection { color: var(--green-text); font-size: var(--fs-xs); font-weight: 600; }
+.work-queue-projection.late { color: var(--red-text); }
+.work-queue-projection.unknown { color: var(--muted); font-weight: 500; }
+.work-queue-move { display: flex; flex-direction: column; gap: 4px; }
+.work-queue-move .icon-btn { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+
 @media (max-width: 720px) {
   .workload-window { width: 100%; margin-left: 0; flex-wrap: wrap; }
   .workload-heat th:first-child, .workload-heat td:first-child { width: 190px; min-width: 190px; }

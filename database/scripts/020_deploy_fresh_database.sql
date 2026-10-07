@@ -132,11 +132,12 @@ GO
 :r database/migrations/068_day_request_effective_roles.sql
 :r database/migrations/069_withdraw_project_document.sql
 :r database/migrations/070_estimate_labor_discipline.sql
+:r database/migrations/071_work_priorities.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 70) <> 70
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 71) <> 71
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

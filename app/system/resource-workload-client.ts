@@ -17,6 +17,15 @@ export type Workload = {
   holidays: string[];
   /** Projects whose schedule could not be resolved; their tasks are missing from items. */
   warnings: string[];
+  /** Each person's own order of work, as work keys, kept to the open work in items. */
+  priorities: WorkOrder[];
 };
+export type WorkOrder = { userId: number; keys: string[] };
 
-export const loadWorkload = () => apiRequest<Workload>("/api/v1/resource-planning/workload");
+/** The whole team's workload, or with `mine` only the caller's own work (My Work). */
+export const loadWorkload = (options: { mine?: boolean } = {}) =>
+  apiRequest<Workload>(`/api/v1/resource-planning/workload${options.mine ? "?mine=1" : ""}`);
+
+/** Saves a person's order of work; the person themself or an Admin / Engineering Manager / Project Manager. */
+export const saveWorkOrder = (userId: number, keys: string[]) =>
+  apiRequest<WorkOrder>(`/api/v1/resource-planning/work-order/${userId}`, { method: "PUT", body: JSON.stringify({ keys }) });

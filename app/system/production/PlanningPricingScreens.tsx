@@ -11,6 +11,7 @@ import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedu
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
+import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
 import { ganttFitWindow, ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
 import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
@@ -745,7 +746,7 @@ type MyWorkProgressInput = {
 
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting";
 type MyWorkSort = "priority" | "due" | "project";
-type MyWorkTab = "new" | "active" | "updates";
+type MyWorkTab = "new" | "active" | "queue" | "updates";
 type MyWorkSource = "all" | "crm" | "estimate" | "project" | "service" | "personal";
 type ScheduleWorkGroup = {
   key: string;
@@ -799,6 +800,7 @@ const MY_WORK_SOURCE_OPTIONS: { id: MyWorkSource; label: string }[] = [
 const MY_WORK_SOURCE_AVAILABILITY: Record<MyWorkTab, MyWorkSource[]> = {
   new: ["all", "estimate", "project", "service"],
   active: ["all", "crm", "estimate", "project", "personal"],
+  queue: ["all"],
   updates: ["all"],
 };
 
@@ -1304,6 +1306,7 @@ export function ProductionMyWork({
     }} tabs={[
       { id: "new", label: "New Assignments", count: newAssignmentCount },
       { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
+      { id: "queue", label: "WorkQueue.myTab" },
       { id: "updates", label: "My Updates", count: updates.length },
     ]} />
     <div className="my-work-source-filter" role="group" aria-label={localizeCopy("Filter by source")}>
@@ -1418,6 +1421,7 @@ export function ProductionMyWork({
       </> : null}
     </> : null}
 
+    {tab === "queue" ? <MyWorkQueue bootstrap={bootstrap} notify={notify} openProjectSchedule={openProjectSchedule} openEstimate={openEstimate} /> : null}
     {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle={uiText("What you reported, in order")} flush>
       <div className="panel-body feed">
         {visibleUpdates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>

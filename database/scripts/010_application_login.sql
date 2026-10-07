@@ -725,4 +725,8 @@ GO
 -- database/migrations/069_withdraw_project_document.sql
 GRANT EXECUTE ON OBJECT::dbo.withdraw_project_document TO [iot_team_app_role];
 GO
+
+-- database/migrations/071_work_priorities.sql
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.work_priorities TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

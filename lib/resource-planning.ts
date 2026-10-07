@@ -1,6 +1,9 @@
 /** Production-only planning math: no demo dates, users, or seeded effort. */
 export type Commitment = {
+  /** One row per person: the work and whose share it is. */
   key: string;
+  /** The work itself, whoever does it (backend-node/src/resource-workload.ts); a person's work order names these. */
+  workKey: string;
   type: "Inquiry" | "Estimate" | "Project";
   entityId: number;
   ownerId: number | null;
@@ -115,6 +118,71 @@ export function planningLoad(
     unknown: entries.filter((e) => e.item.manDays === null || !e.days.length)
       .length,
   };
+}
+const byDueDate = (a: Commitment, b: Commitment) =>
+  (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
+/** A person's open work in their order: what they ranked first, as ranked, then the rest soonest due first. */
+export function orderWork(items: Commitment[], order: readonly string[]) {
+  const rank = new Map(order.map((key, index) => [key, index]));
+  return items
+    .filter(isOpenWork)
+    .sort((a, b) => (rank.get(a.workKey) ?? Infinity) - (rank.get(b.workKey) ?? Infinity) || byDueDate(a, b));
+}
+export type Projection = {
+  /** The first and last working day the work is projected on; null when it cannot be projected. */
+  start: string | null;
+  finish: string | null;
+  /** Working days past the planned finish (0 when on time or with no planned finish); null when unknown. */
+  lateDays: number | null;
+  /** Why there is no finish: no effort on the item, no capacity, or not done within the horizon. */
+  reason?: "effort" | "capacity" | "horizon";
+};
+const EPSILON = 1e-6;
+/**
+ * When each item would be done if this person worked through it in this order from today. Every working day gives
+ * capacity / 5 man-days to the first item that may start (not before its planned start) and still has work left, and
+ * what is left of the day to the next. Remaining work is the effort not yet reported done. Work without effort, or a
+ * person with no capacity, is not projected, and nothing past the horizon is guessed. Plan dates are not changed.
+ */
+export function projectWork(
+  ordered: Commitment[],
+  capacity: number,
+  today: string,
+  holidays: readonly string[] = [],
+  horizonDays = 365,
+) {
+  const result = new Map<string, Projection>();
+  const remaining = new Map<string, number>();
+  for (const item of ordered) {
+    if (!item.manDays) result.set(item.key, { start: null, finish: null, lateDays: null, reason: "effort" });
+    else if (capacity <= 0) result.set(item.key, { start: null, finish: null, lateDays: null, reason: "capacity" });
+    else remaining.set(item.key, (item.manDays * Math.max(0, 100 - item.progress)) / 100);
+  }
+  const daily = capacity / 5;
+  const started = new Map<string, string>();
+  for (const day of workingDays(today, dateFromDay(dayNumber(today) + horizonDays), holidays)) {
+    if (![...remaining.values()].some((left) => left > EPSILON)) break;
+    let budget = daily;
+    for (const item of ordered) {
+      const left = remaining.get(item.key);
+      if (left === undefined || left <= EPSILON || (item.start !== null && item.start > day)) continue;
+      if (!started.has(item.key)) started.set(item.key, day);
+      const used = Math.min(budget, left);
+      remaining.set(item.key, left - used);
+      budget -= used;
+      if (left - used <= EPSILON) {
+        const lateDays = item.end && day > item.end ? workingDays(dateFromDay(dayNumber(item.end) + 1), day, holidays).length : 0;
+        result.set(item.key, { start: started.get(item.key)!, finish: day, lateDays });
+      }
+      if (budget <= EPSILON) break;
+    }
+  }
+  for (const [key, left] of remaining)
+    if (!result.has(key))
+      result.set(key, left > EPSILON
+        ? { start: started.get(key) ?? null, finish: null, lateDays: null, reason: "horizon" }
+        : { start: today, finish: today, lateDays: 0 });
+  return result;
 }
 /** Protect exported spreadsheet cells from formula injection. */
 export function resourceCsv(rows: unknown[][]) {
