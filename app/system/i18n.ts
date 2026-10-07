@@ -2366,6 +2366,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Gantt.expandVisible": { en: "Expand projects", th: "กางโครงการ", jp: "プロジェクトを展開" },
   "Gantt.expandLimit": { en: "Opens the first {n} projects in this view", th: "เปิด {n} โครงการแรกในมุมมองนี้", jp: "この表示の最初の{n}件を開きます" },
   "Gantt.collapseAll": { en: "Collapse all", th: "ยุบทั้งหมด", jp: "すべて折りたたむ" },
+  "Gantt.fullScreen": { en: "Full screen", th: "เต็มจอ", jp: "全画面表示" },
+  "Gantt.exitFullScreen": { en: "Exit full screen", th: "ออกจากเต็มจอ", jp: "全画面を終了" },
   "Gantt.taskSearch": { en: "Find a task or person in these projects", th: "ค้นหางานหรือผู้รับผิดชอบในโครงการเหล่านี้", jp: "これらのプロジェクトでタスク・担当者を検索" },
   "Gantt.findTasks": { en: "Find tasks", th: "ค้นหางาน", jp: "タスクを検索" },
   "Gantt.clearSearch": { en: "Clear search", th: "ล้างการค้นหา", jp: "検索をクリア" },

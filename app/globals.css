@@ -2085,6 +2085,9 @@ tbody tr.subtotal-row:hover td { background: var(--n-100); }
    Overlays: modal + drawer
    ========================================================================== */
 
+/* app/system/use-fullscreen.ts: while an element is laid over the window, the page under it stays put. */
+body.fullscreen-overlay-open { overflow: hidden; }
+
 .overlay {
   position: fixed;
   inset: 0;

@@ -110,8 +110,16 @@
 /* Overview > Timeline: the shared Gantt (gantt.css) under its zoom bar and legend. */
 .portfolio-gantt { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
 .portfolio-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 0 14px; }
-.portfolio-gantt-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px 0; }
+.portfolio-gantt-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px; }
 .portfolio-gantt-sort .icon.asc { transform: rotate(180deg); }
+
+/* Full screen, the browser's (:fullscreen) or the page's own overlay where the browser has none: the block
+   fills the window and the chart scrolls inside it instead of stopping at 70vh. Above the top bar and
+   menus, below dialogs (.overlay, 100) and toasts. */
+.portfolio-gantt.is-fullscreen { background: var(--surface); padding-bottom: 0; }
+.portfolio-gantt:fullscreen { width: 100%; height: 100%; overflow: hidden; }
+.portfolio-gantt.is-overlay { position: fixed; inset: 0; z-index: 90; overflow: hidden; }
+.portfolio-gantt.is-fullscreen .gantt { flex: 1; min-height: 0; max-height: none; }
 
 /* Timeline task search: one row under the zoom bar; the result line wraps below the buttons. */
 .portfolio-gantt-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px; }

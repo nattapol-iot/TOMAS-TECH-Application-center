@@ -195,6 +195,41 @@ test("the Projects menu badge counts open Delayed and At Risk projects, not ever
   assert.match(routes, /AND p\.status NOT IN \(N'Closed',N'On Hold'\)/);
 });
 
+test("the portfolio Timeline goes full screen, with an overlay where the browser has no element full screen", () => {
+  const hook = read("app/system/use-fullscreen.ts");
+  // The browser's full screen first; a refusal or a missing API falls back to the page's own overlay.
+  assert.match(hook, /if \(document\.fullscreenEnabled && typeof element\.requestFullscreen === "function"\) \{\s*try \{ await element\.requestFullscreen\(\); return; \} catch/);
+  assert.match(hook, /setOverlay\(true\);/);
+  // State follows the browser (Esc, F11) and Escape leaves the overlay; the page under it does not scroll.
+  assert.match(hook, /document\.addEventListener\("fullscreenchange", sync\)/);
+  assert.match(hook, /if \(event\.key === "Escape"\) setOverlay\(false\);/);
+  assert.match(hook, /document\.body\.classList\.add\(OVERLAY_BODY_CLASS\)/);
+  assert.match(hook, /document\.body\.classList\.remove\(OVERLAY_BODY_CLASS\)/);
+  assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{ overflow: hidden; \}/);
+
+  // The whole block goes full screen, sort included, and the button says which way it goes.
+  assert.match(gantt, /<div ref=\{fullscreen\.ref\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/);
+  assert.match(gantt, /aria-pressed=\{fullscreen\.active\}/);
+  assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
+  assert.match(core, /controls=\{\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);
+  const ui = read("app/system/ui.tsx");
+  assert.match(ui, /^\s+maximize: </m);
+  assert.match(ui, /^\s+minimize: </m);
+
+  // In full screen the chart takes the window height; the overlay stays under dialogs and toasts.
+  const css = read("app/system/production/project-portfolio.css");
+  assert.match(css, /\.portfolio-gantt\.is-fullscreen \.gantt \{ flex: 1; min-height: 0; max-height: none; \}/);
+  assert.match(css, /\.portfolio-gantt\.is-overlay \{ position: fixed; inset: 0; z-index: 90;/);
+  assert.match(read("app/globals.css"), /\.overlay \{\r?\n\s+position: fixed;\r?\n\s+inset: 0;\r?\n\s+z-index: 100;/);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
+
+  const { translate } = load("app/system/i18n.ts");
+  for (const key of ["Gantt.fullScreen", "Gantt.exitFullScreen"]) {
+    for (const lang of ["EN", "TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
+  }
+  assert.equal(translate("Gantt.fullScreen", "TH"), "เต็มจอ");
+});
+
 test("every new follow-up string has English, Thai and Japanese copy", () => {
   const { translate } = load("app/system/i18n.ts");
   const keys = [

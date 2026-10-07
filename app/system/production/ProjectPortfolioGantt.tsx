@@ -2,14 +2,16 @@
 /* Projects > Overview in Timeline mode: the same filtered, sorted projects as the list, one bar per
    project from the overview fields (no schedule fetch), and a project's tasks loaded only when it is
    expanded. Clicking a project opens its plan; clicking a task opens the plan on that task. A task
-   search (task name or person) finds rows across every project in scope and opens just those. */
+   search (task name or person) finds rows across every project in scope and opens just those. The
+   whole block, sort controls included, can go full screen; opening a plan leaves full screen first. */
 
-import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
 import { apiRequest } from "../api-client";
 import { useT } from "../i18n";
 import { searchScheduleTasks, type ProjectOverviewItem } from "../project-overview-client";
 import { Icon, type Tone } from "../ui";
+import { useFullscreen } from "../use-fullscreen";
 import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
 import { HealthBadge } from "./ProjectPlanFields";
@@ -24,14 +26,19 @@ type TaskSearch = { query: string; matches: Map<number, Set<number>>; truncated:
 
 const taskMatches = (task: ScheduleTask, hits: Set<number>): boolean => hits.has(task.id) || task.children.some((child) => taskMatches(child, hits));
 
-export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClosed = false, openProjectSchedule }: {
+export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClosed = false, openProjectSchedule, controls }: {
   rows: ProjectOverviewItem[];
   today: string;
   canReadSchedule: boolean;
   includeClosed?: boolean;
   openProjectSchedule?: (id: number, taskId?: number) => void;
+  /** Drawn above the zoom bar, inside the full-screen area (the portfolio's sort). */
+  controls?: ReactNode;
 }) {
   const t = useT();
+  const fullscreen = useFullscreen<HTMLDivElement>();
+  // The plan opens on another tab, so full screen ends first; otherwise it would keep covering the page.
+  const openPlan = openProjectSchedule ? (id: number, taskId?: number) => { void fullscreen.exit(); openProjectSchedule(id, taskId); } : undefined;
   const [zoom, setZoom] = useState<GanttZoomChoice>("quarter");
   const [anchor, setAnchor] = useState(today);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
@@ -94,7 +101,7 @@ export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClo
       meta: `${item.managerName} · ${Math.round(Number(item.progress) || 0)}%`,
       status: <HealthBadge health={item.health ?? "No plan"} />,
       expandable: canReadSchedule && item.taskCount > 0, expanded: isOpen, onToggle: () => toggle(item.id),
-      ...(openProjectSchedule ? { onOpen: () => openProjectSchedule(item.id) } : {}),
+      ...(openPlan ? { onOpen: () => openPlan(item.id) } : {}),
       start: item.planStart, finish: item.planFinish, progress: Number(item.progress), tone: HEALTH_TONE[item.health ?? "No plan"] ?? "slate",
       forecastFinish: item.forecastFinish, target: item.targetDelivery,
       title: `${item.number} · ${item.name} · ${item.planStart ?? "—"} → ${item.planFinish ?? "—"} · ${Math.round(Number(item.progress) || 0)}%`,
@@ -118,7 +125,7 @@ export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClo
           key: `task:${item.id}:${task.id}`, depth, kind: task.kind === "phase" ? "phase" : task.children.length ? "phase" : "task",
           label: <><span className="mono">{task.wbs}</span> {task.name}</>,
           meta: [task.pics.map((pic) => pic.name).join(", ") || task.picExternal, t(task.status)].filter(Boolean).join(" · "),
-          ...(openProjectSchedule ? { onOpen: () => openProjectSchedule(item.id, task.id) } : {}),
+          ...(openPlan ? { onOpen: () => openPlan(item.id, task.id) } : {}),
           start: task.planStart, finish: task.planFinish, progress: Number(task.percentComplete),
           tone: scheduleTone(task, today), forecastFinish: task.forecastFinish,
           baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, milestone: task.isMilestone,
@@ -135,13 +142,15 @@ export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClo
   const shownTaskMatches = hits ? visibleRows.reduce((sum, item) => sum + (hits.get(item.id)?.size ?? 0), 0) : 0;
   const notOpened = hits ? Math.max(0, visibleRows.length - EXPAND_LIMIT) : 0;
 
-  return <div className="portfolio-gantt">
+  return <div ref={fullscreen.ref} className={`portfolio-gantt${fullscreen.active ? " is-fullscreen" : ""}${fullscreen.overlay ? " is-overlay" : ""}`}>
+    {controls}
     <div className="portfolio-gantt-bar">
       <GanttToolbar zoom={zoom} onZoom={setZoom} onShift={(direction) => setAnchor((value) => shiftGanttAnchor(zoom === "fit" ? "quarter" : zoom, value, direction))} onToday={() => setAnchor(today)} />
-      {canReadSchedule ? <div className="gantt-nav">
-        <button type="button" className="btn ghost sm" disabled={!expandable.length || Boolean(hits)} title={expandable.length > EXPAND_LIMIT ? t("Gantt.expandLimit").replace("{n}", String(EXPAND_LIMIT)) : undefined} onClick={() => open(expandable.slice(0, EXPAND_LIMIT).map((item) => item.id))}><Icon name="plus" />{t("Gantt.expandVisible")}</button>
-        <button type="button" className="btn ghost sm" disabled={!expanded.size} onClick={() => setExpanded(new Set())}><Icon name="minus" />{t("Gantt.collapseAll")}</button>
-      </div> : null}
+      <div className="gantt-nav">
+        {canReadSchedule ? <><button type="button" className="btn ghost sm" disabled={!expandable.length || Boolean(hits)} title={expandable.length > EXPAND_LIMIT ? t("Gantt.expandLimit").replace("{n}", String(EXPAND_LIMIT)) : undefined} onClick={() => open(expandable.slice(0, EXPAND_LIMIT).map((item) => item.id))}><Icon name="plus" />{t("Gantt.expandVisible")}</button>
+        <button type="button" className="btn ghost sm" disabled={!expanded.size} onClick={() => setExpanded(new Set())}><Icon name="minus" />{t("Gantt.collapseAll")}</button></> : null}
+        <button type="button" className="btn ghost sm" aria-pressed={fullscreen.active} title={t(fullscreen.active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")} onClick={() => { void fullscreen.toggle(); }}><Icon name={fullscreen.active ? "minimize" : "maximize"} />{t(fullscreen.active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}</button>
+      </div>
       <GanttLegend baseline={expanded.size > 0} target />
     </div>
     {canReadSchedule ? <form className="portfolio-gantt-search" role="search" onSubmit={(event) => { void runSearch(event); }}>

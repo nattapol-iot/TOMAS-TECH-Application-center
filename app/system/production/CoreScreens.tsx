@@ -1063,12 +1063,13 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     </details> : null}
     <Panel flush className="portfolio-panel">
       {sorted.length && mode === "timeline" ? <>
-        <div className="portfolio-gantt-sort">
-          <label className="select-field"><span className="sr-only">{uiText("Portfolio.sortBy")}</span><select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>{PORTFOLIO_SORT_KEYS.map((key) => <option key={key} value={key}>{uiText(PORTFOLIO_SORT_LABEL[key])}</option>)}</select><Icon name="chevronDown" /></label>
-          <button type="button" className="btn ghost sm" onClick={() => changeSort(sort.key)} aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")} title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}><Icon name="chevronDown" className={sort.direction} />{uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}</button>
-        </div>
         {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
-        <ProjectPortfolioGantt key={overview?.loadedAt ?? 0} rows={sorted} today={today()} canReadSchedule={bootstrap.permissions.includes("schedule.read")} includeClosed={includeClosed} {...(openProjectSchedule ? { openProjectSchedule } : {})} />
+        <ProjectPortfolioGantt key={overview?.loadedAt ?? 0} rows={sorted} today={today()} canReadSchedule={bootstrap.permissions.includes("schedule.read")} includeClosed={includeClosed} {...(openProjectSchedule ? { openProjectSchedule } : {})}
+          controls={/* The sort sits inside the timeline so it stays at hand in full screen. */
+          <div className="portfolio-gantt-sort">
+            <label className="select-field"><span className="sr-only">{uiText("Portfolio.sortBy")}</span><select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>{PORTFOLIO_SORT_KEYS.map((key) => <option key={key} value={key}>{uiText(PORTFOLIO_SORT_LABEL[key])}</option>)}</select><Icon name="chevronDown" /></label>
+            <button type="button" className="btn ghost sm" onClick={() => changeSort(sort.key)} aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")} title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}><Icon name="chevronDown" className={sort.direction} />{uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}</button>
+          </div>} />
       </>
         : sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
         <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
