@@ -46,7 +46,8 @@ test("the ERP labor rule reads the discipline first and keeps the department fal
 });
 
 test("every route that writes a labor or expense line writes its discipline", async () => {
-  const [write, read, estimates, copy, labor, excel] = await Promise.all(["estimate-workspace-write", "estimate-workspace-read", "estimates", "estimate-copy", "labor-packages", "estimate-excel-import"].map(route));
+  const [write, read, estimates, copy, labor, excel] = await Promise.all([route("estimate-workspace-write"), route("estimate-workspace-read"),
+    route("estimates"), route("estimate-copy"), route("labor-packages"), route("estimate-excel-import")]);
   assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType, department\)/);
   assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType\)/);
   assert.match(write, /INSERT INTO dbo\.manhour_lines\(estimate_id,revision,package,activity,department,level,cost_type,discipline,/);
