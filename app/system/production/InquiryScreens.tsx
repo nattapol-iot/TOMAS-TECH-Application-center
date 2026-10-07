@@ -3,6 +3,7 @@ import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } f
 import { ProjectHandover } from "./ProjectHandover";
 import { InquirySalesFollowup } from "./InquirySalesFollowup";
 import { ExistingRfqWork } from "./ExistingRfqWork";
+import { CreateEstimateFromInquiryDialog, startFromCreatedMessage } from "./EstimateStartFrom";
 import { type CrmRecord } from "./CrmScreens";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
@@ -20,7 +21,6 @@ import {
   assignInquiryOwner,
   assignmentDeliveryNote,
   apiRequest,
-  createEstimate,
   createInquiry,
   createInquiryMeeting,
   downloadInquiryAttachment,
@@ -381,7 +381,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   const [qualificationOpen, setQualificationOpen] = useState(false);
   const [endUserOpen, setEndUserOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [createEstimateOpen, setCreateEstimateOpen] = useState(false);
 
   const load = useCallback(async () => { setLoading(true); setError(""); try { setDetail(await loadInquiry(id)); } catch (requestError) { setError(toError(requestError)); } finally { setLoading(false); } }, [id]);
   useEffect(() => {
@@ -460,13 +460,12 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
             ariaLabel: "Inquiry to estimate steps",
           };
 
-  const createLinkedEstimate = async () => {
-    setBusy(true); setError("");
-    try {
-      const created = await createEstimate({ inquiryId: detail.id, ownerId: detail.estimateOwnerId, dueDate: detail.dueDate, contingencyRate: 0 });
-      notify(`${created.number} created from ${detail.number}`); await Promise.all([load(), refreshBootstrap()]); setTab("estimate");
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+  // Creating asks first: start empty, or from a similar previous estimate (then open it to check what came across).
+  const estimateCreated = async (created: { id: number; number: string; copied: Parameters<typeof startFromCreatedMessage>[1] }) => {
+    setCreateEstimateOpen(false);
+    notify(created.copied ? startFromCreatedMessage(created.number, created.copied) : `${created.number} created from ${detail.number}`);
+    await Promise.all([load(), refreshBootstrap()]);
+    if (created.copied && openEstimate) openEstimate(created.id); else setTab("estimate");
   };
 
   return <>
@@ -489,7 +488,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
       {detail.estimate
         ? <button className="btn primary sm" type="button" onClick={() => openEstimate?.(detail.estimate!.id)}>{flowCopy.action}<Icon name="arrowRight" /></button>
         : canCreateEstimate
-          ? <button className="btn primary sm" type="button" disabled={busy} onClick={() => { void createLinkedEstimate(); }}><Icon name="plus" />{busy ? "…" : flowCopy.action}</button>
+          ? <button className="btn primary sm" type="button" onClick={() => setCreateEstimateOpen(true)}><Icon name="plus" />{flowCopy.action}</button>
           : null}
     </div> : null}
     {!closed && detail.estimate?.status === "Cancelled" ? <div className="info-strip amber"><LocalizedText text="The estimate was cancelled. Review this inquiry and use Manage document to close the work if appropriate." /></div> : null}
@@ -505,6 +504,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
     {tab === "activity" ? <InquiryActivityTab detail={detail} /> : null}
     {endUserOpen ? <EndUserEditModal kind="inquiries" record={detail} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserOpen(false)} onSaved={load} reloadRecord={() => loadInquiry(detail.id)} /> : null}
     {meetingOpen ? <MeetingDrawer bootstrap={bootstrap} detail={detail} onClose={() => setMeetingOpen(false)} onSaved={async () => { setMeetingOpen(false); notify("Meeting record added to the inquiry"); await load(); }} /> : null}
+    {createEstimateOpen ? <CreateEstimateFromInquiryDialog inquiry={{ id: detail.id, number: detail.number, ownerId: detail.estimateOwnerId, dueDate: detail.dueDate }} onClose={() => setCreateEstimateOpen(false)} onCreated={estimateCreated} /> : null}
     {assignOpen ? <AssignOwnerDrawer bootstrap={bootstrap} detail={detail} onClose={() => setAssignOpen(false)} onSaved={async (delivery) => { setAssignOpen(false); notify(`Estimate owner re-assigned${delivery}`); await load(); }} /> : null}
     {qualificationOpen ? <QualificationDrawer detail={detail} onClose={() => setQualificationOpen(false)} onSaved={async () => { setQualificationOpen(false); notify("Project qualification updated"); await load(); }} /> : null}
     {uploadOpen ? <AttachmentDrawer detail={detail} onClose={() => setUploadOpen(false)} onSaved={async () => { setUploadOpen(false); notify("Attachment uploaded"); await load(); }} /> : null}

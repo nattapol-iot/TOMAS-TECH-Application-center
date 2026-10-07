@@ -13,6 +13,7 @@ import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
 import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
 
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
+import { ALL_START_LEDGERS, EstimateSourcePicker, StartFromChoice, anyStartLedger, startFromCreatedMessage, startFromInput, type StartLedgers } from "./EstimateStartFrom";
 import { EstimateLaborTab, defaultWorkPackage, disciplineLabel, disciplineRates, useEngineeringRateOptions, type LaborExpenseSeed, type LaborSeed } from "./EstimateLaborSheet";
 import { ESTIMATE_DISCIPLINES, costTypeOfDiscipline, isEstimateDiscipline, type EstimateDiscipline } from "../../../lib/estimate-disciplines";
 import { currentLocale, useT as useUiText } from "../i18n";
@@ -429,63 +430,11 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     </Panel>
     {createOpen ? <CreateEstimateModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (created) => {
       setCreateOpen(false);
-      notify(created.copied
-        ? estimateUxCopy(currentLocale(),
-          `สร้าง ${created.number} แล้ว · คัดลอกจาก ${created.copied.sourceNumber}: อุปกรณ์ ${created.copied.costItems} · ค่าแรง ${created.copied.manhourLines} · ค่าเดินทาง/ที่พัก ${created.copied.expenseLines} · อื่นๆ ${created.copied.otherCostLines} รายการ`,
-          `${created.number} created · copied from ${created.copied.sourceNumber}: ${created.copied.costItems} equipment · ${created.copied.manhourLines} labor · ${created.copied.expenseLines} travel · ${created.copied.otherCostLines} other line(s)`,
-          `${created.number} を作成 · ${created.copied.sourceNumber} からコピー：機器 ${created.copied.costItems} · 工数 ${created.copied.manhourLines} · 旅費 ${created.copied.expenseLines} · その他 ${created.copied.otherCostLines} 件`)
-        : `${created.number} created`);
+      notify(startFromCreatedMessage(created.number, created.copied));
       await Promise.all([load(), refreshBootstrap()]);
       setSelectedEstimateId(created.id);
     }} /> : null}
   </>;
-}
-
-type StartLedgers = { costItems: boolean; manhour: boolean; expenses: boolean; otherCosts: boolean };
-const ALL_START_LEDGERS: StartLedgers = { costItems: true, manhour: true, expenses: true, otherCosts: true };
-
-/* Find a previous estimate to start from. The person searches by number, project or
-   customer and chooses; the server searches every estimate they may read. */
-function EstimateSourcePicker({ excludeId, source, onSource, ledgers, onLedgers }: {
-  excludeId: number | null; source: EstimateSummary | null; onSource: (source: EstimateSummary) => void;
-  ledgers: StartLedgers; onLedgers: (ledgers: StartLedgers) => void;
-}) {
-  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-  const [sourceSearch, setSourceSearch] = useState("");
-  const [sources, setSources] = useState<{ items: EstimateSummary[]; loading: boolean; error: string }>({ items: [], loading: true, error: "" });
-  useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setSources((current) => ({ ...current, loading: true, error: "" }));
-      void listEstimates({ page: 1, pageSize: 8, search: sourceSearch.trim() || undefined })
-        .then((result) => { if (!cancelled) setSources({ items: result.items.filter((item) => item.id !== excludeId), loading: false, error: "" }); })
-        .catch((requestError) => { if (!cancelled) setSources({ items: [], loading: false, error: toError(requestError) }); });
-    }, 250);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [sourceSearch, excludeId]);
-  const ledgerChoices: [keyof StartLedgers, string][] = [
-    ["costItems", copy("อุปกรณ์และวัสดุ", "Equipment and materials", "機器・材料")],
-    ["manhour", copy("ค่าแรงทุกสาขา", "Labor in every discipline", "全分野の工数")],
-    ["expenses", copy("ค่าเดินทาง ที่พัก เบี้ยเลี้ยง", "Travel, hotel and per diem", "旅費・宿泊・日当")],
-    ["otherCosts", copy("ค่าใช้จ่ายอื่น", "Other project costs", "その他費用")],
-  ];
-  return <div className="stack">
-    <SearchInput value={sourceSearch} onChange={setSourceSearch} placeholder="Search estimate, inquiry, project or customer…" />
-    {sources.error ? <div className="info-strip red" role="alert"><Icon name="alertTriangle" /><span>{sources.error}</span></div> : null}
-    <div className="table-wrap"><table>
-      <thead><tr><th aria-label={copy("เลือก", "Select", "選択")} /><th><LocalizedText text={"Estimate No."} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Status"} /></th><th className="num"><LocalizedText text={"Total"} /></th></tr></thead>
-      <tbody>{sources.items.map((item) => <tr key={item.id} className="clickable" onClick={() => onSource(item)}>
-        <td><input type="radio" name={`estimate-source-${excludeId ?? "new"}`} aria-label={item.number} checked={source?.id === item.id} onChange={() => onSource(item)} /></td>
-        <td><strong className="mono">{item.number}</strong> <span className="pill">{revisionCode(item.revision)}</span></td>
-        <td><div className="cell-primary"><strong>{item.projectName}</strong><span>{item.projectType}</span></div></td>
-        <td>{item.customerName}</td><td><Badge>{item.status}</Badge></td><td className="num">{formatMoney(item.total)}</td>
-      </tr>)}</tbody>
-    </table></div>
-    {sources.loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div>
-      : !sources.items.length ? <div className="info-strip">{copy("ไม่พบ Estimate ที่ตรงกับคำค้น", "No estimate matches the search", "検索に一致する見積はありません")}</div> : null}
-    {source ? <div className="settings-list">{ledgerChoices.map(([key, label]) => <div key={key} className="check-row"><input id={`estimate-source-${excludeId ?? "new"}-${key}`} type="checkbox" checked={ledgers[key]} onChange={(event) => onLedgers({ ...ledgers, [key]: event.target.checked })} /><label htmlFor={`estimate-source-${excludeId ?? "new"}-${key}`}><strong>{label}</strong></label></div>)}</div> : null}
-    <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} /></span></div>
-  </div>;
 }
 
 /* An estimate with no line yet — however it was created: from an inquiry, a site visit or
@@ -497,7 +446,7 @@ function EstimateStartPanel({ workspace, busy, onCopy, onDismiss }: {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const [source, setSource] = useState<EstimateSummary | null>(null);
   const [ledgers, setLedgers] = useState<StartLedgers>(ALL_START_LEDGERS);
-  const anyLedger = ledgers.costItems || ledgers.manhour || ledgers.expenses || ledgers.otherCosts;
+  const anyLedger = anyStartLedger(ledgers);
   return <Panel className="estimate-start-panel"
     title={copy("Estimate นี้ยังว่าง — เริ่มจาก Estimate เดิมที่คล้ายกันไหม?", "This estimate is empty — start from a similar previous one?", "この見積は空です — 類似の過去見積から始めますか？")}
     subtitle={copy("เลือก Estimate ที่ทำไว้แล้ว ระบบจะคัดลอกอุปกรณ์ ค่าแรงแยกตามสาขา และค่าเดินทางเข้ามาให้แก้ต่อ", "Pick an earlier estimate to copy its equipment, labor by discipline and travel, then adjust them.", "既存の見積を選ぶと、機器・分野別工数・旅費をコピーして編集できます。")}
@@ -553,12 +502,11 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
-  const anyLedger = ledgers.costItems || ledgers.manhour || ledgers.expenses || ledgers.otherCosts;
-  const copyReady = startFrom === "blank" || (source !== null && anyLedger);
+  const copyReady = startFrom === "blank" || (source !== null && anyStartLedger(ledgers));
   const submit = async () => {
     setBusy(true); setError("");
     try {
-      const copyFrom = startFrom === "copy" && source ? { sourceEstimateId: source.id, includeCostItems: ledgers.costItems, includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts } : undefined;
+      const copyFrom = startFrom === "copy" && source ? startFromInput(source, ledgers) : undefined;
       await onCreated(await createEstimate({ ...form, copyFrom }));
     }
     catch (requestError) { setError(toError(requestError)); }
@@ -574,14 +522,7 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
         <Field label="Due date *" hint="Today through five years"><input type="date" min={earliestDueDate} max={latestDueDate} value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} /></Field>
         <Field label="Contingency %"><input type="number" min="0" max="100" step="0.01" value={form.contingencyRate} onChange={(event) => setForm((current) => ({ ...current, contingencyRate: Number(event.target.value) }))} /></Field>
       </div></details>
-      <fieldset className="span-2 estimate-start-from">
-        <legend>{copy("เริ่มจาก", "Start from", "開始方法")}</legend>
-        <div className="settings-list">
-          <div className="check-row"><input id="estimate-start-blank" type="radio" name="estimate-start" checked={startFrom === "blank"} onChange={() => setStartFrom("blank")} /><label htmlFor="estimate-start-blank"><strong>{copy("เริ่มว่าง", "Start empty", "空で開始")}</strong><small>{copy("เพิ่มอุปกรณ์และค่าแรงเองทีละรายการ", "Add equipment and labor yourself", "機器と工数を自分で追加します")}</small></label></div>
-          <div className="check-row"><input id="estimate-start-copy" type="radio" name="estimate-start" checked={startFrom === "copy"} onChange={() => setStartFrom("copy")} /><label htmlFor="estimate-start-copy"><strong>{copy("คัดลอกจาก Estimate เดิมที่คล้ายกัน", "Copy from a similar previous estimate", "類似の過去見積からコピー")}</strong><small>{copy("ค้นหาด้วยเลข Estimate ชื่อโปรเจกต์ หรือชื่อลูกค้า", "Search by estimate number, project or customer", "見積番号・案件名・顧客名で検索")}</small></label></div>
-        </div>
-        {startFrom === "copy" ? <div style={{ marginTop: 12 }}><EstimateSourcePicker excludeId={null} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} /></div> : null}
-      </fieldset>
+      <StartFromChoice idPrefix="estimate-start" startFrom={startFrom} onStartFrom={setStartFrom} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
     </div> : <EmptyState icon="inbox" title="No inquiry available" message="ทุก Inquiry มี Estimate แล้ว หรือบัญชีนี้ไม่มี Inquiry ที่อ่านได้" />}
   </Modal>;
 }

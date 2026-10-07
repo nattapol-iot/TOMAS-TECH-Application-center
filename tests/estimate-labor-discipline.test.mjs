@@ -70,15 +70,22 @@ test("the labor and expense dialogs require a discipline and derive the cost typ
 });
 
 test("a new estimate can start from any previous estimate the person chooses", async () => {
-  const [screen, client] = await Promise.all([source("app/system/production/EstimateScreens.tsx"), source("app/system/api-client.ts")]);
+  const [screen, startFrom, inquiry, client] = await Promise.all([source("app/system/production/EstimateScreens.tsx"),
+    source("app/system/production/EstimateStartFrom.tsx"), source("app/system/production/InquiryScreens.tsx"), source("app/system/api-client.ts")]);
   const modal = screen.match(/function CreateEstimateModal\([\s\S]*?\n\}\n/)?.[0] ?? "";
-  const picker = screen.match(/function EstimateSourcePicker\([\s\S]*?\n\}\n/)?.[0] ?? "";
   // The person searches; nothing ranks or picks for them.
-  assert.match(picker, /listEstimates\(\{ page: 1, pageSize: 8, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
-  assert.match(modal, /<EstimateSourcePicker excludeId=\{null\} source=\{source\} onSource=\{setSource\}/);
-  assert.match(modal, /copyFrom = startFrom === "copy" && source \? \{ sourceEstimateId: source\.id, includeCostItems: ledgers\.costItems, includeManhour: ledgers\.manhour, includeExpenses: ledgers\.expenses, includeOtherCosts: ledgers\.otherCosts \}/);
-  assert.match(modal, /const copyReady = startFrom === "blank" \|\| \(source !== null && anyLedger\);/);
+  assert.match(startFrom, /listEstimates\(\{ page: 1, pageSize: 8, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
+  assert.match(startFrom, /export function startFromInput\(source: EstimateSummary, ledgers: StartLedgers\): EstimateStartFrom \{\s*return \{ sourceEstimateId: source\.id, includeCostItems: ledgers\.costItems, includeManhour: ledgers\.manhour, includeExpenses: ledgers\.expenses, includeOtherCosts: ledgers\.otherCosts \};/);
+  assert.match(modal, /<StartFromChoice idPrefix="estimate-start"/);
+  assert.match(modal, /const copyFrom = startFrom === "copy" && source \? startFromInput\(source, ledgers\) : undefined;/);
+  assert.match(modal, /const copyReady = startFrom === "blank" \|\| \(source !== null && anyStartLedger\(ledgers\)\);/);
   assert.match(client, /copyFrom\?: EstimateStartFrom;/);
+  // The inquiry page, where most estimates are created, asks before it creates.
+  assert.match(inquiry, /onClick=\{\(\) => setCreateEstimateOpen\(true\)\}/);
+  assert.match(inquiry, /<CreateEstimateFromInquiryDialog inquiry=\{\{ id: detail\.id, number: detail\.number, ownerId: detail\.estimateOwnerId, dueDate: detail\.dueDate \}\}/);
+  assert.doesNotMatch(inquiry, /createEstimate\(\{ inquiryId: detail\.id/, "the inquiry page no longer creates an empty estimate without asking");
+  const dialog = startFrom.match(/export function CreateEstimateFromInquiryDialog\([\s\S]*?\n\}\n/)?.[0] ?? "";
+  assert.match(dialog, /copyFrom: startFrom === "copy" && source \? startFromInput\(source, ledgers\) : undefined/);
 });
 
 test("an empty estimate offers the same start, however it was created", async () => {
