@@ -449,12 +449,16 @@ function EstimateStartPanel({ workspace, busy, onCopy, onDismiss }: {
   const anyLedger = anyStartLedger(ledgers);
   return <Panel className="estimate-start-panel"
     title={copy("Estimate นี้ยังว่าง — เริ่มจาก Estimate เดิมที่คล้ายกันไหม?", "This estimate is empty — start from a similar previous one?", "この見積は空です — 類似の過去見積から始めますか？")}
-    subtitle={copy("เลือก Estimate ที่ทำไว้แล้ว ระบบจะคัดลอกอุปกรณ์ ค่าแรงแยกตามสาขา และค่าเดินทางเข้ามาให้แก้ต่อ", "Pick an earlier estimate to copy its equipment, labor by discipline and travel, then adjust them.", "既存の見積を選ぶと、機器・分野別工数・旅費をコピーして編集できます。")}
-    actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={onDismiss}>{copy("เริ่มเอง ไม่คัดลอก", "Start empty instead", "コピーせずに開始")}</button>}>
+    subtitle={copy("เลือก Estimate ที่ทำไว้แล้ว ระบบจะคัดลอกอุปกรณ์ ค่าแรงแยกตามสาขา และค่าเดินทางเข้ามาให้แก้ต่อ", "Pick an earlier estimate to copy its equipment, labor by discipline and travel, then adjust them.", "既存の見積を選ぶと、機器・分野別工数・旅費をコピーして編集できます。")}>
     <EstimateSourcePicker excludeId={workspace.header.id} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
-    <div className="modal-actions" style={{ marginTop: 12 }}>
+    {/* The two ways forward sit together, so not copying reads as a choice rather than a stray link. */}
+    <div className="row" style={{ marginTop: 12 }}>
       <button className="btn primary" type="button" disabled={busy || !source || !anyLedger} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: COST_CATEGORIES.map(([code]) => code), includeCostItems: ledgers.costItems, includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: true }); }}>
         <Icon name="copy" />{source ? copy(`คัดลอกจาก ${source.number}`, `Copy from ${source.number}`, `${source.number} からコピー`) : copy("เลือก Estimate ด้านบนก่อน", "Choose an estimate above", "上で見積を選択")}
+      </button>
+      <span className="muted">{copy("หรือ", "or", "または")}</span>
+      <button className="btn default" type="button" disabled={busy} onClick={onDismiss}>
+        <Icon name="edit" />{copy("ไม่คัดลอก — เริ่มกรอกเอง", "Don't copy — fill it in myself", "コピーせずに自分で入力")}
       </button>
     </div>
   </Panel>;
