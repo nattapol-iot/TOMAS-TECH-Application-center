@@ -266,6 +266,34 @@ tr.est-lab-total > td { border-top: 1px solid var(--line); border-bottom: 1px so
 .est-base-list li.total { border-top: 1px solid var(--line); border-bottom: 0; color: var(--ink); font-weight: 600; }
 .est-base-dot { width: 8px; height: 8px; flex: none; border-radius: 2px; }
 
+/* ---------- Summary: readiness bar and the ERP sheet ---------- */
+.est-erp-ready { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; padding: 10px 16px; font-size: var(--fs-sm); }
+.est-ready-item { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); }
+.est-ready-item .link-btn { font-size: var(--fs-xs); }
+.est-ready-item.ok .est-ready-icon { background: var(--green-soft); color: var(--green-text); }
+.est-ready-item.warn .est-ready-icon { background: var(--amber-soft); color: var(--amber-text); }
+.est-ready-item.err .est-ready-icon { background: var(--red-soft); color: var(--red-text); }
+.est-unsaved-dot { display: inline-flex; align-items: center; gap: 6px; color: var(--amber-text); font-weight: 600; }
+.est-unsaved-dot::before { content: ""; width: 8px; height: 8px; border-radius: var(--r-pill); background: var(--amber); }
+.est-erp-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.est-erp-panel > .panel-head { gap: 16px; }
+.est-erp-panel > .panel-head > .panel-actions { flex: 1; justify-content: flex-end; }
+.est-erp-panel > .panel-head > .panel-actions > .est-erp-tools { flex: 1; }
+.est-erp-tools .estimate-sheet-search { flex: 0 1 200px; min-width: 150px; }
+.est-erp-panel .cb-title { color: var(--ink); }
+.est-erp-panel tfoot td.cb-erp-col select { width: 100%; max-width: 178px; }
+.est-erp-tools .estimate-sheet-search input { padding: 6px 0; }
+.est-erp-panel .estimate-selection-bar { padding: 8px 16px; border-bottom: 1px solid var(--blue-line); }
+.est-erp-panel .cost-breakdown tr.cb-section td { background: var(--n-50); border-color: var(--line); }
+.est-erp-panel .cost-breakdown tbody tr.cb-section:hover td { background: var(--n-100); }
+.est-erp-panel .cost-breakdown tr.cb-section.unmapped td { background: var(--amber-soft); border-color: var(--amber-line); color: var(--amber-text); }
+.est-erp-panel .cost-breakdown tr.cb-section.unmapped .cb-title { color: var(--amber-text); }
+.est-erp-panel .cost-breakdown tr.cb-section .cb-toggle { color: var(--ink-soft); }
+.est-erp-panel .cb-section .icon { vertical-align: -2px; margin-right: 6px; }
+.est-lines-link { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--fs-2xs); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.est-lines-link:hover, .est-lines-link[aria-expanded="true"] { color: var(--blue-text); }
+select.est-unmapped { border-color: var(--amber-line); background-color: var(--amber-soft); color: var(--amber-text); }
+
 /* ---------- Revision history ---------- */
 .est-snapshot > summary { cursor: pointer; color: var(--blue-text); font-size: var(--fs-xs); }
 .est-snapshot pre { max-height: 320px; overflow: auto; margin: 8px 0 0; }

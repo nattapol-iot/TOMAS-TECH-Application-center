@@ -98,8 +98,9 @@ function SheetLineName({ value, onSave }: { value: string; onSave: (next: string
   </div>;
 }
 
-export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyChange }: {
+export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyChange, onOpenTab }: {
   onDirtyChange?: (dirty: boolean) => void;
+  onOpenTab?: (tab: "validation" | "assignment") => void;
   workspace: EstimateCostWorkspace;
   onChanged: (message: string) => Promise<void>;
   notify: (message: string) => void;
@@ -121,7 +122,6 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const [drafts, setDrafts] = useState<Record<string, DraftCategory>>({});
   const [search, setSearch] = useState("");
   const [unmappedOnly, setUnmappedOnly] = useState(false);
-  const [bulkCategory, setBulkCategory] = useState<DraftCategory | "">("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [editingRemark, setEditingRemark] = useState(false);
@@ -240,6 +240,10 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const unusedHeadings = ERP_COST_CATEGORIES.filter((category) => !headings.some((heading) => heading.category === category));
   const rowCount = headings.reduce((total, heading) => total + heading.rows.length, 0);
   const selectedRows = headings.flatMap((heading) => heading.rows).filter((row) => row.erpKeys.length > 0 && row.erpKeys.every((key) => selected.has(key)));
+  const selectableRows = headings.flatMap((heading) => heading.rows).filter((row) => row.erpKeys.length > 0);
+  const allSelected = selectableRows.length > 0 && selectableRows.every((row) => row.erpKeys.every((key) => selected.has(key)));
+  /* Contingency has no row, but approval still needs its category, so the foot of the sheet carries the choice. */
+  const contingencyLine = (summary?.lines ?? []).find((line) => line.sourceType === "Contingency" && Math.abs(line.amount) > 0.005) ?? null;
   /* One written line carries one category, so a merge only ever gathers rows that
      already sit under the same heading — the sheet must not move money between
      categories to tidy up a name. */
@@ -474,9 +478,8 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
             {merged ? <span className="badge blue">{copy("รวมเป็นบรรทัดเดียว", "One line", "1行")}</span> : null}
             {/* Where the money lives. The sheet classifies the line; it does not move it. */}
             <span className="cb-code">{row.source.categoryCode ? row.source.categoryCode + " " + row.source.title : row.source.title}</span>
-            <span>{row.lines.length} {copy("รายการ", "lines", "明細")}</span>
-            <button type="button" className="chip" aria-expanded={open} onClick={() => setOpened((current) => { const next = new Set(current); if (next.has(row.key)) next.delete(row.key); else next.add(row.key); return next; })}>
-              {open ? copy("ย่อ", "Hide", "閉じる") : copy("ดูรายการ", "Lines", "明細")}
+            <button type="button" className="est-lines-link" aria-expanded={open} title={open ? copy("ซ่อนรายการ", "Hide the lines", "明細を閉じる") : copy("ดูรายการ", "Show the lines", "明細を表示")} onClick={() => setOpened((current) => { const next = new Set(current); if (next.has(row.key)) next.delete(row.key); else next.add(row.key); return next; })}>
+              {row.lines.length} {copy("รายการ", "lines", "明細")}
             </button>
             {merged && !nameEditable ? <button type="button" className="chip" disabled={!canEdit} onClick={() => setMerge({ title: merged.title, group: merged, members: [] })}>{copy("เปลี่ยนชื่อ", "Rename", "名前を変更")}</button> : null}
             {merged ? <button type="button" className="chip" disabled={!canEdit} onClick={() => { void splitMerged(merged); }}>{copy("แยกกลับ", "Split back", "まとめを解除")}</button> : null}
@@ -494,7 +497,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
           }} /> : <><td className="num">{quantity(rowQuantity)}</td><td>{rowUnit}</td></>}
         <td className="num"><strong>{money(row.amount)}</strong></td>
         <td className="cb-erp-col"><div className="cb-module-controls">
-          <select disabled={!canEdit || !row.erpKeys.length} aria-label={"ERP category for " + title} value={heading.category} onChange={(event) => classify(row.erpKeys, event.target.value as DraftCategory)}>
+          <select disabled={!canEdit || !row.erpKeys.length} aria-label={"ERP category for " + title} className={heading.category === "Unmapped" ? "est-unmapped" : undefined} value={heading.category} onChange={(event) => classify(row.erpKeys, event.target.value as DraftCategory)}>
             <option value="Unmapped">{unmappedLabel}</option>
             {ERP_COST_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
@@ -526,7 +529,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     const empty = heading.rows.length === 0;
     const open = !folded.has(heading.key);
     return <tbody key={heading.key}>
-      <tr className={`cb-section${open ? " open" : ""}${dropTarget === heading.category ? " cost-drop-module" : ""}`} aria-expanded={open}
+      <tr className={`cb-section${open ? " open" : ""}${heading.category === "Unmapped" ? " unmapped" : ""}${dropTarget === heading.category ? " cost-drop-module" : ""}`} aria-expanded={open}
         onDragOver={(event) => allowDrop(event, heading.category)}
         onDrop={(event) => dropInto(event, heading.category)}>
         <td className="cb-num-col">
@@ -538,10 +541,10 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
           <strong>{heading.ordinal}</strong>
         </td>
         <td>
-          <strong className="cb-title">{heading.category === "Unmapped" ? unmappedLabel : heading.category}</strong>
+          {heading.category === "Unmapped" ? <Icon name="alertTriangle" /> : null}<strong className="cb-title">{heading.category === "Unmapped" ? unmappedLabel : heading.category} ({heading.rows.length})</strong>
           {empty ? <span className="muted small"> {copy("ลากรายการมาวางที่นี่", "Drag a line here", "ここに行をドラッグ")}</span> : null}
         </td>
-        <td colSpan={2} className="num muted">{heading.rows.length} <LocalizedText text="item" /></td>
+        <td colSpan={2} />
         <td className="num"><strong>{money(heading.amount)}</strong></td>
         <td className="cb-erp-col">
           {empty && addedHeadings.includes(heading.category)
@@ -566,13 +569,56 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     </span>
   </div> : null;
 
-  return <Panel title={copy("รายการต้นทุนตามหมวด", "Costs by category", "分類別原価")}
+  const errorCount = workspace.validationIssues.filter((issue) => issue.severity.trim().toLowerCase() === "error").length;
+  const warningCount = workspace.validationIssues.length - errorCount;
+  const unclassified = (summary?.lines ?? []).filter((line) => draftOf(line) === "Unmapped" && (line.sourceType !== "Contingency" || Math.abs(line.amount) > 0.005));
+  const unclassifiedLines = unclassified.filter((line) => line.sourceType !== "Contingency").length;
+  const unclassifiedContingency = unclassified.length > unclassifiedLines;
+  const assignedSections = workspace.assignments.filter((assignment) => assignment.ownerId > 0).length;
+  /* Everything that stands between this sheet and an approved, exportable estimate, on one line. */
+  const readiness = <section className="panel est-erp-ready" aria-label={copy("ความพร้อม", "Readiness", "準備状況")}>
+    <strong>{workspace.header.status === "Approved" ? copy("พร้อมส่งออก ERP", "Ready for the ERP file", "ERP出力の準備") : copy("ความพร้อมก่อนส่งตรวจ", "Before you submit", "提出前の確認")}</strong>
+    <span className={errorCount ? "est-ready-item err" : "est-ready-item ok"}><span className="est-ready-icon"><Icon name={errorCount ? "x" : "check"} /></span>{errorCount ? copy(`${errorCount} ข้อผิดพลาด`, `${errorCount} error(s)`, `エラー ${errorCount}件`) : copy("ไม่มีข้อผิดพลาด", "No errors", "エラーなし")}{errorCount && onOpenTab ? <button type="button" className="link-btn" onClick={() => onOpenTab("validation")}>{copy("ไปแก้", "Fix", "修正")}</button> : null}</span>
+    {warningCount ? <span className="est-ready-item warn"><span className="est-ready-icon"><Icon name="alertTriangle" /></span>{copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告 ${warningCount}件`)}{onOpenTab ? <button type="button" className="link-btn" onClick={() => onOpenTab("validation")}>{copy("ดู", "View", "表示")}</button> : null}</span> : null}
+    {summary ? <span className={unclassified.length ? "est-ready-item warn" : "est-ready-item ok"}><span className="est-ready-icon"><Icon name={unclassified.length ? "alertTriangle" : "check"} /></span>{!unclassified.length ? copy("จัดหมวด ERP ครบ", "Every line has an ERP category", "ERP分類は完了")
+      : unclassifiedLines && unclassifiedContingency ? copy(`${unclassifiedLines} รายการและ Contingency ยังไม่จัดหมวด`, `${unclassifiedLines} line(s) and the contingency are unclassified`, `${unclassifiedLines}件と予備費が未分類`)
+        : unclassifiedContingency ? copy("Contingency ยังไม่จัดหมวด", "The contingency is unclassified", "予備費が未分類")
+          : copy(`${unclassifiedLines} รายการยังไม่จัดหมวด`, `${unclassifiedLines} line(s) unclassified`, `未分類 ${unclassifiedLines}件`)}</span> : null}
+    {workspace.assignments.length ? <span className={assignedSections === workspace.assignments.length ? "est-ready-item ok" : "est-ready-item warn"}><span className="est-ready-icon"><Icon name={assignedSections === workspace.assignments.length ? "check" : "clock"} /></span>{copy(`ส่วนงาน ${assignedSections}/${workspace.assignments.length} มีผู้รับผิดชอบ`, `Sections assigned ${assignedSections}/${workspace.assignments.length}`, `担当割当 ${assignedSections}/${workspace.assignments.length}`)}{assignedSections < workspace.assignments.length && onOpenTab ? <button type="button" className="link-btn" onClick={() => onOpenTab("assignment")}>{copy("ดู", "View", "表示")}</button> : null}</span> : null}
+    <span className="spacer" />
+    {unsaved.length ? <>
+      <span className="est-unsaved-dot">{copy(`จัดหมวดยังไม่บันทึก (${unsaved.length})`, `Classification not saved (${unsaved.length})`, `分類未保存 (${unsaved.length})`)}</span>
+      <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { if (summary) setDrafts(Object.fromEntries(summary.lines.map((line) => [erpKey(line), line.erpCategory]))); }}>{copy("ยกเลิกที่แก้ไข", "Discard", "変更を破棄")}</button>
+      <button className="btn primary sm" type="button" disabled={busy} onClick={() => { void saveClassification(); }}><Icon name="check" />{copy("บันทึกการจัดหมวด", "Save the classification", "分類を保存")}</button>
+    </> : null}
+  </section>;
+
+  return <>{readiness}<Panel className="est-erp-panel" title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")}
     subtitle={copy(
-      `${headings.length} หมวด · ${rowCount} รายการ · เลือกหมวดให้รายการ แล้วบันทึก`,
-      `${headings.length} categories · ${rowCount} lines · choose categories, then save`,
-      `${headings.length}分類 · ${rowCount}行 · 分類を選択して保存`)} flush>
+      `ใช้สร้างไฟล์ ERP หลังอนุมัติ · ${headings.length} หมวด · ${rowCount} รายการ`,
+      `Builds the ERP file after approval · ${headings.length} categories · ${rowCount} lines`,
+      `承認後にERPファイルを作成 · ${headings.length}分類 · ${rowCount}行`)} actions={headings.length ? <>
+    <div className="est-erp-tools">
+      <label className="estimate-sheet-search"><Icon name="search" /><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={copy("ค้นหารายการ / Module", "Search items / modules", "明細・モジュールを検索")} aria-label={copy("ค้นหารายการ", "Search items", "明細を検索")} /></label>
+      <button className="chip" type="button" aria-pressed={unmappedOnly} onClick={() => setUnmappedOnly(value => !value)}>{copy("ยังไม่จัดหมวด", "Unclassified", "未分類")} {(summary?.lines ?? []).filter(line => draftOf(line) === "Unmapped").length}</button>
+      {canEdit && unusedHeadings.length ? <label className="select-field">
+          <span className="sr-only">{copy("เพิ่มหัวข้อ", "Add a heading", "見出しを追加")}</span>
+          <select value="" aria-label={copy("เพิ่มหัวข้อ", "Add a heading", "見出しを追加")} onChange={(event) => { if (event.target.value) setAddedHeadings((current) => [...current, event.target.value]); }}>
+            <option value="">＋ {copy("เพิ่มหัวข้อ", "Add a heading", "見出しを追加")}</option>
+            {unusedHeadings.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select><Icon name="chevronDown" />
+        </label> : null}
+      <button className="chip" type="button" disabled={!headings.length}
+          onClick={() => setFolded((current) => current.size ? new Set() : new Set(headings.map((heading) => heading.key)))}>
+          <Icon name={folded.size ? "chevronDown" : "chevronRight"} />{folded.size ? copy("ขยายทุกหัวข้อ", "Expand all", "すべて開く") : copy("ย่อทุกหัวข้อ", "Collapse all", "すべて閉じる")}
+        </button>
+      <button className="btn default sm" type="button" title={unsaved.length ? copy("บันทึกการจัดหมวดก่อน Export", "Save the classification before exporting", "出力前に分類を保存してください") : workspace.header.status !== "Approved" ? copy("Export ได้เมื่อ Estimate อนุมัติแล้ว", "Export once the estimate is approved", "見積承認後に出力できます") : undefined} disabled={busy || unsaved.length > 0 || workspace.header.status !== "Approved" || !summary?.capabilities.canExport || !approvedOverhead} onClick={() => { void exportWorkbook(); }}>
+        <Icon name="download" />{copy("Export ไป ERP", "Export Estimate cost to ERP", "Estimate cost を ERP へ出力")}
+      </button>
+    </div>
+    </> : undefined} flush>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span><button className="btn ghost" type="button" onClick={() => { void load(); }}><LocalizedText text={"Try again"} /></button></div> : null}
-    {!unsaved.length && (summary?.unmapped.lineCount || !summary?.reconciled) ? reconciliation : null}
+    {!unsaved.length && summary && !summary.reconciled ? reconciliation : null}
 
     {loading && !summary ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading the ERP sheet…"} /></div> : null}
 
@@ -591,45 +637,25 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     </div> : null}
 
     {headings.length ? <>
-      <div className="toolbar estimate-sheet-tools">
-        <label className="estimate-sheet-search"><Icon name="search" /><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={copy("ค้นหารายการ / Module", "Search items / modules", "明細・モジュールを検索")} aria-label={copy("ค้นหารายการ", "Search items", "明細を検索")} /></label>
-        <button className="chip" type="button" aria-pressed={unmappedOnly} onClick={() => setUnmappedOnly(value => !value)}>{copy("ยังไม่จัดหมวด", "Unclassified", "未分類")} {(summary?.lines ?? []).filter(line => draftOf(line) === "Unmapped").length}</button>
-        {canEdit && unusedHeadings.length ? <label className="select-field">
-          <span className="sr-only">{copy("เพิ่มหัวข้อ", "Add a heading", "見出しを追加")}</span>
-          <select value="" aria-label={copy("เพิ่มหัวข้อ", "Add a heading", "見出しを追加")} onChange={(event) => { if (event.target.value) setAddedHeadings((current) => [...current, event.target.value]); }}>
-            <option value="">＋ {copy("เพิ่มหัวข้อ", "Add a heading", "見出しを追加")}</option>
-            {unusedHeadings.map((category) => <option key={category} value={category}>{category}</option>)}
-          </select><Icon name="chevronDown" />
-        </label> : null}
-        <button className="chip" type="button" disabled={!headings.length}
-          onClick={() => setFolded((current) => current.size ? new Set() : new Set(headings.map((heading) => heading.key)))}>
-          <Icon name={folded.size ? "chevronDown" : "chevronRight"} />{folded.size ? copy("ขยายทุกหัวข้อ", "Expand all", "すべて開く") : copy("ย่อทุกหัวข้อ", "Collapse all", "すべて閉じる")}
-        </button>
-        {selected.size > 0 ? <button className="btn default" type="button" disabled={!canEdit || !mergeable}
+      {selected.size > 0 ? <div className="toolbar estimate-selection-bar">
+        <strong>{copy(`เลือก ${selectedRows.length} รายการ`, `${selectedRows.length} rows selected`, `${selectedRows.length}行を選択`)}</strong>
+        <select aria-label={copy("ย้ายไปหมวด", "Move to category", "分類を移動")} value="" disabled={!canEdit} onChange={(event) => {
+          const bulkCategory = event.target.value as DraftCategory | "";
+          if (bulkCategory) { classify([...selected], bulkCategory); setSelected(new Set()); }
+        }}><option value="">{copy("ย้ายไปหมวด", "Move to category", "分類を移動")}</option><option value="Unmapped">{unmappedLabel}</option>{ERP_COST_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
+        <button className="btn default sm" type="button" disabled={!canEdit || !mergeable}
           title={copy("เขียนบรรทัดที่เลือกเป็นบรรทัดเดียวบนใบ ERP — ต้นทุนแต่ละรายการไม่เปลี่ยน", "Write the selected lines as one line on the sheet — no cost changes", "選択行をシート上で1行にまとめます — 原価は変わりません")}
           onClick={() => setMerge({ title: selectedRows[0]?.title ?? "", group: null, members: selectedRows.flatMap((row) => row.erpKeys).map((key) => ({ sourceType: key.slice(0, key.lastIndexOf(":")) as EstimateErpSourceType, sourceId: Number(key.slice(key.lastIndexOf(":") + 1)) })) })}>
-          <Icon name="layers" />{copy("เขียนรวมเป็นบรรทัดเดียว", "Write as one line", "1行にまとめる")}
-        </button> : null}
-        {selected.size ? <button className="btn ghost" type="button" onClick={() => setSelected(new Set())}>{copy("ล้างการเลือก", "Clear selection", "選択解除")}</button> : null}
+          <Icon name="layers" />{copy("รวมเป็นบรรทัดเดียว", "Write as one line", "1行にまとめる")}
+        </button>
+        {unsaved.length ? <span className="muted small">{copy("บันทึกการจัดหมวดก่อนรวม", "Save the classification before merging", "まとめる前に分類を保存")}</span> : null}
         <span className="spacer" />
-        {unsaved.length ? <>
-          <span className="muted small">{copy(`แก้หมวดไว้ ${unsaved.length} รายการ ยังไม่บันทึก`, `${unsaved.length} line(s) reclassified, not saved`, `未保存 ${unsaved.length}件`)}</span>
-          <button className="btn ghost" type="button" disabled={busy} onClick={() => { if (summary) setDrafts(Object.fromEntries(summary.lines.map((line) => [erpKey(line), line.erpCategory]))); }}>{copy("ยกเลิกที่แก้ไข", "Discard", "変更を破棄")}</button>
-          <button className="btn primary" type="button" disabled={busy} onClick={() => { void saveClassification(); }}><Icon name="check" />{copy("บันทึกการจัดหมวด", "Save the classification", "分類を保存")}</button>
-        </> : <button className="btn primary" type="button" disabled={busy || workspace.header.status !== "Approved" || !summary?.capabilities.canExport || !approvedOverhead} onClick={() => { void exportWorkbook(); }}>
-          <Icon name="download" />{copy("Export Estimate cost to ERP", "Export Estimate cost to ERP", "Estimate cost を ERP へ出力")}
-        </button>}
-      </div>
-
-      {selected.size > 0 ? <div className="toolbar estimate-selection-bar">
-        <strong>{copy(`เลือก ${selectedRows.length} บรรทัด`, `${selectedRows.length} rows selected`, `${selectedRows.length}行を選択`)}</strong>
-        <select aria-label={copy("ย้ายไปหมวด", "Move to category", "分類を移動")} value={bulkCategory} disabled={!canEdit} onChange={event => setBulkCategory(event.target.value as DraftCategory | "")}><option value="">{copy("ย้ายไปหมวด", "Move to category", "分類を移動")}</option><option value="Unmapped">{unmappedLabel}</option>{ERP_COST_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
-        <button type="button" className="btn primary sm" disabled={!canEdit || !bulkCategory} onClick={() => { if (bulkCategory) { classify([...selected], bulkCategory); setSelected(new Set()); setBulkCategory(""); } }}>{copy("นำไปใช้", "Apply", "適用")}</button>
+        <button className="link-btn" type="button" onClick={() => setSelected(new Set())}>{copy("ยกเลิกเลือก", "Clear selection", "選択解除")}</button>
       </div> : null}
       {search.trim() || unmappedOnly ? <p className="muted small" style={{ padding: "0 16px" }}>{copy("กำลังกรองรายการ · ยอดรวมยังแสดงต้นทุนทั้งหมด", "Filtered view · totals still include all costs", "絞り込み中 · 合計は全原価を含みます")}</p> : null}
       <div className="table-wrap"><table className="cost-breakdown erp-lines estimate-summary-sheet">
         <thead><tr>
-          <th className="cb-num-col">#</th>
+          <th className="cb-num-col">{canEdit && selectableRows.length ? <input type="checkbox" className="cb-check" checked={allSelected} aria-label={copy("เลือกทั้งหมด", "Select all", "すべて選択")} onChange={(event) => setSelected(event.target.checked ? new Set(selectableRows.flatMap((row) => row.erpKeys)) : new Set())} /> : null}#</th>
           <th><LocalizedText text={"Description"} /></th>
           <th className="num cb-qty-col"><LocalizedText text={"Qty"} /></th>
           <th className="cb-unit-col"><LocalizedText text={"Unit"} /></th>
@@ -641,7 +667,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
         {!hasVisibleRows && (search.trim() || unmappedOnly) ? <tbody><tr><td colSpan={6} className="muted">{copy("ไม่พบรายการตามตัวกรอง ลองเปลี่ยนคำค้นหรือปิดตัวกรอง", "No matching items. Change your search or clear the filter.", "一致する明細がありません。検索条件を変更してください。")}</td></tr></tbody> : null}
         <tfoot>
           <tr className="cb-foot"><td colSpan={4} className="num">{copy("รวมก่อนเงินเผื่อสำรอง", "Subtotal", "小計")}</td><td className="num">{money(Number(totals.subtotal))}</td><td /></tr>
-          <tr className="cb-foot"><td colSpan={4} className="num"><LocalizedText text={"Contingency"} /> {quantity(Number(contingencyRate))}%</td><td className="num">{money(Number(totals.contingency))}</td><td /></tr>
+          <tr className="cb-foot"><td colSpan={4} className="num"><LocalizedText text={"Contingency"} /> {quantity(Number(contingencyRate))}%</td><td className="num">{money(Number(totals.contingency))}</td><td className="cb-erp-col">{contingencyLine ? <select disabled={!canEdit} aria-label={copy("หมวด ERP ของ Contingency", "ERP category for the contingency", "予備費のERP分類")} className={draftOf(contingencyLine) === "Unmapped" ? "est-unmapped" : undefined} value={draftOf(contingencyLine)} onChange={(event) => classify([erpKey(contingencyLine)], event.target.value as DraftCategory)}><option value="Unmapped">{unmappedLabel}</option>{ERP_COST_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}</td></tr>
           <tr className="cb-total"><td colSpan={4} className="num"><LocalizedText text={"Total estimated cost"} /></td><td className="num"><strong>{money(Number(totals.total))}</strong></td><td /></tr>
         </tfoot>
       </table></div>
@@ -666,7 +692,6 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
       onSaved={async () => { setEditingRemark(false); await onChanged(copy("บันทึกหมายเหตุแล้ว", "Remark saved", "備考を保存しました")); await load(); }} /> : null}
 
     {!approvedOverhead ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("ต้องกำหนดและอนุมัติ Overhead ก่อนส่งออกไฟล์ ERP", "Set and approve Overhead before exporting the ERP file.", "ERP出力前に間接費を設定・承認してください。")}</span></div> : null}
-    {workspace.header.status !== "Approved" ? <div className="info-strip"><Icon name="alertTriangle" /><span>{copy("ส่งออกไฟล์ได้เมื่อ Estimate อนุมัติแล้ว — ระหว่างนี้จัดหมวดและรวมบรรทัดไว้ก่อนได้", "The file can be exported once the estimate is approved — classify and merge in the meantime.", "見積承認後に出力できます。それまでに分類とまとめを進められます。")}</span></div> : null}
 
     {merge ? <Modal size="sm"
       title={merge.group ? copy("เปลี่ยนชื่อบรรทัด", "Rename the line", "行の名前") : copy("เขียนรวมเป็นบรรทัดเดียว", "Write as one line", "1行にまとめる")}
@@ -683,5 +708,5 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
         <button className="btn primary" type="button" disabled={busy || !merge.title.trim()} onClick={() => { void saveMerge(); }}><Icon name="check" />{merge.group ? <LocalizedText text={"Save"} /> : copy("รวมรายการ", "Merge", "まとめる")}</button>
       </div>
     </Modal> : null}
-  </Panel>;
+  </Panel></>;
 }

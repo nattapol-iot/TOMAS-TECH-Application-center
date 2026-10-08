@@ -950,7 +950,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       { id: "revision", label: copy("Revision", "Revision history", "改訂履歴") },
     ]} />
 
-    <div hidden={tab !== "summary"}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} />
+    <div hidden={tab !== "summary"}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} onOpenTab={setTab} />
     </div>
     {tab === "summary" ? <>
       {header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
