@@ -7,7 +7,7 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, optionalBodyText, optionalPositiveLong, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { MATERIAL_CATEGORY_CODES, remainingToRequest } from "../procurement-rules.js";
+import { MATERIAL_CATEGORY_CODES, NO_MODULE, remainingToRequest, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -57,36 +57,41 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT b.bom_no,b.revision,b.status,b.project_id,p.project_no,p.name project_name,b.estimate_id,
       e.estimate_no,e.revision estimate_revision,b.row_version,t.material_total FROM dbo.boms b INNER JOIN dbo.projects p ON p.id=b.project_id
       INNER JOIN dbo.estimates e ON e.id=b.estimate_id LEFT JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE b.id=@id AND b.deleted_at IS NULL;
-      SELECT l.id,l.section_code,l.item_id,i.item_code,i.part_no,l.description,i.brand,l.qty_required,l.unit,l.est_unit_cost,l.customer_supplied_qty,l.non_stock,
-        l.estimate_line_id,ci.item_code estimate_item_code,l.owner_id,u.name owner_name,l.sort_order,l.row_version,
+      SELECT l.id,l.section_code,l.item_id,COALESCE(i.item_code,ci.item_code,N'') item_code,COALESCE(i.part_no,N'') part_no,l.description,COALESCE(i.brand,N'') brand,l.qty_required,l.unit,l.est_unit_cost,l.customer_supplied_qty,l.non_stock,
+        l.estimate_line_id,ci.item_code estimate_item_code,COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none) module,l.owner_id,u.name owner_name,l.sort_order,l.row_version,
         COALESCE(vb.usable,0) usable,COALESCE(vb.reserved,0) reserved,COALESCE(vb.available,0) available,COALESCE(vb.quarantine,0) quarantine,
         COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WHERE r.bom_line_id=l.id AND r.status IN(N'Active',N'Consumed')),0) allocated,
         COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WHERE r.bom_line_id=l.id AND r.status=N'Active'),0) active_reserved,
-        COALESCE((SELECT SUM(CASE WHEN pol.qty>COALESCE(gr.received_qty,0) THEN pol.qty-COALESCE(gr.received_qty,0) ELSE 0 END)
-          FROM dbo.mat_po_lines pol INNER JOIN dbo.mat_pos po ON po.id=pol.po_id AND po.deleted_at IS NULL AND po.status IN(N'Ordered',N'Partially Received')
-          OUTER APPLY(SELECT SUM(gl.received_qty) received_qty FROM dbo.grn_lines gl INNER JOIN dbo.grns g ON g.id=gl.grn_id AND g.status=N'Confirmed' WHERE gl.po_line_id=pol.id) gr
-          WHERE pol.bom_line_id=l.id),0) on_order,
-        COALESCE((SELECT SUM(prl.qty) FROM dbo.mat_pr_lines prl INNER JOIN dbo.mat_prs pr ON pr.id=prl.pr_id AND pr.deleted_at IS NULL
-          AND pr.status IN(N'Draft',N'In Approval',N'Approved') WHERE prl.bom_line_id=l.id),0) on_open_pr,
+        COALESCE((SELECT SUM(prl.covered_qty) FROM dbo.mat_pr_lines prl INNER JOIN dbo.mat_prs pr ON pr.id=prl.pr_id AND pr.deleted_at IS NULL
+          AND pr.status IN(${REQUESTING_PR_STATUSES}) WHERE prl.bom_line_id=l.id),0) requested,
         COALESCE((SELECT SUM(ml.issued_qty-ml.returned_qty) FROM dbo.mir_lines ml INNER JOIN dbo.mirs m ON m.id=ml.mir_id
-          AND m.status IN(N'Issued',N'Received',N'Completed') WHERE ml.bom_line_id=l.id),0) net_issued
+          AND m.status IN(N'Issued',N'Received') WHERE ml.bom_line_id=l.id),0) net_issued
       FROM dbo.bom_lines l LEFT JOIN dbo.mat_items i ON i.id=l.item_id LEFT JOIN dbo.v_item_balances vb ON vb.item_id=l.item_id
       LEFT JOIN dbo.cost_items ci ON ci.id=l.estimate_line_id INNER JOIN dbo.users u ON u.id=l.owner_id
-      WHERE l.bom_id=@id AND l.deleted_at IS NULL AND ${MATERIAL_LINE} ORDER BY l.section_code,l.sort_order,l.id;`, (r) => r.input("id", sql.BigInt, id));
+      WHERE l.bom_id=@id AND l.deleted_at IS NULL AND ${MATERIAL_LINE} ORDER BY l.section_code,l.sort_order,l.id;
+      SELECT l.budget_module module,SUM(l.line_total) requested FROM dbo.mat_pr_lines l
+        INNER JOIN dbo.mat_prs pr ON pr.id=l.pr_id AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) WHERE l.bom_id=@id GROUP BY l.budget_module;`, (r) => {
+      r.input("id", sql.BigInt, id); r.input("none", sql.NVarChar(200), NO_MODULE); });
     const h = result.recordsets[0]?.[0] as (Record<string, unknown> & { row_version: Buffer }) | undefined; if (!h) throw new ApiError(404, "bom_not_found", "BOM not found.");
     const lines = (result.recordsets[1] ?? []).map((raw) => { const row = raw as Record<string, unknown> & { row_version: Buffer }; const required = Number(row.qty_required);
       const customer = Number(row.customer_supplied_qty); const nonStock = Boolean(row.non_stock); const allocated = Number(row.allocated);
-      const active = Number(row.active_reserved); const onOrder = Number(row.on_order); const onOpenPr = Number(row.on_open_pr); const issued = Number(row.net_issued);
-      const purchaseRequired = remainingToRequest({ required, customerSupplied: customer, allocated, activeReserved: active, netIssued: issued, onOrder, onOpenPr });
-      return { id: Number(row.id), sectionCode: row.section_code, itemId: row.item_id === null ? null : Number(row.item_id), itemCode: row.item_code,
+      const active = Number(row.active_reserved); const requested = Number(row.requested); const issued = Number(row.net_issued);
+      const purchaseRequired = remainingToRequest({ required, customerSupplied: customer, allocated, activeReserved: active, netIssued: issued, requested });
+      return { id: Number(row.id), sectionCode: row.section_code, module: String(row.module), itemId: row.item_id === null ? null : Number(row.item_id), itemCode: row.item_code,
         partNumber: row.part_no, description: row.description, brand: row.brand, quantityRequired: required, unit: row.unit, estimatedUnitCost: Number(row.est_unit_cost),
         customerSuppliedQuantity: customer, nonStock, estimateLineId: row.estimate_line_id === null ? null : Number(row.estimate_line_id), estimateItemCode: row.estimate_item_code,
         ownerId: Number(row.owner_id), ownerName: row.owner_name, sortOrder: Number(row.sort_order), rowVersion: row.row_version.toString("base64"),
         onHand: Number(row.usable) + Number(row.quarantine), reserved: Number(row.reserved), available: Number(row.available), allocated, activeReserved: active,
-        onOrder, onOpenPr, netIssued: issued, purchaseRequired, budget: required * Number(row.est_unit_cost) }; });
+        requested, netIssued: issued, purchaseRequired, budget: required * Number(row.est_unit_cost) }; });
+    // Each module's estimate budget and what live PRs already spend in it, substitutes and unplanned items included.
+    const modules = new Map<string, { module: string; budget: number; requested: number }>();
+    for (const line of lines) { const entry = modules.get(line.module) ?? { module: line.module, budget: 0, requested: 0 }; entry.budget += line.budget; modules.set(line.module, entry); }
+    for (const raw of result.recordsets[2] ?? []) { const row = raw as unknown as { module: string; requested: number | string };
+      const entry = modules.get(row.module) ?? { module: row.module, budget: 0, requested: 0 }; entry.requested += Number(row.requested); modules.set(row.module, entry); }
     return { bom: { id, number: h.bom_no, revision: Number(h.revision), status: h.status, projectId: Number(h.project_id), projectNumber: h.project_no,
       projectName: h.project_name, estimateId: Number(h.estimate_id), estimateNumber: h.estimate_no, estimateRevision: Number(h.estimate_revision),
-      rowVersion: h.row_version.toString("base64"), approvedMaterialBudget: Number(h.material_total ?? 0) }, lines };
+      rowVersion: h.row_version.toString("base64"), approvedMaterialBudget: Number(h.material_total ?? 0) }, lines,
+      modules: [...modules.values()].sort((a, b) => a.module.localeCompare(b.module)) };
   });
 
   app.post("/api/v1/boms", async (request, reply) => {

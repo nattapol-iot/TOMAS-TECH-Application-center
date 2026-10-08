@@ -739,4 +739,8 @@ GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.monitor_logs TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_incidents TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.monitor_commands TO [iot_team_app_role];
 GO
+
+-- database/migrations/074_flexible_purchase_requisition_lines.sql
+GRANT UPDATE (supplier_id) ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

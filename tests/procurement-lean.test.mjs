@@ -7,15 +7,25 @@ const material = read("app/system/production/MaterialScreens.tsx");
 const shell = read("app/system/ProductionApp.tsx");
 const boms = read("backend-node/src/routes/boms.ts");
 const requisitions = read("backend-node/src/routes/purchase-requisitions.ts");
-const planner = material.slice(material.indexOf("function CreatePrModal"), material.indexOf("function ConvertPrModal"));
+const editor = read("app/system/production/PurchaseRequestEditor.tsx");
+const sheet = read("lib/pr-spreadsheet.ts");
 
-test("the PR planner reserves no stock here, preselects no supplier and labels the estimate price honestly", () => {
+test("the PR sheet reserves no stock here, asks no supplier of the engineer and labels the estimate price honestly", () => {
   // Stock is kept in the company ERP; reserving here was a separate request per line made before the PR, and a failed PR left them behind.
-  assert.doesNotMatch(planner, /\/reservations/);
-  assert.match(planner, /supplierId: 0, unitPrice: Math\.max\(0, group\.estimatedUnitCost\), priceSource: "Estimate"/);
-  assert.doesNotMatch(planner, /bootstrap\.suppliers\[0\]/);
-  assert.match(planner, /missingSupplier > 0/);
+  assert.doesNotMatch(editor, /\/reservations/);
+  assert.doesNotMatch(editor, /suppliers/);
+  assert.match(sheet, /lineType: "Planned", bomLineId: row\.bomLineId, quantity: row\.quantity, unitPrice: row\.unitPrice, priceSource: "Estimate"/);
   assert.match(requisitions, /const priceSources = \["Estimate", /);
+  assert.match(material, /setCreating\(true\)/);
+  assert.doesNotMatch(material, /function CreatePrModal|function ConvertPrModal/);
+});
+
+test("Purchasing chooses suppliers for many lines at once and records the ERP order; nothing is ordered in this app", () => {
+  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/suppliers`, \{ method: "PUT"/);
+  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{item\.id\}\/erp-order/);
+  assert.doesNotMatch(material, /\/convert`/);
+  assert.doesNotMatch(requisitions, /purchase-requisitions\/:id\/convert|INSERT INTO dbo\.mat_pos/);
+  assert.match(requisitions, /current\.name === PURCHASING_REVIEW_STEP/);
 });
 
 test("a BOM line without an inventory item can still be requested", () => {

@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `7c72bae7`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `4f8fcb97`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -78,5 +78,7 @@ Evidence: repository migrations at `7c72bae7`. Highest file number is not proof 
 | [070_estimate_labor_discipline.sql](<../../database/migrations/070_estimate_labor_discipline.sql>) | Inspect migration SQL |
 | [071_work_priorities.sql](<../../database/migrations/071_work_priorities.sql>) | `dbo.work_priorities` |
 | [072_site_monitor.sql](<../../database/migrations/072_site_monitor.sql>) | `dbo.monitor_sites`, `dbo.monitor_site_contacts`, `dbo.monitor_agents`, `dbo.monitor_programs`, `dbo.monitor_logs`, `dbo.monitor_incidents`, `dbo.monitor_commands` |
+| [073_estimate_section_effort.sql](<../../database/migrations/073_estimate_section_effort.sql>) | Inspect migration SQL |
+| [074_flexible_purchase_requisition_lines.sql](<../../database/migrations/074_flexible_purchase_requisition_lines.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

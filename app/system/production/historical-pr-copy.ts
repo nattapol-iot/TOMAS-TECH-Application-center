@@ -563,5 +563,280 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "ความเห็น / หมายเหตุ",
     "en": "Comment / note",
     "jp": "コメント／メモ"
+  },
+  "กลับไปรายการ PR": {
+    "th": "กลับไปรายการ PR",
+    "en": "Back to PR list",
+    "jp": "購買申請一覧へ戻る"
+  },
+  "ซื้อทั้งหมดที่เหลือ": {
+    "th": "ซื้อทั้งหมดที่เหลือ",
+    "en": "Buy everything still needed",
+    "jp": "残り全てを購入"
+  },
+  "ไม่เลือกเลย": {
+    "th": "ไม่เลือกเลย",
+    "en": "Select none",
+    "jp": "選択解除"
+  },
+  "ดาวน์โหลด Excel": {
+    "th": "ดาวน์โหลด Excel",
+    "en": "Download Excel",
+    "jp": "Excelをダウンロード"
+  },
+  "งบ Estimate": {
+    "th": "งบ Estimate",
+    "en": "Estimate budget",
+    "jp": "見積予算"
+  },
+  "PR ก่อนหน้า": {
+    "th": "PR ก่อนหน้า",
+    "en": "Earlier PRs",
+    "jp": "先行の購買申請"
+  },
+  "PR นี้": {
+    "th": "PR นี้",
+    "en": "This PR",
+    "jp": "この購買申請"
+  },
+  "คงเหลือหลัง PR นี้": {
+    "th": "คงเหลือหลัง PR นี้",
+    "en": "Left after this PR",
+    "jp": "この申請後の残額"
+  },
+  "แทน": {
+    "th": "แทน",
+    "en": "Replaces",
+    "jp": "代替対象"
+  },
+  "เปลี่ยนรุ่น": {
+    "th": "เปลี่ยนรุ่น",
+    "en": "Use another item",
+    "jp": "別品目に変更"
+  },
+  "ใช้ตาม Estimate": {
+    "th": "ใช้ตาม Estimate",
+    "en": "Back to estimate item",
+    "jp": "見積品目に戻す"
+  },
+  "รายการที่ซื้อ": {
+    "th": "รายการที่ซื้อ",
+    "en": "Lines to buy",
+    "jp": "購入明細"
+  },
+  "ต้องแก้ก่อนส่ง": {
+    "th": "ต้องแก้ก่อนส่ง",
+    "en": "To fix before sending",
+    "jp": "送信前に修正"
+  },
+  "แถวที่มีข้อความสีแดง": {
+    "th": "แถวที่มีข้อความสีแดง",
+    "en": "Rows with a red note",
+    "jp": "赤字のある行"
+  },
+  "แล้วฝ่ายจัดซื้อเลือก Supplier": {
+    "th": "แล้วฝ่ายจัดซื้อเลือก Supplier",
+    "en": "then Purchasing chooses suppliers",
+    "jp": "その後購買が仕入先を選定"
+  },
+  "ยอดขอซื้อ": {
+    "th": "ยอดขอซื้อ",
+    "en": "Requested value",
+    "jp": "申請金額"
+  },
+  "ไม่พบตารางรายการในไฟล์ (ต้องมีหัวคอลัมน์ Description หรือ Part No. และ Qty หรือเป็นฟอร์ม TOMAS PR)": {
+    "th": "ไม่พบตารางรายการในไฟล์ (ต้องมีหัวคอลัมน์ Description หรือ Part No. และ Qty หรือเป็นฟอร์ม TOMAS PR)",
+    "en": "No item table found in the file (it needs a Description or Part No. column and a Qty column, or the TOMAS PR form)",
+    "jp": "ファイルに明細表がありません（Description または Part No. と Qty の列、または TOMAS PR 様式が必要です）"
+  },
+  "นำเข้าแล้ว": {
+    "th": "นำเข้าแล้ว",
+    "en": "Imported",
+    "jp": "取込済み"
+  },
+  "ข้ามแถวที่ไม่มีจำนวน": {
+    "th": "ข้ามแถวที่ไม่มีจำนวน",
+    "en": "rows without a quantity skipped",
+    "jp": "数量のない行をスキップ"
+  },
+  "ซื้อรายการนี้": {
+    "th": "ซื้อรายการนี้",
+    "en": "Buy this line",
+    "jp": "この明細を購入"
+  },
+  "ขอซื้อ (PR)": {
+    "th": "ขอซื้อ (PR)",
+    "en": "Purchase request (PR)",
+    "jp": "購買申請（PR）"
+  },
+  "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · Supplier ให้ฝ่ายจัดซื้อเลือก": {
+    "th": "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · Supplier ให้ฝ่ายจัดซื้อเลือก",
+    "en": "Starts from what the BOM still needs. Swap an item or add one the estimate missed; within the module budget no extra approval is needed · Purchasing chooses suppliers",
+    "jp": "BOMの未申請分から開始。品目の変更や見積外品目の追加が可能で、モジュール予算内なら追加承認は不要・仕入先は購買が選定"
+  },
+  "ค้นหา รหัส / Part No. / รายละเอียด / ยี่ห้อ": {
+    "th": "ค้นหา รหัส / Part No. / รายละเอียด / ยี่ห้อ",
+    "en": "Search code / Part No. / description / brand",
+    "jp": "コード／品番／品名／メーカーで検索"
+  },
+  "งบตาม Module": {
+    "th": "งบตาม Module",
+    "en": "Budget by module",
+    "jp": "モジュール別予算"
+  },
+  "BOM นี้ขอซื้อครบแล้ว": {
+    "th": "BOM นี้ขอซื้อครบแล้ว",
+    "en": "Everything on this BOM is requested",
+    "jp": "このBOMは全て申請済み"
+  },
+  "ใช้ 'เพิ่มรายการนอกแผน' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม": {
+    "th": "ใช้ 'เพิ่มรายการนอกแผน' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม",
+    "en": "Use 'Add unplanned item' or import Excel to buy more",
+    "jp": "追加購入は「見積外品目を追加」またはExcel取込で"
+  },
+  "ตรงแผน": {
+    "th": "ตรงแผน",
+    "en": "Planned",
+    "jp": "計画通り"
+  },
+  "ทดแทน": {
+    "th": "ทดแทน",
+    "en": "Substitute",
+    "jp": "代替品"
+  },
+  "นอกแผน": {
+    "th": "นอกแผน",
+    "en": "Unplanned",
+    "jp": "計画外"
+  },
+  "อยู่ในงบ": {
+    "th": "อยู่ในงบ",
+    "en": "Within budget",
+    "jp": "予算内"
+  },
+  "เกินงบไม่เกิน 10% · PM อนุมัติ": {
+    "th": "เกินงบไม่เกิน 10% · PM อนุมัติ",
+    "en": "Over budget up to 10% · PM approves",
+    "jp": "予算超過10%以内・PMが承認"
+  },
+  "เกินงบเกิน 10% · Engineering Manager อนุมัติเพิ่ม": {
+    "th": "เกินงบเกิน 10% · Engineering Manager อนุมัติเพิ่ม",
+    "en": "Over budget by more than 10% · Engineering Manager also approves",
+    "jp": "予算超過10%超・エンジニアリングマネージャーも承認"
+  },
+  "Quantity must be more than 0": {
+    "th": "จำนวนต้องมากกว่า 0",
+    "en": "Quantity must be more than 0",
+    "jp": "数量は0より大きくしてください"
+  },
+  "Unit price cannot be negative": {
+    "th": "ราคาต่อหน่วยติดลบไม่ได้",
+    "en": "Unit price cannot be negative",
+    "jp": "単価は負にできません"
+  },
+  "Choose the module that pays for it": {
+    "th": "เลือก Module ที่ใช้งบ",
+    "en": "Choose the module that pays for it",
+    "jp": "予算を使うモジュールを選択"
+  },
+  "Describe the item": {
+    "th": "ใส่รายละเอียดสินค้า",
+    "en": "Describe the item",
+    "jp": "品目を記入"
+  },
+  "Enter a unit": {
+    "th": "ใส่หน่วย",
+    "en": "Enter a unit",
+    "jp": "単位を入力"
+  },
+  "This BOM line is not on the selected BOM": {
+    "th": "รายการนี้ไม่อยู่ใน BOM ที่เลือก",
+    "en": "This BOM line is not on the selected BOM",
+    "jp": "この明細は選択中のBOMにありません"
+  },
+  "Describe the substitute item": {
+    "th": "ใส่รายละเอียดของรุ่นที่ใช้แทน",
+    "en": "Describe the substitute item",
+    "jp": "代替品を記入"
+  },
+  "บันทึก PO จาก ERP": {
+    "th": "บันทึก PO จาก ERP",
+    "en": "Record ERP PO",
+    "jp": "ERPの発注番号を記録"
+  },
+  "ฝ่ายจัดซื้อเลือก Supplier": {
+    "th": "ฝ่ายจัดซื้อเลือก Supplier",
+    "en": "Purchasing chooses suppliers",
+    "jp": "購買が仕入先を選定"
+  },
+  "ใช้กับรายการที่เลือก": {
+    "th": "ใช้กับรายการที่เลือก",
+    "en": "Apply to selected lines",
+    "jp": "選択明細に適用"
+  },
+  "รอจัดซื้อเลือก": {
+    "th": "รอจัดซื้อเลือก",
+    "en": "Awaiting Purchasing",
+    "jp": "購買の選定待ち"
+  },
+  "ขอซื้อแล้ว": {
+    "th": "ขอซื้อแล้ว",
+    "en": "Requested",
+    "jp": "申請済み"
+  },
+  "ยังไม่มี Supplier": {
+    "th": "ยังไม่มี Supplier",
+    "en": "Without supplier",
+    "jp": "仕入先未設定"
+  },
+  "บันทึก Supplier": {
+    "th": "บันทึก Supplier",
+    "en": "Save suppliers",
+    "jp": "仕入先を保存"
+  },
+  "เลือกทั้งหน้า": {
+    "th": "เลือกทั้งหน้า",
+    "en": "Select this page",
+    "jp": "このページを選択"
+  },
+  "เลือกรายการนี้": {
+    "th": "เลือกรายการนี้",
+    "en": "Select this line",
+    "jp": "この明細を選択"
+  },
+  "สร้าง PR จาก BOM ที่ release แล้ว": {
+    "th": "สร้าง PR จาก BOM ที่ release แล้ว",
+    "en": "Create a PR from a released BOM",
+    "jp": "リリース済みBOMから購買申請を作成"
+  },
+  "ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วฝ่ายจัดซื้อเลือก Supplier และออก PO ใน ERP": {
+    "th": "ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วฝ่ายจัดซื้อเลือก Supplier และออก PO ใน ERP",
+    "en": "Request from the BOM, approve against module budgets; Purchasing chooses suppliers and raises the PO in the ERP",
+    "jp": "BOMから申請し、モジュール予算で承認。購買が仕入先を選びERPで発注"
+  },
+  "ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ": {
+    "th": "ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ",
+    "en": "Planned / substitute / unplanned, and the module whose budget each line spends",
+    "jp": "計画通り／代替品／計画外と、予算を使うモジュール"
+  },
+  "PM อนุมัติ แล้วฝ่ายจัดซื้อ · Engineering Manager เมื่อ Module เกินงบเกิน 10%": {
+    "th": "PM อนุมัติ แล้วฝ่ายจัดซื้อ · Engineering Manager เมื่อ Module เกินงบเกิน 10%",
+    "en": "PM approves, then Purchasing · the Engineering Manager when a module is over budget by more than 10%",
+    "jp": "PM承認の後に購買・モジュール予算超過10%超はエンジニアリングマネージャーも承認"
+  },
+  "ออก PO ในระบบ ERP แล้วใส่เลข PO ที่นี่ (หลายใบคั่นด้วย , )": {
+    "th": "ออก PO ในระบบ ERP แล้วใส่เลข PO ที่นี่ (หลายใบคั่นด้วย , )",
+    "en": "Raise the PO in the ERP, then enter its number here (separate several with commas)",
+    "jp": "ERPで発注後、発注番号をここに入力（複数はカンマ区切り）"
+  },
+  "เลข PO ใน ERP": {
+    "th": "เลข PO ใน ERP",
+    "en": "ERP PO number",
+    "jp": "ERP発注番号"
+  },
+  "Ordered in ERP": {
+    "th": "สั่งซื้อใน ERP แล้ว",
+    "en": "Ordered in ERP",
+    "jp": "ERPで発注済み"
   }
 };

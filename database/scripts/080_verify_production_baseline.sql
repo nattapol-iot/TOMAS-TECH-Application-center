@@ -477,6 +477,17 @@ IF NOT EXISTS (
       AND permission.state IN ('G', 'W'))
     THROW 51372, 'The application role is missing its column-scoped user role update grant.', 1;
 
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_permissions permission
+    WHERE permission.grantee_principal_id = @app_role_id
+      AND permission.class = 1
+      AND permission.major_id = OBJECT_ID(N'dbo.mat_pr_lines')
+      AND permission.minor_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.mat_pr_lines'), N'supplier_id', 'ColumnId')
+      AND permission.permission_name = N'UPDATE'
+      AND permission.state IN ('G', 'W'))
+    THROW 51373, 'The application role is missing its column-scoped PR line supplier grant.', 1;
+
 IF EXISTS (SELECT 1 FROM @required_material_permissions WHERE is_effective <> 1 OR is_effective IS NULL)
     THROW 51093, 'The application principal is missing an effective material-workflow permission.', 1;
 
@@ -649,6 +660,9 @@ IF EXISTS (
           N'mat_pr_approval_steps', N'mat_pos', N'mat_po_lines', N'grns', N'grn_lines',
           N'mirs', N'mir_lines', N'stock_adjustments', N'stock_txns', N'mat_audit',
           N'schedule_tasks', N'schedule_task_pics', N'schedule_updates', N'schedule_baselines')
+      -- Purchasing sets a PR line's supplier (migration 074): that one column, checked below.
+      AND NOT (object_item.name = N'mat_pr_lines' AND permission.permission_name = N'UPDATE'
+               AND permission.minor_id = COLUMNPROPERTY(OBJECT_ID(N'dbo.mat_pr_lines'), N'supplier_id', 'ColumnId'))
       AND NOT EXISTS (
           SELECT 1
           FROM @required_material_permissions required

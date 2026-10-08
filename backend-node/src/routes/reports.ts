@@ -224,7 +224,12 @@ export function registerReportRoutes(app: FastifyInstance, config: AppConfig, da
       final_approval AS (SELECT step.pr_id,MAX(step.acted_at) approved_at FROM dbo.mat_pr_approval_steps step
         INNER JOIN scoped_pr pr ON pr.id=step.pr_id WHERE pr.status IN(N'Approved',N'Converted to PO')
           AND step.status=N'Completed' AND step.decision=N'Approve' AND step.name NOT IN(N'Submitted by Requester',N'PO Creation') GROUP BY step.pr_id),
-      first_po AS (SELECT po.pr_id,MIN(po.created_at) converted_at FROM dbo.mat_pos po INNER JOIN scoped_pr pr ON pr.id=po.pr_id WHERE po.deleted_at IS NULL GROUP BY po.pr_id)
+      first_po AS (SELECT orders.pr_id,MIN(orders.converted_at) converted_at FROM (
+          SELECT po.pr_id,po.created_at converted_at FROM dbo.mat_pos po INNER JOIN scoped_pr pr ON pr.id=po.pr_id WHERE po.deleted_at IS NULL
+          UNION ALL
+          -- Orders raised in the ERP leave no in-app PO; Purchasing recording the ERP number completes the PO Creation step.
+          SELECT step.pr_id,step.acted_at FROM dbo.mat_pr_approval_steps step INNER JOIN scoped_pr pr ON pr.id=step.pr_id
+          WHERE step.name=N'PO Creation' AND step.status=N'Completed' AND step.acted_at IS NOT NULL) orders GROUP BY orders.pr_id)
       SELECT COUNT_BIG(*) pr_count,AVG(CONVERT(decimal(19,4),DATEDIFF_BIG(second,pr.created_at,pr.submitted_at)/3600.0)) created_to_submitted,
         AVG(CASE WHEN approval.approved_at IS NOT NULL THEN CONVERT(decimal(19,4),DATEDIFF_BIG(second,pr.submitted_at,approval.approved_at)/3600.0) END) submitted_to_approved,
         AVG(CASE WHEN po.converted_at IS NOT NULL AND approval.approved_at IS NOT NULL THEN CONVERT(decimal(19,4),DATEDIFF_BIG(second,approval.approved_at,po.converted_at)/3600.0) END) approved_to_po,
