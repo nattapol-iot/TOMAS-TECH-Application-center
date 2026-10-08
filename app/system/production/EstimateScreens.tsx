@@ -13,6 +13,7 @@ import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
 import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
 
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
+import "./estimate-flow.css";
 import { ALL_START_LEDGERS, EstimateSourcePicker, StartFromChoice, anyStartLedger, startFromCreatedMessage, startFromInput, type StartLedgers } from "./EstimateStartFrom";
 import { EstimateLaborTab, defaultWorkPackage, disciplineLabel, disciplineRates, useEngineeringRateOptions, type LaborExpenseSeed, type LaborSeed } from "./EstimateLaborSheet";
 import { ESTIMATE_DISCIPLINES, costTypeOfDiscipline, isEstimateDiscipline, type EstimateDiscipline } from "../../../lib/estimate-disciplines";
@@ -96,12 +97,9 @@ import {
   Progress,
   ProgressCell,
   SearchInput,
-  Select,
-  StatusLegend,
-  SummaryTile,
   TablePageSize,
   Tabs,
-  Toolbar,
+  type Tone,
 } from "../ui";
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { readSpreadsheet, type SpreadsheetRow } from "../../../lib/import-spreadsheet";
@@ -268,6 +266,43 @@ const assignmentResultMessage = (action: "created" | "updated", result: Estimate
   return saved;
 };
 const revisionCode = (revision: number) => `R${String(revision).padStart(2, "0")}`;
+const estimateCopy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+/* The statuses a person can act on. The database still accepts Engineering Input, Waiting Supplier
+   Price, Estimate Completed and Locked, but no route writes them; an older row reads as the state it
+   behaves like. */
+const ESTIMATE_STATUS_TABS = [
+  ["All status", "ทั้งหมด", "All", "すべて"],
+  ["Draft", "ร่าง", "Draft", "下書き"],
+  ["Engineering Review", "รอตรวจทาน", "In review", "レビュー待ち"],
+  ["Revision Required", "ต้องแก้ไข", "Revision required", "修正依頼"],
+  ["Approved", "อนุมัติแล้ว", "Approved", "承認済み"],
+  ["Cancelled", "ยกเลิก", "Cancelled", "キャンセル"],
+] as const;
+function estimateStatusView(status: string): { label: string; tone: Tone } {
+  if (status === "Engineering Review") return { label: estimateCopy("รอตรวจทาน", "In review", "レビュー待ち"), tone: "violet" };
+  if (status === "Revision Required") return { label: estimateCopy("ต้องแก้ไข", "Revision required", "修正依頼"), tone: "amber" };
+  if (status === "Approved" || status === "Locked") return { label: estimateCopy("อนุมัติแล้ว", "Approved", "承認済み"), tone: "green" };
+  if (status === "Cancelled") return { label: estimateCopy("ยกเลิก", "Cancelled", "キャンセル"), tone: "red" };
+  return { label: estimateCopy("ร่าง", "Draft", "下書き"), tone: "blue" };
+}
+const isClosedEstimateStatus = (status: string) => ["Approved", "Locked", "Cancelled"].includes(status);
+/* "อีก 7 วัน" / "เลยกำหนด 3 วัน" reads faster than a bare date; closed work needs neither. */
+function dueDistance(due: string, today: string) {
+  const days = Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  if (!Number.isFinite(days)) return "";
+  if (days < 0) return estimateCopy(`เลยกำหนด ${-days} วัน`, `${-days} day(s) overdue`, `${-days}日超過`);
+  if (days === 0) return estimateCopy("ครบกำหนดวันนี้", "Due today", "本日期限");
+  return estimateCopy(`อีก ${days} วัน`, `in ${days} day(s)`, `あと${days}日`);
+}
+/* A send-back writes the reviewer's reason on the revision it closes. It explains the current revision
+   only when it is the newest snapshot before it: Create Revision and Withdraw leave no such row. */
+function latestSendBack(workspace: EstimateCostWorkspace) {
+  if (workspace.header.status !== "Revision Required") return null;
+  const previous = workspace.revisionHistory
+    .filter((entry) => entry.revision < workspace.header.revision)
+    .sort((left, right) => right.revision - left.revision)[0];
+  return previous?.status === "Revision Required" ? previous : null;
+}
 const copyResultMessage = (result: EstimateCopyResult) => {
   const copied = [
     [result.costItems, "cost item"], [result.manhourLines, "man-hour line"],
@@ -370,97 +405,148 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
   const departments = [...new Set(bootstrap.team.map((member) => member.department).filter(Boolean))].sort();
   const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const todayIso = businessDate();
+  const copy = estimateCopy;
+  const clearFilters = () => { setCustomerId("All customers"); setProjectType("All project types"); setOwnerId("All owners"); setDepartment("All departments"); setRevision("All revisions"); resetPage(); };
+  /* Secondary filters live in one popover; what is set shows as a chip that removes itself. */
+  const chips = [
+    customerId !== "All customers" ? { key: "customer", label: `${copy("ลูกค้า", "Customer", "顧客")}: ${bootstrap.customers.find((customer) => String(customer.id) === customerId)?.name ?? customerId}`, clear: () => setCustomerId("All customers") } : null,
+    projectType !== "All project types" ? { key: "type", label: `${copy("ประเภทงาน", "Project type", "案件種別")}: ${projectType}`, clear: () => setProjectType("All project types") } : null,
+    ownerId !== "All owners" ? { key: "owner", label: `${copy("ผู้ประเมิน", "Estimator", "見積担当")}: ${owners.find((owner) => String(owner.id) === ownerId)?.name ?? ownerId}`, clear: () => setOwnerId("All owners") } : null,
+    department !== "All departments" ? { key: "department", label: `${copy("แผนก", "Department", "部署")}: ${department}`, clear: () => setDepartment("All departments") } : null,
+    revision !== "All revisions" ? { key: "revision", label: `Revision: ${revisionCode(Number(revision))}`, clear: () => setRevision("All revisions") } : null,
+  ].filter((chip): chip is { key: string; label: string; clear: () => void } => chip !== null);
+  const costKey = [
+    { label: copy("วัสดุ", "Material", "材料"), color: "var(--c1)" },
+    { label: copy("ค่าแรง", "Labor", "労務"), color: "var(--c2)" },
+    { label: "Outsource", color: "var(--c5)" },
+    { label: copy("อื่นๆ", "Other", "その他"), color: "var(--c4)" },
+  ];
 
-  return <>
+  return <div className="est-list">
     <PageHeader
-      eyebrow="ENGINEERING COST"
       title={uiText("Estimate Cost")}
-      subtitle="จัดทำต้นทุน ตรวจสอบ revision และอนุมัติจากข้อมูล SQL Server ชุดเดียวกัน"
+      subtitle={copy("ต้นทุนวิศวกรรมภายใน · กรอก ตรวจทาน และอนุมัติทีละ Revision", "Internal engineering cost · fill in, review and approve one revision at a time", "社内技術原価 · リビジョンごとに入力・レビュー・承認")}
       actions={<><DocumentHistoryButton kind="estimates" notify={notify} onOpen={setSelectedEstimateId} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New estimate from inquiry"} /></button> : null}</>}
     />
-    <Toolbar>
+    <div className="est-toolbar">
+      {canOwnEstimate(bootstrap.user.role) ? <div className="seg-control" role="group" aria-label={copy("ขอบเขต", "Scope", "範囲")}>
+        <button type="button" className={mine ? "on" : ""} aria-pressed={mine} onClick={() => { setMine(true); setOwnerId("All owners"); resetPage(); }}><LocalizedText text={"My estimates"} /></button>
+        <button type="button" className={mine ? "" : "on"} aria-pressed={!mine} onClick={() => { setMine(false); resetPage(); }}><LocalizedText text={"All estimates"} /></button>
+      </div> : null}
       <SearchInput value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
-      {canOwnEstimate(bootstrap.user.role) ? <>
-        <button className={mine ? "btn primary" : "btn default"} type="button" onClick={() => { setMine(true); setOwnerId("All owners"); resetPage(); }}><Icon name="user" /><LocalizedText text={"My estimates"} /></button>
-        <button className={!mine && ownerId === "All owners" ? "btn primary" : "btn default"} type="button" onClick={() => { setMine(false); setOwnerId("All owners"); resetPage(); }}><Icon name="users" /><LocalizedText text={"All estimates"} /></button>
-      </> : null}
-      <Select label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "Draft", "Engineering Input", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Revision Required", "Approved", "Locked"]} />
-      <button className={advancedFiltersOpen ? "btn default active" : "btn default"} type="button" aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((current) => !current)}><Icon name="filter" /><LocalizedText text={"Advanced filters"} /></button>
-      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-    </Toolbar>
-    {advancedFiltersOpen ? <Toolbar>
-      <FilterSelect label="Customer" value={customerId} onChange={(value) => { setCustomerId(value); resetPage(); }} options={[{ value: "All customers", label: "All customers" }, ...bootstrap.customers.map((customer) => ({ value: String(customer.id), label: `${customer.code} — ${customer.name}` }))]} />
-      <Select label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...PROJECT_TYPES]} />
-      <FilterSelect label="Owner" value={ownerId} onChange={(value) => { setMine(false); setOwnerId(value); resetPage(); }} options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]} />
-      <Select label="Department" value={department} onChange={(value) => { setDepartment(value); resetPage(); }} options={["All departments", ...departments]} />
-      <FilterSelect label="Revision" value={revision} onChange={(value) => { setRevision(value); resetPage(); }} options={[{ value: "All revisions", label: "All revisions" }, ...Array.from({ length: 11 }, (_, index) => ({ value: String(index), label: revisionCode(index) }))]} />
-    </Toolbar> : null}
-    {/* The eight statuses dbo.estimates actually allows, in workflow order.
-        "Overdue" used to be listed here but is not a status — it is a derived
-        flag — while "Revision Required", which the grid does show, was missing. */}
-    <StatusLegend items={[
-      { label: "Draft" },
-      { label: "Engineering Input" },
-      { label: "Waiting Supplier Price" },
-      { label: "Estimate Completed" },
-      { label: "Engineering Review" },
-      { label: "Revision Required" },
-      { label: "Approved" },
-      { label: "Locked" },
-    ]} />
+      <div className="est-filter">
+        <button className={advancedFiltersOpen || chips.length ? "btn default active" : "btn default"} type="button" aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((current) => !current)}><Icon name="filter" />{copy("ตัวกรอง", "Filters", "フィルター")}{chips.length ? <span className="est-count">{chips.length}</span> : null}</button>
+        {advancedFiltersOpen ? <div className="est-filter-pop" role="group" aria-label={copy("ตัวกรองเพิ่มเติม", "More filters", "詳細フィルター")}>
+          <div className="est-filter-grid">
+            <div className="est-filter-field"><span>{copy("ลูกค้า", "Customer", "顧客")}</span><FilterSelect label="Customer" value={customerId} onChange={(value) => { setCustomerId(value); resetPage(); }} options={[{ value: "All customers", label: "All customers" }, ...bootstrap.customers.map((customer) => ({ value: String(customer.id), label: `${customer.code} — ${customer.name}` }))]} /></div>
+            <div className="est-filter-field"><span>{copy("ประเภทงาน", "Project type", "案件種別")}</span><FilterSelect label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...PROJECT_TYPES].map((value) => ({ value, label: value }))} /></div>
+            <div className="est-filter-field"><span>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</span><FilterSelect label="Owner" value={ownerId} onChange={(value) => { setMine(false); setOwnerId(value); resetPage(); }} options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]} /></div>
+            <div className="est-filter-field"><span>{copy("แผนก", "Department", "部署")}</span><FilterSelect label="Department" value={department} onChange={(value) => { setDepartment(value); resetPage(); }} options={["All departments", ...departments].map((value) => ({ value, label: value }))} /></div>
+            <div className="est-filter-field"><span>Revision</span><FilterSelect label="Revision" value={revision} onChange={(value) => { setRevision(value); resetPage(); }} options={[{ value: "All revisions", label: "All revisions" }, ...Array.from({ length: 11 }, (_, index) => ({ value: String(index), label: revisionCode(index) }))]} /></div>
+          </div>
+          <div className="est-filter-actions">
+            <button className="btn ghost sm" type="button" onClick={clearFilters}>{copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}</button>
+            <button className="btn primary sm" type="button" onClick={() => setAdvancedFiltersOpen(false)}>{copy("เสร็จ", "Done", "完了")}</button>
+          </div>
+        </div> : null}
+      </div>
+      <button className="btn ghost est-icon-btn" type="button" disabled={loading} aria-label={uiText("Refresh")} title={uiText("Refresh")} onClick={() => { void load(); }}><Icon name="refresh" /></button>
+    </div>
+    {chips.length ? <div className="est-chips">
+      {chips.map((chip) => <span className="est-chip" key={chip.key}>{chip.label}<button type="button" aria-label={copy("ลบตัวกรองนี้", "Remove this filter", "このフィルターを解除")} onClick={() => { chip.clear(); resetPage(); }}><Icon name="x" /></button></span>)}
+      <button className="btn ghost sm" type="button" onClick={clearFilters}>{copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}</button>
+    </div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${result.total} ${uiText("estimates")}`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data · click a row to open the full workspace"} flush>
-      {result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); resetPage(); }} /><table>
-        <thead><tr><th><LocalizedText text={"Estimate No."} /></th><th><LocalizedText text={"Inquiry"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Rev."} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Due"} /></th><th className="num"><LocalizedText text={"Material"} /></th><th className="num"><LocalizedText text={"Engineering"} /></th><th className="num"><LocalizedText text={"Outsource"} /></th><th className="num"><LocalizedText text={"Other"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th><th /></tr></thead>
+    <section className="panel est-list-panel">
+      <div className="tabs est-status-tabs" role="tablist" aria-label={copy("สถานะ", "Status", "ステータス")}>
+        {ESTIMATE_STATUS_TABS.map(([value, th, en, ja]) => <button key={value} type="button" role="tab" aria-selected={status === value} className={status === value ? "tab active" : "tab"} onClick={() => { setStatus(value); resetPage(); }}>{copy(th, en, ja)}</button>)}
+      </div>
+      {result.items.length ? <div className="table-wrap"><table className="est-list-table">
+        <thead><tr>
+          <th>Estimate</th>
+          <th>{copy("งาน / ลูกค้า", "Project / customer", "案件 / 顧客")}</th>
+          <th>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</th>
+          <th>{copy("กำหนดส่ง", "Due", "期限")}</th>
+          <th className="num"><span className="est-cost-key">{costKey.map((key) => <span key={key.label}><i style={{ background: key.color }} />{key.label}</span>)}</span>{copy("ต้นทุนรวม", "Total cost", "原価合計")}</th>
+          <th>{copy("สถานะ", "Status", "ステータス")}</th>
+          <th>{copy("อัปเดต", "Updated", "更新")}</th>
+          <th aria-label={uiText("Action")} />
+        </tr></thead>
         <tbody>{result.items.map((item) => {
-          const late = item.dueDate < todayIso && !["Approved", "Locked"].includes(item.status);
-          const other = numberOf(item.transportationTotal) + numberOf(item.accommodationTotal) + numberOf(item.otherTotal) + numberOf(item.contingencyTotal);
-          return <tr key={item.id} className={`clickable ${late ? "row-late" : ["Approved", "Locked"].includes(item.status) ? "row-ok" : item.status === "Waiting Supplier Price" ? "row-wait" : ""}`} onClick={() => setSelectedEstimateId(item.id)}>
-            <td><strong className="mono">{item.number}</strong></td><td className="mono">{item.inquiryNumber}</td><td>{item.customerName}</td>
-            <td><div className="cell-primary"><strong>{item.projectName}</strong><span>{item.projectType}</span></div></td><td>{item.ownerName}</td><td><span className="pill">{revisionCode(item.revision)}</span></td>
-            <td>{formatDate(item.createdDate)}</td><td className={late ? "red-text" : undefined}>{formatDate(item.dueDate)}{late ? <Badge tone="red">{"Overdue"}</Badge> : null}</td>
-            <td className="num">{formatMoney(item.materialTotal)}</td><td className="num">{formatMoney(item.engineeringTotal)}</td><td className="num">{formatMoney(item.outsourceTotal)}</td><td className="num">{formatMoney(other)}</td><td className="num"><strong>{formatMoney(item.total)}</strong></td>
-            <td style={{ minWidth: 110 }}><ProgressCell value={numberOf(item.progress)} /></td><td><Badge>{item.status}</Badge></td><td className="muted">{formatDateTime(item.updatedAt)}</td>
+          const closed = isClosedEstimateStatus(item.status);
+          const late = item.dueDate < todayIso && !closed;
+          const view = estimateStatusView(item.status);
+          const parts = [numberOf(item.materialTotal), numberOf(item.engineeringTotal), numberOf(item.outsourceTotal), numberOf(item.transportationTotal) + numberOf(item.accommodationTotal) + numberOf(item.otherTotal) + numberOf(item.contingencyTotal)];
+          const base = parts.reduce((sum, value) => sum + Math.max(0, value), 0);
+          const breakdown = costKey.map((key, index) => `${key.label} ${formatMoney(parts[index])}`).join(" · ");
+          return <tr key={item.id} className={`clickable${late ? " row-late" : ""}`} onClick={() => setSelectedEstimateId(item.id)}>
+            <td><span className="mono est-no">{item.number}</span><span className="pill">{revisionCode(item.revision)}</span><div className="est-sub mono">{item.inquiryNumber}</div></td>
+            <td className="wrap est-project"><strong>{item.projectName}</strong><div className="est-sub">{item.customerName} · {item.projectType}</div></td>
+            <td>{item.ownerName}</td>
+            <td>{formatDate(item.dueDate)}{closed ? null : <div className={late ? "est-sub red-text" : "est-sub"}>{dueDistance(item.dueDate, todayIso)}</div>}</td>
+            <td className="num">{base > 0 ? <><strong>{formatMoney(item.total)}</strong><span className="est-stack" title={breakdown}>{parts.map((value, index) => value > 0 ? <i key={costKey[index].label} style={{ width: `${(value / base) * 100}%`, background: costKey[index].color }} /> : null)}</span></> : <span className="est-sub">{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span>}</td>
+            <td><Badge tone={view.tone}><span>{view.label}</span></Badge><span className="est-progress" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, numberOf(item.progress)))}%` }} /></span></td>
+            <td className="est-sub">{formatDateTime(item.updatedAt)}</td>
             <td><button className="row-action" type="button" aria-label={`Open ${item.number}`} onClick={(event) => { event.stopPropagation(); setSelectedEstimateId(item.id); }}><Icon name="chevronRight" /></button></td>
           </tr>;
         })}</tbody>
-      </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div>
+      </table></div>
         : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div>
           : <EmptyState icon="file" title="No estimate matches the filters" message="ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate" />}
-    </Panel>
+      {result.total ? <div className="est-list-foot">
+        <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); resetPage(); }} />
+        <Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} />
+      </div> : null}
+    </section>
     {createOpen ? <CreateEstimateModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (created) => {
       setCreateOpen(false);
       notify(startFromCreatedMessage(created.number, created.copied));
       await Promise.all([load(), refreshBootstrap()]);
       setSelectedEstimateId(created.id);
     }} /> : null}
-  </>;
+  </div>;
 }
 
-/* An estimate with no line yet — however it was created: from an inquiry, a site visit or
-   the estimate list — offers to start from a similar previous estimate before anything else. */
-function EstimateStartPanel({ workspace, busy, onCopy, onDismiss }: {
-  workspace: EstimateCostWorkspace; busy: boolean;
+/* An estimate with no line yet — however it was created — shows where to start. Copying a similar
+   previous estimate stays one click away; the creation dialogs already offered it once. */
+function EstimateStartPanel({ workspace, busy, canAssign, onOpenTab, onCopy, onDismiss }: {
+  workspace: EstimateCostWorkspace; busy: boolean; canAssign: boolean; onOpenTab: (tab: WorkspaceTab) => void;
   onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onDismiss: () => void;
 }) {
-  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  const copy = estimateCopy;
+  const [copyOpen, setCopyOpen] = useState(false);
   const [source, setSource] = useState<EstimateSummary | null>(null);
   const [ledgers, setLedgers] = useState<StartLedgers>(ALL_START_LEDGERS);
   const anyLedger = anyStartLedger(ledgers);
-  return <Panel className="estimate-start-panel"
-    title={copy("Estimate นี้ยังว่าง — เริ่มจาก Estimate เดิมที่คล้ายกันไหม?", "This estimate is empty — start from a similar previous one?", "この見積は空です — 類似の過去見積から始めますか？")}
-    subtitle={copy("เลือก Estimate ที่ทำไว้แล้ว ระบบจะคัดลอกอุปกรณ์ ค่าแรงแยกตามสาขา และค่าเดินทางเข้ามาให้แก้ต่อ", "Pick an earlier estimate to copy its equipment, labor by discipline and travel, then adjust them.", "既存の見積を選ぶと、機器・分野別工数・旅費をコピーして編集できます。")}>
-    <EstimateSourcePicker excludeId={workspace.header.id} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
-    {/* The two ways forward sit together, so not copying reads as a choice rather than a stray link. */}
-    <div className="row" style={{ marginTop: 12 }}>
-      <button className="btn primary" type="button" disabled={busy || !source || !anyLedger} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: COST_CATEGORIES.map(([code]) => code), includeCostItems: ledgers.costItems, includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: true }); }}>
-        <Icon name="copy" />{source ? copy(`คัดลอกจาก ${source.number}`, `Copy from ${source.number}`, `${source.number} からコピー`) : copy("เลือก Estimate ด้านบนก่อน", "Choose an estimate above", "上で見積を選択")}
-      </button>
-      <span className="muted">{copy("หรือ", "or", "または")}</span>
-      <button className="btn default" type="button" disabled={busy} onClick={onDismiss}>
-        <Icon name="edit" />{copy("ไม่คัดลอก — เริ่มกรอกเอง", "Don't copy — fill it in myself", "コピーせずに自分で入力")}
-      </button>
-    </div>
+  const steps = [
+    ...(canAssign ? [{ key: "assign", title: copy("แบ่งงานให้ทีม (ถ้าทำหลายคน)", "Split the work (when several people estimate)", "チームで分担（複数人の場合）"), text: copy("มอบหมายส่วนงาน Electrical / Mechanical / Software ระบบส่งอีเมลและงานขึ้นใน My Work", "Assign the Electrical / Mechanical / Software sections; assignees get an email and see the work in My Work.", "電気・機械・ソフトの各セクションを割り当てると、担当者にメールが届き My Work に表示されます。"), actions: <button className="btn default sm" type="button" onClick={() => onOpenTab("assignment")}><Icon name="users" />{copy("มอบหมายส่วนงาน", "Assign sections", "セクションを割当")}</button> }] : []),
+    { key: "cost", title: copy("ใส่วัสดุและอุปกรณ์", "Add equipment and material", "機器・材料を追加"), text: copy("เพิ่มทีละโมดูล นำเข้า Excel ฟอร์มบริษัท ใช้ Template หรือคัดลอกจาก Estimate เดิมที่คล้ายกัน", "Add module by module, import the company Excel form, apply a template or copy a similar earlier estimate.", "モジュール単位で追加、会社様式のExcel取込、テンプレート適用、または類似の過去見積をコピーします。"), actions: <><button className="btn primary sm" type="button" onClick={() => onOpenTab("cost")}><Icon name="plus" />{copy("ไปที่วัสดุและอุปกรณ์", "Open equipment and material", "機器・材料へ")}</button><button className="btn default sm" type="button" aria-expanded={copyOpen} onClick={() => setCopyOpen((current) => !current)}><Icon name="copy" />{copy("คัดลอกจาก Estimate เดิม", "Copy an earlier estimate", "過去見積からコピー")}</button></> },
+    { key: "labor", title: copy("ใส่ค่าแรงตามสาขา", "Add labor by discipline", "分野別に工数を追加"), text: copy("Electrical · Mechanical · Software · Installation พร้อมค่าเดินทางของแต่ละสาขา", "Electrical · Mechanical · Software · Installation, each with its own travel.", "電気・機械・ソフト・据付、それぞれの旅費とともに。"), actions: <button className="btn default sm" type="button" onClick={() => onOpenTab("manhour")}>{copy("ไปที่ค่าแรง", "Open labor", "労務費へ")}<Icon name="arrowRight" /></button> },
+  ];
+  return <Panel className="estimate-start-panel est-start"
+    title={copy("เริ่มกรอก Estimate", "Start this estimate", "見積を始める")}
+    subtitle={copy("Estimate นี้ยังไม่มีรายการ ทำตามลำดับนี้ หรือเริ่มขั้นไหนก่อนก็ได้", "This estimate has no line yet. Follow these steps, in any order.", "この見積にはまだ明細がありません。順番は自由です。")}
+    actions={<button className="btn ghost sm" type="button" onClick={onDismiss}>{copy("ซ่อน", "Hide", "閉じる")}</button>}>
+    <ol className="est-start-steps">
+      {steps.map((step, index) => <li key={step.key}>
+        <span className="est-dot">{index + 1}</span>
+        <div className="est-start-text"><strong>{step.title}</strong><p>{step.text}</p></div>
+        <div className="est-start-actions">{step.actions}</div>
+      </li>)}
+    </ol>
+    {copyOpen ? <div className="est-start-copy">
+      <EstimateSourcePicker excludeId={workspace.header.id} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
+      {/* The two ways forward sit together, so not copying reads as a choice rather than a stray link. */}
+      <div className="row" style={{ marginTop: 12 }}>
+        <button className="btn primary" type="button" disabled={busy || !source || !anyLedger} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: COST_CATEGORIES.map(([code]) => code), includeCostItems: ledgers.costItems, includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: true }); }}>
+          <Icon name="copy" />{source ? copy(`คัดลอกจาก ${source.number}`, `Copy from ${source.number}`, `${source.number} からコピー`) : copy("เลือก Estimate ด้านบนก่อน", "Choose an estimate above", "上で見積を選択")}
+        </button>
+        <span className="muted">{copy("หรือ", "or", "または")}</span>
+        <button className="btn default" type="button" disabled={busy} onClick={() => setCopyOpen(false)}>
+          <Icon name="edit" />{copy("ไม่คัดลอก — เริ่มกรอกเอง", "Don't copy — fill it in myself", "コピーせずに自分で入力")}
+        </button>
+      </div>
+    </div> : null}
   </Panel>;
 }
 
@@ -762,62 +848,114 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     notify("Estimate exported from live workspace");
   };
 
-  return <DraftHoldProvider value={holds}><div ref={workspaceRoot} className="estimate-live-root">
+  const copy = estimateCopy;
+  const statusView = estimateStatusView(header.status);
+  const sentBack = latestSendBack(workspace);
+  const approved = ["Approved", "Locked"].includes(header.status);
+  const inReview = header.status === "Engineering Review";
+  /* Draft is where costs are filled in; a send-back reopens that same step on the next revision. */
+  const rail = [
+    { key: "fill", label: header.status === "Revision Required" ? copy(`แก้ไขตามที่ส่งกลับ · ${revisionCode(header.revision)}`, `Revise as returned · ${revisionCode(header.revision)}`, `差し戻し対応 · ${revisionCode(header.revision)}`) : copy("กรอกต้นทุน (ร่าง)", "Fill in costs (draft)", "原価入力（下書き）"), state: approved || inReview ? "done" : header.status === "Cancelled" ? "off" : "now" },
+    { key: "review", label: copy("ตรวจทาน", "Review", "レビュー"), state: approved ? "done" : inReview ? "now" : "later" },
+    { key: "approve", label: copy("อนุมัติ", "Approved", "承認"), state: approved ? "done" : "later" },
+  ];
+  const manDays = workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
+  /* The cost bar is the breakdown; each part opens the tab its lines live on. */
+  const segments: { key: string; label: string; value: number; note: string; color: string; tab: WorkspaceTab }[] = [
+    { key: "material", label: copy("วัสดุและอุปกรณ์", "Material", "材料・機器"), value: numberOf(totals.material), note: copy(`${workspace.costItems.length} รายการ`, `${workspace.costItems.length} item(s)`, `${workspace.costItems.length}件`), color: "var(--c1)", tab: "cost" },
+    { key: "engineering", label: copy("ค่าแรงวิศวกรรม", "Engineering", "技術工数"), value: numberOf(totals.engineering), note: `${formatNumber(manDays)} Man-day`, color: "var(--c2)", tab: "manhour" },
+    { key: "outsource", label: "Outsource", value: numberOf(totals.outsource), note: "", color: "var(--c5)", tab: "other" },
+    { key: "travel", label: copy("เดินทาง · ที่พัก", "Travel · hotel", "交通・宿泊"), value: numberOf(totals.transportation) + numberOf(totals.accommodation), note: copy("ตามสาขา", "per discipline", "分野別"), color: "var(--c7)", tab: "manhour" },
+    { key: "other", label: copy("อื่นๆ", "Other", "その他"), value: numberOf(totals.other), note: "", color: "var(--c4)", tab: "other" },
+    ...(ESTIMATE_OVERHEAD_ENABLED && numberOf(totals.overhead) > 0 ? [{ key: "overhead", label: "Overhead", value: numberOf(totals.overhead), note: "", color: "var(--c6)", tab: "summary" as WorkspaceTab }] : []),
+    { key: "contingency", label: `Contingency ${formatNumber(header.contingencyRate)}%`, value: numberOf(totals.contingency), note: "", color: "var(--c8)", tab: "other" },
+  ];
+  const segmentBase = segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0);
+  const submitBlocker = criticalCount > 0
+    ? copy(`แก้ ${criticalCount} ข้อผิดพลาดก่อนส่งตรวจ`, `Resolve ${criticalCount} error(s) before submitting`, `提出前に${criticalCount}件のエラーを修正`)
+    : classificationDirty ? copy("บันทึกการจัดหมวดก่อนส่งตรวจ", "Save the category changes before submitting", "提出前に分類を保存") : undefined;
+
+  return <DraftHoldProvider value={holds}><div ref={workspaceRoot} className="estimate-live-root est-workspace">
     <div className="breadcrumb"><button type="button" onClick={onBack}><LocalizedText text={"Estimate Cost"} /></button><Icon name="chevronRight" /><span>{header.number}</span></div>
-    <header className="estimate-heading-compact">
-      <div className="estimate-title-line"><h1>{header.projectName}</h1><Badge tone={["Approved", "Locked"].includes(header.status) ? "green" : header.status === "Revision Required" ? "amber" : "blue"}>{header.status}</Badge></div>
-      <div className="estimate-heading-reference">{header.number} · {revisionCode(header.revision)} <span> | </span> {header.customerCode} — {header.customerName} <span> | </span> Inquiry {header.inquiryNumber}</div>
-      <div className="estimate-heading-owner"><span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span><span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong></span></div>
+    <header className="est-head">
+      <div className="est-head-text">
+        <div className="est-title"><h1>{header.projectName}</h1><Badge tone={statusView.tone}><span>{statusView.label}</span></Badge></div>
+        <div className="est-meta">
+          <span className="mono"><strong>{header.number} · {revisionCode(header.revision)}</strong></span>
+          <span>{header.customerCode} — {header.customerName}</span>
+          <span className="mono">Inquiry {header.inquiryNumber}</span>
+          <span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span>
+          <span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>{isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}</span>
+        </div>
+      </div>
+      <div className="est-head-actions">
+        <RecordViewers viewers={viewers} describe={describeLine} />
+        <details className="estimate-more est-menu"><summary className="btn default est-icon-btn" aria-label={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")} title={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")}><Icon name="more" /></summary><div className="estimate-more-content">
+          <div className="estimate-document-meta"><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
+          <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
+          <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+          <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
+        </div></details>
+        {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
+        {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
+        {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
+        {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
+      </div>
+    </header>
     {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
-    <RecordViewers viewers={viewers} describe={describeLine} />
     {waitingOn ? <div className="info-strip amber" role="status"><Icon name="refresh" /><span><strong>{waitingOn.length
       ? `${liveCopy("แก้ไขโดย", "Changed by", "変更者：")} ${waitingOn.join(", ")}`
       : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました")}</strong>{" · "}
       {liveCopy("จะอัปเดตให้ทันทีที่คุณบันทึกหรือปิดสิ่งที่กำลังแก้", "It updates as soon as you save or close what you are editing.", "編集中の内容を保存するか閉じるとすぐに更新されます。")}</span></div> : null}
-    <div className="workspace-bar estimate-workspace-bar">
-      <details className="estimate-more"><summary className="btn default">{estimateUxCopy(currentLocale(), "เพิ่มเติม", "More", "その他")} <Icon name="chevronDown" /></summary><div className="estimate-more-content">
-      <div className="estimate-document-meta"><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
-      <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
-      <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
-      <button className="btn default" type="button" onClick={() => setTab("validation")}><Icon name="shield" /><LocalizedText text={"Validation"} />{validationCount ? <span className={`badge ${criticalCount ? "red" : "amber"}`}>{validationCount}</span> : <span className="badge green"><LocalizedText text={"OK"} /></span>}</button>
-      <button className="btn ghost" type="button" onClick={() => setTab("assignment")}><LocalizedText text="Assignment" /></button>
-      <button className="btn ghost" type="button" onClick={() => setTab("revision")}><LocalizedText text="Revision Control" /></button>
-      <button className="btn ghost" type="button" onClick={() => setTab("review")}><LocalizedText text="Engineering Review" /></button>
-      </div></details>
-      <span className="spacer" />
-      {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
-      {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
-      {capabilities.canCreateRevision ? <button className="btn primary" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
-      {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
-    </div>
-    </header>
+    {sentBack ? <div className="info-strip amber est-sentback" role="status"><Icon name="alertTriangle" /><span><strong>{[sentBack.reviewedByName, sentBack.reviewedAt ? formatDate(sentBack.reviewedAt) : ""].filter(Boolean).join(" · ") || copy("ผู้ตรวจ", "Reviewer", "レビュー担当")}</strong>{" · "}{copy("ส่งกลับให้แก้:", "returned it:", "差し戻し理由:")} “{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}”</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("revision")}>{copy("ดูประวัติ Revision", "Open revision history", "改訂履歴を開く")}<Icon name="arrowRight" /></button></div> : null}
+    {approved ? <div className="info-strip green"><Icon name="lock" /><span><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></span></div> : null}
+    {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{estimateUxCopy(currentLocale(), "มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{estimateUxCopy(currentLocale(), "กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
-    {validationCount ? <div className="info-strip estimate-validation-strip estimate-advisory"><Icon name="alertTriangle" /><span>{criticalCount ? <strong className="red-text">{criticalCount} {estimateUxCopy(currentLocale(), "รายการต้องแก้ก่อนส่งตรวจ", "issues to resolve before submission", "提出前に修正が必要")}</strong> : null}{criticalCount && warningCount ? " · " : null}{warningCount ? <span>{warningCount} {estimateUxCopy(currentLocale(), "คำเตือนที่ควรทบทวน (ไม่ขัดขวางการส่ง)", "advisory warnings (do not block submission)", "警告（提出を妨げません）")}</span> : null}</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("validation")}><LocalizedText text="Open validation" /><Icon name="arrowRight" /></button></div> : null}
-    {["Approved", "Locked"].includes(header.status) ? <div className="info-strip green"><Icon name="lock" /><span><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></span></div> : null}
-    {lineCount === 0 && capabilities.canEditAllSections && !startDismissed ? <EstimateStartPanel workspace={workspace} busy={busy} onCopy={copyFromEstimate} onDismiss={() => setStartDismissed(true)} /> : null}
+    <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
+      <div className="est-overview-main">
+        <div className="est-overview-top">
+          <ol className="est-rail" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>
+            {rail.map((step, index) => <li key={step.key} className={`est-step ${step.state}`} aria-current={step.state === "now" ? "step" : undefined}><span className="est-dot">{step.state === "done" ? <Icon name="check" /> : index + 1}</span>{step.label}</li>)}
+          </ol>
+          {validationCount
+            ? <button className={`est-issue ${criticalCount ? "red" : "amber"}`} type="button" onClick={() => setTab("validation")}><Icon name="alertTriangle" />{[criticalCount ? copy(`${criticalCount} ต้องแก้ก่อนส่ง`, `${criticalCount} to fix before submitting`, `提出前に${criticalCount}件修正`) : "", warningCount ? copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告${warningCount}件`) : ""].filter(Boolean).join(" · ")}</button>
+            : <span className="est-issue green"><Icon name="checkCircle" />{copy("ผ่านการตรวจของระบบ", "System checks passed", "システムチェック合格")}</span>}
+        </div>
+        {segmentBase > 0
+          ? <div className="est-costbar" role="img" aria-label={segments.filter((segment) => segment.value > 0).map((segment) => `${segment.label} ${formatMoney(segment.value)}`).join(" · ")}>{segments.map((segment) => segment.value > 0 ? <i key={segment.key} style={{ width: `${(segment.value / segmentBase) * 100}%`, background: segment.color }} /> : null)}</div>
+          : <div className="est-costbar empty"><span>{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span></div>}
+        <div className="est-legend">
+          {segments.map((segment) => <button key={segment.key} type="button" className="est-legend-item" onClick={() => setTab(segment.tab)}>
+            <span><i style={{ background: segment.color }} />{segment.label}</span>
+            <strong>{formatMoney(segment.value)}</strong>
+            {segment.note ? <em>{segment.note}</em> : null}
+          </button>)}
+        </div>
+      </div>
+      <div className="est-total">
+        <span>{copy("ต้นทุนรวมโดยประมาณ", "Total estimated cost", "見積原価合計")}</span>
+        <strong>{formatMoney(totals.total)}</strong>
+        <span>{copy("ต้นทุนภายใน", "Internal cost", "社内原価")} · {revisionCode(header.revision)}</span>
+      </div>
+    </section>
+    {lineCount === 0 && capabilities.canEditAllSections && !startDismissed ? <EstimateStartPanel workspace={workspace} busy={busy} onCopy={copyFromEstimate} canAssign={capabilities.canManageAssignments} onOpenTab={setTab} onDismiss={() => setStartDismissed(true)} /> : null}
     <Tabs active={tab} onChange={setTab} tabs={[
-      { id: "summary", label: estimateUxCopy(currentLocale(), "สรุปต้นทุน", "Cost summary", "原価サマリー") }, { id: "cost", label: estimateUxCopy(currentLocale(), "รายการต้นทุน", "Cost Items", "原価明細"), count: workspace.costItems.length }, { id: "manhour", label: estimateUxCopy(currentLocale(), "ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length }, { id: "other", label: estimateUxCopy(currentLocale(), "ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length },
+      { id: "summary", label: copy("สรุป", "Cost summary", "原価サマリー") },
+      { id: "cost", label: copy("วัสดุและอุปกรณ์", "Cost Items", "原価明細"), count: workspace.costItems.length },
+      { id: "manhour", label: copy("ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length },
+      { id: "other", label: copy("ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length },
+      { id: "validation", label: copy("ตรวจสอบ", "Validation", "検証"), count: validationCount },
+      { id: "assignment", label: copy("ผู้รับผิดชอบ", "Assignment", "担当"), count: workspace.assignments.length },
+      { id: "review", label: copy("ตรวจทาน", "Engineering Review", "技術レビュー") },
+      { id: "revision", label: copy("Revision", "Revision history", "改訂履歴") },
     ]} />
-    {!["summary", "cost", "manhour", "other"].includes(tab) ? <div className="estimate-secondary-heading"><button className="btn ghost sm" type="button" onClick={() => setTab("summary")}><Icon name="chevronLeft" />{estimateUxCopy(currentLocale(), "กลับสรุปต้นทุน", "Back to cost summary", "原価サマリーへ")}</button><strong><LocalizedText text={tab === "assignment" ? "Assignment" : tab === "revision" ? "Revision Control" : tab === "review" ? "Engineering Review" : "Validation"} /></strong></div> : null}
 
     <div hidden={tab !== "summary"}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} />
     </div>
     {tab === "summary" ? <>
       {header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
       {ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}
-      <details className="estimate-secondary"><summary>{estimateUxCopy(currentLocale(), "รายละเอียดต้นทุนและความพร้อม", "Cost breakdown and readiness", "原価と準備状況")}</summary>
-    <section className="summary-strip">
-      <SummaryTile label="Material Cost" value={formatMoney(totals.material)} note="01–05" />
-      <SummaryTile label="Engineering cost" value={formatMoney(totals.engineering)} note={`${formatNumber(workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0))} MD`} />
-      <SummaryTile label="Outsource" value={formatMoney(totals.outsource)} note="Supplier and other outsource" />
-      <SummaryTile label="Transportation" value={formatMoney(totals.transportation)} note="Material and project expense" />
-      <SummaryTile label="Accommodation" value={formatMoney(totals.accommodation)} note="Hotel and per diem" />
-      <SummaryTile label="Other Cost" value={formatMoney(totals.other)} note="06 and 10" />
-      <SummaryTile label={`Contingency ${formatNumber(header.contingencyRate)}%`} value={formatMoney(totals.contingency)} note="Calculated by SQL Server" />
-      <SummaryTile label="Total Estimated Cost" value={formatMoney(totals.total)} note="Internal cost · no margin" strong />
-    </section>
+      <details className="estimate-secondary"><summary>{estimateUxCopy(currentLocale(), "ความพร้อมและข้อมูล Revision", "Readiness and revision information", "準備状況と改訂情報")}</summary>
 <EstimateSummaryTab workspace={workspace} /></details></> : null}
     {tab === "cost" ? <EstimateCostItemsTab onCopyModule={copyModule} onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
       if (!seeds.length) return false;
@@ -1017,23 +1155,9 @@ function EstimateNextSteps({ workspace, busy, onOpen, onSubmit }: { workspace: E
     "review-summary": [copy("ตรวจสรุป Estimate", "Review the Estimate summary", "見積サマリーを確認"), copy("ข้อมูลปัจจุบันไม่มีงานที่ระบบระบุว่าต้องแก้", "There is no system-identified action for the current state.", "現在、システムが要求する修正はありません。")],
   } as const;
   const [title, subtitle] = content[action.kind];
-  /* `description` is the FOR JSON PATH snapshot the workflow archives with each
-     revision (estimates.ts:151), not prose — printing it puts the whole estimate
-     on screen. `reason` carries the words a person typed, and only a row whose
-     own status is "Revision Required" is a send-back: approving writes the
-     literal "Approved" into the same column (estimates.ts:350). */
-  const sentBack = action.kind === "address-revision"
-    ? [...workspace.revisionHistory].reverse().find((entry) => entry.status === "Revision Required") ?? null
-    : null;
+  /* The reviewer's reason sits in the strip at the top of the workspace (latestSendBack), so this
+     panel only names the next step. */
   return <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
-    {sentBack ? <div className="info-strip amber" style={{ marginBottom: 12 }}>
-      <Icon name="alertTriangle" />
-      <span>
-        <strong>{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}</strong>
-        {sentBack.reviewedByName ? <> · {sentBack.reviewedByName}</> : null}
-        {sentBack.reviewedAt ? <> · {formatDate(sentBack.reviewedAt)}</> : null}
-      </span>
-    </div> : null}
     {action.kind === "submit-review"
       ? <button className="btn primary" type="button" disabled={busy} onClick={onSubmit}><Icon name="send" />{title}</button>
       : <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}><Icon name="arrowRight" />{title}</button>}

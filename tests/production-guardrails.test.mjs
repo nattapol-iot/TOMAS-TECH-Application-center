@@ -525,7 +525,8 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /capabilities\.canEditOtherCosts/);
   assert.match(estimateScreen, /const \[pageSize, setPageSize\] = useState\(50\)/);
   assert.match(estimateScreen, /<TablePageSize value=\{pageSize\}/);
-  assert.match(estimateScreen, /<StatusLegend items=/);
+  // Status tabs replace the colour legend: they name the statuses and filter by them.
+  assert.match(estimateScreen, /ESTIMATE_STATUS_TABS\.map\(\(\[value, th, en, ja\]\)/);
   for (const tab of ["Cost summary", "Cost Items", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
     assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -1385,10 +1386,12 @@ test("the next-action note shows the reviewer's reason, never the archived snaps
     readFile(new URL("app/system/production/EstimateScreens.tsx", root), "utf8"),
     readFile(new URL("backend-node/src/routes/estimates.ts", root), "utf8"),
   ]);
-  const panel = screens.slice(screens.indexOf("const sentBack = action.kind"), screens.indexOf("function EstimateSummaryTab"));
-  assert.match(panel, /entry\.status === "Revision Required"/);
-  assert.match(panel, /sentBack\.reason/);
-  assert.doesNotMatch(panel, /sentBack\.description/);
+  // The reason now heads the workspace (latestSendBack) instead of sitting in the next-action panel.
+  const helperStart = screens.indexOf("function latestSendBack");
+  const helper = screens.slice(helperStart, screens.indexOf("return previous", helperStart) + 120);
+  assert.match(helper, /status === "Revision Required"/);
+  assert.match(screens, /sentBack\.reason/);
+  assert.doesNotMatch(screens, /sentBack\.description/);
   // The premise above, pinned against the writer so the two cannot drift apart.
   assert.match(estimates, /INSERT INTO dbo\.estimate_revisions\(estimate_id,revision,reason,description/);
   assert.match(estimates, /snapshotRevision\(transaction, id, current\.revision, "Approved", "Approved"/);
@@ -1420,9 +1423,8 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   // The ERP sheet is now the only primary summary; secondary workflows remain available.
   assert.match(screens, /hidden=\{tab !== "summary"\}><EstimateErpSheetPanel/);
   assert.doesNotMatch(screens, /id: "erp"|<EstimateErpSummaryPanel/);
-  assert.match(screens, /setTab\("assignment"\)/);
-  assert.match(screens, /setTab\("revision"\)/);
-  assert.match(screens, /setTab\("review"\)/);
+  // They are tabs now, visible on every estimate, rather than entries in a "More" menu.
+  for (const id of ["assignment", "validation", "revision", "review"]) assert.ok(screens.includes(`{ id: "${id}", label: copy(`), `the ${id} tab is missing from the workspace tabs`);
   assert.match(sheet, /classify\(\[\.\.\.selected\], bulkCategory\)/);
   assert.match(sheet, /visibleRows\.map/);
 });

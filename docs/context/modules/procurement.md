@@ -4,7 +4,7 @@
 
 จัดซื้อ อนุมัติ และประวัติ PR
 
-Evidence: snapshot `4f8fcb97`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `049482a7`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
