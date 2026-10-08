@@ -908,7 +908,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました")}</strong>{" · "}
       {liveCopy("จะอัปเดตให้ทันทีที่คุณบันทึกหรือปิดสิ่งที่กำลังแก้", "It updates as soon as you save or close what you are editing.", "編集中の内容を保存するか閉じるとすぐに更新されます。")}</span></div> : null}
     {sentBack ? <div className="info-strip amber est-sentback" role="status"><Icon name="alertTriangle" /><span><strong>{[sentBack.reviewedByName, sentBack.reviewedAt ? formatDate(sentBack.reviewedAt) : ""].filter(Boolean).join(" · ") || copy("ผู้ตรวจ", "Reviewer", "レビュー担当")}</strong>{" · "}{copy("ส่งกลับให้แก้:", "returned it:", "差し戻し理由:")} “{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}”</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("revision")}>{copy("ดูประวัติ Revision", "Open revision history", "改訂履歴を開く")}<Icon name="arrowRight" /></button></div> : null}
-    {approved ? <div className="info-strip green"><Icon name="lock" /><span><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></span></div> : null}
+    {approved ? <div className="info-strip green est-approved"><Icon name="lock" /><span><strong><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></strong>{" · "}{copy("ขั้นต่อไป: Export ไฟล์ ERP ในแท็บสรุป · ฝ่ายขายทำใบเสนอราคาต่อ · สร้าง Project จาก RFQ เมื่อลูกค้ายืนยันสั่งซื้อ", "Next: export the ERP file from the summary tab · Sales prepares the quotation · the project is created from the RFQ once the customer orders", "次へ：サマリーからERPファイルを出力 · 営業が見積書を作成 · 受注後にRFQから案件を作成")}</span><span className="spacer" />{tab !== "summary" ? <button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("ไปที่ Export ERP", "Go to ERP export", "ERP出力へ")}<Icon name="arrowRight" /></button> : null}</div> : null}
     {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
@@ -1086,7 +1086,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       catch (requestError) { await mutationError(requestError); }
       finally { setBusy(false); }
     }} /> : null}
-    {workflowAction ? <WorkflowModal action={workflowAction} estimate={header.number} busy={busy} onClose={() => setWorkflowAction(null)} onConfirm={async (comment) => {
+    {workflowAction ? <WorkflowModal action={workflowAction} workspace={workspace} busy={busy} onShowValidation={() => { setWorkflowAction(null); setTab("validation"); }} onClose={() => setWorkflowAction(null)} onConfirm={async (comment) => {
       setBusy(true); setError("");
       try { await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment); const label = workflowAction === "approve" ? "approved and locked" : workflowAction === "submit" ? "submitted for engineering review" : workflowAction === "create-revision" ? "opened a new revision" : "returned for revision"; setWorkflowAction(null); await afterMutation(`${header.number} ${label}`); }
       catch (requestError) { await mutationError(requestError); }
@@ -1196,6 +1196,8 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     setSetBusy(true);setSetError("");try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/price-set-detach`,{method:"POST",body:JSON.stringify({lineId:line.id,estimateRowVersion:workspace.header.rowVersion})});await onExcelImported();}catch(error){setSetError(toError(error));}finally{setSetBusy(false);}
   };
   const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
+  /* One module's actions open at a time, inline, so the scrolling sheet never clips a popover. */
+  const [bandActions, setBandActions] = useState<string | null>(null);
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
@@ -1351,12 +1353,13 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
       {issues ? <Badge tone="amber">{issues} <LocalizedText text={"to fix"} /></Badge> : null}
       {isCollapsed(group.key) ? <strong className="num cost-collapsed-total">{formatMoney(groupTotal)}</strong> : null}
 
-      {canAdd && lineCount ? <button type="button" className="group-action" disabled={busy} onClick={() => setSaveTarget(groups.find((entry) => entry.key === group.key) ?? null)} title={localizeCopy("เก็บโมดูลนี้เข้าคลัง Master Template")}><Icon name="package" /><LocalizedText text={"Save as template"} /></button> : null}
-    </div></td><td className="cost-module-controls">{canAdd && lineCount ? <span className="row-actions cost-order-actions">{([-1, 1] as const).map(direction => {
+    </div></td><td className="cost-module-controls">{canAdd && lineCount ? (bandActions === group.key
+      ? <span className="row-actions cost-order-actions est-band-actions"><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("เก็บโมดูลนี้เข้าคลัง Master Template")} aria-label={"Save as template " + group.module} onClick={() => { setBandActions(null); setSaveTarget(groups.find((entry) => entry.key === group.key) ?? null); }}><Icon name="package" /></button>{([-1, 1] as const).map(direction => {
         const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
         const index = siblings.findIndex(entry => entry.key === group.key);
         return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={localizeCopy(direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down")} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
-      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateUxCopy(currentLocale(), "คัดลอกโมดูล", "Copy module", "モジュールを複製")} aria-label={"Copy Module " + group.module} onClick={() => setCopyTarget(groups.find(entry => entry.key === group.key) ?? null)}><Icon name="copy" /></button><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button></span> : null}</td>
+      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateUxCopy(currentLocale(), "คัดลอกโมดูล", "Copy module", "モジュールを複製")} aria-label={"Copy Module " + group.module} onClick={() => setCopyTarget(groups.find(entry => entry.key === group.key) ?? null)}><Icon name="copy" /></button><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button><button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกโมดูล", "Close module actions", "モジュール操作を閉じる")} onClick={() => setBandActions(null)}><Icon name="x" /></button></span>
+      : <button className="icon-btn" type="button" disabled={busy || quickSaving} aria-expanded={false} title={estimateCopy("ตัวเลือกโมดูล: ย้าย คัดลอก แก้ไข บันทึกเป็น Template ลบ", "Module actions: move, copy, edit, save as template, delete", "モジュール操作：移動・複製・編集・テンプレート保存・削除")} aria-label={estimateCopy("ตัวเลือกโมดูล", "Module actions", "モジュール操作") + " " + group.module} onClick={() => setBandActions(group.key)}><Icon name="more" /></button>) : null}</td>
   </tr>;
 
   return <>
@@ -1859,23 +1862,51 @@ function revisionWithCurrent(revisions: EstimateRevision[], currentRevision: num
   return [...revisions, { id: -1, revision: currentRevision, code: revisionCode(currentRevision), reason: "Current revision", description: "Current live revision", createdById: 0, createdByName: "—", createdAt: "", reviewedById: null, reviewedByName: null, reviewedAt: null, status: "Active", total: currentTotal }].sort((left, right) => left.revision - right.revision);
 }
 
+/* `description` is the FOR JSON PATH snapshot archived with each revision, not prose. It stays one
+   click away for audits, formatted only when someone opens it. */
 function RevisionDescription({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   if (!text) return <>—</>;
-  if (text.length <= 160 && !text.includes("\n")) return <span className="revision-description-text">{text}</span>;
+  if (text.length <= 160 && !text.includes("\n") && !text.trim().startsWith("{") && !text.trim().startsWith("[")) return <span className="revision-description-text">{text}</span>;
   let formatted = text;
-  if (expanded) {
+  if (open) {
     try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { /* Plain descriptions retain their original text. */ }
   }
-  return <div className="revision-description">
-    <div className={expanded ? "revision-description-text expanded" : "revision-description-text collapsed"}>{expanded ? formatted : text.slice(0, 160) + (text.length > 160 ? "…" : "")}</div>
-    <button type="button" className="link-btn" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? estimateUxCopy(currentLocale(), "ย่อรายละเอียด", "Show less", "折りたたむ") : estimateUxCopy(currentLocale(), "ขยายรายละเอียด", "Show more", "詳細を表示")}</button>
-  </div>;
+  return <details className="est-snapshot" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>{estimateCopy("ดูข้อมูลที่บันทึกไว้", "Show the stored snapshot", "保存データを表示")}</summary>
+    {open ? <pre className="revision-description-text expanded">{formatted}</pre> : null}
+  </details>;
 }
+
+function revisionStatusView(revision: EstimateRevision, currentRevision: number): { label: string; tone: Tone } {
+  if (revision.revision === currentRevision) return { label: estimateCopy("ปัจจุบัน", "Current", "現行"), tone: "blue" };
+  if (revision.status === "Approved" || revision.status === "Locked") return { label: estimateCopy("อนุมัติแล้ว", "Approved", "承認済み"), tone: "green" };
+  if (revision.status === "Revision Required") return { label: estimateCopy("ส่งกลับแก้ไข", "Returned for revision", "差し戻し"), tone: "amber" };
+  if (revision.status === "Withdrawn") return { label: estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ"), tone: "slate" };
+  return { label: revision.status, tone: "slate" };
+}
+const revisionReasonText = (reason: string) => reason === "Approved" ? estimateCopy("อนุมัติ", "Approved", "承認")
+  : reason === "Current revision" ? estimateCopy("Revision ที่กำลังทำ", "Current revision", "作業中の改訂")
+    : reason === "Review withdrawn" ? estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ") : reason;
 
 function EstimateRevisionTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {
   const rows = revisionWithCurrent(revisions, currentRevision, currentTotal);
-  return <Panel title="Revision Control" subtitle="Revision history เป็น immutable record; เปิด revision ใหม่จากแถบคำสั่งของรายการที่ Approved หรือ Locked" flush>{rows.length ? <div className="table-wrap"><table className="estimate-revision-table"><thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th><LocalizedText text={"Reviewed"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead><tbody>{rows.map((revision) => <tr key={revision.id}><td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span></td><td><strong>{revision.reason}</strong></td><td><RevisionDescription text={revision.description} /></td><td>{revision.createdByName}</td><td>{formatDateTime(revision.createdAt)}</td><td>{revision.reviewedByName ?? "—"}</td><td>{formatDateTime(revision.reviewedAt)}</td><td className="num"><strong>{formatMoney(revision.total)}</strong></td><td><Badge>{revision.revision === currentRevision ? "Current" : revision.status}</Badge></td></tr>)}</tbody></table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}</Panel>;
+  const copy = estimateCopy;
+  return <Panel title={copy("ประวัติ Revision", "Revision Control", "改訂管理")} subtitle={copy("ทุก Revision ถูกเก็บถาวร แก้ไม่ได้ · เปิด Revision ใหม่จากปุ่มบนหัวหน้าเมื่ออนุมัติแล้ว", "Revision history is an immutable record; open a new revision from the header once approved", "改訂履歴は変更不可の記録です。承認後はヘッダーから新しい改訂を開きます")} flush>{rows.length ? <div className="table-wrap"><table className="estimate-revision-table">
+    <thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Description"} /></th></tr></thead>
+    <tbody>{rows.map((revision) => {
+      const view = revisionStatusView(revision, currentRevision);
+      return <tr key={revision.id}>
+        <td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span></td>
+        <td className="wrap"><strong>{revisionReasonText(revision.reason)}</strong></td>
+        <td><Badge tone={view.tone}><span>{view.label}</span></Badge></td>
+        <td>{revision.createdByName}<div className="est-sub">{formatDateTime(revision.createdAt)}</div></td>
+        <td>{revision.reviewedByName ?? "—"}{revision.reviewedAt ? <div className="est-sub">{formatDateTime(revision.reviewedAt)}</div> : null}</td>
+        <td className="num"><strong>{formatMoney(revision.total)}</strong></td>
+        <td className="wrap"><RevisionDescription text={revision.description} /></td>
+      </tr>;
+    })}</tbody>
+  </table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}</Panel>;
 }
 
 function EstimateCompareTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {
@@ -2097,13 +2128,52 @@ function AssignmentEditor({ bootstrap, workspace, assignment, busy, onClose, onS
   </Modal>;
 }
 
-function WorkflowModal({ action, estimate, busy, onClose, onConfirm }: { action: "submit" | "approve" | "request-revision" | "create-revision"; estimate: string; busy: boolean; onClose: () => void; onConfirm: (comment: string) => Promise<void> }) {
+/* The server keeps a revision reason in NVARCHAR(100) (estimates.ts); a submit or approve comment may be long. */
+const REVISION_REASON_MAX = 100;
+const SEND_BACK_REASONS = [
+  ["ราคาเก่าเกิน 180 วัน", "Prices older than 180 days", "180日超の価格"],
+  ["ขาดค่าแรงติดตั้ง", "Installation labor missing", "据付工数の不足"],
+  ["ขอบเขตไม่ตรง RFQ", "Scope does not match the RFQ", "範囲がRFQと不一致"],
+] as const;
+
+function WorkflowModal({ action, workspace, busy, onClose, onConfirm, onShowValidation }: {
+  action: "submit" | "approve" | "request-revision" | "create-revision"; workspace: EstimateCostWorkspace; busy: boolean;
+  onClose: () => void; onConfirm: (comment: string) => Promise<void>; onShowValidation: () => void;
+}) {
+  const copy = estimateCopy;
+  const { header } = workspace;
   const [comment, setComment] = useState("");
   const requiresComment = action === "request-revision" || action === "create-revision";
-  const title = action === "approve" ? "Approve estimate cost?" : action === "submit" ? "Submit for Engineering Review?" : action === "create-revision" ? "Create a new estimate revision?" : "Request estimate revision";
-  const label = action === "approve" ? "Approve and lock" : action === "submit" ? "Submit review" : action === "create-revision" ? "Create revision" : "Return for revision";
-  return <Modal title={title} subtitle={`${estimate} · this workflow decision is written to the audit trail`} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className={action === "approve" ? "btn success" : action === "request-revision" ? "btn warn" : "btn primary"} type="button" disabled={busy || (requiresComment && !comment.trim())} onClick={() => { void onConfirm(comment.trim()); }}><Icon name={action === "approve" ? "checkCircle" : action === "submit" ? "send" : action === "create-revision" ? "gitBranch" : "refresh"} />{busy ? "Working…" : label}</button></>}>
-    <div className={action === "approve" ? "info-strip green" : action === "request-revision" ? "info-strip amber" : "info-strip"}><Icon name={action === "approve" ? "lock" : action === "request-revision" ? "alertTriangle" : action === "create-revision" ? "copy" : "shield"} /><span>{action === "approve" ? "Approved revision becomes read-only." : action === "request-revision" ? "A reason is required so the estimate owner knows what to change." : action === "create-revision" ? "The locked revision remains immutable and its current lines are copied into the next revision." : "Server validation runs again before the status changes."}</span></div>
-    <Field label={requiresComment ? "Revision reason *" : "Workflow comment"}><textarea maxLength={20000} rows={4} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={requiresComment ? "Describe the scope, price or effort that must be revised…" : "Optional note for the audit trail…"} /></Field>
+  const maxLength = requiresComment ? REVISION_REASON_MAX : 20000;
+  const title = action === "approve" ? copy("อนุมัติต้นทุน Estimate?", "Approve estimate cost?", "見積原価を承認しますか？")
+    : action === "submit" ? copy("ส่งให้ Engineering Review?", "Submit for Engineering Review?", "技術レビューへ提出しますか？")
+      : action === "create-revision" ? copy("สร้าง Revision ใหม่?", "Create a new estimate revision?", "新しい改訂を作成しますか？")
+        : copy("ส่งกลับให้แก้ไข", "Request estimate revision", "修正を依頼");
+  const label = action === "approve" ? copy("อนุมัติและล็อก", "Approve and lock", "承認してロック")
+    : action === "submit" ? copy("ส่งตรวจ", "Submit review", "提出")
+      : action === "create-revision" ? copy("สร้าง Revision", "Create revision", "改訂を作成")
+        : copy("ส่งกลับแก้ไข", "Return for revision", "差し戻す");
+  const note = action === "approve" ? copy("Revision ที่อนุมัติจะอ่านได้อย่างเดียว", "Approved revision becomes read-only.", "承認した改訂は読み取り専用になります。")
+    : action === "request-revision" ? copy(`${revisionCode(header.revision)} ถูกเก็บเป็นประวัติ ระบบเปิด ${revisionCode(header.revision + 1)} ให้แก้ต่อโดยคัดลอกทุกรายการ และเจ้าของ Estimate เห็นเหตุผลนี้บนหน้า Estimate`, `${revisionCode(header.revision)} is kept as history; ${revisionCode(header.revision + 1)} opens with every line copied, and the owner sees this reason on the estimate. A reason is required so the estimate owner knows what to change.`, `${revisionCode(header.revision)}は履歴として保存され、全明細をコピーした${revisionCode(header.revision + 1)}が開きます。`)
+      : action === "create-revision" ? copy("Revision ที่ล็อกไว้จะไม่ถูกแก้ และรายการปัจจุบันจะถูกคัดลอกไป Revision ใหม่", "The locked revision remains immutable and its current lines are copied into the next revision.", "ロック済みの改訂は変更されず、現在の明細が次の改訂へコピーされます。")
+        : copy("ระบบตรวจซ้ำอีกครั้งก่อนเปลี่ยนสถานะ · หลังส่ง Estimate อ่านอย่างเดียวจนผู้ตรวจตัดสิน · ถอนการส่งได้จากเมนู ⋯ › จัดการเอกสาร", "Server validation runs again before the status changes. The estimate is read-only until the reviewer decides; withdraw it from ⋯ › Manage document.", "状態変更前にサーバーが再検証します。提出後はレビュー完了まで読み取り専用です。");
+  const warnings = workspace.validationIssues.filter((issue) => !isCriticalValidationIssue(issue)).length;
+  const errors = workspace.validationIssues.length - warnings;
+  const sectionsDone = workspace.assignments.filter((assignment) => numberOf(assignment.progress) >= 100 || ["Completed", "Reviewed"].includes(assignment.status)).length;
+  const manDays = workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
+  const addReason = (text: string) => setComment((current) => (current.trim() ? `${current.trim()}; ${text}` : text).slice(0, REVISION_REASON_MAX));
+  return <Modal title={title} subtitle={`${header.number} · ${revisionCode(header.revision)} · ${copy("การตัดสินใจนี้บันทึกในประวัติ", "this workflow decision is written to the audit trail", "この判断は監査証跡に記録されます")}`} size="md" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className={action === "approve" ? "btn success" : action === "request-revision" ? "btn warn" : "btn primary"} type="button" disabled={busy || (requiresComment && !comment.trim())} onClick={() => { void onConfirm(comment.trim()); }}><Icon name={action === "approve" ? "checkCircle" : action === "submit" ? "send" : action === "create-revision" ? "gitBranch" : "refresh"} />{busy ? "Working…" : label}</button></>}>
+    {action === "submit" || action === "approve" ? <ul className="est-ready" aria-label={copy("ความพร้อม", "Readiness", "準備状況")}>
+      <li className={errors ? "err" : "ok"}><span className="est-ready-icon"><Icon name={errors ? "x" : "check"} /></span>{errors ? copy(`${errors} ข้อผิดพลาดที่ปิดกั้น`, `${errors} blocking error(s)`, `${errors}件のブロックエラー`) : copy("ไม่มีข้อผิดพลาดที่ปิดกั้น", "No blocking errors", "ブロックエラーなし")}</li>
+      <li className={warnings ? "warn" : "ok"}><span className="est-ready-icon"><Icon name={warnings ? "alertTriangle" : "check"} /></span>{warnings ? copy(`${warnings} คำเตือน (ไม่ปิดกั้น)`, `${warnings} warning(s) — advisory`, `警告${warnings}件（ブロックしません）`) : copy("ไม่มีคำเตือน", "No warnings", "警告なし")}{warnings ? <button className="link-btn" type="button" onClick={onShowValidation}>{copy("ดู", "View", "表示")}</button> : null}</li>
+      {workspace.assignments.length ? <li className={sectionsDone === workspace.assignments.length ? "ok" : "warn"}><span className="est-ready-icon"><Icon name={sectionsDone === workspace.assignments.length ? "check" : "clock"} /></span>{copy(`ส่วนงานเสร็จ ${sectionsDone}/${workspace.assignments.length}`, `Sections done ${sectionsDone}/${workspace.assignments.length}`, `セクション完了 ${sectionsDone}/${workspace.assignments.length}`)}</li> : null}
+      <li className="info"><span className="est-ready-icon"><Icon name="file" /></span>{copy("ต้นทุนรวม", "Total cost", "原価合計")} <strong>{formatMoney(header.totals.total)}</strong><span className="muted">· {copy("วัสดุ", "Material", "材料")} {formatMoney(header.totals.material)} · {copy("ค่าแรง", "Labor", "労務")} {formatMoney(header.totals.engineering)} ({formatNumber(manDays)} Man-day)</span></li>
+    </ul> : null}
+    <div className={action === "approve" ? "info-strip green" : action === "request-revision" ? "info-strip amber" : "info-strip"}><Icon name={action === "approve" ? "lock" : action === "request-revision" ? "alertTriangle" : action === "create-revision" ? "copy" : "shield"} /><span>{note}</span></div>
+    {action === "request-revision" ? <div className="est-reason-chips">{SEND_BACK_REASONS.map(([th, en, ja]) => <button key={en} type="button" className="chip" disabled={busy} onClick={() => addReason(copy(th, en, ja))}>+ {copy(th, en, ja)}</button>)}</div> : null}
+    <Field label={requiresComment ? copy("เหตุผล *", "Revision reason *", "理由 *") : copy("ความเห็น (ถ้ามี)", "Workflow comment", "コメント（任意）")}>
+      <textarea maxLength={maxLength} rows={4} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={requiresComment ? copy("ระบุสิ่งที่ต้องแก้ เช่น ขอบเขต ราคา หรือค่าแรง", "Describe the scope, price or effort that must be revised…", "修正が必要な範囲・価格・工数を記入") : copy("บันทึกถึงผู้ตรวจหรือในประวัติ", "Optional note for the audit trail…", "監査証跡への任意メモ")} />
+      {requiresComment ? <span className={comment.length >= REVISION_REASON_MAX ? "est-counter full" : "est-counter"}>{comment.length}/{REVISION_REASON_MAX}</span> : null}
+    </Field>
   </Modal>;
 }
