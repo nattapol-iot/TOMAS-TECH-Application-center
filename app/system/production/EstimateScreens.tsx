@@ -1874,24 +1874,72 @@ function EstimateOtherCostTab({ workspace, busy, onAddOther, onEditOther, onRemo
   onRemoveOther: (line: EstimateOtherCostLine) => void;
   onUpdateContingency: (rate: number) => Promise<void>;
 }) {
-  const uiText = useUiText();
-  const [contingency, setContingency] = useState(numberOf(workspace.header.contingencyRate));
-  const previewContingency = Math.round(numberOf(workspace.header.totals.subtotal) * contingency / 100);
-  const previewTotal = numberOf(workspace.header.totals.subtotal) + previewContingency;
-  return <section className="grid-main">
+  const copy = estimateCopy;
+  const { totals } = workspace.header;
+  const canEdit = workspace.capabilities.canEditOtherCosts;
+  const canUpdate = workspace.capabilities.canUpdateContingency;
+  const [rateText, setRateText] = useState(String(numberOf(workspace.header.contingencyRate)));
+  const [rowActions, setRowActions] = useState<number | null>(null);
+  const rate = Number(rateText);
+  // The server takes 0–100 in steps of 0.25.
+  const validRate = rateText.trim() !== "" && Number.isFinite(rate) && rate >= 0 && rate <= 100 && Math.abs(rate * 4 - Math.round(rate * 4)) < 1e-9;
+  const base = numberOf(totals.subtotal);
+  const previewContingency = validRate ? Math.round(base * rate / 100) : numberOf(totals.contingency);
+  const categoryView = (category: EstimateOtherCostLine["category"]): { label: string; tone: Tone } => category === "Outsource" ? { label: "Outsource", tone: "violet" }
+    : category === "Transportation" ? { label: copy("เดินทาง", "Transportation", "交通"), tone: "blue" }
+      : category === "Accommodation" ? { label: copy("ที่พัก", "Accommodation", "宿泊"), tone: "blue" }
+        : { label: copy("อื่นๆ", "Other", "その他"), tone: "slate" };
+  const baseRows: Array<[string, number, string]> = [
+    [copy("วัสดุและอุปกรณ์", "Material", "材料・機器"), numberOf(totals.material), "var(--c1)"],
+    [copy("ค่าแรง", "Labor", "労務費"), numberOf(totals.engineering), "var(--c2)"],
+    ["Outsource", numberOf(totals.outsource), "var(--c5)"],
+    [copy("เดินทาง · ที่พัก", "Travel · stay", "旅費・宿泊"), numberOf(totals.transportation) + numberOf(totals.accommodation), "var(--c7)"],
+    [copy("อื่นๆ", "Other", "その他"), numberOf(totals.other), "var(--c4)"],
+  ];
+  if (numberOf(totals.overhead) > 0) baseRows.push(["Overhead", numberOf(totals.overhead), "var(--c6)"]);
+  return <section className="grid-main est-other">
     <div className="stack">
-      <Panel title="Outsource & Other Project Cost" subtitle="Cost line ที่ไม่ใช่ material หรือ man-hour" actions={workspace.capabilities.canEditOtherCosts ? <button className="btn primary sm" type="button" onClick={onAddOther}><Icon name="plus" /><LocalizedText text={"Add other cost"} /></button> : undefined} flush>
-        {workspace.otherCostLines.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Category"} /></th><th><LocalizedText text={"Description"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Remark"} /></th><th /></tr></thead><tbody>{workspace.otherCostLines.map((line) => <tr key={line.id}><td><Badge>{line.category}</Badge></td><td><strong>{line.description}</strong></td><td className="num">{formatNumber(line.quantity, 4)}</td><td>{line.unit}</td><td className="num">{formatMoney(line.unitCost)}</td><td className="num"><strong>{formatMoney(line.lineTotal)}</strong></td><td>{line.remark || "—"}</td><td>{line.canEdit ? <div className="row-actions"><button className="icon-btn" type="button" disabled={busy} onClick={() => onEditOther(line)} aria-label={`Edit ${line.description}`}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} onClick={() => onRemoveOther(line)} aria-label={`Remove ${line.description}`}><Icon name="trash" /></button></div> : <Icon name="lock" />}</td></tr>)}</tbody></table></div> : <EmptyState icon="package" title="No other project cost" message="ยังไม่มี outsource, transportation, accommodation หรือ other cost" action={workspace.capabilities.canEditOtherCosts ? <button className="btn primary" type="button" onClick={onAddOther}><Icon name="plus" /><LocalizedText text={"Add other cost"} /></button> : undefined} />}
+      <Panel title={copy("Outsource และค่าใช้จ่ายอื่น", "Outsource and other costs", "外注・その他費用")} subtitle={copy("แก้ได้เฉพาะเจ้าของ Estimate, Engineering Manager และ Admin", "Editable by the estimate owner, Engineering Managers and Admins", "見積担当者・技術マネージャー・管理者のみ編集可")} actions={canEdit ? <button className="btn primary sm" type="button" onClick={onAddOther}><Icon name="plus" />{copy("เพิ่มรายการ", "Add other cost", "項目を追加")}</button> : undefined} flush>
+        {workspace.otherCostLines.length ? <div className="table-wrap"><table className="est-other-table"><thead><tr>
+          <th>{copy("หมวด", "Category", "区分")}</th><th>{copy("รายการ", "Item", "項目")}</th><th className="num">{copy("จำนวน", "Qty", "数量")}</th><th>{copy("หน่วย", "Unit", "単位")}</th>
+          <th className="num">{copy("ราคา/หน่วย", "Unit cost", "単価")}</th><th className="num">{copy("รวม", "Total", "合計")}</th><th>{copy("หมายเหตุ", "Remark", "備考")}</th><th className="num">{copy("จัดการ", "Actions", "操作")}</th>
+        </tr></thead><tbody>{workspace.otherCostLines.map((line) => {
+          const view = categoryView(line.category);
+          const waiting = numberOf(line.unitCost) <= 0;
+          return <tr key={line.id}>
+            <td><Badge tone={view.tone}><span>{view.label}</span></Badge></td>
+            <td className="wrap"><strong>{line.description}</strong></td>
+            <td className="num">{formatNumber(line.quantity, 4)}</td>
+            <td>{line.unit}</td>
+            <td className="num">{waiting ? <span className="est-wait"><span className="est-wait-pill">{copy("รอราคา", "Waiting for price", "価格待ち")}</span>{formatMoney(0)}</span> : formatMoney(line.unitCost)}</td>
+            <td className={waiting ? "num soft-warn" : "num"}><strong>{formatMoney(line.lineTotal)}</strong></td>
+            <td>{line.remark || "—"}</td>
+            <td className="num">{!line.canEdit ? (canEdit ? <Icon name="lock" /> : null) : rowActions === line.id
+              ? <span className="row-actions est-other-actions"><button className="icon-btn" type="button" disabled={busy} onClick={() => { setRowActions(null); onEditOther(line); }} aria-label={`Edit ${line.description}`}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} onClick={() => { setRowActions(null); onRemoveOther(line); }} aria-label={`Remove ${line.description}`}><Icon name="trash" /></button><button className="icon-btn" type="button" aria-label={copy("ปิดตัวเลือก", "Close actions", "操作を閉じる")} onClick={() => setRowActions(null)}><Icon name="x" /></button></span>
+              : <button className="icon-btn" type="button" disabled={busy} title={copy("แก้ไข · ลบ", "Edit · delete", "編集・削除")} aria-label={`${copy("ตัวเลือก", "Actions", "操作")} ${line.description}`} onClick={() => setRowActions(line.id)}><Icon name="more" /></button>}</td>
+          </tr>;
+        })}</tbody></table></div> : <EmptyState icon="package" title="No other project cost" message="ยังไม่มี outsource, transportation, accommodation หรือ other cost" action={canEdit ? <button className="btn primary" type="button" onClick={onAddOther}><Icon name="plus" /><LocalizedText text={"Add other cost"} /></button> : undefined} />}
       </Panel>
     </div>
     <div className="stack">
-      <Panel title={uiText("Contingency")} subtitle="Applied by SQL Server to the current cost base">
-        <Field label={`Contingency rate — ${formatNumber(contingency)}%`} hint={workspace.capabilities.canUpdateContingency ? "Save เพื่อบันทึกพร้อม optimistic concurrency" : "บัญชีนี้ไม่มีสิทธิ์แก้ contingency"}><input type="range" min="0" max="100" step="0.25" value={contingency} disabled={!workspace.capabilities.canUpdateContingency || busy} onChange={(event) => setContingency(Number(event.target.value))} /></Field>
-        <div className="calc-strip" style={{ marginTop: 10 }}><Icon name="cpu" /><span>{formatMoney(workspace.header.totals.subtotal)} × {formatNumber(contingency)}%</span><strong>{formatMoney(previewContingency)}</strong></div>
-        <div className="calc-strip" style={{ marginTop: 8 }}><Icon name="chart" /><span><LocalizedText text={"Preview total after contingency"} /></span><strong>{formatMoney(previewTotal)}</strong></div>
-        {workspace.capabilities.canUpdateContingency ? <button className="btn primary block" style={{ marginTop: 12 }} type="button" disabled={busy || contingency === numberOf(workspace.header.contingencyRate)} onClick={() => { void onUpdateContingency(contingency); }}><Icon name="check" /><LocalizedText text={"Save contingency"} /></button> : null}
+      <Panel title="Contingency">
+        <span className="est-cont-label">{copy("อัตรา Contingency", "Contingency rate", "予備費率")}</span>
+        <div className="est-cont-row">
+          <span className="est-cont-input"><input type="number" min="0" max="100" step="0.25" aria-label={copy("อัตรา Contingency (%)", "Contingency rate (%)", "予備費率 (%)")} aria-invalid={!validRate} value={rateText} disabled={!canUpdate || busy} onChange={(event) => setRateText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && canUpdate && validRate && rate !== numberOf(workspace.header.contingencyRate)) void onUpdateContingency(rate); }} /><span>%</span></span>
+          {canUpdate ? <button className="btn primary sm" type="button" disabled={busy || !validRate || rate === numberOf(workspace.header.contingencyRate)} onClick={() => { void onUpdateContingency(rate); }}>{copy("บันทึก", "Save", "保存")}</button> : null}
+        </div>
+        <small className={validRate ? "muted" : "soft-warn"}>{canUpdate ? copy("0–100% · ทีละ 0.25", "0–100% · steps of 0.25", "0〜100% · 0.25刻み") : copy("บัญชีนี้ไม่มีสิทธิ์แก้ Contingency", "This account cannot change the contingency", "このアカウントは予備費を変更できません")}</small>
+        <div className="est-cont-calc">
+          <div>{copy("คิดจากฐานต้นทุน", "On the cost base", "原価ベース")} <strong>{formatMoney(base)}</strong> × {validRate ? formatNumber(rate) : "—"}% = <strong>{formatMoney(previewContingency)}</strong></div>
+          <div className="muted">{copy("ต้นทุนรวมหลัง Contingency", "Total after contingency", "予備費込み合計")} {formatMoney(base + previewContingency)}</div>
+        </div>
       </Panel>
-      <Panel title="Cost base"><dl className="def-list one"><div><dt><LocalizedText text={"Material"} /></dt><dd>{formatMoney(workspace.header.totals.material)}</dd></div><div><dt><LocalizedText text={"Engineering"} /></dt><dd>{formatMoney(workspace.header.totals.engineering)}</dd></div><div><dt><LocalizedText text={"Outsource"} /></dt><dd>{formatMoney(workspace.header.totals.outsource)}</dd></div><div><dt><LocalizedText text={"Transportation"} /></dt><dd>{formatMoney(workspace.header.totals.transportation)}</dd></div><div><dt><LocalizedText text={"Accommodation"} /></dt><dd>{formatMoney(workspace.header.totals.accommodation)}</dd></div><div><dt><LocalizedText text={"Other"} /></dt><dd>{formatMoney(workspace.header.totals.other)}</dd></div><div><dt><LocalizedText text={"Subtotal"} /></dt><dd>{formatMoney(workspace.header.totals.subtotal)}</dd></div><div><dt><LocalizedText text={"Contingency"} /></dt><dd>{formatMoney(workspace.header.totals.contingency)}</dd></div><div><dt><LocalizedText text={"Total"} /></dt><dd><strong>{formatMoney(workspace.header.totals.total)}</strong></dd></div></dl></Panel>
+      <Panel title={copy("ฐานต้นทุน", "Cost base", "原価ベース")} actions={<span className="muted est-readonly">{copy("อ่านอย่างเดียว", "Read-only", "閲覧のみ")}</span>} flush>
+        <ul className="est-base-list">
+          {baseRows.map(([label, value, color]) => <li key={label}><span className="est-base-dot" style={{ background: color }} />{label}<strong>{formatMoney(value)}</strong></li>)}
+          <li className="total">{copy("รวมก่อน Contingency", "Before contingency", "予備費前合計")}<strong>{formatMoney(base)}</strong></li>
+        </ul>
+      </Panel>
     </div>
   </section>;
 }

@@ -204,6 +204,68 @@ tr.est-picked > td { background: var(--blue-soft); }
 .est-attention-chip strong { font-variant-numeric: tabular-nums; }
 .est-attention-chip.active { border-color: var(--amber); background: var(--amber); color: var(--n-0); }
 
+/* ---------- Labor: one open discipline, light rows ---------- */
+.est-lab-note { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-xs); }
+.est-labor-panel .btn.ghost.active { background: var(--blue-soft); color: var(--blue-text); }
+.est-labor-wrap { overflow-x: auto; }
+.est-labor-sheet { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+.est-labor-sheet td, .est-labor-sheet th { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--ink-soft); font-size: var(--fs-sm); }
+.est-labor-sheet th { background: var(--n-25); color: var(--muted); font-size: var(--fs-2xs); font-weight: 600; text-align: left; }
+.est-labor-sheet .num { text-align: right; font-variant-numeric: tabular-nums; }
+.est-labor-sheet strong { color: var(--ink); font-weight: 600; }
+.est-labor-sheet tbody tr:hover > td { background: transparent; }
+.est-labor-sheet tr.est-lab-row:hover > td { background: var(--n-25); }
+.est-lab-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.est-lab-line > .muted { font-size: var(--fs-xs); }
+tr.est-lab-disc > td { padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+tr.est-lab-disc.open > td { background: var(--n-25); }
+.est-lab-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 2px 4px; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink); font: inherit; font-size: var(--fs-md); cursor: pointer; }
+.est-lab-toggle:hover { background: var(--n-100); }
+.est-lab-sep { width: 1px; height: 14px; background: var(--line); }
+.est-lab-amount { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.est-lab-link { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); }
+tr.est-lab-pkg > td { background: var(--n-25); }
+tr.est-lab-pkg .row-actions { display: inline-flex; align-items: center; gap: 4px; }
+.est-labor-sheet td.est-lab-indent { padding-left: 28px; }
+tr.est-lab-add > td { padding: 4px 10px 4px 28px; }
+tr.est-lab-total > td { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--n-50); }
+.est-lab-ref { color: var(--blue-text); }
+.est-type-pill { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-2xs); font-weight: 600; }
+.est-lab-act { text-align: right; }
+.est-lab-act .row-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+.est-lab-act .icon-btn { width: 26px; height: 26px; }
+.est-labor-sheet input, .est-labor-sheet select { width: 100%; min-width: 0; height: 28px; padding: 0 8px; font-size: var(--fs-sm); }
+.est-labor-sheet input.num { display: block; max-width: 64px; margin-left: auto; text-align: right; }
+.est-lab-line .icon-btn { width: 24px; height: 24px; }
+.est-labor-sheet td.effort-hours, .est-labor-sheet td.effort-cost { overflow: visible; white-space: normal; }
+.est-labor-sheet .effort-edit-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; }
+.est-labor-sheet td.effort-cost small { display: block; font-size: var(--fs-3xs); }
+.est-labor-sheet .cell-stack { display: grid; gap: 4px; }
+.est-labor-panel .module-name-edit .icon { opacity: 0; transition: opacity 0.12s ease; }
+.est-labor-panel .module-name-edit:hover .icon,
+.est-labor-panel .module-name-edit:focus-visible .icon { opacity: 1; }
+.est-labor-panel .sticky-foot { gap: 8px; padding: 9px 16px; border-top: 1px solid var(--line); background: var(--n-25); color: var(--ink); font-size: var(--fs-sm); }
+.est-labor-panel .sticky-foot strong { font-variant-numeric: tabular-nums; }
+
+/* ---------- Other costs and contingency ---------- */
+.est-other-table th { white-space: nowrap; }
+.est-other-actions { display: inline-flex; gap: 2px; }
+.est-other .icon-btn { width: 26px; height: 26px; }
+.est-wait { display: inline-flex; align-items: center; gap: 6px; color: var(--amber-text); }
+.est-wait-pill { padding: 1px 8px; border: 1px solid var(--amber-line); border-radius: var(--r-pill); background: var(--amber-soft); font-size: var(--fs-3xs); font-weight: 600; }
+.est-cont-label { display: block; margin-bottom: 6px; color: var(--ink); font-size: var(--fs-xs); font-weight: 600; }
+.est-cont-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.est-cont-input { display: inline-flex; align-items: center; gap: 6px; width: 120px; padding-right: 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--muted); }
+.est-cont-input input { width: 100%; min-width: 0; height: 34px; border: 0; background: transparent; box-shadow: none; }
+.est-cont-calc { display: grid; gap: 2px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-25); font-size: var(--fs-sm); }
+.est-cont-calc .muted { font-size: var(--fs-xs); }
+.est-readonly { font-size: var(--fs-xs); }
+.est-base-list { margin: 0; padding: 4px 16px 8px; list-style: none; }
+.est-base-list li { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font-size: var(--fs-sm); }
+.est-base-list li strong { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
+.est-base-list li.total { border-top: 1px solid var(--line); border-bottom: 0; color: var(--ink); font-weight: 600; }
+.est-base-dot { width: 8px; height: 8px; flex: none; border-radius: 2px; }
+
 /* ---------- Revision history ---------- */
 .est-snapshot > summary { cursor: pointer; color: var(--blue-text); font-size: var(--fs-xs); }
 .est-snapshot pre { max-height: 320px; overflow: auto; margin: 8px 0 0; }
