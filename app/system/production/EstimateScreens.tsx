@@ -1201,6 +1201,8 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
   /* One module's actions open at a time, inline, so the scrolling sheet never clips a popover. */
   const [bandActions, setBandActions] = useState<string | null>(null);
+  /* A line's move / edit / delete sit behind its own ⋯, like the module band, so the sheet reads as data. */
+  const [rowActions, setRowActions] = useState<number | null>(null);
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
@@ -1295,6 +1297,15 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     void onReorder("CostItem", workspace.costItems.map(line => ids.has(line.id) ? moved[offset++].id : line.id));
   };
   const visibleLines = groups.flatMap((group) => group.lines);
+  const lineSeverity = useMemo(() => {
+    const severity = new Map<number, "error" | "warning">();
+    for (const issue of workspace.validationIssues) {
+      if (issue.entityType !== "CostItem") continue;
+      if (isCriticalValidationIssue(issue)) severity.set(issue.entityId, "error");
+      else if (!severity.has(issue.entityId)) severity.set(issue.entityId, "warning");
+    }
+    return severity;
+  }, [workspace.validationIssues]);
   /* The toolbar opens the source used last; a module footer opens the price library aimed at that module. */
   const openAddItems = (target: AddItemsTarget | null) => { setAddTarget(target); setAddSwitched(false); setTool(target ? "price" : addSource); };
   const closeTool = () => { setTool(null); setAddTarget(null); };
@@ -1337,7 +1348,7 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   };
 
   const colCount = dense ? 10 : 16;
-  const sheetWidth = dense ? 1320 : 2190;
+  const sheetWidth = dense ? 1260 : 2130;
   const draftRow = (groupKey: string) => quickDraft?.groupKey === groupKey ? <tr className="item-row inline-draft-row cost-draft-row" key={`quick-${groupKey}-${quickDraft.version}`} title={localizeCopy("Enter: save and create the next row · Esc: cancel")} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setQuickDraft(null); } if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void saveQuickRow(true); } }}>
     <td><span className="cell-text quick-new"><LocalizedText text={"New"} />{!quickDraft.module ? <small style={{ display: "block" }}><LocalizedText text={"standalone"} /></small> : null}</span></td>
     <td><CostItemLookupInput field="itemCode" inputRef={(node) => { quickItemCodeRef.current = node; }} required aria-label={uiText("Item code")} maxLength={100} placeholder={localizeCopy("Part No. *")} value={quickDraft.itemCode} onChange={(text) => updateQuick("itemCode", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /></td>
@@ -1359,62 +1370,70 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     <td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(false); }} aria-label={localizeCopy("Save cost item")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new cost item")}><Icon name="x" /></button></div></td>
   </tr> : null;
 
-  const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, ordinal: number, lineCount: number, groupTotal: number, issues: number) => <tr className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "")} onDragOver={event => { if (lineCount) allowDrop(event, group.key); }} onDrop={event => { const target = groups.find(entry => entry.key === group.key)?.lines.at(-1); if (target) dropCost(event, target.id, true); }} key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
-    <td colSpan={colCount - 1}><div className="row band">
+  const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, ordinal: number, lineCount: number, groupTotal: number) => {
+    /* Red: lines whose validation error blocks submit. Amber: lines still waiting for a price or a supplier,
+       or carrying a warning. Each line counts once. */
+    const bandLines = groups.find((entry) => entry.key === group.key)?.lines ?? [];
+    const errors = bandLines.filter((line) => lineSeverity.get(line.id) === "error").length;
+    const warnings = bandLines.filter((line) => lineSeverity.get(line.id) !== "error" && (lineSeverity.has(line.id) || lineNeedsPrice(line) || lineNeedsSupplier(line))).length;
+    return <tr className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "")} onDragOver={event => { if (lineCount) allowDrop(event, group.key); }} onDrop={event => { const target = groups.find(entry => entry.key === group.key)?.lines.at(-1); if (target) dropCost(event, target.id, true); }} key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
+
+    <td colSpan={colCount}><div className="row band">
       <button type="button" className="module-toggle" aria-label={(isCollapsed(group.key) ? "Expand " : "Collapse ") + group.module} aria-expanded={!isCollapsed(group.key)} onClick={() => toggleModule(group.key)}>
         <Icon name={isCollapsed(group.key) ? "chevronRight" : "chevronDown"} />
-        <span className="module-ordinal">{ordinal}</span>
       </button>
-      {canAdd && lineCount ? <button type="button" className="module-name-edit" disabled={busy || quickSaving} title={localizeCopy("แก้ชื่อ Main Module / Rename Main Module")} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><strong>{group.module}</strong><Icon name="edit" /></button> : <strong>{group.module}</strong>}
+      {canAdd && lineCount ? <button type="button" className="module-name-edit" disabled={busy || quickSaving} title={localizeCopy("แก้ชื่อ Main Module / Rename Main Module")} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><strong>{ordinal} · {group.module}</strong><Icon name="edit" /></button> : <strong>{ordinal} · {group.module}</strong>}
       <span className="pill">{group.categoryCode}</span>
-      <span className="muted">{group.category} <LocalizedText text={"·"} /> {lineCount} <LocalizedText text={"item"} /></span>
-      {issues ? <Badge tone="amber">{issues} <LocalizedText text={"to fix"} /></Badge> : null}
-      {isCollapsed(group.key) ? <strong className="num cost-collapsed-total">{formatMoney(groupTotal)}</strong> : null}
-
-    </div></td><td className="cost-module-controls">{canAdd && lineCount ? (bandActions === group.key
+      <span className="muted">{group.category} · {estimateCopy(`${lineCount} รายการ`, `${lineCount} item(s)`, `${lineCount}件`)}</span>
+      {errors ? <Badge tone="red">{estimateCopy(`${errors} ต้องแก้`, `${errors} to fix`, `要修正 ${errors}`)}</Badge> : null}
+      {warnings ? <Badge tone="amber">{estimateCopy(`${warnings} คำเตือน`, `${warnings} warning(s)`, `警告 ${warnings}`)}</Badge> : null}
+      {lineCount ? <strong className="est-band-total">{formatMoney(groupTotal)}</strong> : null}
+      {canAdd && lineCount ? (bandActions === group.key
       ? <span className="row-actions cost-order-actions est-band-actions"><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("เก็บโมดูลนี้เข้าคลัง Master Template")} aria-label={"Save as template " + group.module} onClick={() => { setBandActions(null); setSaveTarget(groups.find((entry) => entry.key === group.key) ?? null); }}><Icon name="package" /></button>{([-1, 1] as const).map(direction => {
         const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
         const index = siblings.findIndex(entry => entry.key === group.key);
         return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={localizeCopy(direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down")} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
       })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateUxCopy(currentLocale(), "คัดลอกโมดูล", "Copy module", "モジュールを複製")} aria-label={"Copy Module " + group.module} onClick={() => setCopyTarget(groups.find(entry => entry.key === group.key) ?? null)}><Icon name="copy" /></button><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button><button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกโมดูล", "Close module actions", "モジュール操作を閉じる")} onClick={() => setBandActions(null)}><Icon name="x" /></button></span>
-      : <button className="icon-btn" type="button" disabled={busy || quickSaving} aria-expanded={false} title={estimateCopy("ตัวเลือกโมดูล: ย้าย คัดลอก แก้ไข บันทึกเป็น Template ลบ", "Module actions: move, copy, edit, save as template, delete", "モジュール操作：移動・複製・編集・テンプレート保存・削除")} aria-label={estimateCopy("ตัวเลือกโมดูล", "Module actions", "モジュール操作") + " " + group.module} onClick={() => setBandActions(group.key)}><Icon name="more" /></button>) : null}</td>
+      : <button className="icon-btn" type="button" disabled={busy || quickSaving} aria-expanded={false} title={estimateCopy("ตัวเลือกโมดูล: ย้าย คัดลอก แก้ไข บันทึกเป็น Template ลบ", "Module actions: move, copy, edit, save as template, delete", "モジュール操作：移動・複製・編集・テンプレート保存・削除")} aria-label={estimateCopy("ตัวเลือกโมดูล", "Module actions", "モジュール操作") + " " + group.module} onClick={() => setBandActions(group.key)}><Icon name="more" /></button>) : null}
+    </div></td>
   </tr>;
+  };
 
   return <>
   {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={onExcelImported} /> : null}
   {setError ? <div role="alert" className="info-strip red">{setError}</div> : null}
   {setEditor ? <EstimatePriceSetEditor workspace={workspace} bootstrap={bootstrap} members={setEditor.members} header={setEditor.header} onClose={()=>setSetEditor(null)} onSaved={async()=>{setSetSelection([]);await onExcelImported();}}/> : null}
-  <Panel className="estimate-cost-panel" title={estimateUxCopy(currentLocale(), "รายการประมาณต้นทุน", "Cost estimate items", "見積原価明細")} subtitle={estimateUxCopy(currentLocale(), `${groups.filter(group => group.module).length} โมดูล · ${visibleLines.filter(line => !line.isPriceSet).length} รายการ`, `${groups.filter(group => group.module).length} modules · ${visibleLines.filter(line => !line.isPriceSet).length} items`, `${groups.filter(group => group.module).length} モジュール · ${visibleLines.filter(line => !line.isPriceSet).length} 明細`)} actions={canAdd ? <>
+  <Panel className="estimate-cost-panel" flush>
+    <div className="est-sheet-bar">
+      {presentCategories.length ? <div className="est-dchips" role="group" aria-label={localizeCopy("Cost category")}>
+        <button type="button" className={activeCategory === "all" ? "est-dchip on" : "est-dchip"} aria-pressed={activeCategory === "all"} onClick={() => { setCategory("all"); setQuickDraft(null); }}>{estimateCopy("ทั้งหมด", "All", "すべて")}<span className="est-dchip-n">{workspace.costItems.length}</span></button>
+        {presentCategories.map(([code, name]) => { const count = workspace.costItems.filter((line) => line.categoryCode === code).length; return <button key={code} type="button" className={activeCategory === code ? "est-dchip on" : "est-dchip"} aria-pressed={activeCategory === code} onClick={() => { setCategory(code); setQuickDraft(null); }}><span className="est-dchip-code mono">{code}</span>{name}<span className="est-dchip-n">{count}</span></button>; })}
+      </div> : null}
+      <span className="spacer" />
+      <div className="est-seg" role="group" aria-label={estimateCopy("คอลัมน์ที่แสดง", "Columns shown", "表示する列")}>
+        <button type="button" className={dense ? "on" : undefined} aria-pressed={dense} title={estimateCopy("แสดงคอลัมน์หลัก", "Main columns only", "主要な列のみ")} onClick={() => setDense(true)}>{estimateCopy("ย่อ", "Compact", "簡易")}</button>
+        <button type="button" className={dense ? undefined : "on"} aria-pressed={!dense} title={estimateCopy("เพิ่มแหล่งราคา อ้างอิง วันที่ราคา ผู้รับผิดชอบ หมายเหตุ และสถานะ", "Adds price source, reference, price date, owner, remark and status", "価格元・参照・価格日・担当・備考・状態を追加")} onClick={() => setDense(false)}>{estimateCopy("เต็ม", "Full", "全列")}</button>
+      </div>
+      <button type="button" className="btn ghost sm icon-btn" disabled={!groups.length} aria-label={localizeCopy("หุบทุกโมดูล")} title={localizeCopy("หุบทุกโมดูล")} onClick={() => setCollapsed(groups.filter(group => group.module).map((group) => group.key))}><Icon name="minimize" /></button>
+      <button type="button" className="btn ghost sm icon-btn" disabled={!collapsed.length} aria-label={localizeCopy("กางทุกโมดูล")} title={localizeCopy("กางทุกโมดูล")} onClick={() => setCollapsed([])}><Icon name="maximize" /></button>
+      {canAdd ? <>
     {setSelection.length ? <button type="button" className="btn default sm" disabled={busy || setBusy} onClick={() => setSetEditor({ members: workspace.costItems.filter(line => setSelection.includes(line.id) && !line.priceSetKey) })}>{estimateUxCopy(currentLocale(), "รวมเป็นเซ็ต", "Set price", "セット化")} ({setSelection.length})</button> : null}
     <button className="btn default sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการ", "Add item", "明細を追加")}</button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => openAddItems(null)}><Icon name="upload" />{estimateUxCopy(currentLocale(), "นำเข้า / คัดลอก", "Import / copy", "インポート / コピー")}</button>
     <button className="btn primary sm" type="button" disabled={busy} onClick={() => setTool("module")}><Icon name="layers" />{estimateUxCopy(currentLocale(), "เพิ่มโมดูล", "Add module", "モジュールを追加")}</button>
-  </> : undefined} flush>
-    <div className="sheet-controls">
-      <div className="subtabs" role="tablist" aria-label={localizeCopy("Cost category")}>
-        {presentCategories.length ? <>
-        <button type="button" className={activeCategory === "all" ? "subtab active" : "subtab"} onClick={() => { setCategory("all"); setQuickDraft(null); }}><LocalizedText text={"All disciplines"} /><em>{workspace.costItems.length}</em></button>
-        {presentCategories.map(([code, name]) => { const count = workspace.costItems.filter((line) => line.categoryCode === code).length; return <button key={code} type="button" className={activeCategory === code ? "subtab active" : "subtab"} onClick={() => { setCategory(code); setQuickDraft(null); }}><span className="pill">{code}</span>{name}<em>{count}</em></button>; })}
-        </> : null}
-      </div>
-      <div className="sheet-tools">
-        <button type="button" className="sheet-tool" disabled={!groups.length} onClick={() => setCollapsed(groups.filter(group => group.module).map((group) => group.key))} title={localizeCopy("หุบทุกโมดูล")}><Icon name="chevronRight" /><LocalizedText text={"Collapse all"} /></button>
-        <button type="button" className="sheet-tool" disabled={!collapsed.length} onClick={() => setCollapsed([])} title={localizeCopy("กางทุกโมดูล")}><Icon name="chevronDown" /><LocalizedText text={"Expand all"} /></button>
-        <button type="button" className={dense ? "sheet-tool" : "sheet-tool active"} onClick={() => setDense((current) => !current)} title={dense ? "แสดง price source, reference, price date, owner, remark และ status" : "ซ่อนคอลัมน์อ้างอิงเพื่อให้ตารางพอดีจอ"}><Icon name="table" />{dense ? "All columns" : "Compact"}</button>
-      </div>
+      </> : null}
     </div>
-    {canAdd ? <p className="cost-drag-help estimate-entry-help">{estimateUxCopy(currentLocale(), "เพิ่มรายการท้ายโมดูลเพื่อกรอกในกลุ่มนั้น · Enter บันทึกและเพิ่มต่อ · Esc ยกเลิก · ลาก ⠿ เพื่อย้ายรายการ", "Add at a module footer to enter items in that group · Enter saves and continues · Esc cancels · Drag ⠿ to move", "モジュール末尾から明細を追加 · Enterで保存して続行 · Escで取消 · ⠿で移動")}</p> : null}
     {groups.length || showPending ? <div className="table-wrap cost-sheet-wrap"><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
       <thead><tr>
-        <th style={{ width: 48 }}><LocalizedText text={"No."} /></th>
-        <th style={{ width: 140 }}><LocalizedText text={"Item code"} /></th>
-        <th style={{ width: 300 }}><LocalizedText text={"Description / Specification"} /></th>
-        <th style={{ width: 160 }}><LocalizedText text={"Brand / Model"} /></th>
-        <th style={{ width: 180 }}><LocalizedText text={"Supplier"} /></th>
-        <th className="num" style={{ width: 100 }}><LocalizedText text={"Qty"} /></th>
-        <th style={{ width: 140 }}><LocalizedText text={"Unit"} /></th>
-        <th className="num" style={{ width: 120 }}><LocalizedText text={"Unit cost"} /></th>
-        <th className="num" style={{ width: 130 }}><LocalizedText text={"Total"} /></th>
+        <th style={{ width: 48 }}>#</th>
+        <th style={{ width: 140 }}>{estimateCopy("รหัส", "Code", "コード")}</th>
+        <th style={{ width: 280 }}>{estimateCopy("รายการ / Spec", "Item / Spec", "明細 / 仕様")}</th>
+        <th style={{ width: 140 }}>Brand / Model</th>
+        <th style={{ width: 150 }}><LocalizedText text={"Supplier"} /></th>
+        <th className="num" style={{ width: 84 }}><LocalizedText text={"Qty"} /></th>
+        <th style={{ width: 104 }}><LocalizedText text={"Unit"} /></th>
+        <th className="num" style={{ width: 112 }}>{estimateCopy("ต้นทุน/หน่วย", "Unit cost", "単価")}</th>
+        <th className="num" style={{ width: 120 }}><LocalizedText text={"Total"} /></th>
         {dense ? null : <>
           <th style={{ width: 150 }}><LocalizedText text={"Price source"} /></th>
           <th style={{ width: 170 }}><LocalizedText text={"Reference"} /></th>
@@ -1423,14 +1442,13 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
           <th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th>
           <th style={{ width: 110 }}><LocalizedText text={"Status"} /></th>
         </>}
-        <th style={{ width: 164 }} aria-label={uiText("Action")} />
+        <th style={{ width: 84 }} aria-label={uiText("Action")} />
       </tr></thead>
       <tbody>
         {groups.flatMap((group, groupIndex) => {
-          const issues = group.needPrice + group.needSupplier;
-          if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues)];
+          if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total)];
           return [
-            group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total, issues) : null,
+            group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total) : null,
             ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
               <td><span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span></td>
               <td><span className="cell-text">{canAdd && line.canEdit && !line.priceSetKey ? <input type="checkbox" aria-label={"Select for price set " + line.itemCode} checked={setSelection.includes(line.id)} onChange={event=>setSetSelection(current=>event.target.checked?[...current,line.id]:current.filter(id=>id!==line.id))}/> : null}<strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong></span></td>
@@ -1448,15 +1466,15 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
                 <td><span className="cell-text">{line.remark || "—"}</span></td>
                 <td><span className="cell-text"><Badge>{line.status}</Badge></span></td>
               </>}
-              <td><div className="row-actions cost-order-actions">{line.canEdit && line.isPriceSet ? <button type="button" className="btn default sm" disabled={busy||setBusy} onClick={()=>setSetEditor({header:line,members:workspace.costItems.filter(item=>item.priceSetKey===line.priceSetKey&&!item.isPriceSet)})}>Edit set</button> : line.canEdit && line.priceSetKey ? <button type="button" className="icon-btn" disabled={busy||setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={()=>void detachSetItem(line)}>↗</button> : null}{canAdd && line.canEdit && !line.priceSetKey ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd && !line.priceSetKey ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit && !line.priceSetKey ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : line.priceSetKey ? null : <Icon name="lock" />}</div></td>
+              <td><div className="row-actions cost-order-actions">{line.canEdit && line.isPriceSet ? <button type="button" className="btn ghost sm" disabled={busy||setBusy} onClick={()=>setSetEditor({header:line,members:workspace.costItems.filter(item=>item.priceSetKey===line.priceSetKey&&!item.isPriceSet)})}>{estimateCopy("แก้ไขเซ็ต", "Edit set", "セット編集")}</button> : line.canEdit && line.priceSetKey ? <button type="button" className="icon-btn" disabled={busy||setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={()=>void detachSetItem(line)}>↗</button> : null}{canAdd && line.canEdit && !line.priceSetKey ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{!line.priceSetKey && (canAdd || line.canEdit) ? (rowActions === line.id ? <>{canAdd ? ([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>) : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : null}<button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกรายการ", "Close line actions", "明細操作を閉じる")} onClick={() => setRowActions(null)}><Icon name="x" /></button></> : <button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateCopy("ตัวเลือก: ย้ายขึ้น-ลง แก้ไข ลบ", "Actions: move up or down, edit, delete", "操作：上下移動・編集・削除")} aria-label={estimateCopy("ตัวเลือกรายการ", "Line actions", "明細操作") + " " + line.itemCode} onClick={() => setRowActions(line.id)}><Icon name="more" /></button>) : null}{canAdd && !line.canEdit && !line.priceSetKey ? <Icon name="lock" /> : null}</div></td>
             </tr>),
             group.module ? draftRow(group.key) : null,
-            group.module ? <tr className="cost-module-subtotal" key={`add-${group.key}`}><td colSpan={8}><div className="cost-module-footer"><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการในโมดูลนี้", "Add item to this module", "このモジュールに明細を追加")}</span></button>{canAdd ? <button type="button" className="link-btn est-add-from" disabled={busy || quickSaving} onClick={() => openAddItems({ categoryCode: group.categoryCode, category: group.category, module: group.module })}><Icon name="search" />{estimateCopy("เพิ่มจากคลังราคา / นำเข้า", "Add from the price library / import", "価格ライブラリ・取込から追加")}</button> : null}<span>{estimateUxCopy(currentLocale(), "รวมโมดูล", "Module subtotal", "モジュール小計")}</span></div></td><td className="num"><strong>{formatMoney(group.total)}</strong></td>{!dense ? <td colSpan={6} /> : null}<td /></tr> : null,
+            group.module ? <tr className="cost-module-subtotal" key={`add-${group.key}`}><td colSpan={8}><div className="cost-module-footer">{canAdd ? <><button type="button" className="add-row-btn" disabled={busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการในโมดูลนี้", "Add item to this module", "このモジュールに明細を追加")}</span></button><button type="button" className="link-btn est-add-from" disabled={busy || quickSaving} onClick={() => openAddItems({ categoryCode: group.categoryCode, category: group.category, module: group.module })}><Icon name="search" />{estimateCopy("เพิ่มจากคลังราคา / นำเข้า", "Add from the price library / import", "価格ライブラリ・取込から追加")}</button></> : null}{quickDraft?.groupKey === group.key ? <span className="est-sheet-hint">{estimateCopy("Enter บันทึกแล้วเพิ่มแถวต่อ · Esc ยกเลิก · ลาก ⠿ ย้ายรายการ ข้ามโมดูลได้ · ⋯ ย้าย แก้ไข ลบ", "Enter saves and adds another row · Esc cancels · drag ⠿ to move an item, also across modules · ⋯ move, edit, delete", "Enterで保存して次の行へ · Escで取消 · ⠿で移動（モジュール間も可） · ⋯ 移動・編集・削除")}</span> : null}<span className="est-subtotal-label">{estimateUxCopy(currentLocale(), "รวมโมดูล", "Module subtotal", "モジュール小計")}</span></div></td><td className="num"><strong>{formatMoney(group.total)}</strong></td>{!dense ? <td colSpan={6} /> : null}<td /></tr> : null,
             draftRow(`standalone-after:${group.key}`),
           ];
         })}
         {showPending && pendingModule && pendingKey ? [
-          moduleBand({ key: pendingKey, ...pendingModule }, groups.length + 1, 0, 0, 0),
+          moduleBand({ key: pendingKey, ...pendingModule }, groups.length + 1, 0, 0),
           draftRow(pendingKey),
           quickDraft?.groupKey === pendingKey ? null : <tr className="module-empty" key={`empty-${pendingKey}`}><td colSpan={colCount}><LocalizedText text={"ยังไม่มี item ในโมดูลนี้ — เพิ่ม item แรกเพื่อบันทึกโมดูลลง revision"} /></td></tr>,
           <tr className="add-row" key={`add-${pendingKey}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow({ key: pendingKey, ...pendingModule })}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {pendingModule.module}</span></button></td></tr>,

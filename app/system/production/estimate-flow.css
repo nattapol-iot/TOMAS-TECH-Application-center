@@ -149,7 +149,54 @@ button.est-issue { cursor: pointer; }
 .est-add-target { margin-bottom: 12px; }
 .est-pick-col { width: 36px; }
 tr.est-picked > td { background: var(--blue-soft); }
-.est-add-from { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: var(--fs-xs); }
+.est-add-from { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); }
+
+/* ---------- Cost sheet: one bar, light module bands, light foot ---------- */
+.est-sheet-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.est-dchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.est-dchip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface); color: var(--ink-soft); font: inherit; font-size: var(--fs-xs); font-weight: 560; white-space: nowrap; cursor: pointer; }
+.est-dchip:hover { border-color: var(--n-300); }
+.est-dchip.on { border-color: var(--blue); background: var(--blue); color: var(--n-0); }
+.est-dchip-code { padding: 1px 5px; border-radius: var(--r-xs); background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-3xs); }
+.est-dchip.on .est-dchip-code { background: var(--blue-hover); color: var(--n-0); }
+.est-dchip-n { color: var(--muted); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.est-dchip.on .est-dchip-n { color: var(--blue-soft); }
+.est-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-md); background: var(--n-100); }
+.est-seg button { height: 24px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink-soft); font: inherit; font-size: var(--fs-xs); font-weight: 560; cursor: pointer; }
+.est-seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+
+.estimate-cost-panel .cost-sheet thead th { background: var(--n-25); color: var(--muted); font-weight: 600; }
+.estimate-cost-panel .module-row > td { padding: 3px 10px 3px 8px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--n-50); color: var(--ink); font-size: var(--fs-sm); }
+.estimate-cost-panel tbody tr.module-row:hover td { background: var(--n-100); }
+.estimate-cost-panel .module-row strong { color: var(--ink); font-weight: 600; }
+.estimate-cost-panel .module-row .muted { color: var(--muted); opacity: 1; font-size: var(--fs-xs); }
+.estimate-cost-panel .module-row .row.band { gap: 8px; }
+.estimate-cost-panel .module-toggle:hover { background: var(--n-150); }
+.estimate-cost-panel .module-name-edit .icon { opacity: 0; transition: opacity 0.12s ease; }
+.estimate-cost-panel .module-name-edit:hover .icon,
+.estimate-cost-panel .module-name-edit:focus-visible .icon { opacity: 1; }
+.est-band-total { font-variant-numeric: tabular-nums; }
+.estimate-cost-panel .row-actions .icon-btn { width: 26px; height: 26px; }
+/* Quantity and unit fill their (narrower) columns rather than overflowing into an ellipsis. */
+.estimate-cost-panel .cost-sheet td.cb-inline-quantity,
+.estimate-cost-panel .cost-sheet td.cb-inline-unit { padding-left: 6px; padding-right: 6px; }
+.estimate-cost-panel .cb-inline-quantity input,
+.estimate-cost-panel .cb-inline-unit select,
+.estimate-cost-panel .cb-inline-unit input { min-width: 0; }
+/* A row shows only ⠿ and ⋯; once ⋯ is open its buttons wrap inside the narrow column instead of being clipped. */
+.estimate-cost-panel .item-row .row-actions { flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+
+.estimate-cost-panel .cost-module-footer { justify-content: flex-start; gap: 12px; }
+.est-sheet-hint { color: var(--muted); font-size: var(--fs-2xs); }
+.estimate-cost-panel .cost-module-footer > .est-subtotal-label { margin-left: auto; }
+
+.estimate-cost-panel .sticky-foot { flex-wrap: wrap; gap: 12px; padding: 7px 16px; border-top: 1px solid var(--line); background: var(--n-25); color: var(--ink); }
+.estimate-cost-panel .sticky-foot .foot-item { flex-direction: row; align-items: baseline; gap: 6px; }
+.estimate-cost-panel .sticky-foot .foot-item + .foot-item { padding-left: 12px; border-left: 1px solid var(--line); }
+.estimate-cost-panel .sticky-foot .foot-item span { color: var(--muted); font-size: var(--fs-xs); }
+.estimate-cost-panel .sticky-foot .foot-total { display: flex; align-items: baseline; gap: 8px; }
+.estimate-cost-panel .sticky-foot .foot-total span { color: var(--muted); font-size: var(--fs-xs); text-transform: none; letter-spacing: 0; }
+.estimate-cost-panel .sticky-foot .foot-total strong { font-size: var(--fs-lg); font-weight: 650; letter-spacing: 0; }
 
 /* ---------- Cost sheet: incomplete-line filters in the sticky foot ---------- */
 .est-attention { display: flex; flex-wrap: wrap; gap: 6px; }
