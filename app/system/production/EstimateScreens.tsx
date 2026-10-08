@@ -1111,6 +1111,9 @@ type CostModuleGroup = {
 
 const MATERIAL_CODES = ["01", "02", "03", "04", "05"];
 const moduleKeyOf = (categoryCode: string, module: string) => `${categoryCode}::${module}`;
+/* A set component is priced by its set header, so only the header can be waiting for a price. */
+const lineNeedsPrice = (line: EstimateCostItem) => numberOf(line.unitCost) <= 0 && (!line.priceSetKey || Boolean(line.isPriceSet));
+const lineNeedsSupplier = (line: EstimateCostItem) => !line.supplierId && MATERIAL_CODES.includes(line.categoryCode);
 
 function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   const groups = new Map<string, CostModuleGroup>();
@@ -1124,8 +1127,8 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
     }
     group.lines.push(line);
     group.total += numberOf(line.lineTotal);
-    if (numberOf(line.unitCost) <= 0 && (!line.priceSetKey || line.isPriceSet)) group.needPrice += 1;
-    else if (!line.supplierId && MATERIAL_CODES.includes(line.categoryCode)) group.needSupplier += 1;
+    if (lineNeedsPrice(line)) group.needPrice += 1;
+    else if (lineNeedsSupplier(line)) group.needSupplier += 1;
   }
   for (const group of groups.values()) {
     const ordered: EstimateCostItem[] = []; const seen = new Set<string>();
@@ -1202,6 +1205,10 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
   const [tool, setTool] = useState<"price" | "import" | "import-flat" | "copy" | "module" | "template" | null>(null);
+  const [addSource, setAddSource] = useState<AddItemsSource>("price");
+  const [addTarget, setAddTarget] = useState<AddItemsTarget | null>(null);
+  const [addSwitched, setAddSwitched] = useState(false);
+  const [attention, setAttention] = useState<"" | "price" | "supplier">("");
   const [saveTarget, setSaveTarget] = useState<CostModuleGroup | null>(null);
   const [copyTarget, setCopyTarget] = useState<CostModuleGroup | null>(null);
   const [quickDraft, setQuickDraft] = useState<QuickCostDraft | null>(null);
@@ -1246,7 +1253,14 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
      that no longer exists. Derived, not stored: setting state from an effect
      would trip react-hooks/set-state-in-effect. */
   const activeCategory = category !== "all" && presentCategories.some(([code]) => code === category) ? category : "all";
-  const groups = useMemo(() => costModuleGroups(activeCategory === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === activeCategory)), [workspace.costItems, activeCategory]);
+  const disciplineLines = activeCategory === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === activeCategory);
+  const attentionCounts = { price: disciplineLines.filter(lineNeedsPrice).length, supplier: disciplineLines.filter(lineNeedsSupplier).length };
+  /* Pricing the last waiting line empties the filter, so it falls back to every line (derived, like activeCategory). */
+  const activeAttention = attention && attentionCounts[attention] ? attention : "";
+  const groups = useMemo(() => {
+    const lines = activeCategory === "all" ? workspace.costItems : workspace.costItems.filter((line) => line.categoryCode === activeCategory);
+    return costModuleGroups(activeAttention ? lines.filter(activeAttention === "price" ? lineNeedsPrice : lineNeedsSupplier) : lines);
+  }, [workspace.costItems, activeCategory, activeAttention]);
   const [draggedCostId, setDraggedCostId] = useState<number | null>(null);
   const [dropMarker, setDropMarker] = useState("");
   const clearDrag = () => { setDraggedCostId(null); setDropMarker(""); };
@@ -1281,6 +1295,10 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     void onReorder("CostItem", workspace.costItems.map(line => ids.has(line.id) ? moved[offset++].id : line.id));
   };
   const visibleLines = groups.flatMap((group) => group.lines);
+  /* The toolbar opens the source used last; a module footer opens the price library aimed at that module. */
+  const openAddItems = (target: AddItemsTarget | null) => { setAddTarget(target); setAddSwitched(false); setTool(target ? "price" : addSource); };
+  const closeTool = () => { setTool(null); setAddTarget(null); };
+  const sourceTabs = (active: AddItemsSource) => function renderSourceTabs(locked: boolean) { return <AddItemsSources active={active} switched={addSwitched} locked={locked} onSwitch={(next) => { setAddSource(next); setAddSwitched(true); setTool(next); }} />; };
   const isCollapsed = (key: string) => collapsed.includes(key);
   const toggleModule = (key: string) => setCollapsed((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
   const pendingKey = pendingModule ? moduleKeyOf(pendingModule.categoryCode, pendingModule.module) : null;
@@ -1369,12 +1387,7 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   <Panel className="estimate-cost-panel" title={estimateUxCopy(currentLocale(), "รายการประมาณต้นทุน", "Cost estimate items", "見積原価明細")} subtitle={estimateUxCopy(currentLocale(), `${groups.filter(group => group.module).length} โมดูล · ${visibleLines.filter(line => !line.isPriceSet).length} รายการ`, `${groups.filter(group => group.module).length} modules · ${visibleLines.filter(line => !line.isPriceSet).length} items`, `${groups.filter(group => group.module).length} モジュール · ${visibleLines.filter(line => !line.isPriceSet).length} 明細`)} actions={canAdd ? <>
     {setSelection.length ? <button type="button" className="btn default sm" disabled={busy || setBusy} onClick={() => setSetEditor({ members: workspace.costItems.filter(line => setSelection.includes(line.id) && !line.priceSetKey) })}>{estimateUxCopy(currentLocale(), "รวมเป็นเซ็ต", "Set price", "セット化")} ({setSelection.length})</button> : null}
     <button className="btn default sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการ", "Add item", "明細を追加")}</button>
-    <details className="estimate-more estimate-cost-menu"><summary className="btn default sm">{estimateUxCopy(currentLocale(), "นำเข้า / คัดลอก", "Import / copy", "インポート / コピー")}<Icon name="chevronDown" /></summary><div className="estimate-more-content">
-      <button className="btn ghost sm" type="button" disabled={busy} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setTool("price"); }}><Icon name="search" /><LocalizedText text="Search Price Library" /></button>
-      <button className="btn ghost sm" type="button" disabled={busy} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setTool("import"); }}><Icon name="upload" /><LocalizedText text="Import Excel" /></button>
-      <button className="btn ghost sm" type="button" disabled={busy} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setTool("copy"); }}><Icon name="copy" /><LocalizedText text="Copy Previous Estimate" /></button>
-      <button className="btn ghost sm" type="button" disabled={busy} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setTool("template"); }}><Icon name="package" /><LocalizedText text="เลือกจาก Template" /></button>
-    </div></details>
+    <button className="btn default sm" type="button" disabled={busy} onClick={() => openAddItems(null)}><Icon name="upload" />{estimateUxCopy(currentLocale(), "นำเข้า / คัดลอก", "Import / copy", "インポート / コピー")}</button>
     <button className="btn primary sm" type="button" disabled={busy} onClick={() => setTool("module")}><Icon name="layers" />{estimateUxCopy(currentLocale(), "เพิ่มโมดูล", "Add module", "モジュールを追加")}</button>
   </> : undefined} flush>
     <div className="sheet-controls">
@@ -1438,7 +1451,7 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
               <td><div className="row-actions cost-order-actions">{line.canEdit && line.isPriceSet ? <button type="button" className="btn default sm" disabled={busy||setBusy} onClick={()=>setSetEditor({header:line,members:workspace.costItems.filter(item=>item.priceSetKey===line.priceSetKey&&!item.isPriceSet)})}>Edit set</button> : line.canEdit && line.priceSetKey ? <button type="button" className="icon-btn" disabled={busy||setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={()=>void detachSetItem(line)}>↗</button> : null}{canAdd && line.canEdit && !line.priceSetKey ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{canAdd && !line.priceSetKey ? <>{([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>)}</> : null}{line.canEdit && !line.priceSetKey ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : line.priceSetKey ? null : <Icon name="lock" />}</div></td>
             </tr>),
             group.module ? draftRow(group.key) : null,
-            group.module ? <tr className="cost-module-subtotal" key={`add-${group.key}`}><td colSpan={8}><div className="cost-module-footer"><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการในโมดูลนี้", "Add item to this module", "このモジュールに明細を追加")}</span></button><span>{estimateUxCopy(currentLocale(), "รวมโมดูล", "Module subtotal", "モジュール小計")}</span></div></td><td className="num"><strong>{formatMoney(group.total)}</strong></td>{!dense ? <td colSpan={6} /> : null}<td /></tr> : null,
+            group.module ? <tr className="cost-module-subtotal" key={`add-${group.key}`}><td colSpan={8}><div className="cost-module-footer"><button type="button" className="add-row-btn" disabled={!canAdd || busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการในโมดูลนี้", "Add item to this module", "このモジュールに明細を追加")}</span></button>{canAdd ? <button type="button" className="link-btn est-add-from" disabled={busy || quickSaving} onClick={() => openAddItems({ categoryCode: group.categoryCode, category: group.category, module: group.module })}><Icon name="search" />{estimateCopy("เพิ่มจากคลังราคา / นำเข้า", "Add from the price library / import", "価格ライブラリ・取込から追加")}</button> : null}<span>{estimateUxCopy(currentLocale(), "รวมโมดูล", "Module subtotal", "モジュール小計")}</span></div></td><td className="num"><strong>{formatMoney(group.total)}</strong></td>{!dense ? <td colSpan={6} /> : null}<td /></tr> : null,
             draftRow(`standalone-after:${group.key}`),
           ];
         })}
@@ -1450,19 +1463,21 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
         ] : null}
       </tbody>
     </table></div> : <EmptyState icon="package" title={uiText("No cost item")} message={canAdd ? "เพิ่มรายการเดี่ยวได้ทันที หรือสร้าง Main Module เพื่อจัดกลุ่มรายการ" : "ไม่มีรายการที่บัญชีนี้อ่านได้"} action={canAdd ? <button className="btn primary" type="button" onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" /><LocalizedText text={"Add a standalone item"} /></button> : undefined} />}
-    <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{groups.filter(group => group.module).length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown lines"} /></span><strong>{visibleLines.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown subtotal"} /></span><strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong></div><div className="foot-total"><span><LocalizedText text={"Total estimated cost"} /></span><strong>{formatMoney(workspace.header.totals.total)}</strong></div></div>
+    <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{groups.filter(group => group.module).length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown lines"} /></span><strong>{visibleLines.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown subtotal"} /></span><strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong></div>{attentionCounts.price || attentionCounts.supplier ? <div className="est-attention" role="group" aria-label={estimateCopy("รายการที่ยังไม่ครบ", "Lines still incomplete", "未完了の明細")}>{(["price", "supplier"] as const).map((kind) => attentionCounts[kind] ? <button key={kind} type="button" className={activeAttention === kind ? "est-attention-chip active" : "est-attention-chip"} aria-pressed={activeAttention === kind} title={activeAttention === kind ? estimateCopy("แสดงทุกรายการ", "Show every line", "すべての明細を表示") : estimateCopy("แสดงเฉพาะรายการนี้", "Show only these lines", "該当明細のみ表示")} onClick={() => { setAttention(activeAttention === kind ? "" : kind); setQuickDraft(null); }}><Icon name="alertTriangle" />{kind === "price" ? estimateCopy("รอราคา", "Waiting for price", "価格待ち") : estimateCopy("ยังไม่เลือกผู้ขาย", "No supplier", "仕入先未選択")}<strong>{attentionCounts[kind]}</strong>{activeAttention === kind ? <Icon name="x" /> : null}</button> : null)}</div> : null}<div className="foot-total"><span><LocalizedText text={"Total estimated cost"} /></span><strong>{formatMoney(workspace.header.totals.total)}</strong></div></div>
   </Panel>
-  {tool === "price" ? <PriceLibraryPicker workspace={workspace} busy={busy} onClose={() => setTool(null)} onUse={async (record) => {
-    const saved = await onBulkAddCost([costSeedFromLine(record.item, workspace.header.ownerId, record.sourceKind === "Historical Purchase" ? "Purchase Price" : "Price Library", record.sourceNumber, record.projectName)], "Price selected from live Price Library");
-    if (saved) setTool(null);
+  {tool === "price" ? <PriceLibraryPicker workspace={workspace} busy={busy} target={addTarget} sources={sourceTabs("price")} onClose={closeTool} onUse={async (records) => {
+    /* From a module footer every picked price lands in that module; from the toolbar each keeps its source's module. */
+    const seeds = records.map((record) => costSeedFromLine(record.item, workspace.header.ownerId, record.sourceKind === "Historical Purchase" ? "Purchase Price" : "Price Library", record.sourceNumber, record.projectName));
+    const saved = await onBulkAddCost(addTarget ? seeds.map((seed) => ({ ...seed, ...addTarget })) : seeds, "Price selected from live Price Library");
+    if (saved) closeTool();
   }} /> : null}
-  {tool === "import" ? <EstimateExcelImport workspace={workspace} bootstrap={bootstrap} onClose={() => setTool(null)} onImported={onExcelImported} onLegacy={() => setTool("import-flat")} /> : null}
+  {tool === "import" ? <EstimateExcelImport workspace={workspace} bootstrap={bootstrap} sources={sourceTabs("import")} onClose={closeTool} onImported={onExcelImported} onLegacy={() => setTool("import-flat")} /> : null}
   {tool === "import-flat" ? <ImportCostItemsModal bootstrap={bootstrap} workspace={workspace} busy={busy} onClose={() => setTool(null)} onImport={async (seeds) => { const saved = await onBulkAddCost(seeds, "Excel import completed"); if (saved) setTool(null); }} /> : null}
-  {tool === "copy" ? <CopyPreviousEstimateModal workspace={workspace} busy={busy} onClose={() => setTool(null)} onCopy={async (input) => {
+  {tool === "copy" ? <CopyPreviousEstimateModal workspace={workspace} busy={busy} sources={sourceTabs("copy")} onClose={closeTool} onCopy={async (input) => {
     const saved = await onCopyFrom(input);
     if (saved) setTool(null);
   }} /> : null}
-  {tool === "template" ? <ApplyModuleTemplateModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} onClose={() => setTool(null)} onApply={async (input) => {
+  {tool === "template" ? <ApplyModuleTemplateModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} sources={sourceTabs("template")} onClose={closeTool} onApply={async (input) => {
     const applied = await onApplyTemplate(input);
     if (applied) setTool(null);
     return applied;
@@ -1494,8 +1509,27 @@ function costSeedFromLine(line: EstimateCostItem, ownerId: number, priceSource: 
   };
 }
 
-function PriceLibraryPicker({ workspace, busy, onClose, onUse }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onUse: (record: PriceLibraryRecord) => Promise<void> }) {
+/* Price Library, Template, Excel and Copy used to be four entries of a menu, each with its own dialog.
+   They are now the tabs of one dialog. Each tab is still its own component, so switching remounts the
+   dialog; estimate-flow.css skips the opening animation once a switch has happened. */
+type AddItemsSource = "price" | "template" | "import" | "copy";
+type AddItemsTarget = { categoryCode: string; category: string; module: string };
+const ADD_ITEM_SOURCES = [
+  ["price", "search", "คลังราคา", "Price library", "価格ライブラリ"],
+  ["template", "package", "Template โมดูล", "Module template", "モジュールテンプレート"],
+  ["import", "upload", "นำเข้า Excel", "Import Excel", "Excel取込"],
+  ["copy", "copy", "คัดลอกจาก Estimate", "Copy from an estimate", "既存見積からコピー"],
+] as const;
+
+function AddItemsSources({ active, switched, locked, onSwitch }: { active: AddItemsSource; switched: boolean; locked: boolean; onSwitch: (source: AddItemsSource) => void }) {
+  return <div className={switched ? "est-source-tabs switched" : "est-source-tabs"} role="group" aria-label={estimateCopy("แหล่งที่มาของรายการ", "Where the items come from", "明細の取得元")}>
+    {ADD_ITEM_SOURCES.map(([id, icon, th, en, ja]) => <button key={id} type="button" className={active === id ? "est-source active" : "est-source"} aria-pressed={active === id} disabled={locked && active !== id} onClick={() => { if (active !== id) onSwitch(id); }}><Icon name={icon} />{estimateCopy(th, en, ja)}</button>)}
+  </div>;
+}
+
+function PriceLibraryPicker({ workspace, busy, target, sources, onClose, onUse }: { workspace: EstimateCostWorkspace; busy: boolean; target: AddItemsTarget | null; sources?: (locked: boolean) => React.ReactNode; onClose: () => void; onUse: (records: PriceLibraryRecord[]) => Promise<void> }) {
   const uiText = useUiText();
+  const [picked, setPicked] = useState<string[]>([]);
   const [source, setSource] = useState<PriceLibraryRecord | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(100);
   const [records, setRecords] = useState<PriceLibraryRecord[]>([]);
@@ -1510,13 +1544,15 @@ function PriceLibraryPicker({ workspace, busy, onClose, onUse }: { workspace: Es
   const needle = search.trim().toLocaleLowerCase();
   const matches = records.filter(({ item, sourceNumber, projectName, customerName }) => !needle || [item.itemCode, item.description, item.brand, item.model, item.supplierName, sourceNumber, projectName, customerName].some((value) => value?.toLocaleLowerCase().includes(needle))).sort((a, b) => (b.item.priceDate ?? "").localeCompare(a.item.priceDate ?? ""));
   const visible = matches.slice(0, visibleLimit);
-  return <Modal title={uiText("Search Price Library")} subtitle="ค้นจาก Estimate เดิมและประวัติราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา" size="xl" onClose={onClose} footer={<><span className="muted">{records.length} <LocalizedText text={"live price record(s)"} /></span><span className="spacer" /><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Close"} /></button></>}>
+  return <Modal title={uiText("Search Price Library")} subtitle="ค้นจาก Estimate เดิมและประวัติราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา" size="wide" onClose={onClose} footer={<><span className="muted">{records.length} <LocalizedText text={"live price record(s)"} /></span><span className="spacer" /><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !picked.length} onClick={() => { void onUse(records.filter((record) => picked.includes(record.key))); }}><Icon name="plus" />{estimateCopy(`เพิ่ม ${picked.length} รายการ`, `Add ${picked.length} item(s)`, `${picked.length}件を追加`)}</button></>}>
+    {sources?.(busy)}
+    <div className="info-strip est-add-target"><Icon name="layers" /><span>{target ? <>{estimateCopy("เพิ่มเข้าโมดูล", "Adding to module", "追加先モジュール")}: <strong>{target.module}</strong> · {target.categoryCode} {target.category}</> : estimateCopy("รายการจะเข้าโมดูลตามชื่อในแหล่งราคา · เปิดจากท้ายโมดูลเพื่อเพิ่มเข้าโมดูลนั้นโดยตรง", "Items keep the module name of their price source · open this from a module footer to add straight into that module", "明細は価格元のモジュール名で追加されます · モジュール下部から開くとそのモジュールへ直接追加します")}</span></div>
     <SearchInput value={search} onChange={(value) => { setSearch(value); setVisibleLimit(100); }} placeholder="Search item code, description, brand, supplier or estimate…" />
     <p className="muted">{estimateUxCopy(currentLocale(), "ราคาอ้างอิงเรียงจากวันที่ล่าสุด ตรวจหน่วย จำนวน และเงื่อนไขก่อนใช้ ราคานี้ไม่ได้ยืนยันว่าผู้ขายยังเสนออยู่", "Newest reference dates first. Check units, quantities and terms; these are not confirmed current offers.", "参照日の新しい順です。単位・数量・条件を確認してください。現在有効な見積価格とは限りません。")}</p>
     {source ? <div className="panel" style={{ padding: 12, marginTop: 12 }}><strong>{source.sourceNumber} {source.sourceRevision !== undefined ? revisionCode(source.sourceRevision) : ""} · {source.sourceStatus ?? source.sourceKind}</strong><p>{source.item.description} · {source.item.quantity} {source.item.unit} × {formatMoney(source.item.unitCost)} · {formatDate(source.item.priceDate)}</p><p>{source.item.referenceNumber || "—"} · {source.item.remark || "—"}</p>{source.sourceEstimateId ? <EstimateImportHistory estimateId={source.sourceEstimateId} /> : null}<button className="btn ghost sm" type="button" onClick={() => setSource(null)}><LocalizedText text="Close" /></button></div> : null}
     {matches.length > visibleLimit ? <button type="button" className="btn default sm" onClick={() => setVisibleLimit((value) => value + 100)}>{estimateUxCopy(currentLocale(), "แสดงเพิ่ม", "Show more", "さらに表示")} ({visible.length}/{matches.length})</button> : null}
     {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live Price Library…"} /></div> : visible.length ? <div className="table-wrap tall" style={{ marginTop: 12 }}><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Price date"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th><th /></tr></thead><tbody>{visible.map((record) => <tr key={record.key}><td><strong className="mono">{record.item.itemCode}</strong></td><td>{record.item.description}</td><td>{[record.item.brand, record.item.model].filter(Boolean).join(" · ") || "—"}</td><td>{record.item.supplierName ?? "—"}</td><td><div className="cell-primary"><button type="button" className="link-btn" onClick={() => setSource(record)}>{record.sourceNumber} {record.sourceRevision !== undefined ? revisionCode(record.sourceRevision) : ""}</button><span>{record.projectName} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td><td>{formatDate(record.item.priceDate)}</td><td className="num"><strong>{formatMoney(record.item.unitCost)}</strong><div className="muted">/ {record.item.unit} · Qty {record.item.quantity}</div></td><td><button className="btn primary sm" type="button" disabled={busy} onClick={() => { void onUse(record); }}><Icon name="plus" /><LocalizedText text={"Use price"} /></button></td></tr>)}</tbody></table></div> : <EmptyState icon="search" title="No matching price" message="ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร" />}
+    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live Price Library…"} /></div> : visible.length ? <div className="table-wrap tall" style={{ marginTop: 12 }}><table><thead><tr><th className="est-pick-col" aria-label={estimateCopy("เลือก", "Select", "選択")} /><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Price date"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th></tr></thead><tbody>{visible.map((record) => <tr key={record.key} className={picked.includes(record.key) ? "est-picked" : undefined}><td><input type="checkbox" aria-label={estimateCopy("เลือก", "Select", "選択") + " " + record.item.itemCode} disabled={busy} checked={picked.includes(record.key)} onChange={(event) => { const checked = event.target.checked; setPicked((current) => checked ? [...current, record.key] : current.filter((key) => key !== record.key)); }} /></td><td><strong className="mono">{record.item.itemCode}</strong></td><td>{record.item.description}</td><td>{[record.item.brand, record.item.model].filter(Boolean).join(" · ") || "—"}</td><td>{record.item.supplierName ?? "—"}</td><td><div className="cell-primary"><button type="button" className="link-btn" onClick={() => setSource(record)}>{record.sourceNumber} {record.sourceRevision !== undefined ? revisionCode(record.sourceRevision) : ""}</button><span>{record.projectName} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td><td>{formatDate(record.item.priceDate)}</td><td className="num"><strong>{formatMoney(record.item.unitCost)}</strong><div className="muted">/ {record.item.unit} · Qty {record.item.quantity}</div></td></tr>)}</tbody></table></div> : <EmptyState icon="search" title="No matching price" message="ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร" />}
   </Modal>;
 }
 
@@ -1525,7 +1561,7 @@ function PriceLibraryPicker({ workspace, busy, onClose, onUse }: { workspace: Es
    a deactivated supplier stopped halfway and left a partial copy behind, and it
    only ever carried cost items. The server now copies the cost, man-hour,
    expense and other-cost ledgers with their ERP classifications, or nothing. */
-function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<void> }) {
+function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }: { workspace: EstimateCostWorkspace; busy: boolean; sources?: (locked: boolean) => React.ReactNode; onClose: () => void; onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<void> }) {
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [sourceId, setSourceId] = useState(0);
   const [sourceWorkspace, setSourceWorkspace] = useState<EstimateCostWorkspace | null>(null);
@@ -1560,7 +1596,9 @@ function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { works
     return costs + manhour + expenses + other;
   };
   const totalLines = COST_CATEGORIES.reduce((sum, [code]) => sum + (selected.includes(code) && allowedSection(code) ? sectionCounts(code) : 0), 0);
-  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว" size="lg" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !totalLines} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: selected.filter(allowedSection), includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: ledgers.erpCategories }); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} /></button></>}>
+  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว" size="wide" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !totalLines} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: selected.filter(allowedSection), includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: ledgers.erpCategories }); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} /></button></>}>
+    {sources?.(busy)}
+    <div className="est-source-narrow">
     <Field label="Source estimate *"><select value={sourceId} disabled={loading && !estimates.length} onChange={(event) => { setLoading(true); setError(""); setSourceId(Number(event.target.value)); }}>{estimates.map((estimate) => <option key={estimate.id} value={estimate.id}>{estimate.number} <LocalizedText text={"·"} /> {estimate.projectName} <LocalizedText text={"·"} /> {estimate.customerName}</option>)}</select></Field>
     {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
     <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} /></span></div>
@@ -1577,6 +1615,7 @@ function CopyPreviousEstimateModal({ workspace, busy, onClose, onCopy }: { works
         ))}
       </div>
     </> : null}
+    </div>
   </Modal>;
 }
 
@@ -1637,7 +1676,7 @@ function ImportCostItemsModal({ bootstrap, workspace, busy, onClose, onImport }:
 
 /* Pull a whole module out of the library. The engineer says how many of it the project
    needs; the multiplication is the point of the feature. */
-function ApplyModuleTemplateModal({ workspace, currentUserId, busy, onClose, onApply }: { workspace: EstimateCostWorkspace; currentUserId: number; busy: boolean; onClose: () => void; onApply: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean> }) {
+function ApplyModuleTemplateModal({ workspace, currentUserId, busy, sources, onClose, onApply }: { workspace: EstimateCostWorkspace; currentUserId: number; busy: boolean; sources?: (locked: boolean) => React.ReactNode; onClose: () => void; onApply: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean> }) {
   const [templates, setTemplates] = useState<ModuleTemplateSummary[]>([]);
   const [templatePage, setTemplatePage] = useState(1);
   const [templateTotal, setTemplateTotal] = useState(0);
@@ -1694,6 +1733,7 @@ function ApplyModuleTemplateModal({ workspace, currentUserId, busy, onClose, onA
       setSaving(false);
     }}><Icon name="plus" />{saving ? "Applying…" : selected ? `Apply ${projected.length} line(s)` : "Apply"}</button>
   </>}>
+    {sources?.(busy || saving)}
     {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
     <div className="row" style={{ gap: 8 }}>
       <SearchInput value={search} onChange={(value) => { setSearch(value); setTemplatePage(1); }} placeholder="ค้นหา code, ชื่อ, item, brand" />

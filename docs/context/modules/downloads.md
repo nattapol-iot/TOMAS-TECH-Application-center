@@ -4,7 +4,7 @@
 
 โปรแกรมและไฟล์ของแผนกจากโฟลเดอร์ download-center บน NAS (รายการและดาวน์โหลด)
 
-Evidence: snapshot `2704cff8`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `564bcc7d`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

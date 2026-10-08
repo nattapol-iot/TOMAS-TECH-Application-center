@@ -13,8 +13,9 @@ test("Copy Previous Estimate sends the whole selection to one server transaction
   ]);
   assert.match(client, /apiRequest<EstimateCopyResult>\(`\/api\/v1\/estimates\/\$\{estimateId\}\/copy-from`, \{ method: "POST"/);
   assert.match(app, /registerEstimateCopyRoutes\(app, config, database, users\);/);
-  // The copy tool is the one that was already there, now calling the transactional endpoint.
-  assert.match(screen, /setTool\("copy"\)/);
+  // The copy tool is the one that was already there, now a tab of the add-items dialog, calling the transactional endpoint.
+  assert.match(screen, /\["copy", "copy", "คัดลอกจาก Estimate"/);
+  assert.match(screen, /onSwitch=\{\(next\) => \{ setAddSource\(next\); setAddSwitched\(true\); setTool\(next\); \}\}/);
   assert.match(screen, /tool === "copy" \? <CopyPreviousEstimateModal/);
   assert.match(screen, /copyEstimateContent\(estimateId, \{ \.\.\.input, estimateRowVersion: workspace\.header\.rowVersion, ownerId: workspace\.header\.ownerId \}\)/);
   // The per-line loop must not be how a copy is written any more.

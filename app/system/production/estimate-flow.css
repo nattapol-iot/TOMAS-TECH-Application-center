@@ -136,6 +136,27 @@ button.est-issue { cursor: pointer; }
 /* ---------- Cost sheet module band ---------- */
 .est-band-actions { flex-wrap: wrap; row-gap: 3px; }
 
+/* ---------- Add items: one dialog, four sources ---------- */
+.est-source-tabs { display: flex; flex-wrap: wrap; gap: 4px; width: fit-content; max-width: 100%; margin-bottom: 14px; padding: 3px; border-radius: var(--r-md); background: var(--n-100); }
+.est-source { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--fs-sm); font-weight: 550; cursor: pointer; }
+.est-source:hover:not(:disabled) { color: var(--ink); }
+.est-source.active { background: var(--surface); color: var(--blue-text); box-shadow: 0 0 0 1px var(--line); }
+.est-source:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Switching source remounts the dialog; only the first opening animates. */
+.overlay:has(.est-source-tabs.switched),
+.overlay:has(.est-source-tabs.switched) > .modal { animation: none; }
+.est-source-narrow { max-width: 760px; }
+.est-add-target { margin-bottom: 12px; }
+.est-pick-col { width: 36px; }
+tr.est-picked > td { background: var(--blue-soft); }
+.est-add-from { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: var(--fs-xs); }
+
+/* ---------- Cost sheet: incomplete-line filters in the sticky foot ---------- */
+.est-attention { display: flex; flex-wrap: wrap; gap: 6px; }
+.est-attention-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--amber-line); border-radius: var(--r-pill); background: var(--amber-soft); color: var(--amber-text); font: inherit; font-size: var(--fs-xs); font-weight: 550; cursor: pointer; }
+.est-attention-chip strong { font-variant-numeric: tabular-nums; }
+.est-attention-chip.active { border-color: var(--amber); background: var(--amber); color: var(--n-0); }
+
 /* ---------- Revision history ---------- */
 .est-snapshot > summary { cursor: pointer; color: var(--blue-text); font-size: var(--fs-xs); }
 .est-snapshot pre { max-height: 320px; overflow: auto; margin: 8px 0 0; }
