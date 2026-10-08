@@ -66,7 +66,7 @@ export function WorkloadGantt({ people, today, onPerson, onOpen }: {
       rows.push({
         key: `work:${person.user.id}:${item.key}`, depth: 1, kind: "task",
         label: <><span className="mono">{index + 1}.</span> {item.reference}</>,
-        meta: item.title,
+        meta: item.tentative ? `${item.title} · ${t("Workload.awaitingApproval")}` : item.title,
         onOpen: () => openItem(item),
         start: item.start, finish: item.end, progress: item.progress,
         tone: scheduleTone({ status: item.status, planFinish: item.end, forecastFinish: projected?.finish ?? null, percentComplete: item.progress }, today),

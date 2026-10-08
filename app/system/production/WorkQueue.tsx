@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
 import { useLanguage } from "../i18n";
 import { Badge, EmptyState, Field, Icon, Modal, Panel, type Tone } from "../ui";
-import { loadWorkload, saveWorkOrder, type Workload } from "../resource-workload-client";
+import { loadWorkload, saveWorkOrder, type Workload, type WorkloadEffort } from "../resource-workload-client";
 import { orderWork, projectWork, weeklyCapacity, type Commitment } from "../../../lib/resource-planning";
 import "./workload.css";
 
@@ -112,6 +112,7 @@ export function WorkQueue({
                     <span className="mono">{item.reference}</span>
                   )}
                   {item.end && item.end < today ? <Badge tone="red">{t("overdue")}</Badge> : null}
+                  {item.tentative ? <Badge tone="amber">{t("Workload.awaitingApproval")}</Badge> : null}
                 </div>
                 <strong>{item.title}</strong>
                 <small>
@@ -223,6 +224,58 @@ function DayRequestModal({ item, taskId, days: projectedDays, finish, onClose, o
   );
 }
 
+/** Plans the effort of a whole inquiry or estimate, or of one estimate section, on the dates the work runs. */
+export function EffortModal({ item, current, onClose, onSaved }: {
+  item: Commitment & { effort: NonNullable<Commitment["effort"]> };
+  current?: WorkloadEffort;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useLanguage();
+  const fallbackDay = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [start, setStart] = useState(current?.start ?? item.start ?? fallbackDay);
+  const [end, setEnd] = useState(current?.end ?? item.end ?? fallbackDay);
+  const [amount, setAmount] = useState(current ? String(current.manDays) : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <Modal title={t("Plan effort") + " · " + item.reference} onClose={onClose}>
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            await apiRequest(`/api/v1/resource-planning/${item.effort.kind}/${item.effort.id}`, {
+              method: "PUT",
+              body: JSON.stringify({ start, end, manDays: Number(amount), rowVersion: current?.rowVersion ?? null }),
+            });
+            await onSaved();
+            onClose();
+          } catch (e) {
+            setError(errorText(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <p>{t(item.effort.kind === "EstimateSection" ? "Workload.sectionEffortHint" : "Total estimating effort, not project delivery effort. Shared equally between estimate assignees.")}</p>
+        <Field label={t("Start date")}>
+          <input required type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+        </Field>
+        <Field label={t("Due date")}>
+          <input required type="date" min={start} value={end} onChange={(event) => setEnd(event.target.value)} />
+        </Field>
+        <Field label={t("Man-days")}>
+          <input required type="number" min="0" max="100000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
+        </Field>
+        {error ? <p role="alert" className="red-text">{error}</p> : null}
+        <button className="btn primary" disabled={busy}>{t("Save")}</button>
+      </form>
+    </Modal>
+  );
+}
+
 /** My Work's "My work order": the signed-in person's own queue, read with the Workload's own rules. */
 export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstimate }: {
   bootstrap: BootstrapData;
@@ -235,6 +288,7 @@ export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstima
   const [data, setData] = useState<Workload | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [edit, setEdit] = useState<Commitment | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -272,7 +326,9 @@ export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstima
           holidays={data.holidays}
           editable
           canRequestDays={bootstrap.permissions.includes("schedule.progress")}
-          canPlanEffort={() => false}
+          // An engineer plans the effort of their own estimate sections here.
+          canPlanEffort={(item) => item.effort?.kind === "EstimateSection"}
+          onEffort={setEdit}
           onOpen={open}
           canOpen={canOpen}
           onSaveOrder={async (keys) => {
@@ -285,6 +341,14 @@ export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstima
           }}
         />
       )}
+      {edit?.effort ? (
+        <EffortModal
+          item={{ ...edit, effort: edit.effort }}
+          current={data?.efforts.find((entry) => entry.entityType === edit.effort!.kind && entry.entityId === edit.effort!.id)}
+          onClose={() => setEdit(null)}
+          onSaved={async () => { await load(); notify(t("Saved")); }}
+        />
+      ) : null}
     </Panel>
   );
 }

@@ -58,6 +58,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 70, fileName: "070_estimate_labor_discipline.sql", name: "Estimate labor and site expense disciplines" },
   { version: 71, fileName: "071_work_priorities.sql", name: "Personal work order" },
   { version: 72, fileName: "072_site_monitor.sql", name: "Site Monitor agents, incidents and remote program control" },
+  { version: 73, fileName: "073_estimate_section_effort.sql", name: "Estimate section effort" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

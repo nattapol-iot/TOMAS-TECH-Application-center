@@ -21,9 +21,9 @@ import {
 import { useLanguage } from "../i18n";
 import { useActivitySubView } from "../use-activity-presence";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
-import { WorkQueue } from "./WorkQueue";
+import { EffortModal, WorkQueue } from "./WorkQueue";
 import { WorkloadGantt } from "./WorkloadGantt";
-import { loadWorkload, saveWorkOrder, type Workload, type WorkloadCapacity, type WorkloadEffort } from "../resource-workload-client";
+import { loadWorkload, saveWorkOrder, type Workload, type WorkloadCapacity } from "../resource-workload-client";
 import {
   orderWork,
   planningLoad,
@@ -218,11 +218,12 @@ export function ProductionResourcePlan({
         ? openEstimate?.(item.entityId)
         : openInquiry?.(item.entityId);
   // Whole-inquiry and estimate effort is planned here; tasks and plan rows carry their own effort.
+  // Whole inquiries and estimates are planned by planners with write access; an estimate section also by its own
+  // engineers (the API checks the section). Plan tasks and Resource Plan tasks carry their effort in their own plan.
   const canPlanEffort = (item: Commitment) =>
-    item.type !== "Project" &&
-    !item.key.startsWith("InquiryTask-") &&
-    canPlan &&
-    bootstrap.permissions.includes(item.type === "Inquiry" ? "inquiry.write" : "estimate.write");
+    item.effort !== undefined &&
+    ((item.effort.kind === "EstimateSection" && item.ownerId === bootstrap.user.id) ||
+      (canPlan && bootstrap.permissions.includes(item.effort.kind === "Inquiry" ? "inquiry.write" : "estimate.write")));
   const filtered = (apply: () => void) => {
     apply();
     setPage(1);
@@ -520,14 +521,14 @@ export function ProductionResourcePlan({
           <WorkList items={unassigned} today={todayIso} canPlanEffort={() => false} onOpen={open} onEffort={setEdit} />
         </Drawer>
       ) : null}
-      {edit && (
+      {edit?.effort ? (
         <EffortModal
-          item={edit}
-          current={data?.efforts.find((e) => e.entityType === edit.type && e.entityId === edit.entityId)}
+          item={{ ...edit, effort: edit.effort }}
+          current={data?.efforts.find((e) => e.entityType === edit.effort!.kind && e.entityId === edit.effort!.id)}
           onClose={() => setEdit(null)}
           onSaved={saved}
         />
-      )}
+      ) : null}
       {capacityUser !== null && (
         <CapacityModal
           initialUser={capacityUser}
@@ -567,6 +568,7 @@ function WorkList({
               {item.reference}
             </button>
             {item.end && item.end < today ? <Badge tone="red">{t("overdue")}</Badge> : null}
+            {item.tentative ? <Badge tone="amber">{t("Workload.awaitingApproval")}</Badge> : null}
           </div>
           <strong>{item.title}</strong>
           <small>
@@ -588,97 +590,6 @@ function WorkList({
   );
 }
 
-function EffortModal({
-  item,
-  current,
-  onClose,
-  onSaved,
-}: {
-  item: Commitment;
-  current?: WorkloadEffort;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const { t } = useLanguage(),
-    [start, setStart] = useState(current?.start ?? item.start ?? today()),
-    [end, setEnd] = useState(current?.end ?? item.end ?? today()),
-    [amount, setAmount] = useState(current ? String(current.manDays) : ""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  return (
-    <Modal title={t("Plan effort") + " · " + item.reference} onClose={onClose}>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError("");
-          try {
-            await apiRequest(
-              "/api/v1/resource-planning/" + item.type + "/" + item.entityId,
-              {
-                method: "PUT",
-                body: JSON.stringify({
-                  start,
-                  end,
-                  manDays: Number(amount),
-                  rowVersion: current?.rowVersion ?? null,
-                }),
-              },
-            );
-            await onSaved();
-            onClose();
-          } catch (e) {
-            setError(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <p>
-          {t(
-            "Total estimating effort, not project delivery effort. Shared equally between estimate assignees.",
-          )}
-        </p>
-        <Field label={t("Start date")}>
-          <input
-            required
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
-        </Field>
-        <Field label={t("Due date")}>
-          <input
-            required
-            type="date"
-            min={start}
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
-        </Field>
-        <Field label={t("Man-days")}>
-          <input
-            required
-            type="number"
-            min="0"
-            max="100000"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </Field>
-        {error && (
-          <p role="alert" className="red-text">
-            {error}
-          </p>
-        )}
-        <button className="btn primary" disabled={busy}>
-          {t("Save")}
-        </button>
-      </form>
-    </Modal>
-  );
-}
 function CapacityModal({
   initialUser,
   team,

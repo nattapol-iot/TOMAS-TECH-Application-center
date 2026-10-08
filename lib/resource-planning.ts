@@ -15,6 +15,10 @@ export type Commitment = {
   manDays: number | null;
   progress: number;
   status: string;
+  /** Where its effort is planned on the Workload screen; absent when the work's own plan holds it. */
+  effort?: { kind: "Inquiry" | "Estimate" | "EstimateSection"; id: number };
+  /** A Resource Plan task awaiting approval, counted at its proposed plan. */
+  tentative?: boolean;
 };
 const DAY = 86400000;
 /** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */
@@ -22,7 +26,7 @@ export const DEFAULT_WEEKLY_CAPACITY = 5;
 /** A saved capacity, or the default when nobody saved one. */
 export const weeklyCapacity = (saved: number | null | undefined) => saved ?? DEFAULT_WEEKLY_CAPACITY;
 /** Work in these statuses, or at 100%, no longer takes anyone's time; the server filters with the same list. */
-export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Rejected"];
+export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Reviewed", "Rejected"];
 export const isOpenWork = (item: Pick<Commitment, "progress" | "status">) =>
   item.progress < 100 && !FINISHED_WORK_STATUSES.includes(item.status);
 export const dayNumber = (value: string) =>

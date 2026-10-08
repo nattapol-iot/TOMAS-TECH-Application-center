@@ -2311,6 +2311,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Workload.noOpenWorkHint": { en: "Inquiries, estimates and plan tasks assigned to this person appear here.", th: "Inquiry, Estimate และงานในแผนที่มอบหมายให้คนนี้จะแสดงที่นี่", jp: "この人に割り当てられた Inquiry、Estimate、計画タスクがここに表示されます。" },
   "Workload.schedulesSkipped": { en: "These project plans could not be read and are left out", th: "อ่านแผนของโครงการเหล่านี้ไม่ได้ จึงไม่ได้นับรวม", jp: "次のプロジェクト計画を読み込めなかったため除外しました" },
   "Workload.method": { en: "Counts Monday to Friday without company holidays; leave is not deducted. Anyone without a saved capacity works 5 days a week. An estimate's effort is shared between its people, a plan task's between its PICs.", th: "นับวันจันทร์–ศุกร์ ไม่รวมวันหยุดบริษัท และยังไม่หักวันลา ใครไม่ได้ตั้งกำลังคนไว้ถือว่าทำงาน 5 วันต่อสัปดาห์ effort ของ Estimate แบ่งเท่ากันตามผู้รับผิดชอบ ส่วนงานในแผนแบ่งตาม PIC", jp: "月曜〜金曜で数え、会社の休日を除きます。休暇は差し引きません。稼働を保存していない人は週5日とみなします。Estimate の工数は担当者で、計画タスクの工数は PIC で均等に分けます。" },
+  "Workload.awaitingApproval": { en: "Awaiting approval", th: "รออนุมัติ", jp: "承認待ち" },
+  "Workload.sectionEffortHint": { en: "Effort for this estimate section, shared equally between its responsible and support engineer.", th: "effort ของ section นี้ แบ่งเท่ากันระหว่างผู้รับผิดชอบและผู้ช่วย", jp: "この見積セクションの工数です。担当者とサポートで均等に分けます。" },
   "Workload.projectedLate": { en: "Would finish late in their order", th: "จะเลยกำหนดตามลำดับงาน", jp: "作業順では期限超過" },
   "Workload.view": { en: "Workload view", th: "มุมมองภาระงาน", jp: "負荷の表示" },
   "Workload.viewTable": { en: "Table", th: "ตาราง", jp: "表" },

@@ -202,3 +202,20 @@ test("the Workload shows a Gantt, a work order per person, and My Work has its o
   assert.match(lazy, /export const MyWorkQueue = dynamic\(\(\) => import\("\.\/WorkQueue"\)\.then\(\(m\) => m\.MyWorkQueue\), screen\);/);
   assert.match(queue, /loadWorkload\(\{ mine: true \}\)/);
 });
+test("estimate sections and tasks awaiting approval show up, and a section's engineer plans its effort", async () => {
+  const [screen, queue, gantt] = await Promise.all([
+    "../app/system/production/ResourcePlanningScreen.tsx", "../app/system/production/WorkQueue.tsx", "../app/system/production/WorkloadGantt.tsx",
+  ].map((file) => readFile(new URL(file, import.meta.url), "utf8")));
+  // Awaiting approval is marked wherever the work is listed.
+  assert.match(queue, /\{item\.tentative \? <Badge tone="amber">\{t\("Workload\.awaitingApproval"\)\}<\/Badge> : null\}/);
+  assert.match(screen, /\{item\.tentative \? <Badge tone="amber">\{t\("Workload\.awaitingApproval"\)\}<\/Badge> : null\}/);
+  assert.match(gantt, /item\.tentative \? `\$\{item\.title\} · \$\{t\("Workload\.awaitingApproval"\)\}` : item\.title/);
+  // One effort dialog, saved where the item says its effort lives.
+  assert.match(queue, /export function EffortModal\(/);
+  assert.match(queue, /`\/api\/v1\/resource-planning\/\$\{item\.effort\.kind\}\/\$\{item\.effort\.id\}`/);
+  assert.match(screen, /import \{ EffortModal, WorkQueue \} from "\.\/WorkQueue";/);
+  assert.doesNotMatch(screen, /function EffortModal/);
+  // A section's own engineer plans it from the Workload drawer or My Work; planners plan the rest.
+  assert.match(screen, /item\.effort\.kind === "EstimateSection" && item\.ownerId === bootstrap\.user\.id/);
+  assert.match(queue, /canPlanEffort=\{\(item\) => item\.effort\?\.kind === "EstimateSection"\}/);
+});

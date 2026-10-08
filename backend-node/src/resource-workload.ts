@@ -1,4 +1,5 @@
 import { dateOnly } from "./http.js";
+import { planDates, type TaskPlan } from "./resource-task-math.js";
 import { resolveTasks, taskRow, type TaskRow } from "./schedule-service.js";
 
 // The Resource Plan's Workload in one read: every open piece of work in the caller's scope, with the person it
@@ -8,53 +9,77 @@ import { resolveTasks, taskRow, type TaskRow } from "./schedule-service.js";
 /** Working days a week for anyone without a saved capacity: Monday to Friday. lib/resource-planning.ts holds the same default for the screens. */
 export const DEFAULT_WEEKLY_CAPACITY = 5;
 /** Work in these statuses, or at 100%, no longer takes anyone's time. lib/resource-planning.ts filters with the same list. */
-export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Rejected"] as const;
+export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Reviewed", "Rejected"] as const;
 export const isOpenWork = (item: { progress: number; status: string }) =>
   item.progress < 100 && !(FINISHED_WORK_STATUSES as readonly string[]).includes(item.status);
+
+/** Where a piece of work's effort is planned on the Workload screen (PUT /resource-planning/:kind/:id). */
+export type EffortSource = { kind: "Inquiry" | "Estimate" | "EstimateSection"; id: number };
 
 export type WorkloadItem = {
   /** One row per person: the work and whose share it is. */
   key: string;
-  /** The work itself, whoever does it: Project-<task id>, Estimate-<id>, Inquiry-<id> or InquiryTask-<id>. A person's work order names these. */
+  /**
+   * The work itself, whoever does it: Project-<task id>, Estimate-<id>, EstimateSection-<assignment id>, Inquiry-<id>
+   * or InquiryTask-<id>. A person's work order names these.
+   */
   workKey: string;
   type: "Inquiry" | "Estimate" | "Project"; entityId: number; ownerId: number | null;
   reference: string; title: string; customer: string; start: string | null; end: string | null;
   manDays: number | null; progress: number; status: string;
+  /** Absent where the effort lives in the work's own plan (plan tasks, Resource Plan tasks). */
+  effort?: EffortSource;
+  /** A Resource Plan task still awaiting approval: counted at its proposed dates and effort. */
+  tentative?: boolean;
 };
 
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
 
 /**
- * Seven recordsets, after the caller's planning recordsets: whole inquiries, inquiry tasks, estimate shares, projects,
- * their schedule rows and PICs, and every person's work order. Binds @actor, @project_elevated and @task_elevated.
- * Visibility follows the screens the Resource Plan used to read: inquiries and estimates as their lists show them to
- * inquiry.read / estimate.read, inquiry tasks as GET /resource-tasks/commitments scopes them, projects as GET /projects
- * lists them.
+ * Eight recordsets, after the caller's planning recordsets: whole inquiries, inquiry tasks, whole estimates, estimate
+ * sections, projects, their schedule rows and PICs, and every person's work order. Binds @actor, @project_elevated and
+ * @task_elevated. Visibility follows the screens the Resource Plan used to read: inquiries and estimates as their lists
+ * show them to inquiry.read / estimate.read, inquiry tasks as GET /resource-tasks/commitments scopes them (managers see
+ * all), projects as GET /projects lists them.
  */
 export const WORKLOAD_SQL = `
       DECLARE @inquiries bit = CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'inquiry.read') THEN 1 ELSE 0 END;
       DECLARE @estimates bit = CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'estimate.read') THEN 1 ELSE 0 END;
-      -- An inquiry counts whole until it is broken into Resource Plan tasks; then its tasks count instead.
+      -- An inquiry counts whole until it is broken into Resource Plan tasks, approved or proposed; then its tasks count instead.
       SELECT i.id,i.inquiry_no,i.project_name,c.name customer_name,i.estimate_owner_id owner_id,
         COALESCE(re.start_date,i.inquiry_date) start_date,COALESCE(re.end_date,i.due_date) end_date,re.man_days,i.progress,i.status
       FROM dbo.inquiries i JOIN dbo.customers c ON c.id=i.customer_id
       LEFT JOIN dbo.resource_effort re ON re.entity_type=N'Inquiry' AND re.entity_id=i.id
       WHERE @inquiries=1 AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.progress<100 AND i.status NOT IN(${FINISHED_SQL})
-        AND NOT EXISTS(SELECT 1 FROM dbo.resource_task_sources s WHERE s.inquiry_id=i.id);
-      SELECT t.id,t.inquiry_id,i.inquiry_no,c.name customer_name,t.title,t.assignee_id,t.plan_start,t.plan_end,t.man_days,t.percent_done,t.execution_status
+        AND NOT EXISTS(SELECT 1 FROM dbo.resource_task_sources s WHERE s.inquiry_id=i.id)
+        AND NOT EXISTS(SELECT 1 FROM dbo.resource_tasks pending WHERE pending.inquiry_id=i.id AND pending.state=N'PendingApproval');
+      -- Approved tasks at their plan; tasks awaiting approval at the plan proposed for them.
+      SELECT t.id,t.inquiry_id,i.inquiry_no,c.name customer_name,t.title,t.assignee_id,t.plan_start,t.plan_end,t.man_days,t.percent_done,
+        t.execution_status,t.state,t.pending_plan
       FROM dbo.resource_tasks t JOIN dbo.inquiries i ON i.id=t.inquiry_id JOIN dbo.customers c ON c.id=i.customer_id
-      WHERE @inquiries=1 AND t.state=N'Approved' AND i.deleted_at IS NULL AND i.status NOT IN(N'Closed',N'Cancelled',N'Rejected')
+      WHERE @inquiries=1 AND t.state IN(N'Approved',N'PendingApproval') AND i.deleted_at IS NULL AND i.status NOT IN(N'Closed',N'Cancelled',N'Rejected')
         AND (@task_elevated=1 OR i.estimate_owner_id=@actor OR i.created_by=@actor OR t.assignee_id=@actor OR t.created_by=@actor);
-      -- One row per person on an estimate: its owners and support, or the estimate owner when nobody is assigned.
-      SELECT e.id,e.estimate_no,e.project_name,c.name customer_name,o.user_id owner_id,o.owner_count,
+      -- An estimate nobody has been assigned a section of is its owner's work.
+      SELECT e.id,e.estimate_no,e.project_name,c.name customer_name,e.owner_id,
         COALESCE(re.start_date,e.created_date) start_date,COALESCE(re.end_date,e.due_date) end_date,re.man_days,e.progress,e.status
       FROM dbo.estimates e JOIN dbo.customers c ON c.id=e.customer_id
       LEFT JOIN dbo.resource_effort re ON re.entity_type=N'Estimate' AND re.entity_id=e.id
-      CROSS APPLY(SELECT user_id,COUNT(*) OVER() owner_count FROM (
-        SELECT a.owner_id user_id FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id
-        UNION SELECT a.support_id FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id AND a.support_id IS NOT NULL
-        UNION SELECT e.owner_id WHERE NOT EXISTS(SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id)) owners) o
-      WHERE @estimates=1 AND e.deleted_at IS NULL AND e.archived_at IS NULL AND e.progress<100 AND e.status NOT IN(${FINISHED_SQL});
+      WHERE @estimates=1 AND e.deleted_at IS NULL AND e.archived_at IS NULL AND e.progress<100 AND e.status NOT IN(${FINISHED_SQL})
+        AND NOT EXISTS(SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id);
+      -- Otherwise each open section is work for its responsible and support engineer, due on the section's date, with the
+      -- section's own effort or, until one is planned, an equal part of the whole estimate's.
+      SELECT a.id assignment_id,a.section,e.id,e.estimate_no,e.project_name,c.name customer_name,people.user_id owner_id,people.share_count,
+        COALESCE(se.start_date,CASE WHEN e.created_date>a.due_date THEN a.due_date ELSE e.created_date END) start_date,
+        COALESCE(se.end_date,a.due_date) end_date,COALESCE(se.man_days,ee.man_days/NULLIF(sections.n,0)) man_days,a.progress,a.status
+      FROM dbo.estimate_assignments a
+      JOIN dbo.estimates e ON e.id=a.estimate_id JOIN dbo.inquiries i ON i.id=e.inquiry_id JOIN dbo.customers c ON c.id=e.customer_id
+      LEFT JOIN dbo.resource_effort se ON se.entity_type=N'EstimateSection' AND se.entity_id=a.id
+      LEFT JOIN dbo.resource_effort ee ON ee.entity_type=N'Estimate' AND ee.entity_id=e.id
+      CROSS APPLY(SELECT COUNT(*) n FROM dbo.estimate_assignments s WHERE s.estimate_id=e.id) sections
+      CROSS APPLY(SELECT user_id,COUNT(*) OVER() share_count FROM (
+        SELECT a.owner_id user_id UNION SELECT a.support_id WHERE a.support_id IS NOT NULL) engineers) people
+      WHERE @estimates=1 AND e.deleted_at IS NULL AND e.archived_at IS NULL AND i.deleted_at IS NULL AND i.archived_at IS NULL
+        AND e.status NOT IN(${FINISHED_SQL}) AND a.status NOT IN(${FINISHED_SQL}) AND a.progress<100;
       -- A closed project's plan no longer takes anyone's time.
       DECLARE @projects TABLE(id bigint PRIMARY KEY);
       INSERT @projects SELECT p.id FROM dbo.projects p WHERE p.deleted_at IS NULL AND p.status<>N'Closed'
@@ -73,29 +98,60 @@ const optional = (row: Row, key: string) => (row[key] === null || row[key] === u
 const day = (row: Row, key: string) => dateOnly((row[key] ?? null) as Date | string | null);
 
 /** A work key as WorkloadItem.workKey writes it; the only shape dbo.work_priorities stores. */
-export const WORK_KEY = /^(?:Project|Estimate|Inquiry|InquiryTask)-[1-9][0-9]{0,17}$/;
+export const WORK_KEY = /^(?:Project|Estimate|EstimateSection|Inquiry|InquiryTask)-[1-9][0-9]{0,17}$/;
 
-/** Turns WORKLOAD_SQL's recordsets into open work items. A schedule that cannot be resolved is skipped and named in warnings. */
-export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { items: WorkloadItem[]; warnings: string[] } {
-  const [inquiries = [], tasks = [], estimates = [], projects = [], scheduleRows = [], pics = []] = sets;
+/** The plan proposed for a task awaiting approval, or null when it cannot be read. */
+function proposedPlan(value: unknown, holidays: ReadonlySet<string>) {
+  try {
+    const plan = JSON.parse(String(value)) as TaskPlan;
+    if (!Number.isInteger(plan.assigneeId) || typeof plan.start !== "string" || !Number.isInteger(plan.workDays) || typeof plan.manDays !== "number") return null;
+    return { ...plan, end: planDates(plan, holidays).end };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns WORKLOAD_SQL's recordsets into open work items. A schedule that cannot be resolved is skipped and named in
+ * warnings; orderRows are the saved work orders, for workOrders.
+ */
+export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { items: WorkloadItem[]; warnings: string[]; orderRows: Row[] } {
+  const [inquiries = [], tasks = [], estimates = [], sections = [], projects = [], scheduleRows = [], pics = [], orderRows = []] = sets;
   const items: WorkloadItem[] = [];
   const warnings: string[] = [];
   for (const r of inquiries) items.push({
     key: `Inquiry-${id(r, "id")}`, workKey: `Inquiry-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
     reference: text(r, "inquiry_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
     start: day(r, "start_date"), end: day(r, "end_date"), manDays: optional(r, "man_days"), progress: Number(r.progress ?? 0), status: text(r, "status"),
+    effort: { kind: "Inquiry", id: id(r, "id") },
   });
-  for (const r of tasks) items.push({
-    key: `InquiryTask-${id(r, "id")}`, workKey: `InquiryTask-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "inquiry_id"), ownerId: optional(r, "assignee_id"),
-    reference: `${text(r, "inquiry_no")} · TASK-${id(r, "id")}`, title: text(r, "title"), customer: text(r, "customer_name"),
-    start: day(r, "plan_start"), end: day(r, "plan_end"), manDays: optional(r, "man_days"), progress: Number(r.percent_done ?? 0), status: text(r, "execution_status"),
+  for (const r of tasks) {
+    const work = {
+      key: `InquiryTask-${id(r, "id")}`, workKey: `InquiryTask-${id(r, "id")}`, type: "Inquiry" as const, entityId: id(r, "inquiry_id"),
+      reference: `${text(r, "inquiry_no")} · TASK-${id(r, "id")}`, title: text(r, "title"), customer: text(r, "customer_name"),
+      progress: Number(r.percent_done ?? 0), status: text(r, "execution_status"),
+    };
+    if (r.state !== "PendingApproval") {
+      items.push({ ...work, ownerId: optional(r, "assignee_id"), start: day(r, "plan_start"), end: day(r, "plan_end"), manDays: optional(r, "man_days") });
+      continue;
+    }
+    const plan = proposedPlan(r.pending_plan, holidays);
+    if (plan) items.push({ ...work, ownerId: plan.assigneeId, start: plan.start, end: plan.end, manDays: plan.manDays, tentative: true });
+  }
+  for (const r of estimates) items.push({
+    key: `Estimate-${id(r, "id")}-${text(r, "owner_id")}`, workKey: `Estimate-${id(r, "id")}`, type: "Estimate", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
+    reference: text(r, "estimate_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
+    start: day(r, "start_date"), end: day(r, "end_date"), manDays: optional(r, "man_days"), progress: Number(r.progress ?? 0), status: text(r, "status"),
+    effort: { kind: "Estimate", id: id(r, "id") },
   });
-  for (const r of estimates) {
-    const effort = optional(r, "man_days"), share = Math.max(1, Number(r.owner_count ?? 1));
+  for (const r of sections) {
+    const effort = optional(r, "man_days"), share = Math.max(1, Number(r.share_count ?? 1));
     items.push({
-      key: `Estimate-${id(r, "id")}-${text(r, "owner_id")}`, workKey: `Estimate-${id(r, "id")}`, type: "Estimate", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
-      reference: text(r, "estimate_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
+      key: `EstimateSection-${id(r, "assignment_id")}-${text(r, "owner_id")}`, workKey: `EstimateSection-${id(r, "assignment_id")}`, type: "Estimate",
+      entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
+      reference: `${text(r, "estimate_no")} · ${text(r, "section")}`, title: text(r, "project_name"), customer: text(r, "customer_name"),
       start: day(r, "start_date"), end: day(r, "end_date"), manDays: effort === null ? null : effort / share, progress: Number(r.progress ?? 0), status: text(r, "status"),
+      effort: { kind: "EstimateSection", id: id(r, "assignment_id") },
     });
   }
   const projectById = new Map(projects.map((r) => [id(r, "id"), { number: text(r, "project_no"), customer: text(r, "customer_name") }]));
@@ -125,7 +181,7 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
       });
     }
   }
-  return { items: items.filter(isOpenWork), warnings };
+  return { items: items.filter(isOpenWork), warnings, orderRows };
 }
 
 export type WorkOrder = { userId: number; keys: string[] };

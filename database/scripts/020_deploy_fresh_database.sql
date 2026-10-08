@@ -134,11 +134,12 @@ GO
 :r database/migrations/070_estimate_labor_discipline.sql
 :r database/migrations/071_work_priorities.sql
 :r database/migrations/072_site_monitor.sql
+:r database/migrations/073_estimate_section_effort.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 72) <> 72
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 73) <> 73
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

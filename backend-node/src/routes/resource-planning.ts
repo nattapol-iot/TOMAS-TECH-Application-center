@@ -13,6 +13,7 @@ import { ApiError } from "../errors.js";
 import { insertAudit } from "../audit.js";
 import { isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { elevated } from "../resource-task-service.js";
+import { permissionFor } from "../schedule-service.js";
 import { WORK_KEY, WORKLOAD_SQL, workloadItems, workOrders } from "../resource-workload.js";
 
 type Row = Record<string, unknown> & { row_version: Buffer };
@@ -48,7 +49,9 @@ const PLANNING_SQL = `
       WHERE EXISTS(SELECT 1 FROM dbo.user_effective_permissions p WHERE p.user_id=@actor
         AND p.code=CASE e.entity_type WHEN N'Inquiry' THEN N'inquiry.read' ELSE N'estimate.read' END)
       AND ((e.entity_type=N'Inquiry' AND EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=e.entity_id AND i.deleted_at IS NULL))
-        OR (e.entity_type=N'Estimate' AND EXISTS(SELECT 1 FROM dbo.estimates i WHERE i.id=e.entity_id AND i.deleted_at IS NULL)));
+        OR (e.entity_type=N'Estimate' AND EXISTS(SELECT 1 FROM dbo.estimates i WHERE i.id=e.entity_id AND i.deleted_at IS NULL))
+        OR (e.entity_type=N'EstimateSection' AND EXISTS(SELECT 1 FROM dbo.estimate_assignments a JOIN dbo.estimates i ON i.id=a.estimate_id
+          WHERE a.id=e.entity_id AND i.deleted_at IS NULL)));
       SELECT holiday_date FROM dbo.holidays;`;
 const holidayDates = (rows: unknown) => (rows as { holiday_date: Date }[]).map((r) => dateOnly(r.holiday_date)!);
 export function registerResourcePlanningRoutes(
@@ -74,7 +77,8 @@ export function registerResourcePlanningRoutes(
     const result = await db.query<Row>(`SET NOCOUNT ON;${PLANNING_SQL}${WORKLOAD_SQL}`, (q) => q
       .input("actor", sql.BigInt, actor.id)
       .input("project_elevated", sql.Bit, isProjectElevated(actor))
-      .input("task_elevated", sql.Bit, elevated(actor)));
+      // Admin, Engineering Managers and Project Managers see every inquiry task; others see the ones they are part of.
+      .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor)));
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
     const holidays = holidayDates(sets[2]);
     const work = workloadItems(sets.slice(3), new Set(holidays));
@@ -87,7 +91,7 @@ export function registerResourcePlanningRoutes(
       holidays,
       items,
       warnings: work.warnings,
-      priorities: workOrders(sets[9] ?? [], items),
+      priorities: workOrders(work.orderRows, items),
     };
   });
   // A person's own order of work, set by them or by a manager for them. Only the order is stored: plan dates never
@@ -117,19 +121,24 @@ export function registerResourcePlanningRoutes(
     return { userId, keys };
   });
   app.put("/api/v1/resource-planning/:kind/:id", async (request) => {
-    await users.demandPermission(request, "schedule.plan");
-    const actor = await users.required(request),
-      params = request.params as { kind: string; id: string };
+    const params = request.params as { kind: string; id: string };
+    // An estimate section's own engineers plan its effort; every other planning record needs schedule.plan and write
+    // access to its source. A planner may set a section's effort too (checked against the section below).
+    const section = params.kind === "EstimateSection";
+    if (section) await users.demandPermission(request, "estimate.read");
+    else await users.demandPermission(request, "schedule.plan");
+    const actor = await users.required(request);
     const id = positiveLong(params.id, "Record id"),
       body = bodyObject(request.body);
     const capacity = params.kind === "capacity";
-    if (!capacity && !["Inquiry", "Estimate"].includes(params.kind))
+    if (!capacity && !["Inquiry", "Estimate", "EstimateSection"].includes(params.kind))
       throw new ApiError(400, "validation_failed", "Unknown planning record.");
-    if (!capacity)
+    if (!capacity && !section)
       await users.demandPermission(
         request,
         params.kind === "Inquiry" ? "inquiry.write" : "estimate.write",
       );
+    const planner = section && (await permissionFor(db, actor.id, "schedule.plan")) && (await permissionFor(db, actor.id, "estimate.write"));
     const expected =
       body.rowVersion == null ? null : parseRowVersion(body.rowVersion);
     const amount = decimal(
@@ -165,12 +174,16 @@ export function registerResourcePlanningRoutes(
           ? "inquiries"
           : "estimates";
       const ref = (
-        await q.query(
-          `SELECT id FROM dbo.${source} WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL${capacity ? " AND is_active=1" : ""};`,
+        await q.query<{ id: number; owner_id?: number; support_id?: number | null }>(
+          section
+            ? "SELECT a.id,a.owner_id,a.support_id FROM dbo.estimate_assignments a WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.estimates e ON e.id=a.estimate_id WHERE a.id=@id AND e.deleted_at IS NULL;"
+            : `SELECT id FROM dbo.${source} WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL${capacity ? " AND is_active=1" : ""};`,
         )
       ).recordset[0];
       if (!ref)
         throw new ApiError(404, "not_found", "Source record is unavailable.");
+      if (section && !planner && Number(ref.owner_id) !== actor.id && Number(ref.support_id) !== actor.id)
+        throw new ApiError(403, "section_effort_forbidden", "Only the section's engineers or a planner can plan its effort.");
       if (params.kind === "Inquiry" && (await q.query('SELECT inquiry_id FROM dbo.resource_task_sources WHERE inquiry_id=@id')).recordset.length)
         throw new ApiError(409, "inquiry_task_mode", "This inquiry uses approved task effort. Submit a task plan change in Resource Plan instead.");
       const table = capacity ? "resource_capacity" : "resource_effort";
