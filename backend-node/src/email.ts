@@ -36,6 +36,23 @@ export type SupportTicketEmail = {
   recipients: EmailRecipient[];
 };
 
+/** A Site Monitor incident, opened (escalation step 1-3) or resolved. Times are already formatted. */
+export type SiteMonitorEmail = {
+  state: "open" | "resolved";
+  kind: "ProgramStopped" | "AgentOffline";
+  siteName: string;
+  location: string;
+  agentName: string;
+  machineName: string;
+  programName: string;
+  openedAt: string;
+  resolvedAt: string;
+  /** The escalation step this email belongs to (1 = first responsible person). */
+  priority: number;
+  recentLogs: { at: string; level: string; message: string }[];
+  recipients: EmailRecipient[];
+};
+
 type FetchLike = typeof fetch;
 
 function escapeHtml(value: string): string {
@@ -98,6 +115,35 @@ export class EmailService {
       + `<tr><td><strong>Subject</strong></td><td>${escapeHtml(message.subject)}</td></tr>`
       + `<tr><td><strong>By</strong></td><td>${escapeHtml(message.actorName)}</td></tr></table>`
       + `<p><a href="${escapeHtml(appUrl)}#support/${message.ticketId}">เปิด Support Center ${escapeHtml(message.ticketNumber)} / Open this ticket</a></p>`);
+  }
+
+  // Sent by the Site Monitor sweeper (site-monitor.ts): escalation step 1 → 2 → 3 while an incident
+  // stays open and unacknowledged, then once more to everyone already told when it is resolved.
+  async sendSiteMonitorIncident(message: SiteMonitorEmail): Promise<EmailDeliveryResult> {
+    const what = message.kind === "ProgramStopped"
+      ? `${message.programName} stopped`
+      : `${message.agentName} is offline`;
+    const subject = message.state === "open"
+      ? `[Site Monitor] ${message.siteName}: ${what}`
+      : `[Site Monitor] Resolved · ${message.siteName}: ${what}`;
+    const heading = message.state === "open"
+      ? (message.kind === "ProgramStopped"
+        ? "โปรแกรมหยุดทำงานโดยไม่คาดคิด / A monitored program stopped unexpectedly."
+        : "เครื่องที่เฝ้าระวังหยุดส่งข้อมูล / A monitored machine stopped reporting.")
+      : "ปัญหาได้รับการแก้ไขแล้ว / The problem has been resolved.";
+    const row = (label: string, value: string) => value ? `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>` : "";
+    const logs = message.recentLogs.length === 0 ? "" :
+      `<p><strong>Log ล่าสุด / Recent log</strong></p><table>${message.recentLogs.map((log) =>
+        `<tr><td>${escapeHtml(log.at)}</td><td>${escapeHtml(log.level)}</td><td>${escapeHtml(log.message)}</td></tr>`).join("")}</table>`;
+    return this.sendMail(message.recipients, subject, (appUrl) =>
+      `<p>${heading}</p>`
+      + `<table>${row("Site", message.siteName)}${row("Location", message.location)}`
+      + `${row("Program", message.kind === "ProgramStopped" ? message.programName : "")}`
+      + `${row("Agent", message.agentName)}${row("Machine", message.machineName)}`
+      + `${row("Since", message.openedAt)}${row("Resolved", message.state === "resolved" ? message.resolvedAt : "")}`
+      + `${message.state === "open" ? row("Escalation", `ผู้ดูแลลำดับที่ ${message.priority} / Responsible person #${message.priority}`) : ""}</table>`
+      + logs
+      + `<p><a href="${escapeHtml(appUrl)}#/site-monitor">เปิด Site Monitor / Open Site Monitor</a></p>`);
   }
 
   private async sendMail(rawRecipients: EmailRecipient[], subject: string, htmlBody: (appUrl: string) => string): Promise<EmailDeliveryResult> {

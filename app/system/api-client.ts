@@ -2969,6 +2969,135 @@ function clickDownload(href: string, file: string) {
   anchor.remove();
 }
 
+/* Site Monitor: TMT Control Panel agents on customer machines report programs, resources and logs. */
+export type MonitorContact = { priority: number; userId: number; name: string; email: string };
+export type MonitorSite = {
+  id: number;
+  name: string;
+  location: string;
+  description: string;
+  escalationMinutes: number;
+  offlineMinutes: number;
+  isActive: boolean;
+  rowVersion: string;
+  agentCount: number;
+  agentsOnline: number;
+  programCount: number;
+  programsRunning: number;
+  openIncidents: number;
+  lastSeenAt: string | null;
+  contacts: MonitorContact[];
+};
+export type MonitorAgent = {
+  id: number;
+  name: string;
+  keyHint: string;
+  machineName: string | null;
+  agentVersion: string | null;
+  allowsControl: boolean;
+  isOnline: boolean;
+  lastSeenAt: string | null;
+  statusChangedAt: string | null;
+  createdAt: string | null;
+  host: {
+    cpuPercent: number | null;
+    memoryUsedBytes: number | null;
+    memoryTotalBytes: number | null;
+    diskFreeBytes: number | null;
+    diskTotalBytes: number | null;
+    uptimeSeconds: number | null;
+  };
+};
+export type MonitorVerb = "Start" | "Stop" | "Restart";
+export type MonitorProgram = {
+  id: number;
+  agentId: number;
+  key: string;
+  name: string;
+  group: string;
+  runAsAdmin: boolean;
+  isRunning: boolean;
+  cpuPercent: number | null;
+  memoryBytes: number | null;
+  uptimeSeconds: number | null;
+  processCount: number;
+  statusChangedAt: string | null;
+  reportedAt: string | null;
+  pendingCommand: { id: number; verb: MonitorVerb; status: string } | null;
+};
+export type MonitorIncident = {
+  id: number;
+  kind: "ProgramStopped" | "AgentOffline";
+  agentId: number;
+  agentName: string;
+  programId: number | null;
+  programName: string | null;
+  openedAt: string;
+  resolvedAt: string | null;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
+  notifiedLevel: number;
+};
+export type MonitorCommand = {
+  id: number;
+  programId: number;
+  programName: string;
+  verb: MonitorVerb;
+  status: "Pending" | "Delivered" | "Succeeded" | "Failed" | "Expired";
+  requestedBy: string;
+  requestedAt: string;
+  completedAt: string | null;
+  resultMessage: string | null;
+};
+export type MonitorLog = { id: number; agentId: number; agentName: string; level: "Info" | "Warning" | "Error"; message: string; loggedAt: string };
+export type MonitorSiteDetail = {
+  site: MonitorSite;
+  agents: MonitorAgent[];
+  programs: MonitorProgram[];
+  incidents: MonitorIncident[];
+  commands: MonitorCommand[];
+};
+export type MonitorSiteInput = {
+  name: string;
+  location: string;
+  description: string;
+  escalationMinutes: number;
+  offlineMinutes: number;
+  isActive: boolean;
+  contacts: { priority: number; userId: number }[];
+  rowVersion?: string;
+};
+
+export const getMonitorSites = () =>
+  apiRequest<{ sites: MonitorSite[]; heartbeatSeconds: number }>("/api/v1/monitor/sites");
+export const getMonitorSite = (siteId: number) =>
+  apiRequest<MonitorSiteDetail>(`/api/v1/monitor/sites/${siteId}`);
+export const getMonitorLogs = (siteId: number, filter: { level?: string; agentId?: number; q?: string; beforeId?: number; limit?: number }) => {
+  const query = new URLSearchParams();
+  if (filter.level) query.set("level", filter.level);
+  if (filter.agentId) query.set("agentId", String(filter.agentId));
+  if (filter.q) query.set("q", filter.q);
+  if (filter.beforeId) query.set("beforeId", String(filter.beforeId));
+  query.set("limit", String(filter.limit ?? 200));
+  return apiRequest<{ logs: MonitorLog[] }>(`/api/v1/monitor/sites/${siteId}/logs?${query}`);
+};
+export const sendMonitorCommand = (programId: number, verb: MonitorVerb) =>
+  apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/programs/${programId}/commands`, { method: "POST", body: JSON.stringify({ verb }) });
+export const getMonitorCommand = (commandId: number) =>
+  apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/commands/${commandId}`);
+export const acknowledgeMonitorIncident = (incidentId: number) =>
+  apiRequest<{ ok: boolean }>(`/api/v1/monitor/incidents/${incidentId}/acknowledge`, { method: "POST", body: "{}" });
+export const createMonitorSite = (input: MonitorSiteInput) =>
+  apiRequest<{ id: number }>("/api/v1/monitor/sites", { method: "POST", body: JSON.stringify(input) });
+export const updateMonitorSite = (siteId: number, input: MonitorSiteInput) =>
+  apiRequest<{ ok: boolean }>(`/api/v1/monitor/sites/${siteId}`, { method: "PUT", body: JSON.stringify(input) });
+export const createMonitorAgent = (siteId: number, name: string) =>
+  apiRequest<{ agent: { id: number; name: string; keyHint: string }; key: string }>(`/api/v1/monitor/sites/${siteId}/agents`, { method: "POST", body: JSON.stringify({ name }) });
+export const rotateMonitorAgentKey = (agentId: number) =>
+  apiRequest<{ key: string; keyHint: string }>(`/api/v1/monitor/agents/${agentId}/rotate-key`, { method: "POST", body: "{}" });
+export const revokeMonitorAgent = (agentId: number) =>
+  apiRequest<{ ok: boolean }>(`/api/v1/monitor/agents/${agentId}/revoke`, { method: "POST", body: "{}" });
+
 /**
  * Content-Disposition carries the real file name, which may be Thai. The
  * RFC 5987 form is preferred and the quoted form is the fallback, the same

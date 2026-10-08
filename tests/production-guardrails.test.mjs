@@ -59,7 +59,7 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
   const productionApp = await readFile(new URL("app/system/ProductionApp.tsx", root), "utf8");
   const navSource = productionApp.slice(productionApp.indexOf("const NAV"), productionApp.indexOf("const IS_AUTH_CONFIGURED"));
   const menuLabels = [
-    "Dashboard", "My Work", "RFQ intake & estimating", "Estimate Cost", "Projects", "Knowledge Hub", "Download Center",
+    "Dashboard", "My Work", "RFQ intake & estimating", "Estimate Cost", "Projects", "Knowledge Hub", "Download Center", "Site Monitor",
     // Every label is a dictionary key, never a literal in one language: the
     // intake and opportunity entries once carried raw Thai and showed Thai to
     // English and Japanese readers.
@@ -593,7 +593,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(deployment, /026_performance_reviews\.sql/);
   // Migration 017 extended the list. The assertion still pins an exact count,
   // so a migration added to the runner but never applied still fails the build.
-  assert.match(deployment, /version BETWEEN 1 AND 71\) <> 71/);
+  assert.match(deployment, /version BETWEEN 1 AND 72\) <> 72/);
   assert.match(seed, /schema_versions WHERE version = 15/);
 
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
@@ -1011,7 +1011,7 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.match(client, /listKnowledgeDocuments/);
   assert.match(deployment, /014_knowledge_hub\.sql/);
   assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 71\) <> 71/);
+  assert.match(deployment, /version BETWEEN 1 AND 72\) <> 72/);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.knowledge_audit_events/);
   assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.knowledge_document_approvals/);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);

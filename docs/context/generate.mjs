@@ -34,6 +34,7 @@ const modules = [
  ['performance','KPI / Growth / Team Activity','ประเมิน performance หลักฐาน insights และ activity','performance activity','production/PerformanceScreen.tsx production/TeamActivityScreen.tsx','performance|activity'],
  ['support','Support / Employee Manual','แจ้งปัญหา ticket การตอบรับ และคู่มือ','support','production/SupportScreens.tsx production/EmployeeManualScreen.tsx','support|employee-manual'],
  ['downloads','Download Center','โปรแกรมและไฟล์ของแผนกจากโฟลเดอร์ download-center บน NAS (รายการและดาวน์โหลด)','download-center','production/DownloadCenterScreen.tsx','download-center'],
+ ['site-monitor','Site Monitor','สถานะโปรแกรม resource และ log ที่ TMT Control Panel (agent) ส่งมา สั่ง start/stop/restart และแจ้งเมลผู้ดูแลลำดับ 1-2-3','site-monitor','production/SiteMonitorScreen.tsx','site-monitor'],
  ['master','Master Data / Customers / Admin','ลูกค้า supplier พนักงาน role audit และ settings','master sales-customers admin','production/CoreScreens.tsx production/AdminAnalyticsScreens.tsx','customer|user-role|admin|business-card'],
  ['platform','Platform / Health / Storage','config database migration authentication และ document storage','health record-presence','','migration|database|startup|network|audit|http'],
 ];

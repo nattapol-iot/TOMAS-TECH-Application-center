@@ -76,6 +76,7 @@ export const ProductionSalesIntake = dynamic(() => import("./SiteVisitScreens").
 export const ProductionSiteVisits = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionSiteVisits), screen);
 export const ProductionVisitMasterData = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionVisitMasterData), screen);
 export const DownloadCenterScreen = dynamic(() => import("./DownloadCenterScreen").then((m) => m.DownloadCenterScreen), screen);
+export const SiteMonitorScreen = dynamic(() => import("./SiteMonitorScreen").then((m) => m.SiteMonitorScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);
 // My Work's "My work order" tab: the work queue and its projection load when the tab is first opened.
 export const MyWorkQueue = dynamic(() => import("./WorkQueue").then((m) => m.MyWorkQueue), screen);

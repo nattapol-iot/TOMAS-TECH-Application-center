@@ -729,4 +729,14 @@ GO
 -- database/migrations/071_work_priorities.sql
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.work_priorities TO [iot_team_app_role];
 GO
+
+-- database/migrations/072_site_monitor.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_sites TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.monitor_site_contacts TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_agents TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_programs TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.monitor_logs TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_incidents TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.monitor_commands TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

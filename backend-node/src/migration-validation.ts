@@ -57,6 +57,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 69, fileName: "069_withdraw_project_document.sql", name: "Withdraw a mistaken project document upload" },
   { version: 70, fileName: "070_estimate_labor_discipline.sql", name: "Estimate labor and site expense disciplines" },
   { version: 71, fileName: "071_work_priorities.sql", name: "Personal work order" },
+  { version: 72, fileName: "072_site_monitor.sql", name: "Site Monitor agents, incidents and remote program control" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

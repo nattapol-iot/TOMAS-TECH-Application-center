@@ -62,6 +62,7 @@ import {
   ProductionInventoryOperations,
   ProductionKnowledgeHub,
   DownloadCenterScreen,
+  SiteMonitorScreen,
   ProductionMaterialIssues,
   ProductionModuleTemplates,
   ProductionMyAssignments,
@@ -86,7 +87,7 @@ type View = CrmView
   | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
   | "signing" | "documents" | "signature" | "stamps"
   | "suppliers" | "employees" | "material-master" | "user-accounts" | "summary-reports"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "schedule-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support" | "downloads";
+  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "schedule-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support" | "downloads" | "site-monitor";
 
 /** unlessPermission hides an item from people who hold that permission, because they have a fuller screen for the same records. */
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; unlessPermission?: string; rateAccess?: boolean };
@@ -117,6 +118,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
     { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
     { view: "downloads", label: "Download Center", icon: "download" },
+    { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
   ] },
   { group: "CRM & SALES", items: [
     { view: "crm-dashboard", label: "CRM Dashboard", icon: "grid", permission: "crm.read" },
@@ -813,6 +815,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "downloads" ? <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} notify={setToast} /> : null}
+          {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "sales-intake" ? <ProductionSalesIntake {...common} openVisit={openSiteVisit} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
           {view === "site-visits" ? <ProductionSiteVisits key={preferredSiteVisitId ?? "site-visit-list"} {...common} initialVisitId={preferredSiteVisitId} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
           {view === "my-assignments" ? <ProductionMyAssignments {...common} /> : null}
