@@ -2969,6 +2969,82 @@ function clickDownload(href: string, file: string) {
   anchor.remove();
 }
 
+/* Source repositories: each project's source code tree, kept on the NAS and browsed like GitHub. */
+export type RepositoryActor = { id: number; name: string };
+export type SourceRepository = {
+  name: string;
+  description: string;
+  project: { id: number; projectNo: string; name: string; status: string } | null;
+  fileCount: number;
+  sizeBytes: number;
+  createdAt: string;
+  createdBy: RepositoryActor;
+  updatedAt: string;
+  updatedBy: RepositoryActor;
+};
+export type RepositoryHistoryEntry = {
+  at: string; by: RepositoryActor; action: "create" | "upload" | "delete" | "update"; message: string; path: string; files: number;
+};
+export type SourceRepositoryDetail = SourceRepository & { history: RepositoryHistoryEntry[]; canManage: boolean };
+export type RepositoryTreeEntry = { name: string; path: string; type: "dir" | "file"; sizeBytes: number; modifiedAt: string };
+export type RepositoryTree = { path: string; entries: RepositoryTreeEntry[]; readme: { name: string; path: string; content: string } | null };
+export type RepositoryBlob = {
+  path: string; name: string; sizeBytes: number; modifiedAt: string; content: string | null; reason: "binary" | "too_large" | null;
+};
+
+const repositoryBase = (name: string) => `/api/v1/download-center/repositories/${encodeURIComponent(name)}`;
+
+export const listSourceRepositories = () =>
+  apiRequest<{ items: SourceRepository[] }>("/api/v1/download-center/repositories");
+export const createSourceRepository = (input: { name: string; projectId: number; description: string }) =>
+  apiRequest<SourceRepository>("/api/v1/download-center/repositories", { method: "POST", body: JSON.stringify(input) });
+export const updateSourceRepository = (name: string, input: { description?: string; projectId?: number }) =>
+  apiRequest<SourceRepository>(repositoryBase(name), { method: "PATCH", body: JSON.stringify(input) });
+export const deleteSourceRepository = (name: string) =>
+  apiRequest<void>(repositoryBase(name), { method: "DELETE" });
+export const getSourceRepository = (name: string) =>
+  apiRequest<SourceRepositoryDetail>(repositoryBase(name));
+export const getRepositoryTree = (name: string, path: string) =>
+  apiRequest<RepositoryTree>(`${repositoryBase(name)}/tree?${new URLSearchParams({ path })}`);
+export const getRepositoryBlob = (name: string, path: string) =>
+  apiRequest<RepositoryBlob>(`${repositoryBase(name)}/blob?${new URLSearchParams({ path })}`);
+export const deleteRepositoryPath = (name: string, path: string, message: string) =>
+  apiRequest<{ removed: number; fileCount: number; sizeBytes: number }>(`${repositoryBase(name)}/files?${new URLSearchParams({ path, message })}`, { method: "DELETE" });
+
+export async function uploadRepositoryFile(name: string, file: File, options: { path: string; message: string; extract: boolean; replace: boolean; stripRoot: boolean }) {
+  const body = new FormData();
+  body.set("path", options.path);
+  body.set("message", options.message);
+  body.set("extract", String(options.extract));
+  body.set("replace", String(options.replace));
+  body.set("stripRoot", String(options.stripRoot));
+  body.set("file", file);
+  return (await authorizedFetch(`${repositoryBase(name)}/upload`, { method: "POST", body }, 15 * 60_000))
+    .json() as Promise<{ written: number; skipped: number; fileCount: number; sizeBytes: number }>;
+}
+
+/** Same delivery as downloadCenterFile: a cookie session lets the browser stream it to disk. */
+async function downloadFromApi(path: string, file: string): Promise<void> {
+  if (IS_TMT_ID_MODE) {
+    await authorizedFetch(path, { method: "HEAD", headers: { Accept: "application/octet-stream" } });
+    clickDownload(`${API_BASE_URL}${path}`, file);
+    return;
+  }
+  const response = await authorizedFetch(path, { headers: { Accept: "application/octet-stream" } }, 15 * 60_000);
+  const url = URL.createObjectURL(await response.blob());
+  clickDownload(url, file);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+export const downloadRepositoryFile = (name: string, path: string) =>
+  downloadFromApi(`${repositoryBase(name)}/raw?${new URLSearchParams({ path })}`, path.split("/").at(-1) ?? "file");
+export const downloadRepositoryArchive = (name: string, path = "") =>
+  downloadFromApi(`${repositoryBase(name)}/archive?${new URLSearchParams({ path })}`, `${[name, ...path.split("/").filter(Boolean)].join("-")}.zip`);
+/** Bytes for an inline image preview; the API always sends octet-stream, the page sets the type. */
+export async function fetchRepositoryFileBlob(name: string, path: string, type: string): Promise<Blob> {
+  const response = await authorizedFetch(`${repositoryBase(name)}/raw?${new URLSearchParams({ path })}`, { headers: { Accept: "application/octet-stream" } }, 120_000);
+  return new Blob([await response.arrayBuffer()], { type });
+}
+
 /* Site Monitor: TMT Control Panel agents on customer machines report programs, resources and logs. */
 export type MonitorContact = { priority: number; userId: number; name: string; email: string };
 export type MonitorSite = {

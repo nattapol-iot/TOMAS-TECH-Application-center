@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { downloadCenterFile, getDownloadCenter, type DownloadCenterCategory, type DownloadCenterFile } from "../api-client";
 import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
-import { Badge, EmptyState, Icon, PageHeader, Panel, SearchInput, Toolbar } from "../ui";
+import { Badge, EmptyState, Icon, PageHeader, Panel, SearchInput, Tabs, Toolbar } from "../ui";
+import { SourceRepositories } from "./SourceRepositories";
 
 type Notify = (message: string) => void;
 
@@ -26,7 +27,7 @@ function matches(file: DownloadCenterFile, category: DownloadCenterCategory, que
  * titles and descriptions come from the share and are shown as written, never through the
  * dictionary.
  */
-export function DownloadCenterScreen({ canManage, notify }: { canManage: boolean; notify: Notify }) {
+export function DownloadCenterScreen({ canManage, canManageRepositories, notify }: { canManage: boolean; canManageRepositories: boolean; notify: Notify }) {
   const t = useT();
   const { lang } = useLanguage();
   const [categories, setCategories] = useState<DownloadCenterCategory[] | null>(null);
@@ -34,6 +35,7 @@ export function DownloadCenterScreen({ canManage, notify }: { canManage: boolean
   const [query, setQuery] = useState("");
   const [revision, setRevision] = useState(0);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [tab, setTab] = useState<"files" | "repositories">("files");
 
   useEffect(() => {
     let active = true;
@@ -65,8 +67,11 @@ export function DownloadCenterScreen({ canManage, notify }: { canManage: boolean
   return (
     <div className="stack download-center">
       <PageHeader title="Download Center" subtitle="Downloads.subtitle"
-        actions={<button className="btn default" type="button" onClick={() => { setCategories(null); setRevision((value) => value + 1); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
+        actions={tab === "files" ? <button className="btn default" type="button" onClick={() => { setCategories(null); setRevision((value) => value + 1); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button> : undefined} />
 
+      <Tabs tabs={[{ id: "files", label: "Downloads.tabFiles", count: categories ? total : undefined }, { id: "repositories", label: "Repos.tab" }]} active={tab} onChange={setTab} />
+
+      {tab === "repositories" ? <SourceRepositories canManage={canManageRepositories} notify={notify} /> : <>
       {canManage ? (
         <div className="download-center-note" role="note">
           <Icon name="folder" />
@@ -137,6 +142,7 @@ export function DownloadCenterScreen({ canManage, notify }: { canManage: boolean
           </div>
         </section>
       ))}
+      </>}
     </div>
   );
 }

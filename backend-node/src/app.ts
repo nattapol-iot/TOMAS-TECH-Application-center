@@ -51,6 +51,7 @@ import { registerKnowledgeDocumentRoutes } from "./routes/knowledge-documents.js
 import { registerKnowledgeWorkflowRoutes } from "./routes/knowledge-workflow.js";
 import { registerKnowledgeSalesMaterialRoutes } from "./routes/knowledge-sales-materials.js";
 import { registerDownloadCenterRoutes } from "./routes/download-center.js";
+import { registerSourceRepositoryRoutes } from "./routes/source-repositories.js";
 import { registerSiteMonitorRoutes } from "./routes/site-monitor.js";
 import { registerLaborPackageRoutes } from "./routes/labor-packages.js";
 import { registerLaborRateRoutes } from "./routes/labor-rates.js";
@@ -213,6 +214,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerKnowledgeWorkflowRoutes(app, config, database, users);
   registerKnowledgeSalesMaterialRoutes(app, config, database, users);
   registerDownloadCenterRoutes(app, config, database, users);
+  registerSourceRepositoryRoutes(app, config, database, users);
   registerSiteMonitorRoutes(app, config, database, users, email);
   registerMasterRoutes(app, database, users);
   registerLaborRateRoutes(app, config, database, users);
