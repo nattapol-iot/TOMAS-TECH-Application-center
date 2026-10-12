@@ -91,5 +91,13 @@ export const DOWNLOAD_CENTER_COPY: Record<string, { th: string; en: string; jp: 
   "Repos.copyClone": { th: "คัดลอกคำสั่ง clone", en: "Copy the clone command", jp: "クローンコマンドをコピー" },
   "Repos.cloneCopied": { th: "คัดลอกคำสั่ง git clone แล้ว", en: "git clone command copied", jp: "git clone コマンドをコピーしました" },
   "Repos.actionCommit": { th: "commit", en: "Commit", jp: "コミット" },
+  "Repos.uploadLimit": { th: "ขนาดสูงสุดต่อไฟล์", en: "Largest file per upload", jp: "1 回のアップロードの上限" },
+  "Repos.uploadLimitGit": { th: "ใหญ่กว่านี้ให้ใช้ git push", en: "use git push for anything larger", jp: "それ以上は git push を使ってください" },
+  "Repos.tooLargeUpload": { th: "ไฟล์เหล่านี้ใหญ่เกินกว่าที่อัปโหลดผ่านหน้าเว็บได้", en: "These files are too large to upload through the page", jp: "次のファイルはページからアップロードするには大きすぎます" },
+  "Repos.useGitPush": {
+    th: "clone repository แล้ววางไฟล์ลงไป จากนั้น git add / commit / push (git ไม่มีเพดานขนาด) หรือแยก zip เป็นหลายไฟล์",
+    en: "Clone the repository, add the files, then git add / commit / push (git has no size ceiling), or split the zip into smaller parts.",
+    jp: "リポジトリをクローンしてファイルを追加し、git add / commit / push してください（git にサイズ上限はありません）。または zip を分割してください。",
+  },
   "Repos.keepProject": { th: "เลือกโครงการใหม่เฉพาะเมื่อต้องการย้าย ไม่เลือก = คงเดิม", en: "Choose a project only to move it; leave empty to keep the current one.", jp: "移動する場合のみ選択。空欄なら現在のまま。" },
 };

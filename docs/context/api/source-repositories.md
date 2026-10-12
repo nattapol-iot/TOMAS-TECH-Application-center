@@ -2,25 +2,25 @@
 
 [Module](../modules/downloads.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `fa2a9ed3`; generated, do not edit. [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `87e54075`; generated, do not edit. [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/download-center/repositories` | 326–345 |
-| POST | `/api/v1/download-center/repositories` | 347–370 |
-| GET | `/api/v1/download-center/repositories/:repo` | 372–378 |
-| PATCH | `/api/v1/download-center/repositories/:repo` | 380–389 |
-| DELETE | `/api/v1/download-center/repositories/:repo` | 391–402 |
-| GET | `/api/v1/download-center/repositories/:repo/tree` | 404–416 |
-| GET | `/api/v1/download-center/repositories/:repo/blob` | 431–438 |
-| GET | `/api/v1/download-center/repositories/:repo/raw` | 455–455 |
-| HEAD | `/api/v1/download-center/repositories/:repo/raw` | 456–456 |
-| GET | `/api/v1/download-center/repositories/:repo/archive` | 498–498 |
-| HEAD | `/api/v1/download-center/repositories/:repo/archive` | 499–499 |
-| POST | `/api/v1/download-center/repositories/:repo/upload` | 505–562 |
-| DELETE | `/api/v1/download-center/repositories/:repo/files` | 564–581 |
+| GET | `/api/v1/download-center/repositories` | 368–387 |
+| POST | `/api/v1/download-center/repositories` | 389–412 |
+| GET | `/api/v1/download-center/repositories/:repo` | 414–420 |
+| PATCH | `/api/v1/download-center/repositories/:repo` | 422–431 |
+| DELETE | `/api/v1/download-center/repositories/:repo` | 433–444 |
+| GET | `/api/v1/download-center/repositories/:repo/tree` | 446–458 |
+| GET | `/api/v1/download-center/repositories/:repo/blob` | 473–480 |
+| GET | `/api/v1/download-center/repositories/:repo/raw` | 497–497 |
+| HEAD | `/api/v1/download-center/repositories/:repo/raw` | 498–498 |
+| GET | `/api/v1/download-center/repositories/:repo/archive` | 540–540 |
+| HEAD | `/api/v1/download-center/repositories/:repo/archive` | 541–541 |
+| POST | `/api/v1/download-center/repositories/:repo/upload` | 547–604 |
+| DELETE | `/api/v1/download-center/repositories/:repo/files` | 606–623 |
 
 ## Named functions
 
@@ -37,9 +37,13 @@ Evidence: source snapshot `fa2a9ed3`; generated, do not edit. [backend-node/src/
 | `walkFiles` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 148–171 |
 | `readTree` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 174–203 |
 | `decodeSource` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 206–211 |
-| `planZipExtraction` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 218–253 |
-| `loadProjects` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 257–265 |
-| `registerSourceRepositoryRoutes` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 267–582 |
+| `listZipEntries` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 221–254 |
+| `readZipEntries` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 257–266 |
+| `batchZipEntries` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 269–284 |
+| `planZipExtraction` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 287–290 |
+| `repositoryUploadLimit` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 293–295 |
+| `loadProjects` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 299–307 |
+| `registerSourceRepositoryRoutes` | [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>) | 309–624 |
 
 ## Direct local dependencies
 

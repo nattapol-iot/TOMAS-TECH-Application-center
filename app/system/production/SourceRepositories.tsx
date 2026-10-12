@@ -296,7 +296,7 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
       )}
 
       {uploading ? (
-        <UploadModal repo={name} path={path} notify={notify} onClose={() => setUploading(false)}
+        <UploadModal repo={name} path={path} maxBytes={detail.uploadMaxBytes ?? null} cloneUrl={detail.cloneUrl ?? null} notify={notify} onClose={() => setUploading(false)}
           onDone={() => { setUploading(false); setFile(null); refresh(); }} />
       ) : null}
       {editing ? (
@@ -526,8 +526,12 @@ function HistoryPanel({ detail }: { detail: SourceRepositoryDetail }) {
   );
 }
 
-function UploadModal({ repo, path, notify, onClose, onDone }: { repo: string; path: string; notify: Notify; onClose: () => void; onDone: () => void }) {
+function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }: {
+  repo: string; path: string; maxBytes: number | null; cloneUrl: string | null; notify: Notify; onClose: () => void; onDone: () => void;
+}) {
   const [files, setFiles] = useState<File[]>([]);
+  // Checked before sending: a file over the ceiling would otherwise upload for minutes and then fail.
+  const tooLarge = maxBytes ? files.filter((file) => file.size > maxBytes) : [];
   const [target, setTarget] = useState(path);
   const [message, setMessage] = useState("");
   const [extract, setExtract] = useState(true);
@@ -563,14 +567,27 @@ function UploadModal({ repo, path, notify, onClose, onDone }: { repo: string; pa
     <Modal title="Repos.upload" subtitle="Repos.uploadHint" onClose={progress === null ? onClose : () => undefined}
       footer={<>
         <button className="btn default" type="button" disabled={progress !== null} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={files.length === 0 || progress !== null} onClick={() => void start()}>
+        <button className="btn primary" type="button" disabled={files.length === 0 || tooLarge.length > 0 || progress !== null} onClick={() => void start()}>
           <Icon name="upload" />{progress === null ? <LocalizedText text={"Repos.upload"} /> : <>{progress} / {files.length}</>}
         </button>
       </>}>
       <div className="form-grid two">
         <Field label="Repos.chooseFiles" span={2}>
           <input type="file" multiple onChange={(event) => setFiles([...(event.target.files ?? [])])} />
+          {maxBytes ? (
+            <small className="repo-upload-limit">
+              <LocalizedText text={"Repos.uploadLimit"} /> {formatRepositorySize(maxBytes)} · <LocalizedText text={"Repos.uploadLimitGit"} />
+            </small>
+          ) : null}
         </Field>
+        {tooLarge.length > 0 ? (
+          <div className="span-2 repo-upload-too-large" role="alert">
+            <strong><LocalizedText text={"Repos.tooLargeUpload"} /></strong>
+            <ul>{tooLarge.map((file) => <li key={file.name}>{file.name} · {formatRepositorySize(file.size)}</li>)}</ul>
+            <span><LocalizedText text={"Repos.useGitPush"} /></span>
+            {cloneUrl ? <code>{`git clone ${cloneUrl}`}</code> : null}
+          </div>
+        ) : null}
         <Field label="Repos.targetFolder" hint="Repos.targetHint" span={2}>
           <input value={target} onChange={(event) => setTarget(event.target.value)} placeholder="src/drivers" />
         </Field>

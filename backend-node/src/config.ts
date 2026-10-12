@@ -47,6 +47,8 @@ export type AppConfig = {
     mode: "Local" | "Nas";
     rootPath: string;
     maxFileSizeBytes: number;
+    /** Project repository uploads (Download Center); defaults to 200 MiB. */
+    repositoryUploadMaxBytes?: number;
   };
   email: {
     mode: "Disabled" | "MicrosoftGraph";
@@ -427,6 +429,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       "DocumentStorage__MaxFileSizeBytes must be between 1 MiB and 500 MiB.",
     );
   }
+  // Source code arrives as one zip, so it gets its own, larger ceiling than ordinary documents.
+  // Uploads are inflated and committed in batches, but the zip itself is held in memory, and the
+  // API container has 1 GiB: 500 MiB is the upper bound.
+  const repositoryUploadMaxBytes = positiveInteger(
+    env,
+    "DocumentStorage__RepositoryUploadMaxBytes",
+    Math.max(209_715_200, maxFileSizeBytes),
+  );
+  if (repositoryUploadMaxBytes < 1_048_576 || repositoryUploadMaxBytes > 524_288_000) {
+    throw new Error(
+      "DocumentStorage__RepositoryUploadMaxBytes must be between 1 MiB and 500 MiB.",
+    );
+  }
 
   const emailMode = optional(env, "Email__Mode") ?? "Disabled";
   if (emailMode !== "Disabled" && emailMode !== "MicrosoftGraph")
@@ -485,6 +500,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       mode: storageMode,
       rootPath: resolve(storagePath),
       maxFileSizeBytes,
+      repositoryUploadMaxBytes,
     },
     email: {
       mode: emailMode,

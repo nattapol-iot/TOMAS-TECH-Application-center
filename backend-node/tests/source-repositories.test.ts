@@ -131,7 +131,7 @@ test("a project repository is created, filled from a zip, browsed, downloaded an
     return { payload: Buffer.concat(parts), headers: { "content-type": `multipart/form-data; boundary=${boundary}` } };
   };
   try {
-    assert.deepEqual((await app.inject({ method: "GET", url: "/api/v1/download-center/repositories" })).json(), { items: [], hub: null });
+    assert.deepEqual((await app.inject({ method: "GET", url: "/api/v1/download-center/repositories" })).json(), { items: [], hub: null, uploadMaxBytes: 10_000_000 });
     assert.equal((await app.inject({ method: "POST", url: "/api/v1/download-center/repositories", payload: { name: "fw", projectId: 99 } })).statusCode, 404);
     const created = await app.inject({ method: "POST", url: "/api/v1/download-center/repositories", payload: { name: "fw", projectId: 12, description: "Gateway firmware" } });
     assert.equal(created.statusCode, 201);
@@ -176,7 +176,7 @@ test("a project repository is created, filled from a zip, browsed, downloaded an
     assert.equal((await app.inject({ method: "GET", url: "/api/v1/download-center/repositories/fw" })).json().canManage, false);
     permitted.value = true;
     assert.equal((await app.inject({ method: "DELETE", url: "/api/v1/download-center/repositories/fw" })).statusCode, 204);
-    assert.deepEqual((await app.inject({ method: "GET", url: "/api/v1/download-center/repositories" })).json(), { items: [], hub: null });
+    assert.deepEqual((await app.inject({ method: "GET", url: "/api/v1/download-center/repositories" })).json(), { items: [], hub: null, uploadMaxBytes: 10_000_000 });
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

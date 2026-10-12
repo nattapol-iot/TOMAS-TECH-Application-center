@@ -2994,7 +2994,7 @@ export type RepositoryHistoryEntry = {
   at: string; by: RepositoryActor; action: "create" | "upload" | "delete" | "update" | "commit"; message: string; path: string; files: number;
   sha?: string; url?: string;
 };
-export type SourceRepositoryDetail = SourceRepository & { history: RepositoryHistoryEntry[]; canManage: boolean; hub?: RepositoryHub | null };
+export type SourceRepositoryDetail = SourceRepository & { history: RepositoryHistoryEntry[]; canManage: boolean; hub?: RepositoryHub | null; uploadMaxBytes?: number };
 export type RepositoryTreeEntry = { name: string; path: string; type: "dir" | "file"; sizeBytes: number; modifiedAt: string };
 export type RepositoryTree = { path: string; entries: RepositoryTreeEntry[]; readme: { name: string; path: string; content: string } | null };
 export type RepositoryBlob = {
@@ -3004,7 +3004,7 @@ export type RepositoryBlob = {
 const repositoryBase = (name: string) => `/api/v1/download-center/repositories/${encodeURIComponent(name)}`;
 
 export const listSourceRepositories = () =>
-  apiRequest<{ items: SourceRepository[]; hub: RepositoryHub | null }>("/api/v1/download-center/repositories");
+  apiRequest<{ items: SourceRepository[]; hub: RepositoryHub | null; uploadMaxBytes?: number }>("/api/v1/download-center/repositories");
 export const createSourceRepository = (input: { name: string; projectId: number; description: string }) =>
   apiRequest<SourceRepository>("/api/v1/download-center/repositories", { method: "POST", body: JSON.stringify(input) });
 export const updateSourceRepository = (name: string, input: { description?: string; projectId?: number }) =>
@@ -3029,7 +3029,7 @@ export async function uploadRepositoryFile(name: string, file: File, options: { 
   body.set("stripRoot", String(options.stripRoot));
   body.set("file", file);
   return (await authorizedFetch(`${repositoryBase(name)}/upload`, { method: "POST", body }, 15 * 60_000))
-    .json() as Promise<{ written: number; skipped: number; fileCount: number | null; sizeBytes: number | null }>;
+    .json() as Promise<{ written: number; skipped: number; commits?: number; fileCount: number | null; sizeBytes: number | null }>;
 }
 
 /** Same delivery as downloadCenterFile: a cookie session lets the browser stream it to disk. */

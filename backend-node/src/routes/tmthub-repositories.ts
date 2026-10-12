@@ -9,7 +9,8 @@ import { DOCUMENT_DOWNLOAD_RATE_LIMIT, multipartText, readMultipartForm, uploade
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import {
-  decodeSource, loadProjects, MANAGE_PERMISSION, MAX_README_BYTES, MAX_VIEW_BYTES, planZipExtraction, REPOSITORY_UPLOAD_RATE_LIMIT,
+  decodeSource, loadProjects, MANAGE_PERMISSION, MAX_README_BYTES, MAX_VIEW_BYTES, REPOSITORY_UPLOAD_RATE_LIMIT,
+  batchZipEntries, listZipEntries, readZipEntries, repositoryUploadLimit,
   repositoryName, repositoryPath, type ProjectRef,
 } from "./source-repositories.js";
 
@@ -24,6 +25,8 @@ import {
  */
 const PROJECT_TOPIC = /^project-(\d{1,15})$/;
 const MAX_CHANGED_FILES = 5000;
+/** Uncompressed bytes per upload commit: base64 in one JSON body, so about 32 MB on the wire. */
+const COMMIT_BATCH_BYTES = 24 * 1024 * 1024;
 const HUB_TIMEOUT_MS = 30_000;
 
 type HubRepository = {
@@ -205,6 +208,7 @@ export function registerTmthubRepositoryRoutes(
     return {
       items: repos.map((repo) => summary(repo, projects)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name)),
       hub: hubInfo,
+      uploadMaxBytes: repositoryUploadLimit(config),
     };
   });
 
@@ -241,6 +245,7 @@ export function registerTmthubRepositoryRoutes(
       ...summary(repo, projects),
       canManage,
       hub: hubInfo,
+      uploadMaxBytes: repositoryUploadLimit(config),
       history: commits.map((commit) => ({
         at: commit.commit.author.date || commit.created,
         by: { id: 0, name: commit.commit.author.name },
@@ -355,13 +360,13 @@ export function registerTmthubRepositoryRoutes(
   app.get("/api/v1/download-center/repositories/:repo/archive", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT }, exposeHeadRoute: false }, sendArchive);
   app.head("/api/v1/download-center/repositories/:repo/archive", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, sendArchive);
 
-  /** One commit per upload: a .zip (optionally replacing every file) or a single file. */
+  /** A .zip (optionally replacing every file) or a single file, as one or more commits. */
   app.post("/api/v1/download-center/repositories/:repo/upload", { config: { rateLimit: REPOSITORY_UPLOAD_RATE_LIMIT } }, async (request) => {
     await users.demandPermission(request, MANAGE_PERMISSION);
     const actor = await users.required(request);
     const name = repoParam(request);
     const { branch } = await branchOf(name);
-    const form = await readMultipartForm(request, config.documentStorage.maxFileSizeBytes);
+    const form = await readMultipartForm(request, repositoryUploadLimit(config));
     if (!form.file) throw new ApiError(400, "file_required", "Exactly one multipart file field named 'file' is required.");
     const target = repositoryPath(multipartText(form.values, "path", 1000));
     const message = multipartText(form.values, "message", 500) ?? "";
@@ -371,39 +376,49 @@ export function registerTmthubRepositoryRoutes(
     if (replace && target.length > 0) throw new ApiError(400, "validation_failed", "Replacing the repository only works from its root folder.");
     const fileName = uploadedFileName(form.file.filename);
 
-    let files: Array<{ path: string[]; contents: Uint8Array }>;
+    // A zip is listed first and inflated a batch at a time: each batch is one commit of about
+    // COMMIT_BATCH_BYTES, so memory stays bounded by the batch rather than by the whole project.
+    const data = new Uint8Array(await readFile(form.file.filepath));
+    let batches: Array<() => Array<{ path: string[]; contents: Uint8Array }>>;
+    let paths: string[];
     let skipped = 0;
     if (extract && /\.zip$/i.test(fileName)) {
-      const plan = planZipExtraction(new Uint8Array(await readFile(form.file.filepath)), stripRoot);
-      if (plan.files.length === 0) throw new ApiError(400, "empty_zip", "The zip holds no source files.");
-      files = plan.files.map((file) => ({ path: [...target, ...file.path], contents: file.contents }));
-      skipped = plan.skipped;
+      const listing = listZipEntries(data, stripRoot);
+      if (listing.entries.length === 0) throw new ApiError(400, "empty_zip", "The zip holds no source files.");
+      skipped = listing.skipped;
+      const entries = listing.entries.map((entry) => ({ ...entry, path: [...target, ...entry.path] }));
+      paths = entries.map((entry) => entry.path.join("/"));
+      batches = batchZipEntries(entries, COMMIT_BATCH_BYTES).map((batch) => () => readZipEntries(data, batch));
     } else {
-      const single = repositoryPath(fileName, false);
-      files = [{ path: [...target, ...single], contents: new Uint8Array(await readFile(form.file.filepath)) }];
+      const single = [...target, ...repositoryPath(fileName, false)];
+      paths = [single.join("/")];
+      batches = [() => [{ path: single, contents: data }]];
     }
 
     const existing = new Map((await client.tree(name, branch)).map((entry) => [entry.path, entry.sha]));
-    const uploaded = new Set(files.map((file) => file.path.join("/")));
-    const changes: Array<Record<string, unknown>> = files.map((file) => {
-      const path = file.path.join("/");
-      const sha = existing.get(path);
-      return { operation: sha ? "update" : "create", path, content: Buffer.from(file.contents).toString("base64"), ...(sha ? { sha } : {}) };
-    });
-    if (replace) {
-      for (const [path, sha] of existing) if (!uploaded.has(path)) changes.push({ operation: "delete", path, sha });
-    }
-    if (changes.length > MAX_CHANGED_FILES) {
+    const uploaded = new Set(paths);
+    const deletions = replace ? [...existing].filter(([path]) => !uploaded.has(path)).map(([path, sha]) => ({ operation: "delete", path, sha })) : [];
+    if (paths.length + deletions.length > MAX_CHANGED_FILES) {
       throw new ApiError(413, "too_many_files", `One upload may change at most ${MAX_CHANGED_FILES} files; push larger changes with git.`);
     }
-    await client.changeFiles(name, {
-      branch,
-      message: `${message || `Upload ${fileName}`}\n\nUploaded through Engineering Center (Download Center).`,
-      author: authorOf(actor),
-      files: changes,
-    });
-    request.log.info({ actorId: actor.id, repository: name, written: files.length, skipped, replace }, "TMTHub upload committed");
-    return { written: files.length, skipped, fileCount: null, sizeBytes: null };
+    const title = message || `Upload ${fileName}`;
+    for (const [index, load] of batches.entries()) {
+      const changes: Array<Record<string, unknown>> = load().map((file) => {
+        const path = file.path.join("/");
+        const sha = existing.get(path);
+        return { operation: sha ? "update" : "create", path, content: Buffer.from(file.contents).toString("base64"), ...(sha ? { sha } : {}) };
+      });
+      if (index === batches.length - 1) changes.push(...deletions);
+      const part = batches.length > 1 ? ` (part ${index + 1}/${batches.length})` : "";
+      await client.changeFiles(name, {
+        branch,
+        message: `${title}${part}\n\nUploaded through Engineering Center (Download Center).`,
+        author: authorOf(actor),
+        files: changes,
+      });
+    }
+    request.log.info({ actorId: actor.id, repository: name, written: paths.length, skipped, replace, commits: batches.length }, "TMTHub upload committed");
+    return { written: paths.length, skipped, commits: batches.length, fileCount: null, sizeBytes: null };
   });
 
   app.delete("/api/v1/download-center/repositories/:repo/files", async (request) => {

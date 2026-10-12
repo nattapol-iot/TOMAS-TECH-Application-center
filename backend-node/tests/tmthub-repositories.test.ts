@@ -5,6 +5,7 @@ import multipart from "@fastify/multipart";
 import { strToU8, zipSync } from "fflate";
 import { loadConfig } from "../src/config.js";
 import { registerErrorHandler } from "../src/errors.js";
+import { batchZipEntries, listZipEntries, readZipEntries } from "../src/routes/source-repositories.js";
 import { projectIdFromTopics, registerTmthubRepositoryRoutes } from "../src/routes/tmthub-repositories.js";
 
 const HUB = { apiUrl: "http://tmthub:3000", token: "t".repeat(40), org: "TMT", publicUrl: "https://tmthub.example:8446" };
@@ -125,7 +126,7 @@ test("TMTHub mode: create, browse, upload as a commit, download and delete throu
   };
   try {
     const empty = (await app.inject({ method: "GET", url: "/api/v1/download-center/repositories" })).json();
-    assert.deepEqual(empty, { items: [], hub: { url: HUB.publicUrl, org: "TMT", orgUrl: `${HUB.publicUrl}/TMT` } });
+    assert.deepEqual(empty, { items: [], hub: { url: HUB.publicUrl, org: "TMT", orgUrl: `${HUB.publicUrl}/TMT` }, uploadMaxBytes: 10_000_000 });
     assert.equal(hub.calls[0]?.auth, `token ${HUB.token}`);
 
     const created = await app.inject({ method: "POST", url: "/api/v1/download-center/repositories", payload: { name: "fw", projectId: 12, description: "Gateway firmware" } });
@@ -173,6 +174,51 @@ test("TMTHub mode: create, browse, upload as a commit, download and delete throu
     permitted.value = true;
     assert.equal((await app.inject({ method: "DELETE", url: "/api/v1/download-center/repositories/fw" })).statusCode, 204);
     assert.equal((await app.inject({ method: "GET", url: "/api/v1/download-center/repositories/fw" })).statusCode, 404);
+  } finally {
+    await app.close();
+  }
+});
+
+test("a zip is listed without inflating and grouped into commit-sized batches", () => {
+  const zip = zipSync({ "p/a.c": new Uint8Array(10), "p/b.bin": new Uint8Array(30), "p/c.c": new Uint8Array(5), "p/.git/x": new Uint8Array(1) });
+  const listing = listZipEntries(zip, true);
+  assert.deepEqual(listing.entries.map((entry) => `${entry.path.join("/")}:${entry.sizeBytes}`).sort(), ["a.c:10", "b.bin:30", "c.c:5"]);
+  assert.equal(listing.skipped, 1);
+  const batches = batchZipEntries(listing.entries.sort((a, b) => a.original.localeCompare(b.original)), 20);
+  assert.deepEqual(batches.map((batch) => batch.map((entry) => entry.path.join("/"))), [["a.c"], ["b.bin"], ["c.c"]]);
+  assert.deepEqual(batchZipEntries(listing.entries, 100).length, 1);
+  const read = readZipEntries(zip, [listing.entries.find((entry) => entry.path[0] === "b.bin")!]);
+  assert.equal(read[0]?.contents.length, 30);
+});
+
+test("a repository upload past the document limit is accepted and committed in parts", async () => {
+  const hub = fakeHub();
+  hub.repos.set("big", { description: "", topics: [], files: new Map([["README.md", "# big\n"], ["old.txt", "x"]]) });
+  const users = { async required() { return { id: 7, name: "Dev One", email: "dev.one@tomastc.com" }; }, async demandPermission() {} };
+  const app = Fastify();
+  registerErrorHandler(app);
+  await app.register(multipart, { limits: { files: 1, fileSize: 2_000_000, fields: 30, parts: 31 }, throwFileSizeLimit: true });
+  registerTmthubRepositoryRoutes(app, {
+    tmthub: HUB, documentStorage: { mode: "Local", rootPath: ".", maxFileSizeBytes: 2_000_000, repositoryUploadMaxBytes: 40_000_000 },
+  } as never, { async query() { return { recordset: [] }; } } as never, users as never, hub.fetchImpl as never);
+  // Random bytes do not compress: the zip itself is ~30 MB, past the 2 MB document limit.
+  const noise = (size: number) => Uint8Array.from({ length: size }, () => Math.floor(Math.random() * 256));
+  const zip = zipSync({ "src/a.bin": noise(15_000_000), "src/b.bin": noise(15_000_000), "src/c.txt": strToU8("c") }, { level: 0 });
+  const boundary = "----big";
+  const payload = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="extract"\r\n\r\ntrue\r\n--${boundary}\r\nContent-Disposition: form-data; name="replace"\r\n\r\ntrue\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="big.zip"\r\nContent-Type: application/zip\r\n\r\n`),
+    Buffer.from(zip), Buffer.from(`\r\n--${boundary}--\r\n`),
+  ]);
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/download-center/repositories/big/upload", payload, headers: { "content-type": `multipart/form-data; boundary=${boundary}` } });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual({ written: response.json().written, commits: response.json().commits }, { written: 3, commits: 2 });
+    const commits = hub.calls.filter((call) => call.method === "POST" && call.path === "/repos/TMT/big/contents").map((call) => call.body as { message: string; files: Array<{ operation: string; path: string }> });
+    assert.deepEqual(commits.map((commit) => commit.message.split("\n")[0]), ["Upload big.zip (part 1/2)", "Upload big.zip (part 2/2)"]);
+    // Replacing deletes what the zip no longer holds, once, in the last commit.
+    assert.deepEqual(commits[1]!.files.filter((file) => file.operation === "delete").map((file) => file.path).sort(), ["README.md", "old.txt"]);
+    assert.deepEqual([...hub.repos.get("big")!.files.keys()].sort(), ["a.bin", "b.bin", "c.txt"]);
   } finally {
     await app.close();
   }

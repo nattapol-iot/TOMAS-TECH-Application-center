@@ -4891,5 +4891,9 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .repo-options { display: grid; gap: 8px; grid-column: 1 / -1; }
 .repo-clone { display: flex; align-items: center; gap: 8px; max-width: 640px; margin-top: 8px; padding: 4px 4px 4px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-25); font-size: var(--fs-xs); }
 .repo-clone > span { color: var(--muted); white-space: nowrap; }
+.repo-upload-limit { display: block; margin-top: 4px; color: var(--muted); font-size: var(--fs-xs); }
+.repo-upload-too-large { display: grid; gap: 6px; grid-column: 1 / -1; padding: 10px 12px; border: 1px solid var(--red-line); border-radius: var(--r-md); background: var(--red-soft); color: var(--red-text); font-size: var(--fs-sm); }
+.repo-upload-too-large ul { margin: 0; padding-left: 18px; }
+.repo-upload-too-large code { overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink); }
 .repo-clone code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); color: var(--ink); }
 @media (max-width: 720px) { .repo-actions { margin-left: 0; } }

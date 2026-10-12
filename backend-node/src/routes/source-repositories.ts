@@ -210,46 +210,88 @@ export function decodeSource(bytes: Uint8Array): string | null {
   return decoded.charCodeAt(0) === 0xfeff ? decoded.slice(1) : decoded;
 }
 
+export type ZipEntry = { original: string; path: string[]; sizeBytes: number };
+
 /**
- * Files to write from an uploaded zip, in repository paths. A GitHub "Download ZIP" wraps everything
- * in one "name-main/" folder; stripRoot drops that single top folder. Tooling folders are skipped and
- * the uncompressed total is capped before anything is inflated.
+ * What an uploaded zip holds, in repository paths, without inflating anything: the central
+ * directory is read and every entry filtered out. A GitHub "Download ZIP" wraps everything in one
+ * "name-main/" folder; stripRoot drops that single top folder. Tooling folders are skipped and the
+ * uncompressed total is capped.
  */
-export function planZipExtraction(data: Uint8Array, stripRoot: boolean): { files: Array<{ path: string[]; contents: Uint8Array }>; skipped: number } {
-  let declared = 0;
-  let count = 0;
-  let entries: Record<string, Uint8Array>;
+export function listZipEntries(data: Uint8Array, stripRoot: boolean): { entries: ZipEntry[]; skipped: number } {
+  const listed: Array<{ original: string; sizeBytes: number }> = [];
   try {
-    entries = unzipSync(data, {
+    unzipSync(data, {
       filter: (file) => {
         if (file.name.endsWith("/")) return false;
-        count += 1;
-        declared += file.originalSize;
-        if (count > MAX_REPOSITORY_FILES) throw new ApiError(413, "repository_too_large", `A zip may hold at most ${MAX_REPOSITORY_FILES} files.`);
-        if (declared > MAX_EXTRACTED_BYTES) throw new ApiError(413, "repository_too_large", "The zip expands to more than 1 GB.");
-        return true;
+        listed.push({ original: file.name, sizeBytes: file.originalSize });
+        if (listed.length > MAX_REPOSITORY_FILES) throw new ApiError(413, "repository_too_large", `A zip may hold at most ${MAX_REPOSITORY_FILES} files.`);
+        return false;
       },
     });
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(400, "invalid_zip", "The file is not a readable zip archive.");
   }
-  const names = Object.keys(entries).map((name) => name.replaceAll("\\", "/").replace(/^\/+/, ""));
+  if (listed.reduce((sum, file) => sum + file.sizeBytes, 0) > MAX_EXTRACTED_BYTES) {
+    throw new ApiError(413, "repository_too_large", "The zip expands to more than 1 GB.");
+  }
+  const names = listed.map((file) => file.original.replaceAll("\\", "/").replace(/^\/+/, ""));
   const tops = new Set(names.map((name) => name.split("/")[0]));
   const strip = stripRoot && tops.size === 1 && names.every((name) => name.includes("/"));
-  const files: Array<{ path: string[]; contents: Uint8Array }> = [];
+  const entries: ZipEntry[] = [];
   let skipped = 0;
-  for (const [original, contents] of Object.entries(entries)) {
-    const name = original.replaceAll("\\", "/").replace(/^\/+/, "");
-    const segments = name.split("/").filter(Boolean).slice(strip ? 1 : 0);
-    if (segments.length === 0 || segments.some((segment) => isIgnoredName(segment))) { skipped += 1; continue; }
+  listed.forEach((file, index) => {
+    const segments = names[index]!.split("/").filter(Boolean).slice(strip ? 1 : 0);
+    if (segments.length === 0 || segments.some((segment) => isIgnoredName(segment))) { skipped += 1; return; }
     try {
-      files.push({ path: repositoryPath(segments.join("/"), false), contents });
+      entries.push({ original: file.original, path: repositoryPath(segments.join("/"), false), sizeBytes: file.sizeBytes });
     } catch {
       skipped += 1;
     }
+  });
+  return { entries, skipped };
+}
+
+/** Inflates only the given entries, so a large zip is written a batch at a time. */
+export function readZipEntries(data: Uint8Array, entries: ZipEntry[]): Array<{ path: string[]; contents: Uint8Array }> {
+  const wanted = new Set(entries.map((entry) => entry.original));
+  let inflated: Record<string, Uint8Array>;
+  try {
+    inflated = unzipSync(data, { filter: (file) => wanted.has(file.name) });
+  } catch {
+    throw new ApiError(400, "invalid_zip", "The file is not a readable zip archive.");
   }
-  return { files, skipped };
+  return entries.map((entry) => ({ path: entry.path, contents: inflated[entry.original] ?? new Uint8Array(0) }));
+}
+
+/** Groups entries into batches of about maxBytes uncompressed; a larger file travels alone. */
+export function batchZipEntries(entries: ZipEntry[], maxBytes: number): ZipEntry[][] {
+  const batches: ZipEntry[][] = [];
+  let current: ZipEntry[] = [];
+  let size = 0;
+  for (const entry of entries) {
+    if (current.length > 0 && size + entry.sizeBytes > maxBytes) {
+      batches.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(entry);
+    size += entry.sizeBytes;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+/** Every file of an uploaded zip at once (NAS folder mode). */
+export function planZipExtraction(data: Uint8Array, stripRoot: boolean): { files: Array<{ path: string[]; contents: Uint8Array }>; skipped: number } {
+  const { entries, skipped } = listZipEntries(data, stripRoot);
+  return { files: readZipEntries(data, entries), skipped };
+}
+
+/** Ceiling for one repository upload: its own setting, never below the ordinary document limit. */
+export function repositoryUploadLimit(config: AppConfig): number {
+  return Math.max(config.documentStorage.repositoryUploadMaxBytes ?? 0, config.documentStorage.maxFileSizeBytes);
 }
 
 export type ProjectRef = { id: number; projectNo: string; name: string; status: string };
@@ -329,7 +371,7 @@ export function registerSourceRepositoryRoutes(app: FastifyInstance, config: App
     try {
       folders = await readdir(rootPath, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { items: [], hub: null };
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { items: [], hub: null, uploadMaxBytes: repositoryUploadLimit(config) };
       throw new ApiError(503, "document_storage_unavailable", "The repository folder could not be read.");
     }
     const metas: RepositoryMeta[] = [];
@@ -341,7 +383,7 @@ export function registerSourceRepositoryRoutes(app: FastifyInstance, config: App
       }
     }
     const projects = await loadProjects(database, metas.flatMap((meta) => (meta.projectId ? [meta.projectId] : [])));
-    return { items: metas.map((meta) => summary(meta, projects)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name)), hub: null };
+    return { items: metas.map((meta) => summary(meta, projects)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name)), hub: null, uploadMaxBytes: repositoryUploadLimit(config) };
   });
 
   app.post("/api/v1/download-center/repositories", async (request, reply) => {
@@ -374,7 +416,7 @@ export function registerSourceRepositoryRoutes(app: FastifyInstance, config: App
     const meta = await readMeta(repoParam(request));
     const projects = await loadProjects(database, meta.projectId ? [meta.projectId] : []);
     const canManage = await users.demandPermission(request, MANAGE_PERMISSION).then(() => true, () => false);
-    return { ...summary(meta, projects), history: meta.history, canManage };
+    return { ...summary(meta, projects), history: meta.history, canManage, uploadMaxBytes: repositoryUploadLimit(config) };
   });
 
   app.patch("/api/v1/download-center/repositories/:repo", async (request) => {
@@ -506,7 +548,7 @@ export function registerSourceRepositoryRoutes(app: FastifyInstance, config: App
     await users.demandPermission(request, MANAGE_PERMISSION);
     const actor = await users.required(request);
     const meta = await readMeta(repoParam(request));
-    const form = await readMultipartForm(request, storage.maxFileSizeBytes);
+    const form = await readMultipartForm(request, repositoryUploadLimit(config));
     if (!form.file) throw new ApiError(400, "file_required", "Exactly one multipart file field named 'file' is required.");
     const target = repositoryPath(multipartText(form.values, "path", 1000));
     const message = multipartText(form.values, "message", 500) ?? "";
