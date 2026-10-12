@@ -220,8 +220,45 @@ deploy_tmthub() {
   export TMTHUB_NAS_ADDR
 
   tcompose() { compose --profile tmthub "$@"; }
-  log "Starting TMTHub with its repositories on the NAS (NFS)"
   tcompose rm -sf tmthub tmthub-backup >/dev/null 2>&1 || true
+
+  # Find the NFS path and protocol this NAS accepts by mounting a throwaway volume: Synology
+  # exports the full /volumeN path over v4, others (UGREEN) may use the v4 pseudo-root or v3.
+  # TMTHUB_NFS_PATH / TMTHUB_NFS_OPTIONS in .env pin a choice and skip the probe.
+  nfs_try() {
+    local probe_volume=tmthub-nfs-probe result=1
+    docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
+    if docker --context "$DOCKER_CONTEXT" volume create --driver local --opt type=nfs \
+        --opt "o=addr=$TMTHUB_NAS_ADDR,$2" --opt "device=:$1" "$probe_volume" >/dev/null 2>&1 \
+      && docker --context "$DOCKER_CONTEXT" run --rm --entrypoint /bin/sh -v "$probe_volume:/probe" \
+        codeberg.org/forgejo/forgejo:15.0.9 -c 'touch /probe/.tmthub-probe && rm -f /probe/.tmthub-probe' >/dev/null 2>&1; then
+      result=0
+    fi
+    docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
+    return "$result"
+  }
+  nfs_path="$(env_value TMTHUB_NFS_PATH)"
+  nfs_options="$(env_value TMTHUB_NFS_OPTIONS)"
+  if [[ -z "$nfs_path" || -z "$nfs_options" ]]; then
+    nfs_share="${TMTHUB_NFS_SHARE:-/volume1/IoT Department}"
+    nfs_sub="IoT Team Center/TMTHub"
+    v4="rw,nfsvers=4.1,hard,timeo=600,retrans=2,noresvport"
+    v3="rw,nfsvers=3,nolock,hard,timeo=600,retrans=2,noresvport"
+    nfs_path=""
+    for candidate in "$nfs_share/$nfs_sub|$v4" "/${nfs_share#/volume*/}/$nfs_sub|$v4" "$nfs_share/$nfs_sub|$v3"; do
+      if nfs_try "${candidate%%|*}" "${candidate#*|}"; then
+        nfs_path="${candidate%%|*}"; nfs_options="${candidate#*|}"
+        break
+      fi
+    done
+    if [[ -z "$nfs_path" ]]; then
+      log "WARNING: TMTHub skipped: no NFS path on the NAS could be mounted and written (tried $nfs_share over v4.1, its v4 pseudo-root path, and v3)."
+      echo "::warning title=TMTHub skipped::No NFS path on the NAS could be mounted and written; check the NFS rule (docs/TMTHUB.md)"
+      return 0
+    fi
+  fi
+  export TMTHUB_NFS_PATH="$nfs_path" TMTHUB_NFS_OPTIONS="$nfs_options"
+  log "Starting TMTHub with its repositories on the NAS (NFS $nfs_path, ${nfs_options#rw,})"
   # Volume options are fixed at creation; the volume is only a mount, so dropping it loses nothing.
   for volume in $(docker --context "$DOCKER_CONTEXT" volume ls -q --filter label=com.docker.compose.volume=tmthub-nas); do
     docker --context "$DOCKER_CONTEXT" volume rm "$volume" >/dev/null

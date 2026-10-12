@@ -184,5 +184,7 @@ volumes:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr=${TMTHUB_NAS_ADDR:-100.64.0.53},rw,nfsvers=4.1,hard,timeo=600,retrans=2,noresvport"
+      # deploy.sh probes which path and protocol the NAS accepts (NAS vendors differ: full path
+      # or NFSv4 pseudo-root, v4.1 or v3) and exports the pair that mounts.
+      o: "addr=${TMTHUB_NAS_ADDR:-100.64.0.53},${TMTHUB_NFS_OPTIONS:-rw,nfsvers=4.1,hard,timeo=600,retrans=2,noresvport}"
       device: ":${TMTHUB_NFS_PATH:-/volume1/IoT Department/IoT Team Center/TMTHub}"
