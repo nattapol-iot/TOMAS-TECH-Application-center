@@ -46,4 +46,6 @@ jobs:
         # See docs/MACMINI_HANDOFF.md § "Bringing this repo up".
         env:
           DEV_NAS_USERNAME: ${{ secrets.NAS_USERNAME }}
+          # TMTHub's own Keycloak client (docs/TMTHUB.md); empty until the secret is set.
+          TMTHUB_OIDC_CLIENT_SECRET: ${{ secrets.TMTHUB_OIDC_CLIENT_SECRET }}
         run: scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"

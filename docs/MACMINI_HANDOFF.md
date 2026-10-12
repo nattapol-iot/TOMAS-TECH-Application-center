@@ -287,6 +287,12 @@ Keycloak admin: `https://100.64.0.4:2083/admin`, realm `internal`, bootstrap adm
 are with the owner. Rotating the client secret means updating `OIDC_CLIENT_SECRET` in `.env`
 and `deploy.sh` (or `compose up -d api`).
 
+TMTHub (Forgejo git server, `docs/TMTHUB.md`) signs in through its own client `tmthub` (redirect
+URI `https://tmthub.tomastc.com:8446/user/oauth2/TMT-ID/callback`); `deploy.sh` copies its secret
+from the GitHub Actions secret `TMTHUB_OIDC_CLIENT_SECRET` into TMTHub on every deploy. TMTHub's
+repositories are on the NAS over NFS from the `iot` VM (no password; an NFS rule for 100.64.0.3 on
+the `IoT Department` share), and `deploy.sh` skips TMTHub with a warning until NFS answers.
+
 ### More traps that cost time
 
 - Writing secrets into `.env` through nested shells (Windows bash -> WSL -> ssh -> python)

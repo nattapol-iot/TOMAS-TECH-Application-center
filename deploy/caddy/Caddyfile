@@ -29,3 +29,10 @@
 	import cloudflare_tls
 	reverse_proxy api:5106
 }
+
+# TMTHub (Forgejo). Same certificate path; the A record points at the tailnet address, so it is
+# reachable over the VPN only. No body limit: a first push of a large repository is one request.
+{$TMTHUB_HOST}:{$TMTHUB_PORT} {
+	import cloudflare_tls
+	reverse_proxy tmthub:3000
+}

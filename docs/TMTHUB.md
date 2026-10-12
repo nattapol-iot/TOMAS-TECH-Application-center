@@ -1,0 +1,81 @@
+# TMTHub — git server ของแผนก
+
+TMTHub คือ [Forgejo](https://forgejo.org) (git server แบบ GitHub) ที่รันบน Mac mini ตัวเดียวกับ Engineering Center
+ใช้ `git clone / pull / push` ได้จริง มี branch, tag, Pull Request, Issues และหน้าเว็บดูโค้ด
+
+| | |
+|---|---|
+| URL | `https://tmthub.tomastc.com:8446/` |
+| เข้าถึง | ผ่าน VPN (tailnet) เท่านั้น — DNS ชี้ไปที่ `100.64.0.3` แบบ DNS-only |
+| เข้าสู่ระบบ | ปุ่ม **Sign in with TMT-ID** (บัญชีเดียวกับ Engineering Center) |
+| git บน command line | HTTPS + Personal Access Token (ไม่มี SSH) |
+| Organization | `TMT` องค์กรเดียวรวมทุกโครงการ ตั้งชื่อ repo ขึ้นต้นด้วยเลขโครงการ เช่น `PJ-26-012-gateway-firmware` |
+| ผู้ดูแล | admin กำหนดใน `TMTHUB_ADMIN_EMAIL` (ค่าเริ่มต้นใน `scripts/macos/deploy.sh`) |
+
+## เริ่มใช้งาน (ครั้งแรก)
+
+1. ต่อ VPN แล้วเปิด `https://tmthub.tomastc.com:8446/` → **Sign in with TMT-ID** (บัญชีถูกสร้างอัตโนมัติครั้งแรก)
+2. สร้าง token สำหรับ git: มุมขวาบน → **Settings → Applications → Generate New Token**
+   เลือก scope `repository: Read and Write` (และ `user: Read`) แล้วเก็บ token ไว้ — จะเห็นแค่ครั้งเดียว
+3. Clone ครั้งแรก git จะถามชื่อผู้ใช้และรหัสผ่าน: ใส่ **ชื่อผู้ใช้ TMTHub** และใช้ **token เป็นรหัสผ่าน**
+   (Git Credential Manager บน Windows จะจำไว้ให้)
+
+```bash
+git clone https://tmthub.tomastc.com:8446/TMT/PJ-26-012-gateway-firmware.git
+```
+
+## งานประจำวัน
+
+```bash
+git pull
+git add .
+git commit -m "แก้การอ่าน Modbus"
+git push
+```
+
+ย้ายโปรเจคที่มีอยู่แล้ว (เช่นจาก GitHub หรือโฟลเดอร์ในเครื่อง) เข้า TMTHub: สร้าง repo เปล่าในหน้าเว็บก่อน แล้ว
+
+```bash
+git remote add tmthub https://tmthub.tomastc.com:8446/TMT/<ชื่อ-repo>.git
+git push tmthub --all
+git push tmthub --tags
+```
+
+หรือใช้เมนู **+ → New Migration** ในหน้าเว็บเพื่อดึงจาก GitHub ทั้ง issue และ PR
+
+## การทำงานเบื้องหลัง (สำหรับผู้ดูแล)
+
+- Service `tmthub` และ `tmthub-backup` อยู่ใน `docker-compose.tls.yml`; Caddy เปิด site
+  `{$TMTHUB_HOST}:{$TMTHUB_PORT}` ใน `deploy/caddy/Caddyfile` (cert จาก Cloudflare DNS-01 แบบเดียวกับแอป)
+- `scripts/macos/deploy.sh` ทำให้ทุกครั้งที่ deploy:
+  - สร้าง `TMTHUB_SECRET_KEY` ใน `.env` ครั้งแรกครั้งเดียว (ห้ามเปลี่ยน — ใช้เข้ารหัส OAuth secret / 2FA)
+  - สร้าง DNS `tmthub.tomastc.com A <ip เดียวกับ PUBLIC_HOST>` (DNS-only) ถ้ายังไม่มี และจะไม่เขียนทับ record ที่มีอยู่
+  - ตั้งค่า login ผ่าน TMT ID (auth source `TMT-ID`, Keycloak client เดียวกับแอป) และอัปเดต secret ทุกครั้ง
+  - สร้างบัญชี admin (`TMTHUB_ADMIN_EMAIL`) ก่อนใครเข้า แล้ว TMT ID จะผูกบัญชีให้ด้วย email
+- **ที่เก็บข้อมูล = NAS** `IoT Department\IoT Team Center\TMTHub\`
+  - `repositories\` (git repo ทั้งหมด), `lfs\`, `attachments\` — VM ของ Mac mini mount ผ่าน **NFS** (volume `tmthub-nas`)
+    ไม่ใช้ SMB ของ macOS เพราะ macOS สร้างไฟล์ `._*` ข้างไฟล์ และ `._pack-*.idx` ทำให้ git อ่าน repo เสีย
+  - `backups\tmthub-db-*.zip` — ฐานข้อมูล (ผู้ใช้ สิทธิ์ issue PR) + `app.ini` จาก `tmthub-backup` ทุก deploy และทุก 24 ชม. เก็บ 14 ชุด
+  - บน Mac mini เหลือแค่ฐานข้อมูล SQLite (`tmthub-data`) เพราะ SQLite บน network share เสียหายง่ายเมื่อมีการ lock
+- **ถ้า NAS ยังไม่เปิด NFS** deploy จะข้าม TMTHub พร้อมคำเตือน `TMTHub skipped` (แอปหลัก deploy ตามปกติ)
+- Keycloak realm `internal` มี client แยกของ TMTHub คือ `tmthub` (redirect URI
+  `https://tmthub.tomastc.com:8446/user/oauth2/TMT-ID/callback`) secret เก็บใน GitHub Actions secret
+  `TMTHUB_OIDC_CLIENT_SECRET` ซึ่ง deploy.yml ส่งให้ deploy.sh (หรือใส่ `TMTHUB_OIDC_CLIENT_SECRET` ใน `.env` บน Mac mini)
+  หมุน secret ได้โดยเปลี่ยนค่าแล้ว deploy ใหม่
+
+### ตั้งค่า NFS บน NAS (ครั้งเดียว, ผู้ดูแล NAS)
+
+ตัวอย่างสำหรับ Synology DSM:
+
+1. **Control Panel → File Services → NFS**: เปิด NFS service และ NFSv4.1
+2. **Control Panel → Shared Folder → `IoT Department` → Edit → NFS Permissions → Create**
+   - Hostname or IP: `100.64.0.3` (Mac mini บน tailnet — VM ออกเน็ตผ่านเครื่องนี้)
+   - Privilege: Read/Write · Squash: **Map all users to admin** · Security: `sys`
+   - เปิด **Allow connections from non-privileged ports** และ **Allow users to access mounted subfolders**
+3. ถ้า path ของ share ไม่ใช่ `/volume1/IoT Department` ให้ใส่ `TMTHUB_NFS_PATH=/volumeX/IoT Department/IoT Team Center/TMTHub`
+   ใน `.env` บน Mac mini (ดู path ได้ที่หน้า NFS Permissions ด้านล่าง "Mount path")
+
+### กู้คืนจาก backup
+
+repo อยู่บน NAS อยู่แล้ว (NAS snapshot ของ share ใช้กู้ไฟล์ได้) ส่วนฐานข้อมูลกู้จาก `backups\tmthub-db-*.zip`
+ตามขั้นตอนใน https://forgejo.org/docs/latest/admin/upgrade/#backup-and-restore

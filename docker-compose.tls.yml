@@ -53,6 +53,8 @@ services:
       TLS_FRONTEND_PORT: ${TLS_FRONTEND_PORT:-8444}
       TLS_API_PORT: ${TLS_API_PORT:-8445}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Cloudflare token with Zone.DNS edit on the PUBLIC_HOST zone}
+      TMTHUB_HOST: ${TMTHUB_HOST:-tmthub.tomastc.com}
+      TMTHUB_PORT: ${TMTHUB_PORT:-8446}
     volumes:
       # Directory, not file: rsync replaces files by rename and a single-file bind mount would
       # keep serving the old inode, so reloads would never see an updated Caddyfile.
@@ -62,6 +64,7 @@ services:
     ports:
       - "${TLS_FRONTEND_PORT:-8444}:${TLS_FRONTEND_PORT:-8444}"
       - "${TLS_API_PORT:-8445}:${TLS_API_PORT:-8445}"
+      - "${TMTHUB_PORT:-8446}:${TMTHUB_PORT:-8446}"
     depends_on:
       - api
       - frontend
@@ -73,6 +76,107 @@ services:
         max-size: 10m
         max-file: "3"
 
+  # TMTHub: the department git server (Forgejo), clone/push/pull over HTTPS behind Caddy on
+  # https://$TMTHUB_HOST:$TMTHUB_PORT. Sign-in is TMT ID only; git uses personal access tokens.
+  #
+  # Repositories, LFS objects and attachments live on the NAS, mounted over NFS by the iot VM's
+  # kernel (volume tmthub-nas, no password: the NAS authorises this host's address). Not through
+  # the Mac's /private/tmp SMB mount: macOS smbfs writes AppleDouble "._*" companions, and a
+  # "._pack-*.idx" beside a pack is read by git as a corrupt index. Only the SQLite database stays
+  # on the VM disk (SQLite over a network share corrupts under locking); tmthub-backup copies it
+  # to the NAS.
+  #
+  # Profile "tmthub": scripts/macos/deploy.sh starts these after the application is healthy, so a
+  # NAS or TMTHub problem can never stop the application from deploying.
+  tmthub:
+    image: codeberg.org/forgejo/forgejo:15.0.9
+    profiles: [tmthub]
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__DEFAULT__APP_NAME: TMTHub
+      FORGEJO__DEFAULT__APP_SLOGAN: Tomas Tech source code
+      FORGEJO__server__DOMAIN: ${TMTHUB_HOST:-tmthub.tomastc.com}
+      FORGEJO__server__ROOT_URL: https://${TMTHUB_HOST:-tmthub.tomastc.com}:${TMTHUB_PORT:-8446}/
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__server__START_SSH_SERVER: "false"
+      FORGEJO__server__OFFLINE_MODE: "true"
+      FORGEJO__server__LFS_START_SERVER: "true"
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__repository__ROOT: /nas/repositories
+      FORGEJO__lfs__PATH: /nas/lfs
+      FORGEJO__attachment__PATH: /nas/attachments
+      FORGEJO__security__INSTALL_LOCK: "true"
+      # Generated once by scripts/macos/deploy.sh into .env; it encrypts stored OAuth secrets.
+      FORGEJO__security__SECRET_KEY: ${TMTHUB_SECRET_KEY:?scripts/macos/deploy.sh generates TMTHUB_SECRET_KEY in .env}
+      FORGEJO__service__DISABLE_REGISTRATION: "false"
+      FORGEJO__service__ALLOW_ONLY_EXTERNAL_REGISTRATION: "true"
+      FORGEJO__service__SHOW_REGISTRATION_BUTTON: "false"
+      FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
+      FORGEJO__service__DEFAULT_KEEP_EMAIL_PRIVATE: "true"
+      FORGEJO__service__DEFAULT_ALLOW_CREATE_ORGANIZATION: "false"
+      FORGEJO__service__ENABLE_NOTIFY_MAIL: "false"
+      FORGEJO__openid__ENABLE_OPENID_SIGNIN: "false"
+      FORGEJO__openid__ENABLE_OPENID_SIGNUP: "false"
+      # TMT ID accounts register on first sign-in and link to a pre-created account by email.
+      FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION: "true"
+      FORGEJO__oauth2_client__USERNAME: email
+      FORGEJO__oauth2_client__ACCOUNT_LINKING: auto
+      FORGEJO__oauth2_client__OPENID_CONNECT_SCOPES: email profile
+      FORGEJO__repository__DEFAULT_PRIVATE: private
+      FORGEJO__repository__DEFAULT_BRANCH: main
+      FORGEJO__session__COOKIE_SECURE: "true"
+      FORGEJO__mailer__ENABLED: "false"
+      FORGEJO__actions__ENABLED: "false"
+      FORGEJO__cron_0X2E_update_checker__ENABLED: "false"
+      FORGEJO__log__LEVEL: Warn
+      FORGEJO__time__DEFAULT_UI_LOCATION: Asia/Bangkok
+    volumes:
+      - tmthub-data:/data
+      - tmthub-nas:/nas
+    restart: unless-stopped
+    # The iot VM has 4 GiB and no swap; Forgejo idles near 150 MB.
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The database (and app.ini) onto the NAS at every deploy and daily, keeping the newest 14; the
+  # repositories are on the NAS already and are not copied again.
+  tmthub-backup:
+    image: codeberg.org/forgejo/forgejo:15.0.9
+    profiles: [tmthub]
+    entrypoint: ["/bin/sh", "/opt/tmthub/backup.sh"]
+    environment:
+      TMTHUB_BACKUP_KEEP: "14"
+    volumes:
+      - tmthub-data:/data
+      - tmthub-nas:/nas
+      - ./deploy/tmthub:/opt/tmthub:ro
+    depends_on:
+      - tmthub
+    restart: unless-stopped
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
 volumes:
   caddy-data:
   caddy-config:
+  tmthub-data:
+  # <NAS>:/volume1/IoT Department/IoT Team Center/TMTHub over NFSv4.1. The NAS rule must allow
+  # this host read/write, map all users to one account, accept non-privileged ports (the VM is
+  # behind NAT) and allow mounting subfolders. deploy.sh removes this mount-only volume before
+  # each start because volume options are fixed at creation; the data on the NAS is untouched.
+  tmthub-nas:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=${TMTHUB_NAS_ADDR:-100.64.0.53},rw,nfsvers=4.1,hard,timeo=600,retrans=2,noresvport"
+      device: ":${TMTHUB_NFS_PATH:-/volume1/IoT Department/IoT Team Center/TMTHub}"
