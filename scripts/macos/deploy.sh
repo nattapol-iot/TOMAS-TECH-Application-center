@@ -226,8 +226,16 @@ deploy_tmthub() {
   for volume in $(docker --context "$DOCKER_CONTEXT" volume ls -q --filter label=com.docker.compose.volume=tmthub-nas); do
     docker --context "$DOCKER_CONTEXT" volume rm "$volume" >/dev/null
   done
-  tcompose up -d --force-recreate tmthub tmthub-backup \
-    || die "TMTHub could not start. If the NAS mount was refused, check the NFS rule for this host on the NAS (docs/TMTHUB.md)."
+  if ! up_output="$(tcompose up -d --force-recreate tmthub tmthub-backup 2>&1)"; then
+    printf '%s\n' "$up_output"
+    if grep -q "failed to mount local volume" <<<"$up_output"; then
+      # The NAS answers NFS but has no rule for this host yet: the same "not ready" case as above.
+      log "WARNING: TMTHub skipped: the NAS refused the NFS mount; add the NFS rule for this host (docs/TMTHUB.md)."
+      echo "::warning title=TMTHub skipped::The NAS refused the NFS mount; add the NFS permission rule for this host (docs/TMTHUB.md)"
+      return 0
+    fi
+    die "TMTHub could not start."
+  fi
 
   # --resolve: a record created a moment ago may still be negatively cached by the host resolver.
   wait_for "https://$TMTHUB_HOST:$TMTHUB_PORT/api/healthz" "TMTHub" --resolve "$TMTHUB_HOST:$TMTHUB_PORT:$TMTHUB_IP"
@@ -279,6 +287,33 @@ deploy_tmthub() {
     rm -f "$token_header"
     tmthub_sql "DELETE FROM access_token WHERE name='$token_name';"
   fi
+
+  # Engineering Center reads and commits through a service account. Its token lives in .env
+  # (TMTHUB_API_TOKEN) and is replaced when TMTHub no longer accepts it; the API is then
+  # recreated so the Download Center switches to TMTHub repositories.
+  service_user=engineering-center
+  if ! forgejo_admin user list | awk 'NR > 1 { print $2 }' | grep -Fxq "$service_user"; then
+    log "Creating the TMTHub service account $service_user"
+    forgejo_admin user create --admin --username "$service_user" --email "$service_user@tmthub.invalid" \
+      --random-password --must-change-password=false >/dev/null
+  fi
+  api_token_header="$(mktemp)"
+  chmod 600 "$api_token_header"
+  printf 'Authorization: token %s\n' "$(env_value TMTHUB_API_TOKEN)" > "$api_token_header"
+  if [[ -z "$(env_value TMTHUB_API_TOKEN)" ]] || ! curl -fsS --max-time 20 --resolve "$TMTHUB_HOST:$TMTHUB_PORT:$TMTHUB_IP" \
+      -H @"$api_token_header" -o /dev/null "https://$TMTHUB_HOST:$TMTHUB_PORT/api/v1/user"; then
+    log "Issuing the Engineering Center token for TMTHub"
+    new_token="$(forgejo_admin user generate-access-token --username "$service_user" --token-name "engineering-center-$(date +%s)" \
+      --scopes write:repository,write:organization,read:user --raw | tr -d '\r')"
+    [[ -n "$new_token" ]] || die "TMTHub did not issue a token."
+    /usr/bin/perl -i -ne 'print unless /^TMTHUB_API_TOKEN=/' .env
+    printf 'TMTHUB_API_TOKEN=%s\n' "$new_token" >> .env
+    unset new_token
+    log "Restarting the API so the Download Center uses TMTHub"
+    compose up -d --no-deps --force-recreate api
+    wait_for "$API_URL" "API readiness"
+  fi
+  rm -f "$api_token_header"
   log "TMTHub is at https://$TMTHUB_HOST:$TMTHUB_PORT/ (VPN only); repositories and database backups on the NAS under IoT Team Center/TMTHub"
 }
 deploy_tmthub

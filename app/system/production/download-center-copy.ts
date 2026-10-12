@@ -85,5 +85,11 @@ export const DOWNLOAD_CENTER_COPY: Record<string, { th: string; en: string; jp: 
   "Repos.replace": { th: "แทนที่ไฟล์ทั้งหมดด้วย zip นี้ (เวอร์ชันใหม่ทั้งชุด)", en: "Replace every file with this zip (a whole new version)", jp: "この zip で全ファイルを置き換える（新バージョン一式）" },
   "Repos.uploaded": { th: "อัปโหลดแล้ว (ไฟล์)", en: "Uploaded files:", jp: "アップロード済みファイル：" },
   "Repos.skipped": { th: "ข้ามไฟล์", en: "files skipped", jp: "スキップしたファイル" },
+  "Repos.openHub": { th: "เปิด TMTHub", en: "Open TMTHub", jp: "TMTHub を開く" },
+  "Repos.openInHub": { th: "เปิดใน TMTHub", en: "Open in TMTHub", jp: "TMTHub で開く" },
+  "Repos.clone": { th: "Clone ด้วย git", en: "Clone with git", jp: "git でクローン" },
+  "Repos.copyClone": { th: "คัดลอกคำสั่ง clone", en: "Copy the clone command", jp: "クローンコマンドをコピー" },
+  "Repos.cloneCopied": { th: "คัดลอกคำสั่ง git clone แล้ว", en: "git clone command copied", jp: "git clone コマンドをコピーしました" },
+  "Repos.actionCommit": { th: "commit", en: "Commit", jp: "コミット" },
   "Repos.keepProject": { th: "เลือกโครงการใหม่เฉพาะเมื่อต้องการย้าย ไม่เลือก = คงเดิม", en: "Choose a project only to move it; leave empty to keep the current one.", jp: "移動する場合のみ選択。空欄なら現在のまま。" },
 };

@@ -27,16 +27,16 @@ import type { CurrentUserService } from "../users.js";
 export const REPOSITORIES_ROOT = "source-repositories";
 const FILES_FOLDER = "files";
 const META_FILE = "repo.json";
-const MANAGE_PERMISSION = "project.write";
+export const MANAGE_PERMISSION = "project.write";
 const MAX_HISTORY = 200;
 const MAX_TREE_ENTRIES = 2000;
 const MAX_REPOSITORY_FILES = 50_000;
 const MAX_EXTRACTED_BYTES = 1024 * 1024 * 1024;
-const MAX_VIEW_BYTES = 1024 * 1024;
-const MAX_README_BYTES = 256 * 1024;
+export const MAX_VIEW_BYTES = 1024 * 1024;
+export const MAX_README_BYTES = 256 * 1024;
 const STREAM_CHUNK_BYTES = 1024 * 1024;
 /** Many single files can follow each other when someone drops a folder's worth; zips stay the norm. */
-const REPOSITORY_UPLOAD_RATE_LIMIT = { max: 60, timeWindow: "1 minute" } as const;
+export const REPOSITORY_UPLOAD_RATE_LIMIT = { max: 60, timeWindow: "1 minute" } as const;
 
 export type RepositoryActor = { id: number; name: string };
 export type RepositoryHistoryEntry = {
@@ -252,9 +252,9 @@ export function planZipExtraction(data: Uint8Array, stripRoot: boolean): { files
   return { files, skipped };
 }
 
-type ProjectRef = { id: number; projectNo: string; name: string; status: string };
+export type ProjectRef = { id: number; projectNo: string; name: string; status: string };
 
-async function loadProjects(database: Database, ids: number[]): Promise<Map<number, ProjectRef>> {
+export async function loadProjects(database: Database, ids: number[]): Promise<Map<number, ProjectRef>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   const result = await database.query<{ id: number | string; project_no: string; name: string; status: string }>(`
@@ -329,7 +329,7 @@ export function registerSourceRepositoryRoutes(app: FastifyInstance, config: App
     try {
       folders = await readdir(rootPath, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { items: [] };
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { items: [], hub: null };
       throw new ApiError(503, "document_storage_unavailable", "The repository folder could not be read.");
     }
     const metas: RepositoryMeta[] = [];
@@ -341,7 +341,7 @@ export function registerSourceRepositoryRoutes(app: FastifyInstance, config: App
       }
     }
     const projects = await loadProjects(database, metas.flatMap((meta) => (meta.projectId ? [meta.projectId] : [])));
-    return { items: metas.map((meta) => summary(meta, projects)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name)) };
+    return { items: metas.map((meta) => summary(meta, projects)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name)), hub: null };
   });
 
   app.post("/api/v1/download-center/repositories", async (request, reply) => {

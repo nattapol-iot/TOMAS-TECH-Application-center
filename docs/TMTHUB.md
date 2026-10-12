@@ -63,6 +63,18 @@ git push tmthub --tags
   `TMTHUB_OIDC_CLIENT_SECRET` ซึ่ง deploy.yml ส่งให้ deploy.sh (หรือใส่ `TMTHUB_OIDC_CLIENT_SECRET` ใน `.env` บน Mac mini)
   หมุน secret ได้โดยเปลี่ยนค่าแล้ว deploy ใหม่
 
+### เชื่อมกับศูนย์ดาวน์โหลดของ Engineering Center
+
+เมื่อ TMTHub ทำงานแล้ว `deploy.sh` จะสร้างบัญชีบริการ `engineering-center` และ token (`TMTHUB_API_TOKEN` ใน `.env`)
+แล้ว restart API — แท็บ **Repository โค้ดโครงการ** ในศูนย์ดาวน์โหลดจะเปลี่ยนเป็น repo ของ TMTHub ทันที:
+
+- รายการ = repo ทั้งหมดใน org `TMT`; โครงการที่ผูกไว้เก็บเป็น topic `project-<id>` ของ repo
+- สร้าง repo จากหน้านี้ = สร้างใน TMTHub (private, branch `main`, มี README) พร้อม topic โครงการ
+- ดู tree / โค้ด / README, ดาวน์โหลดไฟล์ หรือ ZIP ทั้ง repo, ประวัติ = commit ล่าสุด 30 รายการ
+- อัปโหลด .zip หรือไฟล์ / ลบไฟล์-โฟลเดอร์ = **1 commit** ในชื่อผู้ใช้ที่กด (สูงสุด 5,000 ไฟล์ต่อครั้ง; งานใหญ่กว่านั้นใช้ `git push`)
+- มีปุ่ม **เปิดใน TMTHub** และคำสั่ง `git clone` ให้คัดลอก
+- ถ้ายังไม่มี token (TMTHub ยังไม่พร้อม) หน้านี้ยังใช้โฟลเดอร์บน NAS แบบเดิม
+
 ### ตั้งค่า NFS บน NAS (ครั้งเดียว, ผู้ดูแล NAS)
 
 ตัวอย่างสำหรับ Synology DSM:

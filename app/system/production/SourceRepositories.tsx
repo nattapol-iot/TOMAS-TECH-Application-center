@@ -5,7 +5,7 @@ import {
   createSourceRepository, deleteRepositoryPath, deleteSourceRepository, downloadRepositoryArchive, downloadRepositoryFile,
   fetchRepositoryFileBlob, getRepositoryBlob, getRepositoryTree, getSourceRepository, listProjects, listSourceRepositories,
   updateSourceRepository, uploadRepositoryFile,
-  type ProjectSummary, type RepositoryBlob, type RepositoryTree, type SourceRepository, type SourceRepositoryDetail,
+  type ProjectSummary, type RepositoryBlob, type RepositoryHub, type RepositoryTree, type SourceRepository, type SourceRepositoryDetail,
 } from "../api-client";
 import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
@@ -36,6 +36,7 @@ function projectLabel(project: SourceRepository["project"]): string {
 /** Repository list, then one repository's tree, file view and history. */
 export function SourceRepositories({ canManage, notify }: { canManage: boolean; notify: Notify }) {
   const [items, setItems] = useState<SourceRepository[] | null>(null);
+  const [hub, setHub] = useState<RepositoryHub | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [query, setQuery] = useState("");
@@ -49,7 +50,7 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   useEffect(() => {
     let active = true;
     listSourceRepositories()
-      .then((result) => { if (active) { setItems(result.items); setError(null); } })
+      .then((result) => { if (active) { setItems(result.items); setHub(result.hub ?? null); setError(null); } })
       .catch((reason: unknown) => { if (active) setError(errorText(reason)); });
     return () => { active = false; };
   }, [revision]);
@@ -80,6 +81,9 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
           </select>
         </label>
         {items ? <span className="download-center-count">{visible.length} <LocalizedText text={"Repos.count"} /></span> : null}
+        {hub ? (
+          <a className="btn default" href={hub.orgUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /><LocalizedText text={"Repos.openHub"} /></a>
+        ) : null}
         {canManage ? (
           <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"Repos.new"} /></button>
         ) : null}
@@ -118,7 +122,7 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
                         </div>
                       </td>
                       <td><span title={projectLabel(item.project)}>{projectLabel(item.project) || "—"}</span></td>
-                      <td className="num">{item.fileCount}</td>
+                      <td className="num">{item.fileCount ?? "—"}</td>
                       <td className="num">{formatRepositorySize(item.sizeBytes)}</td>
                       <td>
                         <div className="cell-primary">
@@ -257,13 +261,18 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
             <h2 className="repo-title"><Icon name="gitBranch" /> {detail.name}</h2>
             <p className="repo-meta">
               {detail.project ? <Badge tone="blue">{projectLabel(detail.project)}</Badge> : null}
-              <span>{detail.fileCount} <LocalizedText text={"Repos.files"} /> · {formatRepositorySize(detail.sizeBytes)}</span>
+              {detail.defaultBranch ? <Badge tone="violet">{detail.defaultBranch}</Badge> : null}
+              <span>{detail.fileCount !== null ? <>{detail.fileCount} <LocalizedText text={"Repos.files"} /> · </> : null}{formatRepositorySize(detail.sizeBytes)}</span>
               {detail.updatedAt ? <span><LocalizedText text={"Downloads.updated"} /> {dateFormat.format(new Date(detail.updatedAt))}{detail.updatedBy.name ? ` · ${detail.updatedBy.name}` : ""}</span> : null}
             </p>
             {detail.description ? <p className="download-center-description">{detail.description}</p> : null}
+            {detail.cloneUrl ? <CloneBox url={detail.cloneUrl} notify={notify} /> : null}
           </div>
           <div className="repo-actions">
-            <button className="btn primary" type="button" disabled={busy || detail.fileCount === 0} onClick={() => void run(() => downloadRepositoryArchive(detail.name))}>
+            {detail.webUrl ? (
+              <a className="btn default" href={detail.webUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /><LocalizedText text={"Repos.openInHub"} /></a>
+            ) : null}
+            <button className="btn primary" type="button" disabled={busy || detail.fileCount === 0 || detail.empty === true} onClick={() => void run(() => downloadRepositoryArchive(detail.name))}>
               <Icon name="download" /><LocalizedText text={"Repos.downloadZip"} />
             </button>
             {detail.canManage ? <>
@@ -282,6 +291,7 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
           onNavigate={(next) => { setFile(null); setPath(next); }} onDelete={() => removePath(file, false)} />
       ) : (
         <TreePanel repo={name} path={path} revision={revision} canManage={detail.canManage} busy={busy} dateFormat={dateFormat} notify={notify}
+          folderZip={!detail.cloneUrl}
           onNavigate={setPath} onOpenFile={setFile} onDelete={removePath} />
       )}
 
@@ -311,8 +321,10 @@ function Breadcrumb({ repo, path, onNavigate }: { repo: string; path: string; on
   );
 }
 
-function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, onNavigate, onOpenFile, onDelete }: {
+function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, folderZip, onNavigate, onOpenFile, onDelete }: {
   repo: string; path: string; revision: number; canManage: boolean; busy: boolean; dateFormat: Intl.DateTimeFormat; notify: Notify;
+  /** Folder ZIPs come from NAS folders only; a TMTHub repository downloads whole. */
+  folderZip: boolean;
   onNavigate: (path: string) => void; onOpenFile: (path: string) => void; onDelete: (path: string, isFolder: boolean) => void;
 }) {
   const t = useT();
@@ -335,7 +347,7 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
       <section className="panel">
         <div className="panel-head">
           <Breadcrumb repo={repo} path={path} onNavigate={onNavigate} />
-          {path ? (
+          {path && folderZip ? (
             <button className="btn default sm" type="button" disabled={busy} onClick={() => void downloadRepositoryArchive(repo, path).catch((reason: unknown) => notify(errorText(reason)))}>
               <Icon name="download" /><LocalizedText text={"Repos.downloadFolder"} />
             </button>
@@ -369,12 +381,12 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
                             onClick={(event) => { event.stopPropagation(); void downloadRepositoryFile(repo, entry.path).catch((reason: unknown) => notify(errorText(reason))); }}>
                             <Icon name="download" />
                           </button>
-                        ) : (
+                        ) : folderZip ? (
                           <button className="icon-btn" type="button" aria-label={t("Repos.downloadFolder")} title={t("Repos.downloadFolder")}
                             onClick={(event) => { event.stopPropagation(); void downloadRepositoryArchive(repo, entry.path).catch((reason: unknown) => notify(errorText(reason))); }}>
                             <Icon name="download" />
                           </button>
-                        )}
+                        ) : null}
                         {canManage ? (
                           <button className="icon-btn" type="button" disabled={busy} aria-label={t("Repos.delete")} title={t("Repos.delete")}
                             onClick={(event) => { event.stopPropagation(); onDelete(entry.path, entry.type === "dir"); }}>
@@ -466,11 +478,27 @@ function BlobPanel({ repo, path, canManage, busy, notify, onNavigate, onDelete }
   );
 }
 
+/** The git remote of a TMTHub repository, ready to copy into "git clone". */
+function CloneBox({ url, notify }: { url: string; notify: Notify }) {
+  const t = useT();
+  const command = `git clone ${url}`;
+  const copy = () => {
+    void navigator.clipboard?.writeText(command).then(() => notify(t("Repos.cloneCopied")), () => notify(command));
+  };
+  return (
+    <div className="repo-clone">
+      <span><LocalizedText text={"Repos.clone"} /></span>
+      <code title={command}>{command}</code>
+      <button className="icon-btn" type="button" aria-label={t("Repos.copyClone")} title={t("Repos.copyClone")} onClick={copy}><Icon name="copy" /></button>
+    </div>
+  );
+}
+
 function HistoryPanel({ detail }: { detail: SourceRepositoryDetail }) {
   const { lang } = useLanguage();
   const format = new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  const actionKey = { create: "Repos.actionCreate", upload: "Repos.actionUpload", delete: "Repos.actionDelete", update: "Repos.actionUpdate" } as const;
-  const tone = { create: "green", upload: "blue", delete: "red", update: "violet" } as const;
+  const actionKey = { create: "Repos.actionCreate", upload: "Repos.actionUpload", delete: "Repos.actionDelete", update: "Repos.actionUpdate", commit: "Repos.actionCommit" } as const;
+  const tone = { create: "green", upload: "blue", delete: "red", update: "violet", commit: "blue" } as const;
   if (detail.history.length === 0) return <Panel><EmptyState icon="clock" title="Repos.noHistory" message="Repos.noHistoryMessage" /></Panel>;
   return (
     <section className="panel">
@@ -485,6 +513,9 @@ function HistoryPanel({ detail }: { detail: SourceRepositoryDetail }) {
                   {entry.by.name || "—"} · {entry.at ? format.format(new Date(entry.at)) : "—"}
                   {entry.files ? <> · {entry.files} <LocalizedText text={"Repos.files"} /></> : null}
                   {entry.path && entry.message ? <> · <code>{entry.path}</code></> : null}
+                  {entry.sha ? <> · {entry.url
+                    ? <a href={entry.url} target="_blank" rel="noopener noreferrer"><code>{entry.sha.slice(0, 8)}</code></a>
+                    : <code>{entry.sha.slice(0, 8)}</code>}</> : null}
                 </span>
               </div>
             </li>

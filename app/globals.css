@@ -4889,4 +4889,7 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .repo-project-picker { display: grid; gap: 6px; }
 .repo-current-project { margin: 0 0 6px; color: var(--ink-soft); font-size: var(--fs-sm); }
 .repo-options { display: grid; gap: 8px; grid-column: 1 / -1; }
+.repo-clone { display: flex; align-items: center; gap: 8px; max-width: 640px; margin-top: 8px; padding: 4px 4px 4px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--n-25); font-size: var(--fs-xs); }
+.repo-clone > span { color: var(--muted); white-space: nowrap; }
+.repo-clone code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); color: var(--ink); }
 @media (max-width: 720px) { .repo-actions { margin-left: 0; } }

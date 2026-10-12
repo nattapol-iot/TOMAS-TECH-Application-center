@@ -4,7 +4,7 @@
 
 config database migration authentication และ document storage
 
-Evidence: snapshot `6aff3090`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `fa2a9ed3`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

@@ -57,7 +57,35 @@ export type AppConfig = {
     applicationBaseUrl?: string;
   };
   pdfParserUrl: string;
+  /** TMTHub (Forgejo): when set, the Download Center's repositories are TMTHub repositories. */
+  tmthub?: TmthubConfig;
 };
+
+export type TmthubConfig = {
+  /** Server-to-server base, e.g. http://tmthub:3000 on the compose network. */
+  apiUrl: string;
+  token: string;
+  /** The one organisation that holds every project repository. */
+  org: string;
+  /** What people open and clone, e.g. https://tmthub.tomastc.com:8446. */
+  publicUrl: string;
+};
+
+function loadTmthubConfig(env: NodeJS.ProcessEnv): TmthubConfig | undefined {
+  const token = optional(env, "TMTHUB_API_TOKEN");
+  if (!token) return undefined;
+  const apiUrl = (optional(env, "TMTHUB_API_URL") ?? "http://tmthub:3000").replace(/\/+$/, "");
+  const publicUrl = required(env, "TMTHUB_PUBLIC_URL").replace(/\/+$/, "");
+  for (const [name, value] of [["TMTHUB_API_URL", apiUrl], ["TMTHUB_PUBLIC_URL", publicUrl]] as const) {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(`${name} must be an http(s) URL.`);
+    if (url.username || url.password || url.search || url.hash) throw new Error(`${name} must be a plain origin or base URL.`);
+  }
+  const org = optional(env, "TMTHUB_ORG") ?? "TMT";
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(org)) throw new Error("TMTHUB_ORG must be a valid organisation name.");
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) throw new Error("TMTHUB_API_TOKEN is not a valid access token.");
+  return { apiUrl, token, org, publicUrl };
+}
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]?.trim();
@@ -423,6 +451,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       throw new Error("Email__ApplicationBaseUrl is required when Microsoft Graph email is enabled.");
     validateOrigin(emailApplicationBaseUrl, allowPrivateLanHttp);
   }
+  const tmthub = loadTmthubConfig(env);
   return {
     environment,
     host: optional(env, "HOST") ?? "127.0.0.1",
@@ -466,5 +495,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ...(emailApplicationBaseUrl ? { applicationBaseUrl: emailApplicationBaseUrl } : {}),
     },
     pdfParserUrl: optional(env, "PDF_PARSER_URL") ?? "http://pdf-parser:8000",
+    ...(tmthub ? { tmthub } : {}),
   };
 }

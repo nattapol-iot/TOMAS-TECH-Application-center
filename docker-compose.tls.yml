@@ -19,6 +19,12 @@ services:
       # The dev file falls back to Development, which trusts an x-dev-user-email header from
       # anyone. On the shared host a missing value must stop compose instead.
       Authentication__Mode: ${DEV_API_AUTH_MODE:?set DEV_API_AUTH_MODE=TmtId in .env on the shared host}
+      # TMTHub: the Download Center's repositories once deploy.sh has issued the token; empty, the
+      # Download Center keeps plain NAS folders.
+      TMTHUB_API_URL: http://tmthub:3000
+      TMTHUB_API_TOKEN: ${TMTHUB_API_TOKEN:-}
+      TMTHUB_ORG: ${TMTHUB_ORG:-TMT}
+      TMTHUB_PUBLIC_URL: https://${TMTHUB_HOST:-tmthub.tomastc.com}:${TMTHUB_PORT:-8446}
 
   frontend:
     # The dev file bind-mounts the checkout and runs 'npm run dev', and a Vite dev server

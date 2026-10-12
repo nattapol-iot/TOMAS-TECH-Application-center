@@ -2975,17 +2975,26 @@ export type SourceRepository = {
   name: string;
   description: string;
   project: { id: number; projectNo: string; name: string; status: string } | null;
-  fileCount: number;
+  /** null for TMTHub repositories, which report size only. */
+  fileCount: number | null;
   sizeBytes: number;
   createdAt: string;
   createdBy: RepositoryActor;
   updatedAt: string;
   updatedBy: RepositoryActor;
+  /** TMTHub repositories only: a real git remote. */
+  defaultBranch?: string;
+  webUrl?: string;
+  cloneUrl?: string;
+  empty?: boolean;
 };
+/** Set when the Download Center's repositories are TMTHub (git) repositories. */
+export type RepositoryHub = { url: string; org: string; orgUrl: string };
 export type RepositoryHistoryEntry = {
-  at: string; by: RepositoryActor; action: "create" | "upload" | "delete" | "update"; message: string; path: string; files: number;
+  at: string; by: RepositoryActor; action: "create" | "upload" | "delete" | "update" | "commit"; message: string; path: string; files: number;
+  sha?: string; url?: string;
 };
-export type SourceRepositoryDetail = SourceRepository & { history: RepositoryHistoryEntry[]; canManage: boolean };
+export type SourceRepositoryDetail = SourceRepository & { history: RepositoryHistoryEntry[]; canManage: boolean; hub?: RepositoryHub | null };
 export type RepositoryTreeEntry = { name: string; path: string; type: "dir" | "file"; sizeBytes: number; modifiedAt: string };
 export type RepositoryTree = { path: string; entries: RepositoryTreeEntry[]; readme: { name: string; path: string; content: string } | null };
 export type RepositoryBlob = {
@@ -2995,7 +3004,7 @@ export type RepositoryBlob = {
 const repositoryBase = (name: string) => `/api/v1/download-center/repositories/${encodeURIComponent(name)}`;
 
 export const listSourceRepositories = () =>
-  apiRequest<{ items: SourceRepository[] }>("/api/v1/download-center/repositories");
+  apiRequest<{ items: SourceRepository[]; hub: RepositoryHub | null }>("/api/v1/download-center/repositories");
 export const createSourceRepository = (input: { name: string; projectId: number; description: string }) =>
   apiRequest<SourceRepository>("/api/v1/download-center/repositories", { method: "POST", body: JSON.stringify(input) });
 export const updateSourceRepository = (name: string, input: { description?: string; projectId?: number }) =>
@@ -3009,7 +3018,7 @@ export const getRepositoryTree = (name: string, path: string) =>
 export const getRepositoryBlob = (name: string, path: string) =>
   apiRequest<RepositoryBlob>(`${repositoryBase(name)}/blob?${new URLSearchParams({ path })}`);
 export const deleteRepositoryPath = (name: string, path: string, message: string) =>
-  apiRequest<{ removed: number; fileCount: number; sizeBytes: number }>(`${repositoryBase(name)}/files?${new URLSearchParams({ path, message })}`, { method: "DELETE" });
+  apiRequest<{ removed: number; fileCount: number | null; sizeBytes: number | null }>(`${repositoryBase(name)}/files?${new URLSearchParams({ path, message })}`, { method: "DELETE" });
 
 export async function uploadRepositoryFile(name: string, file: File, options: { path: string; message: string; extract: boolean; replace: boolean; stripRoot: boolean }) {
   const body = new FormData();
@@ -3020,7 +3029,7 @@ export async function uploadRepositoryFile(name: string, file: File, options: { 
   body.set("stripRoot", String(options.stripRoot));
   body.set("file", file);
   return (await authorizedFetch(`${repositoryBase(name)}/upload`, { method: "POST", body }, 15 * 60_000))
-    .json() as Promise<{ written: number; skipped: number; fileCount: number; sizeBytes: number }>;
+    .json() as Promise<{ written: number; skipped: number; fileCount: number | null; sizeBytes: number | null }>;
 }
 
 /** Same delivery as downloadCenterFile: a cookie session lets the browser stream it to disk. */
