@@ -226,14 +226,16 @@ deploy_tmthub() {
   # exports the full /volumeN path over v4, others (UGREEN) may use the v4 pseudo-root or v3.
   # TMTHUB_NFS_PATH / TMTHUB_NFS_OPTIONS in .env pin a choice and skip the probe.
   nfs_try() {
-    local probe_volume=tmthub-nfs-probe result=1
+    local probe_volume=tmthub-nfs-probe result=1 output
     docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
-    if docker --context "$DOCKER_CONTEXT" volume create --driver local --opt type=nfs \
-        --opt "o=addr=$TMTHUB_NAS_ADDR,$2" --opt "device=:$1" "$probe_volume" >/dev/null 2>&1 \
+    if output="$(docker --context "$DOCKER_CONTEXT" volume create --driver local --opt type=nfs \
+        --opt "o=addr=$TMTHUB_NAS_ADDR,$2" --opt "device=:$1" "$probe_volume" 2>&1 \
       && docker --context "$DOCKER_CONTEXT" run --rm --entrypoint /bin/sh -v "$probe_volume:/probe" \
-        codeberg.org/forgejo/forgejo:15.0.9 -c 'touch /probe/.tmthub-probe && rm -f /probe/.tmthub-probe' >/dev/null 2>&1; then
+        codeberg.org/forgejo/forgejo:15.0.9 -c 'id; ls -ldn /probe; touch /probe/.tmthub-probe && rm -f /probe/.tmthub-probe' 2>&1)"; then
       result=0
     fi
+    # One line per attempt in the job log, so a refusal says why (mount error, ownership, read-only).
+    log "NFS $1 (${2#rw,}): $([[ $result == 0 ]] && echo ok || printf '%s' "$output" | tr '\n' ' ' | tail -c 400)"
     docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
     return "$result"
   }
@@ -252,6 +254,9 @@ deploy_tmthub() {
       fi
     done
     if [[ -z "$nfs_path" ]]; then
+      # Diagnostics only: does the share root itself mount? Tells a subfolder restriction apart
+      # from a rule that does not match this host at all.
+      nfs_try "$nfs_share" "$v4" || nfs_try "$nfs_share" "$v3" || true
       log "WARNING: TMTHub skipped: no NFS path on the NAS could be mounted and written (tried $nfs_share over v4.1, its v4 pseudo-root path, and v3)."
       echo "::warning title=TMTHub skipped::No NFS path on the NAS could be mounted and written; check the NFS rule (docs/TMTHUB.md)"
       return 0
