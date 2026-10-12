@@ -356,6 +356,18 @@ deploy_tmthub() {
     wait_for "$API_URL" "API readiness"
   fi
   rm -f "$api_token_header"
+
+  # The backup container dumps once at start; show its result in this log.
+  backup_result=""
+  for _ in $(seq 1 36); do
+    backup_result="$(tcompose logs --no-log-prefix tmthub-backup 2>/dev/null | grep -A20 '^tmthub-backup:' | tail -n 21 || true)"
+    [[ -n "$backup_result" ]] && break
+    sleep 5
+  done
+  log "TMTHub database backup: ${backup_result:-no result within 3 minutes}"
+  if [[ "$backup_result" != *"wrote backups/"* ]]; then
+    echo "::warning title=TMTHub backup::The first database backup did not complete; see the deploy log"
+  fi
   log "TMTHub is at https://$TMTHUB_HOST:$TMTHUB_PORT/ (VPN only); repositories and database backups on the NAS under IoT Team Center/TMTHub"
 }
 deploy_tmthub
