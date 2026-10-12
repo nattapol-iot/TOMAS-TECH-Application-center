@@ -743,4 +743,18 @@ GO
 -- database/migrations/074_flexible_purchase_requisition_lines.sql
 GRANT UPDATE (supplier_id) ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
 GO
+
+-- database/migrations/075_installed_base.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.installed_assets TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.installed_asset_events TO [iot_team_app_role];
+GO
+
+-- database/migrations/076_release_deployments.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_deployments TO [iot_team_app_role];
+GO
+
+-- database/migrations/077_site_credentials.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.site_credentials TO [iot_team_app_role];
+GRANT SELECT, INSERT ON OBJECT::dbo.site_credential_access TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

@@ -60,6 +60,9 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 72, fileName: "072_site_monitor.sql", name: "Site Monitor agents, incidents and remote program control" },
   { version: 73, fileName: "073_estimate_section_effort.sql", name: "Estimate section effort" },
   { version: 74, fileName: "074_flexible_purchase_requisition_lines.sql", name: "Flexible purchase requisition lines" },
+  { version: 75, fileName: "075_installed_base.sql", name: "Installed base: customer equipment and software" },
+  { version: 76, fileName: "076_release_deployments.sql", name: "Release deployments to monitored programs" },
+  { version: 77, fileName: "077_site_credentials.sql", name: "Site credentials vault" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

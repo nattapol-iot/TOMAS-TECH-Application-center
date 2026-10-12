@@ -39,6 +39,10 @@ type HubCommit = {
   commit: { message: string; author: { name: string; email: string; date: string } };
 };
 type HubTreeEntry = { path: string; type: "blob" | "tree" | "commit"; sha: string; size: number };
+export type HubRelease = {
+  id: number; tag_name: string; name: string; body: string; draft: boolean; prerelease: boolean; published_at: string; html_url: string;
+  assets: Array<{ id: number; name: string; size: number; download_count: number }>;
+};
 
 export type HubFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -137,6 +141,24 @@ export function createHubClient(hub: TmthubConfig, fetchImpl: HubFetch = fetch) 
     },
     changeFiles: (name: string, body: Record<string, unknown>) =>
       json<unknown>(`${repo(name)}/contents`, { method: "POST", body: JSON.stringify(body), signal: AbortSignal.timeout(15 * 60_000) }, repoNotFound),
+    /** Published releases (not drafts), newest first, with their uploaded assets. */
+    releases: (name: string) => json<HubRelease[]>(`${repo(name)}/releases?limit=30&draft=false`, {}, repoNotFound),
+    /**
+     * A release asset's bytes. Forgejo serves release downloads on its web routes, which accept the
+     * same access token for /releases/download/ paths.
+     */
+    async releaseAsset(name: string, tag: string, assetName: string): Promise<Response> {
+      const url = `${hub.apiUrl}/${encodeURIComponent(hub.org)}/${encodeURIComponent(name)}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetName)}`;
+      let response: Response;
+      try {
+        response = await fetchImpl(url, { headers: { Authorization: `token ${hub.token}`, Accept: "*/*" }, signal: AbortSignal.timeout(30 * 60_000) });
+      } catch {
+        throw new ApiError(503, "tmthub_unavailable", "TMTHub is not reachable right now.");
+      }
+      if (response.status === 404) throw new ApiError(404, "release_asset_not_found", "The release file no longer exists in TMTHub.");
+      if (!response.ok) throw new ApiError(502, "tmthub_error", `TMTHub answered ${response.status} for the release file.`);
+      return response;
+    },
   };
 }
 

@@ -136,11 +136,14 @@ GO
 :r database/migrations/072_site_monitor.sql
 :r database/migrations/073_estimate_section_effort.sql
 :r database/migrations/074_flexible_purchase_requisition_lines.sql
+:r database/migrations/075_installed_base.sql
+:r database/migrations/076_release_deployments.sql
+:r database/migrations/077_site_credentials.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 74) <> 74
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 77) <> 77
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -193,7 +196,10 @@ IF EXISTS (
         (69, N'Withdraw a mistaken project document upload'),
         (70, N'Estimate labor and site expense disciplines'),
         (72, N'Site Monitor agents, incidents and remote program control'),
-        (74, N'Flexible purchase requisition lines')
+        (74, N'Flexible purchase requisition lines'),
+        (75, N'Installed base: customer equipment and software'),
+        (76, N'Release deployments to monitored programs'),
+        (77, N'Site credentials vault')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

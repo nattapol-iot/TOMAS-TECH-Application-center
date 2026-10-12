@@ -22,6 +22,7 @@ import { DOCUMENT_LIFECYCLE_COPY } from "./document-lifecycle-copy";
 import { CRM_COPY } from "./production/crm-copy";
 import { DOWNLOAD_CENTER_COPY } from "./production/download-center-copy";
 import { SITE_MONITOR_COPY } from "./production/site-monitor-copy";
+import { INSTALLED_BASE_COPY } from "./production/installed-base-copy";
 
 export type Lang = "TH" | "EN" | "JP";
 
@@ -2250,6 +2251,7 @@ export const DICTIONARY: Record<string, Entry> = {
   ...DOCUMENT_LIFECYCLE_COPY,
   ...DOWNLOAD_CENTER_COPY,
   ...SITE_MONITOR_COPY,
+  ...INSTALLED_BASE_COPY,
   /* Projects portfolio (ProductionProjects). Namespaced keys, added last, so no shared label changes. */
   "Portfolio.subtitle": { en: "Every project you are part of, with its schedule health, progress against plan and stage.", th: "ทุกโครงการที่คุณเกี่ยวข้อง พร้อมสุขภาพแผนงาน ความคืบหน้าเทียบแผน และสถานะ", jp: "関わっている全プロジェクトの計画健全性、計画比の進捗、ステージ。" },
   "Portfolio.overview": { en: "Portfolio overview", th: "ภาพรวมพอร์ตโครงการ", jp: "ポートフォリオ概要" },

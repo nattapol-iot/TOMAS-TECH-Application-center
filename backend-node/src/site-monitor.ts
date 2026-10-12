@@ -18,6 +18,28 @@ export const COMMAND_WAIT_SECONDS = 25;
 /** A queued command nobody picked up expires; a delivered one with no result fails. */
 export const COMMAND_PICKUP_SECONDS = 120;
 export const COMMAND_RESULT_SECONDS = 180;
+/** An Update downloads, backs up, replaces and test-starts a program, so it has longer to report. */
+export const UPDATE_RESULT_SECONDS = 30 * 60;
+
+/** Expires commands nobody picked up or reported on; a deployment follows its command. */
+export const EXPIRE_COMMANDS_SQL = `
+  UPDATE dbo.monitor_commands
+  SET status = N'Expired', completed_at = SYSUTCDATETIME(),
+      result_message = N'The agent did not pick up the command in time.'
+  WHERE status = N'Pending' AND requested_at < DATEADD(second, -${COMMAND_PICKUP_SECONDS}, SYSUTCDATETIME());
+
+  UPDATE dbo.monitor_commands
+  SET status = N'Failed', completed_at = SYSUTCDATETIME(),
+      result_message = N'The agent did not report a result.'
+  WHERE status = N'Delivered'
+    AND delivered_at < DATEADD(second, -CASE WHEN verb = N'Update' THEN ${UPDATE_RESULT_SECONDS} ELSE ${COMMAND_RESULT_SECONDS} END, SYSUTCDATETIME());
+
+  UPDATE d
+  SET status = CASE WHEN c.status = N'Expired' THEN N'Expired' ELSE N'Failed' END,
+      completed_at = SYSUTCDATETIME(), result_message = c.result_message
+  FROM dbo.monitor_deployments d
+  INNER JOIN dbo.monitor_commands c ON c.id = d.command_id
+  WHERE d.status IN (N'Approved', N'Delivered') AND c.status IN (N'Expired', N'Failed');`;
 export const LOG_RETENTION_DAYS = 30;
 
 const MAX_PROGRAMS = 200;
@@ -57,6 +79,8 @@ export type HeartbeatProgram = {
   memoryBytes: number | null;
   uptimeSeconds: number | null;
   processCount: number;
+  /** File version of the program's executable; empty from agents that do not report it. */
+  version: string;
 };
 
 export type HeartbeatInput = {
@@ -155,6 +179,7 @@ export function parseHeartbeat(body: unknown, now = new Date()): HeartbeatInput 
       memoryBytes: isRunning ? wholeNumber(program.memoryBytes) : null,
       uptimeSeconds: isRunning ? wholeNumber(program.uptimeSeconds) : null,
       processCount: isRunning ? wholeNumber(program.processCount, 100_000) ?? 0 : 0,
+      version: text(program.version, 100),
     });
   }
 
@@ -403,17 +428,7 @@ export class SiteMonitorSweeper {
   }
 
   async expireCommands(): Promise<void> {
-    await this.database.query(`
-      UPDATE dbo.monitor_commands
-      SET status = N'Expired', completed_at = SYSUTCDATETIME(),
-          result_message = N'The agent did not pick up the command in time.'
-      WHERE status = N'Pending' AND requested_at < DATEADD(second, -${COMMAND_PICKUP_SECONDS}, SYSUTCDATETIME());
-
-      UPDATE dbo.monitor_commands
-      SET status = N'Failed', completed_at = SYSUTCDATETIME(),
-          result_message = N'The agent did not report a result.'
-      WHERE status = N'Delivered' AND delivered_at < DATEADD(second, -${COMMAND_RESULT_SECONDS}, SYSUTCDATETIME());
-    `);
+    await this.database.query(EXPIRE_COMMANDS_SQL);
   }
 
   private incidentQuery(where: string): string {

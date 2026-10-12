@@ -1,10 +1,14 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import { insertAudit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
+import { resolveStoragePath } from "../document-storage.js";
 import type { EmailService } from "../email.js";
+import { parseByteRange } from "./download-center.js";
 import { ApiError } from "../errors.js";
 import {
   AGENT_KEY_PATTERN,
@@ -145,7 +149,8 @@ type ProgramRow = {
   id: number | string; agent_id: number | string; program_key: string; name: string; group_label: string;
   run_as_admin: boolean; is_running: boolean; cpu_percent: number | null; memory_bytes: number | string | null;
   uptime_seconds: number | string | null; process_count: number; status_changed_at: Date | null; reported_at: Date;
-  command_id: number | string | null; command_verb: Verb | null; command_status: string | null;
+  command_id: number | string | null; command_verb: Verb | "Update" | null; command_status: string | null;
+  version: string | null; repository: string | null;
 };
 type IncidentRow = {
   id: number | string; kind: string; agent_id: number | string; agent_name: string; program_id: number | string | null;
@@ -230,6 +235,59 @@ const COMMAND_SELECT = `
   INNER JOIN dbo.monitor_programs p ON p.id = c.program_id
   INNER JOIN dbo.users u ON u.id = c.requested_by`;
 
+/** Claims an agent's pending commands; an Update's deployment is marked delivered with it. */
+export const CLAIM_COMMANDS_SQL = `
+  DECLARE @claimed TABLE (id bigint NOT NULL, verb nvarchar(10) NOT NULL, program_id bigint NOT NULL, deployment_id bigint NULL);
+  UPDATE c
+  SET status = N'Delivered', delivered_at = SYSUTCDATETIME()
+  OUTPUT inserted.id, inserted.verb, inserted.program_id, inserted.deployment_id INTO @claimed
+  FROM dbo.monitor_commands c
+  WHERE c.agent_id = @agent AND c.status = N'Pending';
+  UPDATE d SET status = N'Delivered'
+  FROM dbo.monitor_deployments d INNER JOIN @claimed k ON k.deployment_id = d.id
+  WHERE d.status = N'Approved';
+  SELECT k.id, k.verb, p.program_key, k.deployment_id, d.asset_name, d.asset_size, d.sha256
+  FROM @claimed k
+  INNER JOIN dbo.monitor_programs p ON p.id = k.program_id
+  LEFT JOIN dbo.monitor_deployments d ON d.id = k.deployment_id
+  ORDER BY k.id;`;
+
+/**
+ * Records a command's result. For an Update it also closes the deployment, and on success sets the
+ * program's version and every installed asset linked to that program, with a timeline event.
+ */
+export const COMMAND_RESULT_SQL = `
+  DECLARE @done TABLE (program_id bigint NOT NULL, deployment_id bigint NULL);
+  UPDATE dbo.monitor_commands
+  SET status = CASE WHEN @success = 1 THEN N'Succeeded' ELSE N'Failed' END,
+      completed_at = SYSUTCDATETIME(), result_message = @message
+  OUTPUT inserted.program_id, inserted.deployment_id INTO @done
+  WHERE id = @id AND agent_id = @agent AND status IN (N'Pending', N'Delivered');
+
+  UPDATE d
+  SET status = CASE WHEN @success = 1 THEN N'Succeeded' WHEN @rolled_back = 1 THEN N'RolledBack' ELSE N'Failed' END,
+      new_version = CASE WHEN @success = 1 THEN @version ELSE d.new_version END,
+      result_message = @message, completed_at = SYSUTCDATETIME()
+  FROM dbo.monitor_deployments d INNER JOIN @done k ON k.deployment_id = d.id
+  WHERE d.status IN (N'Approved', N'Delivered');
+
+  IF @success = 1 AND @version IS NOT NULL AND EXISTS (SELECT 1 FROM @done WHERE deployment_id IS NOT NULL)
+  BEGIN
+    UPDATE p SET version = @version FROM dbo.monitor_programs p INNER JOIN @done k ON k.program_id = p.id;
+    DECLARE @updated TABLE (asset_id bigint NOT NULL, previous nvarchar(100) NOT NULL);
+    UPDATE a SET firmware_version = @version, updated_at = SYSUTCDATETIME()
+    OUTPUT inserted.id, deleted.firmware_version INTO @updated
+    FROM dbo.installed_assets a INNER JOIN @done k ON k.program_id = a.monitor_program_id
+    WHERE a.deleted_at IS NULL;
+    INSERT dbo.installed_asset_events (asset_id, kind, summary, details, actor_id)
+    SELECT u.asset_id, N'Deployed', LEFT(CONCAT(u.previous, N' → ', @version, N' (', d.release_tag, N')'), 500),
+           (SELECT d.id AS deploymentId, d.repository AS repository, d.release_tag AS releaseTag, d.asset_name AS assetName FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+           NULL
+    FROM @updated u CROSS JOIN @done k INNER JOIN dbo.monitor_deployments d ON d.id = k.deployment_id;
+  END;
+
+  SELECT COUNT(*) AS updated FROM @done;`;
+
 export function registerSiteMonitorRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -280,7 +338,7 @@ export function registerSiteMonitorRoutes(
     const programs = JSON.stringify(input.programs.map((program) => ({
       key: program.key, name: program.name, group: program.group, admin: program.runAsAdmin ? 1 : 0,
       running: program.isRunning ? 1 : 0, cpu: program.cpuPercent, memory: program.memoryBytes,
-      uptime: program.uptimeSeconds, processes: program.processCount,
+      uptime: program.uptimeSeconds, processes: program.processCount, version: program.version || null,
     })));
     const events = JSON.stringify(input.events.map((event) => ({
       programKey: event.programKey, kind: event.kind, userInitiated: event.userInitiated ? 1 : 0,
@@ -321,27 +379,30 @@ export function registerSiteMonitorRoutes(
         DECLARE @reported TABLE (
           program_key nvarchar(64) NOT NULL PRIMARY KEY, name nvarchar(200) NOT NULL, group_label nvarchar(150) NOT NULL,
           run_as_admin bit NOT NULL, is_running bit NOT NULL, cpu_percent decimal(5,1) NULL, memory_bytes bigint NULL,
-          uptime_seconds bigint NULL, process_count int NOT NULL);
-        INSERT @reported (program_key, name, group_label, run_as_admin, is_running, cpu_percent, memory_bytes, uptime_seconds, process_count)
-        SELECT program_key, name, group_label, run_as_admin, is_running, cpu_percent, memory_bytes, uptime_seconds, process_count
+          uptime_seconds bigint NULL, process_count int NOT NULL, version nvarchar(100) NULL);
+        INSERT @reported (program_key, name, group_label, run_as_admin, is_running, cpu_percent, memory_bytes, uptime_seconds, process_count, version)
+        SELECT program_key, name, group_label, run_as_admin, is_running, cpu_percent, memory_bytes, uptime_seconds, process_count, version
         FROM OPENJSON(@programs) WITH (
           program_key nvarchar(64) '$.key', name nvarchar(200) '$.name', group_label nvarchar(150) '$.group',
           run_as_admin bit '$.admin', is_running bit '$.running', cpu_percent decimal(5,1) '$.cpu',
-          memory_bytes bigint '$.memory', uptime_seconds bigint '$.uptime', process_count int '$.processes');
+          memory_bytes bigint '$.memory', uptime_seconds bigint '$.uptime', process_count int '$.processes',
+          version nvarchar(100) '$.version');
 
+        -- An agent that does not report versions keeps the last one known.
         UPDATE p
         SET name = s.name, group_label = s.group_label, run_as_admin = s.run_as_admin,
             status_changed_at = CASE WHEN p.is_running <> s.is_running OR p.removed_at IS NOT NULL THEN @now ELSE p.status_changed_at END,
             is_running = s.is_running, cpu_percent = s.cpu_percent, memory_bytes = s.memory_bytes,
-            uptime_seconds = s.uptime_seconds, process_count = s.process_count, reported_at = @now, removed_at = NULL
+            uptime_seconds = s.uptime_seconds, process_count = s.process_count, reported_at = @now, removed_at = NULL,
+            version = COALESCE(s.version, p.version)
         FROM dbo.monitor_programs p
         INNER JOIN @reported s ON s.program_key = p.program_key
         WHERE p.agent_id = @agent;
 
         INSERT dbo.monitor_programs (agent_id, program_key, name, group_label, run_as_admin, is_running,
-                                     cpu_percent, memory_bytes, uptime_seconds, process_count, status_changed_at, reported_at)
+                                     cpu_percent, memory_bytes, uptime_seconds, process_count, status_changed_at, reported_at, version)
         SELECT @agent, s.program_key, s.name, s.group_label, s.run_as_admin, s.is_running,
-               s.cpu_percent, s.memory_bytes, s.uptime_seconds, s.process_count, @now, @now
+               s.cpu_percent, s.memory_bytes, s.uptime_seconds, s.process_count, @now, @now, s.version
         FROM @reported s
         WHERE NOT EXISTS (SELECT 1 FROM dbo.monitor_programs p WHERE p.agent_id = @agent AND p.program_key = s.program_key);
 
@@ -406,15 +467,20 @@ export function registerSiteMonitorRoutes(
     reply.raw.once("close", () => gone.abort());
 
     for (;;) {
-      const claimed = await database.query<{ id: number | string; verb: Verb; program_key: string }>(`
-        UPDATE c
-        SET status = N'Delivered', delivered_at = SYSUTCDATETIME()
-        OUTPUT inserted.id, inserted.verb, p.program_key
-        FROM dbo.monitor_commands c
-        INNER JOIN dbo.monitor_programs p ON p.id = c.program_id
-        WHERE c.agent_id = @agent AND c.status = N'Pending';
-      `, (sqlRequest) => sqlRequest.input("agent", sql.BigInt, agent.id));
-      const commands = claimed.recordset.map((row) => ({ id: Number(row.id), verb: row.verb, programKey: row.program_key }));
+      const claimed = await database.query<{
+        id: number | string; verb: Verb | "Update"; program_key: string;
+        deployment_id: number | string | null; asset_name: string | null; asset_size: number | string | null; sha256: string | null;
+      }>(CLAIM_COMMANDS_SQL, (sqlRequest) => sqlRequest.input("agent", sql.BigInt, agent.id));
+      // An Update names exactly the bytes to install: the agent downloads them and checks the hash.
+      const commands = claimed.recordset.map((row) => ({
+        id: Number(row.id), verb: row.verb, programKey: row.program_key,
+        ...(row.deployment_id === null ? {} : {
+          deployment: {
+            id: Number(row.deployment_id), fileName: row.asset_name ?? "", sizeBytes: Number(row.asset_size ?? 0), sha256: row.sha256 ?? "",
+            downloadPath: `deployments/${Number(row.deployment_id)}/artifact`,
+          },
+        }),
+      }));
       if (commands.length > 0) request.log.info({ agentId: agent.id, commands }, "Site Monitor commands delivered");
       const remaining = deadline - Date.now();
       if (commands.length > 0 || remaining <= 0 || closing || gone.signal.aborted) return { commands };
@@ -429,20 +495,75 @@ export function registerSiteMonitorRoutes(
     const input = body(request);
     const success = input.success === true;
     const message = typeof input.message === "string" ? input.message.trim().slice(0, 1000) : "";
-    const result = await database.query<{ updated: number }>(`
-      UPDATE dbo.monitor_commands
-      SET status = CASE WHEN @success = 1 THEN N'Succeeded' ELSE N'Failed' END,
-          completed_at = SYSUTCDATETIME(), result_message = @message
-      WHERE id = @id AND agent_id = @agent AND status IN (N'Pending', N'Delivered');
-      SELECT @@ROWCOUNT AS updated;
-    `, (sqlRequest) => {
-      sqlRequest.input("id", sql.BigInt, commandId);
-      sqlRequest.input("agent", sql.BigInt, agent.id);
-      sqlRequest.input("success", sql.Bit, success);
-      sqlRequest.input("message", sql.NVarChar(1000), message || null);
-    });
-    return { ok: (result.recordset[0]?.updated ?? 0) > 0 };
+    // Update results also say whether the agent restored the previous version, and what is installed now.
+    const rolledBack = input.outcome === "RolledBack";
+    const version = typeof input.version === "string" ? input.version.trim().slice(0, 100) : "";
+    const updated = await database.transaction(async (transaction) => {
+      const result = await new sql.Request(transaction)
+        .input("id", sql.BigInt, commandId)
+        .input("agent", sql.BigInt, agent.id)
+        .input("success", sql.Bit, success)
+        .input("rolled_back", sql.Bit, rolledBack)
+        .input("version", sql.NVarChar(100), version || null)
+        .input("message", sql.NVarChar(1000), message || null)
+        .query<{ updated: number }>(COMMAND_RESULT_SQL);
+      return result.recordset[0]?.updated ?? 0;
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+    if (updated > 0) request.log.info({ agentId: agent.id, commandId, success, rolledBack, version: version || undefined }, "Site Monitor command result");
+    return { ok: updated > 0 };
   });
+
+  /**
+   * The release copy an approved Update installs. Only the agent the deployment targets may fetch
+   * it, and only while the deployment is in flight. Byte ranges let a slow link resume.
+   */
+  const sendArtifact = async (request: FastifyRequest, reply: FastifyReply) => {
+    const agent = await agentFrom(request);
+    const deploymentId = id((request.params as Record<string, unknown>).deploymentId, "deploymentId");
+    const found = await database.query<{ storage_key: string; asset_name: string; asset_size: number | string; sha256: string }>(`
+      SELECT storage_key, asset_name, asset_size, sha256 FROM dbo.monitor_deployments
+      WHERE id = @id AND agent_id = @agent AND status IN (N'Approved', N'Delivered');
+    `, (sqlRequest) => {
+      sqlRequest.input("id", sql.BigInt, deploymentId);
+      sqlRequest.input("agent", sql.BigInt, agent.id);
+    });
+    const deployment = found.recordset[0];
+    if (!deployment) throw new ApiError(404, "monitor_deployment_not_found", "No approved deployment for this machine.");
+    const path = resolveStoragePath(config.documentStorage, deployment.storage_key);
+    let size: number;
+    try {
+      size = (await stat(path)).size;
+    } catch {
+      throw new ApiError(410, "monitor_deployment_artifact_missing", "The release copy is no longer in storage.");
+    }
+    if (size !== Number(deployment.asset_size)) throw new ApiError(409, "monitor_deployment_artifact_changed", "The stored release copy does not match the approved size.");
+    const asciiName = deployment.asset_name.replace(/[^\x20-\x7e]/g, "_").replaceAll('"', "'");
+    reply.header("Content-Type", "application/octet-stream");
+    reply.header("Content-Disposition", `attachment; filename="${asciiName}"`);
+    reply.header("X-Content-SHA256", deployment.sha256);
+    reply.header("Accept-Ranges", "bytes");
+    reply.header("Cache-Control", "no-store");
+    if (request.method === "HEAD") {
+      reply.header("Content-Length", String(size));
+      return reply.send();
+    }
+    const range = parseByteRange(request.headers.range, size);
+    if (range === "invalid") {
+      reply.header("Content-Range", `bytes */${size}`);
+      return reply.code(416).send();
+    }
+    if (range) {
+      reply.code(206);
+      reply.header("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
+      reply.header("Content-Length", String(range.end - range.start + 1));
+      return reply.send(createReadStream(path, { start: range.start, end: range.end, highWaterMark: 1024 * 1024 }));
+    }
+    reply.header("Content-Length", String(size));
+    request.log.info({ agentId: agent.id, deploymentId, sizeBytes: size }, "Site Monitor release copy downloaded");
+    return reply.send(createReadStream(path, { highWaterMark: 1024 * 1024 }));
+  };
+  app.get("/api/v1/monitor/agent/deployments/:deploymentId/artifact", { config: { public: true }, exposeHeadRoute: false }, sendArtifact);
+  app.head("/api/v1/monitor/agent/deployments/:deploymentId/artifact", { config: { public: true } }, sendArtifact);
 
   // ── screen API: reading ────────────────────────────────────────────────
 
@@ -478,7 +599,7 @@ export function registerSiteMonitorRoutes(
       ORDER BY name;
 
       SELECT p.id, p.agent_id, p.program_key, p.name, p.group_label, p.run_as_admin, p.is_running, p.cpu_percent, p.memory_bytes,
-             p.uptime_seconds, p.process_count, p.status_changed_at, p.reported_at,
+             p.uptime_seconds, p.process_count, p.status_changed_at, p.reported_at, p.version, p.repository,
              pending.id AS command_id, pending.verb AS command_verb, pending.status AS command_status
       FROM dbo.monitor_programs p
       INNER JOIN dbo.monitor_agents a ON a.id = p.agent_id
@@ -517,6 +638,7 @@ export function registerSiteMonitorRoutes(
         memoryBytes: numberOrNull(row.memory_bytes), uptimeSeconds: numberOrNull(row.uptime_seconds),
         processCount: Number(row.process_count), statusChangedAt: iso(row.status_changed_at), reportedAt: iso(row.reported_at),
         pendingCommand: row.command_id === null ? null : { id: Number(row.command_id), verb: row.command_verb, status: row.command_status },
+        version: row.version ?? "", repository: row.repository ?? "",
       })),
       incidents: incidents.map((row) => ({
         id: Number(row.id), kind: row.kind, agentId: Number(row.agent_id), agentName: row.agent_name,

@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `87e54075`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `f09bd49e`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -80,5 +80,8 @@ Evidence: repository migrations at `87e54075`. Highest file number is not proof 
 | [072_site_monitor.sql](<../../database/migrations/072_site_monitor.sql>) | `dbo.monitor_sites`, `dbo.monitor_site_contacts`, `dbo.monitor_agents`, `dbo.monitor_programs`, `dbo.monitor_logs`, `dbo.monitor_incidents`, `dbo.monitor_commands` |
 | [073_estimate_section_effort.sql](<../../database/migrations/073_estimate_section_effort.sql>) | Inspect migration SQL |
 | [074_flexible_purchase_requisition_lines.sql](<../../database/migrations/074_flexible_purchase_requisition_lines.sql>) | Inspect migration SQL |
+| [075_installed_base.sql](<../../database/migrations/075_installed_base.sql>) | `dbo.installed_assets`, `dbo.installed_asset_events` |
+| [076_release_deployments.sql](<../../database/migrations/076_release_deployments.sql>) | `dbo.monitor_deployments` |
+| [077_site_credentials.sql](<../../database/migrations/077_site_credentials.sql>) | `dbo.site_credentials`, `dbo.site_credential_access` |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

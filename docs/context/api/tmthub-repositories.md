@@ -2,36 +2,36 @@
 
 [Module](../modules/downloads.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `87e54075`; generated, do not edit. [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `f09bd49e`; generated, do not edit. [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/download-center/repositories` | 201–213 |
-| POST | `/api/v1/download-center/repositories` | 215–233 |
-| GET | `/api/v1/download-center/repositories/:repo` | 235–260 |
-| PATCH | `/api/v1/download-center/repositories/:repo` | 262–279 |
-| DELETE | `/api/v1/download-center/repositories/:repo` | 281–288 |
-| GET | `/api/v1/download-center/repositories/:repo/tree` | 295–316 |
-| GET | `/api/v1/download-center/repositories/:repo/blob` | 318–329 |
-| GET | `/api/v1/download-center/repositories/:repo/raw` | 344–344 |
-| HEAD | `/api/v1/download-center/repositories/:repo/raw` | 345–345 |
-| GET | `/api/v1/download-center/repositories/:repo/archive` | 360–360 |
-| HEAD | `/api/v1/download-center/repositories/:repo/archive` | 361–361 |
-| POST | `/api/v1/download-center/repositories/:repo/upload` | 364–422 |
-| DELETE | `/api/v1/download-center/repositories/:repo/files` | 424–442 |
+| GET | `/api/v1/download-center/repositories` | 223–235 |
+| POST | `/api/v1/download-center/repositories` | 237–255 |
+| GET | `/api/v1/download-center/repositories/:repo` | 257–282 |
+| PATCH | `/api/v1/download-center/repositories/:repo` | 284–301 |
+| DELETE | `/api/v1/download-center/repositories/:repo` | 303–310 |
+| GET | `/api/v1/download-center/repositories/:repo/tree` | 317–338 |
+| GET | `/api/v1/download-center/repositories/:repo/blob` | 340–351 |
+| GET | `/api/v1/download-center/repositories/:repo/raw` | 366–366 |
+| HEAD | `/api/v1/download-center/repositories/:repo/raw` | 367–367 |
+| GET | `/api/v1/download-center/repositories/:repo/archive` | 382–382 |
+| HEAD | `/api/v1/download-center/repositories/:repo/archive` | 383–383 |
+| POST | `/api/v1/download-center/repositories/:repo/upload` | 386–444 |
+| DELETE | `/api/v1/download-center/repositories/:repo/files` | 446–464 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `projectIdFromTopics` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 45–51 |
-| `encodePath` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 53–55 |
-| `createHubClient` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 57–141 |
-| `authorOf` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 145–147 |
-| `pipeDownload` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 150–160 |
-| `registerTmthubRepositoryRoutes` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 162–443 |
+| `projectIdFromTopics` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 49–55 |
+| `encodePath` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 57–59 |
+| `createHubClient` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 61–163 |
+| `authorOf` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 167–169 |
+| `pipeDownload` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 172–182 |
+| `registerTmthubRepositoryRoutes` | [backend-node/src/routes/tmthub-repositories.ts](<../../../backend-node/src/routes/tmthub-repositories.ts>) | 184–465 |
 
 ## Direct local dependencies
 

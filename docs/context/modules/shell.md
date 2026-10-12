@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `87e54075`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `f09bd49e`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,15 +17,15 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 188–194 |
-| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 197–200 |
-| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 201–201 |
-| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 204–212 |
-| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 223–868 |
-| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 870–922 |
-| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 924–926 |
-| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 929–931 |
-| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 934–941 |
+| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 190–196 |
+| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 199–202 |
+| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 203–203 |
+| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 206–214 |
+| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 225–871 |
+| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 873–925 |
+| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 927–929 |
+| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 932–934 |
+| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 937–944 |
 | `ScreenLoading` | [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>) | 27–53 |
 | `initials` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 25–27 |
 | `permissionVerb` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 29–32 |

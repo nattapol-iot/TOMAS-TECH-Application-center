@@ -25,6 +25,9 @@ services:
       TMTHUB_API_TOKEN: ${TMTHUB_API_TOKEN:-}
       TMTHUB_ORG: ${TMTHUB_ORG:-TMT}
       TMTHUB_PUBLIC_URL: https://${TMTHUB_HOST:-tmthub.tomastc.com}:${TMTHUB_PORT:-8446}
+      # Site credentials vault key ring, generated once by scripts/macos/deploy.sh into .env. Losing it
+      # makes every stored site secret unreadable: keep a copy outside this host (docs/CREDENTIAL_VAULT.md).
+      CREDENTIAL_VAULT_KEYS: ${CREDENTIAL_VAULT_KEYS:-}
 
   frontend:
     # The dev file bind-mounts the checkout and runs 'npm run dev', and a Vite dev server

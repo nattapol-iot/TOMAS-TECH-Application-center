@@ -3054,6 +3054,127 @@ export async function fetchRepositoryFileBlob(name: string, path: string, type: 
   return new Blob([await response.arrayBuffer()], { type });
 }
 
+/* Installed base: customer equipment and software, linked to projects, Site Monitor and TMTHub. */
+export type AssetCategory = "Gateway" | "PLC" | "HMI" | "IPC" | "Server" | "Network" | "Sensor" | "Meter" | "Camera" | "Software" | "Other";
+export type AssetStatus = "Active" | "Spare" | "Faulty" | "Replaced" | "Retired";
+export type AssetWarranty = "none" | "expired" | "expiring" | "covered";
+export type InstalledAsset = {
+  id: number;
+  assetNo: string;
+  customer: { id: number; code: string; name: string };
+  customerSite: { id: number; name: string } | null;
+  project: { id: number; projectNo: string; name: string } | null;
+  monitorSite: { id: number; name: string } | null;
+  monitorProgram: { id: number; name: string; isRunning: boolean; agentOnline: boolean } | null;
+  category: AssetCategory;
+  name: string;
+  manufacturer: string;
+  model: string;
+  serialNo: string;
+  locationDetail: string;
+  ipAddress: string;
+  firmwareVersion: string;
+  repository: string;
+  installedOn: string | null;
+  warrantyUntil: string | null;
+  warranty: AssetWarranty;
+  status: AssetStatus;
+  replacedBy: { id: number; assetNo: string } | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+  rowVersion: string;
+};
+export type AssetEvent = { id: number; kind: string; summary: string; details: unknown; occurredAt: string; actor: string | null };
+export type InstalledAssetDetail = InstalledAsset & { canManage: boolean; events: AssetEvent[] };
+export type AssetInput = {
+  customerId: number;
+  customerSiteId: number | null;
+  projectId: number | null;
+  monitorSiteId: number | null;
+  monitorProgramId: number | null;
+  category: AssetCategory;
+  name: string;
+  manufacturer: string;
+  model: string;
+  serialNo: string;
+  locationDetail: string;
+  ipAddress: string;
+  firmwareVersion: string;
+  repository: string;
+  installedOn: string | null;
+  warrantyUntil: string | null;
+  status: AssetStatus;
+  replacedById: number | null;
+  notes: string;
+};
+export type AssetOptions = {
+  categories: AssetCategory[];
+  statuses: AssetStatus[];
+  customers: Array<{ id: number; code: string; name: string }>;
+  customerSites: Array<{ id: number; customerId: number; code: string; name: string }>;
+  monitorSites: Array<{ id: number; name: string }>;
+  monitorPrograms: Array<{ id: number; siteId: number; name: string; agentName: string }>;
+};
+export type AssetQuery = {
+  page?: number; pageSize?: number; search?: string; customerId?: number; customerSiteId?: number; projectId?: number;
+  monitorSiteId?: number; monitorProgramId?: number; category?: string; status?: string; warranty?: string;
+};
+
+export const listAssets = (values: AssetQuery) =>
+  apiRequest<PagedResult<InstalledAsset> & { facets: { status: Record<string, number>; category: Record<string, number> } }>(`/api/v1/assets${queryString(values)}`);
+export const getAssetOptions = (customerId?: number) =>
+  apiRequest<AssetOptions>(`/api/v1/assets/options${queryString({ customerId })}`);
+export const getAsset = (id: number) => apiRequest<InstalledAssetDetail>(`/api/v1/assets/${id}`);
+export const createAsset = (input: AssetInput) =>
+  apiRequest<InstalledAsset>("/api/v1/assets", { method: "POST", body: JSON.stringify(input) });
+export const updateAsset = (id: number, input: AssetInput & { rowVersion: string }) =>
+  apiRequest<InstalledAsset>(`/api/v1/assets/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const addAssetEvent = (id: number, kind: "Note" | "Serviced", summary: string) =>
+  apiRequest<{ ok: true }>(`/api/v1/assets/${id}/events`, { method: "POST", body: JSON.stringify({ kind, summary }) });
+export const deleteAsset = (id: number) => apiRequest<void>(`/api/v1/assets/${id}`, { method: "DELETE" });
+
+/* Site credentials vault: secrets are encrypted on the server and revealed one at a time, logged. */
+export type CredentialKind = "Login" | "WiFi" | "VPN" | "Database" | "API" | "License" | "Other";
+export type SiteCredential = {
+  id: number;
+  customer: { id: number; name: string };
+  customerSite: { id: number; name: string } | null;
+  asset: { id: number; assetNo: string; name: string } | null;
+  project: { id: number; projectNo: string } | null;
+  kind: CredentialKind;
+  label: string;
+  username: string;
+  host: string;
+  notes: string;
+  updatedAt: string | null;
+  updatedBy: string;
+  secretChangedAt: string | null;
+  lastRevealedAt: string | null;
+  lastRevealedBy: string | null;
+  canReveal: boolean;
+  rowVersion: string;
+};
+export type SiteCredentialInput = {
+  customerId: number; customerSiteId: number | null; assetId: number | null; projectId: number | null;
+  kind: CredentialKind; label: string; username: string; host: string; notes: string;
+  /** Only when adding, or when the secret changes. */
+  secret?: string;
+};
+export const listCredentials = (filter: { customerId?: number; customerSiteId?: number; assetId?: number; includeSiteWide?: boolean; search?: string }) =>
+  apiRequest<{ items: SiteCredential[]; canManage: boolean; canReveal: boolean; vaultReady: boolean; kinds: CredentialKind[] }>(
+    `/api/v1/credentials${queryString({ ...filter, includeSiteWide: filter.includeSiteWide ? "true" : undefined })}`);
+export const createCredential = (input: SiteCredentialInput) =>
+  apiRequest<SiteCredential>("/api/v1/credentials", { method: "POST", body: JSON.stringify(input) });
+export const updateCredential = (id: number, input: SiteCredentialInput & { rowVersion: string }) =>
+  apiRequest<SiteCredential>(`/api/v1/credentials/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const revealCredential = (id: number) =>
+  apiRequest<{ secret: string }>(`/api/v1/credentials/${id}/reveal`, { method: "POST", body: "{}" });
+export const deleteCredential = (id: number) => apiRequest<void>(`/api/v1/credentials/${id}`, { method: "DELETE" });
+export const getCredentialAccess = (id: number) =>
+  apiRequest<{ items: Array<{ action: string; at: string; user: string; ip: string | null }> }>(`/api/v1/credentials/${id}/access`);
+
 /* Site Monitor: TMT Control Panel agents on customer machines report programs, resources and logs. */
 export type MonitorContact = { priority: number; userId: number; name: string; email: string };
 export type MonitorSite = {
@@ -3108,7 +3229,11 @@ export type MonitorProgram = {
   processCount: number;
   statusChangedAt: string | null;
   reportedAt: string | null;
-  pendingCommand: { id: number; verb: MonitorVerb; status: string } | null;
+  pendingCommand: { id: number; verb: MonitorVerb | "Update"; status: string } | null;
+  /** File version of the executable, as TMT Control Panel 2.1+ reports it. */
+  version: string;
+  /** TMTHub repository the program is built from; enables release updates. */
+  repository: string;
 };
 export type MonitorIncident = {
   id: number;
@@ -3127,7 +3252,7 @@ export type MonitorCommand = {
   id: number;
   programId: number;
   programName: string;
-  verb: MonitorVerb;
+  verb: MonitorVerb | "Update";
   status: "Pending" | "Delivered" | "Succeeded" | "Failed" | "Expired";
   requestedBy: string;
   requestedAt: string;
@@ -3170,6 +3295,51 @@ export const sendMonitorCommand = (programId: number, verb: MonitorVerb) =>
   apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/programs/${programId}/commands`, { method: "POST", body: JSON.stringify({ verb }) });
 export const getMonitorCommand = (commandId: number) =>
   apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/commands/${commandId}`);
+
+/* Release deployments: a TMTHub release installed on a monitored program, requested by one person and approved by another. */
+export type MonitorDeploymentStatus =
+  "PendingApproval" | "Approved" | "Delivered" | "Succeeded" | "Failed" | "RolledBack" | "Rejected" | "Cancelled" | "Expired";
+export type MonitorDeployment = {
+  id: number;
+  program: { id: number; name: string };
+  agent: { id: number; name: string };
+  site: { id: number; name: string };
+  repository: string;
+  releaseTag: string;
+  releaseName: string;
+  assetName: string;
+  assetSize: number;
+  sha256: string;
+  status: MonitorDeploymentStatus;
+  note: string;
+  requestedBy: string;
+  requestedAt: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string;
+  previousVersion: string | null;
+  newVersion: string | null;
+  resultMessage: string | null;
+  completedAt: string | null;
+  canDecide: boolean;
+  canCancel: boolean;
+  isOwn: boolean;
+};
+export type MonitorRelease = {
+  id: number; tag: string; name: string; prerelease: boolean; publishedAt: string; url: string; notes: string;
+  assets: Array<{ id: number; name: string; size: number; deployable: boolean }>;
+};
+
+export const listMonitorDeployments = (filter: { siteId?: number; programId?: number; status?: MonitorDeploymentStatus }) =>
+  apiRequest<{ items: MonitorDeployment[]; canRequest: boolean; canApprove: boolean }>(`/api/v1/monitor/deployments${queryString(filter)}`);
+export const getMonitorProgramReleases = (programId: number) =>
+  apiRequest<{ repository: string; currentVersion: string; releases: MonitorRelease[] }>(`/api/v1/monitor/programs/${programId}/releases`);
+export const setMonitorProgramRepository = (programId: number, repository: string) =>
+  apiRequest<{ repository: string }>(`/api/v1/monitor/programs/${programId}/repository`, { method: "PUT", body: JSON.stringify({ repository }) });
+export const requestMonitorDeployment = (programId: number, input: { releaseId: number; assetName: string; note: string }) =>
+  apiRequest<MonitorDeployment>(`/api/v1/monitor/programs/${programId}/deployments`, { method: "POST", body: JSON.stringify(input) }, 30 * 60_000);
+export const decideMonitorDeployment = (deploymentId: number, decision: "approve" | "reject" | "cancel", note = "") =>
+  apiRequest<{ ok: true }>(`/api/v1/monitor/deployments/${deploymentId}/${decision}`, { method: "POST", body: JSON.stringify({ note }) });
 export const acknowledgeMonitorIncident = (incidentId: number) =>
   apiRequest<{ ok: boolean }>(`/api/v1/monitor/incidents/${incidentId}/acknowledge`, { method: "POST", body: "{}" });
 export const createMonitorSite = (input: MonitorSiteInput) =>

@@ -11,6 +11,7 @@ import { API_BASE_URL } from "../api-origin";
 import { localeFor, useLanguage, useT, type Lang } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Field, FilterChips, Icon, Modal, PageHeader, Panel, Progress, SearchInput, Toolbar, type FilterItem, type Tone } from "../ui";
+import { DeployModal, DeploymentsPanel } from "./MonitorDeployments";
 
 /**
  * Site Monitor: every customer site's programs as TMT Control Panel reports them — running or not,
@@ -104,6 +105,8 @@ function serverUrl(): string {
 export function SiteMonitorScreen({ bootstrap, notify }: { bootstrap: BootstrapData; notify: Notify }) {
   const canControl = bootstrap.permissions.includes("monitor.control");
   const canManage = bootstrap.permissions.includes("monitor.manage");
+  const canDeploy = bootstrap.permissions.includes("monitor.deploy");
+  const canApprove = bootstrap.permissions.includes("monitor.approve");
   const [siteId, setSiteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<MonitorSite | "new" | null>(null);
   const [revision, setRevision] = useState(0);
@@ -111,9 +114,14 @@ export function SiteMonitorScreen({ bootstrap, notify }: { bootstrap: BootstrapD
   return (
     <div className="stack site-monitor">
       {siteId === null ? (
-        <SiteOverview canManage={canManage} revision={revision} onOpen={setSiteId} onCreate={() => setEditing("new")} />
+        <>
+          {canApprove ? (
+            <DeploymentsPanel onlyPending revision={revision} notify={notify} onChanged={() => setRevision((value) => value + 1)} />
+          ) : null}
+          <SiteOverview canManage={canManage} revision={revision} onOpen={setSiteId} onCreate={() => setEditing("new")} />
+        </>
       ) : (
-        <SiteDetailView key={siteId} siteId={siteId} canControl={canControl} canManage={canManage} revision={revision}
+        <SiteDetailView key={siteId} siteId={siteId} canControl={canControl} canManage={canManage} canDeploy={canDeploy} revision={revision}
           notify={notify} onBack={() => setSiteId(null)} onEdit={setEditing} />
       )}
       {editing ? (
@@ -239,8 +247,8 @@ type Confirm =
   | { kind: "revoke"; agent: MonitorAgent }
   | { kind: "rotate"; agent: MonitorAgent };
 
-function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBack, onEdit }: {
-  siteId: number; canControl: boolean; canManage: boolean; revision: number; notify: Notify;
+function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, notify, onBack, onEdit }: {
+  siteId: number; canControl: boolean; canManage: boolean; canDeploy: boolean; revision: number; notify: Notify;
   onBack: () => void; onEdit: (site: MonitorSite) => void;
 }) {
   const t = useT();
@@ -255,6 +263,7 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
   const [busy, setBusy] = useState(false);
   const [addingAgent, setAddingAgent] = useState(false);
   const [shownKey, setShownKey] = useState<{ machine: string; key: string } | null>(null);
+  const [deploying, setDeploying] = useState<{ program: MonitorProgram; agentName: string } | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -413,7 +422,7 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
             ) : (
               <div className="table-wrap">
                 <table className="grid site-monitor-programs">
-                  <colgroup><col /><col style={{ width: 120 }} /><col style={{ width: 80 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /><col style={{ width: 110 }} />{canControl ? <col style={{ width: 220 }} /> : null}</colgroup>
+                  <colgroup><col /><col style={{ width: 120 }} /><col style={{ width: 80 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /><col style={{ width: 110 }} />{canControl || canDeploy ? <col style={{ width: canDeploy ? 300 : 220 }} /> : null}</colgroup>
                   <thead>
                     <tr>
                       <th><LocalizedText text={"Monitor.program"} /></th>
@@ -422,7 +431,7 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
                       <th className="num"><LocalizedText text={"Monitor.memory"} /></th>
                       <th className="num"><LocalizedText text={"Monitor.uptime"} /></th>
                       <th><LocalizedText text={"Monitor.since"} /></th>
-                      {canControl ? <th aria-label={t("Monitor.control")} /> : null}
+                      {canControl || canDeploy ? <th aria-label={t("Monitor.control")} /> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -435,7 +444,10 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
                           <td className="wrap">
                             <div className="cell-primary">
                               <strong title={program.name}>{program.name}{program.runAsAdmin ? <> <Badge tone="violet"><LocalizedText text={"Monitor.admin"} /></Badge></> : null}</strong>
-                              <span title={agent?.machineName ?? agent?.name}>{agent?.name ?? "—"}{program.group ? ` · ${program.group}` : ""}</span>
+                              <span title={agent?.machineName ?? agent?.name}>
+                                {agent?.name ?? "—"}{program.group ? ` · ${program.group}` : ""}
+                                {program.version ? <> · <span className="mono" title={t("Monitor.version")}>v{program.version}</span></> : null}
+                              </span>
                             </div>
                           </td>
                           <td>
@@ -451,10 +463,10 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
                           <td className="num">{program.isRunning && known ? formatBytes(program.memoryBytes) : "—"}</td>
                           <td className="num">{program.isRunning && known ? duration(program.uptimeSeconds) : "—"}</td>
                           <td title={dateTime(program.statusChangedAt)}>{ago(program.statusChangedAt)}</td>
-                          {canControl ? (
+                          {canControl || canDeploy ? (
                             <td>
                               <div className="site-monitor-actions" title={blocker ? t(blocker) : undefined}>
-                                {(["Start", "Stop", "Restart"] as const).map((verb) => {
+                                {canControl ? (["Start", "Stop", "Restart"] as const).map((verb) => {
                                   const pointless = known && ((verb === "Start" && program.isRunning) || (verb === "Stop" && !program.isRunning));
                                   return (
                                     <button key={verb} type="button" className={`btn sm ${verb === "Stop" ? "danger" : verb === "Start" ? "primary" : "default"}`}
@@ -463,7 +475,13 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
                                       <LocalizedText text={`Monitor.verb.${verb}`} />
                                     </button>
                                   );
-                                })}
+                                }) : null}
+                                {canDeploy ? (
+                                  <button type="button" className="btn sm default" disabled={!site.isActive || !agent?.allowsControl}
+                                    title={t("Deploy.requestTitle")} onClick={() => setDeploying({ program, agentName: agent?.name ?? "" })}>
+                                    <Icon name="upload" /><LocalizedText text={"Deploy.update"} />
+                                  </button>
+                                ) : null}
                               </div>
                             </td>
                           ) : null}
@@ -475,6 +493,8 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
               </div>
             )}
           </Panel>
+
+          <DeploymentsPanel siteId={site.id} revision={tick} notify={notify} onChanged={refresh} />
 
           <Panel title="Monitor.machines" subtitle="Monitor.machinesHint" flush>
             {agents.length === 0 ? (
@@ -623,6 +643,10 @@ function SiteDetailView({ siteId, canControl, canManage, revision, notify, onBac
           onCreated={(machine, key) => { setAddingAgent(false); setShownKey({ machine, key }); refresh(); }} />
       ) : null}
       {shownKey ? <AgentKeyModal machine={shownKey.machine} agentKey={shownKey.key} onClose={() => setShownKey(null)} /> : null}
+      {deploying ? (
+        <DeployModal program={deploying.program} agentName={deploying.agentName} canLinkRepository={canManage} notify={notify}
+          onClose={() => setDeploying(null)} onRequested={() => { setDeploying(null); refresh(); }} />
+      ) : null}
     </>
   );
 }

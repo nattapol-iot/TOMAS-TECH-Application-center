@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { resolve } from "node:path";
+import { parseVaultKeys, type VaultKeys } from "./credential-vault.js";
 import type { AuthenticationMode } from "./types.js";
 
 export type TmtIdConfig = {
@@ -61,6 +62,8 @@ export type AppConfig = {
   pdfParserUrl: string;
   /** TMTHub (Forgejo): when set, the Download Center's repositories are TMTHub repositories. */
   tmthub?: TmthubConfig;
+  /** Site credentials vault keys (CREDENTIAL_VAULT_KEYS); without them secrets can be neither stored nor revealed. */
+  credentialVault?: VaultKeys;
 };
 
 export type TmthubConfig = {
@@ -467,6 +470,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     validateOrigin(emailApplicationBaseUrl, allowPrivateLanHttp);
   }
   const tmthub = loadTmthubConfig(env);
+  const credentialVault = parseVaultKeys(env.CREDENTIAL_VAULT_KEYS);
   return {
     environment,
     host: optional(env, "HOST") ?? "127.0.0.1",
@@ -512,5 +516,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     pdfParserUrl: optional(env, "PDF_PARSER_URL") ?? "http://pdf-parser:8000",
     ...(tmthub ? { tmthub } : {}),
+    ...(credentialVault ? { credentialVault } : {}),
   };
 }
