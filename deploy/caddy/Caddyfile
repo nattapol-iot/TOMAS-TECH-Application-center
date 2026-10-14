@@ -2,6 +2,18 @@
 # host never has to expose 80/443 for ACME and the same hostname can sit on non-standard
 # ports when 443 is already taken by another tenant.
 
+{
+	# TMTHub speaks HTTP/1.1 only. Git sends a large push as a chunked HTTP POST; through the
+	# HTTP/2 path the end of the body was lost ("premature end of pack file, 97 bytes missing").
+	# Without a body timeout either, so a slow VPN link can take as long as it needs.
+	servers :{$TMTHUB_PORT} {
+		protocols h1
+		timeouts {
+			read_body 0
+		}
+	}
+}
+
 (cloudflare_tls) {
 	tls {
 		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
@@ -34,5 +46,12 @@
 # reachable over the VPN only. No body limit: a first push of a large repository is one request.
 {$TMTHUB_HOST}:{$TMTHUB_PORT} {
 	import cloudflare_tls
-	reverse_proxy tmthub:3000
+	reverse_proxy tmthub:3000 {
+		# Stream the push straight through; never buffer or cut a request body.
+		request_buffers 0
+		flush_interval -1
+		transport http {
+			versions 1.1
+		}
+	}
 }

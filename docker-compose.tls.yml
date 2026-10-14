@@ -140,6 +140,11 @@ services:
       FORGEJO__actions__ENABLED: "false"
       FORGEJO__cron_0X2E_update_checker__ENABLED: "false"
       FORGEJO__log__LEVEL: Warn
+      # Also to a file in the data volume, so problems outlive the container (deploy.sh reports them).
+      FORGEJO__log__MODE: console, file
+      FORGEJO__log__ROOT_PATH: /data/gitea/log
+      FORGEJO__log_0X2E_file__MAX_SIZE_SHIFT: "24"
+      FORGEJO__log_0X2E_file__MAX_DAYS: "14"
       FORGEJO__time__DEFAULT_UI_LOCATION: Asia/Bangkok
     volumes:
       - tmthub-data:/data

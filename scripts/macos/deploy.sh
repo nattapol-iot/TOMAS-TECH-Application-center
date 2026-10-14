@@ -141,6 +141,11 @@ migrations_connection="${migrations_connection%\"}"; migrations_connection="${mi
 export ConnectionStrings__Migrations="$migrations_connection"
 compose run --rm --no-deps -e ConnectionStrings__Migrations api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
 unset ConnectionStrings__Migrations
+# A Caddyfile Caddy cannot load would leave every site down after the recreate below; check it
+# first, with the same image and environment, while the running containers still serve.
+log "Validating the Caddyfile"
+compose run --rm --no-deps -T --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null \
+  || die "deploy/caddy/Caddyfile does not load; nothing was replaced."
 log "Starting containers"
 # --force-recreate keeps every deploy a clean restart: pdf-parser and caddy have no source
 # change most of the time, and a stale container would otherwise survive the deploy unnoticed.
@@ -375,6 +380,10 @@ deploy_tmthub() {
   if [[ "$backup_result" != *"wrote backups/"* ]]; then
     echo "::warning title=TMTHub backup::The first database backup did not complete; see the deploy log"
   fi
+  # Git transfer problems people hit since earlier deploys, from TMTHub's log file (kept in the
+  # data volume, so it survives the container being recreated), for the job log.
+  push_errors="$(tcompose exec -T tmthub sh -c 'cat /data/gitea/log/*.log 2>/dev/null' | grep -iE 'receive-pack|upload-pack|index-pack|pack file|ServiceRPC|OOM|killed' | tail -n 30 || true)"
+  if [[ -n "$push_errors" ]]; then log "Recent TMTHub git transfer problems:"; printf '%s\n' "$push_errors"; fi
   log "TMTHub is at https://$TMTHUB_HOST:$TMTHUB_PORT/ (VPN only); repositories and database backups on the NAS under IoT Team Center/TMTHub"
 }
 deploy_tmthub
