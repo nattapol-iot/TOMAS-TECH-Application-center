@@ -98,8 +98,13 @@ function SheetLineName({ value, onSave }: { value: string; onSave: (next: string
   </div>;
 }
 
-export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyChange, onOpenTab }: {
+export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyChange, onOpenTab, onUnclassifiedChange, onExportChange, hideReadiness = false }: {
   onDirtyChange?: (dirty: boolean) => void;
+  /** How many lines (contingency included) still have no ERP category, once the sheet has loaded. */
+  onUnclassifiedChange?: (count: number) => void;
+  /** The export, when it may run now — the workspace header offers it too. */
+  onExportChange?: (exportNow: (() => void) | null) => void;
+  hideReadiness?: boolean;
   onOpenTab?: (tab: "validation" | "assignment") => void;
   workspace: EstimateCostWorkspace;
   onChanged: (message: string) => Promise<void>;
@@ -575,6 +580,11 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const unclassifiedLines = unclassified.filter((line) => line.sourceType !== "Contingency").length;
   const unclassifiedContingency = unclassified.length > unclassifiedLines;
   const assignedSections = workspace.assignments.filter((assignment) => assignment.ownerId > 0).length;
+  useEffect(() => { if (summary) onUnclassifiedChange?.(unclassified.length); }, [summary, unclassified.length, onUnclassifiedChange]);
+  const exportReady = Boolean(summary?.capabilities.canExport) && workspace.header.status === "Approved" && !unsaved.length && approvedOverhead && !busy && !loading;
+  const latestExport = useRef(exportWorkbook);
+  useEffect(() => { latestExport.current = exportWorkbook; });
+  useEffect(() => { onExportChange?.(exportReady ? () => { void latestExport.current(); } : null); }, [exportReady, onExportChange]);
   /* Everything that stands between this sheet and an approved, exportable estimate, on one line. */
   const readiness = <section className="panel est-erp-ready" aria-label={copy("ความพร้อม", "Readiness", "準備状況")}>
     <strong>{workspace.header.status === "Approved" ? copy("พร้อมส่งออก ERP", "Ready for the ERP file", "ERP出力の準備") : copy("ความพร้อมก่อนส่งตรวจ", "Before you submit", "提出前の確認")}</strong>
@@ -593,7 +603,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     </> : null}
   </section>;
 
-  return <>{readiness}<Panel className="est-erp-panel" title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")}
+  return <>{hideReadiness ? null : readiness}<Panel className="est-erp-panel" title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")}
     subtitle={copy(
       `ใช้สร้างไฟล์ ERP หลังอนุมัติ · ${headings.length} หมวด · ${rowCount} รายการ`,
       `Builds the ERP file after approval · ${headings.length} categories · ${rowCount} lines`,

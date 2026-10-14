@@ -264,7 +264,8 @@ export function ProgressCell({ value }: { value: number }) {
 }
 
 export function Tabs<T extends string>({ tabs, active, onChange }: {
-  tabs: { id: T; label: string; count?: number }[]; active: T; onChange: (id: T) => void;
+  /* raw: the label is already in the reader's language; translating it again lets the alias map swap words. */
+  tabs: { id: T; label: string; count?: number; raw?: boolean }[]; active: T; onChange: (id: T) => void;
 }) {
   const t = useT();
   return (
@@ -272,7 +273,7 @@ export function Tabs<T extends string>({ tabs, active, onChange }: {
       {tabs.map((tab) => (
         <button key={tab.id} role="tab" type="button" aria-selected={active === tab.id}
           className={active === tab.id ? "tab active" : "tab"} onClick={() => onChange(tab.id)}>
-          {t(tab.label)}
+          {tab.raw ? tab.label : t(tab.label)}
           {tab.count !== undefined ? <em>{tab.count}</em> : null}
         </button>
       ))}

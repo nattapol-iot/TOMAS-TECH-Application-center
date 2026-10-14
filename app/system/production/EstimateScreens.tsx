@@ -620,6 +620,12 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
 function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notify, refreshBootstrap, onBack, onListChanged }: Props & { estimateId: number; tab: WorkspaceTab; setTab: (tab: WorkspaceTab) => void; onBack: () => void; onListChanged: () => Promise<void> }) {
   const [workspace, setWorkspace] = useState<EstimateCostWorkspace | null>(null);
   const [classificationDirty, setClassificationDirty] = useState(false);
+  /* In review the summary is the reviewer's overview; the ERP sheet opens below it on request. */
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [erpUnclassified, setErpUnclassified] = useState<number | null>(null);
+  const [erpExport, setErpExport] = useState<{ run: () => void } | null>(null);
+  const onErpExportChange = useCallback((run: (() => void) | null) => setErpExport(run ? { run } : null), []);
   const [costFocus, setCostFocus] = useState<string | null>(null);
   const clearCostFocus = useCallback(() => setCostFocus(null), []);
   const [loading, setLoading] = useState(true);
@@ -870,7 +876,11 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     ...(ESTIMATE_OVERHEAD_ENABLED && numberOf(totals.overhead) > 0 ? [{ key: "overhead", label: "Overhead", value: numberOf(totals.overhead), note: "", color: "var(--c6)", tab: "summary" as WorkspaceTab }] : []),
     { key: "contingency", label: `Contingency ${formatNumber(header.contingencyRate)}%`, value: numberOf(totals.contingency), note: "", color: "var(--c8)", tab: "other" },
   ];
+  const onSummary = tab === "summary" || tab === "review";
   const segmentBase = segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0);
+  const previousEntry = header.revision > 0 ? workspace.revisionHistory.find((entry) => entry.revision === header.revision - 1) : undefined;
+  const previousTotal = previousEntry ? numberOf(previousEntry.total) : null;
+  const revisionDelta = previousTotal === null ? 0 : numberOf(totals.total) - previousTotal;
   const submitBlocker = criticalCount > 0
     ? copy(`แก้ ${criticalCount} ข้อผิดพลาดก่อนส่งตรวจ`, `Resolve ${criticalCount} error(s) before submitting`, `提出前に${criticalCount}件のエラーを修正`)
     : classificationDirty ? copy("บันทึกการจัดหมวดก่อนส่งตรวจ", "Save the category changes before submitting", "提出前に分類を保存") : undefined;
@@ -899,6 +909,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
         {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
         {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
         {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
+        {approved ? <button className="btn primary" type="button" disabled={busy || !erpExport} title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")} onClick={() => erpExport?.run()}><Icon name="download" />{copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}</button> : null}
         {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
       </div>
     </header>
@@ -908,7 +919,6 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました")}</strong>{" · "}
       {liveCopy("จะอัปเดตให้ทันทีที่คุณบันทึกหรือปิดสิ่งที่กำลังแก้", "It updates as soon as you save or close what you are editing.", "編集中の内容を保存するか閉じるとすぐに更新されます。")}</span></div> : null}
     {sentBack ? <div className="info-strip amber est-sentback" role="status"><Icon name="alertTriangle" /><span><strong>{[sentBack.reviewedByName, sentBack.reviewedAt ? formatDate(sentBack.reviewedAt) : ""].filter(Boolean).join(" · ") || copy("ผู้ตรวจ", "Reviewer", "レビュー担当")}</strong>{" · "}{copy("ส่งกลับให้แก้:", "returned it:", "差し戻し理由:")} “{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}”</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("revision")}>{copy("ดูประวัติ Revision", "Open revision history", "改訂履歴を開く")}<Icon name="arrowRight" /></button></div> : null}
-    {approved ? <div className="info-strip green est-approved"><Icon name="lock" /><span><strong><LocalizedText text={"Revision นี้ถูกล็อกแล้ว ข้อมูลต้นทุนอ่านได้อย่างเดียว การแก้ไขต้องผ่าน revision workflow"} /></strong>{" · "}{copy("ขั้นต่อไป: Export ไฟล์ ERP ในแท็บสรุป · ฝ่ายขายทำใบเสนอราคาต่อ · สร้าง Project จาก RFQ เมื่อลูกค้ายืนยันสั่งซื้อ", "Next: export the ERP file from the summary tab · Sales prepares the quotation · the project is created from the RFQ once the customer orders", "次へ：サマリーからERPファイルを出力 · 営業が見積書を作成 · 受注後にRFQから案件を作成")}</span><span className="spacer" />{tab !== "summary" ? <button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("ไปที่ Export ERP", "Go to ERP export", "ERP出力へ")}<Icon name="arrowRight" /></button> : null}</div> : null}
     {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
@@ -935,25 +945,35 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
       <div className="est-total">
         <span>{copy("ต้นทุนรวมโดยประมาณ", "Total estimated cost", "見積原価合計")}</span>
         <strong>{formatMoney(totals.total)}</strong>
+        {previousTotal !== null ? <span className={revisionDelta > 0 ? "est-delta up" : revisionDelta < 0 ? "est-delta down" : "est-delta"}>{revisionDelta === 0
+          ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
+          : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}`}</span> : null}
         <span>{copy("ต้นทุนภายใน", "Internal cost", "社内原価")} · {revisionCode(header.revision)}</span>
       </div>
     </section>
+    {approved ? <section className="panel est-handoff" aria-label={copy("ส่งต่อ", "Hand-off", "引き継ぎ")}>
+      <div className="est-handoff-title"><strong>{copy("ส่งต่อ", "Hand-off", "引き継ぎ")}</strong><span className="muted">{copy(`ใช้ต้นทุน ${revisionCode(header.revision)} ต่อ · Revision นี้ล็อกแล้ว แก้ไขผ่านการสร้าง Revision ใหม่`, `Carry the ${revisionCode(header.revision)} cost forward · this revision is locked; changes go through a new revision`, `${revisionCode(header.revision)} の原価を引き継ぎ · この改訂はロック済み`)}</span></div>
+      <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="file" /><strong>{copy("ไฟล์ ERP", "ERP file", "ERPファイル")}</strong>{erpUnclassified === 0 ? <Badge tone="green"><span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span></Badge> : erpUnclassified ? <Badge tone="amber"><span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span></Badge> : null}<span className="spacer" />{erpExport ? <button className="link-btn" type="button" onClick={() => erpExport.run()}>Export</button> : null}</div>
+        <span className="mono">{`${header.number}_${revisionCode(header.revision)}_ERP_EstimateCost.xlsx`}</span></div>
+      <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="users" /><strong>{copy("ฝ่ายขาย", "Sales", "営業")}</strong></div><span>{copy(`ทำใบเสนอราคาต่อจาก RFQ ${header.inquiryNumber}`, `Prepares the quotation from RFQ ${header.inquiryNumber}`, `RFQ ${header.inquiryNumber} から見積書を作成`)}</span></div>
+      <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="folder" /><strong>Project</strong></div><span>{copy("สร้างจาก RFQ ได้เมื่อลูกค้ายืนยันสั่งซื้อ", "Created from the RFQ once the customer orders", "受注確定後にRFQから作成")}</span></div>
+    </section> : null}
     {lineCount === 0 && capabilities.canEditAllSections && !startDismissed ? <EstimateStartPanel workspace={workspace} busy={busy} onCopy={copyFromEstimate} canAssign={capabilities.canManageAssignments} onOpenTab={setTab} onDismiss={() => setStartDismissed(true)} /> : null}
-    <Tabs active={tab} onChange={setTab} tabs={[
-      { id: "summary", label: copy("สรุป", "Cost summary", "原価サマリー") },
-      { id: "cost", label: copy("วัสดุและอุปกรณ์", "Cost Items", "原価明細"), count: workspace.costItems.length },
-      { id: "manhour", label: copy("ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length },
-      { id: "other", label: copy("ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length },
-      { id: "validation", label: copy("ตรวจสอบ", "Validation", "検証"), count: validationCount },
-      { id: "assignment", label: copy("ผู้รับผิดชอบ", "Assignment", "担当"), count: workspace.assignments.length },
-      { id: "review", label: copy("ตรวจทาน", "Engineering Review", "技術レビュー") },
-      { id: "revision", label: copy("Revision", "Revision history", "改訂履歴") },
+    <Tabs active={onSummary ? "summary" : tab} onChange={setTab} tabs={[
+      { id: "summary", label: copy("สรุป", "Cost summary", "原価サマリー"), raw: true },
+      { id: "cost", label: copy("วัสดุและอุปกรณ์", "Cost Items", "原価明細"), count: workspace.costItems.length, raw: true },
+      { id: "manhour", label: copy("ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length, raw: true },
+      { id: "other", label: copy("ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length, raw: true },
+      { id: "validation", label: copy("ตรวจสอบ", "Validation", "検証"), count: validationCount, raw: true },
+      { id: "assignment", label: copy("ผู้รับผิดชอบ", "Assignment", "担当"), count: workspace.assignments.length, raw: true },
+      { id: "revision", label: copy("Revision", "Revision history", "改訂履歴"), raw: true },
     ]} />
 
-    <div hidden={tab !== "summary"}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} onOpenTab={setTab} />
+    {onSummary && inReview ? <EstimateReviewSummary workspace={workspace} erpUnclassified={erpUnclassified} sheetOpen={sheetOpen} onOpenTab={setTab} onOpenSheet={() => { setSheetOpen(true); window.setTimeout(() => sheetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} /> : null}
+    {onSummary && header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
+    <div ref={sheetRef} hidden={!onSummary || (inReview && !sheetOpen)}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} onOpenTab={setTab} onUnclassifiedChange={setErpUnclassified} onExportChange={onErpExportChange} hideReadiness={inReview} />
     </div>
-    {tab === "summary" ? <>
-      {header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
+    {onSummary ? <>
       {ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}
       <details className="estimate-secondary"><summary>{estimateUxCopy(currentLocale(), "ความพร้อมและข้อมูล Revision", "Readiness and revision information", "準備状況と改訂情報")}</summary>
 <EstimateSummaryTab workspace={workspace} /></details></> : null}
@@ -1043,7 +1063,6 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     }} /> : null}
     {tab === "revision" ? <div className="stack"><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /><EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
 
-    {tab === "review" ? <EstimateReviewTab workspace={workspace} onWorkflow={action => { if (classificationDirty && (action === "submit" || action === "approve")) { setTab("summary"); return; } setWorkflowAction(action); }} /> : null}
 
     {costEditor ? <CostItemEditor bootstrap={bootstrap} workspace={workspace} line={costEditor === "new" ? null : costEditor} seed={costSeed} busy={busy} onClose={() => { setCostEditor(null); setCostSeed({}); }} onSave={async (input, lineId) => {
       setBusy(true); setError("");
@@ -2031,20 +2050,90 @@ function EstimateCompareTab({ revisions, currentRevision, currentTotal }: { revi
   return <><Panel title="Compare Estimate Revision" subtitle="เปรียบเทียบยอดรวมจาก revision history จริง"><div className="row"><Field label="From revision"><select value={fromRevision} onChange={(event) => setFromRevision(Number(event.target.value))}>{rows.map((revision) => <option key={revision.revision} value={revision.revision}>{revision.code || revisionCode(revision.revision)}</option>)}</select></Field><Icon name="arrowRight" /><Field label="To revision"><select value={toRevision} onChange={(event) => setToRevision(Number(event.target.value))}>{rows.map((revision) => <option key={revision.revision} value={revision.revision}>{revision.code || revisionCode(revision.revision)}</option>)}</select></Field></div></Panel><div style={{ height: 14 }} /><section className="grid-3"><Panel title={`${from?.code ?? revisionCode(fromRevision)} Total`}><strong style={{ fontSize: "var(--fs-2xl)" }}>{formatMoney(from?.total)}</strong><p className="muted">{from?.reason}</p></Panel><Panel title={`${to?.code ?? revisionCode(toRevision)} Total`}><strong style={{ fontSize: "var(--fs-2xl)" }}>{formatMoney(to?.total)}</strong><p className="muted">{to?.reason}</p></Panel><Panel title="Difference"><strong style={{ fontSize: "var(--fs-2xl)" }} className={delta > 0 ? "red-text" : delta < 0 ? "green-text" : "muted"}>{delta > 0 ? "+" : delta < 0 ? "−" : ""}{formatMoney(Math.abs(delta))}</strong><p className="muted">{numberOf(from?.total) ? `${(delta / numberOf(from?.total) * 100).toFixed(1)}%` : "No baseline total"}</p></Panel></section><div className="info-strip" style={{ marginTop: 14 }}><Icon name="alertCircle" /><span><LocalizedText text={"Line-by-line historical comparison จะเปิดเมื่อ backend ส่ง revision snapshots; หน้านี้แสดงเฉพาะ revision totals ที่มีอยู่จริง"} /></span></div></>;
 }
 
-function EstimateReviewTab({ workspace, onWorkflow }: { workspace: EstimateCostWorkspace; onWorkflow: (action: "submit" | "approve" | "request-revision") => void }) {
-  const uiText = useUiText();
-  const topItems = [...workspace.costItems].sort((left, right) => numberOf(right.lineTotal) - numberOf(left.lineTotal)).slice(0, 10);
-  const effortByDepartment = [...new Set(workspace.manhourLines.map((line) => line.department))].map((department) => ({ department, lines: workspace.manhourLines.filter((line) => line.department === department) }));
-  const criticalIssues = workspace.validationIssues.filter(isCriticalValidationIssue);
-  const warningIssues = workspace.validationIssues.filter((issue) => !isCriticalValidationIssue(issue));
-  const orderedIssues = [...criticalIssues, ...warningIssues];
-  return <section className="grid-main"><div className="stack"><Panel title={uiText("Project information")}><dl className="def-list"><div><dt><LocalizedText text={"Estimate"} /></dt><dd className="mono">{workspace.header.number} <LocalizedText text={"·"} /> {revisionCode(workspace.header.revision)}</dd></div><div><dt><LocalizedText text={"Inquiry"} /></dt><dd className="mono">{workspace.header.inquiryNumber}</dd></div><div><dt><LocalizedText text={"Customer"} /></dt><dd>{workspace.header.customerName}</dd></div><div><dt><LocalizedText text={"Project"} /></dt><dd>{workspace.header.projectName}</dd></div><div><dt><LocalizedText text={"Project type"} /></dt><dd>{workspace.header.projectType}</dd></div><div><dt><LocalizedText text={"Estimate owner"} /></dt><dd>{workspace.header.ownerName}</dd></div><div><dt><LocalizedText text={"Due date"} /></dt><dd>{formatDate(workspace.header.dueDate)}</dd></div><div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{workspace.header.status}</Badge></dd></div></dl></Panel>
-    <Panel title="Cost summary" subtitle="Approval covers internal engineering cost only — no margin" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Cost block"} /></th><th className="num"><LocalizedText text={"Amount"} /></th><th className="num"><LocalizedText text={"Share"} /></th></tr></thead><tbody>{[["Material", workspace.header.totals.material], ["Engineering", workspace.header.totals.engineering], ["Outsource", workspace.header.totals.outsource], ["Transportation", workspace.header.totals.transportation], ["Accommodation", workspace.header.totals.accommodation], ["Other", workspace.header.totals.other], [`Contingency ${formatNumber(workspace.header.contingencyRate)}%`, workspace.header.totals.contingency]].map(([label, value]) => <tr key={String(label)}><td>{label}</td><td className="num">{formatMoney(value as number)}</td><td className="num muted">{numberOf(workspace.header.totals.total) ? `${Math.round(numberOf(value) / numberOf(workspace.header.totals.total) * 100)}%` : "0%"}</td></tr>)}<tr className="subtotal-row"><td><LocalizedText text={"Total estimated cost"} /></td><td className="num"><strong>{formatMoney(workspace.header.totals.total)}</strong></td><td className="num">100%</td></tr></tbody></table></div></Panel>
-    <Panel title="Top 10 highest cost items" flush>{topItems.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Supplier"} /></th><th className="num"><LocalizedText text={"Total"} /></th></tr></thead><tbody>{topItems.map((line) => <tr key={line.id}><td><div className="cell-primary"><strong>{line.description}</strong><span>{line.brand} {line.model}</span></div></td><td>{line.supplierName ?? "—"}</td><td className="num"><strong>{formatMoney(line.lineTotal)}</strong></td></tr>)}</tbody></table></div> : <EmptyState icon="package" title={uiText("No cost item")} message="ยังไม่มี cost item สำหรับ review" />}</Panel>
-    <Panel title="Engineering man-hour by department" flush>{effortByDepartment.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Department"} /></th><th className="num"><LocalizedText text={"Man-days"} /></th><th className="num"><LocalizedText text={"Man-hours"} /></th><th className="num"><LocalizedText text={"Cost"} /></th></tr></thead><tbody>{effortByDepartment.map((entry) => <tr key={entry.department}><td><strong>{entry.department}</strong></td><td className="num">{formatNumber(entry.lines.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0))}</td><td className="num">{formatNumber(entry.lines.reduce((sum, line) => sum + numberOf(line.manHours), 0))}</td><td className="num">{formatMoney(entry.lines.reduce((sum, line) => sum + numberOf(line.lineCost), 0))}</td></tr>)}</tbody></table></div> : <EmptyState icon="users" title="No man-hour" message="ยังไม่มี engineering effort สำหรับ review" />}</Panel></div>
-    <div className="stack"><Panel title="Reviewer decision" subtitle="Actions shown from API capabilities"><div className="stack" style={{ gap: 8 }}>{workspace.capabilities.canSubmit ? <button className="btn primary block" type="button" disabled={criticalIssues.length > 0} onClick={() => onWorkflow("submit")}><Icon name="send" /><LocalizedText text={"Submit for Engineering Review"} /></button> : null}{workspace.capabilities.canApprove ? <button className="btn success block" type="button" disabled={criticalIssues.length > 0} onClick={() => onWorkflow("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve Estimate Cost"} /></button> : null}{workspace.capabilities.canRequestRevision ? <button className="btn warn block" type="button" onClick={() => onWorkflow("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}{!workspace.capabilities.canSubmit && !workspace.capabilities.canApprove && !workspace.capabilities.canRequestRevision ? <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"บัญชีนี้ไม่มี workflow action สำหรับสถานะปัจจุบัน"} /></span></div> : null}</div>{criticalIssues.length ? <div className="info-strip red" style={{ marginTop: 10 }}><Icon name="alertTriangle" />{criticalIssues.length} <LocalizedText text={"critical error(s) block submission and approval."} /></div> : null}{warningIssues.length ? <div className="info-strip amber" style={{ marginTop: 10 }}><Icon name="alertTriangle" />{warningIssues.length} <LocalizedText text={"warning(s) are advisory and do not block workflow."} /></div> : null}</Panel>
-    <Panel title="Validation for reviewer">{orderedIssues.length ? <ul className="check-list">{orderedIssues.map((issue) => { const critical = isCriticalValidationIssue(issue); return <li className={`check-item ${critical ? "error" : "warning"}`} key={`${issue.code}-${issue.entityType}-${issue.entityId}`}><Icon name={critical ? "alertCircle" : "alertTriangle"} /><div><strong>{issue.code.replaceAll("_", " ")} <LocalizedText text={"·"} /> {issue.severity}</strong><p>{issue.message}</p></div></li>; })}</ul> : <p className="muted"><LocalizedText text={"No server validation issue."} /></p>}</Panel>
-    <Panel title={uiText("Revision history")} flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Rev."} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Status"} /></th><th className="num"><LocalizedText text={"Total"} /></th></tr></thead><tbody>{workspace.revisionHistory.map((revision) => <tr key={revision.id}><td><span className="pill">{revision.code}</span></td><td>{revision.reason}</td><td><Badge>{revision.status}</Badge></td><td className="num">{formatMoney(revision.total)}</td></tr>)}</tbody></table></div></Panel></div>
+/* What a reviewer reads before deciding: where the money is, the biggest lines, the labor by
+   discipline, what the system flagged, whether the ERP sheet is classified, and the revisions.
+   The decision itself stays in the header (Approve / Request revision). */
+function EstimateReviewSummary({ workspace, erpUnclassified, sheetOpen, onOpenSheet, onOpenTab }: {
+  workspace: EstimateCostWorkspace; erpUnclassified: number | null; sheetOpen: boolean;
+  onOpenSheet: () => void; onOpenTab: (tab: WorkspaceTab) => void;
+}) {
+  const copy = estimateCopy;
+  const { header } = workspace;
+  const { totals } = header;
+  const total = numberOf(totals.total);
+  const groups: Array<[string, number, string]> = [
+    [copy("วัสดุและอุปกรณ์", "Material", "材料・機器"), numberOf(totals.material), "var(--c1)"],
+    [copy("ค่าแรงวิศวกรรม", "Engineering labor", "技術労務"), numberOf(totals.engineering), "var(--c2)"],
+    ["Outsource", numberOf(totals.outsource), "var(--c5)"],
+    [copy("เดินทาง · ที่พัก", "Travel · stay", "旅費・宿泊"), numberOf(totals.transportation) + numberOf(totals.accommodation), "var(--c7)"],
+    [copy("อื่นๆ", "Other", "その他"), numberOf(totals.other), "var(--c4)"],
+  ];
+  if (numberOf(totals.overhead) > 0) groups.push(["Overhead", numberOf(totals.overhead), "var(--c6)"]);
+  groups.push([`Contingency ${formatNumber(header.contingencyRate)}%`, numberOf(totals.contingency), "var(--c8)"]);
+  const share = (value: number) => total > 0 ? value / total * 100 : 0;
+  // A price-set component is priced by its header, so only lines that carry their own price rank.
+  const priced = [...workspace.costItems].filter((line) => !line.priceSetKey || line.isPriceSet).sort((left, right) => numberOf(right.lineTotal) - numberOf(left.lineTotal));
+  const topLines = priced.slice(0, 6);
+  const laborRows = [...new Set(workspace.manhourLines.map((line) => line.discipline ?? ""))].map((discipline) => {
+    const lines = workspace.manhourLines.filter((line) => (line.discipline ?? "") === discipline);
+    return { discipline, manDays: lines.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0), manHours: lines.reduce((sum, line) => sum + numberOf(line.manHours), 0), cost: lines.reduce((sum, line) => sum + numberOf(line.lineCost), 0) };
+  });
+  const laborTotal = laborRows.reduce((sum, row) => ({ manDays: sum.manDays + row.manDays, manHours: sum.manHours + row.manHours, cost: sum.cost + row.cost }), { manDays: 0, manHours: 0, cost: 0 });
+  const errors = workspace.validationIssues.filter(isCriticalValidationIssue);
+  const warnings = workspace.validationIssues.filter((issue) => !isCriticalValidationIssue(issue));
+  const revisions = [...workspace.revisionHistory].filter((entry) => entry.revision !== header.revision).sort((left, right) => right.revision - left.revision).slice(0, 2);
+  const currentStatus = estimateStatusView(header.status);
+  const viewAll = (tab: WorkspaceTab) => <button className="link-btn" type="button" onClick={() => onOpenTab(tab)}>{copy("ดูทั้งหมด", "View all", "すべて表示")}</button>;
+  return <section className="est-review-grid">
+    <div className="stack">
+      <Panel title={copy("ต้นทุนตามกลุ่ม", "Cost by group", "グループ別原価") + " · " + revisionCode(header.revision)} flush>
+        <table className="est-mini-table"><thead><tr><th>{copy("กลุ่ม", "Group", "グループ")}</th><th className="num">{copy("ต้นทุน", "Cost", "原価")}</th><th className="num">{copy("สัดส่วน", "Share", "比率")}</th></tr></thead>
+          <tbody>{groups.map(([label, value, color]) => <tr key={label}><td><span className="est-base-dot" style={{ background: color }} />{label}</td><td className="num">{formatMoney(value)}</td>
+            <td className="num"><span className="est-share"><span className="est-share-bar"><i style={{ width: `${Math.min(100, share(value))}%`, background: color }} /></span>{formatNumber(share(value), 1)}%</span></td></tr>)}</tbody>
+          <tfoot><tr><td>{copy("รวม", "Total", "合計")}</td><td className="num">{formatMoney(total)}</td><td className="num">100%</td></tr></tfoot>
+        </table>
+        <p className="est-review-note"><Icon name="alertCircle" />{copy("การอนุมัติครอบคลุมต้นทุนวิศวกรรมภายในเท่านั้น", "Approval covers internal engineering cost only", "承認対象は社内技術原価のみです")}</p>
+      </Panel>
+    </div>
+    <div className="stack">
+      <Panel title={copy("รายการที่ต้นทุนสูงสุด", "Highest-cost lines", "原価上位の明細")} flush>
+        {topLines.length ? <ul className="est-top-list">{topLines.map((line) => <li key={line.id}>
+          <div><strong>{line.description}</strong><span>{[line.brand, line.model].filter(Boolean).join(" · ") || "—"} · {formatNumber(line.quantity)} {line.unit} · {line.supplierName ?? <span className="soft-warn">{copy("ยังไม่เลือกผู้ขาย", "No supplier", "仕入先未選択")}</span>}</span></div>
+          <strong className="num">{formatMoney(line.lineTotal)}</strong>
+        </li>)}</ul> : <p className="muted est-review-empty">{copy("ยังไม่มีรายการวัสดุ", "No material lines yet", "材料明細はまだありません")}</p>}
+        {priced.length > topLines.length ? <button className="link-btn est-review-more" type="button" onClick={() => onOpenTab("cost")}>{copy(`อีก ${priced.length - topLines.length} รายการ · เปิดแท็บวัสดุ`, `${priced.length - topLines.length} more · open Cost Items`, `他${priced.length - topLines.length}件 · 明細を開く`)}</button> : null}
+      </Panel>
+      <Panel title={copy("ค่าแรงตามสาขา", "Labor by discipline", "分野別労務") + ` · ${formatNumber(laborTotal.manDays)} Man-day`} flush>
+        {laborRows.length ? <table className="est-mini-table"><thead><tr><th>{copy("สาขา", "Discipline", "分野")}</th><th className="num">Man-day</th><th className="num">Man-hour</th><th className="num">{copy("ต้นทุน", "Cost", "原価")}</th></tr></thead>
+          <tbody>{laborRows.map((row) => <tr key={row.discipline || "none"}><td>{row.discipline || copy("ยังไม่ระบุสาขา", "No discipline", "分野未選択")}</td><td className="num">{formatNumber(row.manDays)}</td><td className="num">{formatNumber(row.manHours)}</td><td className="num">{formatMoney(row.cost)}</td></tr>)}</tbody>
+          <tfoot><tr><td>{copy("รวม", "Total", "合計")}</td><td className="num">{formatNumber(laborTotal.manDays)}</td><td className="num">{formatNumber(laborTotal.manHours)}</td><td className="num">{formatMoney(laborTotal.cost)}</td></tr></tfoot>
+        </table> : <p className="muted est-review-empty">{copy("ยังไม่มีค่าแรง", "No labor yet", "工数はまだありません")}</p>}
+      </Panel>
+    </div>
+    <div className="stack">
+      <Panel title={copy("ผลตรวจระบบ", "System checks", "システムチェック")} actions={viewAll("validation")}>
+        <div className="est-review-pills"><span className={errors.length ? "est-pill red" : "est-pill green"}>{copy(`${errors.length} ข้อผิดพลาด`, `${errors.length} error(s)`, `エラー ${errors.length}`)}</span><span className={warnings.length ? "est-pill amber" : "est-pill green"}>{copy(`${warnings.length} คำเตือน`, `${warnings.length} warning(s)`, `警告 ${warnings.length}`)}</span>
+          <span className="muted">{errors.length ? copy("ข้อผิดพลาดปิดกั้นการอนุมัติ", "Errors block approval", "エラーは承認を妨げます") : <LocalizedText text="warning(s) are advisory and do not block workflow." />}</span></div>
+        {workspace.validationIssues.length ? <ul className="est-issue-list">{[...errors, ...warnings].slice(0, 3).map((issue, index) => <li key={`${issue.code}-${issue.entityId}-${index}`} className={isCriticalValidationIssue(issue) ? "err" : "warn"}>
+          <span>{estimateIssueMessage(issue, currentLocale())}</span><button className="link-btn" type="button" onClick={() => onOpenTab("validation")}>{copy("ดู", "View", "表示")}</button>
+        </li>)}</ul> : null}
+      </Panel>
+      <Panel title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")} actions={erpUnclassified === 0 ? <Badge tone="green"><span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span></Badge> : erpUnclassified ? <Badge tone="amber"><span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span></Badge> : undefined}>
+        <p className="est-review-text">{erpUnclassified === 0
+          ? copy(`ทุกบรรทัดรวม Contingency อยู่ในหมวดแล้ว · ยอดบนใบ ${formatMoney(total)} ตรงกับ Estimate`, `Every line, contingency included, has a category · the sheet totals ${formatMoney(total)}, as the estimate does`, `予備費を含む全行が分類済み · 合計 ${formatMoney(total)} は見積と一致`)
+          : copy("ผู้ตรวจจัดหมวดและรวมบรรทัดได้ระหว่างตรวจทาน · ยอดเงินไม่เปลี่ยน", "The reviewer may classify and merge lines during review · amounts do not change", "レビュー中も分類とまとめが可能 · 金額は変わりません")}</p>
+        {sheetOpen ? <p className="muted est-review-text">{copy("ใบจัดหมวดเปิดอยู่ด้านล่าง", "The sheet is open below", "シートは下に表示中")}</p>
+          : <button className="btn default block" type="button" onClick={onOpenSheet}>{copy("เปิดใบจัดหมวด ERP", "Open the ERP sheet", "ERPシートを開く")}<Icon name="arrowRight" /></button>}
+      </Panel>
+      <Panel title={copy("ประวัติ Revision", "Revision history", "改訂履歴")} actions={viewAll("revision")} flush>
+        <ul className="est-rev-list">
+          <li><div className="est-rev-line"><span className="pill blue">{revisionCode(header.revision)}</span><Badge tone="blue"><span>{copy("ปัจจุบัน", "Current", "現行")}</span></Badge><Badge tone={currentStatus.tone}><span>{currentStatus.label}</span></Badge><strong className="num">{formatMoney(total)}</strong></div>
+            <span className="muted">{copy(`แก้ล่าสุด ${formatDate(header.updatedAt)} · ${header.ownerName}`, `Last changed ${formatDate(header.updatedAt)} · ${header.ownerName}`, `最終更新 ${formatDate(header.updatedAt)} · ${header.ownerName}`)}</span></li>
+          {revisions.map((entry) => { const view = revisionStatusView(entry, header.revision); return <li key={entry.id}><div className="est-rev-line"><span className="pill">{entry.code || revisionCode(entry.revision)}</span><Badge tone={view.tone}><span>{view.label}</span></Badge><strong className="num">{formatMoney(entry.total)}</strong></div>
+            <span className="muted">{[entry.reviewedByName, entry.reviewedAt ? formatDate(entry.reviewedAt) : ""].filter(Boolean).join(" · ") || formatDate(entry.createdAt)}</span></li>; })}
+        </ul>
+      </Panel>
+    </div>
   </section>;
 }
 

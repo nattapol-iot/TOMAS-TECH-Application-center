@@ -1421,10 +1421,14 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   // Contingency has no row on the sheet and still has to reach the file, or it stops adding up.
   assert.match(exportBlock, /sourceType === "Contingency"/);
   // The ERP sheet is now the only primary summary; secondary workflows remain available.
-  assert.match(screens, /hidden=\{tab !== "summary"\}><EstimateErpSheetPanel/);
+  // Always mounted, so an unsaved classification survives a tab switch; in review it opens under the reviewer's overview.
+  assert.match(screens, /hidden=\{!onSummary \|\| \(inReview && !sheetOpen\)\}><EstimateErpSheetPanel/);
   assert.doesNotMatch(screens, /id: "erp"|<EstimateErpSummaryPanel/);
   // They are tabs now, visible on every estimate, rather than entries in a "More" menu.
-  for (const id of ["assignment", "validation", "revision", "review"]) assert.ok(screens.includes(`{ id: "${id}", label: copy(`), `the ${id} tab is missing from the workspace tabs`);
+  for (const id of ["assignment", "validation", "revision"]) assert.ok(screens.includes(`{ id: "${id}", label: copy(`), `the ${id} tab is missing from the workspace tabs`);
+  // The reviewer's overview is the summary while an estimate is in review; "review" links land there.
+  assert.match(screens, /onSummary && inReview \? <EstimateReviewSummary/);
+  assert.match(screens, /const onSummary = tab === "summary" \|\| tab === "review";/);
   assert.match(sheet, /classify\(\[\.\.\.selected\], bulkCategory\)/);
   assert.match(sheet, /visibleRows\.map/);
 });
