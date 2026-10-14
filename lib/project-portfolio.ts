@@ -15,6 +15,25 @@ export type PortfolioRow = {
 /** Worst first: the order the portfolio opens in and the order of the health bar. */
 export const PORTFOLIO_HEALTH_ORDER: readonly PortfolioHealth[] = ["Delayed", "At Risk", "No plan", "On Track", "On Hold", "Completed"];
 
+/** The teams a project belongs to (owner, 2026-10-14). */
+export const PROJECT_TEAMS = ["IoT Team", "Mechanical Team", "Application Team"] as const;
+
+/**
+ * The team a department, or a team stored before the list above, belongs to; "" when it names none.
+ * Electrical work sits with the IoT team, as in dbo.department_teams. Older projects stored the
+ * lead engineer's department ("IoT Engineer Dept."), so they read as their team without a data change.
+ */
+export function projectTeamOf(text: string | null | undefined): string {
+  const value = (text ?? "").toLowerCase();
+  if (value.includes("application")) return "Application Team";
+  if (value.includes("mechanic")) return "Mechanical Team";
+  if (/\biot\b/.test(value) || value.includes("electric")) return "IoT Team";
+  return "";
+}
+
+/** A project's team as shown and filtered: one of PROJECT_TEAMS, or the stored text when it names none. */
+export const shownProjectTeam = (team: string | null | undefined): string => projectTeamOf(team) || (team ?? "").trim();
+
 export const PORTFOLIO_SORT_KEYS = ["health", "number", "name", "pm", "target", "slip", "progress", "lastUpdate"] as const;
 export type PortfolioSortKey = (typeof PORTFOLIO_SORT_KEYS)[number];
 export type PortfolioSort = { key: PortfolioSortKey; direction: "asc" | "desc" };
@@ -128,7 +147,7 @@ export const EMPTY_PORTFOLIO_FILTERS: PortfolioFilters = { search: "", managerId
 export function scopePortfolio<T extends PortfolioRow>(rows: readonly T[], filters: PortfolioFilters): T[] {
   return rows.filter((row) => matchesPortfolioSearch(row, filters.search)
     && (filters.managerId === null || row.managerId === filters.managerId)
-    && (filters.team === null || (row.team ?? "") === filters.team)
+    && (filters.team === null || shownProjectTeam(row.team) === filters.team)
     && (filters.mineUserId === null || row.managerId === filters.mineUserId || row.leadEngineerId === filters.mineUserId)
     && (filters.status === null || row.status === filters.status));
 }

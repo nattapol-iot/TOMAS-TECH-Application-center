@@ -67,3 +67,26 @@ test("projects without an estimate still appear in the cost report and on the CR
   assert.match(customers, /FROM dbo\.projects p LEFT JOIN dbo\.inquiries i ON i\.id=p\.inquiry_id/);
   assert.match(analytics, /report\.project\.estimateNumber \? `Estimate \$\{report\.project\.estimateNumber\}` : uiText\("Project without an estimate"\)/);
 });
+
+test("a project belongs to one of three teams, and older department names read as their team", async () => {
+  const { PROJECT_TEAMS, projectTeamOf, shownProjectTeam, scopePortfolio, EMPTY_PORTFOLIO_FILTERS } = await import("../lib/project-portfolio.ts");
+  assert.deepEqual([...PROJECT_TEAMS], ["IoT Team", "Mechanical Team", "Application Team"]);
+  assert.equal(projectTeamOf("IoT Engineer Dept."), "IoT Team");
+  assert.equal(projectTeamOf("Electrical Engineer Dept."), "IoT Team", "electrical work sits with IoT");
+  assert.equal(projectTeamOf("Mechanical Engineer Dept."), "Mechanical Team");
+  assert.equal(projectTeamOf("Application Engineer Dept. 2G"), "Application Team");
+  assert.equal(projectTeamOf("System Architect & System Engineer Dept."), "");
+  assert.equal(shownProjectTeam("Application Team"), "Application Team");
+  assert.equal(shownProjectTeam(" Sales "), "Sales", "a team naming none of the three is kept as typed");
+  const rows = [{ team: "IoT Engineer Dept." }, { team: "IoT Team" }, { team: "Mechanical Team" }, { team: null }]
+    .map((row, index) => ({ ...row, id: index, number: `P${index}`, name: "", customerName: "", managerId: 1, leadEngineerId: 2, status: "Design" }));
+  assert.deepEqual(scopePortfolio(rows, { ...EMPTY_PORTFOLIO_FILTERS, team: "IoT Team" }).map((row) => row.id), [0, 1]);
+});
+
+test("the team select offers the three teams and the dialogs default to the lead engineer's team", async () => {
+  const [fields, screens] = await Promise.all([source("app/system/production/ProjectPlanFields.tsx"), source("app/system/production/CoreScreens.tsx")]);
+  assert.match(fields, /return \[\.\.\.PROJECT_TEAMS, \.\.\.\(kept && !\(PROJECT_TEAMS as readonly string\[\]\)\.includes\(kept\) \? \[kept\] : \[\]\)\];/);
+  assert.equal(screens.match(/const departments = projectTeamOptions\(form\.department\);/g)?.length, 2, "Create and Edit project");
+  assert.match(screens, /const departmentOf = \(userId: number\) => projectTeamOf\(bootstrap\.team\.find\(member => member\.id === userId\)\?\.department\);/);
+  assert.match(screens, /department: shownProjectTeam\(project\.team\),/);
+});

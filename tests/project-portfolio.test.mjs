@@ -128,7 +128,7 @@ test("the health bar ignores its own filter and the chips ignore theirs", () => 
     row({ id: 2, number: "B", health: "Delayed", overdueCount: 0, managerId: 10 }),
     row({ id: 3, number: "C", health: "At Risk", overdueCount: 1, managerId: 10 }),
     row({ id: 4, number: "D", health: "On Track", overdueCount: 0, managerId: 11, leadEngineerId: 10 }),
-    row({ id: 5, number: "E", health: "On Track", overdueCount: 3, managerId: 12, leadEngineerId: 13, team: "Electrical" }),
+    row({ id: 5, number: "E", health: "On Track", overdueCount: 3, managerId: 12, leadEngineerId: 13, team: "Mechanical Engineer Dept." }),
   ];
   const all = portfolioView(rows, EMPTY_PORTFOLIO_FILTERS, NOW);
   assert.equal(all.barTotal, 5);
@@ -149,7 +149,8 @@ test("the health bar ignores its own filter and the chips ignore theirs", () => 
   const mine = portfolioView(rows, { ...EMPTY_PORTFOLIO_FILTERS, mineUserId: 10 }, NOW);
   assert.deepEqual(mine.rows.map((item) => item.number), ["A", "B", "C", "D"], "Mine is projects I manage or lead");
   assert.deepEqual(portfolioView(rows, { ...EMPTY_PORTFOLIO_FILTERS, managerId: 12 }, NOW).rows.map((item) => item.number), ["E"]);
-  assert.deepEqual(portfolioView(rows, { ...EMPTY_PORTFOLIO_FILTERS, team: "Electrical" }, NOW).rows.map((item) => item.number), ["E"]);
+  // A project reads as one of the three teams, whatever department name it was saved with.
+  assert.deepEqual(portfolioView(rows, { ...EMPTY_PORTFOLIO_FILTERS, team: "Mechanical Team" }, NOW).rows.map((item) => item.number), ["E"]);
   assert.deepEqual(portfolioView(rows, { ...EMPTY_PORTFOLIO_FILTERS, status: "Design" }, NOW).rows, []);
   assert.deepEqual(portfolioView(rows, { ...EMPTY_PORTFOLIO_FILTERS, search: "e" }, NOW).rows.map((item) => item.number), ["A", "B", "C", "D", "E"]);
 });

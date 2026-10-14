@@ -71,10 +71,10 @@ import { listPendingDayRequests, listProjectOverview, type PendingDayRequest, ty
 import { ProjectPortfolioGantt } from "./ProjectPortfolioGantt";
 import { useActivitySubView } from "../use-activity-presence";
 import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFOLIO_SORT_KEYS, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
-  type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
+  projectTeamOf, shownProjectTeam, type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
-import { ContactPicker, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, useDepartments,
+import { ContactPicker, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
   type MasterPlanDraft, type TeamPlanDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -983,7 +983,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const canDelete = (project: ProjectSummary) => canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
   const items = useMemo(() => overview?.items ?? [], [overview]);
   const managers = useMemo(() => [...new Map(items.map((item) => [item.managerId, item.managerName] as const)).entries()].sort((a, b) => a[1].localeCompare(b[1])), [items]);
-  const teams = useMemo(() => [...new Set(items.map((item) => item.team ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
+  const teams = useMemo(() => [...new Set(items.map((item) => shownProjectTeam(item.team)).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
   // The PM and team lists come from the loaded rows, so a reload can drop the chosen value; Closed
   // means nothing while closed projects are not loaded. The filter and the controls use these.
   const managerIds = useMemo(() => managers.map(([id]) => id), [managers]);
@@ -1093,7 +1093,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
           <td><strong className="mono">{item.number}</strong></td>
           <td className="portfolio-col-project"><div className="portfolio-project">
             {openProjectSchedule ? <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}><strong>{item.name}</strong></button> : <strong>{item.name}</strong>}
-            <small className="muted">{customerLine}{item.team ? ` · ${item.team}` : ""}</small>
+            <small className="muted">{customerLine}{item.team ? ` · ${shownProjectTeam(item.team)}` : ""}</small>
           </div></td>
           <td className="portfolio-col-pm">{item.managerName}</td>
           <td>{item.targetDelivery ? formatDate(item.targetDelivery) : "—"}</td>
@@ -1264,11 +1264,11 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     actualDelivery: project.actualDelivery ?? "",
     site: project.site ?? "",
     remark: project.remark ?? "",
-    department: project.team ?? "",
+    department: shownProjectTeam(project.team),
     paymentsReceived: project.paymentsReceived ?? [],
     contactIds: project.contactIds ?? [],
   });
-  const departments = useDepartments(bootstrap, form.department);
+  const departments = projectTeamOptions(form.department);
   const [plan, setPlan] = useState<{ snapshot: PlanSnapshot; initial: string } | null>(null);
   const [planError, setPlanError] = useState("");
   const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
@@ -1550,9 +1550,9 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
   const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
   useEffect(() => { let cancelled = false; void listScheduleTemplates().then(items => { if (!cancelled) setTemplates(items); }).catch(() => undefined); return () => { cancelled = true; }; }, []);
-  const departments = useDepartments(bootstrap, form.department);
-  // The team defaults to the lead engineer's department until someone picks one.
-  const departmentOf = (userId: number) => bootstrap.team.find(member => member.id === userId)?.department.trim() ?? "";
+  const departments = projectTeamOptions(form.department);
+  // The team defaults to the lead engineer's team (from their department) until someone picks one.
+  const departmentOf = (userId: number) => projectTeamOf(bootstrap.team.find(member => member.id === userId)?.department);
   const [inheritEndUser, setInheritEndUser] = useState(true);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -1571,7 +1571,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       const lead=data.people.find(member=>member.canLead&&member.id===first?.ownerId)?.id??0;
       setForm(current=>({...current,estimateId:current.estimateId||first?.id||0,
         managerId:current.managerId||data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id||0,
-        leadEngineerId:current.leadEngineerId||lead,department:current.department||(lead?bootstrap.team.find(member=>member.id===lead)?.department.trim()??"":""),
+        leadEngineerId:current.leadEngineerId||lead,department:current.department||(lead?projectTeamOf(bootstrap.team.find(member=>member.id===lead)?.department):""),
         site:current.site||first?.siteLocation||"",targetDelivery:first?.targetDelivery||current.targetDelivery,
         purchaseOrderNumber:current.purchaseOrderNumber||first?.purchaseOrderNumber||"",purchaseOrderDate:first?.purchaseOrderDate||current.purchaseOrderDate}));
       // Nothing approved to start from: someone allowed to go without an estimate starts there.

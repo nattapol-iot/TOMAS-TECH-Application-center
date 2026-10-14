@@ -15,6 +15,7 @@ import { useT } from "../i18n";
 import { Badge, Icon } from "../ui";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
+import { PROJECT_TEAMS } from "../../../lib/project-portfolio";
 
 /*
  * The parts of a project that Create project and Edit project share: its Master Plan, who
@@ -103,9 +104,10 @@ export function TeamPlanSection({ rows, onChange, people }: { rows: TeamPlanDraf
   </section>;
 }
 
-/** Departments as the employee directory spells them, so a team is picked, not typed. */
-export function useDepartments(bootstrap: BootstrapData, current?: string | null): string[] {
-  return useMemo(() => [...new Set([...bootstrap.team.map(member => member.department.trim()), current?.trim() ?? ""].filter(Boolean))].sort((a, b) => a.localeCompare(b)), [bootstrap.team, current]);
+/** The three project teams, picked rather than typed, plus a stored team that names none of them so it is not lost. */
+export function projectTeamOptions(current?: string | null): string[] {
+  const kept = current?.trim() ?? "";
+  return [...PROJECT_TEAMS, ...(kept && !(PROJECT_TEAMS as readonly string[]).includes(kept) ? [kept] : [])];
 }
 
 export function TeamSelect({ value, onChange, departments }: { value: string; onChange: (value: string) => void; departments: string[] }) {
