@@ -155,9 +155,13 @@ export async function validateScheduleVersion(transaction: TransactionType, proj
   if (!current) { if (!expected) return; throw concurrency(); }
   if (!expected || !current.equals(parseRowVersion(expected))) throw concurrency();
 }
-export async function replacePics(transaction: TransactionType, taskId: number, ids: number[]): Promise<void> {
+/** Replaces a row's PICs and returns who was not a PIC before, so the caller can tell them (project-notices.ts). */
+export async function replacePics(transaction: TransactionType, taskId: number, ids: number[]): Promise<number[]> {
+  const before = new sql.Request(transaction); before.input("task", sql.BigInt, taskId);
+  const existing = new Set((await before.query<{ user_id: number | string }>(`SELECT user_id FROM dbo.schedule_task_pics WHERE task_id=@task;`)).recordset.map((row) => Number(row.user_id)));
   const remove = new sql.Request(transaction); remove.input("task", sql.BigInt, taskId); await remove.query(`DELETE FROM dbo.schedule_task_pics WHERE task_id=@task;`);
   for (const id of ids) { const insert = new sql.Request(transaction); insert.input("task", sql.BigInt, taskId); insert.input("user", sql.BigInt, id); await insert.query(`INSERT INTO dbo.schedule_task_pics(task_id,user_id) VALUES(@task,@user);`); }
+  return [...new Set(ids)].filter((id) => !existing.has(id));
 }
 export async function validatePics(transaction: TransactionType, project: ProjectRow, ids: number[]): Promise<void> {
   for (const id of ids) { const request = new sql.Request(transaction); request.input("user", sql.BigInt, id); request.input("manager", sql.BigInt, project.managerId); request.input("project", sql.BigInt, project.id);

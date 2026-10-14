@@ -1251,6 +1251,8 @@ button.kpi:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); tra
 /* Create project: master plan and team rows, one line each like a small schedule sheet. */
 .project-create { display: flex; flex-direction: column; gap: 14px; }
 .project-create > p { margin: 0; }
+/* A failed save, beside the buttons the person just pressed; the form keeps what they typed. */
+.project-create-error { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--red-text); font-size: var(--fs-sm); }
 .project-plan { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .project-plan-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .project-plan-head h3 { font-size: var(--fs-sm); font-weight: 650; color: var(--ink); }

@@ -53,6 +53,36 @@ export type SiteMonitorEmail = {
   recipients: EmailRecipient[];
 };
 
+/** One person on a new project: their role on it and the plan rows they were given at creation. */
+export type ProjectCreatedEmail = {
+  projectId: number;
+  projectNumber: string;
+  projectName: string;
+  customerName: string;
+  managerName: string;
+  leadEngineerName: string;
+  startDate: string;
+  targetDelivery: string;
+  createdBy: string;
+  /** "Project Manager", "Lead Engineer" or "Member". */
+  role: string;
+  tasks: { name: string; start: string; finish: string }[];
+  recipients: EmailRecipient[];
+};
+
+/** Someone became a PIC of a project plan row (Project Plan, team plan or an approved Resource Plan task). */
+export type ProjectTaskAssignmentEmail = {
+  projectId: number;
+  projectNumber: string;
+  projectName: string;
+  taskId: number;
+  taskName: string;
+  start: string;
+  finish: string;
+  assignedBy: string;
+  recipients: EmailRecipient[];
+};
+
 type FetchLike = typeof fetch;
 
 function escapeHtml(value: string): string {
@@ -103,6 +133,38 @@ export class EmailService {
       + `<tr><td><strong>Priority</strong></td><td>${escapeHtml(message.priority)}</td></tr>`
       + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
       + `<p><a href="${escapeHtml(appUrl)}#inquiry/${message.inquiryId}">เปิด Inquiry ${escapeHtml(message.inquiryNumber)} / Open this inquiry</a></p>`);
+  }
+
+  // Sent once per person after a project is created: its manager, lead engineer and everyone on the
+  // team plan, never the person who created it. projects.ts writes the matching bell row in the
+  // creation transaction, so the bell still tells them when mail is off or Graph fails.
+  async sendProjectCreated(message: ProjectCreatedEmail): Promise<EmailDeliveryResult> {
+    const tasks = message.tasks.length === 0 ? "" :
+      `<p><strong>งานของคุณในแผน / Your rows in the plan</strong></p><table>${message.tasks.map((task) =>
+        `<tr><td>${escapeHtml(task.name)}</td><td>${escapeHtml(task.start)} – ${escapeHtml(task.finish)}</td></tr>`).join("")}</table>`;
+    return this.sendMail(message.recipients, `[Engineering Center] Project ${message.projectNumber}: ${message.projectName}`, (appUrl) =>
+      `<p>มี Project ใหม่ที่คุณอยู่ในทีม / A new project has been created with you on the team.</p>`
+      + `<table><tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
+      + `<tr><td><strong>Your role</strong></td><td>${escapeHtml(message.role)}</td></tr>`
+      + `<tr><td><strong>Project manager</strong></td><td>${escapeHtml(message.managerName)}</td></tr>`
+      + `<tr><td><strong>Lead engineer</strong></td><td>${escapeHtml(message.leadEngineerName)}</td></tr>`
+      + `<tr><td><strong>Start – target delivery</strong></td><td>${escapeHtml(message.startDate)} – ${escapeHtml(message.targetDelivery)}</td></tr>`
+      + `<tr><td><strong>Created by</strong></td><td>${escapeHtml(message.createdBy)}</td></tr></table>`
+      + tasks
+      + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}">เปิดแผนงาน Project ${escapeHtml(message.projectNumber)} / Open the project plan</a></p>`);
+  }
+
+  // A plan row given to someone other than the person assigning it. project-notices.ts writes the
+  // bell row in the same transaction as the assignment and hands this message back to send after commit.
+  async sendProjectTaskAssignment(message: ProjectTaskAssignmentEmail): Promise<EmailDeliveryResult> {
+    return this.sendMail(message.recipients, `[Engineering Center] Assigned: ${message.projectNumber} · ${message.taskName}`, (appUrl) =>
+      `<p>คุณได้รับมอบหมายงานใน Project / You have been assigned a project task.</p>`
+      + `<table><tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Task</strong></td><td>${escapeHtml(message.taskName)}</td></tr>`
+      + `<tr><td><strong>Plan</strong></td><td>${escapeHtml(message.start)} – ${escapeHtml(message.finish)}</td></tr>`
+      + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
+      + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}/task/${message.taskId}">เปิดงานนี้ใน Project ${escapeHtml(message.projectNumber)} / Open this task</a></p>`);
   }
 
   // Fires for a ticket being created, commented on, (re)assigned, or changing status --

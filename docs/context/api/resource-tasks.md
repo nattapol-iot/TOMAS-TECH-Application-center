@@ -2,29 +2,31 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c91268be`; generated, do not edit. [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `f58ab5c6`; generated, do not edit. [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/resource-tasks/commitments` | 38–42 |
-| GET | `/api/v1/resource-tasks/sources` | 44–54 |
-| GET | `/api/v1/resource-tasks` | 55–68 |
-| POST | `/api/v1/resource-tasks/preview` | 69–80 |
-| POST | `/api/v1/resource-tasks` | 81–94 |
-| POST | `/api/v1/resource-tasks/:id/:action` | 95–154 |
+| GET | `/api/v1/resource-tasks/commitments` | 40–44 |
+| GET | `/api/v1/resource-tasks/sources` | 46–56 |
+| GET | `/api/v1/resource-tasks` | 57–70 |
+| POST | `/api/v1/resource-tasks/preview` | 71–82 |
+| POST | `/api/v1/resource-tasks` | 83–96 |
+| POST | `/api/v1/resource-tasks/:id/:action` | 97–160 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerResourceTaskRoutes` | [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>) | 13–155 |
+| `registerResourceTaskRoutes` | [backend-node/src/routes/resource-tasks.ts](<../../../backend-node/src/routes/resource-tasks.ts>) | 15–161 |
 
 ## Direct local dependencies
 
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
+- [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
+- [backend-node/src/project-notices.ts](<../../../backend-node/src/project-notices.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)

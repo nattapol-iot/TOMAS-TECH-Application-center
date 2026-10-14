@@ -1112,7 +1112,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
         : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
     </Panel>
     {closingProject ? <CloseProjectModal project={closingProject} busy={stageBusy !== null} onClose={() => setClosingProject(null)} onConfirm={(actualDelivery) => { void saveStage(closingProject, "Closed", actualDelivery); }} /> : null}
-    {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} · ${uiText("Portfolio.created")}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
+    {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number, deliveryNote) => { setCreateOpen(false); notify(`${number} · ${uiText("Portfolio.created")}${deliveryNote}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
     {endUserProject ? <EndUserEditModal kind="projects" record={endUserProject} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserProject(null)} onSaved={load} reloadRecord={async () => { const page = await listProjects({ search: endUserProject.number, pageSize: 100 }); const latest = page.items.find((item) => item.id === endUserProject.id); if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable"); return latest; }} /> : null}
     {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
     {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
@@ -1527,16 +1527,25 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
 
 // Only estimates whose CRM opportunity is WON; the order evidence arrives as the suggested PO.
 type ProjectEstimateOption = {id:number;number:string;projectName:string;customerId:number;ownerId:number;siteLocation:string;targetDelivery:string;opportunityNo:string;purchaseOrderNumber:string;purchaseOrderDate:string};
+type ProjectCreationOptions = { estimates: ProjectEstimateOption[]; people: {id:number;name:string;canManage:boolean;canLead:boolean}[]; canCreateWithoutEstimate?: boolean };
+// The same list the estimate screens offer, so a project without an estimate reads like one with.
+const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Mechanical", "Robot", "AMR", "Auto Warehouse", "WMS", "WCS", "Traceability", "Vision", "Data Collection", "Other"];
 
-export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCreated, initialEstimateId }: { initialEstimateId?: number; bootstrap: BootstrapData; refreshBootstrap: () => Promise<void>; notify: (message: string) => void; onClose: () => void; onCreated: (number: string) => Promise<void> }) {
-  const [options, setOptions] = useState<{estimates: ProjectEstimateOption[]; people: {id:number;name:string;canManage:boolean;canLead:boolean}[]}>({estimates:[],people:[]});
+/*
+ * A project starts from an approved estimate on a WON order, or -- for the Application team, PMs and
+ * Admins -- without one, naming its customer, name and type here. A failed save keeps everything typed:
+ * its error sits beside the buttons, and the options load only fills fields nobody has filled yet.
+ */
+export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCreated, initialEstimateId }: { initialEstimateId?: number; bootstrap: BootstrapData; refreshBootstrap: () => Promise<void>; notify: (message: string) => void; onClose: () => void; onCreated: (number: string, deliveryNote: string) => Promise<void> }) {
+  const [options, setOptions] = useState<ProjectCreationOptions>({estimates:[],people:[]});
   const managers = options.people.filter(member=>member.canManage);
   const engineers = options.people.filter(member=>member.canLead);
   const estimates = initialEstimateId ? options.estimates.filter(item=>item.id===initialEstimateId) : options.estimates;
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const t = useUiText();
-  const [form, setForm] = useState<CreateProjectInput>({ projectNumber: "", estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "", department: "", paymentsReceived: [], contactIds: [] });
+  const [form, setForm] = useState<CreateProjectInput>({ projectNumber: "", estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "", department: "", paymentsReceived: [], contactIds: [], customerId: 0, projectName: "", projectType: "" });
+  const [withoutEstimate, setWithoutEstimate] = useState(false);
   const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
   const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
   const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
@@ -1546,67 +1555,97 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const departmentOf = (userId: number) => bootstrap.team.find(member => member.id === userId)?.department.trim() ?? "";
   const [inheritEndUser, setInheritEndUser] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  // Defaults land once. The options load again on "Try again" and when the bootstrap refreshes (a new
+  // end user company), and must never clear an estimate, lead engineer or site someone already chose.
+  const defaultsApplied = useRef(false);
   useEffect(() => {
     let cancelled=false;
-    void apiRequest<typeof options>("/api/v1/projects/creation-options").then(data=>{
+    void apiRequest<ProjectCreationOptions>("/api/v1/projects/creation-options").then(data=>{
       if(cancelled)return;
-      setOptions(data);
+      setOptions(data); setLoadError("");
+      if(defaultsApplied.current)return;
+      defaultsApplied.current=true;
       const first=initialEstimateId ? data.estimates.find(item=>item.id===initialEstimateId) : undefined;
       const lead=data.people.find(member=>member.canLead&&member.id===first?.ownerId)?.id??0;
-      setForm(current=>({...current,estimateId:first?.id??0,
-        managerId:data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id??0,
-        leadEngineerId:lead,department:current.department||(lead?bootstrap.team.find(member=>member.id===lead)?.department.trim()??"":""),
-        site:first?.siteLocation??"",targetDelivery:first?.targetDelivery||current.targetDelivery,
-        purchaseOrderNumber:first?.purchaseOrderNumber??current.purchaseOrderNumber,purchaseOrderDate:first?.purchaseOrderDate||current.purchaseOrderDate}));
-    }).catch(error=>{if(!cancelled)setError(toError(error));}).finally(()=>{if(!cancelled)setLoadingOptions(false);});
+      setForm(current=>({...current,estimateId:current.estimateId||first?.id||0,
+        managerId:current.managerId||data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id||0,
+        leadEngineerId:current.leadEngineerId||lead,department:current.department||(lead?bootstrap.team.find(member=>member.id===lead)?.department.trim()??"":""),
+        site:current.site||first?.siteLocation||"",targetDelivery:first?.targetDelivery||current.targetDelivery,
+        purchaseOrderNumber:current.purchaseOrderNumber||first?.purchaseOrderNumber||"",purchaseOrderDate:first?.purchaseOrderDate||current.purchaseOrderDate}));
+      // Nothing approved to start from: someone allowed to go without an estimate starts there.
+      if(!initialEstimateId&&!data.estimates.length&&data.canCreateWithoutEstimate)setWithoutEstimate(true);
+    }).catch(error=>{if(!cancelled)setLoadError(toError(error));}).finally(()=>{if(!cancelled)setLoadingOptions(false);});
     return()=>{cancelled=true;};
   }, [initialEstimateId, bootstrap.user.id, bootstrap.team, optionsRevision]);
-  const selectedEstimate = estimates.find(item=>item.id===form.estimateId);
-  const customer = bootstrap.customers.find(item=>item.id===selectedEstimate?.customerId);
+  const standalone = withoutEstimate && !initialEstimateId;
+  const selectedEstimate = standalone ? undefined : estimates.find(item=>item.id===form.estimateId);
+  const customerId = standalone ? form.customerId ?? 0 : selectedEstimate?.customerId ?? 0;
+  const customer = bootstrap.customers.find(item=>item.id===customerId);
+  const canChooseSource = !initialEstimateId && Boolean(options.canCreateWithoutEstimate);
   // With plan rows the project runs from the first row to the last, so its dates are not typed twice.
   const planned = masterPlan.length + teamPlan.length > 0;
   const span = planSpanOf(masterPlan, teamPlan);
   const planIssues = planIssuesOf(t, masterPlan, teamPlan);
   const missingFields = [
-    !form.estimateId ? "Approved estimate *" : "", !form.projectNumber.trim() ? "CRM.projectNoFromErp" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
+    ...(standalone ? [!form.customerId ? "Customer *" : "", !form.projectName?.trim() ? "Project name *" : "", !form.projectType ? "Project type *" : ""]
+      : [!form.estimateId ? "Approved estimate *" : ""]),
+    !form.projectNumber.trim() ? "CRM.projectNoFromErp" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
     !form.purchaseOrderDate ? "PO date *" : "", !form.managerId ? "Project manager *" : "", !form.leadEngineerId ? "Lead engineer *" : "",
     !planned && !form.startDate ? "Start date *" : "", !planned && !form.targetDelivery ? "Target delivery *" : "", !form.site.trim() ? "Site *" : "",
   ].filter(Boolean);
   const datesInvalid = planned ? !span : !form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate;
-  const submit = async () => { setBusy(true); setError(""); try {
-    const input: CreateProjectInput = { ...form, projectNumber: form.projectNumber.trim(), startDate: span?.start ?? form.startDate, targetDelivery: span?.finish ?? form.targetDelivery,
-      department: form.department?.trim() || null, ...planPayload(masterPlan, teamPlan) };
-    if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null;
-    const created = await createProject(input); await onCreated(created.number); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
-  return <Modal title="Create project" subtitle="CRM.projectGate" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}><div className="project-create">
-    {error ? <LoadError message={t(error)} retry={() => { setError("");setLoadingOptions(true);setOptionsRevision(value=>value+1); }} /> : null}
-    {loadingOptions?<p role="status">{t("CRM.loading")}</p>:!estimates.length?<p className="alert warn">{t("CRM.noEligibleEstimate")}</p>:initialEstimateId&&!estimates.some(e=>e.id===initialEstimateId)?<p className="alert warn">{t("CRM.sourceUnavailable")}</p>:null}
+  const update = (patch: Partial<CreateProjectInput>) => { setSaveError(""); setForm(current => ({ ...current, ...patch })); };
+  const submit = async () => { setBusy(true); setSaveError(""); try {
+    const { customerId: chosenCustomer, projectName, projectType, estimateId, ...shared } = form;
+    const input: CreateProjectInput = { ...shared, projectNumber: form.projectNumber.trim(), startDate: span?.start ?? form.startDate, targetDelivery: span?.finish ?? form.targetDelivery,
+      department: form.department?.trim() || null, ...planPayload(masterPlan, teamPlan),
+      ...(standalone ? { withoutEstimate: true, customerId: chosenCustomer, projectName: projectName?.trim(), projectType } : { estimateId }) };
+    if (standalone) input.endUserCustomerId = form.endUserCustomerId ?? null;
+    else if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null;
+    const created = await createProject(input); await onCreated(created.number, assignmentDeliveryNote(created.notification)); } catch (requestError) { setSaveError(toError(requestError)); } finally { setBusy(false); } };
+  return <Modal title="Create project" subtitle={standalone ? "CRM.projectGateWithoutEstimate" : "CRM.projectGate"} size="xl" onClose={onClose} footer={<>
+    {saveError ? <span className="project-create-error" role="alert"><Icon name="alertTriangle" /><span>{t(saveError)}</span></span> : <span className="spacer" />}
+    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}><div className="project-create">
+    {loadError ? <LoadError message={t(loadError)} retry={() => { setLoadError("");setLoadingOptions(true);setOptionsRevision(value=>value+1); }} /> : null}
+    {canChooseSource ? <div className="seg-control" role="group" aria-label={t("CRM.projectSource")}>
+      <button type="button" className={standalone ? "" : "on"} aria-pressed={!standalone} disabled={busy} onClick={() => { setSaveError(""); setWithoutEstimate(false); }}>{t("CRM.projectFromEstimate")}</button>
+      <button type="button" className={standalone ? "on" : ""} aria-pressed={standalone} disabled={busy} onClick={() => { setSaveError(""); setWithoutEstimate(true); }}>{t("CRM.projectWithoutEstimate")}</button>
+    </div> : null}
+    {loadingOptions?<p role="status">{t("CRM.loading")}</p>:standalone?null:!estimates.length?<p className="alert warn">{t("CRM.noEligibleEstimate")}</p>:initialEstimateId&&!estimates.some(e=>e.id===initialEstimateId)?<p className="alert warn">{t("CRM.sourceUnavailable")}</p>:null}
     {!loadingOptions&&(missingFields.length||planIssues.length)?<p role="status">{t("CRM.missingProjectFields")}: {[...missingFields.map(field=>t(field)), ...planIssues].join(", ")}</p>:null}
     <div className="form-grid">
-      <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));const lead=engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0;setForm((current) => ({ ...current, estimateId:Number(event.target.value),leadEngineerId:lead,department:current.department||departmentOf(lead),site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||current.targetDelivery,purchaseOrderNumber:estimate?.purchaseOrderNumber??"",purchaseOrderDate:estimate?.purchaseOrderDate||today(),contactIds:[] }));}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.opportunityNo} · {item.number} — {item.projectName}</option>)}</select></label>
-      <div className="field span-2"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
-      <label className="field"><span>{t("CRM.projectNoFromErp")}</span><input required maxLength={30} autoComplete="off" placeholder={t("CRM.projectNoPlaceholder")} value={form.projectNumber} onChange={(event) => setForm((current) => ({ ...current, projectNumber: event.target.value }))} /></label>
-      <div className="field span-2"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>
-      <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => setForm((current) => ({ ...current, department }))} />
-      <label className="field"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => setForm((current) => ({ ...current, managerId: Number(event.target.value) }))}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => { const lead = Number(event.target.value); setForm((current) => ({ ...current, leadEngineerId: lead, department: current.department || departmentOf(lead) })); }}><option value={0}>{t("CRM.selectLeadEngineer")}</option>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderNumber: event.target.value }))} /></label>
-      <label className="field"><span><LocalizedText text={"PO date *"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => setForm((current) => ({ ...current, purchaseOrderDate: event.target.value }))} /></label>
-      <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => setForm((current) => ({ ...current, site: event.target.value }))} /></label>
+      {standalone ? <>
+        <label className="field span-2"><span><LocalizedText text={"Customer *"} /></span><select disabled={busy} value={form.customerId ?? 0} onChange={(event) => update({ customerId: Number(event.target.value), contactIds: [], endUserCustomerId: null })}><option value={0}>{t("CRM.selectCustomer")}</option>{bootstrap.customers.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
+        <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.projectName ?? ""} onChange={(event) => update({ projectName: event.target.value })} /></label>
+        <label className="field"><span><LocalizedText text={"Project type *"} /></span><select disabled={busy} value={form.projectType ?? ""} onChange={(event) => update({ projectType: event.target.value })}><option value="">{t("CRM.selectProjectType")}</option>{PROJECT_TYPES.map((type) => <option key={type} value={type}>{t(type)}</option>)}</select></label>
+      </> : <>
+        <label className="field span-2"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));const lead=engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0;update({ estimateId:Number(event.target.value),leadEngineerId:lead,department:form.department||departmentOf(lead),site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||form.targetDelivery,purchaseOrderNumber:estimate?.purchaseOrderNumber??"",purchaseOrderDate:estimate?.purchaseOrderDate||today(),contactIds:[] });}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.opportunityNo} · {item.number} — {item.projectName}</option>)}</select></label>
+        <div className="field span-2"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
+      </>}
+      <label className="field"><span>{t("CRM.projectNoFromErp")}</span><input required maxLength={30} autoComplete="off" placeholder={t("CRM.projectNoPlaceholder")} value={form.projectNumber} onChange={(event) => update({ projectNumber: event.target.value })} /></label>
+      {standalone ? null : <div className="field span-2"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>}
+      <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => update({ department })} />
+      <label className="field"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => { const lead = Number(event.target.value); update({ leadEngineerId: lead, department: form.department || departmentOf(lead) }); }}><option value={0}>{t("CRM.selectLeadEngineer")}</option>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => update({ purchaseOrderNumber: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"PO date *"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} /></label>
+      <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => update({ site: event.target.value })} /></label>
+      {standalone ? <EndUserCompanyField bootstrap={bootstrap} customerId={customerId} value={form.endUserCustomerId ?? null} disabled={busy || !customerId} onChange={(endUserCustomerId) => update({ endUserCustomerId })} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
     </div>
-    <ContactPicker customerId={selectedEstimate?.customerId ?? 0} value={form.contactIds ?? []} onChange={(contactIds) => setForm((current) => ({ ...current, contactIds }))} />
-    <MasterPlanSection rows={masterPlan} onChange={setMasterPlan} templates={templates} />
-    <TeamPlanSection rows={teamPlan} onChange={setTeamPlan} people={bootstrap.team} />
+    <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
+    <MasterPlanSection rows={masterPlan} onChange={(change) => { setSaveError(""); setMasterPlan(change); }} templates={templates} />
+    <TeamPlanSection rows={teamPlan} onChange={(change) => { setSaveError(""); setTeamPlan(change); }} people={bootstrap.team} />
     {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} /></label>
-      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => setForm((current) => ({ ...current, targetDelivery: event.target.value }))} /></label>
+      <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>
     </div>}
-    <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => setForm((current) => ({ ...current, paymentsReceived }))} />
+    <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
     <details><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">
-      <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label></div>
-      {!inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={selectedEstimate?.customerId ?? 0} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
-      <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark||""} onChange={(event)=>setForm(current=>({...current,remark:event.target.value}))}/></label>
+      {standalone ? null : <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label></div>}
+      {!standalone && !inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={customerId} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => update({ endUserCustomerId })} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
+      <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark||""} onChange={(event)=>update({remark:event.target.value})}/></label>
     </div></details>
     <p className="muted">{t("CRM.projectPlanLater")}</p>
   </div></Modal>;

@@ -303,13 +303,15 @@ chapter('pricing', 'ราคาอ้างอิงและใบเสนอ
     'app/system/production/PlanningPricingScreens.tsx', 'price quotations missing')
 
 chapter('projects', 'Projects และเอกสารโครงการ', 'Projects → Overview', 'PM / ผู้มีสิทธิ์ Project / สมาชิกโครงการ',
-    proc('15.1 สร้าง Project จาก Estimate ที่อนุมัติ', [
+    proc('15.1 สร้าง Project', [
         'เปิด Projects → แท็บ <b>Overview</b> → <b>Create project</b>',
-        'เลือก Estimate ที่อนุมัติและอยู่ในขอบเขตงานของตน ตรวจลูกค้า ชื่องานและ revision',
+        'งานที่มี Estimate: เลือก Estimate ที่อนุมัติและอยู่ในขอบเขตงานของตน ตรวจลูกค้า ชื่องานและ revision',
+        'งานที่ไม่มี Estimate (ทีม Application, PM หรือ Admin): กด <b>ไม่มี Estimate</b> แล้วเลือกลูกค้า ตั้งชื่อ Project และเลือกประเภทงาน',
         'กรอก <b>Customer PO number, PO date, Project manager, Lead engineer, Start date, Target delivery และ Site</b> ให้ครบ วันส่งมอบต้องไม่ก่อนวันเริ่ม',
-        'ตรวจ Contracting customer กับ End user แล้วบันทึก',
+        'ตรวจ Contracting customer กับ End user แล้วบันทึก ถ้าบันทึกไม่สำเร็จ ข้อความจะขึ้นข้างปุ่มและข้อมูลที่กรอกไว้ยังอยู่ครบ',
+        'หลังบันทึก PM, Lead engineer และสมาชิกในแผนทีมได้รับแจ้งเตือนในระบบและอีเมล (ไม่แจ้งคนที่กดสร้าง) เมื่อมอบหมายงานให้ใครเป็น PIC ภายหลัง คนนั้นได้รับแจ้งเช่นกัน',
         'ค้นหา Project ใหม่ ตรวจเลขโครงการและเปิด Documents เพื่อดูโฟลเดอร์ที่เตรียมไว้'
-    ], 'Project อ้างอิง Estimate ถูกฉบับและมีโฟลเดอร์มาตรฐาน 15 หมวด') +
+    ], 'Project อ้างอิง Estimate ถูกฉบับ หรือระบุลูกค้าเองเมื่อไม่มี Estimate และมีโฟลเดอร์มาตรฐาน 15 หมวด') +
     proc('15.2 จัดเก็บและดาวน์โหลดไฟล์', [
         'ในแถว Project กด <b>Documents</b> เลือกโฟลเดอร์ตามเนื้อหา',
         'เลือกไฟล์ กรอกประเภทและหมายเหตุที่จำเป็น ตรวจชื่อไฟล์/โฟลเดอร์ก่อนอัปโหลด',

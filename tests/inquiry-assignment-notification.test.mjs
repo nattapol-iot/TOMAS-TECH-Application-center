@@ -72,7 +72,7 @@ test("every fragment the notification mail links to is one the shell navigates",
     read("app/system/ProductionApp.tsx"),
   ]);
   const linked = [...email.matchAll(/href="\$\{escapeHtml\(appUrl\)\}#([a-z-]+)\//g)].map((match) => match[1]);
-  assert.deepEqual([...new Set(linked)].sort(), ["estimate", "inquiry", "support"]);
+  assert.deepEqual([...new Set(linked)].sort(), ["estimate", "inquiry", "project", "support"]);
   for (const name of new Set(linked)) {
     assert.ok(new RegExp(String.raw`location\.hash\.match\(/\^#${name}(?:\\/|\()`).test(shell),
       `the shell reads a #${name}/<id> deep link`);

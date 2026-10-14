@@ -47,8 +47,8 @@ test("only #/<view> names a screen; record links and in-page anchors do not", ()
   assert.equal(hashView("#activity"), "activity");
   assert.equal(hashView("#/my-work"), "my-work");
   assert.equal(hashView("#crm/4"), null);
-  for (const hash of ["#estimate/1", "#inquiry/22", "#crm/333"]) assert.ok(RECORD_LINK.test(hash), hash);
-  for (const hash of ["#/estimates", "#support/1", "#estimate/"]) assert.ok(!RECORD_LINK.test(hash), hash);
+  for (const hash of ["#estimate/1", "#inquiry/22", "#crm/333", "#project/41", "#project/41/task/70"]) assert.ok(RECORD_LINK.test(hash), hash);
+  for (const hash of ["#/estimates", "#support/1", "#estimate/", "#project/", "#project/41/task/", "#estimate/1/task/2"]) assert.ok(!RECORD_LINK.test(hash), hash);
 });
 
 test("Ctrl, Cmd, Shift, Alt and middle clicks are left to the browser", () => {

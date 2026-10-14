@@ -566,7 +566,13 @@ export type CreateProjectInput = {
   endUserCustomerId?: number | null;
   /** The project number issued by the ERP. */
   projectNumber: string;
-  estimateId: number;
+  /** The approved estimate the project comes from; left out when withoutEstimate is set. */
+  estimateId?: number;
+  /** Application team, PM or Admin: the project names its own customer, name and type. */
+  withoutEstimate?: boolean;
+  customerId?: number;
+  projectName?: string;
+  projectType?: string;
   purchaseOrderNumber: string;
   purchaseOrderDate: string;
   managerId: number;
@@ -1656,7 +1662,7 @@ export const listProjects = (values: { page?: number; pageSize?: number; search?
   apiRequest<PagedResult<ProjectSummary>>(`/api/v1/projects/${queryString(values)}`);
 
 export const createProject = (input: CreateProjectInput) =>
-  apiRequest<{ id: number; number: string; rowVersion: string }>("/api/v1/projects/", { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>("/api/v1/projects/", { method: "POST", body: JSON.stringify(input) });
 
 /** Work recorded against a project that stops it being deleted, by source ("BOM", "Purchase order", ...). */
 export type ProjectDeletionCheck = { id: number; canDelete: boolean; blockers: { source: string; count: number }[] };

@@ -2,16 +2,16 @@
 
 [Module](../modules/reports.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c91268be`; generated, do not edit. [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `f58ab5c6`; generated, do not edit. [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/reports/project-cost` | 39–92 |
-| GET | `/api/v1/reports/inventory-value` | 94–140 |
-| GET | `/api/v1/reports/supplier-performance` | 142–203 |
-| GET | `/api/v1/reports/pr-cycle-time` | 205–252 |
+| GET | `/api/v1/reports/project-cost` | 39–93 |
+| GET | `/api/v1/reports/inventory-value` | 95–141 |
+| GET | `/api/v1/reports/supplier-performance` | 143–204 |
+| GET | `/api/v1/reports/pr-cycle-time` | 206–253 |
 
 ## Named functions
 
@@ -21,7 +21,7 @@ Evidence: source snapshot `c91268be`; generated, do not edit. [backend-node/src/
 | `shift` | [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>) | 16–21 |
 | `optionalInt` | [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>) | 23–28 |
 | `range` | [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>) | 30–36 |
-| `registerReportRoutes` | [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>) | 38–253 |
+| `registerReportRoutes` | [backend-node/src/routes/reports.ts](<../../../backend-node/src/routes/reports.ts>) | 38–254 |
 
 ## Direct local dependencies
 

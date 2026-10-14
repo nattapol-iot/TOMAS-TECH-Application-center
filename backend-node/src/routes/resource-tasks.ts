@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Transaction } from 'mssql';
 import type { Database } from '../db.js';
 import type { CurrentUserService } from '../users.js';
+import type { EmailService } from '../email.js';
+import { deliverProjectNotices, queueTaskAssignmentNotices, type NewPics } from '../project-notices.js';
 import { ApiError } from '../errors.js';
 import { bodyObject, clampedInteger, dateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from '../http.js';
 import { insertAudit } from '../audit.js';
@@ -10,7 +12,7 @@ import { appendUpdate, permissionFor, readTask, readHolidays, progressInput } fr
 import { assigneeAllowed, elevated, impact, saveApprovedProjectPlan, sourceAccess, taskDto, taskRow, type WorkRow } from '../resource-task-service.js';
 import { parseTaskPlan, planDates } from '../resource-task-math.js';
 
-export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users:CurrentUserService) {
+export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users:CurrentUserService,email?:EmailService) {
   // Keep the established WBS endpoints for legacy work. Tasks governed by the
   // approval workflow must not bypass its plan review or member acknowledgment.
   app.addHook('preHandler',async request=>{
@@ -96,7 +98,9 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
     const actor=await actorFor(request),params=request.params as {id:string;action:string},id=positiveLong(params.id,'Task'),action=params.action,b=bodyObject(request.body);
     if(!['propose','approve','reject','acknowledge','progress','close'].includes(action))throw new ApiError(400,'invalid_action','Unknown task action.');
     if(['approve','reject','close'].includes(action))await users.demandPermission(request,'schedule.plan');else await canSubmit(actor.id);
-    return db.transaction(async tx=>{
+    const outcome=await db.transaction(async tx=>{
+      // An approval that gives the schedule row to a new PIC tells them, after the commit.
+      const assigned:NewPics[]=[];
       const r=await taskRow(tx,id,true);version(r,b);
       const kind=r.project_id?'Project':'Inquiry',sourceId=Number(r.project_id??r.inquiry_id);
       await scope(tx,request,r,true,['approve','reject','close'].includes(action));
@@ -120,7 +124,7 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
         const plan=parseTaskPlan(JSON.parse(r.pending_plan));await assigneeAllowed(tx,kind,sourceId,plan.assigneeId);
         if(r.schedule_task_id){const task=await readTask(tx,Number(r.schedule_task_id));if(task.status==='Done'||!plan.scheduleVersion||task.rowVersion.toString('base64')!==plan.scheduleVersion)throw new ApiError(409,'plan_stale','The project task changed after this proposal. Return it and submit a fresh proposal.');}
         const preview=await impact(tx,plan,r,kind,sourceId);if(preview.needsReason&&!note)throw new ApiError(409,'workload_reason_required','Workload is over capacity or incomplete. Review the warning and provide an override reason.');
-        let scheduleId=r.schedule_task_id;if(kind==='Project')scheduleId=await saveApprovedProjectPlan(tx,r,plan,actor);
+        let scheduleId=r.schedule_task_id;if(kind==='Project')scheduleId=await saveApprovedProjectPlan(tx,r,plan,actor,assigned);
         const dates=planDates(plan,await readHolidays(tx));
         q.input('schedule',sql.BigInt,scheduleId).input('user',sql.BigInt,plan.assigneeId).input('start',sql.Date,kind==='Inquiry'?dates.start:null).input('end',sql.Date,kind==='Inquiry'?dates.end:null).input('effort',sql.Decimal(12,2),kind==='Inquiry'?plan.manDays:null).input('source',sql.BigInt,sourceId);
         if(kind==='Inquiry')await q.query(`IF NOT EXISTS(SELECT 1 FROM dbo.resource_task_sources WITH(UPDLOCK,HOLDLOCK) WHERE inquiry_id=@source) INSERT dbo.resource_task_sources(inquiry_id,activated_by) VALUES(@source,@actor);`);
@@ -149,7 +153,9 @@ export function registerResourceTaskRoutes(app:FastifyInstance,db:Database,users
         const dto=await taskDto(tx,r,actor,db);if(dto.status!=='Done'||!note||r.pending_plan)throw new ApiError(409,'close_task','Complete the task, resolve pending proposals and record verification before closing.');
         await q.query(`UPDATE dbo.resource_tasks SET state=N'Closed',decision_note=@note,updated_at=SYSUTCDATETIME() WHERE id=@id`);
       }
-      const saved=await taskRow(tx,id);await insertAudit(tx,actor.id,'Resource Task',id,`TASK-${id}`,action,{state:r.state,pendingPlan:r.pending_plan,acknowledgedAt:r.acknowledged_at,percentComplete:Number(r.percent_done),status:r.execution_status},{state:saved.state,pendingPlan:saved.pending_plan,note,percentComplete:Number(saved.percent_done),status:saved.execution_status,...(action==='progress'?{remark:bodyObject(request.body).remark??null}:{})});return taskDto(tx,saved,actor,db);
+      const saved=await taskRow(tx,id);await insertAudit(tx,actor.id,'Resource Task',id,`TASK-${id}`,action,{state:r.state,pendingPlan:r.pending_plan,acknowledgedAt:r.acknowledged_at,percentComplete:Number(r.percent_done),status:r.execution_status},{state:saved.state,pendingPlan:saved.pending_plan,note,percentComplete:Number(saved.percent_done),status:saved.execution_status,...(action==='progress'?{remark:bodyObject(request.body).remark??null}:{})});return {dto:await taskDto(tx,saved,actor,db),notices:await queueTaskAssignmentNotices(tx,{id:actor.id,name:actor.name},assigned)};
     },sql.ISOLATION_LEVEL.SERIALIZABLE);
+    await deliverProjectNotices(email,outcome.notices);
+    return outcome.dto;
   });
 }

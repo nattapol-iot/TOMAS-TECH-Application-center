@@ -19,6 +19,8 @@ import {
 } from "../schedule-service.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
+import type { EmailService } from "../email.js";
+import { deliverProjectNotices, queueTaskAssignmentNotices } from "../project-notices.js";
 
 function bindPlan(request: InstanceType<typeof sql.Request>, projectId: number, input: PlanInput, actorId: number): void {
   request.input("project", sql.BigInt, projectId); request.input("parent", sql.BigInt, input.parentId);
@@ -96,7 +98,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
 }
 
 /** timeZone: the business time zone (config.businessTimeZone); without it, the same Business__TimeZoneId setting loadConfig reads. */
-export function registerScheduleRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, timeZone?: string): void {
+export function registerScheduleRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, timeZone?: string, email?: EmailService): void {
   const businessTimeZone = timeZone ?? normalizeBusinessTimeZone(process.env.Business__TimeZoneId);
   app.get("/api/v1/projects/:projectId/schedule", async (request) => {
     await users.demandPermission(request, "schedule.read"); const actor = await users.required(request);
@@ -116,17 +118,19 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       const insert = new sql.Request(transaction); bindPlan(insert, projectId, input, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @changed TABLE(id bigint,row_version binary(8)); INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,updated_by)
         OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,N'PM',@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,@pic_external,@man_days,@actor); SELECT id,row_version FROM @changed;`)).recordset[0]!;
-      const id = Number(row.id); await replacePics(transaction, id, input.picUserIds); await appendUpdate(transaction, projectId, id, actor.id, "created", null, input.name, "Schedule task created");
+      const id = Number(row.id); const added = await replacePics(transaction, id, input.picUserIds); await appendUpdate(transaction, projectId, id, actor.id, "created", null, input.name, "Schedule task created");
       await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Created", null, planAudit(input));
-      return { id, rowVersion: row.row_version.toString("base64"), scheduleVersion: row.row_version.toString("base64") };
+      const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, [{ taskId: id, userIds: added }]);
+      return { id, rowVersion: row.row_version.toString("base64"), scheduleVersion: row.row_version.toString("base64"), notices };
     });
-    return reply.status(201).header("Location", `/api/v1/schedule/tasks/${created.id}`).send(created);
+    const { notices, ...task } = created;
+    return reply.status(201).header("Location", `/api/v1/schedule/tasks/${created.id}`).send({ ...task, notification: await deliverProjectNotices(email, notices) });
   });
 
   app.put("/api/v1/schedule/tasks/:id", async (request) => {
     await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Schedule task id"); const input = planInput(request.body, true);
-    return database.transaction(async (transaction) => {
+    const saved = await database.transaction(async (transaction) => {
       const existing = await readTask(transaction, id); const project = await demandPlanOwner(transaction, existing.projectId, actor);
       await validateScheduleVersion(transaction, existing.projectId, input.scheduleVersion); if (!existing.rowVersion.equals(input.rowVersion!)) throw concurrency();
       const pics = await readPics(transaction, existing.projectId); const oldPics = (pics.get(id) ?? []).map((pic) => pic.id);
@@ -139,10 +143,13 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       if (await hasChildren(transaction, id) && (existing.planStart !== input.planStart || existing.planDays !== input.planDays || existing.startMode !== input.startMode || existing.predecessorId !== input.predecessorId || existing.lagDays !== input.lagDays)) throw new ApiError(400, "schedule_rollup_plan_derived", "A roll-up row's dates and dependency are calculated from its children and cannot be changed directly.");
       const update = new sql.Request(transaction); bindPlan(update, existing.projectId, input, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), input.rowVersion);
       const row = (await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,pic_external=@pic_external,plan_man_days=@man_days,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`)).recordset[0];
-      if (!row) throw concurrency(); await replacePics(transaction, id, input.picUserIds); const before = existingPlan(existing, oldPics), after = planAudit(input);
+      if (!row) throw concurrency(); const added = await replacePics(transaction, id, input.picUserIds); const before = existingPlan(existing, oldPics), after = planAudit(input);
       await appendUpdate(transaction, existing.projectId, id, actor.id, "plan", JSON.stringify(before), JSON.stringify(after), null); await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Updated plan", before, after);
-      return { id, rowVersion: row.row_version.toString("base64"), scheduleVersion: (await currentScheduleVersion(transaction, existing.projectId))!.toString("base64") };
+      const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, [{ taskId: id, userIds: added }]);
+      return { id, rowVersion: row.row_version.toString("base64"), scheduleVersion: (await currentScheduleVersion(transaction, existing.projectId))!.toString("base64"), notices };
     });
+    const { notices, ...task } = saved;
+    return { ...task, notification: await deliverProjectNotices(email, notices) };
   });
 
   app.post("/api/v1/schedule/tasks/:id/updates", async (request) => {

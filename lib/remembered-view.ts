@@ -20,8 +20,8 @@ export function hashView(hash: string): string | null {
   return viewFromHash(hash);
 }
 
-/** Emailed links to one record. Their followers open the record and then clear the fragment. */
-export const RECORD_LINK = /^#(?:estimate|inquiry|crm)\/\d+$/;
+/** Emailed links to one record (a project, optionally on one plan row). Their followers open the record and then clear the fragment. */
+export const RECORD_LINK = /^#(?:(?:estimate|inquiry|crm)\/\d+|project\/\d+(?:\/task\/\d+)?)$/;
 
 /** A click the app handles itself; Ctrl, Cmd, Shift, Alt and other buttons are left to the browser (new tab, new window). */
 export function isPlainClick(event: { button: number; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean; defaultPrevented: boolean }): boolean {

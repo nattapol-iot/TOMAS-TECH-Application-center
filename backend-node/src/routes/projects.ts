@@ -14,11 +14,13 @@ import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, pro
 import { insertInitialPlan, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
-import { demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
+import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
+import { canCreateWithoutEstimate, demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, validateScheduleVersion } from "../schedule-service.js";
 import { hasRole } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
+import type { EmailService } from "../email.js";
 import { confirmOpportunityOrder } from "../crm.js";
 
 const STANDARD_FOLDERS = [
@@ -44,11 +46,14 @@ function shiftDate(value: string, unit: "day" | "year", amount: number): string 
   return date.toISOString().slice(0, 10);
 }
 
-export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
+export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, email?: EmailService): void {
   registerEndUserUpdateRoute(app, database, users, "Project");
   app.get("/api/v1/projects/creation-options", async (request) => {
     await users.demandPermission(request, "project.write");
-    await users.demandPermission(request, "estimate.read");
+    const actor = await users.required(request);
+    // Estimates are listed only to someone who may read them; the Application team, who create
+    // projects without an estimate, may have no estimate access at all.
+    const readsEstimates = await permissionFor(database, actor.id, "estimate.read");
     // Only work the customer has ordered: the linked CRM opportunity is WON, and its order
     // evidence is offered as the PO so it is not typed twice.
     const result = await database.query<Record<string, unknown>>(`
@@ -57,7 +62,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         o.opportunity_no opportunityNo,o.won_on wonOn,o.won_reference wonReference
       FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id
       JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id AND o.stage=N'WON'
-      WHERE e.status IN(N'Approved',N'Locked') AND e.deleted_at IS NULL AND e.archived_at IS NULL
+      WHERE @reads_estimates=1 AND e.status IN(N'Approved',N'Locked') AND e.deleted_at IS NULL AND e.archived_at IS NULL
         AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled'
         AND NOT EXISTS(SELECT 1 FROM dbo.projects p WHERE p.inquiry_id=i.id OR p.estimate_id=e.id)
       ORDER BY e.updated_at DESC,e.id DESC;
@@ -67,13 +72,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       FROM dbo.users u JOIN dbo.user_effective_roles r ON r.user_id=u.id
       GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer') THEN 1 ELSE 0 END)=1
       ORDER BY u.name;
-    `);
+    `, (request) => request.input("reads_estimates", sql.Bit, readsEstimates));
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
     return { estimates: (sets[0] ?? []).map(({ wonOn, wonReference, ...r }) => ({ ...r, id:Number(r.id), customerId:Number(r.customerId), ownerId:Number(r.ownerId), targetDelivery:dateOnly(r.targetDelivery as Date),
         // The order reference is free text; it is only a PO number when it fits the PO field.
         purchaseOrderNumber: typeof wonReference === "string" && wonReference.trim().length <= 100 ? wonReference.trim() : "",
         purchaseOrderDate: dateOnly(wonOn as Date | null) ?? "" })),
-      people: (sets[1] ?? []).map(r => ({ ...r, id:Number(r.id), canManage:Boolean(r.canManage), canLead:Boolean(r.canLead) })) };
+      people: (sets[1] ?? []).map(r => ({ ...r, id:Number(r.id), canManage:Boolean(r.canManage), canLead:Boolean(r.canLead) })),
+      canCreateWithoutEstimate: canCreateWithoutEstimate(actor) };
   });
 
   app.get("/api/v1/projects/handover/:inquiryId", async (request) => {
@@ -256,11 +262,22 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const requestedEndUserId = endUserCustomerId(body.endUserCustomerId);
     const plan = parseInitialPlan(body);
     const details = parseProjectDetails(body);
+    // Without an estimate the form names the customer, project name and type itself. Owner decision
+    // 2026-10-14: for the Application team, who do not make an Estimate Cost, and for PMs and Admins.
+    const standalone = body.withoutEstimate === true ? {
+      customerId: requiredInteger(body.customerId, "Customer", 1),
+      projectName: requiredText(body.projectName, 300, "Project name"),
+      projectType: requiredText(body.projectType, 100, "Project type"),
+    } : null;
+    if (!standalone) await users.demandPermission(request, "estimate.read");
+    if (standalone && !canCreateWithoutEstimate(actor)) {
+      throw new ApiError(403, "project_without_estimate_forbidden", "Only the Application team, a Project Manager or an Admin can create a project without an estimate.");
+    }
     // With a plan, the project runs from its first row to its last; without one, the dates are typed.
     const span = planSpan(plan);
     const input = {
       projectNumber: parseProjectNumber(body.projectNumber),
-      estimateId: requiredInteger(body.estimateId, "Approved estimate", 1),
+      estimateId: standalone ? null : requiredInteger(body.estimateId, "Approved estimate", 1),
       purchaseOrderNumber: requiredText(body.purchaseOrderNumber, 100, "Purchase order number"),
       purchaseOrderDate: parseDateOnly(body.purchaseOrderDate, "Purchase order date")!,
       managerId: requiredInteger(body.managerId, "Manager", 1),
@@ -281,7 +298,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     }
     const writtenKeys: string[] = [];
     let projectDirectory: string | undefined;
-    let created: { id: number; number: string; rowVersion: string; folderMetadataCreated: number; documentsTransferred: number };
+    let created: { id: number; number: string; rowVersion: string; folderMetadataCreated: number; documentsTransferred: number; notices: ProjectNotice[] };
     try {
     created = await database.transaction(async (transaction) => {
       const people = new sql.Request(transaction); people.input("manager_id", sql.BigInt, input.managerId); people.input("lead_id", sql.BigInt, input.leadEngineerId);
@@ -295,32 +312,44 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         || !["Engineer", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")) {
         throw new ApiError(422, "invalid_reference", "Manager and lead engineer must be active users with eligible roles.");
       }
-      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, input.estimateId);
-      const estimate = (await lookup.query<{ customer_id: number | string; inquiry_id: number | string; estimate_no: string; project_name: string; project_type: string }>(`
-        SELECT customer_id,inquiry_id,estimate_no,project_name,project_type FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK)
-        WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL AND archived_at IS NULL;
-      `)).recordset[0];
-      if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
-      const order = new sql.Request(transaction); order.input("inquiry", sql.BigInt, Number(estimate.inquiry_id));
-      if (!(await order.query(`SELECT o.id FROM dbo.inquiries i WITH(HOLDLOCK) JOIN dbo.crm_opportunities o WITH(HOLDLOCK) ON o.id=i.opportunity_id
-          WHERE i.id=@inquiry AND o.stage=N'WON';`)).recordset[0]) {
-        throw new ApiError(409, "opportunity_not_won", "Mark the customer order as WON on the linked CRM opportunity before creating a project.");
+      // Where the project comes from: an approved estimate on a WON order, or the form itself.
+      let source: { customerId: number; inquiryId: number | null; estimateNo: string | null; projectName: string; projectType: string; endUserId: number | null };
+      if (input.estimateId === null) {
+        const customer = new sql.Request(transaction); customer.input("id", sql.BigInt, standalone!.customerId);
+        if (!(await customer.query(`SELECT id FROM dbo.customers WITH (HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;`)).recordset[0]) {
+          throw new ApiError(422, "invalid_reference", "The selected customer must be an active customer.");
+        }
+        source = { ...standalone!, inquiryId: null, estimateNo: null, endUserId: requestedEndUserId ?? null };
+      } else {
+        const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, input.estimateId);
+        const estimate = (await lookup.query<{ customer_id: number | string; inquiry_id: number | string; estimate_no: string; project_name: string; project_type: string }>(`
+          SELECT customer_id,inquiry_id,estimate_no,project_name,project_type FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK)
+          WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL AND archived_at IS NULL;
+        `)).recordset[0];
+        if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
+        const order = new sql.Request(transaction); order.input("inquiry", sql.BigInt, Number(estimate.inquiry_id));
+        if (!(await order.query(`SELECT o.id FROM dbo.inquiries i WITH(HOLDLOCK) JOIN dbo.crm_opportunities o WITH(HOLDLOCK) ON o.id=i.opportunity_id
+            WHERE i.id=@inquiry AND o.stage=N'WON';`)).recordset[0]) {
+          throw new ApiError(409, "opportunity_not_won", "Mark the customer order as WON on the linked CRM opportunity before creating a project.");
+        }
+        const duplicate = new sql.Request(transaction);
+        duplicate.input("estimate",sql.BigInt,input.estimateId).input("inquiry",sql.BigInt,Number(estimate.inquiry_id));
+        if((await duplicate.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate OR inquiry_id=@inquiry`)).recordset[0]) {
+          throw new ApiError(409,"project_already_exists","A project already exists for this inquiry. Open or restore the existing project.");
+        }
+        await assertEstimateTotals(transaction, input.estimateId);
+        const inquiryLookup = new sql.Request(transaction);
+        inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));
+        const inquiry = (await inquiryLookup.query<{ end_user_customer_id: number | string | null }>(`
+          SELECT end_user_customer_id FROM dbo.inquiries WITH (HOLDLOCK) WHERE id=@inquiry_id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';
+        `)).recordset[0];
+        if (!inquiry) throw new ApiError(422, "invalid_reference", "The source inquiry is no longer available.");
+        const inheritedEndUserId = inquiry.end_user_customer_id === null ? null : Number(inquiry.end_user_customer_id);
+        source = { customerId: Number(estimate.customer_id), inquiryId: Number(estimate.inquiry_id), estimateNo: estimate.estimate_no,
+          projectName: estimate.project_name, projectType: estimate.project_type,
+          endUserId: requestedEndUserId === undefined ? inheritedEndUserId : requestedEndUserId };
       }
-      const duplicate = new sql.Request(transaction);
-      duplicate.input("estimate",sql.BigInt,input.estimateId).input("inquiry",sql.BigInt,Number(estimate.inquiry_id));
-      if((await duplicate.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate OR inquiry_id=@inquiry`)).recordset[0]) {
-        throw new ApiError(409,"project_already_exists","A project already exists for this inquiry. Open or restore the existing project.");
-      }
-      await assertEstimateTotals(transaction, input.estimateId);
-      const inquiryLookup = new sql.Request(transaction);
-      inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));
-      const inquiry = (await inquiryLookup.query<{ end_user_customer_id: number | string | null }>(`
-        SELECT end_user_customer_id FROM dbo.inquiries WITH (HOLDLOCK) WHERE id=@inquiry_id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';
-      `)).recordset[0];
-      if (!inquiry) throw new ApiError(422, "invalid_reference", "The source inquiry is no longer available.");
-      const inheritedEndUserId = inquiry.end_user_customer_id === null ? null : Number(inquiry.end_user_customer_id);
-      const endUserId = requestedEndUserId === undefined ? inheritedEndUserId : requestedEndUserId;
-      const endUser = await validateEndUser(transaction, endUserId);
+      const endUser = await validateEndUser(transaction, source.endUserId);
       // The number comes from the ERP. It stays reserved by a project in the trash, so the
       // same ERP number is never issued to two records here.
       const number = input.projectNumber;
@@ -329,15 +358,15 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
       }
       const insert = new sql.Request(transaction);
-      insert.input("number", sql.NVarChar(30), number); insert.input("name", sql.NVarChar(300), estimate.project_name);
-      insert.input("customer_id", sql.BigInt, Number(estimate.customer_id)); insert.input("project_type", sql.NVarChar(100), estimate.project_type);
-      insert.input("end_user_id", sql.BigInt, endUserId);
+      insert.input("number", sql.NVarChar(30), number); insert.input("name", sql.NVarChar(300), source.projectName);
+      insert.input("customer_id", sql.BigInt, source.customerId); insert.input("project_type", sql.NVarChar(100), source.projectType);
+      insert.input("end_user_id", sql.BigInt, endUser.endUserCustomerId);
       insert.input("manager_id", sql.BigInt, input.managerId); insert.input("lead_id", sql.BigInt, input.leadEngineerId);
-      insert.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id)); insert.input("estimate_id", sql.BigInt, input.estimateId);
+      insert.input("inquiry_id", sql.BigInt, source.inquiryId); insert.input("estimate_id", sql.BigInt, input.estimateId);
       insert.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber); insert.input("po_date", sql.Date, input.purchaseOrderDate);
       insert.input("start_date", sql.Date, input.startDate); insert.input("target_delivery", sql.Date, input.targetDelivery);
       insert.input("site", sql.NVarChar(300), input.site); insert.input("remark", sql.NVarChar(sql.MAX), input.remark);
-      insert.input("folder_path", sql.NVarChar(1000), `IoT Team - Documents / Project - ${input.startDate.slice(0, 4)} / [${number}] ${estimate.project_name}`);
+      insert.input("folder_path", sql.NVarChar(1000), `IoT Team - Documents / Project - ${input.startDate.slice(0, 4)} / [${number}] ${source.projectName}`);
       insert.input("actor", sql.BigInt, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
         INSERT INTO dbo.projects(project_no,name,customer_id,end_user_customer_id,project_type,status,manager_id,lead_engineer_id,
@@ -360,13 +389,20 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
       await folders.query(`INSERT INTO dbo.project_folders(project_id,folder_code,name,storage_key,created_by) VALUES ${values};`);
       for (const [code] of STANDARD_FOLDERS) await createStoredDirectory(config.documentStorage, `${projectDirectory}/${code}`);
-      const documentsTransferred = await transferProjectDocuments(transaction, config.documentStorage,
-        projectId, Number(estimate.inquiry_id), input.estimateId, actor.id, writtenKeys);
-      await insertAudit(transaction, actor.id, "Project", projectId, number, "Created from approved estimate", estimate.estimate_no,
+      // Inquiry and estimate files follow the project; a project without an estimate has none to bring.
+      const documentsTransferred = source.inquiryId === null || input.estimateId === null ? 0
+        : await transferProjectDocuments(transaction, config.documentStorage, projectId, source.inquiryId, input.estimateId, actor.id, writtenKeys);
+      await insertAudit(transaction, actor.id, "Project", projectId, number, source.estimateNo ? "Created from approved estimate" : "Created without estimate", source.estimateNo,
         { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred,
           masterPlan: plan.milestones, teamPlan: plan.team, ...details });
-      await confirmOpportunityOrder(transaction,Number(estimate.inquiry_id),actor.id,input.purchaseOrderDate>today?today:input.purchaseOrderDate,input.purchaseOrderNumber);
-      return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred };
+      if (source.inquiryId !== null) await confirmOpportunityOrder(transaction,source.inquiryId,actor.id,input.purchaseOrderDate>today?today:input.purchaseOrderDate,input.purchaseOrderNumber);
+      const customerName = (await new sql.Request(transaction).input("id", sql.BigInt, source.customerId)
+        .query<{ name: string }>(`SELECT name FROM dbo.customers WHERE id=@id;`)).recordset[0]?.name ?? "";
+      const notices = await queueProjectCreatedNotices(transaction, { id: actor.id, name: actor.name }, {
+        projectId, projectNumber: number, projectName: source.projectName, customerName, managerId: input.managerId, leadEngineerId: input.leadEngineerId,
+        startDate: input.startDate, targetDelivery: input.targetDelivery, team: plan.team.map(({ userId, task, start, finish }) => ({ userId, task, start, finish })),
+      });
+      return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred, notices };
     });
     } catch (error) {
       if (error instanceof DatabaseCommitOutcomeUnknownError) {
@@ -383,7 +419,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       }
       throw error;
     }
-    return reply.status(201).header("Location", `/api/v1/projects/${created.id}`).send(created);
+    // Mail goes only after the project is committed; the bell rows were written with it.
+    const { notices, ...project } = created;
+    const notification = await deliverProjectNotices(email, notices);
+    return reply.status(201).header("Location", `/api/v1/projects/${created.id}`).send({ ...project, notification });
   });
 
   app.get("/api/v1/projects/:id/members", async (request) => {
@@ -531,7 +570,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     }
     const plan = editsPlan ? parseInitialPlan(body) : null;
     const canPlan = editsPlan && await permissionFor(database, actor.id, "schedule.plan");
-    return database.transaction(async (transaction) => {
+    const saved = await database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction);
       lookup.input("id", sql.BigInt, id);
       const before = (await lookup.query<Record<string, unknown>>(`SELECT id,project_no,name,project_type,status,progress,manager_id,lead_engineer_id,
@@ -613,6 +652,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES(@project_id,@lead_id,N'Lead Engineer',@actor);`);
 
       let scheduleVersion: string | null = null;
+      let assigned: NewPics[] = [];
       if (plan) {
         // The same people who may change the plan in Project Schedule.
         if (!canPlan || (Number(before.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin"))) {
@@ -620,7 +660,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         }
         if (currentStatus === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
         await validateScheduleVersion(transaction, id, body.scheduleVersion === undefined || body.scheduleVersion === null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"));
-        await syncProjectPlan(transaction, id, plan, actor.id);
+        assigned = await syncProjectPlan(transaction, id, plan, actor.id);
         scheduleVersion = (await currentScheduleVersion(transaction, id))?.toString("base64") ?? null;
       }
       await writeProjectDetails(transaction, id, details, actor.id);
@@ -628,10 +668,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const latest = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=@id;`)).recordset[0]!;
       const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.milestones, teamPlan: plan.team } : {}) };
       await insertAudit(transaction, actor.id, "Project", id, String(before.project_no), transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
+      const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, assigned);
       return {
         id, number: String(before.project_no), ...after, scheduleVersion,
-        rowVersion: latest.row_version.toString("base64"),
+        rowVersion: latest.row_version.toString("base64"), notices,
       };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+    const { notices, ...project } = saved;
+    return { ...project, notification: await deliverProjectNotices(email, notices) };
   });
 }

@@ -43,7 +43,7 @@ export function registerReportRoutes(app: FastifyInstance, config: AppConfig, da
     const projectId = positiveLong((request.query as Record<string, unknown>).projectId, "Project id");
     await demandProjectScope(database, actor, projectId);
     const result = await database.query<Record<string, unknown> & {
-      id: number | string; project_no: string; name: string; status: string; estimate_no: string;
+      id: number | string; project_no: string; name: string; status: string; estimate_no: string | null;
       material_total: number | string; engineering_total: number | string; outsource_total: number | string;
       transportation_total: number | string; accommodation_total: number | string; other_total: number | string;
       contingency_total: number | string; estimate_total: number | string; committed: number | string;
@@ -68,8 +68,9 @@ export function registerReportRoutes(app: FastifyInstance, config: AppConfig, da
         totals.outsource_total,totals.transportation_total,totals.accommodation_total,totals.other_total,
         totals.contingency_total,totals.total AS estimate_total,po.committed,po.received_value,po.open_value,
         actual.material_consumed,reserved.reserved_value,open_pr.open_pr_value
-      FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
-      INNER JOIN dbo.v_estimate_totals totals ON totals.estimate_id=p.estimate_id
+      -- A project without an estimate (Application team) has no approved budget: its totals read as zero.
+      FROM dbo.projects p LEFT JOIN dbo.estimates e ON e.id=p.estimate_id
+      LEFT JOIN dbo.v_estimate_totals totals ON totals.estimate_id=p.estimate_id
       CROSS JOIN po_value po CROSS JOIN actual CROSS JOIN reserved CROSS JOIN open_pr
       WHERE p.id=@project_id AND p.deleted_at IS NULL;
     `, (sqlRequest) => sqlRequest.input("project_id", sql.BigInt, projectId));

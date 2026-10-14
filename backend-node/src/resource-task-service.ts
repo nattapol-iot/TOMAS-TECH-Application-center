@@ -7,6 +7,7 @@ import { readTasks, readPics, readHolidays, resolveTasks, readProject, validateP
 import { hasRole } from './user-roles.js';
 import { planDates, workloadImpact, workDates, type TaskPlan, type Allocation } from './resource-task-math.js';
 import type { Database } from './db.js';
+import type { NewPics } from './project-notices.js';
 import { DEFAULT_WEEKLY_CAPACITY } from './resource-workload.js';
 
 export type WorkRow = {
@@ -96,7 +97,8 @@ export async function impact(tx:Transaction,plan:TaskPlan,exclude:WorkRow|null,k
   return {...workloadImpact(allocations,plan,capacityRow?Number(capacityRow.days_per_week):DEFAULT_WEEKLY_CAPACITY,holidays,replaced),replacesInquiryAggregate:kind==='Inquiry',countedTasks:allocations.length};
 }
 
-export async function saveApprovedProjectPlan(tx:Transaction,r:WorkRow,plan:TaskPlan,actor:CurrentUser) {
+/** `assigned` collects the PIC when the approval gives the row to someone new, so the route can tell them. */
+export async function saveApprovedProjectPlan(tx:Transaction,r:WorkRow,plan:TaskPlan,actor:CurrentUser,assigned?:NewPics[]) {
   const dates=planDates(plan,await readHolidays(tx)),q=new sql.Request(tx);
   q.input('project',sql.BigInt,r.project_id).input('actor',sql.BigInt,actor.id).input('title',sql.NVarChar(500),r.title).input('start',sql.Date,dates.start).input('days',sql.Int,dates.calendarDays).input('effort',sql.Decimal(9,2),plan.manDays);
   let id=r.schedule_task_id?Number(r.schedule_task_id):null;
@@ -114,6 +116,8 @@ export async function saveApprovedProjectPlan(tx:Transaction,r:WorkRow,plan:Task
     id=Number((await q.query<{id:number}>(`DECLARE @ids TABLE(id bigint); INSERT dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,lag_days,pic_external,plan_man_days,updated_by) OUTPUT inserted.id INTO @ids VALUES(@project,NULL,1000,N'task',@title,0,N'PM',@actor,N'Internal',@start,@days,N'manual',0,N'',@effort,@actor);SELECT id FROM @ids;`)).recordset[0]!.id);
   }
   const pic=new sql.Request(tx);pic.input('id',sql.BigInt,id).input('user',sql.BigInt,plan.assigneeId);
+  const before=(await pic.query<{user_id:number|string}>('SELECT user_id FROM dbo.schedule_task_pics WHERE task_id=@id;')).recordset;
   await pic.query('DELETE dbo.schedule_task_pics WHERE task_id=@id;INSERT dbo.schedule_task_pics(task_id,user_id) VALUES(@id,@user);');
+  if(assigned&&!before.some(row=>Number(row.user_id)===plan.assigneeId))assigned.push({taskId:id,userIds:[plan.assigneeId]});
   return id;
 }

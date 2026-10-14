@@ -305,4 +305,11 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["Schedule.actualFinish", "Actual finish", "เสร็จจริง", "実績終了"],
  ["Schedule.forecastFinish", "Forecast finish", "คาดว่าจะเสร็จ", "完了見込み"],
  ["CRM.missingProjectFields", "Complete these fields", "กรุณากรอกข้อมูลที่ยังขาด", "未入力の項目"],
+ ["CRM.projectGateWithoutEstimate", "No estimate: choose the customer and name the project", "ไม่ผูก Estimate · เลือกลูกค้าและตั้งชื่องานเอง", "見積なし：顧客を選び案件名を入力"],
+ ["CRM.projectSource", "Project source", "ที่มาของ Project", "プロジェクトの起点"],
+ ["CRM.projectFromEstimate", "From an approved estimate", "จาก Estimate ที่อนุมัติแล้ว", "承認済み見積から"],
+ ["CRM.projectWithoutEstimate", "Without an estimate", "ไม่มี Estimate", "見積なし"],
+ ["CRM.selectCustomer", "Select customer", "เลือกลูกค้า", "顧客を選択"],
+ ["CRM.selectProjectType", "Select project type", "เลือกประเภทงาน", "案件区分を選択"],
+ ["Project without an estimate", "Project without an estimate", "Project ที่ไม่มี Estimate", "見積なしのプロジェクト"],
 ].map(([key,en,th,jp])=>[key,{en,th,jp}]));

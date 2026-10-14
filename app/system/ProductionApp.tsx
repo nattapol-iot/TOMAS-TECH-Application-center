@@ -567,6 +567,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     }
     if (item.entityType === "GoodsReceipt") setView("receiving");
     if (item.entityType === "SupportTicket" && item.entityId) openSupport(item.entityId);
+    // A new project, or a task given to you on one, opens that project's plan.
+    if (item.entityType === "Project" && item.entityId) openProjectSchedule(item.entityId);
   };
 
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {
@@ -665,6 +667,13 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   useEffect(() => {
     if (!bootstrap) return;
     const follow = () => {
+      // "#project/<id>" and "#project/<id>/task/<taskId>" come from the project and assignment mails.
+      const project = window.location.hash.match(/^#project\/(\d+)(?:\/task\/(\d+))?$/);
+      if (project) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        openProjectSchedule(Number(project[1]), project[2] ? Number(project[2]) : undefined);
+        return;
+      }
       const estimate = window.location.hash.match(/^#estimate\/(\d+)$/);
       const inquiry = estimate ? null : window.location.hash.match(/^#inquiry\/(\d+)$/);
       const id = Number((estimate ?? inquiry)?.[1]);
@@ -675,7 +684,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const timer = window.setTimeout(follow, 0);
     window.addEventListener("hashchange", follow);
     return () => { window.clearTimeout(timer); window.removeEventListener("hashchange", follow); };
-  }, [bootstrap, openEstimate, openInquiry]);
+  }, [bootstrap, openEstimate, openInquiry, openProjectSchedule]);
 
   const startInquiry = () => { setStartInquiryCreate(true); setPreferredInquiryId(null); setView("inquiries"); };
   const toggleNavGroup = (group: string) => {

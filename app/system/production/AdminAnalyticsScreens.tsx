@@ -151,7 +151,7 @@ type PrCycleTimeReport = {
 };
 
 type ProjectCostReport = {
-  project: { id: number; number: string; name: string; status: string; estimateNumber: string };
+  project: { id: number; number: string; name: string; status: string; estimateNumber: string | null };
   budget: {
     approvedMaterial: number;
     approvedEngineering: number;
@@ -747,7 +747,7 @@ function ProjectCostReportView({ report, loading, projectSelected }: { report: P
   if (!projectSelected) return <Panel><EmptyState icon="folder" title="Select a project" message="เลือกโครงการเพื่อคำนวณต้นทุนจาก estimate, procurement และ stock ledger" /></Panel>;
   if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="chart" title={uiText("No report loaded")} message="กด Refresh เพื่อลองอีกครั้ง" />}</Panel>;
   return <>
-    <PageHeader title={`${report.project.number} · ${report.project.name}`} subtitle={`Estimate ${report.project.estimateNumber}`} meta={<Badge>{report.project.status}</Badge>} />
+    <PageHeader title={`${report.project.number} · ${report.project.name}`} subtitle={report.project.estimateNumber ? `Estimate ${report.project.estimateNumber}` : uiText("Project without an estimate")} meta={<Badge>{report.project.status}</Badge>} />
     <div className="kpi-grid four">
       <KpiCard label="Approved estimate" value={formatMoney(report.budget.approvedEstimateTotal)} note="Total approved budget" tone="blue" icon="file" />
       <KpiCard label="Material actual" value={formatMoney(report.actual.materialConsumed)} note="Net MIR issue / return" tone="violet" icon="package" />

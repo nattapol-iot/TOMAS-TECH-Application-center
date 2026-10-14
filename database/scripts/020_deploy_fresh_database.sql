@@ -139,11 +139,12 @@ GO
 :r database/migrations/075_installed_base.sql
 :r database/migrations/076_release_deployments.sql
 :r database/migrations/077_site_credentials.sql
+:r database/migrations/078_project_without_estimate.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 77) <> 77
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 78) <> 78
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -199,7 +200,8 @@ IF EXISTS (
         (74, N'Flexible purchase requisition lines'),
         (75, N'Installed base: customer equipment and software'),
         (76, N'Release deployments to monitored programs'),
-        (77, N'Site credentials vault')
+        (77, N'Site credentials vault'),
+        (78, N'Project without estimate')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name

@@ -4,7 +4,7 @@
 
 สร้าง revision รายการต้นทุน ค่าใช้จ่าย validation และ workflow
 
-Evidence: snapshot `c91268be`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `f58ab5c6`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -192,6 +192,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [tests/estimate-template-selection.test.mjs](<../../../tests/estimate-template-selection.test.mjs>)
 - [tests/estimate-total-guardrails.test.mjs](<../../../tests/estimate-total-guardrails.test.mjs>)
 - [tests/estimate-ux.test.mjs](<../../../tests/estimate-ux.test.mjs>)
+- [tests/project-without-estimate.test.mjs](<../../../tests/project-without-estimate.test.mjs>)
 - [backend-node/tests/document-lifecycle.test.ts](<../../../backend-node/tests/document-lifecycle.test.ts>)
 - [backend-node/tests/estimate-admin-self-decision.test.ts](<../../../backend-node/tests/estimate-admin-self-decision.test.ts>)
 - [backend-node/tests/estimate-assignments-read.test.ts](<../../../backend-node/tests/estimate-assignments-read.test.ts>)

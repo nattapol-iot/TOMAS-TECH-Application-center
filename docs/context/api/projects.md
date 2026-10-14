@@ -2,32 +2,32 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c91268be`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `f58ab5c6`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 49–77 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 79–102 |
-| GET | `/api/v1/projects/contact-options` | 104–114 |
-| GET | `/api/v1/projects` | 116–143 |
-| GET | `/api/v1/projects/attention` | 178–196 |
-| GET | `/api/v1/projects/overview` | 200–250 |
-| POST | `/api/v1/projects` | 252–387 |
-| GET | `/api/v1/projects/:id/members` | 389–414 |
-| POST | `/api/v1/projects/:id/members` | 416–439 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 441–462 |
-| GET | `/api/v1/projects/:id/deletion` | 482–489 |
-| DELETE | `/api/v1/projects/:id` | 491–514 |
-| PUT | `/api/v1/projects/:id` | 516–636 |
+| GET | `/api/v1/projects/creation-options` | 51–83 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 85–108 |
+| GET | `/api/v1/projects/contact-options` | 110–120 |
+| GET | `/api/v1/projects` | 122–149 |
+| GET | `/api/v1/projects/attention` | 184–202 |
+| GET | `/api/v1/projects/overview` | 206–256 |
+| POST | `/api/v1/projects` | 258–426 |
+| GET | `/api/v1/projects/:id/members` | 428–453 |
+| POST | `/api/v1/projects/:id/members` | 455–478 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 480–501 |
+| GET | `/api/v1/projects/:id/deletion` | 521–528 |
+| DELETE | `/api/v1/projects/:id` | 530–553 |
+| PUT | `/api/v1/projects/:id` | 555–679 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 40–45 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–637 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 42–47 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 49–680 |
 
 ## Direct local dependencies
 
@@ -45,11 +45,13 @@ Evidence: source snapshot `c91268be`; generated, do not edit. [backend-node/src/
 - [backend-node/src/project-initial-plan.ts](<../../../backend-node/src/project-initial-plan.ts>)
 - [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/project-overview.ts](<../../../backend-node/src/project-overview.ts>)
+- [backend-node/src/project-notices.ts](<../../../backend-node/src/project-notices.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
 - [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/types.ts](<../../../backend-node/src/types.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
+- [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/crm.ts](<../../../backend-node/src/crm.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)

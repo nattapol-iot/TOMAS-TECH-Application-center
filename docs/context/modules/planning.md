@@ -4,7 +4,7 @@
 
 แผนงาน timeline กำลังคน lifecycle งานและคำขอปรับวัน
 
-Evidence: snapshot `c91268be`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `f58ab5c6`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -146,6 +146,8 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/business-date.ts](<../../../backend-node/src/business-date.ts>)
 - [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
+- [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
+- [backend-node/src/project-notices.ts](<../../../backend-node/src/project-notices.ts>)
 - [backend-node/src/resource-task-service.ts](<../../../backend-node/src/resource-task-service.ts>)
 - [backend-node/src/resource-workload.ts](<../../../backend-node/src/resource-workload.ts>)
 - [backend-node/src/resource-task-math.ts](<../../../backend-node/src/resource-task-math.ts>)

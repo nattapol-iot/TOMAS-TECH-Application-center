@@ -2,6 +2,7 @@ import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import { ApiError } from "./errors.js";
 import { parseDateOnly, requiredInteger, requiredText } from "./http.js";
+import type { NewPics } from "./project-notices.js";
 import { appendUpdate, calendarDays, replacePics } from "./schedule-service.js";
 import { MASTER_PLAN_PHASE } from "./schedule-phases.js";
 
@@ -190,9 +191,10 @@ async function removeRow(transaction: TransactionType, projectId: number, row: S
  * removed only when nothing depends on it: no progress, no children, no pending request
  * for more days, and nothing linked to it (a predecessor, a resource task, a signing
  * document, a report). Such a row stops the save and is named, rather than being dropped
- * or silently kept.
+ * or silently kept. Returns who became a row's person in charge, so they can be told.
  */
-export async function syncProjectPlan(transaction: TransactionType, projectId: number, plan: InitialPlan, actorId: number): Promise<void> {
+export async function syncProjectPlan(transaction: TransactionType, projectId: number, plan: InitialPlan, actorId: number): Promise<NewPics[]> {
+  const assigned: NewPics[] = [];
   await ensureMembers(transaction, projectId, plan.team.map((row) => row.userId), actorId);
   const rows = await readScheduleRows(transaction, projectId);
   const phases = [
@@ -228,7 +230,7 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
       if (!current) {
         const id = await insertRow(transaction, projectId, actorId, { parentId: phaseId, sortOrder: index + 1, kind: "task", name: input.name,
           visibility: phaseSpec.visibility, planStart: input.start, planDays, planManDays: input.planManDays });
-        if (input.userId !== null) await replacePics(transaction, id, [input.userId]);
+        if (input.userId !== null) assigned.push({ taskId: id, userIds: await replacePics(transaction, id, [input.userId]) });
         continue;
       }
       const datesChanged = current.planStart !== input.start || current.planDays !== planDays;
@@ -250,9 +252,10 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
           JSON.stringify({ name: input.name, planStart: input.start, planDays, planManDays: input.planManDays }), "Changed in Edit project");
       }
       // A row with several PICs from Project Schedule keeps them unless its person is changed here.
-      if (input.userId !== null && current.pic !== input.userId) await replacePics(transaction, current.id, [input.userId]);
+      if (input.userId !== null && current.pic !== input.userId) assigned.push({ taskId: current.id, userIds: await replacePics(transaction, current.id, [input.userId]) });
     }
   }
+  return assigned;
 }
 
 /* ── Team, customer payments and contacts ─────────────────────────────── */

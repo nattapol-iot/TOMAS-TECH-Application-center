@@ -28,6 +28,6 @@ export function ProjectHandover({inquiryId,bootstrap,refreshBootstrap,notify,ope
     </>}
     <button className="btn ghost sm" onClick={()=>setRevision(value=>value+1)}>{t("Refresh")}</button>
     {creating&&data?.estimateId?<CreateProjectModal initialEstimateId={data.estimateId} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify}
-      onClose={()=>setCreating(false)} onCreated={async number=>{setCreating(false);setRevision(value=>value+1);notify(number);await refreshBootstrap();}}/>:null}
+      onClose={()=>setCreating(false)} onCreated={async (number,deliveryNote)=>{setCreating(false);setRevision(value=>value+1);notify(`${number} · ${t("Portfolio.created")}${deliveryNote}`);await refreshBootstrap();}}/>:null}
   </Panel>;
 }

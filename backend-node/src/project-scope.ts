@@ -18,6 +18,16 @@ export function isProjectManagerRole(user: CurrentUser): boolean {
   return rolesOf(user).some((role) => PROJECT_MANAGER_ROLES.has(role));
 }
 
+/**
+ * Who may create a project without an estimate (owner decision 2026-10-14): the Application team,
+ * who do not make an Estimate Cost, Project Managers and Admins. The team is read from the
+ * department, whose names vary ("Application Engineer Dept.", group suffixes), so any department
+ * naming Application counts. Creating still needs project.write.
+ */
+export function canCreateWithoutEstimate(user: CurrentUser): boolean {
+  return rolesOf(user).some((role) => role === "Project Manager" || role === "Admin") || /application/i.test(user.department ?? "");
+}
+
 export function isMyWorkElevated(user: CurrentUser): boolean {
   return rolesOf(user).some((role) => MY_WORK_ELEVATED_ROLES.has(role));
 }

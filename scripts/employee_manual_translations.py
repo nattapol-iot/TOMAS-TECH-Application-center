@@ -343,13 +343,15 @@ C('pricing', 'Reference prices and supplier quotations || 参考価格と仕入�
     'This view is derived from supplier-linked cost items. It does not dispatch RFQs or change a cost item’s status automatically. || 仕入先付き原価項目から算出する画面であり、RFQ自動送信や項目状態の自動変更は行いません。'))
 
 C('projects', 'Projects and project documents || プロジェクトと関連書類', 'Projects → Overview || Projects → Overview', 'PM / authorized project users / members || PM・プロジェクト権限者・メンバー',
-  P('15.1 Create a project from an approved estimate || 15.1 承認済み見積からプロジェクトを作成', [
+  P('15.1 Create a project || 15.1 プロジェクトを作成', [
     'Open Projects → the <b>Overview</b> tab → <b>Create project</b>. || Projects → <b>Overview</b>タブ → <b>Create project</b>を開きます。',
-    'Select an approved estimate within your scope; verify customer, job and revision. || 自分の範囲の承認済み見積を選び、顧客、案件、版を確認します。',
+    'Work with an estimate: select an approved estimate within your scope; verify customer, job and revision. || 見積がある案件：自分の範囲の承認済み見積を選び、顧客、案件、版を確認します。',
+    'Work without an estimate (Application team, PM or Admin): choose <b>Without an estimate</b>, then pick the customer, name the project and choose its type. || 見積がない案件（Applicationチーム、PM、Admin）：<b>見積なし</b>を選び、顧客を選択し、案件名と案件区分を入力します。',
     'Complete Customer PO number, PO date, Project manager, Lead engineer, Start date, Target delivery and Site. Delivery must not precede the start. || 顧客PO番号、PO日、PM、Lead engineer、開始日、目標納期、現場を入力します。納期は開始日以降にします。',
-    'Check Contracting customer and End user, then save. || 契約顧客とEnd userを確認して保存します。',
+    'Check Contracting customer and End user, then save. If saving fails, the message appears beside the buttons and everything you entered stays. || 契約顧客とEnd userを確認して保存します。保存できない場合はボタンの横に理由が表示され、入力内容はそのまま残ります。',
+    'After saving, the PM, Lead engineer and team plan members get an in-app notification and an email (not the person who created it). Anyone later made a PIC of a task is told the same way. || 保存後、PM、Lead engineer、チーム計画のメンバーにアプリ内通知とメールが届きます（作成者を除く）。後からタスクのPICになった人にも同様に通知されます。',
     'Find the new project, check its number and open Documents to inspect its prepared folders. || 作成したProjectの番号を確認し、Documentsで用意されたフォルダーを確認します。'
-  ], 'The project references the correct estimate revision and has 15 standard folders. || 正しい見積版に紐づき、標準15フォルダーが作成されます。') +
+  ], 'The project references the correct estimate revision, or its own customer when there is no estimate, and has 15 standard folders. || 正しい見積版、または見積がない場合は指定した顧客に紐づき、標準15フォルダーが作成されます。') +
   P('15.2 Store and download files || 15.2 ファイルの保管とダウンロード', [
     'Select Documents on the project row and choose the appropriate folder. || Project行のDocumentsを開き、内容に合うフォルダーを選びます。',
     'Choose the file and enter any required type/notes; check the filename and destination before uploading. || ファイル、必要な種類・メモを指定し、アップロード前に名前と保存先を確認します。',
