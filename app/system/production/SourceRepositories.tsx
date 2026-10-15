@@ -33,6 +33,36 @@ function projectLabel(project: SourceRepository["project"]): string {
   return [project.projectNo, project.name].filter(Boolean).join(" · ") || `#${project.id}`;
 }
 
+type RepositorySort = "updated" | "name" | "size";
+type RepositoryLayout = "project" | "list";
+
+const SORTS: Record<RepositorySort, (a: SourceRepository, b: SourceRepository) => number> = {
+  updated: (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name),
+  name: (a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true }),
+  size: (a, b) => b.sizeBytes - a.sizeBytes || a.name.localeCompare(b.name),
+};
+
+/** The reader's last sort and layout, a per-browser convenience; the page works without it. */
+const PREFERENCE_KEY = "download-center.repositories.view";
+function readPreference(): { sort: RepositorySort; layout: RepositoryLayout } {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PREFERENCE_KEY) ?? "{}") as { sort?: string; layout?: string };
+    return {
+      sort: saved.sort === "name" || saved.sort === "size" ? saved.sort : "updated",
+      layout: saved.layout === "list" ? "list" : "project",
+    };
+  } catch {
+    return { sort: "updated", layout: "project" };
+  }
+}
+function writePreference(value: { sort: RepositorySort; layout: RepositoryLayout }) {
+  try { window.localStorage.setItem(PREFERENCE_KEY, JSON.stringify(value)); } catch { /* storage unavailable: keep the default next time */ }
+}
+
+function copyText(text: string, done: string, notify: Notify) {
+  void navigator.clipboard?.writeText(text).then(() => notify(done), () => notify(text));
+}
+
 /** Repository list, then one repository's tree, file view and history. */
 export function SourceRepositories({ canManage, notify }: { canManage: boolean; notify: Notify }) {
   const [items, setItems] = useState<SourceRepository[] | null>(null);
@@ -41,6 +71,7 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   const [revision, setRevision] = useState(0);
   const [query, setQuery] = useState("");
   const [project, setProject] = useState("");
+  const [view, setView] = useState(readPreference);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const t = useT();
@@ -62,12 +93,33 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   }, [items]);
   const needle = query.trim().toLocaleLowerCase();
   const visible = (items ?? []).filter((item) => (!project || String(item.project?.id ?? "") === project)
-    && (!needle || `${item.name} ${item.description} ${projectLabel(item.project)}`.toLocaleLowerCase().includes(needle)));
+    && (!needle || `${item.name} ${item.description} ${projectLabel(item.project)}`.toLocaleLowerCase().includes(needle)))
+    .sort(SORTS[view.sort]);
+  // Groups follow the chosen sort: a project appears where its first repository would.
+  const byProject = new Map<string, { key: string; project: SourceRepository["project"]; items: SourceRepository[] }>();
+  for (const item of visible) {
+    const key = item.project ? String(item.project.id) : "";
+    const group = byProject.get(key) ?? { key, project: item.project, items: [] };
+    group.items.push(item);
+    byProject.set(key, group);
+  }
+  const groups = [...byProject.values()].sort((a, b) => Number(!a.key) - Number(!b.key));
+  const changeView = (next: Partial<typeof view>) => {
+    const value = { ...view, ...next };
+    setView(value);
+    writePreference(value);
+  };
 
   if (open) {
     return <RepositoryView name={open} notify={notify} dateFormat={dateFormat}
       onBack={() => { setOpen(null); setRevision((value) => value + 1); }} />;
   }
+
+  const rows = (list: SourceRepository[], showProject: boolean) => (
+    <ul className="repo-list">
+      {list.map((item) => <RepositoryRow key={item.name} item={item} showProject={showProject} dateFormat={dateFormat} notify={notify} onOpen={() => setOpen(item.name)} />)}
+    </ul>
+  );
 
   return (
     <>
@@ -80,6 +132,22 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
             {projects.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
         </label>
+        <label className="select-field">
+          <span className="sr-only">{t("Repos.sortLabel")}</span>
+          <select value={view.sort} onChange={(event) => changeView({ sort: event.target.value as RepositorySort })}>
+            <option value="updated">{t("Repos.sortUpdated")}</option>
+            <option value="name">{t("Repos.sortName")}</option>
+            <option value="size">{t("Repos.sortSize")}</option>
+          </select>
+        </label>
+        <div className="seg-control" role="group" aria-label={t("Repos.viewLabel")}>
+          <button type="button" className={view.layout === "project" ? "on" : ""} aria-pressed={view.layout === "project"} onClick={() => changeView({ layout: "project" })}>
+            <LocalizedText text={"Repos.viewByProject"} />
+          </button>
+          <button type="button" className={view.layout === "list" ? "on" : ""} aria-pressed={view.layout === "list"} onClick={() => changeView({ layout: "list" })}>
+            <LocalizedText text={"Repos.viewList"} />
+          </button>
+        </div>
         {items ? <span className="download-center-count">{visible.length} <LocalizedText text={"Repos.count"} /></span> : null}
         {hub ? (
           <a className="btn default" href={hub.orgUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /><LocalizedText text={"Repos.openHub"} /></a>
@@ -97,53 +165,73 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
       ) : visible.length === 0 ? (
         <Panel><EmptyState icon="gitBranch" title={items.length === 0 ? "Repos.emptyTitle" : "Downloads.noMatchTitle"}
           message={items.length === 0 ? (canManage ? "Repos.emptyManage" : "Repos.emptyMessage") : "Downloads.noMatchMessage"} /></Panel>
-      ) : (
-        <section className="panel">
-          <div className="panel-body flush">
-            <div className="table-wrap">
-              <table className="grid repo-table">
-                <colgroup><col /><col style={{ width: 260 }} /><col style={{ width: 90 }} /><col style={{ width: 100 }} /><col style={{ width: 170 }} /></colgroup>
-                <thead>
-                  <tr>
-                    <th><LocalizedText text={"Repos.repository"} /></th>
-                    <th><LocalizedText text={"Repos.project"} /></th>
-                    <th className="num"><LocalizedText text={"Repos.files"} /></th>
-                    <th className="num"><LocalizedText text={"Downloads.size"} /></th>
-                    <th><LocalizedText text={"Downloads.updated"} /></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((item) => (
-                    <tr key={item.name} className="clickable" onClick={() => setOpen(item.name)}>
-                      <td className="wrap">
-                        <div className="cell-primary">
-                          <strong className="repo-name"><Icon name="gitBranch" /> {item.name}</strong>
-                          {item.description ? <span className="download-center-description">{item.description}</span> : null}
-                        </div>
-                      </td>
-                      <td><span title={projectLabel(item.project)}>{projectLabel(item.project) || "—"}</span></td>
-                      <td className="num">{item.fileCount ?? "—"}</td>
-                      <td className="num">{formatRepositorySize(item.sizeBytes)}</td>
-                      <td>
-                        <div className="cell-primary">
-                          <span>{item.updatedAt ? dateFormat.format(new Date(item.updatedAt)) : "—"}</span>
-                          {item.updatedBy.name ? <span>{item.updatedBy.name}</span> : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      ) : view.layout === "list" ? (
+        <section className="panel"><div className="panel-body flush">{rows(visible, true)}</div></section>
+      ) : groups.map((group) => (
+        <section className="panel" key={group.key || "none"}>
+          <div className="panel-head repo-group-head">
+            <h2>
+              <Icon name="folder" />
+              {group.project ? <>
+                {group.project.projectNo ? <span className="repo-group-no">{group.project.projectNo}</span> : null}
+                <span className="repo-group-name">{group.project.name || `#${group.project.id}`}</span>
+              </> : <LocalizedText text={"Repos.noProject"} />}
+            </h2>
+            <span className="download-center-count">{group.items.length} <LocalizedText text={"Repos.count"} /></span>
           </div>
+          <div className="panel-body flush">{rows(group.items, false)}</div>
         </section>
-      )}
+      ))}
 
       {creating ? (
         <CreateRepositoryModal onClose={() => setCreating(false)} notify={notify}
           onCreated={(created) => { setCreating(false); setOpen(created.name); }} />
       ) : null}
     </>
+  );
+}
+
+function RepositoryRow({ item, showProject, dateFormat, notify, onOpen }: {
+  item: SourceRepository; showProject: boolean; dateFormat: Intl.DateTimeFormat; notify: Notify; onOpen: () => void;
+}) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const empty = item.empty === true || item.fileCount === 0;
+  const download = () => {
+    setBusy(true);
+    downloadRepositoryArchive(item.name).catch((reason: unknown) => notify(errorText(reason))).finally(() => setBusy(false));
+  };
+  return (
+    <li className="repo-item">
+      <button type="button" className="repo-item-main" onClick={onOpen}>
+        <span className="repo-item-title">
+          <Icon name="gitBranch" />
+          <strong>{item.name}</strong>
+          {empty ? <Badge tone="amber">Repos.emptyBadge</Badge> : null}
+        </span>
+        {item.description ? <span className="repo-item-description">{item.description}</span> : null}
+        <span className="repo-item-meta">
+          {showProject && item.project ? <span className="repo-item-project" title={projectLabel(item.project)}><Icon name="folder" />{projectLabel(item.project)}</span> : null}
+          {item.defaultBranch ? <span><Icon name="gitBranch" />{item.defaultBranch}</span> : null}
+          {item.fileCount !== null ? <span>{item.fileCount} <LocalizedText text={"Repos.files"} /></span> : null}
+          {empty ? null : <span>{formatRepositorySize(item.sizeBytes)}</span>}
+          {item.updatedAt ? (
+            <span><Icon name="clock" />{dateFormat.format(new Date(item.updatedAt))}{item.updatedBy.name ? ` · ${item.updatedBy.name}` : ""}</span>
+          ) : null}
+        </span>
+      </button>
+      <div className="repo-item-actions">
+        {item.cloneUrl ? (
+          <button className="icon-btn" type="button" aria-label={t("Repos.copyClone")} title={t("Repos.copyClone")}
+            onClick={() => copyText(`git clone ${item.cloneUrl}`, t("Repos.cloneCopied"), notify)}>
+            <Icon name="copy" />
+          </button>
+        ) : null}
+        <button className="icon-btn" type="button" disabled={busy || empty} aria-label={t("Repos.downloadZip")} title={t("Repos.downloadZip")} onClick={download}>
+          <Icon name="download" />
+        </button>
+      </div>
+    </li>
   );
 }
 
@@ -252,48 +340,86 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
   }
   if (!detail) return <Panel><EmptyState icon="clock" title="Loading…" message="Repos.loading" /></Panel>;
 
+  const empty = detail.fileCount === 0 || detail.empty === true;
+  const stamp = (at: string, by: string) => `${at ? dateFormat.format(new Date(at)) : "—"}${by ? ` · ${by}` : ""}`;
+
   return (
     <div className="stack repo-view">
+      <nav className="repo-crumbs" aria-label={t("Repos.tab")}>
+        <button type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Repos.allRepositories"} /></button>
+        {detail.project ? <><span aria-hidden="true">/</span><span className="repo-crumbs-project" title={projectLabel(detail.project)}>{projectLabel(detail.project)}</span></> : null}
+        <span aria-hidden="true">/</span>
+        <strong>{detail.name}</strong>
+      </nav>
+
       <section className="panel">
         <div className="panel-head repo-head">
-          <div>
-            <button className="btn ghost sm" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Repos.back"} /></button>
-            <h2 className="repo-title"><Icon name="gitBranch" /> {detail.name}</h2>
-            <p className="repo-meta">
-              {detail.project ? <Badge tone="blue">{projectLabel(detail.project)}</Badge> : null}
-              {detail.defaultBranch ? <Badge tone="violet">{detail.defaultBranch}</Badge> : null}
-              <span>{detail.fileCount !== null ? <>{detail.fileCount} <LocalizedText text={"Repos.files"} /> · </> : null}{formatRepositorySize(detail.sizeBytes)}</span>
-              {detail.updatedAt ? <span><LocalizedText text={"Downloads.updated"} /> {dateFormat.format(new Date(detail.updatedAt))}{detail.updatedBy.name ? ` · ${detail.updatedBy.name}` : ""}</span> : null}
-            </p>
-            {detail.description ? <p className="download-center-description">{detail.description}</p> : null}
-            {detail.cloneUrl ? <CloneBox url={detail.cloneUrl} notify={notify} /> : null}
+          <div className="repo-head-text">
+            <h2 className="repo-title">
+              <Icon name="gitBranch" /> <span>{detail.name}</span>
+              {empty ? <Badge tone="amber">Repos.emptyBadge</Badge> : null}
+            </h2>
+            {detail.description ? <p className="repo-head-description">{detail.description}</p> : null}
           </div>
           <div className="repo-actions">
+            {detail.canManage ? <>
+              <button className="btn default" type="button" disabled={busy} onClick={() => setUploading(true)}><Icon name="upload" /><LocalizedText text={"Repos.upload"} /></button>
+              <button className="icon-btn" type="button" disabled={busy} aria-label={t("Edit")} title={t("Edit")} onClick={() => setEditing(true)}><Icon name="edit" /></button>
+              <button className="icon-btn repo-danger" type="button" disabled={busy} aria-label={t("Repos.deleteRepository")} title={t("Repos.deleteRepository")} onClick={removeRepository}><Icon name="trash" /></button>
+            </> : null}
             {detail.webUrl ? (
               <a className="btn default" href={detail.webUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /><LocalizedText text={"Repos.openInHub"} /></a>
             ) : null}
-            <button className="btn primary" type="button" disabled={busy || detail.fileCount === 0 || detail.empty === true} onClick={() => void run(() => downloadRepositoryArchive(detail.name))}>
+            <button className="btn primary" type="button" disabled={busy || empty} onClick={() => void run(() => downloadRepositoryArchive(detail.name))}>
               <Icon name="download" /><LocalizedText text={"Repos.downloadZip"} />
             </button>
-            {detail.canManage ? <>
-              <button className="btn default" type="button" disabled={busy} onClick={() => setUploading(true)}><Icon name="upload" /><LocalizedText text={"Repos.upload"} /></button>
-              <button className="btn default" type="button" disabled={busy} onClick={() => setEditing(true)}><Icon name="edit" /><LocalizedText text={"Edit"} /></button>
-              <button className="btn danger" type="button" disabled={busy} onClick={removeRepository}><Icon name="trash" /><LocalizedText text={"Repos.delete"} /></button>
-            </> : null}
           </div>
         </div>
       </section>
 
-      <Tabs tabs={[{ id: "code", label: "Repos.code" }, { id: "history", label: "Repos.history", count: detail.history.length }]} active={tab} onChange={setTab} />
+      <div className="repo-layout">
+        <div className="stack repo-main">
+          <Tabs tabs={[{ id: "code", label: "Repos.code" }, { id: "history", label: "Repos.history", count: detail.history.length }]} active={tab} onChange={setTab} />
 
-      {tab === "history" ? <HistoryPanel detail={detail} /> : file ? (
-        <BlobPanel key={file} repo={name} path={file} canManage={detail.canManage} busy={busy} notify={notify}
-          onNavigate={(next) => { setFile(null); setPath(next); }} onDelete={() => removePath(file, false)} />
-      ) : (
-        <TreePanel repo={name} path={path} revision={revision} canManage={detail.canManage} busy={busy} dateFormat={dateFormat} notify={notify}
-          folderZip={!detail.cloneUrl}
-          onNavigate={setPath} onOpenFile={setFile} onDelete={removePath} />
-      )}
+          {tab === "history" ? <HistoryPanel detail={detail} /> : file ? (
+            <BlobPanel key={file} repo={name} path={file} canManage={detail.canManage} busy={busy} notify={notify}
+              onNavigate={(next) => { setFile(null); setPath(next); }} onDelete={() => removePath(file, false)} />
+          ) : detail.empty === true && detail.cloneUrl ? (
+            <QuickSetup url={detail.cloneUrl} branch={detail.defaultBranch || "main"} notify={notify} />
+          ) : (
+            <TreePanel repo={name} path={path} revision={revision} canManage={detail.canManage} busy={busy} dateFormat={dateFormat} notify={notify}
+              folderZip={!detail.cloneUrl}
+              onNavigate={setPath} onOpenFile={setFile} onDelete={removePath} />
+          )}
+        </div>
+
+        <aside className="stack repo-aside">
+          {detail.cloneUrl ? (
+            <section className="panel">
+              <div className="panel-head"><h2><Icon name="copy" /> <LocalizedText text={"Repos.clone"} /></h2></div>
+              <div className="panel-body repo-aside-body">
+                <CommandBlock command={`git clone ${detail.cloneUrl}`} notify={notify} />
+                <p className="repo-hint"><LocalizedText text={"Repos.cloneHint"} /></p>
+              </div>
+            </section>
+          ) : null}
+          <section className="panel">
+            <div className="panel-head"><h2><Icon name="book" /> <LocalizedText text={"Repos.about"} /></h2></div>
+            <div className="panel-body repo-aside-body">
+              <dl className="repo-about">
+                <div><dt><LocalizedText text={"Repos.project"} /></dt><dd>{projectLabel(detail.project) || "—"}</dd></div>
+                {detail.defaultBranch ? <div><dt><LocalizedText text={"Repos.defaultBranch"} /></dt><dd><code>{detail.defaultBranch}</code></dd></div> : null}
+                <div>
+                  <dt><LocalizedText text={"Downloads.size"} /></dt>
+                  <dd>{formatRepositorySize(detail.sizeBytes)}{detail.fileCount !== null ? <> · {detail.fileCount} <LocalizedText text={"Repos.files"} /></> : null}</dd>
+                </div>
+                <div><dt><LocalizedText text={"Downloads.updated"} /></dt><dd>{stamp(detail.updatedAt, detail.updatedBy.name)}</dd></div>
+                <div><dt><LocalizedText text={"Repos.created"} /></dt><dd>{stamp(detail.createdAt, detail.createdBy.name)}</dd></div>
+              </dl>
+            </div>
+          </section>
+        </aside>
+      </div>
 
       {uploading ? (
         <UploadModal repo={name} path={path} maxBytes={detail.uploadMaxBytes ?? null} cloneUrl={detail.cloneUrl ?? null} notify={notify} onClose={() => setUploading(false)}
@@ -341,17 +467,33 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
   }, [repo, path, key]);
   const loading = loadedKey !== key;
   const parent = path.split("/").filter(Boolean).slice(0, -1).join("/");
+  // The filter belongs to the folder it was typed in; opening another folder starts clean.
+  const [find, setFind] = useState({ path: "", text: "" });
+  const needle = find.path === path ? find.text.trim().toLocaleLowerCase() : "";
+  const entries = (tree?.entries ?? []).filter((entry) => !needle || entry.name.toLocaleLowerCase().includes(needle));
+  const folders = (tree?.entries ?? []).filter((entry) => entry.type === "dir").length;
+  const files = (tree?.entries.length ?? 0) - folders;
 
   return (
     <>
       <section className="panel">
-        <div className="panel-head">
+        <div className="panel-head repo-tree-head">
           <Breadcrumb repo={repo} path={path} onNavigate={onNavigate} />
-          {path && folderZip ? (
-            <button className="btn default sm" type="button" disabled={busy} onClick={() => void downloadRepositoryArchive(repo, path).catch((reason: unknown) => notify(errorText(reason)))}>
-              <Icon name="download" /><LocalizedText text={"Repos.downloadFolder"} />
-            </button>
-          ) : null}
+          <div className="repo-tree-tools">
+            {tree && !loading && tree.entries.length > 0 ? (
+              <span className="download-center-count">
+                {folders} <LocalizedText text={"Repos.folders"} /> · {files} <LocalizedText text={"Repos.files"} />
+              </span>
+            ) : null}
+            {tree && !loading && tree.entries.length > 8 ? (
+              <SearchInput value={find.path === path ? find.text : ""} onChange={(text) => setFind({ path, text })} placeholder="Repos.findFile" />
+            ) : null}
+            {path && folderZip ? (
+              <button className="btn default sm" type="button" disabled={busy} onClick={() => void downloadRepositoryArchive(repo, path).catch((reason: unknown) => notify(errorText(reason)))}>
+                <Icon name="download" /><LocalizedText text={"Repos.downloadFolder"} />
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="panel-body flush">
           {error && !loading ? (
@@ -363,14 +505,14 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
           ) : (
             <div className="table-wrap">
               <table className="grid repo-tree">
-                <colgroup><col /><col style={{ width: 100 }} /><col style={{ width: 130 }} /><col style={{ width: canManage ? 96 : 52 }} /></colgroup>
+                <colgroup><col /><col style={{ width: 100 }} /><col style={{ width: 130 }} /><col style={{ width: canManage ? 112 : 64 }} /></colgroup>
                 <tbody>
                   {path ? (
                     <tr className="clickable" onClick={() => onNavigate(parent)}>
                       <td colSpan={4}><span className="repo-entry"><Icon name="folder" /> ..</span></td>
                     </tr>
                   ) : null}
-                  {tree.entries.map((entry) => (
+                  {entries.map((entry) => (
                     <tr key={entry.path} className="clickable" onClick={() => (entry.type === "dir" ? onNavigate(entry.path) : onOpenFile(entry.path))}>
                       <td><span className={`repo-entry ${entry.type}`} title={entry.name}><Icon name={entry.type === "dir" ? "folder" : "file"} /> {entry.name}</span></td>
                       <td className="num">{entry.type === "file" ? formatRepositorySize(entry.sizeBytes) : ""}</td>
@@ -396,6 +538,9 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
                       </td>
                     </tr>
                   ))}
+                  {needle && entries.length === 0 ? (
+                    <tr><td colSpan={4} className="repo-no-match"><LocalizedText text={"Repos.noFileMatch"} /></td></tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -478,19 +623,37 @@ function BlobPanel({ repo, path, canManage, busy, notify, onNavigate, onDelete }
   );
 }
 
-/** The git remote of a TMTHub repository, ready to copy into "git clone". */
-function CloneBox({ url, notify }: { url: string; notify: Notify }) {
+/** git commands to paste into a terminal, with a copy button. */
+function CommandBlock({ command, notify }: { command: string; notify: Notify }) {
   const t = useT();
-  const command = `git clone ${url}`;
-  const copy = () => {
-    void navigator.clipboard?.writeText(command).then(() => notify(t("Repos.cloneCopied")), () => notify(command));
-  };
   return (
-    <div className="repo-clone">
-      <span><LocalizedText text={"Repos.clone"} /></span>
-      <code title={command}>{command}</code>
-      <button className="icon-btn" type="button" aria-label={t("Repos.copyClone")} title={t("Repos.copyClone")} onClick={copy}><Icon name="copy" /></button>
+    <div className="repo-command">
+      <pre>{command}</pre>
+      <button className="icon-btn" type="button" aria-label={t("Repos.copyCommand")} title={t("Repos.copyCommand")}
+        onClick={() => copyText(command, t("Repos.commandCopied"), notify)}>
+        <Icon name="copy" />
+      </button>
     </div>
+  );
+}
+
+/** An empty TMTHub repository: how to put code into it, as GitHub shows on a new repository. */
+function QuickSetup({ url, branch, notify }: { url: string; branch: string; notify: Notify }) {
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <h2><LocalizedText text={"Repos.emptyTreeTitle"} /></h2>
+          <p><LocalizedText text={"Repos.quickSetupHint"} /></p>
+        </div>
+      </div>
+      <div className="panel-body repo-setup">
+        <h3><LocalizedText text={"Repos.pushExisting"} /></h3>
+        <CommandBlock command={`git remote add origin ${url}\ngit branch -M ${branch}\ngit push -u origin ${branch}`} notify={notify} />
+        <h3><LocalizedText text={"Repos.startNew"} /></h3>
+        <CommandBlock command={`git clone ${url}`} notify={notify} />
+      </div>
+    </section>
   );
 }
 
