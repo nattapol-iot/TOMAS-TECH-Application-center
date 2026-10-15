@@ -1796,6 +1796,16 @@ export const listSignInRequests = () => apiRequest<SignInRequest[]>("/api/v1/mas
 export const dismissSignInRequest = (subject: string) =>
   apiRequest<void>(`/api/v1/master/sign-in-requests/${encodeURIComponent(subject)}`, { method: "DELETE" });
 
+/** An account that signs in but has no Employee Master record, so no department (GET /api/v1/master/unlinked-accounts). */
+export type UnlinkedAccount = {
+  userId: number; email: string; name: string; role: string; department: string;
+  createdAt: string; lastUsedAt: string | null;
+  /** An active employee already has this email but does not point at the account; saving that employee links it. */
+  employeeId: number | null; employeeNo: number | null;
+};
+
+export const listUnlinkedAccounts = () => apiRequest<UnlinkedAccount[]>("/api/v1/master/unlinked-accounts");
+
 export const createEmployee = (input: EmployeeInput) =>
   apiRequest<{ id: number; employeeNo: number; nameEn: string; rowVersion: string }>("/api/v1/master/employees", {
     method: "POST",

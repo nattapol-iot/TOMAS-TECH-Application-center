@@ -22,6 +22,7 @@ import {
   listEstimates,
   listEmployees,
   listSignInRequests,
+  listUnlinkedAccounts,
   listAccessRoles,
   listInquiries,
   listInventory,
@@ -54,6 +55,7 @@ import {
   type EmployeeInput,
   type EmployeeRecord,
   type SignInRequest,
+  type UnlinkedAccount,
   type InquirySummary,
   type ItemBalance,
   type PagedResult,
@@ -2080,11 +2082,15 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   // Filled in from a sign-in request, so the employee is added with exactly the email that was tried.
   const [prefill, setPrefill] = useState<Partial<EmployeeInput> | null>(null);
   const [signInRequests, setSignInRequests] = useState<SignInRequest[]>([]);
+  // Accounts the old first sign-in created (Admin, no department) that no employee record points at.
+  const [unlinked, setUnlinked] = useState<UnlinkedAccount[]>([]);
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [list, requests] = await Promise.all([listEmployees({ search, activeOnly }), canWrite ? listSignInRequests() : Promise.resolve([])]);
-      setEmployees(list); setSignInRequests(requests);
+      const [list, requests, accounts] = await Promise.all([
+        listEmployees({ search, activeOnly }), canWrite ? listSignInRequests() : Promise.resolve([]), canWrite ? listUnlinkedAccounts() : Promise.resolve([]),
+      ]);
+      setEmployees(list); setSignInRequests(requests); setUnlinked(accounts);
     }
     catch (requestError) { setError(toError(requestError)); }
     finally { setLoading(false); }
@@ -2097,6 +2103,12 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
 
   const linkedAccounts = employees.filter((employee) => employee.accountActive !== null).length;
+  const when = (value: string) => new Date(value).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB");
+  // An employee already has this email but does not point at the account: saving it links the account.
+  const openEmployee = (account: UnlinkedAccount) => {
+    const match = employees.find((employee) => employee.id === account.employeeId);
+    if (match) setEditing(match); else { setSearch(String(account.employeeNo)); setPage(1); }
+  };
   const departments = new Set(employees.map((employee) => employee.department)).size;
   const pageCount = Math.max(1, Math.ceil(employees.length / pageSize));
   const resolvedPage = Math.min(page, pageCount);
@@ -2128,6 +2140,21 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         <td><div className="row-actions">
           {request.status === "new" ? <button className="btn primary sm" type="button" onClick={() => { setPrefill({ nameEn: request.name, email: request.email }); setEditing("new"); }}><Icon name="plus" />{t("SignIn.addEmployee")}</button> : null}
           <button className="btn ghost sm" type="button" onClick={() => { void dismiss(request); }}><Icon name="x" />{t("SignIn.dismiss")}</button>
+        </div></td>
+      </tr>)}</tbody></table></div>
+    </Panel> : null}
+    {canWrite && unlinked.length ? <Panel title={`${t("Employee.unlinkedTitle")} (${unlinked.length})`} subtitle={t("Employee.unlinkedSubtitle")} flush>
+      <div className="table-wrap"><table><thead><tr>
+        <th>{t("Employee")}</th><th>{t("Role")}</th><th>{t("Department")}</th><th>{t("Employee.lastUsed")}</th><th><span className="sr-only">{t("Actions")}</span></th>
+      </tr></thead><tbody>{unlinked.map((account) => <tr key={account.userId}>
+        <td><div className="cell-primary"><strong>{account.name}</strong><span className="mono">{account.email}</span></div></td>
+        <td className="wrap"><Badge tone={account.role === "Admin" ? "red" : "slate"}>{account.role}</Badge>
+          {account.role === "Admin" ? <div className="muted">{t("Employee.unlinkedAdminHint")}</div> : null}</td>
+        <td>{account.department || t("Employee.noDepartment")}</td>
+        <td>{account.lastUsedAt ? when(account.lastUsedAt) : "—"}</td>
+        <td><div className="row-actions">{account.employeeId !== null
+          ? <button className="btn ghost sm" type="button" onClick={() => openEmployee(account)}><Icon name="edit" />{t("Employee.openToLink").replace("{no}", String(account.employeeNo))}</button>
+          : <button className="btn primary sm" type="button" onClick={() => { setPrefill({ nameEn: account.name, email: account.email, department: account.department }); setEditing("new"); }}><Icon name="plus" />{t("SignIn.addEmployee")}</button>}
         </div></td>
       </tr>)}</tbody></table></div>
     </Panel> : null}

@@ -2,32 +2,39 @@
 
 [Module](../modules/installed-base.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3dd32917`; generated, do not edit. [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `55352aae`; generated, do not edit. [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/assets` | 248–282 |
-| GET | `/api/v1/assets/options` | 284–306 |
-| GET | `/api/v1/assets/:id` | 308–324 |
-| POST | `/api/v1/assets` | 326–348 |
-| PUT | `/api/v1/assets/:id` | 350–381 |
-| POST | `/api/v1/assets/:id/events` | 383–402 |
-| DELETE | `/api/v1/assets/:id` | 404–419 |
+| GET | `/api/v1/assets` | 362–400 |
+| GET | `/api/v1/assets/options` | 402–426 |
+| POST | `/api/v1/assets/cabinets` | 437–455 |
+| PUT | `/api/v1/assets/cabinets/:id` | 457–490 |
+| DELETE | `/api/v1/assets/cabinets/:id` | 492–506 |
+| GET | `/api/v1/assets/:id` | 508–524 |
+| POST | `/api/v1/assets` | 526–555 |
+| PUT | `/api/v1/assets/:id` | 557–588 |
+| POST | `/api/v1/assets/:id/events` | 590–609 |
+| DELETE | `/api/v1/assets/:id` | 611–626 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `nullableId` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 63–63 |
-| `assetDto` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 65–98 |
-| `inputFromRow` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 100–109 |
-| `isDuplicateKey` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 111–115 |
-| `checkReferences` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 183–200 |
-| `insertEvent` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 202–212 |
-| `bindInput` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 214–235 |
-| `registerInstalledAssetRoutes` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 237–420 |
+| `nullableId` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 70–70 |
+| `assetDto` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 72–106 |
+| `inputFromRow` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 108–118 |
+| `isDuplicateKey` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 120–124 |
+| `isDuplicateOn` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 127–129 |
+| `cabinetDto` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 261–272 |
+| `checkReferences` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 275–294 |
+| `insertEvent` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 296–306 |
+| `checkCabinetReferences` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 308–316 |
+| `bindCabinet` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 318–325 |
+| `bindInput` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 327–349 |
+| `registerInstalledAssetRoutes` | [backend-node/src/routes/installed-assets.ts](<../../../backend-node/src/routes/installed-assets.ts>) | 351–627 |
 
 ## Direct local dependencies
 
@@ -42,7 +49,7 @@ Evidence: source snapshot `3dd32917`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customer_sites`, `dbo.customers`, `dbo.installed_asset_events`, `dbo.installed_assets`, `dbo.monitor_agents`, `dbo.monitor_programs`, `dbo.monitor_sites`, `dbo.projects`, `dbo.users`
+`dbo.customer_sites`, `dbo.customers`, `dbo.installed_asset_events`, `dbo.installed_assets`, `dbo.installed_cabinets`, `dbo.monitor_agents`, `dbo.monitor_programs`, `dbo.monitor_sites`, `dbo.projects`, `dbo.users`
 
 ## Change boundary
 

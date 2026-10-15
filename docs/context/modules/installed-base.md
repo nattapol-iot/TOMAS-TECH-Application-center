@@ -4,7 +4,7 @@
 
 ทะเบียนอุปกรณ์และซอฟต์แวร์ที่ติดตั้งให้ลูกค้า ผูกกับลูกค้า site โครงการ Site Monitor และ TMTHub พร้อมประวัติและประกัน
 
-Evidence: snapshot `3dd32917`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `55352aae`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,15 +17,21 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `errorText` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 31–33 |
-| `categoryKey` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 35–35 |
-| `statusKey` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 36–36 |
-| `eventKey` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 37–37 |
-| `InstalledBaseScreen` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 40–201 |
-| `AssetDrawer` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 203–325 |
-| `emptyInput` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 327–333 |
-| `inputOf` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 335–343 |
-| `AssetEditor` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 345–477 |
+| `errorText` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 34–36 |
+| `categoryKey` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 38–38 |
+| `statusKey` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 39–39 |
+| `eventKey` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 40–40 |
+| `readLayout` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 49–51 |
+| `writeLayout` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 52–54 |
+| `groupAssets` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 63–95 |
+| `InstalledBaseScreen` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 98–272 |
+| `CabinetSection` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 275–312 |
+| `AssetTable` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 314–380 |
+| `CabinetEditor` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 382–447 |
+| `AssetDrawer` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 449–572 |
+| `emptyInput` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 574–581 |
+| `inputOf` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 583–592 |
+| `AssetEditor` | [app/system/production/InstalledBaseScreen.tsx](<../../../app/system/production/InstalledBaseScreen.tsx>) | 594–744 |
 | `errorText` | [app/system/production/SiteCredentials.tsx](<../../../app/system/production/SiteCredentials.tsx>) | 18–20 |
 | `AssetCredentials` | [app/system/production/SiteCredentials.tsx](<../../../app/system/production/SiteCredentials.tsx>) | 26–153 |
 | `CredentialEditor` | [app/system/production/SiteCredentials.tsx](<../../../app/system/production/SiteCredentials.tsx>) | 155–232 |

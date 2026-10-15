@@ -36,6 +36,14 @@ test("Employee Master lists who is waiting to sign in and adds them with the ema
   assert.match(screen, /<ChoiceSelect value=\{form\.position\} standard=\{EMPLOYEE_LEVELS\} inUse=\{positions\}/);
   assert.doesNotMatch(screen, /list="employee-departments"|list="employee-positions"/);
   assert.match(screen, /<option value=\{OTHER_CHOICE\}>\{t\("Employee\.otherValue"\)\}<\/option>/);
+  // Accounts the old first sign-in made (Admin, no department) are listed for the same people, and added with the same email.
+  assert.match(client, /export const listUnlinkedAccounts = \(\) => apiRequest<UnlinkedAccount\[\]>\("\/api\/v1\/master\/unlinked-accounts"\);/);
+  assert.match(screen, /canWrite \? listUnlinkedAccounts\(\) : Promise\.resolve\(\[\]\)/);
+  assert.match(screen, /\{canWrite && unlinked\.length \? <Panel title=\{`\$\{t\("Employee\.unlinkedTitle"\)\}/);
+  assert.match(screen, /setPrefill\(\{ nameEn: account\.name, email: account\.email, department: account\.department \}\); setEditing\("new"\);/);
+  // An employee that already has the email is opened instead, since saving it links the account.
+  assert.match(screen, /account\.employeeId !== null\s*\? <button className="btn ghost sm" type="button" onClick=\{\(\) => openEmployee\(account\)\}>/);
+  assert.match(screen, /account\.role === "Admin" \? <div className="muted">\{t\("Employee\.unlinkedAdminHint"\)\}<\/div>/);
   // A new person is never filed under the IoT team by default.
   assert.match(screen, /employeeNo: 0, nameEn: "", nameTh: "", department: "", jobTitle: "",/);
 });

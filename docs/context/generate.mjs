@@ -36,7 +36,7 @@ const modules = [
  ['downloads','Download Center','โปรแกรมและไฟล์ของแผนกจากโฟลเดอร์ download-center บน NAS และ Repository source code ของแต่ละโครงการ (tree โค้ด README ประวัติ zip)','download-center source-repositories tmthub-repositories','production/DownloadCenterScreen.tsx production/SourceRepositories.tsx','download-center|source-repositor|tmthub'],
  ['site-monitor','Site Monitor','สถานะโปรแกรม resource และ log ที่ TMT Control Panel (agent) ส่งมา สั่ง start/stop/restart และแจ้งเมลผู้ดูแลลำดับ 1-2-3','site-monitor release-deployments','production/SiteMonitorScreen.tsx production/MonitorDeployments.tsx','site-monitor|deploy'],
  ['installed-base','Installed Base','ทะเบียนอุปกรณ์และซอฟต์แวร์ที่ติดตั้งให้ลูกค้า ผูกกับลูกค้า site โครงการ Site Monitor และ TMTHub พร้อมประวัติและประกัน','installed-assets site-credentials','production/InstalledBaseScreen.tsx production/SiteCredentials.tsx','installed-base|installed-asset'],
- ['master','Master Data / Customers / Admin','ลูกค้า supplier พนักงาน role audit และ settings','master sales-customers admin','production/CoreScreens.tsx production/AdminAnalyticsScreens.tsx','customer|user-role|admin|business-card'],
+ ['master','Master Data / Customers / Admin','ลูกค้า supplier พนักงาน role audit และ settings','master sales-customers admin sign-in-requests','production/CoreScreens.tsx production/AdminAnalyticsScreens.tsx','customer|user-role|admin|business-card'],
  ['platform','Platform / Health / Storage','config database migration authentication และ document storage','health record-presence','','migration|database|startup|network|audit|http'],
 ];
 const routes = files('backend-node/src/routes').filter(p=>p.endsWith('.ts'));

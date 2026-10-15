@@ -34,6 +34,33 @@ export const SIGN_IN_REQUESTS_SQL = `
       WHERE NOT EXISTS(SELECT 1 FROM dbo.users u WHERE u.entra_object_id=r.subject AND u.deleted_at IS NULL)
       ORDER BY r.last_attempt_at DESC,r.subject;`;
 
+type AccountRow = {
+  id: number | string; email: string; name: string; role: string; department: string | null;
+  created_at: Date | string; last_used_at: Date | string | null; employee_id: number | string | null; employee_no: number | null;
+};
+
+export type UnlinkedAccount = {
+  userId: number; email: string; name: string; role: string; department: string;
+  createdAt: string; lastUsedAt: string | null;
+  /** An active employee already has this email but does not point at the account; saving that employee links it. */
+  employeeId: number | null; employeeNo: number | null;
+};
+
+// Accounts that can sign in but that no active Employee Master record points at, so they belong to no
+// department. Until 2026-10-05 the first TMT ID sign-in created one for anyone, as Admin and with no
+// department. Adding the employee with the same email links the account and gives it the department;
+// the role is not changed. database/scripts/045_list_accounts_outside_employee_master.sql reads the same rows.
+export const UNLINKED_ACCOUNTS_SQL = `
+      SELECT u.id,u.email,u.name,r.code role,u.department,u.created_at,
+        (SELECT MAX(s.last_at) FROM dbo.activity_sessions s WHERE s.user_id=u.id) last_used_at,
+        employee.id employee_id,employee.employee_no
+      FROM dbo.users u
+      JOIN dbo.roles r ON r.id=u.role_id
+      LEFT JOIN dbo.employees employee ON employee.email=u.email AND employee.is_active=1 AND employee.deleted_at IS NULL
+      WHERE u.is_active=1 AND u.deleted_at IS NULL
+        AND NOT EXISTS(SELECT 1 FROM dbo.employees linked WHERE linked.user_id=u.id AND linked.is_active=1 AND linked.deleted_at IS NULL)
+      ORDER BY CASE WHEN r.code=N'Admin' THEN 0 ELSE 1 END,u.name,u.id;`;
+
 const iso = (value: Date | string) => (value instanceof Date ? value.toISOString() : String(value));
 
 export function registerSignInRequestRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
@@ -50,6 +77,22 @@ export function registerSignInRequestRoutes(app: FastifyInstance, database: Data
       firstAttemptAt: iso(row.first_attempt_at),
       lastAttemptAt: iso(row.last_attempt_at),
       status: row.status === "linkedElsewhere" || row.status === "registered" ? row.status : "new",
+    }));
+  });
+
+  app.get("/api/v1/master/unlinked-accounts", async (request): Promise<UnlinkedAccount[]> => {
+    await users.demandPermission(request, "master.write");
+    const result = await database.query<AccountRow>(UNLINKED_ACCOUNTS_SQL);
+    return result.recordset.map((row) => ({
+      userId: Number(row.id),
+      email: row.email,
+      name: row.name,
+      role: row.role,
+      department: row.department ?? "",
+      createdAt: iso(row.created_at),
+      lastUsedAt: row.last_used_at == null ? null : iso(row.last_used_at),
+      employeeId: row.employee_id == null ? null : Number(row.employee_id),
+      employeeNo: row.employee_no == null ? null : Number(row.employee_no),
     }));
   });
 

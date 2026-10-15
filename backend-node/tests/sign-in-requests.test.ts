@@ -4,7 +4,7 @@ import test from "node:test";
 import Fastify from "fastify";
 import type { Database } from "../src/db.js";
 import { registerErrorHandler } from "../src/errors.js";
-import { registerSignInRequestRoutes, SIGN_IN_REQUESTS_SQL } from "../src/routes/sign-in-requests.js";
+import { registerSignInRequestRoutes, SIGN_IN_REQUESTS_SQL, UNLINKED_ACCOUNTS_SQL } from "../src/routes/sign-in-requests.js";
 import type { CurrentUserService } from "../src/users.js";
 
 function server(options: { denied?: boolean } = {}) {
@@ -23,6 +23,12 @@ function server(options: { denied?: boolean } = {}) {
       const request = { input(name: string, _type: unknown, value: unknown) { inputs[name] = value; return request; } };
       bind?.(request);
       statements.push({ text, inputs });
+      if (text === UNLINKED_ACCOUNTS_SQL) return { recordset: [
+        { id: "41", email: "soraya.n@tomastc.com", name: "Soraya Norasing", role: "Admin", department: "",
+          created_at: new Date("2026-09-20T03:00:00Z"), last_used_at: new Date("2026-10-15T03:23:00Z"), employee_id: null, employee_no: null },
+        { id: 52, email: "old.mail@tomastc.com", name: "Old Mail", role: "Engineer", department: null,
+          created_at: new Date("2026-09-01T03:00:00Z"), last_used_at: null, employee_id: "7", employee_no: 1007 },
+      ] };
       return { recordset: [
         { subject: "sub-1", email: "new.person@tomastc.com", name: "New Person", username: "new.person", attempts: 3,
           first_attempt_at: new Date("2026-10-14T01:00:00Z"), last_attempt_at: new Date("2026-10-15T02:00:00Z"), status: "new" },
@@ -42,7 +48,8 @@ test("only those who may add employees see who is waiting to sign in", async () 
   try {
     assert.equal((await app.inject({ method: "GET", url: "/api/v1/master/sign-in-requests" })).statusCode, 403);
     assert.equal((await app.inject({ method: "DELETE", url: "/api/v1/master/sign-in-requests/sub-1" })).statusCode, 403);
-    assert.deepEqual(demanded, ["master.write", "master.write"]);
+    assert.equal((await app.inject({ method: "GET", url: "/api/v1/master/unlinked-accounts" })).statusCode, 403);
+    assert.deepEqual(demanded, ["master.write", "master.write", "master.write"]);
     assert.equal(statements.length, 0);
   } finally {
     await app.close();
@@ -82,6 +89,27 @@ test("a request is dismissed by its subject, and a malformed subject is refused"
   } finally {
     await app.close();
   }
+});
+
+test("accounts no employee record points at are listed with their role, last use and any employee that has the email", async () => {
+  const { app } = server();
+  try {
+    const response = await app.inject({ method: "GET", url: "/api/v1/master/unlinked-accounts" });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), [
+      { userId: 41, email: "soraya.n@tomastc.com", name: "Soraya Norasing", role: "Admin", department: "",
+        createdAt: "2026-09-20T03:00:00.000Z", lastUsedAt: "2026-10-15T03:23:00.000Z", employeeId: null, employeeNo: null },
+      { userId: 52, email: "old.mail@tomastc.com", name: "Old Mail", role: "Engineer", department: "",
+        createdAt: "2026-09-01T03:00:00.000Z", lastUsedAt: null, employeeId: 7, employeeNo: 1007 },
+    ]);
+  } finally {
+    await app.close();
+  }
+  // Active accounts only, and only those no active employee points at; Admin accounts first.
+  assert.match(UNLINKED_ACCOUNTS_SQL, /WHERE u\.is_active=1 AND u\.deleted_at IS NULL/);
+  assert.match(UNLINKED_ACCOUNTS_SQL, /AND NOT EXISTS\(SELECT 1 FROM dbo\.employees linked WHERE linked\.user_id=u\.id AND linked\.is_active=1 AND linked\.deleted_at IS NULL\)/);
+  assert.match(UNLINKED_ACCOUNTS_SQL, /LEFT JOIN dbo\.employees employee ON employee\.email=u\.email AND employee\.is_active=1 AND employee\.deleted_at IS NULL/);
+  assert.match(UNLINKED_ACCOUNTS_SQL, /ORDER BY CASE WHEN r\.code=N'Admin' THEN 0 ELSE 1 END/);
 });
 
 test("migration 079 keeps one request per TMT ID subject and grants the API what it uses", () => {
