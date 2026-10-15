@@ -139,6 +139,10 @@ services:
       FORGEJO__mailer__ENABLED: "false"
       FORGEJO__actions__ENABLED: "false"
       FORGEJO__cron_0X2E_update_checker__ENABLED: "false"
+      # Single-threaded pack indexing. index-pack's worker threads re-open the pack it is still
+      # writing, and over the NAS's NFS mount they read short ("premature end of pack file, N bytes
+      # missing" on every push with deltas). One thread reads through the writer's own descriptor.
+      FORGEJO__git_0X2E_config__pack_0X2E_threads: "1"
       FORGEJO__log__LEVEL: Warn
       # Also to a file in the data volume, so problems outlive the container (deploy.sh reports them).
       FORGEJO__log__MODE: console, file
