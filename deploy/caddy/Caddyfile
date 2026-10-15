@@ -3,11 +3,13 @@
 # ports when 443 is already taken by another tenant.
 
 {
-	# TMTHub speaks HTTP/1.1 only. Git sends a large push as a chunked HTTP POST; through the
-	# HTTP/2 path the end of the body was lost ("premature end of pack file, 97 bytes missing").
-	# Without a body timeout either, so a slow VPN link can take as long as it needs.
+	# git push over HTTPS is full duplex: receive-pack starts answering (progress, keepalives) while
+	# the pack is still being uploaded. Go's HTTP/1 server ends the request body as soon as the
+	# response starts, so index-pack got a truncated pack ("premature end of pack file, N bytes
+	# missing"). HTTP/2 is full duplex by design; enable_full_duplex does the same for HTTP/1
+	# clients. No body timeout either, so a slow VPN link can take as long as it needs.
 	servers :{$TMTHUB_PORT} {
-		protocols h1
+		enable_full_duplex
 		timeouts {
 			read_body 0
 		}
@@ -46,12 +48,5 @@
 # reachable over the VPN only. No body limit: a first push of a large repository is one request.
 {$TMTHUB_HOST}:{$TMTHUB_PORT} {
 	import cloudflare_tls
-	reverse_proxy tmthub:3000 {
-		# Stream the push straight through; never buffer or cut a request body.
-		request_buffers 0
-		flush_interval -1
-		transport http {
-			versions 1.1
-		}
-	}
+	reverse_proxy tmthub:3000
 }
