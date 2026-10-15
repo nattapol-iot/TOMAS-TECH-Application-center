@@ -118,7 +118,13 @@ export function registerTmtIdAuthRoutes(
         ...(authTime === undefined ? {} : { authTime }),
         ...(issuedAt === undefined ? {} : { issuedAt }),
       };
-      await provisioning?.ensure(session);
+      // Only an email the provider vouches for may open an account by its domain.
+      const emailVerified = claims?.email_verified === true;
+      if (email && !emailVerified) {
+        // Keycloak marks a brokered email verified only when the identity provider is set to trust it.
+        request.log.info({ emailVerified: claims?.email_verified ?? null }, "TMT ID email is not verified; it cannot open an account by its domain.");
+      }
+      await provisioning?.ensure(session, { emailVerified });
       await cookies.writeSession(reply, session);
       return reply.redirect(`${settings.appBaseUrl}${action.login.next}`, 302);
     },

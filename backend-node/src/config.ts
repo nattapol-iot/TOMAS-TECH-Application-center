@@ -14,6 +14,11 @@ export type TmtIdConfig = {
   masterDataUrl?: string;
   masterDataApiKey?: string;
   defaultRoleCode?: string;
+  /**
+   * Email domains whose verified TMT ID sign-ins get an account on first sign-in (Engineer role,
+   * migration 081). Every other email still waits for Employee Master. Default: tomastc.com.
+   */
+  autoRegisterDomains: string[];
 };
 
 export type AppConfig = {
@@ -261,6 +266,14 @@ function loadTmtIdConfig(
   const defaultRoleCode = optional(env, "TMT_ID_DEFAULT_ROLE_CODE");
   if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode))
     throw new Error("TMT_ID_DEFAULT_ROLE_CODE must be an existing dbo.roles code (1-50 characters).");
+  // "none" turns company-domain sign-in off: everyone then waits for Employee Master again.
+  const autoRegisterRaw = optional(env, "TMT_ID_AUTO_REGISTER_DOMAINS") ?? "tomastc.com";
+  const autoRegisterDomains = autoRegisterRaw.toLowerCase() === "none" ? [] : [...new Set(autoRegisterRaw
+    .split(",").map((domain) => domain.trim().toLowerCase()).filter(Boolean))];
+  for (const domain of autoRegisterDomains) {
+    if (domain.length > 253 || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain))
+      throw new Error("TMT_ID_AUTO_REGISTER_DOMAINS must be a comma-separated list of email domains, or none.");
+  }
 
   return {
     issuer,
@@ -273,6 +286,7 @@ function loadTmtIdConfig(
     ...(masterDataUrl ? { masterDataUrl } : {}),
     ...(masterDataApiKey ? { masterDataApiKey } : {}),
     ...(defaultRoleCode ? { defaultRoleCode } : {}),
+    autoRegisterDomains,
   };
 }
 

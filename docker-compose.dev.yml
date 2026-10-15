@@ -19,6 +19,8 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-}
       TMT_ID_DEFAULT_ROLE_CODE: ${TMT_ID_DEFAULT_ROLE_CODE:-}
+      # Verified TMT ID emails on these domains get an Engineer account on first sign-in; empty = tomastc.com, none = off.
+      TMT_ID_AUTO_REGISTER_DOMAINS: ${TMT_ID_AUTO_REGISTER_DOMAINS:-}
       MASTER_DATA_URL: ${MASTER_DATA_URL:-}
       MASTER_DATA_API_KEY: ${MASTER_DATA_API_KEY:-}
       # Stays Disabled (the config default) unless every Microsoft Graph value below is

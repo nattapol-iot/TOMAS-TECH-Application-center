@@ -78,19 +78,27 @@ try {
    'SET NOCOUNT ON;',
    "INSERT dbo.users(entra_object_id,email,name,role_id) SELECT NULL,N'registered@tomastc.com',N'Registered',id FROM dbo.roles WHERE code=N'Engineer';",
    "INSERT dbo.users(entra_object_id,email,name,role_id) SELECT N'11111111-1111-4111-8111-111111111111',N'linked@tomastc.com',N'Linked',id FROM dbo.roles WHERE code=N'Engineer';",
+   "INSERT dbo.users(entra_object_id,email,name,role_id,deleted_at) SELECT NULL,N'removed@tomastc.com',N'Removed',id,SYSUTCDATETIME() FROM dbo.roles WHERE code=N'Viewer';",
    "EXECUTE AS USER = N'$appLogin';",
    "EXEC dbo.link_registered_sign_in @object_id=N'22222222-2222-4222-8222-222222222222', @email=N'registered@tomastc.com';",
    "EXEC dbo.link_registered_sign_in @object_id=N'33333333-3333-4333-8333-333333333333', @email=N'linked@tomastc.com';",
    "EXEC dbo.link_registered_sign_in @object_id=N'44444444-4444-4444-8444-444444444444', @email=N'unknown@tomastc.com';",
+   "EXEC dbo.register_domain_sign_in @object_id=N'55555555-5555-4555-8555-555555555555', @email=N'New.Person@TomasTC.com', @name=N'New Person', @initials=N'NP', @domain=N'tomastc.com';",
+   "EXEC dbo.register_domain_sign_in @object_id=N'66666666-6666-4666-8666-666666666666', @email=N'removed@tomastc.com', @name=N'Removed', @initials=N'R', @domain=N'tomastc.com';",
+   "EXEC dbo.register_domain_sign_in @object_id=N'77777777-7777-4777-8777-777777777777', @email=N'someone@tomastc.com.evil.net', @name=N'Evil', @initials=N'E', @domain=N'tomastc.com';",
+   "EXEC dbo.register_domain_sign_in @object_id=N'88888888-8888-4888-8888-888888888888', @email=N'a@b@tomastc.com', @name=N'Two Ats', @initials=N'T', @domain=N'tomastc.com';",
    'REVERT;',
    "SELECT CASE WHEN (SELECT entra_object_id FROM dbo.users WHERE email=N'registered@tomastc.com')=N'22222222-2222-4222-8222-222222222222' THEN 'ok' ELSE 'registered person not linked' END",
    "UNION ALL SELECT CASE WHEN (SELECT entra_object_id FROM dbo.users WHERE email=N'linked@tomastc.com')=N'11111111-1111-4111-8111-111111111111' THEN 'ok' ELSE 'linked account was moved' END",
-   "UNION ALL SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM dbo.users WHERE email=N'unknown@tomastc.com' OR entra_object_id IN (N'33333333-3333-4333-8333-333333333333',N'44444444-4444-4444-8444-444444444444')) THEN 'ok' ELSE 'an account was created or moved' END;"
+   "UNION ALL SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM dbo.users WHERE email=N'unknown@tomastc.com' OR entra_object_id IN (N'33333333-3333-4333-8333-333333333333',N'44444444-4444-4444-8444-444444444444')) THEN 'ok' ELSE 'an account was created or moved' END",
+   "UNION ALL SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id WHERE u.email=N'new.person@tomastc.com' AND u.entra_object_id=N'55555555-5555-4555-8555-555555555555' AND r.code=N'Engineer' AND u.deleted_at IS NULL) THEN 'ok' ELSE 'a company email did not get an Engineer account' END",
+   "UNION ALL SELECT CASE WHEN (SELECT entra_object_id FROM dbo.users WHERE email=N'removed@tomastc.com') IS NULL AND (SELECT deleted_at FROM dbo.users WHERE email=N'removed@tomastc.com') IS NOT NULL THEN 'ok' ELSE 'a removed account was brought back' END",
+   "UNION ALL SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM dbo.users WHERE entra_object_id IN (N'66666666-6666-4666-8666-666666666666',N'77777777-7777-4777-8777-777777777777',N'88888888-8888-4888-8888-888888888888')) THEN 'ok' ELSE 'an account was created outside the domain rule' END;"
  ) -join "`n"
  [IO.File]::WriteAllText($checkPath, $linking, [Text.UTF8Encoding]::new($false))
  $problems = @(Invoke-GrantSql -SqlArguments @('-d',$databaseName,'-h','-1','-W','-i',$checkPath) | Where-Object { $_ -and $_.Trim() -and $_.Trim() -ne 'ok' })
  if($problems.Count -gt 0) { throw "First sign-in linking: $($problems -join '; ')" }
- Write-Output 'First sign-in linking works as the application login and never moves or creates an account.'
+ Write-Output 'First sign-in linking works as the application login: it never moves an account, and only a company email gets a new one.'
 }
 finally {
  if($created) {

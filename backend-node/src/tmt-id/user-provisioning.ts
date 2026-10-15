@@ -16,8 +16,22 @@ export function deriveProvisionedUser(session: TmtIdSession): ProvisionedUser {
 }
 
 export type UserProvisioning = {
-  ensure(session: TmtIdSession): Promise<void>;
+  ensure(session: TmtIdSession, claims?: { emailVerified?: boolean }): Promise<void>;
 };
+
+/**
+ * The allowed domain a sign-in may open an account with, or null. It needs a real email claim
+ * (never the preferred_username@domain fallback, which anyone's username would satisfy) that the
+ * provider marks verified, on exactly one of the configured domains.
+ */
+export function autoRegisterDomain(session: TmtIdSession, emailVerified: boolean, domains: readonly string[]): string | null {
+  if (!emailVerified || !session.email) return null;
+  const email = session.email.trim().toLowerCase();
+  const at = email.indexOf("@");
+  if (at <= 0 || at !== email.lastIndexOf("@")) return null;
+  const domain = email.slice(at + 1);
+  return domains.includes(domain) ? domain : null;
+}
 
 // Links a TMT ID sign-in to the account Employee Master already made for that email
 // (dbo.sync_employee_directory_user creates it with the employee's department). It never
@@ -27,10 +41,15 @@ export type UserProvisioning = {
 // dbo.link_registered_sign_in (migration 066) fills it only on an account that has no TMT ID
 // yet, as database/scripts/030_provision_user.sql does, so an email claim cannot take over an
 // account already linked to someone else.
-// A sign-in that links to no account is kept in dbo.sign_in_requests (migration 079) with the
+// A verified email on a company domain (TMT_ID_AUTO_REGISTER_DOMAINS, tomastc.com by default) that
+// links to nothing gets its own account through dbo.register_domain_sign_in (migration 081), which
+// only ever creates and never touches an existing, deactivated or deleted account.
+// A sign-in that still links to no account is kept in dbo.sign_in_requests (migration 079) with the
 // email it was matched on, so Employee Master lists who is waiting and an administrator adds
 // exactly that email; once the person's sign-in links, the row goes.
 export const LINK_SIGN_IN_SQL = `EXEC dbo.link_registered_sign_in @object_id = @object_id, @email = @email;
+      IF @domain IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.users WHERE entra_object_id = @object_id)
+        EXEC dbo.register_domain_sign_in @object_id = @object_id, @email = @email, @name = @name, @initials = @initials, @domain = @domain;
       IF EXISTS (SELECT 1 FROM dbo.users WHERE entra_object_id = @object_id AND deleted_at IS NULL)
         DELETE FROM dbo.sign_in_requests WHERE subject = @object_id;
       ELSE
@@ -40,15 +59,18 @@ export const LINK_SIGN_IN_SQL = `EXEC dbo.link_registered_sign_in @object_id = @
           attempts = request.attempts + 1, last_attempt_at = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (subject, email, name, username) VALUES (@object_id, @email, @name, @username);`;
 
-export function createUserProvisioning(database: Pick<Database, "query">): UserProvisioning {
+export function createUserProvisioning(database: Pick<Database, "query">, autoRegisterDomains: readonly string[] = []): UserProvisioning {
   return {
-    async ensure(session) {
+    async ensure(session, claims = {}) {
       const user = deriveProvisionedUser(session);
+      const domain = autoRegisterDomain(session, claims.emailVerified === true, autoRegisterDomains);
       await database.query(LINK_SIGN_IN_SQL, (request) => {
         request.input("object_id", sql.NVarChar(64), user.objectId);
         request.input("email", sql.NVarChar(256), user.email);
         request.input("name", sql.NVarChar(200), user.name.slice(0, 200));
         request.input("username", sql.NVarChar(200), session.preferredUsername.slice(0, 200));
+        request.input("initials", sql.NVarChar(10), user.initials);
+        request.input("domain", sql.NVarChar(253), domain);
       });
     },
   };

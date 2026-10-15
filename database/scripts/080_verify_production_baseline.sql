@@ -540,6 +540,13 @@ IF NOT EXISTS (
       AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
     THROW 51181, 'The sign-in linking procedure EXECUTE grant is missing.', 1;
 
+IF NOT EXISTS (
+    SELECT 1 FROM sys.database_permissions
+    WHERE grantee_principal_id = @app_role_id
+      AND class = 1 AND major_id = OBJECT_ID(N'dbo.register_domain_sign_in')
+      AND permission_name = N'EXECUTE' AND state IN ('G', 'W'))
+    THROW 51182, 'The company-domain sign-in procedure EXECUTE grant is missing.', 1;
+
 IF EXISTS (
     SELECT 1
     FROM sys.database_permissions
@@ -549,7 +556,8 @@ IF EXISTS (
           OBJECT_ID(N'dbo.answer_schedule_day_request'),
           OBJECT_ID(N'dbo.issue_knowledge_document_number'),
           OBJECT_ID(N'dbo.sync_employee_directory_user'),
-          OBJECT_ID(N'dbo.link_registered_sign_in'))
+          OBJECT_ID(N'dbo.link_registered_sign_in'),
+          OBJECT_ID(N'dbo.register_domain_sign_in'))
       AND permission_name = N'EXECUTE'
       AND state IN ('G', 'W')
       AND grantee_principal_id <> @app_role_id)

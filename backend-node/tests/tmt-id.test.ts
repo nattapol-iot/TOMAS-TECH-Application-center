@@ -13,7 +13,7 @@ import {
 import { createMasterDataDirectory } from "../src/tmt-id/master-data.js";
 import { sanitizeNextPath } from "../src/tmt-id/next-path.js";
 import { PROVISIONED_EMAIL_FALLBACK_DOMAIN } from "../src/tmt-id/constants.js";
-import { createUserProvisioning, deriveProvisionedUser } from "../src/tmt-id/user-provisioning.js";
+import { autoRegisterDomain, createUserProvisioning, deriveProvisionedUser } from "../src/tmt-id/user-provisioning.js";
 import { SealedCookieCodec } from "../src/tmt-id/sealed-cookie.js";
 import {
   loginCookieAttributes,
@@ -198,6 +198,7 @@ test("the master-data adapter stays dormant until both settings are present", as
     appBaseUrl: "https://iot-team-center.example.com:8444",
     sessionSecret: SESSION_SECRET,
     sessionCookieSecure: true,
+    autoRegisterDomains: [],
   };
   let calls = 0;
   const spy: typeof fetch = async () => {
@@ -256,7 +257,7 @@ test("first-login provisioning derives a stable user from the token", () => {
   assert.equal(fallback.initials, "N");
 });
 
-test("first sign-in only links a registered account and never creates one", async () => {
+function recordingDatabase() {
   const statements: { text: string; inputs: Record<string, unknown> }[] = [];
   const database = {
     query: async (text: string, bind?: (request: { input(name: string, type: unknown, value: unknown): void }) => void) => {
@@ -266,11 +267,20 @@ test("first sign-in only links a registered account and never creates one", asyn
       return { recordset: [], recordsets: [], rowsAffected: [0], output: {} };
     },
   };
-  await createUserProvisioning(database as never).ensure({ sub: "sub-9", preferredUsername: "new.person", email: "New.Person@TomasTC.com" });
+  return { statements, database: database as never };
+}
+
+test("first sign-in links a registered account and, without an allowed domain, never creates one", async () => {
+  const { statements, database } = recordingDatabase();
+  await createUserProvisioning(database).ensure({ sub: "sub-9", preferredUsername: "new.person", email: "New.Person@TomasTC.com" });
   assert.equal(statements.length, 1);
   const [statement] = statements;
   assert.match(statement!.text, /EXEC dbo\.link_registered_sign_in @object_id = @object_id, @email = @email;/);
-  assert.deepEqual(statement!.inputs, { object_id: "sub-9", email: "new.person@tomastc.com", name: "new.person", username: "new.person" });
+  assert.deepEqual(statement!.inputs, {
+    object_id: "sub-9", email: "new.person@tomastc.com", name: "new.person", username: "new.person", initials: "N", domain: null,
+  });
+  // Creating is only ever the domain procedure's, and only when the API passed a domain.
+  assert.match(statement!.text, /IF @domain IS NOT NULL AND NOT EXISTS \(SELECT 1 FROM dbo\.users WHERE entra_object_id = @object_id\)\s+EXEC dbo\.register_domain_sign_in /);
   // An unlinked sign-in is only remembered for Employee Master (migration 079); it never becomes an account,
   // and a sign-in that links clears what was remembered.
   assert.doesNotMatch(statement!.text, /INSERT\s+(?:INTO\s+)?dbo\.users/i);
@@ -285,6 +295,45 @@ test("first sign-in only links a registered account and never creates one", asyn
   assert.doesNotMatch(procedure, /\bINSERT\b/i, "an unknown email must meet user_not_registered, not a new account");
   assert.doesNotMatch(procedure, /role_id/i, "linking must not touch the role Employee Master gave");
   assert.match(procedure, /AND \(entra_object_id IS NULL OR entra_object_id LIKE N'team-test:%'\)/);
+});
+
+test("a verified company email opens its own account; anything else still waits for Employee Master", async () => {
+  const domains = ["tomastc.com"];
+  const session = { sub: "sub-1", preferredUsername: "somchai.p", email: "Somchai.P@TomasTC.com", name: "Somchai Prasert" };
+  assert.equal(autoRegisterDomain(session, true, domains), "tomastc.com");
+  // The provider must vouch for the email.
+  assert.equal(autoRegisterDomain(session, false, domains), null);
+  // The preferred_username@tomastc.com fallback is not an email anyone verified.
+  assert.equal(autoRegisterDomain({ sub: "sub-2", preferredUsername: "somchai.p" }, true, domains), null);
+  // Exactly the domain: not a look-alike, a subdomain, or an address with two @.
+  for (const email of ["x@tomastc.com.evil.net", "x@mail.tomastc.com", "x@nottomastc.com", "a@b@tomastc.com", "@tomastc.com"]) {
+    assert.equal(autoRegisterDomain({ ...session, email }, true, domains), null, email);
+  }
+  assert.equal(autoRegisterDomain(session, true, []), null);
+
+  const { statements, database } = recordingDatabase();
+  await createUserProvisioning(database, domains).ensure(session, { emailVerified: true });
+  assert.equal(statements[0]!.inputs.domain, "tomastc.com");
+  assert.equal(statements[0]!.inputs.initials, "SP");
+  await createUserProvisioning(database, domains).ensure(session);
+  assert.equal(statements[1]!.inputs.domain, null, "no verified claim, no account");
+
+  // The procedure only creates, as Engineer, and leaves every existing account alone.
+  const migration = readFileSync(new URL("../../database/migrations/081_domain_sign_in.sql", import.meta.url), "utf8");
+  const procedure = migration.slice(migration.indexOf("CREATE OR ALTER PROCEDURE dbo.register_domain_sign_in"), migration.indexOf("-- ── Batch 2"));
+  assert.match(procedure, /WITH EXECUTE AS OWNER/);
+  assert.match(procedure, /WHERE entra_object_id = @object_id OR email = @email\)/);
+  assert.match(procedure, /code = N'Engineer'/);
+  assert.doesNotMatch(procedure, /\bUPDATE\s+dbo\.users\b/i, "an existing, deactivated or removed account is never changed");
+  assert.match(procedure, /RIGHT\(@email, LEN\(@domain\) \+ 1\) <> N'@' \+ LOWER\(@domain\)/);
+});
+
+test("TMT_ID_AUTO_REGISTER_DOMAINS defaults to tomastc.com, can be turned off, and is validated", () => {
+  assert.deepEqual(loadConfig(TMT_ID_ENV).tmtId?.autoRegisterDomains, ["tomastc.com"]);
+  assert.deepEqual(loadConfig({ ...TMT_ID_ENV, TMT_ID_AUTO_REGISTER_DOMAINS: "none" }).tmtId?.autoRegisterDomains, []);
+  assert.deepEqual(loadConfig({ ...TMT_ID_ENV, TMT_ID_AUTO_REGISTER_DOMAINS: " TomasTC.com, by-works.net " }).tmtId?.autoRegisterDomains, ["tomastc.com", "by-works.net"]);
+  assert.throws(() => loadConfig({ ...TMT_ID_ENV, TMT_ID_AUTO_REGISTER_DOMAINS: "%" }), /TMT_ID_AUTO_REGISTER_DOMAINS/);
+  assert.throws(() => loadConfig({ ...TMT_ID_ENV, TMT_ID_AUTO_REGISTER_DOMAINS: "localhost" }), /TMT_ID_AUTO_REGISTER_DOMAINS/);
 });
 
 test("TMT_ID_DEFAULT_ROLE_CODE is validated as a role code", () => {

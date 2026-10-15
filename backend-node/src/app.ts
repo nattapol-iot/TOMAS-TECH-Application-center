@@ -184,7 +184,9 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     app.log.warn("TMT_ID_DEFAULT_ROLE_CODE is ignored: only people registered in Employee Master can sign in.");
   }
   // A read-only API cannot link anyone; people already linked still sign in.
-  if (tmtId) registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database));
+  if (tmtId) {
+    registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database, tmtId.settings.autoRegisterDomains));
+  }
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
   registerBootstrapRoutes(app, database, users);
