@@ -3,6 +3,8 @@ export type TmtIdUser = {
   sub: string;
   preferredUsername: string;
   email: string | null;
+  /** The email this sign-in is matched to an Engineering Center account on; Employee Master must hold exactly this one. */
+  signInEmail?: string;
   name: string | null;
   role: string | null;
   department: string | null;

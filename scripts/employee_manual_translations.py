@@ -61,7 +61,7 @@ def C(id, title, menu, audience, body):
 C('start', 'Getting started and permissions || 利用開始とアクセス権限', 'Sign-in → My Profile || ログイン → My Profile', 'All employees || 全従業員',
   P('1.1 Sign in for the first time || 1.1 初回ログイン', [
     'Open the URL provided by your administrator. Check <b>TEAM TEST</b> or <b>PRODUCTION</b> before working. || 管理者から案内されたURLを開き、作業先が <b>TEAM TEST</b> または <b>PRODUCTION</b> のどちらか確認します。',
-    'In Team Test, enter your Registered email and individual Personal test access code. In Production, sign in with your company Microsoft account. || Team Testでは登録メールと個人用テストアクセスコードを入力します。Productionでは会社のMicrosoftアカウントでログインします。',
+    'In Team Test, enter your Registered email and individual Personal test access code. In Production, sign in with TMT ID (the Microsoft or LINE WORKS button). If it says the account is not registered, the screen shows the email to add; tell the administrator and sign in again once you are added. || Team Testでは登録メールと個人用テストアクセスコードを入力します。ProductionではTMT ID（MicrosoftまたはLINE WORKSのボタン）でログインします。未登録と表示された場合は、画面に出るメールを管理者に伝え、登録後にもう一度ログインします。',
     'Wait for Dashboard, then check your name, department and role in the user area. || Dashboardの表示後、ユーザー欄で氏名・部署・役割を確認します。',
     'Select <b>TH / EN / JP</b> in the top bar for your preferred interface language. || 上部の <b>TH / EN / JP</b> から表示言語を選択します。'
   ], 'Your own identity and permitted menus appear without a sign-in error. || 自分の情報と利用可能なメニューが表示され、ログインエラーがないことを確認します。',
@@ -876,6 +876,7 @@ C('master', 'Master Data and engineering rates || マスターデータと技術
     'Search before adding; check duplicate codes, names and Active state. || 追加前に検索し、コード重複、名称、Active状態を確認します。',
     'Authorized editors enter category fields: supplier contacts; item code/unit/reorder point; or employee ID, department, position and supported account links. || 編集権限者が分類ごとの項目を入力します。仕入先連絡先、品目コード・単位・再発注点、社員番号・部署・役職・対応するアカウント関連などです。',
     'Save and search the record. If save succeeded but refresh failed, check for an existing record before adding again. || 保存後に検索します。保存成功・再読込失敗の場合は、再追加前に登録済みか確認します。',
+    'In Employees, the <b>Waiting to sign in</b> panel lists people who signed in with TMT ID but are not in Employee Master. <b>Add as employee</b> fills in their name and the email they signed in with; add the employee number, department, position and start date, save, then ask them to sign in again. If it says the email is linked to another sign-in, they use the button they used before (Microsoft or LINE WORKS) or ask IT. || Employeesの<b>サインイン待ち</b>には、TMT IDでサインインしたがEmployee Masterに未登録の人が表示されます。<b>従業員として追加</b>で名前とサインインに使ったメールが入力されるので、社員番号・部署・役職・入社日を入れて保存し、もう一度サインインしてもらいます。別のサインインに紐付け済みと出た場合は、以前のボタン（MicrosoftまたはLINE WORKS）を使うか、ITに依頼します。',
     'User accounts is a reference for company-provided accounts/roles; contact the account administrator when no edit action exists. || User accountsは会社設定のアカウント・役割の参照用です。編集操作がない場合はアカウント管理者へ依頼します。'
   ], 'Codes, names, units and relationships are correct for use in other modules. || 他のモジュールで使うコード、名称、単位、関連が正しく登録されています。') +
   P('36.2 Maintain engineering cost rates || 36.2 技術労務単価を管理', [

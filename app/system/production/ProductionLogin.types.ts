@@ -1,5 +1,6 @@
 import type { Lang } from "../i18n";
 import type { SignInMode } from "../sign-in-mode.types";
+import type { TmtIdUser } from "../tmt-id.types";
 
 export type ProductionLoginCopy = {
   identityBadge: string;
@@ -21,4 +22,6 @@ export type ProductionLoginProps = {
   language: Lang;
   onLanguageChange: (language: Lang) => void;
   onSignIn: (teamTestEmail?: string, teamTestAccessCode?: string) => Promise<void>;
+  /** Signed in to TMT ID but not registered here: who they are and the email Employee Master needs. */
+  unregistered?: TmtIdUser | null;
 };

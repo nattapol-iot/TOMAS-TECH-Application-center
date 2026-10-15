@@ -10,13 +10,14 @@ import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
-import { apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
+import { ApiClientError, apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
 import { clearTeamTestSession, getTeamTestSession, IS_TEAM_TEST_MODE, saveTeamTestSession } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { currentAppPath, loadTmtIdSession, redirectToTmtIdLogin, redirectToTmtIdLogout } from "./tmt-id-client";
 import { SIGN_IN_MODE } from "./sign-in-mode.constants";
 import { PRODUCTION_LOGIN_COPY } from "./production/production-login-copy";
 import type { ProductionLoginProps } from "./production/ProductionLogin.types";
+import type { TmtIdUser } from "./tmt-id.types";
 import { PRODUCT } from "./product";
 import { Icon, Tabs, Toast, type IconName } from "./ui";
 import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
@@ -231,6 +232,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [busy, setBusy] = useState(IS_AUTH_CONFIGURED);
   const [restoringSession, setRestoringSession] = useState(IS_AUTH_CONFIGURED);
   const [authError, setAuthError] = useState("");
+  const [unregistered, setUnregistered] = useState<TmtIdUser | null>(null);
   const [toast, setToast] = useState("");
   const [userOpen, setUserOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -477,7 +479,15 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             redirectToTmtIdLogin(currentAppPath());
             return;
           }
-          const data = await loadBootstrap();
+          let data: BootstrapData;
+          try {
+            data = await loadBootstrap();
+          } catch (error) {
+            // Signed in to TMT ID but not registered here: the sign-in screen says who they are and which
+            // email Employee Master needs; the attempt already waits there for an administrator.
+            if (!cancelled && session.status === "signed-in" && error instanceof ApiClientError && error.code === "user_not_registered") setUnregistered(session.user);
+            throw error;
+          }
           if (!cancelled) {
             restoreWorkspace(data);
             setBusy(false);
@@ -717,6 +727,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           language={language}
           onLanguageChange={setLanguage}
           onSignIn={signIn}
+          unregistered={unregistered}
         />
       </LanguageContext.Provider>
     );
@@ -888,6 +899,7 @@ function ProductionLogin({
   language,
   onLanguageChange,
   onSignIn,
+  unregistered = null,
 }: ProductionLoginProps) {
   const [teamTestEmail, setTeamTestEmail] = useState("");
   const [teamTestAccessCode, setTeamTestAccessCode] = useState("");
@@ -918,6 +930,11 @@ function ProductionLogin({
         <h1>{t(copy.heading)}</h1>
         <p>{t(copy.intro)}</p>
         {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
+        {unregistered ? <div className="callout" role="status"><Icon name="user" /><span>
+          <strong>{t("SignIn.signedInAs").replace("{name}", unregistered.name ?? unregistered.preferredUsername)}</strong>
+          <span>{t("SignIn.emailToRegister")} <strong className="mono">{unregistered.signInEmail ?? unregistered.email ?? unregistered.preferredUsername}</strong></span>
+          <span>{t("SignIn.waitingNote")}</span>
+        </span></div> : null}
         {teamTestMode && apiConfigured ? <><label className="field"><span>{t("Registered email")}</span><input required type="email" maxLength={256} autoComplete="email" value={teamTestEmail} onChange={(event) => setTeamTestEmail(event.target.value)} /></label><label className="field"><span>{t("Personal test access code")}</span><input required type="password" maxLength={256} autoComplete="current-password" value={teamTestAccessCode} onChange={(event) => setTeamTestAccessCode(event.target.value)} /></label></> : null}
         {configured
           ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{t(busy ? "Connecting…" : copy.submitLabel)}</button>

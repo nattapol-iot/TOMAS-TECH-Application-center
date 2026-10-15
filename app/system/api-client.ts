@@ -1784,6 +1784,18 @@ export const createInventoryItem = (input: CreateInventoryItemInput) =>
 export const listEmployees = (values: { search?: string; activeOnly?: boolean } = {}) =>
   apiRequest<EmployeeRecord[]>(`/api/v1/master/employees${queryString(values)}`);
 
+/** Someone who signed in with TMT ID but has no account yet (GET /api/v1/master/sign-in-requests). */
+export type SignInRequest = {
+  subject: string; email: string; name: string; username: string; attempts: number;
+  firstAttemptAt: string; lastAttemptAt: string;
+  /** new: add the employee; registered: they only need to sign in again; linkedElsewhere: the email's account uses another sign-in. */
+  status: "new" | "registered" | "linkedElsewhere";
+};
+
+export const listSignInRequests = () => apiRequest<SignInRequest[]>("/api/v1/master/sign-in-requests");
+export const dismissSignInRequest = (subject: string) =>
+  apiRequest<void>(`/api/v1/master/sign-in-requests/${encodeURIComponent(subject)}`, { method: "DELETE" });
+
 export const createEmployee = (input: EmployeeInput) =>
   apiRequest<{ id: number; employeeNo: number; nameEn: string; rowVersion: string }>("/api/v1/master/employees", {
     method: "POST",

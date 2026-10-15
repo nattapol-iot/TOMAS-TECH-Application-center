@@ -7,6 +7,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import {
   addProjectMember,
   createEmployee,
+  dismissSignInRequest,
   assignmentDeliveryNote,
   createEstimate,
   createCostItem,
@@ -20,6 +21,7 @@ import {
   estimateWorkflow,
   listEstimates,
   listEmployees,
+  listSignInRequests,
   listAccessRoles,
   listInquiries,
   listInventory,
@@ -51,6 +53,7 @@ import {
   type EstimateSummary,
   type EmployeeInput,
   type EmployeeRecord,
+  type SignInRequest,
   type InquirySummary,
   type ItemBalance,
   type PagedResult,
@@ -2015,6 +2018,9 @@ function InventoryItemCreateForm({ bootstrap, notify, refreshBootstrap }: Pick<C
   </Panel>;
 }
 
+const SIGN_IN_STATUS_LABEL: Record<SignInRequest["status"], string> = {
+  new: "SignIn.statusNew", registered: "SignIn.statusRegistered", linkedElsewhere: "SignIn.statusLinkedElsewhere",
+};
 const EMPTY_EMPLOYEE: EmployeeInput = {
   employeeNo: 0, nameEn: "", nameTh: "", department: "IoT Engineer Dept.", jobTitle: "IoT Engineer",
   mobile: "", email: "", nickname: "", birthDate: "", uniformSize: "", shoeSize: "",
@@ -2044,12 +2050,23 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<EmployeeRecord | "new" | null>(null);
+  // Filled in from a sign-in request, so the employee is added with exactly the email that was tried.
+  const [prefill, setPrefill] = useState<Partial<EmployeeInput> | null>(null);
+  const [signInRequests, setSignInRequests] = useState<SignInRequest[]>([]);
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    try { setEmployees(await listEmployees({ search, activeOnly })); }
+    try {
+      const [list, requests] = await Promise.all([listEmployees({ search, activeOnly }), canWrite ? listSignInRequests() : Promise.resolve([])]);
+      setEmployees(list); setSignInRequests(requests);
+    }
     catch (requestError) { setError(toError(requestError)); }
     finally { setLoading(false); }
-  }, [search, activeOnly]);
+  }, [search, activeOnly, canWrite]);
+  const dismiss = async (request: SignInRequest) => {
+    if (!window.confirm(t("SignIn.dismissConfirm").replace("{name}", request.name))) return;
+    try { await dismissSignInRequest(request.subject); notify(t("SignIn.dismissed")); await load(); }
+    catch (requestError) { setError(toError(requestError)); }
+  };
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
 
   const linkedAccounts = employees.filter((employee) => employee.accountActive !== null).length;
@@ -2064,14 +2081,29 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
       <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("Search employee, nickname, email, department or position…")} />
       <label className="checkbox-row"><input type="checkbox" checked={activeOnly} onChange={(event) => { setActiveOnly(event.target.checked); setPage(1); }} /><span>{t("Active employees only")}</span></label>
       <button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" />{t("Refresh")}</button>
-      {canWrite ? <button className="btn primary" type="button" onClick={() => setEditing("new")}><Icon name="plus" />{t("New employee")}</button> : null}
+      {canWrite ? <button className="btn primary" type="button" onClick={() => { setPrefill(null); setEditing("new"); }}><Icon name="plus" />{t("New employee")}</button> : null}
     </Toolbar>
     <div className="kpi-grid three">
       <KpiCard label={t("Employees")} value={employees.length} icon="users" tone="blue" />
       <KpiCard label={t("Departments")} value={departments} icon="folder" tone="slate" />
-      <KpiCard label={t("Linked login accounts")} value={linkedAccounts} note={t("Employee records do not grant login access")} icon="shield" tone="green" />
+      <KpiCard label={t("Linked login accounts")} value={linkedAccounts} note={t("SignIn.linkedNote")} icon="shield" tone="green" />
     </div>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
+    {canWrite && signInRequests.length ? <Panel title={`${t("SignIn.requestsTitle")} (${signInRequests.length})`} subtitle={t("SignIn.requestsSubtitle")} flush>
+      <div className="table-wrap"><table><thead><tr>
+        <th>{t("Employee")}</th><th>{t("SignIn.signInEmail")}</th><th>{t("Status")}</th><th>{t("SignIn.lastAttempt")}</th><th><span className="sr-only">{t("Actions")}</span></th>
+      </tr></thead><tbody>{signInRequests.map((request) => <tr key={request.subject}>
+        <td><div className="cell-primary"><strong>{request.name}</strong><span>{request.username}</span></div></td>
+        <td><strong className="mono">{request.email}</strong></td>
+        <td className="wrap"><Badge tone={request.status === "new" ? "amber" : request.status === "registered" ? "green" : "red"}>{t(SIGN_IN_STATUS_LABEL[request.status])}</Badge>
+          {request.status === "linkedElsewhere" ? <div className="muted">{t("SignIn.linkedElsewhereHint")}</div> : null}</td>
+        <td><div className="cell-primary"><strong>{new Date(request.lastAttemptAt).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB")}</strong><span>{t("SignIn.attempts").replace("{n}", String(request.attempts))}</span></div></td>
+        <td><div className="row-actions">
+          {request.status === "new" ? <button className="btn primary sm" type="button" onClick={() => { setPrefill({ nameEn: request.name, email: request.email }); setEditing("new"); }}><Icon name="plus" />{t("SignIn.addEmployee")}</button> : null}
+          <button className="btn ghost sm" type="button" onClick={() => { void dismiss(request); }}><Icon name="x" />{t("SignIn.dismiss")}</button>
+        </div></td>
+      </tr>)}</tbody></table></div>
+    </Panel> : null}
     <Panel title={`${employees.length} ${t("employees")}`} subtitle={t("Employee Master is stored in SQL Server; age and tenure are calculated from dates")} flush>
       {employees.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr>
         <th>{t("Employee")}</th><th>{t("Email / mobile")}</th><th>{t("Department")}</th><th>{t("Level")}</th><th>{t("Job title")}</th><th>{t("Role")}</th><th>{t("Working time")}</th><th className="num">{t("Daily rate")}</th><th>{t("Status")}</th><th><span className="sr-only">{t("Actions")}</span></th>
@@ -2086,11 +2118,11 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         <td>{canWrite ? <button className="icon-btn" type="button" aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}><Icon name="edit" /></button> : null}</td>
       </tr>)}</tbody></table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={employees.length} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" />{t("Loading…")}</div> : !error ? <EmptyState icon="users" title={t("No employee found")} message={t("Add an employee or change the search filters")} /> : null}
     </Panel>
-    {editing ? <EmployeeModal employee={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={async (message) => { setEditing(null); await load(); notify(message); }} /> : null}
+    {editing ? <EmployeeModal employee={editing === "new" ? null : editing} prefill={editing === "new" ? prefill : null} onClose={() => setEditing(null)} onSaved={async (message) => { setEditing(null); setPrefill(null); await load(); notify(message); }} /> : null}
   </>;
 }
 
-function EmployeeModal({ employee, onClose, onSaved }: { employee: EmployeeRecord | null; onClose: () => void; onSaved: (message: string) => Promise<void> }) {
+function EmployeeModal({ employee, prefill = null, onClose, onSaved }: { employee: EmployeeRecord | null; prefill?: Partial<EmployeeInput> | null; onClose: () => void; onSaved: (message: string) => Promise<void> }) {
   const { t } = useLanguage();
   const [form, setForm] = useState<EmployeeInput>(() => employee ? {
     employeeNo: employee.employeeNo, nameEn: employee.nameEn, nameTh: employee.nameTh,
@@ -2098,7 +2130,7 @@ function EmployeeModal({ employee, onClose, onSaved }: { employee: EmployeeRecor
     email: employee.email, nickname: employee.nickname, birthDate: employee.birthDate ?? "",
     uniformSize: employee.uniformSize, shoeSize: employee.shoeSize, startWorkDate: employee.startWorkDate,
     endWorkDate: employee.endWorkDate ?? "", position: employee.position, isActive: employee.isActive,
-  } : { ...EMPTY_EMPLOYEE });
+  } : { ...EMPTY_EMPLOYEE, ...prefill });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const update = <K extends keyof EmployeeInput>(key: K, value: EmployeeInput[K]) => setForm((current) => ({ ...current, [key]: value }));
@@ -2132,7 +2164,7 @@ function EmployeeModal({ employee, onClose, onSaved }: { employee: EmployeeRecor
         <label className="field"><span>{t("Thai name")}</span><input maxLength={200} value={form.nameTh ?? ""} onChange={(event) => update("nameTh", event.target.value)} /></label>
         <label className="field"><span>{t("Email")} *</span><input required type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
         <label className="field"><span>{t("Mobile")}</span><input type="tel" maxLength={50} autoComplete="tel" value={form.mobile ?? ""} onChange={(event) => update("mobile", event.target.value)} /></label>
-        <label className="field"><span>{t("Department")} *</span><input required maxLength={100} list="employee-departments" value={form.department} onChange={(event) => update("department", event.target.value)} /><datalist id="employee-departments"><option value="IoT Engineer Dept." /><option value="Mechanical Engineer Dept." /></datalist></label>
+        <label className="field"><span>{t("Department")} *</span><input required maxLength={100} list="employee-departments" value={form.department} onChange={(event) => update("department", event.target.value)} /><datalist id="employee-departments"><option value="IoT Engineer Dept." /><option value="Application Engineer Dept." /><option value="Mechanical Engineer Dept." /><option value="Electrical Engineer Dept." /><option value="System Architect & System Engineer Dept." /></datalist></label>
         <label className="field"><span>{t("Level / position")} *</span><input required maxLength={100} list="employee-positions" value={form.position} onChange={(event) => update("position", event.target.value)} /><datalist id="employee-positions"><option value="Junior Engineer" /><option value="Middle Engineer" /><option value="Senior Engineer" /><option value="Lead Engineer" /><option value="Technical Architect" /></datalist></label>
         <label className="field span-2"><span>{t("Job title")} *</span><input required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} /></label>
         <label className="field"><span>{t("Birthday")}</span><input type="date" max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
@@ -2142,7 +2174,7 @@ function EmployeeModal({ employee, onClose, onSaved }: { employee: EmployeeRecor
         <label className="field"><span>{t("Shoe size")}</span><input maxLength={50} value={form.shoeSize ?? ""} onChange={(event) => update("shoeSize", event.target.value)} /></label>
         <label className="checkbox-row"><input type="checkbox" checked={form.isActive} onChange={(event) => update("isActive", event.target.checked)} /><span>{t("Active employee")}</span></label>
       </div>
-      <div className="info-strip" role="note"><Icon name="shield" /><span>{t("Creating an employee does not create a login account. Login access remains controlled by Microsoft Entra or Team Test provisioning.")}</span></div>
+      <div className="info-strip" role="note"><Icon name="shield" /><span>{t("SignIn.employeeAccessNote")}</span></div>
     </form>
   </Modal>;
 }

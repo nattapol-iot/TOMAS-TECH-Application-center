@@ -18,7 +18,7 @@ import {
 } from "../tmt-id/constants.js";
 import { sanitizeNextPath } from "../tmt-id/next-path.js";
 import type { TmtIdRuntime } from "../tmt-id/runtime.js";
-import type { UserProvisioning } from "../tmt-id/user-provisioning.js";
+import { deriveProvisionedUser, type UserProvisioning } from "../tmt-id/user-provisioning.js";
 import type { MeResponse, TmtIdSession } from "../tmt-id/types.js";
 
 type LoginQuery = { next?: string; retry?: string };
@@ -162,6 +162,8 @@ export function registerTmtIdAuthRoutes(
       sub: identity.value,
       preferredUsername: identity.preferredUsername,
       email: identity.email ?? profile?.email ?? null,
+      // What the sign-in screen shows a person who is not registered, so Employee Master gets exactly this email.
+      signInEmail: deriveProvisionedUser({ sub: identity.value, preferredUsername: identity.preferredUsername, ...(identity.email ? { email: identity.email } : {}) }).email,
       name: identity.name ?? profile?.name ?? null,
       role: profile?.role ?? null,
       department: profile?.department ?? null,

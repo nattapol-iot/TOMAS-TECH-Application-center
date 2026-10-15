@@ -27,17 +27,29 @@ export type UserProvisioning = {
 // dbo.link_registered_sign_in (migration 066) fills it only on an account that has no TMT ID
 // yet, as database/scripts/030_provision_user.sql does, so an email claim cannot take over an
 // account already linked to someone else.
+// A sign-in that links to no account is kept in dbo.sign_in_requests (migration 079) with the
+// email it was matched on, so Employee Master lists who is waiting and an administrator adds
+// exactly that email; once the person's sign-in links, the row goes.
+export const LINK_SIGN_IN_SQL = `EXEC dbo.link_registered_sign_in @object_id = @object_id, @email = @email;
+      IF EXISTS (SELECT 1 FROM dbo.users WHERE entra_object_id = @object_id AND deleted_at IS NULL)
+        DELETE FROM dbo.sign_in_requests WHERE subject = @object_id;
+      ELSE
+        MERGE dbo.sign_in_requests WITH (HOLDLOCK) AS request
+        USING (SELECT @object_id AS subject) AS attempt ON request.subject = attempt.subject
+        WHEN MATCHED THEN UPDATE SET email = @email, name = @name, username = @username,
+          attempts = request.attempts + 1, last_attempt_at = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN INSERT (subject, email, name, username) VALUES (@object_id, @email, @name, @username);`;
+
 export function createUserProvisioning(database: Pick<Database, "query">): UserProvisioning {
   return {
     async ensure(session) {
       const user = deriveProvisionedUser(session);
-      await database.query(
-        "EXEC dbo.link_registered_sign_in @object_id = @object_id, @email = @email;",
-        (request) => {
-          request.input("object_id", sql.NVarChar(64), user.objectId);
-          request.input("email", sql.NVarChar(256), user.email);
-        },
-      );
+      await database.query(LINK_SIGN_IN_SQL, (request) => {
+        request.input("object_id", sql.NVarChar(64), user.objectId);
+        request.input("email", sql.NVarChar(256), user.email);
+        request.input("name", sql.NVarChar(200), user.name.slice(0, 200));
+        request.input("username", sql.NVarChar(200), session.preferredUsername.slice(0, 200));
+      });
     },
   };
 }

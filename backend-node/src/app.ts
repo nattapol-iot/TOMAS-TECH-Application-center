@@ -60,6 +60,7 @@ import { registerSiteCredentialRoutes } from "./routes/site-credentials.js";
 import { registerLaborPackageRoutes } from "./routes/labor-packages.js";
 import { registerLaborRateRoutes } from "./routes/labor-rates.js";
 import { registerMasterRoutes } from "./routes/master.js";
+import { registerSignInRequestRoutes } from "./routes/sign-in-requests.js";
 import { registerSalesCustomerRoutes } from "./routes/sales-customers.js";
 import { registerModuleTemplateRoutes } from "./routes/module-templates.js";
 import { registerMaterialIssueRoutes } from "./routes/material-issues.js";
@@ -226,6 +227,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerReleaseDeploymentRoutes(app, config, database, users);
   registerSiteCredentialRoutes(app, config, database, users);
   registerMasterRoutes(app, database, users);
+  registerSignInRequestRoutes(app, database, users);
   registerLaborRateRoutes(app, config, database, users);
   registerLaborPackageRoutes(app, config, database, users);
   registerSalesCustomerRoutes(app, database, users);

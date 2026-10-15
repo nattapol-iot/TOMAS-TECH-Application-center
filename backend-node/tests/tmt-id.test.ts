@@ -161,11 +161,22 @@ test("/api/me answers 401 without a session and 200 with one", async () => {
       sub: "keycloak-subject",
       preferredUsername: "somchai.t",
       email: "somchai.t@tomastc.com",
+      signInEmail: "somchai.t@tomastc.com",
       name: null,
       role: null,
       department: null,
       employeeNo: null,
     });
+
+    // A token without an email claim is matched on the username at the company domain, and /api/me says so,
+    // so the sign-in screen shows the email Employee Master needs.
+    const noEmail = await new SealedCookieCodec(SESSION_SECRET, "session").seal(
+      { sub: "keycloak-subject-2", preferredUsername: "Nok.K" },
+      SESSION_TTL_SECONDS,
+    );
+    const withoutEmail = await app.inject({ method: "GET", url: "/api/me", cookies: { [SESSION_COOKIE_NAME]: noEmail } });
+    assert.equal(withoutEmail.statusCode, 200);
+    assert.equal(withoutEmail.json().signInEmail, `nok.k@${PROVISIONED_EMAIL_FALLBACK_DOMAIN}`);
 
     const tampered = await app.inject({
       method: "GET",
@@ -259,7 +270,13 @@ test("first sign-in only links a registered account and never creates one", asyn
   assert.equal(statements.length, 1);
   const [statement] = statements;
   assert.match(statement!.text, /EXEC dbo\.link_registered_sign_in @object_id = @object_id, @email = @email;/);
-  assert.deepEqual(statement!.inputs, { object_id: "sub-9", email: "new.person@tomastc.com" });
+  assert.deepEqual(statement!.inputs, { object_id: "sub-9", email: "new.person@tomastc.com", name: "new.person", username: "new.person" });
+  // An unlinked sign-in is only remembered for Employee Master (migration 079); it never becomes an account,
+  // and a sign-in that links clears what was remembered.
+  assert.doesNotMatch(statement!.text, /INSERT\s+(?:INTO\s+)?dbo\.users/i);
+  assert.match(statement!.text, /IF EXISTS \(SELECT 1 FROM dbo\.users WHERE entra_object_id = @object_id AND deleted_at IS NULL\)\s+DELETE FROM dbo\.sign_in_requests WHERE subject = @object_id;/);
+  assert.match(statement!.text, /WHEN NOT MATCHED THEN INSERT \(subject, email, name, username\) VALUES \(@object_id, @email, @name, @username\);/);
+  assert.match(statement!.text, /attempts = request\.attempts \+ 1, last_attempt_at = SYSUTCDATETIME\(\)/);
 
   // The procedure links, never creates, and never moves an account linked to someone else.
   const migration = readFileSync(new URL("../../database/migrations/066_application_role_grants.sql", import.meta.url), "utf8");
