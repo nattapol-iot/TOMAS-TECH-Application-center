@@ -16,6 +16,8 @@ export type AssetStatus = (typeof ASSET_STATUSES)[number];
 export type AssetInput = {
   customerId: number;
   customerSiteId: number | null;
+  /** The cabinet the asset is mounted in; one of its own customer's. */
+  cabinetId: number | null;
   projectId: number | null;
   monitorSiteId: number | null;
   monitorProgramId: number | null;
@@ -81,6 +83,7 @@ export function parseAssetInput(raw: Record<string, unknown>): AssetInput {
   return {
     customerId,
     customerSiteId: idOrNull(raw, "customerSiteId", "Customer site"),
+    cabinetId: idOrNull(raw, "cabinetId", "Cabinet"),
     projectId: idOrNull(raw, "projectId", "Project"),
     monitorSiteId,
     monitorProgramId,
@@ -127,13 +130,14 @@ export function assetChangeEvents(before: AssetInput, after: AssetInput): AssetE
       details: { from: before.firmwareVersion, to: after.firmwareVersion },
     });
   }
-  if (before.customerId !== after.customerId || before.customerSiteId !== after.customerSiteId || before.locationDetail !== after.locationDetail) {
+  if (before.customerId !== after.customerId || before.customerSiteId !== after.customerSiteId || before.cabinetId !== after.cabinetId
+    || before.locationDetail !== after.locationDetail) {
     events.push({
       kind: "Moved",
       summary: after.locationDetail || "Location changed",
       details: {
-        from: { customerId: before.customerId, customerSiteId: before.customerSiteId, location: before.locationDetail },
-        to: { customerId: after.customerId, customerSiteId: after.customerSiteId, location: after.locationDetail },
+        from: { customerId: before.customerId, customerSiteId: before.customerSiteId, cabinetId: before.cabinetId, location: before.locationDetail },
+        to: { customerId: after.customerId, customerSiteId: after.customerSiteId, cabinetId: after.cabinetId, location: after.locationDetail },
       },
     });
   }
@@ -146,6 +150,21 @@ export function assetChangeEvents(before: AssetInput, after: AssetInput): AssetE
     });
   }
   return events;
+}
+
+export type CabinetInput = { customerId: number; customerSiteId: number | null; name: string; locationDetail: string; notes: string };
+
+/** Validates and normalises a cabinet from a request body. */
+export function parseCabinetInput(raw: Record<string, unknown>): CabinetInput {
+  const customerId = idOrNull(raw, "customerId", "Customer");
+  if (!customerId) throw new ApiError(400, "validation_failed", "Customer is required.");
+  return {
+    customerId,
+    customerSiteId: idOrNull(raw, "customerSiteId", "Customer site"),
+    name: text(raw, "name", 200, "Cabinet name", true),
+    locationDetail: text(raw, "locationDetail", 300, "Location"),
+    notes: text(raw, "notes", 1000, "Notes"),
+  };
 }
 
 /** Warranty state on a business date: expired, ending within 60 days, or fine. */

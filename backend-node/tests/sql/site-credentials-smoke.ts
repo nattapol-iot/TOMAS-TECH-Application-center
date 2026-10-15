@@ -25,8 +25,8 @@ SET @actor = SCOPE_IDENTITY();
 INSERT dbo.customers (code, name, created_by, updated_by) VALUES (N'VSMOKE', N'Vault Customer', @actor, @actor); SET @customer = SCOPE_IDENTITY();
 INSERT dbo.customers (code, name, created_by, updated_by) VALUES (N'VOTHER', N'Other Customer', @actor, @actor); SET @other = SCOPE_IDENTITY();
 INSERT dbo.customer_sites (customer_id, code, name, created_by, updated_by) VALUES (@customer, N'S1', N'Plant 1', @actor, @actor); SET @site = SCOPE_IDENTITY();
-INSERT dbo.installed_assets (customer_id, customer_site_id, category, name, created_by, updated_by)
-VALUES (@customer, @site, N'PLC', N'Line PLC', @actor, @actor); SET @asset = SCOPE_IDENTITY();
+INSERT dbo.installed_assets (asset_seq, customer_id, customer_site_id, category, name, created_by, updated_by)
+VALUES ((SELECT ISNULL(MAX(asset_seq), 0) + 1 FROM dbo.installed_assets WHERE deleted_at IS NULL), @customer, @site, N'PLC', N'Line PLC', @actor, @actor); SET @asset = SCOPE_IDENTITY();
 
 -- References: the asset must be this customer's.
 INSERT @refs EXEC sp_executesql ${q(CREDENTIAL_REFERENCES_SQL)}, ${inputParams}',

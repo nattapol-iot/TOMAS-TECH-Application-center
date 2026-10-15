@@ -64,8 +64,8 @@ VALUES (@site, N'PC-1', REPLICATE(N'b', 64), N'abcd', @a, 1, 1); SET @agent = SC
 INSERT dbo.monitor_programs (agent_id, program_key, name, reported_at, version, repository)
 VALUES (@agent, N'collector', N'Collector', SYSUTCDATETIME(), N'1.0.0', N'fts-plc-collect-data'); SET @program = SCOPE_IDENTITY();
 INSERT dbo.customers (code, name, created_by, updated_by) VALUES (N'DSMOKE', N'Deploy Smoke', @a, @a); SET @customer = SCOPE_IDENTITY();
-INSERT dbo.installed_assets (customer_id, monitor_site_id, monitor_program_id, category, name, firmware_version, created_by, updated_by)
-VALUES (@customer, @site, @program, N'Software', N'Collector service', N'1.0.0', @a, @a); SET @asset = SCOPE_IDENTITY();
+INSERT dbo.installed_assets (asset_seq, customer_id, monitor_site_id, monitor_program_id, category, name, firmware_version, created_by, updated_by)
+VALUES ((SELECT ISNULL(MAX(asset_seq), 0) + 1 FROM dbo.installed_assets WHERE deleted_at IS NULL), @customer, @site, @program, N'Software', N'Collector service', N'1.0.0', @a, @a); SET @asset = SCOPE_IDENTITY();
 
 -- The program state the routes check.
 DECLARE @state TABLE (id bigint, name nvarchar(200), version nvarchar(100), repository nvarchar(100), removed_at datetimeoffset(0), agent_id bigint,

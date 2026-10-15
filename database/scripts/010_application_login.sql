@@ -761,4 +761,8 @@ GO
 -- database/migrations/079_sign_in_requests.sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.sign_in_requests TO [iot_team_app_role];
 GO
+
+-- database/migrations/080_installed_cabinets.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.installed_cabinets TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

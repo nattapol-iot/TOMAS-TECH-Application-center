@@ -65,6 +65,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 77, fileName: "077_site_credentials.sql", name: "Site credentials vault" },
   { version: 78, fileName: "078_project_without_estimate.sql", name: "Project without estimate" },
   { version: 79, fileName: "079_sign_in_requests.sql", name: "Sign-in requests from unregistered people" },
+  { version: 80, fileName: "080_installed_cabinets.sql", name: "Installed base cabinets and asset numbering" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

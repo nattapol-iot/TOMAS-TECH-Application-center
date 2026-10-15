@@ -3081,6 +3081,7 @@ export type InstalledAsset = {
   assetNo: string;
   customer: { id: number; code: string; name: string };
   customerSite: { id: number; name: string } | null;
+  cabinet: { id: number; name: string } | null;
   project: { id: number; projectNo: string; name: string } | null;
   monitorSite: { id: number; name: string } | null;
   monitorProgram: { id: number; name: string; isRunning: boolean; agentOnline: boolean } | null;
@@ -3109,6 +3110,7 @@ export type InstalledAssetDetail = InstalledAsset & { canManage: boolean; events
 export type AssetInput = {
   customerId: number;
   customerSiteId: number | null;
+  cabinetId: number | null;
   projectId: number | null;
   monitorSiteId: number | null;
   monitorProgramId: number | null;
@@ -3134,10 +3136,18 @@ export type AssetOptions = {
   customerSites: Array<{ id: number; customerId: number; code: string; name: string }>;
   monitorSites: Array<{ id: number; name: string }>;
   monitorPrograms: Array<{ id: number; siteId: number; name: string; agentName: string }>;
+  cabinets: AssetCabinet[];
 };
+/** A customer's cabinet (control panel, MDB, rack) that equipment is mounted in. */
+export type AssetCabinet = {
+  id: number; customerId: number; customerSite: { id: number; name: string } | null; name: string; locationDetail: string; notes: string;
+  assetCount: number; rowVersion: string;
+};
+export type AssetCabinetInput = { customerId: number; customerSiteId: number | null; name: string; locationDetail: string; notes: string };
 export type AssetQuery = {
   page?: number; pageSize?: number; search?: string; customerId?: number; customerSiteId?: number; projectId?: number;
   monitorSiteId?: number; monitorProgramId?: number; category?: string; status?: string; warranty?: string;
+  cabinetId?: number; sort?: "location" | "updated";
 };
 
 export const listAssets = (values: AssetQuery) =>
@@ -3152,6 +3162,11 @@ export const updateAsset = (id: number, input: AssetInput & { rowVersion: string
 export const addAssetEvent = (id: number, kind: "Note" | "Serviced", summary: string) =>
   apiRequest<{ ok: true }>(`/api/v1/assets/${id}/events`, { method: "POST", body: JSON.stringify({ kind, summary }) });
 export const deleteAsset = (id: number) => apiRequest<void>(`/api/v1/assets/${id}`, { method: "DELETE" });
+export const createAssetCabinet = (input: AssetCabinetInput) =>
+  apiRequest<AssetCabinet>("/api/v1/assets/cabinets", { method: "POST", body: JSON.stringify(input) });
+export const updateAssetCabinet = (id: number, input: AssetCabinetInput & { rowVersion: string }) =>
+  apiRequest<AssetCabinet>(`/api/v1/assets/cabinets/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const deleteAssetCabinet = (id: number) => apiRequest<void>(`/api/v1/assets/cabinets/${id}`, { method: "DELETE" });
 
 /* Site credentials vault: secrets are encrypted on the server and revealed one at a time, logged. */
 export type CredentialKind = "Login" | "WiFi" | "VPN" | "Database" | "API" | "License" | "Other";

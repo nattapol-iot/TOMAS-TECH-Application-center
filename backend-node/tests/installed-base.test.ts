@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assetChangeEvents, parseAssetInput, warrantyState, type AssetInput } from "../src/installed-base.js";
+import { assetChangeEvents, parseAssetInput, parseCabinetInput, warrantyState, type AssetInput } from "../src/installed-base.js";
 
 const base = { customerId: 4, category: "Gateway", name: "Edge Gateway Line 3" };
 
@@ -8,6 +8,7 @@ test("an asset needs a customer, a known category and a name; everything else is
   const parsed = parseAssetInput(base);
   assert.equal(parsed.status, "Active");
   assert.equal(parsed.customerSiteId, null);
+  assert.equal(parsed.cabinetId, null);
   assert.equal(parsed.serialNo, "");
   assert.throws(() => parseAssetInput({ ...base, customerId: undefined }), /Customer is required/);
   assert.throws(() => parseAssetInput({ ...base, category: "Robot" }), /Category must be one of/);
@@ -27,6 +28,8 @@ test("dates, links and the repository name are checked before anything reaches S
     installedOn: "2026-01-15", warrantyUntil: "2028-01-15", status: "Replaced", replacedById: 3, serialNo: "  SN-001  ", notes: "line 1\nline 2",
   });
   assert.equal(full.customerSiteId, 7);
+  assert.equal(parseAssetInput({ ...base, cabinetId: "15" }).cabinetId, 15);
+  assert.throws(() => parseAssetInput({ ...base, cabinetId: -1 }), /Cabinet is invalid/);
   assert.equal(full.serialNo, "SN-001");
   assert.equal(full.notes, "line 1\nline 2");
   assert.equal(full.replacedById, 3);
@@ -43,6 +46,18 @@ test("an edit becomes the events people look for, and the rest folds into one", 
   assert.match(events[3]!.summary, /model, IP address/);
   const replaced = assetChangeEvents(before, { ...before, status: "Replaced", replacedById: 8 });
   assert.equal(replaced[0]!.kind, "Replaced");
+  // Moving the equipment to another cabinet is a move, with both cabinets in the details.
+  const moved = assetChangeEvents(before, { ...before, cabinetId: 15 });
+  assert.deepEqual(moved.map((event) => event.kind), ["Moved"]);
+  assert.deepEqual((moved[0]!.details as { to: { cabinetId: number } }).to.cabinetId, 15);
+});
+
+test("a cabinet needs a customer and a name; site, location and notes are optional", () => {
+  const cabinet = parseCabinetInput({ customerId: 4, name: "  MDB-01  ", customerSiteId: "7" });
+  assert.deepEqual(cabinet, { customerId: 4, customerSiteId: 7, name: "MDB-01", locationDetail: "", notes: "" });
+  assert.throws(() => parseCabinetInput({ name: "MDB-01" }), /Customer is required/);
+  assert.throws(() => parseCabinetInput({ customerId: 4, name: " " }), /Cabinet name is required/);
+  assert.throws(() => parseCabinetInput({ customerId: 4, name: "x".repeat(201) }), /cannot exceed 200/);
 });
 
 test("warranty reads expired, expiring within 60 days, covered or none on the business date", () => {
