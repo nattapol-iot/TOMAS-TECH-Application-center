@@ -30,16 +30,21 @@ test("Employee Master lists who is waiting to sign in and adds them with the ema
   // The form no longer says an employee record grants no access, and lists every engineering department.
   assert.match(screen, /t\("SignIn\.employeeAccessNote"\)/);
   assert.doesNotMatch(screen, /Employee records do not grant login access/);
-  for (const department of ["IoT Engineer Dept.", "Application Engineer Dept.", "Mechanical Engineer Dept.", "Electrical Engineer Dept.", "System Architect & System Engineer Dept."]) {
-    assert.ok(screen.includes(`<option value="${department}" />`), department);
-  }
+  assert.match(screen, /const EMPLOYEE_DEPARTMENTS = \["IoT Engineer Dept\.", "Application Engineer Dept\.", "Mechanical Engineer Dept\.", "Electrical Engineer Dept\.", "System Architect & System Engineer Dept\."\];/);
+  // Department and level are real dropdowns (a datalist hides every option but the one already typed), with "Other" to type a new one.
+  assert.match(screen, /<ChoiceSelect value=\{form\.department\} standard=\{EMPLOYEE_DEPARTMENTS\} inUse=\{departments\}/);
+  assert.match(screen, /<ChoiceSelect value=\{form\.position\} standard=\{EMPLOYEE_LEVELS\} inUse=\{positions\}/);
+  assert.doesNotMatch(screen, /list="employee-departments"|list="employee-positions"/);
+  assert.match(screen, /<option value=\{OTHER_CHOICE\}>\{t\("Employee\.otherValue"\)\}<\/option>/);
+  // A new person is never filed under the IoT team by default.
+  assert.match(screen, /employeeNo: 0, nameEn: "", nameTh: "", department: "", jobTitle: "",/);
 });
 
 test("every SignIn string has English, Thai and Japanese copy", async () => {
   const [shell, screen, dictionary] = await Promise.all([
     read("app/system/ProductionApp.tsx"), read("app/system/production/CoreScreens.tsx"), read("app/system/i18n.ts"),
   ]);
-  const keys = [...new Set([shell, screen].flatMap((source) => [...source.matchAll(/"(SignIn\.[A-Za-z]+)"/g)].map((match) => match[1])))];
+  const keys = [...new Set([shell, screen].flatMap((source) => [...source.matchAll(/"((?:SignIn|Employee)\.[A-Za-z]+)"/g)].map((match) => match[1])))];
   assert.ok(keys.length >= 15, `${keys.length} keys`);
   for (const key of keys) {
     const pattern = String.raw`^\s*"` + key.replace(".", "\\.") + String.raw`": \{ en: "[^"]+", th: "[^"]+", jp: "[^"]+" \},$`;

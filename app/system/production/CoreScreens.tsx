@@ -2021,8 +2021,35 @@ function InventoryItemCreateForm({ bootstrap, notify, refreshBootstrap }: Pick<C
 const SIGN_IN_STATUS_LABEL: Record<SignInRequest["status"], string> = {
   new: "SignIn.statusNew", registered: "SignIn.statusRegistered", linkedElsewhere: "SignIn.statusLinkedElsewhere",
 };
+/** The engineering departments, spelled exactly as team scoping compares them, and the engineer levels. */
+const EMPLOYEE_DEPARTMENTS = ["IoT Engineer Dept.", "Application Engineer Dept.", "Mechanical Engineer Dept.", "Electrical Engineer Dept.", "System Architect & System Engineer Dept."];
+const EMPLOYEE_LEVELS = ["Junior Engineer", "Middle Engineer", "Senior Engineer", "Lead Engineer", "Technical Architect"];
+const OTHER_CHOICE = "__other__";
+
+/** A real dropdown: the standard values first, then any others already in use, and "Other" to type one that is new. */
+function ChoiceSelect({ value, standard, inUse, placeholder, onChange }: {
+  value: string; standard: string[]; inUse: string[]; placeholder: string; onChange: (value: string) => void;
+}) {
+  const { t } = useLanguage();
+  const [typing, setTyping] = useState(false);
+  const others = [...new Set([...inUse, value].filter((item) => item && !standard.includes(item)))].sort((a, b) => a.localeCompare(b));
+  if (typing) return <>
+    <input required maxLength={100} value={value} onChange={(event) => onChange(event.target.value)} />
+    <button type="button" className="btn ghost sm" onClick={() => setTyping(false)}>{t("Employee.backToList")}</button>
+  </>;
+  return <select required value={value} onChange={(event) => {
+    if (event.target.value === OTHER_CHOICE) { setTyping(true); onChange(""); } else onChange(event.target.value);
+  }}>
+    {!value ? <option value="">{t(placeholder)}</option> : null}
+    {standard.map((item) => <option key={item} value={item}>{item}</option>)}
+    {others.map((item) => <option key={item} value={item}>{item}</option>)}
+    <option value={OTHER_CHOICE}>{t("Employee.otherValue")}</option>
+  </select>;
+}
+
+// Department and job title start empty, so a new person is never filed under the IoT team by default.
 const EMPTY_EMPLOYEE: EmployeeInput = {
-  employeeNo: 0, nameEn: "", nameTh: "", department: "IoT Engineer Dept.", jobTitle: "IoT Engineer",
+  employeeNo: 0, nameEn: "", nameTh: "", department: "", jobTitle: "",
   mobile: "", email: "", nickname: "", birthDate: "", uniformSize: "", shoeSize: "",
   startWorkDate: businessDate(new Date()), endWorkDate: "", position: "Middle Engineer", isActive: true,
 };
@@ -2118,11 +2145,16 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         <td>{canWrite ? <button className="icon-btn" type="button" aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}><Icon name="edit" /></button> : null}</td>
       </tr>)}</tbody></table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={employees.length} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" />{t("Loading…")}</div> : !error ? <EmptyState icon="users" title={t("No employee found")} message={t("Add an employee or change the search filters")} /> : null}
     </Panel>
-    {editing ? <EmployeeModal employee={editing === "new" ? null : editing} prefill={editing === "new" ? prefill : null} onClose={() => setEditing(null)} onSaved={async (message) => { setEditing(null); setPrefill(null); await load(); notify(message); }} /> : null}
+    {editing ? <EmployeeModal employee={editing === "new" ? null : editing} prefill={editing === "new" ? prefill : null} departments={employees.map((employee) => employee.department)} positions={employees.map((employee) => employee.position)} onClose={() => setEditing(null)} onSaved={async (message) => { setEditing(null); setPrefill(null); await load(); notify(message); }} /> : null}
   </>;
 }
 
-function EmployeeModal({ employee, prefill = null, onClose, onSaved }: { employee: EmployeeRecord | null; prefill?: Partial<EmployeeInput> | null; onClose: () => void; onSaved: (message: string) => Promise<void> }) {
+function EmployeeModal({ employee, prefill = null, departments = [], positions = [], onClose, onSaved }: {
+  employee: EmployeeRecord | null; prefill?: Partial<EmployeeInput> | null;
+  /** Departments and positions other employees already use, offered after the standard ones. */
+  departments?: string[]; positions?: string[];
+  onClose: () => void; onSaved: (message: string) => Promise<void>;
+}) {
   const { t } = useLanguage();
   const [form, setForm] = useState<EmployeeInput>(() => employee ? {
     employeeNo: employee.employeeNo, nameEn: employee.nameEn, nameTh: employee.nameTh,
@@ -2164,8 +2196,8 @@ function EmployeeModal({ employee, prefill = null, onClose, onSaved }: { employe
         <label className="field"><span>{t("Thai name")}</span><input maxLength={200} value={form.nameTh ?? ""} onChange={(event) => update("nameTh", event.target.value)} /></label>
         <label className="field"><span>{t("Email")} *</span><input required type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
         <label className="field"><span>{t("Mobile")}</span><input type="tel" maxLength={50} autoComplete="tel" value={form.mobile ?? ""} onChange={(event) => update("mobile", event.target.value)} /></label>
-        <label className="field"><span>{t("Department")} *</span><input required maxLength={100} list="employee-departments" value={form.department} onChange={(event) => update("department", event.target.value)} /><datalist id="employee-departments"><option value="IoT Engineer Dept." /><option value="Application Engineer Dept." /><option value="Mechanical Engineer Dept." /><option value="Electrical Engineer Dept." /><option value="System Architect & System Engineer Dept." /></datalist></label>
-        <label className="field"><span>{t("Level / position")} *</span><input required maxLength={100} list="employee-positions" value={form.position} onChange={(event) => update("position", event.target.value)} /><datalist id="employee-positions"><option value="Junior Engineer" /><option value="Middle Engineer" /><option value="Senior Engineer" /><option value="Lead Engineer" /><option value="Technical Architect" /></datalist></label>
+        <label className="field"><span>{t("Department")} *</span><ChoiceSelect value={form.department} standard={EMPLOYEE_DEPARTMENTS} inUse={departments} placeholder="Employee.chooseDepartment" onChange={(value) => update("department", value)} /></label>
+        <label className="field"><span>{t("Level / position")} *</span><ChoiceSelect value={form.position} standard={EMPLOYEE_LEVELS} inUse={positions} placeholder="Employee.chooseLevel" onChange={(value) => update("position", value)} /></label>
         <label className="field span-2"><span>{t("Job title")} *</span><input required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} /></label>
         <label className="field"><span>{t("Birthday")}</span><input type="date" max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
         <label className="field"><span>{t("Start work")} *</span><input required type="date" min={form.birthDate || undefined} value={form.startWorkDate} onChange={(event) => update("startWorkDate", event.target.value)} /></label>
