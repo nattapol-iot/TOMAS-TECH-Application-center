@@ -20,7 +20,7 @@ let application: Awaited<ReturnType<typeof buildApp>> | undefined;
 try {
   execFileSync("sqlcmd",[...sqlArgs,"-i","database/scripts/020_deploy_fresh_database.sql","-v",`DatabaseName=${name}`],{cwd:repo,stdio:"pipe"});
   sqlFile("tests/integration/drawing-fixture.sql");
-  const rolePassword=randomUUID().replaceAll("-","");
+  const rolePassword=randomUUID().replaceAll("-","") + "Aa1!";
   execFileSync("sqlcmd",[...sqlArgs,"-d",name,"-Q",`CREATE APPLICATION ROLE drawing_ci_role WITH PASSWORD='${rolePassword}';`],{stdio:"pipe"});
   execFileSync("sqlcmd",[...sqlArgs,"-d",name,"-i","database/scripts/010_application_login.sql","-v",`DatabaseName=${name}`,"AppLogin=drawing_ci_role"],{cwd:repo,stdio:"pipe"});
   config.database.applicationRoleName="drawing_ci_role";config.database.applicationRolePassword=rolePassword;

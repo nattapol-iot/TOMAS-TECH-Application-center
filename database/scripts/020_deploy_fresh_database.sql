@@ -143,11 +143,12 @@ GO
 :r database/migrations/079_sign_in_requests.sql
 :r database/migrations/080_installed_cabinets.sql
 :r database/migrations/081_domain_sign_in.sql
+:r database/migrations/082_repository_write.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 81) <> 81
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 82) <> 82
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

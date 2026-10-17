@@ -28,7 +28,7 @@ try {
     INSERT dbo.customers(code,name,created_by,updated_by) VALUES(N'OH-CI',N'Overhead CI customer',@admin,@admin);
     INSERT dbo.engineering_rates(level,department,engineering_hourly,engineering_daily,installation_hourly,installation_daily,effective_from,created_by)
       VALUES(N'Engineer',N'IoT',100,800,120,960,'2020-01-01',@admin);`);
-  const rolePassword=randomUUID().replaceAll("-","");
+  const rolePassword=randomUUID().replaceAll("-","") + "Aa1!";
   run(`CREATE APPLICATION ROLE overhead_ci_role WITH PASSWORD='${rolePassword}';`);
   execFileSync("sqlcmd",[...sqlArgs,"-d",name,"-i",sqlTest.applicationLoginScript,"-v",`DatabaseName=${name}`,"AppLogin=overhead_ci_role"],sqlTest.sqlcmdOptions);
   const config:AppConfig={environment:"development",host:"127.0.0.1",port:0,allowedHosts:["localhost"],corsOrigins:["http://localhost:3000"],

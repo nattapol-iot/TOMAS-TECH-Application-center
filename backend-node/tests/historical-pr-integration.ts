@@ -38,7 +38,7 @@ try {
     CREATE TABLE dbo.audit_log(id bigint IDENTITY PRIMARY KEY,actor_id bigint,entity_type nvarchar(50),entity_id bigint,entity_no nvarchar(50),action nvarchar(100),before_json nvarchar(max),after_json nvarchar(max));
     CREATE ROLE iot_team_app_role;`);
   execFileSync("sqlcmd", [...args, "-d", name, "-i", resolve("database/migrations/033_historical_pr_import.sql")], { stdio: "pipe" });
-  const password = randomUUID().replaceAll("-", "");
+  const password = randomUUID().replaceAll("-", "") + "Aa1!";
   run(`CREATE APPLICATION ROLE hpr_ci_app WITH PASSWORD='${password}'; ALTER ROLE iot_team_app_role ADD MEMBER hpr_ci_app;
     GRANT SELECT ON dbo.schema_versions TO hpr_ci_app; GRANT SELECT ON dbo.roles TO hpr_ci_app; GRANT SELECT ON dbo.users TO hpr_ci_app;
     GRANT SELECT ON dbo.permissions TO hpr_ci_app; GRANT SELECT ON dbo.role_permissions TO hpr_ci_app; GRANT SELECT ON dbo.user_signing_permissions TO hpr_ci_app;

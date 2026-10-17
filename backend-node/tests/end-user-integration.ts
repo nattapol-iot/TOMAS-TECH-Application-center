@@ -24,7 +24,7 @@ try {
     INSERT dbo.role_permissions(role_id,permission_id) SELECT r.id,p.id FROM dbo.roles r CROSS JOIN dbo.permissions p
       WHERE r.code=N'EndUserWriter' AND p.code IN(N'project.read',N'project.write');
     UPDATE dbo.users SET role_id=(SELECT id FROM dbo.roles WHERE code=N'EndUserWriter') WHERE entra_object_id=N'end-user-outsider';`);
-  const password = randomUUID().replaceAll("-", "");
+  const password = randomUUID().replaceAll("-", "") + "Aa1!";
   run(`CREATE APPLICATION ROLE end_user_ci_role WITH PASSWORD='${password}';`);
   execFileSync("sqlcmd", [...args, "-d", name, "-i", "database/scripts/010_application_login.sql", "-v", `DatabaseName=${name}`, "AppLogin=end_user_ci_role"], { cwd: repo, stdio: "pipe" });
   const config: AppConfig = {

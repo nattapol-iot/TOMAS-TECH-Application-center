@@ -18,7 +18,7 @@ try {
  execFileSync('sqlcmd',[...args,'-i','database/scripts/020_deploy_fresh_database.sql','-v',`DatabaseName=${name}`],{cwd:repo,stdio:'pipe',encoding:'utf8'});
  execFileSync('sqlcmd',[...args,'-d',name,'-i','tests/integration/drawing-fixture.sql'],{cwd:repo,stdio:'pipe'});
  run(`UPDATE dbo.inquiries SET status=N'New';INSERT dbo.signature_specimens(user_id,version,source,image_key) SELECT id,1,N'TYPED',N'TEST-ONLY-no-real-specimen.png' FROM dbo.users WHERE entra_object_id IN(N'drawing-member',N'drawing-leader',N'drawing-manager');`);
- const password=randomUUID().replaceAll('-','');run(`CREATE APPLICATION ROLE report_ci_role WITH PASSWORD='${password}';`);
+ const password=randomUUID().replaceAll('-','') + "Aa1!";run(`CREATE APPLICATION ROLE report_ci_role WITH PASSWORD='${password}';`);
  execFileSync('sqlcmd',[...args,'-d',name,'-i','database/scripts/010_application_login.sql','-v',`DatabaseName=${name}`,'AppLogin=report_ci_role'],{cwd:repo,stdio:'pipe'});
  const config:AppConfig={environment:'development',host:'127.0.0.1',port:0,allowedHosts:['localhost'],corsOrigins:['http://localhost:3000'],businessTimeZone:'Asia/Bangkok',auth:{mode:'Development'},database:{connectionString:`Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`,trustServerCertificate:true,applicationRoleName:'report_ci_role',applicationRolePassword:password},documentStorage:{mode:'Local',rootPath:resolve(repo,'tmp',name),maxFileSizeBytes:10000000},email:{mode:'Disabled'},pdfParserUrl:'http://pdf-parser:8000'};
  mkdirSync(config.documentStorage.rootPath,{recursive:true});

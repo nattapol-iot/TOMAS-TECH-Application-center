@@ -23,7 +23,7 @@ try{
  INSERT dbo.employees(employee_no,name_en,department,job_title,email,start_work_date,position,user_id,created_by,updated_by)
  SELECT id,name,department,N'Engineer',email,'20260101',N'Engineer',id,id,id FROM dbo.users;
  UPDATE dbo.activity_settings SET started_at=DATEADD(day,-60,SYSUTCDATETIME());`);
- const password=randomUUID().replaceAll('-','');run(`CREATE APPLICATION ROLE activity_ci_role WITH PASSWORD='${password}';`);
+ const password=randomUUID().replaceAll('-','') + "Aa1!";run(`CREATE APPLICATION ROLE activity_ci_role WITH PASSWORD='${password}';`);
  execFileSync('sqlcmd',[...args,'-d',name,'-i','database/scripts/010_application_login.sql','-v',`DatabaseName=${name}`,'AppLogin=activity_ci_role'],{cwd:repo,stdio:'pipe'});
  const config:AppConfig={environment:'development',host:'127.0.0.1',port:0,allowedHosts:['localhost'],corsOrigins:['http://localhost:3000'],businessTimeZone:'Asia/Bangkok',auth:{mode:'Development'},database:{connectionString:`Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`,trustServerCertificate:true,applicationRoleName:'activity_ci_role',applicationRolePassword:password},documentStorage:{mode:'Local',rootPath:storage,maxFileSizeBytes:10485760},email:{mode:'Disabled'},pdfParserUrl:'http://pdf-parser:8000'};
  mkdirSync(storage,{recursive:true});application=await buildApp(config);const {app,database}=application;

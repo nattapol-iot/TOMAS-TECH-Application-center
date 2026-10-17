@@ -52,7 +52,7 @@ try {
     INSERT dbo.engineer_skills(user_id,skill_id,proficiency,created_by,updated_by) VALUES(@engineer,SCOPE_IDENTITY(),N'Advanced',@admin,@admin);
     INSERT dbo.engineering_rates(level,department,engineering_hourly,engineering_daily,installation_hourly,installation_daily,effective_from,created_by)
       VALUES(N'Engineer',N'Engineering',100,800,120,960,'2020-01-01',@admin);`);
-  const password = randomUUID().replaceAll("-", "");
+  const password = randomUUID().replaceAll("-", "") + "Aa1!";
   run(`CREATE APPLICATION ROLE handover_ci_role WITH PASSWORD='${password}';`);
   execFileSync("sqlcmd", [...sqlArgs, "-d", name, "-i", sqlTest.applicationLoginScript, "-v", `DatabaseName=${name}`, "AppLogin=handover_ci_role"], sqlTest.sqlcmdOptions);
   const config: AppConfig = {

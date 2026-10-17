@@ -27,7 +27,7 @@ import type { CurrentUserService } from "../users.js";
 export const REPOSITORIES_ROOT = "source-repositories";
 const FILES_FOLDER = "files";
 const META_FILE = "repo.json";
-export const MANAGE_PERMISSION = "project.write";
+export const MANAGE_PERMISSION = "repository.write";
 const MAX_HISTORY = 200;
 const MAX_TREE_ENTRIES = 2000;
 const MAX_REPOSITORY_FILES = 50_000;

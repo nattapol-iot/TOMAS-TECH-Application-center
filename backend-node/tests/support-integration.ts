@@ -17,7 +17,7 @@ const storage=resolve(repo,'tmp',name);
 try {
  execFileSync('sqlcmd',[...args,'-i','database/scripts/020_deploy_fresh_database.sql','-v',`DatabaseName=${name}`],{cwd:repo,stdio:'pipe',encoding:'utf8'});
  execFileSync('sqlcmd',[...args,'-d',name,'-i','tests/integration/drawing-fixture.sql'],{cwd:repo,stdio:'pipe',encoding:'utf8'});
- const password=randomUUID().replaceAll('-','');run(`CREATE APPLICATION ROLE support_ci_role WITH PASSWORD='${password}';`);
+ const password=randomUUID().replaceAll('-','') + "Aa1!";run(`CREATE APPLICATION ROLE support_ci_role WITH PASSWORD='${password}';`);
  execFileSync('sqlcmd',[...args,'-d',name,'-i','database/scripts/010_application_login.sql','-v',`DatabaseName=${name}`,'AppLogin=support_ci_role'],{cwd:repo,stdio:'pipe',encoding:'utf8'});
  const config:AppConfig={environment:'development',host:'127.0.0.1',port:0,allowedHosts:['localhost'],corsOrigins:['http://localhost:3000'],businessTimeZone:'Asia/Bangkok',auth:{mode:'Development'},database:{connectionString:`Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`,trustServerCertificate:true,applicationRoleName:'support_ci_role',applicationRolePassword:password},documentStorage:{mode:'Local',rootPath:storage,maxFileSizeBytes:10485760},email:{mode:'Disabled'},pdfParserUrl:'http://pdf-parser:8000'};
  mkdirSync(storage,{recursive:true});application=await buildApp(config);const {app,database}=application;

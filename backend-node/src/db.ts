@@ -102,7 +102,8 @@ export class Database {
     try {
       const roleName = this.config.applicationRoleName.replaceAll("'", "''");
       const rolePassword = this.config.applicationRolePassword.replaceAll("'", "''");
-      await new Request(pool).query(`EXEC sys.sp_setapprole N'${roleName}', N'${rolePassword}';`);
+      // sp_setapprole only runs ad hoc: query() sends sp_executesql, batch() sends plain SQL.
+      await new Request(pool).batch(`EXEC sys.sp_setapprole N'${roleName}', N'${rolePassword}';`);
       return await work(pool);
     } finally {
       await pool.close();

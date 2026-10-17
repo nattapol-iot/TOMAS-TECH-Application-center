@@ -836,7 +836,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             </div>
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "downloads" ? <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("project.write")} notify={setToast} /> : null}
+          {view === "downloads" ? <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} /> : null}
           {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "installed-base" ? <InstalledBaseScreen canManage={bootstrap.permissions.includes("asset.manage")} canSeeCredentials={bootstrap.permissions.includes("credential.read")} notify={setToast} /> : null}
           {view === "sales-intake" ? <ProductionSalesIntake {...common} openVisit={openSiteVisit} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}

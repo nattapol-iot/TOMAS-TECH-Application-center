@@ -23,7 +23,7 @@ try {
     FROM (VALUES(N'sales-ci-sales',N'Sales Engineer'),(N'sales-ci-manager',N'Sales Manager'),
       (N'sales-ci-admin',N'Admin'),(N'sales-ci-reader',N'Engineer')) v(identity_id,role_code)
     JOIN dbo.roles r ON r.code=v.role_code;`);
-  const password = randomUUID().replaceAll('-', '');
+  const password = randomUUID().replaceAll('-', '') + "Aa1!";
   run(`CREATE APPLICATION ROLE sales_ci_role WITH PASSWORD='${password}';`);
   execFileSync('sqlcmd', [...args, '-d', name, '-i', 'database/scripts/010_application_login.sql', '-v', `DatabaseName=${name}`, 'AppLogin=sales_ci_role'], { cwd: repo, stdio: 'pipe' });
   const config: AppConfig = {
