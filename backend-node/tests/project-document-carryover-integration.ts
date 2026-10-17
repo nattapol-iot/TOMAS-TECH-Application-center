@@ -109,6 +109,18 @@ try {
       dailyRate: 0, ownerId: actors["handover-engineer"], remark: "TEST ONLY complete flow",
     }, 201);
     estimate = { ...estimate, rowVersion: manhour.estimateRowVersion };
+    // Approval requires every cost line, contingency included, to carry an ERP category; assign the unmapped ones as a reviewer would.
+    const erpSummary = await api("engineer", "GET", `/api/v1/estimates/${estimate.id}/erp-summary`);
+    const unmapped = erpSummary.lines.filter((line: { erpCategory: string }) => line.erpCategory === "Unmapped");
+    if (unmapped.length) {
+      const mapped = await api("engineer", "PUT", `/api/v1/estimates/${estimate.id}/erp-mappings`, {
+        estimateRowVersion: estimate.rowVersion,
+        mappings: unmapped.map((line: { sourceType: string; sourceId: number | null; mappingRowVersion: string | null }) =>
+          ({ sourceType: line.sourceType, sourceId: line.sourceId, erpCategory: "Service", mappingRowVersion: line.mappingRowVersion })),
+      });
+      assert.equal(mapped.erpSummary.unmapped.lineCount, 0);
+      estimate = { ...estimate, rowVersion: mapped.estimateRowVersion };
+    }
     estimate = await api("engineer", "POST", `/api/v1/estimates/${estimate.id}/submit`, { rowVersion: estimate.rowVersion, comment: "TEST ONLY ready for review" });
     estimate = await api("manager", "POST", `/api/v1/estimates/${estimate.id}/approve`, { rowVersion: estimate.rowVersion, comment: "TEST ONLY approved" });
     return estimate;

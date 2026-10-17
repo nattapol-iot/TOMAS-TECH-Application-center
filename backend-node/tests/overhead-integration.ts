@@ -6,6 +6,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildApp } from "../src/app.js";
 import type { AppConfig } from "../src/config.js";
+import { ESTIMATE_OVERHEAD_ENABLED } from "../src/feature-flags.js";
 import { createSqlIntegrationConfig } from "./sql-integration-config.js";
 
 const sqlTest=createSqlIntegrationConfig("Overhead");
@@ -53,7 +54,9 @@ try {
   let missing=await estimate(await inquiry("MISSING"));
   let workspace=await api("engineer","GET",`/api/v1/estimates/${missing.id}/cost-workspace`);
   assert.equal(workspace.header.overhead.state,"Missing"); assert.equal(workspace.header.totals.overhead,null);
-  assert.ok(workspace.validationIssues.some((issue:{code:string;severity:string})=>issue.code==="overhead_policy_missing"&&issue.severity==="Warning"));
+  // The missing-policy warning is gated by ESTIMATE_OVERHEAD_ENABLED; overhead totals and snapshots are not.
+  const missingWarning=workspace.validationIssues.some((issue:{code:string;severity:string})=>issue.code==="overhead_policy_missing"&&issue.severity==="Warning");
+  assert.equal(missingWarning,ESTIMATE_OVERHEAD_ENABLED);
   const policy=await api("admin","POST","/api/v1/overhead-policies",{monthlyBudget:60_000,normalDirectHours:400,effectiveFrom:today,reason:"TEST ONLY budget divided by normal direct hours"},201);
   assert.equal(policy.hourlyRate,150); assert.equal((await api("engineer","GET","/api/v1/overhead-policies")).activePolicyId,policy.id);
 
@@ -92,6 +95,15 @@ try {
   assert.deepEqual({state:workspace.header.overhead.state,hours:workspace.header.overhead.eligibleDirectHours,rate:workspace.header.overhead.hourlyRate,amount:workspace.header.overhead.amount},
     {state:"Applied",hours:8,rate:150,amount:1200});
   assert.equal(workspace.header.totals.subtotal,800); assert.equal(workspace.header.totals.contingency,40); assert.equal(workspace.header.totals.total,2040);
+  // Approval requires every cost line, contingency included, to carry an ERP category; assign the unmapped ones as a reviewer would.
+  const erpSummary=await api("engineer","GET",`/api/v1/estimates/${applied.id}/erp-summary`);
+  const unmappedLines=erpSummary.lines.filter((line:{erpCategory:string})=>line.erpCategory==="Unmapped");
+  if(unmappedLines.length){
+    const mapped=await api("engineer","PUT",`/api/v1/estimates/${applied.id}/erp-mappings`,{estimateRowVersion:applied.rowVersion,
+      mappings:unmappedLines.map((line:{sourceType:string;sourceId:number|null;mappingRowVersion:string|null})=>({sourceType:line.sourceType,sourceId:line.sourceId,erpCategory:"Service",mappingRowVersion:line.mappingRowVersion}))});
+    assert.equal(mapped.erpSummary.unmapped.lineCount,0);
+    applied={...applied,rowVersion:mapped.estimateRowVersion};
+  }
   applied=await api("engineer","POST",`/api/v1/estimates/${applied.id}/submit`,{rowVersion:applied.rowVersion,comment:"TEST ONLY with overhead"});
   await api("manager","POST",`/api/v1/estimates/${applied.id}/approve`,{rowVersion:applied.rowVersion,comment:"TEST ONLY approved"});
   const approved=(await database.query<{total:number;description:string}>(`SELECT total,description FROM dbo.estimate_revisions WHERE estimate_id=${applied.id} AND revision=0`)).recordset[0]!;
@@ -115,7 +127,7 @@ try {
   const carriedText=readFileSync(resolve(storageRoot,carried.storage_key),"utf8");
   const carriedEstimate=JSON.parse(carriedText.slice(carriedText.indexOf("{")));
   assert.equal(Number(carriedEstimate.total),2040); assert.equal(Number(carriedEstimate.overhead_total),1200); assert.equal(Number(carriedEstimate.overhead_policy_version),1);
-  console.log("OVERHEAD INTEGRATION PASSED: missing policy remains an explicit warning, active policy snapshots per revision, totals preserve contingency basis, submit freezes full evidence, approval and Project handover preserve total and policy provenance.");
+  console.log("OVERHEAD INTEGRATION PASSED: missing policy warning follows ESTIMATE_OVERHEAD_ENABLED, active policy snapshots per revision, totals preserve contingency basis, submit freezes full evidence, approval and Project handover preserve total and policy provenance.");
 } finally {
   if(application){await application.app.close();await application.database.close();}
   execFileSync("sqlcmd",[...sqlArgs,"-d","master","-Q",`IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`],sqlTest.sqlcmdOptions);
