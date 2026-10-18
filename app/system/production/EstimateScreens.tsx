@@ -1,4 +1,5 @@
 "use client";
+import { isPlainClick, viewHash } from "../../../lib/remembered-view";
 import { useEstimateNavigation } from "./use-estimate-navigation";
 import type { EstimateTab } from "../../../lib/estimate-navigation";
 import { DocumentLifecycleButton, DocumentHistoryButton } from "./DocumentLifecycle";
@@ -337,10 +338,10 @@ async function listAllNewInquiries() {
   return [...new Map(items.map((item) => [item.id, item])).values()];
 }
 
-export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initialEstimateId = null }: Props & { initialEstimateId?: number | null }) {
+export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initialEstimateId = null, onSelectEstimate }: Props & { initialEstimateId?: number | null; onSelectEstimate?: (id: number | null) => void }) {
   const uiText = useUiText();
   const [result, setResult] = useState<PagedResult<EstimateSummary>>(EMPTY_PAGE);
-  const { ready: navigationReady, estimateId: selectedEstimateId, selectEstimate: setSelectedEstimateId, tab, selectTab: setTab } = useEstimateNavigation(bootstrap.user.id, initialEstimateId);
+  const { ready: navigationReady, estimateId: selectedEstimateId, selectEstimate: setSelectedEstimateId, tab, selectTab: setTab } = useEstimateNavigation(bootstrap.user.id, initialEstimateId, onSelectEstimate);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
@@ -480,7 +481,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
           const base = parts.reduce((sum, value) => sum + Math.max(0, value), 0);
           const breakdown = costKey.map((key, index) => `${key.label} ${formatMoney(parts[index])}`).join(" · ");
           return <tr key={item.id} className={`clickable${late ? " row-late" : ""}`} onClick={() => setSelectedEstimateId(item.id)}>
-            <td><span className="mono est-no">{item.number}</span><span className="pill">{revisionCode(item.revision)}</span><div className="est-sub mono">{item.inquiryNumber}</div></td>
+            <td><a className="mono est-no" href={viewHash("estimates", item.id)} onClick={(event) => { event.stopPropagation(); if (!isPlainClick(event)) return; event.preventDefault(); setSelectedEstimateId(item.id); }}>{item.number}</a><span className="pill">{revisionCode(item.revision)}</span><div className="est-sub mono">{item.inquiryNumber}</div></td>
             <td className="wrap est-project"><strong>{item.projectName}</strong><div className="est-sub">{item.customerName} · {item.projectType}</div></td>
             <td>{item.ownerName}</td>
             <td>{formatDate(item.dueDate)}{closed ? null : <div className={late ? "est-sub red-text" : "est-sub"}>{dueDistance(item.dueDate, todayIso)}</div>}</td>

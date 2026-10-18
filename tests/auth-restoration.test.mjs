@@ -41,20 +41,42 @@ function createHarness({
   savedView = null,
   hash = "",
   storageBlocked = false,
+  reactive = false,
 }) {
   const states = [];
   let cursor = 0;
   let mounted = false;
   let mountEffects = [];
   let tmtLoginRedirects = 0;
+  const hooks = [];
+  let hookCursor = 0;
+  const timers = new Map();
+  const listeners = new Map();
+  const history = [hash];
+  let historyIndex = 0;
+  const sameDeps = (left, right) => left && right && left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+  const memo = (factory, deps) => {
+    const index = hookCursor++;
+    if (!hooks[index] || !sameDeps(hooks[index].deps, deps)) hooks[index] = { deps, value: factory() };
+    return hooks[index].value;
+  };
 
   const react = {
-    useCallback: (callback) => callback,
-    useEffect(effect) {
+    useCallback: (callback, deps) => reactive ? memo(() => callback, deps) : callback,
+    useEffect(effect, deps) {
+      if (reactive) {
+        const index = hookCursor++;
+        if (!hooks[index] || !sameDeps(hooks[index].deps, deps)) {
+          const previous = hooks[index];
+          hooks[index] = { deps, cleanup: previous?.cleanup };
+          mountEffects.push(() => { previous?.cleanup?.(); hooks[index].cleanup = effect(); });
+        }
+        return;
+      }
       if (!mounted) mountEffects.push(effect);
     },
-    useMemo: (factory) => factory(),
-    useRef: (value) => ({ current: value }),
+    useMemo: (factory, deps) => reactive ? memo(factory, deps) : factory(),
+    useRef: (value) => reactive ? memo(() => ({ current: value }), []) : ({ current: value }),
     useState(initial) {
       const index = cursor++;
       if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial;
@@ -135,11 +157,14 @@ function createHarness({
   const previousDocument = globalThis.document;
   const storage = new Map();
   globalThis.window = {
-    addEventListener: () => {},
+    addEventListener: (name, callback) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(callback); },
     clearInterval: () => {},
-    clearTimeout: () => {},
+    clearTimeout: (id) => timers.delete(id),
     confirm: () => true,
-    history: { replaceState: () => {} },
+    history: {
+      replaceState: (_state, _title, url) => { if (reactive) { window.location.hash = new URL(url, "https://app.test").hash; history[historyIndex] = window.location.hash; } },
+      pushState: (_state, _title, url) => { if (reactive) { window.location.hash = new URL(url, "https://app.test").hash; history.splice(++historyIndex); history.push(window.location.hash); } },
+    },
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
       removeItem: (key) => storage.delete(key),
@@ -151,17 +176,36 @@ function createHarness({
       removeItem: () => {},
     },
     location: { hash, pathname: "/", search: "" },
-    removeEventListener: () => {},
+    removeEventListener: (name, callback) => listeners.get(name)?.delete(callback),
     scrollTo: () => {},
     setInterval: () => 1,
-    setTimeout: () => 1,
+    setTimeout: (callback, delay) => { const id = Symbol(); if (reactive && delay === 0) timers.set(id, callback); return id; },
   };
   globalThis.document = { documentElement: { lang: "en" } };
 
   return {
     render() {
       cursor = 0;
+      hookCursor = 0;
       return ProductionApp();
+    },
+    async flush() {
+      for (let round = 0; round < 8; round++) {
+        this.render();
+        this.runMountEffects();
+        for (const [id, callback] of [...timers]) { timers.delete(id); callback(); }
+        await new Promise(resolve => setImmediate(resolve));
+      }
+      return this.render();
+    },
+    go(delta) {
+      historyIndex += delta;
+      window.location.hash = history[historyIndex];
+      for (const listener of listeners.get("hashchange") ?? []) listener();
+    },
+    navigate(hash) {
+      window.location.hash = hash;
+      for (const listener of listeners.get("hashchange") ?? []) listener();
     },
     runMountEffects() {
       const effects = mountEffects;
@@ -171,6 +215,7 @@ function createHarness({
     },
     getTmtLoginRedirects: () => tmtLoginRedirects,
     cleanup() {
+      if (reactive) for (const hook of hooks) hook?.cleanup?.();
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;
     },
@@ -361,6 +406,93 @@ function navLeaf(tree, label) {
   return findNode(tree, node => node.type === "a" && findNode(node, child => child.type === "span" && child.props.children === label));
 }
 const plainClick = () => ({ button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, defaultPrevented: false, prevented: false, preventDefault() { this.prevented = true; } });
+
+test("opening an estimate from an inquiry leaves a shareable document URL", async () => {
+  const harness = createHarness({ mode: "team-test", reactive: true, hash: "#/inquiries",
+    loadBootstrap: async () => ({ ...bootstrap, permissions: ["inquiry.read", "estimate.read"] }),
+  });
+  try {
+    const tree = await harness.flush();
+    findNode(tree, node => node.type === "ProductionInquiries").props.openEstimate(42);
+    const opened = await harness.flush();
+    assert.equal(findNode(opened, node => node.type === "ProductionEstimates").props.initialEstimateId, 42);
+    assert.equal(window.location.hash, "#/estimates/42");
+  } finally { harness.cleanup(); }
+});
+
+test("shared Inquiry and Estimate links restore the exact record after sign-in", async (t) => {
+  for (const [view, oldName, component, idProp, permission] of [
+    ["estimates", "estimate", "ProductionEstimates", "initialEstimateId", "estimate.read"],
+    ["inquiries", "inquiry", "ProductionInquiries", "preferredInquiryId", "inquiry.read"],
+  ]) {
+    for (const mode of ["tmt-id", "team-test", "entra"]) {
+      for (const hash of [`#/${view}/42`, `#${oldName}/42`]) {
+        await t.test(`${mode} ${hash}`, async () => {
+          const harness = createHarness({ mode, reactive: true, hash, savedView: "dashboard", storageBlocked: true,
+            restoreAccount: async () => ({}), loadTmtIdSession: async () => ({ status: "signed-in" }),
+            loadBootstrap: async () => ({ ...bootstrap, permissions: [permission] }),
+          });
+          try {
+            const tree = await harness.flush();
+            assert.equal(findNode(tree, node => node.type === component).props[idProp], 42);
+            assert.equal(window.location.hash, `#/${view}/42`);
+          } finally { harness.cleanup(); }
+        });
+      }
+    }
+  }
+});
+
+test("document selection, Back, Forward and returning to the list keep URL and selection together", async (t) => {
+  for (const [view, component, idProp, selectProp, label, permission] of [
+    ["estimates", "ProductionEstimates", "initialEstimateId", "onSelectEstimate", "Estimate Cost", "estimate.read"],
+    ["inquiries", "ProductionInquiries", "preferredInquiryId", "onSelectInquiry", "RFQ intake & estimating", "inquiry.read"],
+  ]) {
+    await t.test(view, async () => {
+      const harness = createHarness({ mode: "team-test", reactive: true, hash: `#/${view}`,
+        loadBootstrap: async () => ({ ...bootstrap, permissions: [permission] }),
+      });
+      const screen = tree => findNode(tree, node => node.type === component);
+      try {
+        let tree = await harness.flush();
+        for (const id of [42, 43]) {
+          screen(tree).props[selectProp](id);
+          tree = await harness.flush();
+          assert.equal(window.location.hash, `#/${view}/${id}`);
+        }
+        harness.go(-1); tree = await harness.flush();
+        assert.equal(screen(tree).props[idProp], 42);
+        harness.go(-1); tree = await harness.flush();
+        assert.equal(screen(tree).props[idProp], null);
+        harness.go(1); tree = await harness.flush();
+        assert.equal(screen(tree).props[idProp], 42);
+        navLeaf(tree, label).props.onClick(plainClick()); tree = await harness.flush();
+        assert.equal(window.location.hash, `#/${view}`);
+        assert.equal(screen(tree).props[idProp], null);
+        screen(tree).props[selectProp](44); tree = await harness.flush();
+        screen(tree).props[selectProp](null); tree = await harness.flush();
+        assert.equal(window.location.hash, `#/${view}`);
+        harness.navigate(`#/${view}/45`); tree = await harness.flush();
+        assert.equal(screen(tree).props[idProp], 45);
+      } finally { harness.cleanup(); }
+    });
+  }
+});
+
+test("a shared document URL never bypasses module permissions", async () => {
+  for (const hash of ["#/estimates/42", "#estimate/42", "#/inquiries/42", "#inquiry/42"]) {
+    const harness = createHarness({ mode: "team-test", reactive: true, hash });
+    try {
+      const tree = await harness.flush();
+      assert.ok(findNode(tree, node => node.type === "ProductionDashboard"));
+      assert.equal(findNode(tree, node => ["ProductionInquiries", "ProductionEstimates"].includes(node.type)), undefined);
+      assert.equal(window.location.hash, "#/dashboard");
+      harness.navigate(hash);
+      await harness.flush();
+      assert.equal(window.location.hash, "#/dashboard");
+    } finally { harness.cleanup(); }
+  }
+});
 
 test("legacy project timeline links and remembered views preserve schedule access", async (t) => {
   for (const permissions of [[], ["project.read"], ["schedule.read"], ["project.read", "schedule.read"]]) {

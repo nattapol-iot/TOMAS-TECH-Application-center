@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { estimateNavigationKey, restoreEstimateNavigation, type EstimateNavigation, type EstimateTab } from "../../../lib/estimate-navigation";
 
-export function useEstimateNavigation(userId: number, initialId: number | null) {
+export function useEstimateNavigation(userId: number, initialId: number | null, onSelect?: (id: number | null) => void) {
   const key = estimateNavigationKey(userId);
   const [state, setState] = useState<EstimateNavigation & { key: string | null }>({ key: null, estimateId: initialId, tab: "summary" });
   const ready = state.key === key;
@@ -21,7 +21,8 @@ export function useEstimateNavigation(userId: number, initialId: number | null) 
   }, [key, ready, state.estimateId, state.tab]);
   const selectEstimate = useCallback((estimateId: number | null) => {
     setState({ key, estimateId, tab: "summary" });
-  }, [key]);
+    onSelect?.(estimateId);
+  }, [key, onSelect]);
   const selectTab = useCallback((tab: EstimateTab) => {
     setState(current => ({ ...current, tab }));
   }, []);

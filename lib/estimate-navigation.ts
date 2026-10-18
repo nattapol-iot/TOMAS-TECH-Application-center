@@ -6,7 +6,7 @@ export function estimateNavigationKey(userId: number): string {
   return `tomas-tech-estimate-navigation:${userId}`;
 }
 
-/** Restore only navigation; explicit document links take precedence. */
+/** The URL chooses the document (null means list); storage remembers only its active tab. */
 export function restoreEstimateNavigation(saved: string | null, initialId: number | null): EstimateNavigation {
   let value: Partial<EstimateNavigation> = {};
   try {
@@ -14,7 +14,7 @@ export function restoreEstimateNavigation(saved: string | null, initialId: numbe
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) value = parsed;
   } catch { /* An obsolete or damaged value opens the list. */ }
   const savedId = Number.isSafeInteger(value.estimateId) && Number(value.estimateId) > 0 ? value.estimateId! : null;
-  const estimateId = initialId ?? savedId;
+  const estimateId = initialId;
   const tab = estimateId !== null && estimateId === savedId && ESTIMATE_TABS.includes(value.tab as EstimateTab) ? value.tab! : "summary";
   return { estimateId, tab };
 }

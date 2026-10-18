@@ -1,4 +1,5 @@
 "use client";
+import { isPlainClick, viewHash } from "../../../lib/remembered-view";
 import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } from "./DocumentLifecycle";
 import { ProjectHandover } from "./ProjectHandover";
 import { InquirySalesFollowup } from "./InquirySalesFollowup";
@@ -64,6 +65,7 @@ type Props = {
   refreshBootstrap: () => Promise<void>;
   openEstimate?: (estimateId: number) => void;
   preferredInquiryId?: number | null;
+  onSelectInquiry?: (id: number | null) => void;
   startWithCreate?: boolean;
   openVisit?: (visitId: number) => void;
   openOpportunity?: (id: number) => void;
@@ -124,9 +126,11 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
 
 export function ProductionInquiries(props: Props) {
   const [screen, setScreen] = useState<Screen>(() => props.preferredInquiryId ? {name:"detail",id:props.preferredInquiryId} : { name: props.startWithCreate ? "create" : "list" });
-  if (screen.name === "create") return <InquiryCreate {...props} onBack={() => setScreen({ name: "list" })} onCreated={(id) => setScreen({ name: "detail", id })} />;
-  if (screen.name === "detail") return <InquiryDetailScreen {...props} id={screen.id} onBack={() => setScreen({ name: "list" })} />;
-  return <InquiryList {...props} onCreate={() => setScreen({ name: "create" })} onOpen={(id) => setScreen({ name: "detail", id })} />;
+  const open = (id: number) => { setScreen({ name: "detail", id }); props.onSelectInquiry?.(id); };
+  const back = () => { setScreen({ name: "list" }); props.onSelectInquiry?.(null); };
+  if (screen.name === "create") return <InquiryCreate {...props} onBack={back} onCreated={open} />;
+  if (screen.name === "detail") return <InquiryDetailScreen {...props} id={screen.id} onBack={back} />;
+  return <InquiryList {...props} onCreate={() => setScreen({ name: "create" })} onOpen={open} />;
 }
 
 function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, openOpportunity }: Props & { onCreate: () => void; onOpen: (id: number) => void }) {
@@ -266,7 +270,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
           const late = item.dueDate < today() && item.status !== "Approved" && item.status !== "Cancelled";
           const rowClass = late ? "row-late" : item.status === "Approved" || item.status === "Estimate Completed" ? "row-ok" : item.status === "Waiting Supplier Price" ? "row-wait" : "";
           return <tr key={item.id} className={`clickable ${rowClass}`} onClick={() => onOpen(item.id)}>
-            <td><button className="back-link" type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>{item.projectName}</button><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo&&openOpportunity ? <button type="button" className="back-link" onClick={event=>{event.stopPropagation();openOpportunity(Number(item.opportunityId));}}>{item.opportunityNo} · {uiText(`CRM.${item.opportunityStage}`)}</button> : uiText(item.hasOpportunity?"CRM.sourceOpportunity":"CRM.directInquiries")}</small></td>
+            <td><a className="back-link" href={viewHash("inquiries", item.id)} onClick={(event) => { event.stopPropagation(); if (!isPlainClick(event)) return; event.preventDefault(); onOpen(item.id); }}>{item.projectName}</a><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo&&openOpportunity ? <button type="button" className="back-link" onClick={event=>{event.stopPropagation();openOpportunity(Number(item.opportunityId));}}>{item.opportunityNo} · {uiText(`CRM.${item.opportunityStage}`)}</button> : uiText(item.hasOpportunity?"CRM.sourceOpportunity":"CRM.directInquiries")}</small></td>
             <td><div className="cell-primary"><strong>{customerItem?.code ?? "—"}</strong><span>{item.customerName}</span><small><LocalizedText text={"End user:"} /> {item.endUserName || "ยังไม่ระบุ / Not specified"}</small></div></td>
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
             <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus, {stage:item.opportunityStage,proposalSentOn:item.proposalSentOn,wonOn:item.wonOn,hasProject:item.hasProject})]}</strong></td>

@@ -5,7 +5,7 @@ import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { useActivityPresence } from "./use-activity-presence";
-import { hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
+import { documentRoute, hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
@@ -246,6 +246,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   // Bumped by every deep link: the Plan remounts for a link, not when the link is cleared after use.
   const [scheduleLinkCount, setScheduleLinkCount] = useState(0);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
+  const [preferredInquiryId, setPreferredInquiryId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
   const [myWorkUrgentCount, setMyWorkUrgentCount] = useState(0);
   const [crmOpportunityId, setCrmOpportunityId] = useState<number|null>(null);
@@ -306,8 +307,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const t = languageValue.t;
   useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));
   const confirmReportNavigation = useCallback(() => (!reportDirty.current && !supportDirty.current) || window.confirm(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?")), [t, language]);
-  /** The open screen's URL fragment; Support keeps its ticket form so its links stay valid. */
-  const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view);
+  /** The address identifies the open document as well as its workspace. */
+  const recordId = view === "estimates" ? preferredEstimateId : view === "inquiries" ? preferredInquiryId : null;
+  const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view, recordId);
   // Returns false when the person keeps unsaved changes. A #support/<id> fragment is left for the address
   // effect to replace with the next screen's, so Back reopens that ticket.
   const setView = useCallback((next: View) => {
@@ -317,6 +319,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setCollapsedActiveGroup(null);
     setCrmOpportunityId(null);
     const target = landingView(next, bootstrap?.permissions ?? []);
+    if (target === "estimates") setPreferredEstimateId(null);
+    if (target === "inquiries") setPreferredInquiryId(null);
     setViewState(target);
     const activeGroup = NAV.find(section => section.items.some(item => item.view === navView(target)))?.group;
     if (activeGroup) setCollapsedNavGroups(groups => groups.filter(group => group !== activeGroup));
@@ -423,7 +427,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
     catch { /* Storage may be disabled; normal navigation still works. */ }
     const dailyLanding: View = allowed.includes("my-work") ? "my-work" : "dashboard";
-    setViewState(restoredView(saved, allowed, window.location.hash, initialVerifyCode, dailyLanding, requested => landingView(requested as View, data.permissions)));
+    const target = restoredView(saved, allowed, window.location.hash, initialVerifyCode, dailyLanding, requested => landingView(requested as View, data.permissions));
+    const document = documentRoute(window.location.hash);
+    setPreferredEstimateId(target === "estimates" ? document?.id ?? null : null);
+    setPreferredInquiryId(target === "inquiries" ? document?.id ?? null : null);
+    setViewState(target);
     setBootstrap(data);
   }, [initialVerifyCode]);
 
@@ -442,11 +450,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const hash = window.location.hash;
     if (RECORD_LINK.test(hash)) return;
     if (hash !== address) {
-      const replace = !addressed.current || hashView(hash) === view;
+      const document = documentRoute(hash);
+      const replace = !addressed.current || (hashView(hash) === view && (!document || document.id === recordId));
       window.history[replace ? "replaceState" : "pushState"](null, "", window.location.pathname + window.location.search + address);
     }
     addressed.current = true;
-  }, [bootstrap, view, address]);
+  }, [bootstrap, view, address, recordId]);
 
   // Back, Forward and an edited address. A screen this person cannot open, or a change they decline
   // to discard, puts the open screen's address back.
@@ -456,14 +465,18 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       const requested = viewFromHash(window.location.hash);
       if (!requested) return;
       const target = landingView(requested as View, bootstrap.permissions);
-      if (target === view) return;
+      const document = documentRoute(window.location.hash);
+      if (target === view && (!document || document.id === recordId)) return;
       if (!allowedViews(bootstrap).includes(target) || !setView(target)) {
         window.history.replaceState(null, "", window.location.pathname + window.location.search + address);
+        return;
       }
+      if (target === "estimates") setPreferredEstimateId(document?.id ?? null);
+      if (target === "inquiries") setPreferredInquiryId(document?.id ?? null);
     };
     window.addEventListener("hashchange", follow);
     return () => window.removeEventListener("hashchange", follow);
-  }, [bootstrap, view, address, setView]);
+  }, [bootstrap, view, address, recordId, setView]);
 
   useEffect(() => {
     if (!IS_AUTH_CONFIGURED) {
@@ -653,24 +666,20 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     window.scrollTo({ top: 0 });
   }, [setView]);
   const openEstimate = useCallback((estimateId: number) => {
+    if (!bootstrap?.permissions.includes("estimate.read") || !setView("estimates")) return;
     setPreferredEstimateId(estimateId);
-    setView("estimates");
     window.scrollTo({ top: 0 });
-  }, [setView]);
+  }, [bootstrap, setView]);
   const [startInquiryCreate, setStartInquiryCreate] = useState(false);
-  const [preferredInquiryId, setPreferredInquiryId] = useState<number | null>(null);
   const openInquiry = useCallback((id: number) => {
+    if (!bootstrap?.permissions.includes("inquiry.read") || !setView("inquiries")) return;
     setStartInquiryCreate(false);
     setPreferredInquiryId(id);
-    setView("inquiries");
     window.scrollTo({top:0});
-  }, [setView]);
+  }, [bootstrap, setView, setStartInquiryCreate]);
   /*
-   * Deep links carried by notification email. Without these an "open this estimate" link
-   * could only land on whatever view the shell happens to start on, which is My Work.
-   * A link is an instruction to navigate once, so it is spent as soon as it is followed:
-   * that keeps a refresh, or the sidebar's own Estimate Cost button, from dragging the
-   * reader back to the same record.
+   * Project deep links carried by notification email still open the plan once.
+   * Inquiry/Estimate links are persistent document addresses handled above.
    *
    * Nothing is read until the session is up. Someone opening the link from their mailbox
    * is usually signed out, and signing in leaves through loginRedirect: MSAL brings them
@@ -686,17 +695,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         openProjectSchedule(Number(project[1]), project[2] ? Number(project[2]) : undefined);
         return;
       }
-      const estimate = window.location.hash.match(/^#estimate\/(\d+)$/);
-      const inquiry = estimate ? null : window.location.hash.match(/^#inquiry\/(\d+)$/);
-      const id = Number((estimate ?? inquiry)?.[1]);
-      if (!Number.isSafeInteger(id) || id <= 0) return;
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-      if (estimate) openEstimate(id); else openInquiry(id);
     };
     const timer = window.setTimeout(follow, 0);
     window.addEventListener("hashchange", follow);
     return () => { window.clearTimeout(timer); window.removeEventListener("hashchange", follow); };
-  }, [bootstrap, openEstimate, openInquiry, openProjectSchedule]);
+  }, [bootstrap, openProjectSchedule]);
 
   const startInquiry = () => { setStartInquiryCreate(true); setPreferredInquiryId(null); setView("inquiries"); };
   const toggleNavGroup = (group: string) => {
@@ -828,8 +831,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           }} /> : personalDashboard : null}
           {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
           {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
-          {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} /> : null}
-          {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} /> : null}
+          {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /> : null}
+          {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /> : null}
           {view === "projects" ? <>
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
             {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={setProjectTab} /> : null}

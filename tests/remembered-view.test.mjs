@@ -1,9 +1,22 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
+import { documentRoute, hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
 
 const allowed = ["dashboard", "estimates", "labor-packages", "support", "documents", "activity", "profile"];
+test("canonical and emailed document links resolve to the same positive safe record ID", () => {
+  for (const [view, legacy] of [["estimates", "estimate"], ["inquiries", "inquiry"]]) {
+    for (const hash of [`#/${view}/42`, `#${legacy}/42`]) {
+      assert.deepEqual(documentRoute(hash), { view, id: 42 });
+      assert.equal(hashView(hash), view);
+      assert.equal(restoredView("dashboard", ["dashboard", view], hash, undefined, "dashboard"), view);
+      assert.equal(restoredView(view, ["dashboard"], hash, undefined, "dashboard"), "dashboard");
+    }
+    assert.equal(viewHash(view, 42), `#/${view}/42`);
+    assert.deepEqual(documentRoute(viewHash(view)), { view, id: null });
+    for (const id of ["0", "-1", "abc", "1.5", "1e2", "9007199254740992", "42/extra"]) assert.equal(documentRoute(`#/${view}/${id}`), null);
+  }
+});
 test("refresh restores the selected menu instead of dashboard", () => {
   for (const view of allowed) assert.equal(restoredView(view, allowed, "", undefined, "dashboard"), view);
 });
@@ -38,8 +51,8 @@ test("a screen's address opens that screen in a new tab, even over the remembere
   assert.equal(restoredView("customers", ["dashboard", "crm-customers"], "", undefined, "dashboard", normalize), "crm-customers");
 });
 
-test("only #/<view> names a screen; record links and in-page anchors do not", () => {
-  for (const hash of ["", "#", "#/", "#/Estimates", "#/a/b", "#estimate/12", "#performance-work-evidence", "#/1abc"]) {
+test("workspace and document addresses name a screen; other record links and anchors do not", () => {
+  for (const hash of ["", "#", "#/", "#/Estimates", "#/a/b", "#performance-work-evidence", "#/1abc"]) {
     assert.equal(viewFromHash(hash), null, hash);
   }
   assert.equal(hashView("#support"), "support");
@@ -47,7 +60,7 @@ test("only #/<view> names a screen; record links and in-page anchors do not", ()
   assert.equal(hashView("#activity"), "activity");
   assert.equal(hashView("#/my-work"), "my-work");
   assert.equal(hashView("#crm/4"), null);
-  for (const hash of ["#estimate/1", "#inquiry/22", "#crm/333", "#project/41", "#project/41/task/70"]) assert.ok(RECORD_LINK.test(hash), hash);
+  for (const hash of ["#crm/333", "#project/41", "#project/41/task/70"]) assert.ok(RECORD_LINK.test(hash), hash);
   for (const hash of ["#/estimates", "#support/1", "#estimate/", "#project/", "#project/41/task/", "#estimate/1/task/2"]) assert.ok(!RECORD_LINK.test(hash), hash);
 });
 
@@ -66,7 +79,7 @@ test("menu entries are links to their screen and the address bar follows the ope
   assert.match(app, /onClick=\{\(event\) => \{ if \(!isPlainClick\(event\)\) return; event\.preventDefault\(\);/);
   assert.doesNotMatch(app, /return <button key=\{item\.view\}/);
   // Each screen change is a history entry; the first write and a rewrite of an older link replace.
-  assert.match(app, /const replace = !addressed\.current \|\| hashView\(hash\) === view;/);
+  assert.match(app, /const replace = !addressed\.current \|\| \(hashView\(hash\) === view && \(!document \|\| document\.id === recordId\)\);/);
   assert.match(app, /window\.history\[replace \? "replaceState" : "pushState"\]/);
   assert.match(app, /if \(RECORD_LINK\.test\(hash\)\) return;/);
   // Back/Forward go through setView, so permissions and the unsaved-changes prompt still apply.

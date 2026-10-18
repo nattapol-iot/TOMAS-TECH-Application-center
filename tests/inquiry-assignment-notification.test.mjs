@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { documentRoute } from "../lib/remembered-view.ts";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
@@ -74,13 +75,16 @@ test("every fragment the notification mail links to is one the shell navigates",
   const linked = [...email.matchAll(/href="\$\{escapeHtml\(appUrl\)\}#([a-z-]+)\//g)].map((match) => match[1]);
   assert.deepEqual([...new Set(linked)].sort(), ["estimate", "inquiry", "project", "support"]);
   for (const name of new Set(linked)) {
+    if (name === "estimate" || name === "inquiry") {
+      assert.deepEqual(documentRoute(`#${name}/42`), { view: name === "estimate" ? "estimates" : "inquiries", id: 42 });
+      continue;
+    }
     assert.ok(new RegExp(String.raw`location\.hash\.match\(/\^#${name}(?:\\/|\()`).test(shell),
       `the shell reads a #${name}/<id> deep link`);
   }
-  // Following the link has to open that record, not merely switch to its list.
-  assert.match(shell, /if \(estimate\) openEstimate\(id\); else openInquiry\(id\);/);
-  // A spent link must not survive, or the sidebar cannot leave the record again.
-  assert.match(shell, /window\.history\.replaceState\(null, "", window\.location\.pathname \+ window\.location\.search\);\r?\n {6}if \(estimate\)/);
+  // Inquiry/Estimate email links now become persistent document URLs. The shell
+  // behavior tests exercise restore, Back/Forward and returning to the list.
+  assert.match(shell, /documentRoute\(window\.location\.hash\)/);
 });
 
 // Someone opening the link from their mailbox is usually signed out, and signing in
@@ -88,7 +92,7 @@ test("every fragment the notification mail links to is one the shell navigates",
 // before the session exists would strip the link off the URL MSAL brings them back to.
 test("a deep link is not spent before the session is up", async () => {
   const shell = await read("app/system/ProductionApp.tsx");
-  const effect = shell.slice(shell.indexOf("Deep links carried by notification email"));
+  const effect = shell.slice(shell.indexOf("Project deep links carried by notification email"));
   const body = effect.slice(0, effect.indexOf("}, ["));
   const guard = body.indexOf("if (!bootstrap) return;");
   const clears = body.indexOf("window.history.replaceState");
