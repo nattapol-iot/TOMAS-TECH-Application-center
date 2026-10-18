@@ -35,6 +35,8 @@ Navigation refresh: `ProductionApp.restoreWorkspace` restores the last top-level
 
 Code splitting: screens off the landing path are `next/dynamic` boundaries in [LazyScreens.tsx](../../app/system/production/LazyScreens.tsx), each with its own loading state and a chunk-failure panel that offers a reload. CoreScreens (Dashboard), PlanningPricingScreens (My Work) and everything they import statically stay in the first load. A static import of a lazy module from an eager one silently puts it back; [tests/lazy-screens.test.mjs](../../tests/lazy-screens.test.mjs) guards this.
 
+Inquiry and Estimate each have one active implementation, in `InquiryScreens.tsx` and `EstimateScreens.tsx`; the unreferenced older implementations in `CoreScreens.tsx` have been removed. Project Timeline is available through the List / Timeline toggle in Projects, without a duplicate sidebar entry. Older `#/project-timeline` links and remembered destinations still open Timeline mode, require both `project.read` and `schedule.read`, and highlight Projects. The shell behavior tests in `tests/auth-restoration.test.mjs` cover these compatibility paths and opening a project task from the timeline.
+
 1. A production screen calls a function in api-client.ts. Navigation may use the ProductionApp view state, so routes.ts alone is not the active-menu inventory.
 2. Fastify applies authentication and configured middleware. Route handlers resolve current user permissions and record scope; visible menus do not confer write authorization.
 3. Business helpers validate inputs, workflow and monetary invariants. Writes may use transactions, rowVersion and audit. Inspect the selected path rather than assuming every endpoint enforces identical rules.

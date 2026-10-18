@@ -66,7 +66,8 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     // Pipeline is the board mode inside CRM Opportunities, not a menu entry of its own.
     "CRM Dashboard", "CRM Customers", "CRM Contacts", "CRM Opportunities", "CRM Activities",
     "Site Visit", "My Assignments",
-    "Price Library", "Supplier Quotation", "Waiting Supplier Price", "Project Timeline", "Resource Plan",
+    // Timeline is a mode in Projects; old timeline links are covered by the shell behavior tests.
+    "Price Library", "Supplier Quotation", "Waiting Supplier Price", "Resource Plan",
     "Procurement Dashboard", "BOM", "Purchase Requisition", "Purchase Orders", "Inventory",
     "Goods Receiving", "Material Issues", "Approvals",
     // Document signing (DSN-TC-005). "My signature" is deliberately not here:

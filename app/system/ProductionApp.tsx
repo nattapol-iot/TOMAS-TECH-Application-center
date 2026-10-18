@@ -139,7 +139,6 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "missing", label: "Waiting Supplier Price", icon: "clock", permission: "estimate.read" },
   ] },
   { group: "PLANNING", items: [
-    { view: "project-timeline", label: "Project Timeline", icon: "chart", permissions: ["project.read", "schedule.read"] },
     { view: "resources", label: "Resource Plan", icon: "calendar", permissions: ["project.read", "schedule.read"] },
   ] },
   { group: "MATERIAL & PROCUREMENT", items: [
@@ -196,12 +195,13 @@ function navItemAllowed(item: NavItem, permissions: readonly string[], role: str
     && (!item.rateAccess || canViewEngineeringRates(role));
 }
 
-/** Pipeline is the board mode of Opportunities, and CRM users keep customers in CRM; both are sub-views, not menu entries. */
+/** CRM users keep customers in CRM; the old Master destination still resolves. */
 function landingView(next: View, permissions: readonly string[]): View {
   const target = next === "master" ? "customers" : next;
   return target === "customers" && permissions.includes("crm.read") ? "crm-customers" : target;
 }
-const navView = (view: View): View => view === "crm-pipeline" ? "crm-opportunities" : view;
+/** Board and Timeline modes highlight the menu of their parent workspace. */
+const navView = (view: View): View => view === "crm-pipeline" ? "crm-opportunities" : view === "project-timeline" ? "projects" : view;
 
 /** The views a refresh, a link or Back may open: the person's menu entries plus the screens reached from inside them. */
 function allowedViews(data: BootstrapData): View[] {
@@ -211,6 +211,8 @@ function allowedViews(data: BootstrapData): View[] {
   allowed.push("profile", "signature");
   if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
   if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
+  // Older bookmarks still open Timeline mode, with the permissions its former menu required.
+  if (data.permissions.includes("project.read") && data.permissions.includes("schedule.read")) allowed.push("project-timeline");
   return allowed;
 }
 
@@ -846,7 +848,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "price" ? <ProductionPriceLibrary {...moduleProps} /> : null}
           {view === "quotations" ? <ProductionSupplierQuotations {...moduleProps} /> : null}
           {view === "missing" ? <ProductionWaitingSupplierPrice {...moduleProps} /> : null}
-          {/* The Project Timeline menu entry stays until the usage data decides; it opens the portfolio's Timeline mode. */}
+          {/* Compatibility for old bookmarks; new navigation uses Projects > Timeline. */}
           {view === "project-timeline" ? <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} /> : null}
           {view === "resources" ? <ProductionResourcePlan {...moduleProps} refreshBootstrap={refreshBootstrap} openInquiry={openInquiry} openEstimate={openEstimate} /> : null}
           {view === "procurement" ? <ProductionProcurementDashboard {...moduleProps} /> : null}

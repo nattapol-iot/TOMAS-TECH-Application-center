@@ -9,29 +9,21 @@ import {
   createEmployee,
   dismissSignInRequest,
   assignmentDeliveryNote,
-  createEstimate,
-  createCostItem,
-  createInquiry,
   createInventoryItem,
   createProject,
   createSupplier,
   deleteSupplier,
   updateSupplier,
   downloadProjectDocument,
-  estimateWorkflow,
-  listEstimates,
   listEmployees,
   listSignInRequests,
   listUnlinkedAccounts,
   listAccessRoles,
-  listInquiries,
   listInventory,
   listProjectDocuments,
   withdrawProjectDocument,
   listProjectMembers,
   listProjects,
-  loadEstimateCostWorkspace,
-  removeCostItem,
   removeProjectMember,
   updateEmployee,
   updateUserRole,
@@ -44,21 +36,14 @@ import {
   loadSignInbox,
   type BootstrapData,
   type AccessRole,
-  type CreateEstimateInput,
-  type CreateInquiryInput,
   type CreateInventoryItemInput,
   type CreateProjectInput,
   type CreateSupplierInput,
-  type CostItemInput,
-  type EstimateCostWorkspace,
-  type EstimateSummary,
   type EmployeeInput,
   type EmployeeRecord,
   type SignInRequest,
   type UnlinkedAccount,
-  type InquirySummary,
   type ItemBalance,
-  type PagedResult,
   type ProjectDocument,
   type ProjectMember,
   type ProjectSummary,
@@ -102,7 +87,6 @@ import {
   PageHeader,
   Pagination,
   Panel,
-  ProgressCell,
   SearchInput,
   SegmentBar,
   Select,
@@ -119,7 +103,6 @@ type CommonProps = {
   refreshBootstrap: () => Promise<void>;
 };
 
-const EMPTY_PAGE = <T,>(): PagedResult<T> => ({ items: [], page: 1, pageSize: 25, total: 0 });
 const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
 const formText = (data: FormData, name: string) => String(data.get(name) ?? "").trim();
 const optionalFormText = (data: FormData, name: string) => formText(data, name) || undefined;
@@ -140,12 +123,6 @@ const businessDate = (date: Date) => {
 };
 const futureDate = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000));
 const today = () => businessDate(new Date());
-const COST_CATEGORIES = [
-  ["01", "Hardware"], ["02", "Software"], ["03", "Electrical"], ["04", "Mechanical"], ["05", "Robot"],
-  ["06", "Other Material"], ["07", "Outsource"], ["08", "Transportation"], ["09", "Accommodation"], ["10", "Other"],
-] as const;
-const ESTIMATE_OWNER_ROLES = ["Engineer", "Engineering Manager", "Admin"] as const;
-const canOwnEstimate = (role: string) => ESTIMATE_OWNER_ROLES.some((allowedRole) => allowedRole === role);
 const MAX_PROJECT_DOCUMENT_BYTES = 50 * 1024 * 1024;
 const PROJECT_DOCUMENT_FOLDERS = [
   ["00", "To do list"],
@@ -500,313 +477,6 @@ export function ProductionDashboard({
       </Panel>
     </div>
   );
-}
-
-export function ProductionInquiries({ bootstrap, notify, refreshBootstrap }: CommonProps) {
-  const uiText = useUiText();
-  const [result, setResult] = useState<PagedResult<InquirySummary>>(EMPTY_PAGE);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("All status");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setResult(await listInquiries({ page, pageSize: 25, search, status: status === "All status" ? undefined : status }));
-    } catch (requestError) {
-      setError(toError(requestError));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, status]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 200);
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
-  const canWrite = bootstrap.permissions.includes("inquiry.write");
-  const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="SALES TO ENGINEERING"
-        title={uiText("Inquiry Management")}
-        subtitle="รายการนี้มาจาก SQL Server และเลข Inquiry ถูกออกแบบ transaction-safe"
-        actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New Inquiry"} /></button> : undefined}
-      />
-      <Toolbar>
-        <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search inquiry, project or customer…" />
-        <Select label="Status" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={["All status", "New", "Estimating", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Approved", "Cancelled"]} />
-        <button className="btn ghost" type="button" onClick={() => { void load(); }} disabled={loading}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      </Toolbar>
-      {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-      <Panel title={`${result.total} inquiries`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {result.items.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th><LocalizedText text={"Inquiry No."} /></th><th><LocalizedText text={"Date"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Due"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Updated"} /></th></tr></thead>
-              <tbody>{result.items.map((item) => (
-                <tr key={item.id}>
-                  <td><strong className="mono">{item.number}</strong></td>
-                  <td>{formatDate(item.inquiryDate)}</td>
-                  <td><div className="cell-primary"><strong>{item.customerName}</strong><span>{item.projectType}</span></div></td>
-                  <td><strong>{item.projectName}</strong></td>
-                  <td>{item.estimateOwnerName}</td>
-                  <td>{formatDate(item.dueDate)}</td>
-                  <td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td>
-                  <td><Badge tone={item.priority === "Urgent" ? "red" : item.priority === "High" ? "amber" : "slate"}>{item.priority}</Badge></td>
-                  <td><Badge>{item.status}</Badge></td>
-                  <td className="muted">{formatDateTime(item.updatedAt)}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-            <Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} />
-          </div>
-        ) : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="inbox" title="No inquiry found" message="ปรับตัวกรองหรือสร้าง Inquiry รายการแรก" />}
-      </Panel>
-      {createOpen ? <CreateInquiryModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (number, delivery) => {
-        setCreateOpen(false); notify(`${number} created${delivery}`); await Promise.all([load(), refreshBootstrap()]);
-      }} /> : null}
-    </>
-  );
-}
-
-function CreateInquiryModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (number: string, delivery: string) => Promise<void> }) {
-  const engineers = bootstrap.team.filter((member) => canOwnEstimate(member.role));
-  const [form, setForm] = useState<CreateInquiryInput>({
-    customerId: bootstrap.customers[0]?.id ?? 0,
-    contact: "",
-    projectName: "",
-    projectType: "IoT / Automation",
-    estimateOwnerId: engineers[0]?.id ?? 0,
-    dueDate: futureDate(7),
-    priority: "Normal",
-    projectProbability: 25,
-    customerInterestGrade: "C",
-    requirement: "",
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const update = <K extends keyof CreateInquiryInput>(key: K, value: CreateInquiryInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const submit = async () => {
-    setBusy(true); setError("");
-    try { const created = await createInquiry(form); await onCreated(created.number, assignmentDeliveryNote(created.notification)); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
-  };
-  return (
-    <Modal title="New production inquiry" subtitle="เลขเอกสารจะสร้างโดย SQL Server เมื่อบันทึกสำเร็จ" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create inquiry"} />}</button></>}>
-      {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-      <div className="form-grid two">
-        <label className="field"><span><LocalizedText text={"Customer *"} /></span><select value={form.customerId} onChange={(event) => update("customerId", Number(event.target.value))}>{bootstrap.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Contact"} /></span><input maxLength={200} value={form.contact} onChange={(event) => update("contact", event.target.value)} /></label>
-        <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.projectName} onChange={(event) => update("projectName", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Project type *"} /></span><input required maxLength={100} value={form.projectType} onChange={(event) => update("projectType", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Estimate owner *"} /></span><select value={form.estimateOwnerId} onChange={(event) => update("estimateOwnerId", Number(event.target.value))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name} <LocalizedText text={"·"} /> {member.department}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Due date *"} /></span><input type="date" min={today()} value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Priority *"} /></span><select value={form.priority} onChange={(event) => update("priority", event.target.value)}><option value={"Low"}><LocalizedText text={"Low"} /></option><option value={"Normal"}><LocalizedText text={"Normal"} /></option><option value={"High"}><LocalizedText text={"High"} /></option><option value={"Urgent"}><LocalizedText text={"Urgent"} /></option></select></label>
-        <label className="field"><span><LocalizedText text={"Project probability *"} /></span><input type="number" min="0" max="100" step="5" value={form.projectProbability} onChange={(event) => update("projectProbability", Number(event.target.value))} /></label>
-        <label className="field"><span><LocalizedText text={"Customer interest *"} /></span><select value={form.customerInterestGrade} onChange={(event) => update("customerInterestGrade", event.target.value)}><option value="A"><LocalizedText text={"A — Hot"} /></option><option value="B"><LocalizedText text={"B — Warm"} /></option><option value="C"><LocalizedText text={"C — Nurture"} /></option><option value="D"><LocalizedText text={"D — Low"} /></option></select></label>
-        <label className="field span-2"><span><LocalizedText text={"Requirement"} /></span><textarea maxLength={20000} value={form.requirement} onChange={(event) => update("requirement", event.target.value)} /></label>
-      </div>
-    </Modal>
-  );
-}
-
-export function ProductionEstimates({ bootstrap, notify, refreshBootstrap }: CommonProps) {
-  const uiText = useUiText();
-  const [result, setResult] = useState<PagedResult<EstimateSummary>>(EMPTY_PAGE);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("All status");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [workspaceEstimate, setWorkspaceEstimate] = useState<EstimateSummary | null>(null);
-  const [workingId, setWorkingId] = useState<number | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try { setResult(await listEstimates({ page, pageSize: 25, search, status: status === "All status" ? undefined : status })); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
-  }, [page, search, status]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
-
-  const act = async (item: EstimateSummary, action: "submit" | "approve" | "request-revision") => {
-    const comment = action === "request-revision" ? window.prompt("Revision reason")?.trim() ?? "" : "";
-    if (action === "request-revision" && !comment) return;
-    setWorkingId(item.id); setError("");
-    try { await estimateWorkflow(item.id, action, item.rowVersion, comment); notify(`${item.number} updated`); await Promise.all([load(), refreshBootstrap()]); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setWorkingId(null); }
-  };
-  const canWrite = bootstrap.permissions.includes("estimate.write");
-  const canApprove = bootstrap.permissions.includes("estimate.approve");
-  const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
-
-  return (
-    <>
-      <PageHeader eyebrow="ENGINEERING COST" title={uiText("Estimate Cost")} subtitle="ต้นทุน Material, Engineering และ Total คำนวณจากข้อมูลจริงในฐานข้อมูล" actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Create from inquiry"} /></button> : undefined} />
-      <Toolbar>
-        <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search estimate, inquiry, project or customer…" />
-        <Select label="Status" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={["All status", "Draft", "Engineering Input", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Revision Required", "Approved", "Locked"]} />
-        <button className="btn ghost" type="button" onClick={() => { void load(); }} disabled={loading}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      </Toolbar>
-      {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-      <Panel title={`${result.total} estimates`} subtitle={loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {result.items.length ? <div className="table-wrap"><table>
-          <thead><tr><th><LocalizedText text={"Estimate No."} /></th><th><LocalizedText text={"Inquiry"} /></th><th><LocalizedText text={"Customer / Project"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Due"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Material"} /></th><th><LocalizedText text={"Engineering"} /></th><th><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Workflow"} /></th></tr></thead>
-          <tbody>{result.items.map((item) => <tr key={item.id}>
-            <td><strong className="mono">{item.number}</strong><small className="muted">R{String(item.revision).padStart(2, "0")}</small></td>
-            <td className="mono">{item.inquiryNumber}</td>
-            <td><div className="cell-primary"><strong>{item.projectName}</strong><span>{item.customerName} <LocalizedText text={"·"} /> {item.projectType}</span></div></td>
-            <td>{item.ownerName}</td><td>{formatDate(item.dueDate)}</td><td style={{ minWidth: 110 }}><ProgressCell value={Number(item.progress)} /></td>
-            <td className="num">{formatMoney(Number(item.materialTotal))}</td><td className="num">{formatMoney(Number(item.engineeringTotal))}</td><td className="num"><strong>{formatMoney(Number(item.total))}</strong></td>
-            <td><Badge>{item.status}</Badge></td>
-            <td><div className="row-actions">
-              <button className="btn sm default" type="button" onClick={() => setWorkspaceEstimate(item)}><Icon name="table" /><LocalizedText text={"Costs"} /></button>
-              {canWrite && ["Draft", "Engineering Input", "Revision Required"].includes(item.status) ? <button className="btn sm ghost" type="button" disabled={workingId === item.id} onClick={() => { void act(item, "submit"); }}><LocalizedText text={"Submit"} /></button> : null}
-              {canApprove && item.status === "Engineering Review" ? <><button className="btn sm primary" type="button" disabled={workingId === item.id} onClick={() => { void act(item, "approve"); }}><LocalizedText text={"Approve"} /></button><button className="btn sm danger" type="button" disabled={workingId === item.id} onClick={() => { void act(item, "request-revision"); }}><LocalizedText text={"Revise"} /></button></> : null}
-            </div></td>
-          </tr>)}</tbody>
-        </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="file" title="No estimate found" message="สร้าง Estimate จาก Inquiry ที่ลงทะเบียนแล้ว" />}
-      </Panel>
-      {createOpen ? <CreateEstimateModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (number) => { setCreateOpen(false); notify(`${number} created`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
-      {workspaceEstimate ? <EstimateCostModal estimate={workspaceEstimate} bootstrap={bootstrap} notify={notify} onClose={() => setWorkspaceEstimate(null)} onChanged={async () => { await load(); }} /> : null}
-    </>
-  );
-}
-
-function EstimateCostModal({ estimate, bootstrap, notify, onClose, onChanged }: {
-  estimate: EstimateSummary;
-  bootstrap: BootstrapData;
-  notify: (message: string) => void;
-  onClose: () => void;
-  onChanged: () => Promise<void>;
-}) {
-  const localizeCopy = useStaticCopy();
-  const [workspace, setWorkspace] = useState<EstimateCostWorkspace | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const costOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
-  const defaultOwner = costOwners.find((member) => member.id === estimate.ownerId)?.id
-    ?? costOwners.find((member) => member.id === bootstrap.user.id)?.id
-    ?? costOwners[0]?.id
-    ?? 0;
-  const [form, setForm] = useState<Omit<CostItemInput, "estimateRowVersion">>({
-    categoryCode: "01", category: "Hardware", subcategory: "", module: "Core", itemCode: "", description: "",
-    brand: "", model: "", supplierId: undefined, quantity: 1, unit: "Set", unitCost: 0,
-    priceSource: "Supplier Quotation", referenceNumber: "", priceDate: today(), ownerId: defaultOwner,
-  });
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try { setWorkspace(await loadEstimateCostWorkspace(estimate.id)); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
-  }, [estimate.id]);
-  useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
-  const editable = Boolean(workspace && bootstrap.permissions.includes("estimate.write") && ["Draft", "Engineering Input", "Revision Required"].includes(workspace.header.status));
-  const submit = async () => {
-    if (!workspace) return;
-    setBusy(true); setError("");
-    try {
-      await createCostItem(estimate.id, { ...form, estimateRowVersion: workspace.header.rowVersion });
-      setAdding(false);
-      setForm((current) => ({ ...current, itemCode: "", description: "", brand: "", model: "", unitCost: 0, referenceNumber: "" }));
-      notify("Cost item saved");
-      await Promise.all([load(), onChanged()]);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
-  };
-  const remove = async (lineId: number, lineVersion: string) => {
-    if (!workspace || !window.confirm("Remove this cost item from the current revision?")) return;
-    setBusy(true); setError("");
-    try { await removeCostItem(estimate.id, lineId, workspace.header.rowVersion, lineVersion, "Removed from cost workspace"); notify("Cost item removed"); await Promise.all([load(), onChanged()]); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
-  };
-  return <Modal title={`${estimate.number} · Cost workspace`} subtitle={`${estimate.projectName} · ${workspace?.header.status ?? estimate.status}`} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>{editable && !adding ? <button className="btn primary" type="button" onClick={() => setAdding(true)}><Icon name="plus" /><LocalizedText text={"Add cost item"} /></button> : null}</>}>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {workspace ? <>
-      <div className="summary-strip four"><div className="summary-tile"><span><LocalizedText text={"Material"} /></span><strong>{formatMoney(Number(workspace.header.totals.material))}</strong></div><div className="summary-tile"><span><LocalizedText text={"Engineering"} /></span><strong>{formatMoney(Number(workspace.header.totals.engineering))}</strong></div><div className="summary-tile"><span><LocalizedText text={"Contingency"} /></span><strong>{formatMoney(Number(workspace.header.totals.contingency))}</strong></div><div className="summary-tile strong"><span><LocalizedText text={"Total"} /></span><strong>{formatMoney(Number(workspace.header.totals.total))}</strong></div></div>
-      {adding ? <div className="form-section production-cost-form"><div className="form-section-title"><Icon name="plus" /><strong><LocalizedText text={"New cost item"} /></strong></div><div className="form-grid">
-        <label className="field span-2"><span><LocalizedText text={"Category *"} /></span><select value={form.categoryCode} onChange={(event) => { const selected = COST_CATEGORIES.find(([code]) => code === event.target.value); setForm((current) => ({ ...current, categoryCode: event.target.value, category: selected?.[1] ?? current.category })); }}>{COST_CATEGORIES.map(([code, label]) => <option key={code} value={code}>{code} — {label}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Module *"} /></span><input required maxLength={200} value={form.module} onChange={(event) => setForm((current) => ({ ...current, module: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Item code *"} /></span><input required maxLength={100} value={form.itemCode} onChange={(event) => setForm((current) => ({ ...current, itemCode: event.target.value }))} /></label>
-        <label className="field span-2"><span><LocalizedText text={"Description *"} /></span><input required maxLength={500} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Brand"} /></span><input maxLength={100} value={form.brand} onChange={(event) => setForm((current) => ({ ...current, brand: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Model"} /></span><input maxLength={200} value={form.model} onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Supplier"} /></span><select value={form.supplierId ?? ""} onChange={(event) => setForm((current) => ({ ...current, supplierId: event.target.value ? Number(event.target.value) : undefined }))}><option value=""><LocalizedText text={"No supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Quantity *"} /></span><input required type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: Number(event.target.value) }))} /></label>
-        <label className="field"><span><LocalizedText text={"Unit *"} /></span><input required maxLength={50} value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Unit cost (THB) *"} /></span><input required type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => setForm((current) => ({ ...current, unitCost: Number(event.target.value) }))} /></label>
-        <label className="field"><span><LocalizedText text={"Price source *"} /></span><select value={form.priceSource} onChange={(event) => setForm((current) => ({ ...current, priceSource: event.target.value }))}><option value={"Supplier Quotation"}><LocalizedText text={"Supplier Quotation"} /></option><option value={"Price Library"}><LocalizedText text={"Price Library"} /></option><option value={"Previous Project"}><LocalizedText text={"Previous Project"} /></option><option value={"Budgetary"}><LocalizedText text={"Budgetary"} /></option></select></label>
-        <label className="field"><span><LocalizedText text={"Reference no."} /></span><input maxLength={200} value={form.referenceNumber} onChange={(event) => setForm((current) => ({ ...current, referenceNumber: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Price date"} /></span><input type="date" value={form.priceDate} onChange={(event) => setForm((current) => ({ ...current, priceDate: event.target.value }))} /></label>
-        <label className="field"><span><LocalizedText text={"Owner *"} /></span><select value={form.ownerId} disabled={costOwners.length === 0} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>{costOwners.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      </div><div className="row"><button className="btn ghost" type="button" onClick={() => setAdding(false)}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !form.ownerId || form.categoryCode.length !== 2 || !form.itemCode.trim() || !form.description.trim() || form.quantity <= 0 || form.unitCost < 0} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Save item"}</button></div></div> : null}
-      {workspace.costItems.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit cost"} /></th><th><LocalizedText text={"Line total"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Owner"} /></th><th /></tr></thead><tbody>{workspace.costItems.map((line) => <tr key={line.id}><td><strong className="mono">{line.itemCode}</strong><small className="muted">{line.categoryCode} <LocalizedText text={"·"} /> {line.category}</small></td><td><div className="cell-primary"><strong>{line.description}</strong><span>{[line.brand, line.model].filter(Boolean).join(" · ")}</span></div></td><td>{line.module}</td><td>{line.supplierName ?? "—"}</td><td className="num">{Number(line.quantity).toLocaleString(currentLocale())} {line.unit}</td><td className="num">{formatMoney(Number(line.unitCost))}</td><td className="num"><strong>{formatMoney(Number(line.lineTotal))}</strong></td><td>{line.priceSource}</td><td>{line.ownerName}</td><td>{editable ? <button className="icon-btn danger" type="button" disabled={busy} aria-label={localizeCopy("Remove item")} onClick={() => { void remove(line.id, line.rowVersion); }}><Icon name="trash" /></button> : null}</td></tr>)}</tbody></table></div> : !adding ? <EmptyState icon="package" title="No cost item in this revision" message={editable ? "เพิ่มรายการต้นทุนอย่างน้อยหนึ่งรายการก่อนส่งตรวจ" : "Estimate นี้ไม่มีรายการต้นทุนใน revision ปัจจุบัน"} /> : null}
-    </> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading cost workspace…"} /></div> : null}
-  </Modal>;
-}
-
-function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (number: string) => Promise<void> }) {
-  const [inquiries, setInquiries] = useState<InquirySummary[]>([]);
-  const [form, setForm] = useState<CreateEstimateInput>({ inquiryId: 0, ownerId: bootstrap.user.id, dueDate: futureDate(7), contingencyRate: 5 });
-  const [busy, setBusy] = useState(false);
-  const [loadingInquiries, setLoadingInquiries] = useState(true);
-  const [inquiryError, setInquiryError] = useState("");
-  const [loadVersion, setLoadVersion] = useState(0);
-  const [error, setError] = useState("");
-  const canManageEstimates = ["Engineering Manager", "Admin"].includes(bootstrap.user.role);
-  const ownerOptions = bootstrap.team.filter((member) =>
-    canOwnEstimate(member.role)
-    && (canManageEstimates || member.id === bootstrap.user.id));
-  useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setLoadingInquiries(true);
-      setInquiryError("");
-      void listInquiries({ pageSize: 100, status: "New" }).then((page) => {
-        if (cancelled) return;
-        const eligible = page.items.filter((item) =>
-          item.status === "New"
-          && item.estimateId === null
-          && (canManageEstimates || item.estimateOwnerId === bootstrap.user.id));
-        setInquiries(eligible);
-        setForm((current) => ({ ...current, inquiryId: eligible[0]?.id ?? 0 }));
-      }).catch((requestError) => {
-        if (!cancelled) setInquiryError(toError(requestError));
-      }).finally(() => {
-        if (!cancelled) setLoadingInquiries(false);
-      });
-    }, 0);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [bootstrap.user.id, canManageEstimates, loadVersion]);
-  const submit = async () => { setBusy(true); setError(""); try { const created = await createEstimate(form); await onCreated(created.number); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
-  return <Modal title="Create estimate from inquiry" subtitle="ข้อมูลลูกค้าและโครงการจะคัดลอกจาก Inquiry" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !form.inquiryId || !form.ownerId} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create estimate"} />}</button></>}>
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    {inquiryError ? <LoadError message={inquiryError} retry={() => setLoadVersion((version) => version + 1)} /> : null}
-    {!loadingInquiries && !inquiryError && inquiries.length === 0 ? <div className="info-strip amber" role="status"><Icon name="alertTriangle" /><span><LocalizedText text={"ไม่มี Inquiry สถานะ New ที่ยังไม่สร้าง Estimate และอยู่ในสิทธิ์ของคุณ"} /></span></div> : null}
-    <div className="form-grid two">
-      <label className="field span-2"><span><LocalizedText text={"Inquiry *"} /></span><select value={form.inquiryId} disabled={loadingInquiries || inquiries.length === 0} onChange={(event) => setForm((current) => ({ ...current, inquiryId: Number(event.target.value) }))}><option value={0}>{loadingInquiries ? "Loading eligible inquiries…" : "Select inquiry"}</option>{inquiries.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Owner *"} /></span><select value={form.ownerId} disabled={!canManageEstimates} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>{ownerOptions.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Due date *"} /></span><input type="date" min={today()} value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} /></label>
-      <label className="field"><span><LocalizedText text={"Contingency (%)"} /></span><input type="number" min="0" max="100" step="0.01" value={form.contingencyRate} onChange={(event) => setForm((current) => ({ ...current, contingencyRate: Number(event.target.value) }))} /></label>
-    </div>
-  </Modal>;
 }
 
 const PORTFOLIO_HEALTH_TONE: Record<ProjectHealth, Tone> = { Delayed: "red", "At Risk": "amber", "No plan": "slate", "On Track": "green", "On Hold": "slate", Completed: "blue" };

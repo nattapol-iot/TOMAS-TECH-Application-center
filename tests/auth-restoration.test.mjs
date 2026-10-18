@@ -362,6 +362,36 @@ function navLeaf(tree, label) {
 }
 const plainClick = () => ({ button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, defaultPrevented: false, prevented: false, preventDefault() { this.prevented = true; } });
 
+test("legacy project timeline links and remembered views preserve schedule access", async (t) => {
+  for (const permissions of [[], ["project.read"], ["schedule.read"], ["project.read", "schedule.read"]]) {
+    for (const hash of ["", "#/project-timeline"]) {
+      await t.test(`${permissions.join(",") || "none"} ${hash || "remembered"}`, async () => {
+        const harness = createHarness({ mode: "team-test", savedView: "project-timeline", hash,
+          loadBootstrap: async () => ({ ...bootstrap, permissions }),
+        });
+        try {
+          harness.render(); harness.runMountEffects();
+          await new Promise(resolve => setImmediate(resolve));
+          const tree = harness.render();
+          const timeline = findNode(tree, node => node.type === "ProductionProjects" && node.props.initialMode === "timeline");
+          assert.equal(navLeaf(tree, "Project Timeline"), undefined, "Timeline is a Projects mode, not a second menu");
+          assert.equal(Boolean(timeline), permissions.length === 2);
+          if (timeline) {
+            assert.equal(navLeaf(tree, "Projects").props["aria-current"], "page");
+            timeline.props.openProjectSchedule(42, 8);
+            const plan = findNode(harness.render(), node => node.type === "ProductionProjectSchedule");
+            assert.ok(plan, "a timeline task still opens its project plan");
+            assert.equal(plan.props.preferredProjectId, 42);
+            assert.equal(plan.props.preferredTaskId, 8);
+          } else {
+            assert.ok(findNode(tree, node => node.type === "ProductionDashboard"));
+          }
+        } finally { harness.cleanup(); }
+      });
+    }
+  }
+});
+
 test("master leaves restore directly and legacy master still opens customers", async (t) => {
   for (const [savedView, destination] of [["master", "customers"], ["suppliers", "suppliers"], ["employees", "employees"], ["material-master", "inventory"], ["user-accounts", "team"]]) {
     await t.test(savedView, async () => {

@@ -15,7 +15,7 @@ test("Pipeline is the board mode of CRM Opportunities, not a second menu entry",
   assert.doesNotMatch(nav, /view: "crm-pipeline"/);
   // The board stays reachable: a remembered board restores, and the sidebar marks Opportunities.
   assert.match(shell, /if \(data\.permissions\.includes\("crm\.read"\)\) allowed\.push\("crm-pipeline"\);/);
-  assert.match(shell, /const navView = \(view: View\): View => view === "crm-pipeline" \? "crm-opportunities" : view;/);
+  assert.match(shell, /const navView = \(view: View\): View => view === "crm-pipeline" \? "crm-opportunities" :/);
   assert.match(shell, /<CrmScreen [^>]*onViewChange=\{setView\}/);
   assert.match(crm, /<Tabs<CrmView> tabs=\{\[\{id:"crm-opportunities",label:"CRM\.listView"\},\{id:"crm-pipeline",label:"CRM\.boardView"\}\]\}/);
   for (const key of ["CRM.listView", "CRM.boardView"]) assert.match(copy, new RegExp(`\\["${key.replace(".", "\\.")}","[^"]+","[^"]+","[^"]+"\\]`));
