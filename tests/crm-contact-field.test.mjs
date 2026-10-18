@@ -49,12 +49,15 @@ test("a contact that is not found is added from the list's last row with the typ
   // Enter adds the contact; it must not submit the deal form around it.
   assert.match(screen, /if\(event\.key==="Enter"\)\{event\.preventDefault\(\);add\(\);\}/);
   assert.match(screen, /next\.contactId="";setAdding\(null\);setAdded\(""\);/);
-  for (const name of ["crm-quick-add", "crm-quick-add-actions", "crm-similar"]) assert.match(crmCss, new RegExp(`\\.${name} \\{`), name);
+  for (const name of ["crm-quick-add", "crm-quick-add-actions", "crm-similar", "crm-field-link"]) assert.match(crmCss, new RegExp(`\\.${name} \\{`), name);
 });
 
 test("the new-deal form asks for what matters first and folds the rest", () => {
-  // Customer and name first, then site and contact side by side, then the owner and the close date.
-  assert.match(screen, /<Fields fields=\{\[\{key:"customerId",required:true,searchable:true,disabled:Boolean\(value\.id\),wide:true,placeholder:"CRM\.searchCustomer",options:companies\},\{key:"name",required:true,wide:true\}\]\}/);
+  // Customer beside its end user (never folded away: it carries forward to the Inquiry), then the name,
+  // then site and contact side by side, then the owner and the close date.
+  assert.match(screen, /<Fields fields=\{\[\{key:"customerId",required:true,searchable:true,disabled:Boolean\(value\.id\),placeholder:"CRM\.searchCustomer",options:companies\},\s*\{key:"endUserCustomerId",searchable:true,placeholder:"CRM\.searchEndUser",options:endUsers,/);
+  assert.match(screen, /link:\{label:"CRM\.useCustomerAsEndUser",onClick:\(\)=>set\(\{\.\.\.value,endUserCustomerId:Number\(value\.customerId\)\}\)\}/);
+  assert.match(screen, /\{key:"name",required:true,wide:true\}\]\} value=\{value\} set=\{update\}\/>/);
   assert.match(screen, /\{key:"siteId",options:sites\.map[^\n]*\n\s*\{key:"contactId",searchable:true/);
   // A new deal starts at New: the stage is asked only when editing or from another board column.
   assert.match(screen, /const create=!initial,showStage=!create\|\|Boolean\(defaultStage&&defaultStage!=="NEW"\);/);
@@ -65,15 +68,16 @@ test("the new-deal form asks for what matters first and folds the rest", () => {
   // Similar open deals show under the name while typing; no browser pop-up on save.
   assert.doesNotMatch(screen, /window\.confirm\(`\$\{t\("CRM\.duplicateWarning"\)\}/);
   assert.match(screen, /useCrmData<CrmRecord\[\]>\(typedName\.length>=3\?`\/api\/v1\/crm\/opportunity-duplicates\?customerId=/);
-  // End user, technical owner and deal value are folded; the customer heads the end-user list.
-  assert.match(screen, /<summary>\{t\("CRM\.optionalDetails"\)\}<\/summary>\s*<Fields fields=\{\[\{key:"endUserCustomerId",searchable:true,placeholder:"CRM\.searchEndUser",options:endUsers\},\{key:"technicalOwnerId"/);
+  // Both owners side by side, then the close date and (for commercial readers) the deal value; the rest is folded.
+  assert.match(screen, /\{key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:people\},\s*\{key:"technicalOwnerId",searchable:true,placeholder:"CRM\.searchPerson",options:people\},\s*\{key:"expectedClose",type:"date"\},\s*\.\.\.\(bootstrap\.permissions\.includes\("crm\.commercial\.read"\)\?\[\{key:"expectedValue",type:"number"\}\]:\[\]\),/);
+  assert.match(screen, /<summary>\{t\("CRM\.optionalDetails"\)\}<\/summary>\s*\{more\}/);
   assert.match(screen, /const endUsers=own\?\[\{\.\.\.own,detail:`\$\{own\.detail\} · \$\{t\("CRM\.sameAsCustomer"\)\}`\}/);
   assert.doesNotMatch(screen, /crm-end-user-actions|CRM\.waitingHint/);
 });
 
 test("every new string has English, Thai and Japanese", () => {
   const keys = ["CRM.searchList", "CRM.searchPerson", "CRM.searchContact", "CRM.searchCustomer", "CRM.searchEndUser", "CRM.noMatch", "CRM.clearChoice",
-    "CRM.showList", "CRM.listCut", "CRM.addContact", "CRM.addContactNamed", "CRM.sameAsCustomer", "CRM.duplicateInline", "CRM.contactNameRequired",
+    "CRM.showList", "CRM.listCut", "CRM.addContact", "CRM.addContactNamed", "CRM.sameAsCustomer", "CRM.useCustomerAsEndUser", "CRM.endUserCustomerId", "CRM.duplicateInline", "CRM.contactNameRequired",
     "CRM.contactCheckFields", "CRM.contactAdded", "CRM.contactExisting", "CRM.newContact", "CRM.contactName", "CRM.action", "CRM.dueDate"];
   for (const key of keys) for (const language of ["en", "th", "jp"]) assert.ok(CRM_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
   assert.match(CRM_COPY["CRM.listCut"].th, /\{shown\}.*\{total\}/);

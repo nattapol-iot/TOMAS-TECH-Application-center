@@ -54,13 +54,15 @@ type Field={key:string;label?:string;type?:string;options?:Option[];required?:bo
   /** A searchable field's placeholder (default: type to search). */
   placeholder?:string;
   /** A searchable field's last list row, which adds what was typed as a new entry. */
-  addLabel?:(typed:string)=>string;onAdd?:(typed:string)=>void};
+  addLabel?:(typed:string)=>string;onAdd?:(typed:string)=>void;
+  /** A one-click shortcut under the field, such as "Use customer as End User". */
+  link?:{label:string;onClick:()=>void}};
 function FilterSelect({label,value,options,onChange}:{label:string;value:string;options:Option[];onChange:(v:string)=>void}) {
   const t=useT();
   return <label className="select-field"><span className="sr-only">{t(label)}</span><select aria-label={t(label)} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select><Icon name="chevronDown"/></label>;
 }
 function Fields({fields,value,set}:{fields:Field[];value:CrmRecord;set:(v:CrmRecord)=>void}) {
-  const t=useT();return <div className="crm-form-grid">{fields.map(f=>f.type==="checkbox"?<label key={f.key} className={`crm-check-field${f.wide?" crm-full":""}`}><input type="checkbox" checked={value[f.key]!==false} onChange={e=>set({...value,[f.key]:e.target.checked})}/><span>{t(f.label??`CRM.${f.key}`)}{f.required?" *":""}</span></label>:<label key={f.key} className={f.wide?"crm-full":""}><span>{t(f.label??`CRM.${f.key}`)}{f.required?" *":""}</span>{f.options&&f.searchable?<SearchSelect value={text(value[f.key])} options={f.options} label={t(f.label??`CRM.${f.key}`)} placeholder={t(f.placeholder??"CRM.searchList")} noMatchText={t("CRM.noMatch")} clearLabel={t("CRM.clearChoice")} showLabel={t("CRM.showList")} moreText={t("CRM.listCut")} required={f.required} disabled={f.disabled} addLabel={f.addLabel} onAdd={f.onAdd} onChange={next=>set({...value,[f.key]:f.key.endsWith("Id")&&next?Number(next):next})}/>:f.options?<select disabled={f.disabled} required={f.required} value={text(value[f.key])} onChange={e=>set({...value,[f.key]:f.key.endsWith("Id")&&e.target.value?Number(e.target.value):e.target.value})}><option value="">—</option>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:f.type==="textarea"?<textarea rows={4} value={text(value[f.key])} onChange={e=>set({...value,[f.key]:e.target.value})}/>:<input required={f.required} type={f.type??"text"} min={f.type==="number"?0:undefined} step={f.type==="number"?"any":undefined} value={f.type==="date"?date(value[f.key]):text(value[f.key])} onChange={e=>set({...value,[f.key]:f.type==="number"&&e.target.value!==""?Number(e.target.value):e.target.value})}/>}</label>)}</div>;
+  const t=useT();return <div className="crm-form-grid">{fields.map(f=>f.type==="checkbox"?<label key={f.key} className={`crm-check-field${f.wide?" crm-full":""}`}><input type="checkbox" checked={value[f.key]!==false} onChange={e=>set({...value,[f.key]:e.target.checked})}/><span>{t(f.label??`CRM.${f.key}`)}{f.required?" *":""}</span></label>:<label key={f.key} className={f.wide?"crm-full":""}><span>{t(f.label??`CRM.${f.key}`)}{f.required?" *":""}</span>{f.options&&f.searchable?<SearchSelect value={text(value[f.key])} options={f.options} label={t(f.label??`CRM.${f.key}`)} placeholder={t(f.placeholder??"CRM.searchList")} noMatchText={t("CRM.noMatch")} clearLabel={t("CRM.clearChoice")} showLabel={t("CRM.showList")} moreText={t("CRM.listCut")} required={f.required} disabled={f.disabled} addLabel={f.addLabel} onAdd={f.onAdd} onChange={next=>set({...value,[f.key]:f.key.endsWith("Id")&&next?Number(next):next})}/>:f.options?<select disabled={f.disabled} required={f.required} value={text(value[f.key])} onChange={e=>set({...value,[f.key]:f.key.endsWith("Id")&&e.target.value?Number(e.target.value):e.target.value})}><option value="">—</option>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:f.type==="textarea"?<textarea rows={4} value={text(value[f.key])} onChange={e=>set({...value,[f.key]:e.target.value})}/>:<input required={f.required} type={f.type??"text"} min={f.type==="number"?0:undefined} step={f.type==="number"?"any":undefined} value={f.type==="date"?date(value[f.key]):text(value[f.key])} onChange={e=>set({...value,[f.key]:f.type==="number"&&e.target.value!==""?Number(e.target.value):e.target.value})}/>}{f.link?<button type="button" className="crm-field-link" onClick={f.link.onClick}>{t(f.link.label)}</button>:null}</label>)}</div>;
 }
 function Editor({title,subtitle,size="xl",initial,fields,onSave,onClose,children}:{title:string;subtitle?:string;size?:"sm"|"md"|"lg"|"xl";initial:CrmRecord;fields:Field[];onSave:(v:CrmRecord)=>Promise<void>;onClose:()=>void;children?:(v:CrmRecord,set:(v:CrmRecord)=>void)=>ReactNode}) {
   const t=useT(),[value,set]=useState(initial),[busy,setBusy]=useState(false),[error,setError]=useState("");
@@ -287,14 +289,20 @@ function OpportunityFields({bootstrap,options,value,set,create=false,showStage=t
   const update=(next:CrmRecord)=>{if(next.customerId!==value.customerId){next.siteId="";next.contactId="";setAdding(null);setAdded("");}else if(next.siteId!==value.siteId)next.contactId="";set(next);};
   return <>
     <Notice error={customer.error}/>
-    <Fields fields={[{key:"customerId",required:true,searchable:true,disabled:Boolean(value.id),wide:true,placeholder:"CRM.searchCustomer",options:companies},{key:"name",required:true,wide:true}]} value={value} set={update}/>
+    {/* The end user sits beside the customer, as it always has: it carries forward to the Inquiry and the estimate. */}
+    <Fields fields={[{key:"customerId",required:true,searchable:true,disabled:Boolean(value.id),placeholder:"CRM.searchCustomer",options:companies},
+      {key:"endUserCustomerId",searchable:true,placeholder:"CRM.searchEndUser",options:endUsers,
+        ...(value.customerId&&String(value.endUserCustomerId??"")!==String(value.customerId)?{link:{label:"CRM.useCustomerAsEndUser",onClick:()=>set({...value,endUserCustomerId:Number(value.customerId)})}}:{})},
+      {key:"name",required:true,wide:true}]} value={value} set={update}/>
     {similar.data?.length?<div className="alert warn" role="status"><strong>{t("CRM.duplicateInline")}</strong><ul className="crm-similar">{similar.data.map(r=><li key={text(r.id)}><span className="mono">{text(r.opportunityNo)}</span> · {text(r.name)} · {t(`CRM.${text(r.stage)}`)}</li>)}</ul></div>:null}
     <Fields fields={[
       {key:"siteId",options:sites.map(r=>({value:text(r.id),label:text(r.name)}))},
       {key:"contactId",searchable:true,disabled:!value.customerId,placeholder:"CRM.searchContact",options:contactOptions,
         ...(canAddContact&&value.customerId?{addLabel:(typed:string)=>typed?t("CRM.addContactNamed").replace("{name}",typed):t("CRM.addContact"),onAdd:(typed:string)=>{setAdded("");setAdding(typed);}}:{})},
       {key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM.searchPerson",options:people},
+      {key:"technicalOwnerId",searchable:true,placeholder:"CRM.searchPerson",options:people},
       {key:"expectedClose",type:"date"},
+      ...(bootstrap.permissions.includes("crm.commercial.read")?[{key:"expectedValue",type:"number"}]:[]),
       ...(showStage?[{key:"stage",options:choice("stage"),required:true}]:[]),
     ]} value={value} set={update}/>
     {adding!==null&&value.customerId?<ContactQuickAdd key={adding} customerId={Number(value.customerId)} sites={sites} siteId={text(value.siteId)} initialName={adding} onClose={()=>setAdding(null)} onAdded={(contact,existing)=>{setAdding(null);setAdded(existing?"CRM.contactExisting":"CRM.contactAdded");customer.refresh();set({...value,contactId:contact.id,siteId:value.siteId&&String(value.siteId)!==String(contact.siteId)?contact.siteId:value.siteId});}}/>:null}
@@ -302,8 +310,6 @@ function OpportunityFields({bootstrap,options,value,set,create=false,showStage=t
     {create?<Fields fields={[{key:"nextActionText",label:"CRM.action"},{key:"nextActionDue",label:"CRM.dueDate",type:"date",required:Boolean(text(value.nextActionText).trim())}]} value={value} set={set}/>:null}
     <details>
       <summary>{t("CRM.optionalDetails")}</summary>
-      <Fields fields={[{key:"endUserCustomerId",searchable:true,placeholder:"CRM.searchEndUser",options:endUsers},{key:"technicalOwnerId",searchable:true,placeholder:"CRM.searchPerson",options:people},...(bootstrap.permissions.includes("crm.commercial.read")?[{key:"expectedValue",type:"number"}]:[])]} value={value} set={set}/>
-      <p className="crm-muted">{t("CRM.endUserHint")}</p>
       {more}
     </details>
   </>;
