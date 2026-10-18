@@ -1,4 +1,12 @@
 export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.fromEntries([
+ ["CRM.searchContact","Search by contact name, position or department…","ค้นหาชื่อ ตำแหน่ง หรือแผนกของผู้ติดต่อ…","担当者名・役職・部署で検索…"],
+ ["CRM.selectContactFromList","Select a contact from the list, or add a new one","กรุณาเลือกผู้ติดต่อจากรายการ หรือเพิ่มผู้ติดต่อใหม่","リストから担当者を選択するか、新しく追加してください"],
+ ["CRM.showContacts","Show contact list","แสดงรายชื่อผู้ติดต่อ","担当者リストを表示"],
+ ["CRM.addContact","Add a new contact","เพิ่มผู้ติดต่อใหม่","新しい担当者を追加"],
+ ["CRM.contactNameRequired","Enter the contact's name.","กรุณากรอกชื่อผู้ติดต่อ","担当者名を入力してください。"],
+ ["CRM.contactCheckFields","Check the name, email and phone, then try again.","ตรวจชื่อ อีเมล และเบอร์โทรอีกครั้ง แล้วลองใหม่","氏名・メール・電話番号を確認して、もう一度お試しください。"],
+ ["CRM.contactAdded","Contact added and selected.","เพิ่มผู้ติดต่อและเลือกให้แล้ว","担当者を追加して選択しました。"],
+ ["CRM.contactExisting","This contact already exists, so it is selected instead.","มีผู้ติดต่อนี้อยู่แล้ว จึงเลือกคนเดิมให้","この担当者は登録済みのため、既存の担当者を選択しました。"],
  ["CRM.remove","Delete","ลบ","削除"],
  ["CRM.removeCustomer","Delete customer","ลบลูกค้า","顧客を削除"],
  ["CRM.removeContact","Delete contact","ลบผู้ติดต่อ","連絡先を削除"],

@@ -2,16 +2,16 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `55352aae`; generated, do not edit. [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `5009a3d5`; generated, do not edit. [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/auth/login` | 45–66 |
-| GET | `/api/auth/callback` | 68–125 |
-| GET | `/api/auth/logout` | 127–152 |
-| GET | `/api/me` | 154–172 |
+| GET | `/api/auth/callback` | 68–131 |
+| GET | `/api/auth/logout` | 133–158 |
+| GET | `/api/me` | 160–178 |
 
 ## Named functions
 
@@ -19,7 +19,7 @@ Evidence: source snapshot `55352aae`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `unixSeconds` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 27–31 |
 | `claimText` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 33–35 |
-| `registerTmtIdAuthRoutes` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 37–173 |
+| `registerTmtIdAuthRoutes` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 37–179 |
 
 ## Direct local dependencies
 
