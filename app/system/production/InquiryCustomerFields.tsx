@@ -8,6 +8,7 @@ import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { apiRequest, type BootstrapData } from "../api-client";
 import { Field, Icon, Modal } from "../ui";
 import { BusinessCardScanner } from "./BusinessCardScanner";
+import { SearchSelect } from "./SearchSelect";
 import { canonicalLocalizedName, contactNameLines, localizedNamesFromCard, type ContactTitles } from "./customer-localized-names";
 
 type Customer = BootstrapData["customers"][number];
@@ -56,10 +57,15 @@ export function InquiryCustomerFields({ customers, permissions, customerId, cont
   return <>
     <Field label="บริษัทที่รับงานด้วย / Contracting customer *" span={2}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <select aria-label={localizeCopy("ลูกค้า / บริษัท")} required disabled={disabled} style={{ flex: "1 1 240px", minWidth: 0 }} value={customerId} onChange={(event) => chooseCustomer(Number(event.target.value))}>
-          <option value={0}>เลือกบริษัทลูกค้า</option>
-          {allCustomers.map((item) => <option key={item.id} value={item.id}>{item.code} — {[item.nameTh, item.nameEn, item.nameJa].filter(Boolean).join(" / ") || item.name}</option>)}
-        </select>
+        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+          <SearchSelect value={customerId ? String(customerId) : ""} required disabled={disabled}
+            options={allCustomers.map((item) => ({ value: String(item.id), label: `${item.code} — ${item.name}`,
+              detail: [item.nameTh, item.nameEn, item.nameJa].filter(name => name && name !== item.name).join(" / ") }))}
+            onChange={(value) => chooseCustomer(Number(value))}
+            label={localizeCopy("ลูกค้า / บริษัท")} placeholder={localizeCopy("CRM.searchCustomer")}
+            noMatchText={localizeCopy("CRM.noMatch")} clearLabel={localizeCopy("CRM.clearChoice")}
+            showLabel={localizeCopy("CRM.showOptions")} moreText={localizeCopy("CRM.listCut")} />
+        </div>
         {canCreate ? <button className="btn default" type="button" disabled={disabled} onClick={() => setModal("customer")}><Icon name="plus" />ลูกค้าใหม่</button> : null}
       </div>
       {!allCustomers.length ? <small>ยังไม่มีข้อมูลลูกค้า{canCreate ? " กดลูกค้าใหม่เพื่อเริ่มรับเรื่อง" : " กรุณาให้ผู้มีสิทธิ์เพิ่มข้อมูลลูกค้า"}</small> : null}
