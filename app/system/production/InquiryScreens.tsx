@@ -227,7 +227,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   };
 
   return <>
-    <PageHeader eyebrow="SALES TO ENGINEERING" title="CRM.rfqTitle" subtitle="CRM.rfqSubtitle" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"รับ RFQ / สร้าง Inquiry"} /></button> : null}</>} />
+    <PageHeader eyebrow="SALES TO ENGINEERING" title="CRM.rfqTitle" subtitle="CRM.rfqSubtitle" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text="CRM.receiveRfq" /></button> : null}</>} />
     <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
       <Icon name="users" />
       <div className="seg-control" role="group" aria-label={queueCopy.team}>
@@ -331,25 +331,27 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
   };
 
   return <form onSubmit={(event) => { void submit(event); }}>
-    <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
-    <PageHeader eyebrow="NEW INQUIRY" title="Register customer inquiry" subtitle="หนึ่งเรื่องลูกค้า ใช้ต่อได้ทั้งการสำรวจหน้างานและการประมาณราคา" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{busy ? "Registering…" : "Register inquiry"}</button></>} />
+    <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button>
+    <PageHeader eyebrow="INQUIRY" title="CRM.receiveRfq" subtitle="CRM.receiveRfqHint" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{t(busy ? "CRM.savingInquiry" : "CRM.saveInquiry")}</button></>} />
     {error ? <LoadError message={error} retry={() => undefined} /> : null}
-    <div className="info-strip" role="note"><Icon name="shield" /><span>{t("CRM.directIntakeHint")}</span></div>
-    {selectedSource?<div className="alert info"><strong>{String(selectedSource.opportunityNo)}</strong><p>{t("CRM.linkedIntakeHint")}</p><button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button></div>:null}
-    <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/>
-    <Panel title="รับเรื่องลูกค้า" subtitle="บันทึกข้อมูลหลักก่อน แล้วเลือกทำ Estimate หรือขอเข้าหน้างาน"><div className="form-grid">
+    <Panel title="CRM.intakeBasics"><div className="form-grid">
       <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy||Boolean(selectedSource)} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
       <EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy||Boolean(selectedSource)} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} />
       <Field label="Project Name" span={2}><input required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
+      <Field label="CRM.customerRfq" hint="CRM.customerRfqHint" span={2}><input maxLength={100} value={form.rfqNo} onChange={(event) => set("rfqNo", event.target.value)} /></Field>
       <Field label="Sales Owner"><select value={form.salesOwner} disabled={Boolean(selectedSource)} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
       <Field label="กำหนดตอบกลับ / Estimate due"><input required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
       <Field label="Customer Requirement" span={2}><textarea maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
     </div></Panel>
+    <div className="alert info" role="status">
+      <strong>{t(selectedSource ? "CRM.pendingOpportunity" : "CRM.noOpportunitySelected")}</strong>
+      {selectedSource ? <><p>{String(selectedSource.opportunityNo)} · {String(selectedSource.name)}</p><p>{t("CRM.linkedIntakeHint")}</p><button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button></> : <p>{t("CRM.directSaveHint")}</p>}
+    </div>
+    {!selectedSource ? <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/> : null}
     <details className="panel" style={{ marginTop: 14, padding: 18 }}><summary><LocalizedText text={"รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค"} /></summary>
       <p className="muted"><LocalizedText text={"ผู้ประเมินเริ่มต้น:"} /> {engineers.find((member) => member.id === form.estimateOwnerId)?.name ?? "กรุณาเลือกผู้ประเมิน"} <LocalizedText text={"· เปลี่ยนได้ในส่วนนี้"} /></p>
       <div className="form-grid">
       <Field label="Project Type"><select value={form.projectType} onChange={(event) => set("projectType", event.target.value)}>{PROJECT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
-      <Field label="Customer RFQ No."><input maxLength={100} value={form.rfqNo} onChange={(event) => set("rfqNo", event.target.value)} /></Field>
       <Field label="Estimate Owner"><select value={form.estimateOwnerId} onChange={(event) => set("estimateOwnerId", Number(event.target.value))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name} — {member.department}</option>)}</select></Field>
       <Field label="Priority"><select value={form.priority} onChange={(event) => set("priority", event.target.value)}>{["Low", "Normal", "High", "Urgent"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       <Field label="Project Probability" hint="0% = unlikely, 100% = highly likely"><div className="input-suffix"><input type="number" min="0" max="100" step="5" value={form.projectProbability} onChange={(event) => set("projectProbability", Number(event.target.value))} /><span>%</span></div></Field>
@@ -402,7 +404,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   useHeartbeat(true, 15_000, async () => { setViewers((await pingInquiryPresence(id)).viewers); },
     () => { void leaveRecord("inquiries", id); });
   if (loading && !detail) return <div className="empty"><span className="spinner" /><LocalizedText text={"Loading inquiry from SQL Server…"} /></div>;
-  if (!detail) return <><button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button><LoadError message={error || "Inquiry not found"} retry={() => { void load(); }} /></>;
+  if (!detail) return <><button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button><LoadError message={error || "Inquiry not found"} retry={() => { void load(); }} /></>;
   const closed = detail.archived || detail.status === "Cancelled";
   const canWrite = !closed && bootstrap.permissions.includes("inquiry.write");
   const canCreateEstimate = !closed && !detail.deletedEstimateId && detail.status === "New" && bootstrap.permissions.includes("estimate.write");
@@ -473,10 +475,8 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   };
 
   return <>
-    <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Inquiry Management"} /></button>
-    {bootstrap.permissions.includes("crm.read")?<InquirySalesFollowup detail={detail} bootstrap={bootstrap} onSaved={load} openOpportunity={openOpportunity}/>:null}
-    <ProjectHandover key={detail.rowVersion} inquiryId={id} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} openProject={openProject}/>
-    <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
+    <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button>
+    <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text="CRM.customerRfq" /></span><strong>{detail.rfqNo || "—"}</strong></div><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
       {!closed && bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setAssignOpen(true)}><Icon name="user" /><LocalizedText text={"Assign owner"} /></button> : null}
       {canWrite && canEditEndUser(detail.status) ? <button className="btn default" type="button" onClick={() => setEndUserOpen(true)}><LocalizedText text={"End user / บริษัทผู้ใช้งานปลายทาง"} /></button> : null}
@@ -484,6 +484,8 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
       <DocumentLifecycleButton kind="inquiries" id={id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
     </>} />
     <RecordViewers viewers={viewers} />
+    {bootstrap.permissions.includes("crm.read")?<InquirySalesFollowup detail={detail} bootstrap={bootstrap} onSaved={load} openOpportunity={openOpportunity}/>:null}
+    <ProjectHandover key={detail.rowVersion} inquiryId={id} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} openProject={openProject}/>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {detail.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
     {!closed && !detail.deletedEstimateId && detail.estimate?.status !== "Cancelled" ? <div className="info-strip" role="region" aria-label={flowCopy.ariaLabel} style={{ marginBottom: 14, flexWrap: "wrap" }}>

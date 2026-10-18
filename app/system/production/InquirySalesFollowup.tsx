@@ -44,9 +44,10 @@ export function InquirySalesFollowup({detail,bootstrap,onSaved,openOpportunity}:
   return <Panel title="CRM.customerFollowup">
     {error?<p role="alert">{error}</p>:null}
     {!loaded?<p role="status">{t("CRM.loading")}</p>:source?.unavailable?<p>{t("CRM.linkUnavailable")}</p>:source?<>
-      <p>{source.opportunityNo} · {t(`CRM.${source.stage}`)}</p>
+      <p><strong>{t("CRM.opportunityLinked")}</strong></p>
+      <p>{source.opportunityNo} · {source.name} · {t(`CRM.${source.stage}`)}</p>
       <button className="btn primary" onClick={()=>openOpportunity?.(source.id)}>{t("CRM.openFollowup")}</button>
-    </>:<><p>{t("CRM.directFollowupHint")}</p>{canLink?<button className="btn primary" onClick={()=>setEditing(true)}>{t("CRM.linkSales")}</button>:null}</>}
+    </>:<><p><strong>{t("CRM.opportunityNotLinked")}</strong></p><p>{t("CRM.directFollowupHint")}</p>{canLink?<button className="btn primary" onClick={()=>setEditing(true)}>{t("CRM.linkSales")}</button>:null}</>}
     {editing?<Modal title="CRM.linkSales" onClose={()=>{if(!busy)setEditing(false);}} footer={<button className="btn primary" disabled={busy||(!selected&&!createNew)||(!selected&&!salesOwnerId)} onClick={()=>{void save();}}>{t(selected?"CRM.linkExisting":"CRM.createFromInquiry")}</button>}>
       {error?<p role="alert">{error}</p>:null}
       <p>{t("CRM.linkSalesHint")}</p>
