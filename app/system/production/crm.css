@@ -342,35 +342,14 @@ button.crm-opportunity-card:hover { border-color: var(--n-300); box-shadow: var(
 .crm-form-grid .crm-check-field span { font-size: var(--fs-sm); font-weight: 500; }
 
 .crm-editor-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
-.crm-end-user-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.crm-end-user-actions > span { margin-right: auto; color: var(--muted); font-size: var(--fs-xs); }
 .crm-upload { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--ink-soft); font-size: var(--fs-sm); }
 
-/* A company picker backed by a datalist, with an optional one-click action. */
-.crm-searchable-select { position: relative; display: flex; min-width: 0; }
-.crm-searchable-select > input { width: 100%; padding-right: 38px; }
-.crm-searchable-select > button {
-  position: absolute;
-  inset: 1px 1px 1px auto;
-  width: 34px;
-  border: 0;
-  border-left: 1px solid var(--line);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  background: var(--n-50);
-  color: var(--ink-soft);
-  font-size: var(--fs-md);
-  cursor: pointer;
-}
-.crm-searchable-select > button:hover { background: var(--n-100); color: var(--ink); }
-.crm-searchable-select > button:disabled { opacity: 0.5; cursor: not-allowed; }
-.crm-searchable-select.has-action > input { padding-right: 156px; }
-.crm-searchable-select.has-action > button { width: 152px; color: var(--blue-text); font-size: var(--fs-xs); font-weight: 650; }
-/* A field that can add a new entry (the deal's contact), and the small form that adds it in place. */
-.crm-field-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--blue-text); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
-.crm-field-add svg { width: 13px; height: 13px; }
-.crm-field-add:hover { text-decoration: underline; }
+/* The small form that adds the deal's contact in place, and similar open deals under the name. */
 .crm-quick-add { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px; border: 1px solid var(--blue-line); border-radius: var(--r-md); background: var(--blue-soft); }
 .crm-quick-add-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.crm-similar { margin: 4px 0 0; padding-left: 18px; }
+.crm-editor details[open] > summary { margin-bottom: 10px; }
+.crm-editor details > .crm-form-grid + .crm-form-grid { margin-top: 12px; }
 
 /* --------------------------------------------------------------------------
    Responsive — follows the application breakpoints (1280 / 980 / 720 / 620)
@@ -389,7 +368,6 @@ button.crm-opportunity-card:hover { border-color: var(--n-300); box-shadow: var(
   .crm-filters .select-field,
   .crm-filters .select-field select { width: 100%; }
   .crm-action { align-items: flex-start; flex-direction: column; gap: 8px; }
-  .crm-end-user-actions > span { margin-right: 0; flex-basis: 100%; }
   .crm-funnel { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
 }
 
@@ -397,7 +375,4 @@ button.crm-opportunity-card:hover { border-color: var(--n-300); box-shadow: var(
   .crm-pipeline { grid-auto-columns: minmax(212px, 86%); }
   .crm-stagebar span { min-width: 88px; }
   .crm-customer-identity > span { width: 44px; height: 44px; font-size: var(--fs-md); }
-  .crm-searchable-select.has-action > input { padding-right: 38px; }
-  .crm-searchable-select.has-action > button { width: 34px; font-size: 0; }
-  .crm-searchable-select.has-action > button::after { content: "⌄"; font-size: var(--fs-md); }
 }

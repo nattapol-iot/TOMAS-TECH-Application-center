@@ -4616,6 +4616,26 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .lookup-status .spinner { width: 14px; height: 14px; }
 .lookup-hint { padding: 6px 9px 3px; border-top: 1px solid var(--line-soft); color: var(--n-400); font-size: var(--fs-2xs); }
 
+/* Single-choice search box (SearchSelect.tsx): the input with a clear button and a list toggle,
+   using the lookup menu above. The input's right padding is set inline. */
+.search-select { position: relative; display: flex; align-items: center; min-width: 0; }
+.search-select > input { width: 100%; text-overflow: ellipsis; }
+.search-select-clear,
+.search-select-toggle { position: absolute; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); cursor: pointer; }
+.search-select-toggle { right: 4px; }
+.search-select-clear { right: 30px; }
+.search-select-clear:hover,
+.search-select-toggle:hover { background: var(--n-100); color: var(--ink); }
+.search-select-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.search-select-clear .icon,
+.search-select-toggle .icon { width: 15px; height: 15px; }
+.lookup-option.chosen strong { color: var(--blue-text); }
+/* Kept at the bottom of the open list, so adding stays one click away however long the list is. */
+.search-select-add { position: sticky; bottom: -4px; margin-top: 2px; border-top: 1px solid var(--line-soft); border-radius: 0 0 var(--r-sm) var(--r-sm); background: var(--surface); }
+.search-select-add.active { background: var(--blue-soft); }
+.search-select-add .lookup-main { align-items: center; gap: 6px; color: var(--blue-text); }
+.search-select-add .icon { width: 14px; height: 14px; }
+
 /* Compact estimate order controls share the right action column. */
 .cost-order-actions { justify-content: flex-end; gap: 3px; flex-wrap: nowrap; }
 .cost-order-actions .icon-btn { width: 26px; height: 26px; min-width: 26px; padding: 3px; }
