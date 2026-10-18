@@ -1,5 +1,4 @@
 "use client";
-import "./inquiry-intake.css";
 import { isPlainClick, viewHash } from "../../../lib/remembered-view";
 import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } from "./DocumentLifecycle";
 import { ProjectHandover } from "./ProjectHandover";
@@ -311,9 +310,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
   const addFiles = (selected: FileList | File[]) => setFiles((current) => [...current, ...Array.from(selected).filter((file) => file.size > 0 && file.size <= MAX_FILE_BYTES).map((file) => ({ file, category: "Customer RFQ" }))]);
 
   const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true); setError("");
+    event.preventDefault(); setBusy(true); setError("");
     let createdInquiry: Awaited<ReturnType<typeof createInquiry>> | null = null;
     try {
       const similar=await apiRequest<Array<{referenceNo:string;projectName:string;status:string;source:string}>>(`/api/v1/inquiry-duplicates?customerId=${form.customerId}&projectName=${encodeURIComponent(form.projectName.trim())}`);
@@ -333,83 +330,48 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     finally { setBusy(false); }
   };
 
-  const saveHint = busy ? "CRM.savingInquiry" : !form.customerId ? "CRM.intakeNeedCustomer" : !form.projectName.trim() ? "CRM.intakeNeedName" : !form.estimateOwnerId ? "CRM.intakeNeedOwner" : "CRM.intakeSaveHint";
-  return <form className="rfq-intake" onSubmit={(event) => { void submit(event); }}>
-    <button className="back-link" type="button" disabled={busy} onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button>
-    <PageHeader title="CRM.receiveRfq" subtitle="CRM.intakeIntro" />
-    {error ? <div className="callout danger" role="alert">{error}</div> : null}
-    <fieldset className="rfq-intake-fields" disabled={busy}>
-      <div className="rfq-intake-layout">
-        <div className="rfq-intake-main">
-          <Panel title="CRM.intakeCustomer" className="rfq-intake-customer">
-            <div className="form-grid">
-              <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy||Boolean(selectedSource)} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
-              <div className="rfq-intake-end-user"><EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy||Boolean(selectedSource)} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} /></div>
-            </div>
-          </Panel>
-          <Panel title="CRM.intakeJob">
-            <div className="form-grid">
-              <Field label="Project Name" span={4}><input aria-label={t("Project Name")} required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
-              <Field label="Customer Requirement" span={4}><textarea rows={4} aria-label={t("Customer Requirement")} maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
-              <Field label="CRM.customerRfq" hint="CRM.customerRfqHint" span={2}><input aria-label={t("CRM.customerRfq")} maxLength={100} value={form.rfqNo} onChange={(event) => set("rfqNo", event.target.value)} /></Field>
-              <Field label="Project Type" span={2}><select aria-label={t("Project Type")} value={form.projectType} onChange={(event) => set("projectType", event.target.value)}>{PROJECT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
-            </div>
-            <section className="rfq-intake-attachments" aria-labelledby="rfq-attachments-title">
-              <h3 id="rfq-attachments-title"><Icon name="paperclip" />{t("CRM.intakeAttachments")}</h3>
+  return <form onSubmit={(event) => { void submit(event); }}>
+    <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button>
+    <PageHeader eyebrow="INQUIRY" title="CRM.receiveRfq" subtitle="CRM.receiveRfqHint" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{t(busy ? "CRM.savingInquiry" : "CRM.saveInquiry")}</button></>} />
+    {error ? <LoadError message={error} retry={() => undefined} /> : null}
+    <Panel title="CRM.intakeBasics"><div className="form-grid">
+      <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy||Boolean(selectedSource)} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
+      <EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy||Boolean(selectedSource)} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} />
+      <Field label="Project Name" span={2}><input required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
+      <Field label="CRM.customerRfq" hint="CRM.customerRfqHint" span={2}><input maxLength={100} value={form.rfqNo} onChange={(event) => set("rfqNo", event.target.value)} /></Field>
+      <Field label="Sales Owner"><select value={form.salesOwner} disabled={Boolean(selectedSource)} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
+      <Field label="กำหนดตอบกลับ / Estimate due"><input required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
+      <Field label="Customer Requirement" span={2}><textarea maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
+    </div></Panel>
+    <div className="alert info" role="status">
+      <strong>{t(selectedSource ? "CRM.pendingOpportunity" : "CRM.noOpportunitySelected")}</strong>
+      {selectedSource ? <><p>{String(selectedSource.opportunityNo)} · {String(selectedSource.name)}</p><p>{t("CRM.linkedIntakeHint")}</p><button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button></> : <p>{t("CRM.directSaveHint")}</p>}
+    </div>
+    {!selectedSource ? <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/> : null}
+    <details className="panel" style={{ marginTop: 14, padding: 18 }}><summary><LocalizedText text={"รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค"} /></summary>
+      <p className="muted"><LocalizedText text={"ผู้ประเมินเริ่มต้น:"} /> {engineers.find((member) => member.id === form.estimateOwnerId)?.name ?? "กรุณาเลือกผู้ประเมิน"} <LocalizedText text={"· เปลี่ยนได้ในส่วนนี้"} /></p>
+      <div className="form-grid">
+      <Field label="Project Type"><select value={form.projectType} onChange={(event) => set("projectType", event.target.value)}>{PROJECT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
+      <Field label="Estimate Owner"><select value={form.estimateOwnerId} onChange={(event) => set("estimateOwnerId", Number(event.target.value))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name} — {member.department}</option>)}</select></Field>
+      <Field label="Priority"><select value={form.priority} onChange={(event) => set("priority", event.target.value)}>{["Low", "Normal", "High", "Urgent"].map((value) => <option key={value}>{value}</option>)}</select></Field>
+      <Field label="Project Probability" hint="0% = unlikely, 100% = highly likely"><div className="input-suffix"><input type="number" min="0" max="100" step="5" value={form.projectProbability} onChange={(event) => set("projectProbability", Number(event.target.value))} /><span>%</span></div></Field>
+      <Field label="Customer Interest Grade"><select value={form.customerInterestGrade} onChange={(event) => set("customerInterestGrade", event.target.value)}>{INTEREST_GRADES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+      <Field label="Qualification Note" hint="Record the evidence behind the grade and probability" span={2}><textarea maxLength={2000} rows={2} value={form.qualificationNote} onChange={(event) => set("qualificationNote", event.target.value)} /></Field>
+      <Field label="Project Background" span={2}><textarea maxLength={20000} value={form.background} onChange={(event) => set("background", event.target.value)} /></Field>
+      <Field label="Scope Summary" span={2}><textarea maxLength={20000} value={form.scopeSummary} readOnly={Boolean(selectedSource)} onChange={(event) => set("scopeSummary", event.target.value)} /></Field>
+      <Field label="Technical Requirement" span={2}><textarea maxLength={20000} value={form.technical} onChange={(event) => set("technical", event.target.value)} /></Field>
+      <Field label="Target Delivery"><input type="date" min={today()} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></Field>
+      <Field label="Site Location"><input maxLength={300} value={form.siteLocation} readOnly={Boolean(selectedSource)} onChange={(event) => set("siteLocation", event.target.value)} /></Field>
+      <Field label="Customer Standard"><input value={form.standard} onChange={(event) => set("standard", event.target.value)} /></Field>
+      <Field label="Special Requirement"><input value={form.special} onChange={(event) => set("special", event.target.value)} /></Field>
+      <Field label="Remark" span={4}><textarea value={form.remark} onChange={(event) => set("remark", event.target.value)} /></Field></div>
+    </details>
+    <div style={{ height: 14 }} />
+    <Panel title="Inquiry Attachments" subtitle="Files are stored in the configured company document storage and linked to the inquiry">
       <input ref={fileRef} type="file" multiple hidden onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
-      <button disabled={busy} className="attachment-drop" type="button" onClick={() => fileRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!busy) addFiles(event.dataTransfer.files); }}><Icon name="upload" /><strong><LocalizedText text={"Drag and drop files here or click to browse"} /></strong><span><LocalizedText text={"PDF, Excel, Word, DWG or image — maximum 50 MB per file"} /></span></button>
-      {files.length ? <div className="rfq-intake-files">{files.map((queued, index) => <div className="file-row" key={`${queued.file.name}-${index}`}><span className="file-icon"><Icon name="file" /></span><div className="rfq-intake-file-name"><strong>{queued.file.name}</strong><small>{formatFileSize(queued.file.size)} <LocalizedText text={"· queued for upload"} /></small></div><select aria-label={t("CRM.fileCategory")} value={queued.category} onChange={(event) => setFiles((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}>{FILE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><button type="button" className="row-action" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={t("CRM.removeFile").replace("{name}", queued.file.name)}><Icon name="trash" /></button></div>)}</div> : null}
-            </section>
-          </Panel>
-          <details className="panel rfq-intake-extra">
-            <summary><span><strong>{t("CRM.intakeExtra")}</strong><small>{t("CRM.intakeExtraHint")}</small></span><Icon name="chevronDown" /></summary>
-            <div className="panel-body">
-              <div className="form-grid">
-                <Field label="Project Background" span={2}><textarea aria-label={t("Project Background")} maxLength={20000} value={form.background} onChange={(event) => set("background", event.target.value)} /></Field>
-                <Field label="Scope Summary" span={2}><textarea aria-label={t("Scope Summary")} maxLength={20000} value={form.scopeSummary} readOnly={Boolean(selectedSource)} onChange={(event) => set("scopeSummary", event.target.value)} /></Field>
-                <Field label="Technical Requirement" span={2}><textarea aria-label={t("Technical Requirement")} maxLength={20000} value={form.technical} onChange={(event) => set("technical", event.target.value)} /></Field>
-                <Field label="Target Delivery" span={2}><input aria-label={t("Target Delivery")} type="date" min={today()} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></Field>
-                <Field label="Site Location" span={2}><input aria-label={t("Site Location")} maxLength={300} value={form.siteLocation} readOnly={Boolean(selectedSource)} onChange={(event) => set("siteLocation", event.target.value)} /></Field>
-                <Field label="Customer Standard" span={2}><input aria-label={t("Customer Standard")} value={form.standard} onChange={(event) => set("standard", event.target.value)} /></Field>
-                <Field label="Special Requirement" span={2}><input aria-label={t("Special Requirement")} value={form.special} onChange={(event) => set("special", event.target.value)} /></Field>
-                <Field label="Remark" span={4}><textarea aria-label={t("Remark")} value={form.remark} onChange={(event) => set("remark", event.target.value)} /></Field>
-              </div>
-              <h3>{t("CRM.intakeQualification")}</h3>
-              <div className="form-grid">
-                <Field label="Project Probability" hint="0% = unlikely, 100% = highly likely" span={2}><div className="input-suffix"><input aria-label={t("Project Probability")} type="number" min="0" max="100" step="5" value={form.projectProbability} onChange={(event) => set("projectProbability", Number(event.target.value))} /><span>%</span></div></Field>
-                <Field label="Customer Interest Grade" span={2}><select aria-label={t("Customer Interest Grade")} value={form.customerInterestGrade} onChange={(event) => set("customerInterestGrade", event.target.value)}>{INTEREST_GRADES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-                <Field label="Qualification Note" hint="Record the evidence behind the grade and probability" span={4}><textarea aria-label={t("Qualification Note")} maxLength={2000} rows={2} value={form.qualificationNote} onChange={(event) => set("qualificationNote", event.target.value)} /></Field>
-              </div>
-            </div>
-          </details>
-        </div>
-        <aside className="rfq-intake-side" aria-label={t("CRM.intakeAssignment")}>
-          <Panel title="CRM.intakeAssignment" className="rfq-intake-assignment">
-            <div className="form-grid">
-              <Field label="Sales Owner"><select aria-label={t("Sales Owner")} value={form.salesOwner} disabled={Boolean(selectedSource)} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
-              <Field label="Estimate Owner"><select required aria-label={t("Estimate Owner")} value={form.estimateOwnerId} onChange={(event) => set("estimateOwnerId", Number(event.target.value))}>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name} — {member.department}</option>)}</select></Field>
-              <Field label="กำหนดตอบกลับ / Estimate due"><input aria-label={t("กำหนดตอบกลับ / Estimate due")} required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
-              <Field label="Priority"><select aria-label={t("Priority")} value={form.priority} onChange={(event) => set("priority", event.target.value)}>{["Low", "Normal", "High", "Urgent"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-            </div>
-            {!engineers.length ? <p className="rfq-intake-empty-owner" role="status">{t("CRM.intakeNeedOwner")}</p> : null}
-          </Panel>
-          {selectedSource ? <Panel title="CRM.customerFollowup" className="rfq-intake-source">
-            <p className="rfq-intake-source-state" role="status"><Icon name="checkCircle" />{t("CRM.pendingOpportunity")}</p>
-            <strong>{String(selectedSource.opportunityNo)}</strong>
-            <p>{String(selectedSource.name)}</p>
-            <p className="muted">{t("CRM.linkedIntakeHint")}</p>
-            <button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button>
-          </Panel> : <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/>}
-        </aside>
-      </div>
-    </fieldset>
-    <footer className="rfq-intake-footer">
-      <p role="status">{t(saveHint)}</p>
-      <div className="row-actions">
-        <button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text="Cancel" /></button>
-        <button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{t(busy ? "CRM.savingInquiry" : "CRM.saveInquiry")}</button>
-      </div>
-    </footer>
+      <button className="attachment-drop" type="button" onClick={() => fileRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}><Icon name="upload" /><strong><LocalizedText text={"Drag and drop files here or click to browse"} /></strong><span><LocalizedText text={"PDF, Excel, Word, DWG or image — maximum 50 MB per file"} /></span></button>
+      {files.length ? <div style={{ marginTop: 12 }}>{files.map((queued, index) => <div className="file-row" key={`${queued.file.name}-${index}`}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{queued.file.name}</strong><small>{formatFileSize(queued.file.size)} <LocalizedText text={"· queued for upload"} /></small></div><select value={queued.category} onChange={(event) => setFiles((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}>{FILE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><button type="button" className="row-action" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${queued.file.name}`}><Icon name="trash" /></button></div>)}</div> : null}
+    </Panel>
   </form>;
 }
 
