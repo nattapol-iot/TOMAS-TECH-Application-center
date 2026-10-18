@@ -29,13 +29,13 @@ export function ExistingRfqWork({bootstrap,customerId,name,onSelect,onOpen,disab
     return()=>{cancelled=true;clearTimeout(timer);};
   },[customerId,name,key,canRead]);
   const matches=result?.key===key?result.matches:null;
-  return <Panel title="CRM.existingRfqWork" subtitle="CRM.existingRfqHint">
-    {!customerId?<p className="muted">{t("CRM.chooseCustomerForMatches")}</p>:error?<p role="alert" className="alert warn">{t("CRM.error")}</p>:!matches?<p role="status">{t("CRM.loading")}</p>:<>
+  return <Panel title="CRM.intakeRelated" subtitle="CRM.intakeRelatedHint" className="rfq-intake-existing">
+    {!customerId?<p className="muted">{t("CRM.chooseCustomerForMatches")}</p>:error?<p role="alert" className="callout danger">{t("CRM.error")}</p>:!matches?<p role="status">{t("CRM.loading")}</p>:<>
       {!matches.opportunities.length&&!matches.inquiries.length?<p className="muted">{t("CRM.noExistingRfqWork")}</p>:null}
       {matches.inquiries.length?<h3>{t("CRM.existingInquiries")}</h3>:null}
-      {matches.inquiries.map(row=><div className="crm-action" key={`inq-${row.id}`}><span>{row.number} · {row.projectName} · {t(row.status)}</span><button type="button" className="btn default sm" disabled={disabled} onClick={()=>onOpen(row.id)}>{t("CRM.openExistingInquiry")}</button></div>)}
+      {matches.inquiries.map(row=><div className="rfq-intake-match" key={`inq-${row.id}`}><div><strong>{row.number}</strong><span>{row.projectName}</span><small>{t(row.status)}</small></div><button type="button" className="btn default" disabled={disabled} onClick={()=>onOpen(row.id)}>{t("CRM.openExistingInquiry")}</button></div>)}
       {matches.opportunities.length?<h3>{t("CRM.existingOpportunities")}</h3>:null}
-      {matches.opportunities.map(row=><div className="crm-action" key={`opp-${row.id}`}><span>{String(row.opportunityNo)} · {String(row.name)} · {t(`CRM.${row.stage}`)}</span>{row.inquiryId&&!["Approved","Cancelled"].includes(String(row.inquiryStatus))?<button type="button" className="btn default sm" disabled={disabled} onClick={()=>onOpen(Number(row.inquiryId))}>{t("CRM.openInquiry")}</button>:canConvert&&!["WON","LOST","ON_HOLD"].includes(String(row.stage))?<button type="button" className="btn default sm" disabled={disabled} onClick={()=>onSelect(row)}>{t("CRM.useOpportunity")}</button>:null}</div>)}
+      {matches.opportunities.map(row=><div className="rfq-intake-match" key={`opp-${row.id}`}><div><strong>{String(row.opportunityNo)}</strong><span>{String(row.name)}</span><small>{t(`CRM.${row.stage}`)}</small></div>{row.inquiryId&&!["Approved","Cancelled"].includes(String(row.inquiryStatus))?<button type="button" className="btn default" disabled={disabled} onClick={()=>onOpen(Number(row.inquiryId))}>{t("CRM.openInquiry")}</button>:canConvert&&!["WON","LOST","ON_HOLD"].includes(String(row.stage))?<button type="button" className="btn default" disabled={disabled} onClick={()=>onSelect(row)}>{t("CRM.useOpportunity")}</button>:null}</div>)}
       <p className="muted">{t("CRM.matchLimit")}</p>
     </>}
   </Panel>;
