@@ -1,0 +1,14 @@
+{
+  "skills": [
+    { "slug": "site-visit-report-th", "title": "รายงานสำรวจหน้างาน (ภาษาไทย)", "description": "เรียบเรียงโน้ต รูป และข้อมูลจากการสำรวจหน้างานเป็นรายงานภาษาไทยตามโครงสร้างมาตรฐานของแผนก พร้อมรายการสิ่งที่ต้องยืนยันกับลูกค้า", "category": "เอกสารและรายงาน", "targets": ["claude", "codex"] },
+    { "slug": "commissioning-checklist", "title": "Checklist ติดตั้งและส่งมอบระบบ IoT", "description": "สร้าง checklist commissioning / SAT / handover ตามอุปกรณ์จริงของโครงการ ตั้งแต่ไฟเลี้ยง เครือข่าย การสื่อสาร จนถึงเอกสารส่งมอบ", "category": "เอกสารและรายงาน", "targets": ["claude", "codex"] },
+    { "slug": "boq-estimate-helper", "title": "ช่วยทำ BOQ และประมาณราคา", "description": "แตกความต้องการของลูกค้าเป็นรายการอุปกรณ์ ค่าแรง และค่าใช้จ่ายแฝง ในรูปแบบตารางที่นำเข้า Estimate Cost ได้ พร้อมสมมติฐานที่ต้องยืนยัน", "category": "เอกสารและรายงาน", "targets": ["claude", "codex"] },
+    { "slug": "modbus-troubleshooting", "title": "ไล่ปัญหา Modbus RTU / TCP", "description": "ขั้นตอนวินิจฉัยเมื่ออ่านค่าจาก meter, PLC หรือ gateway ไม่ได้: wiring, parity, slave id, address offset, byte/word order และ timeout", "category": "อุปกรณ์และการสื่อสาร", "targets": ["claude", "codex"] },
+    { "slug": "plc-tag-mapping", "title": "ทำ Tag list / Mapping จาก IO list", "description": "แปลง IO list หรือ register map ของผู้ผลิตเป็น tag list มาตรฐาน (ชื่อ หน่วย scale ชนิดข้อมูล address) และ export เป็น CSV", "category": "อุปกรณ์และการสื่อสาร", "targets": ["claude", "codex"] },
+    { "slug": "mqtt-integration", "title": "ออกแบบและทดสอบ MQTT", "description": "ออกแบบ topic และ payload JSON, ตั้งค่า QoS/retain/LWT, ทดสอบกับ broker ด้วย mosquitto_pub/sub และตรวจปัญหาการเชื่อมต่อ TLS", "category": "อุปกรณ์และการสื่อสาร", "targets": ["claude", "codex"] },
+    { "slug": "python-device-logger", "title": "สร้างโปรแกรม Data Logger (Python)", "description": "โครงโปรแกรม Python อ่านค่าจาก Modbus/Serial/MQTT บันทึกเป็น CSV หรือ SQL พร้อม retry, log หมุนไฟล์ และรันเป็น Windows service", "category": "พัฒนาโปรแกรม", "targets": ["claude", "codex"] },
+    { "slug": "sql-server-migration", "title": "เขียน Migration SQL Server ให้รันซ้ำได้", "description": "แนวทางเขียน T-SQL migration แบบ idempotent: guard เวอร์ชัน, transaction, สิทธิ์ role, index และการทดสอบบน LocalDB ก่อนขึ้น production", "category": "พัฒนาโปรแกรม", "targets": ["claude", "codex"] },
+    { "slug": "code-review-th", "title": "รีวิวโค้ดก่อน merge (รายงานภาษาไทย)", "description": "รีวิว diff หา bug, ช่องโหว่ความปลอดภัย และจุดที่พังตอน deploy จัดลำดับตามความรุนแรง และสรุปเป็นภาษาไทยสั้น ๆ", "category": "พัฒนาโปรแกรม", "targets": ["claude", "codex"] },
+    { "slug": "git-commit-pr", "title": "เขียน Commit message และ PR", "description": "สรุปการเปลี่ยนแปลงเป็น commit message แบบ Conventional Commits และคำอธิบาย PR ที่บอกเหตุผล วิธีทดสอบ และผลกระทบ", "category": "พัฒนาโปรแกรม", "targets": ["claude", "codex"] }
+  ]
+}

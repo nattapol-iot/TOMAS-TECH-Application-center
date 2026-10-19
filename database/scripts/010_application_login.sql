@@ -769,4 +769,8 @@ GO
 -- database/migrations/081_domain_sign_in.sql
 GRANT EXECUTE ON OBJECT::dbo.register_domain_sign_in TO [iot_team_app_role];
 GO
+
+-- database/migrations/083_download_center_counts.sql
+GRANT SELECT, INSERT ON OBJECT::dbo.download_center_downloads TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

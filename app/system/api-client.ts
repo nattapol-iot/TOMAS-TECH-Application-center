@@ -2955,6 +2955,8 @@ export const markNotificationsRead = (input: { ids?: number[]; all?: boolean }) 
 
 /* Download Center: department software and files published from the NAS share. */
 export type DownloadCenterFile = {
+  downloadCount: number;
+  downloaderCount: number;
   name: string;
   title: string;
   description: string;
@@ -2983,6 +2985,28 @@ export async function downloadCenterFile(category: string, file: string): Promis
     return;
   }
   const response = await authorizedFetch(path, { headers: { Accept: "application/octet-stream" } }, 15 * 60_000);
+  const url = URL.createObjectURL(await response.blob());
+  clickDownload(url, file);
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export type SkillHubSkill = {
+  slug: string; title: string; description: string; category: string;
+  targets: ("claude" | "codex")[]; files: string[];
+};
+export const getSkillHub = () => apiRequest<{ skills: SkillHubSkill[] }>("/api/v1/skill-hub");
+export const getSkillHubSkill = (slug: string) =>
+  apiRequest<{ slug: string; skillMd: string }>(`/api/v1/skill-hub/${encodeURIComponent(slug)}`);
+
+export async function downloadSkillInstaller(slug: string, target: "claude" | "codex"): Promise<void> {
+  const path = `/api/v1/skill-hub/${encodeURIComponent(slug)}/install?${new URLSearchParams({ target })}`;
+  const file = `install-${slug}-${target}.cmd`;
+  if (IS_TMT_ID_MODE) {
+    await authorizedFetch(path, { method: "HEAD", headers: { Accept: "application/octet-stream" } });
+    clickDownload(`${API_BASE_URL}${path}`, file);
+    return;
+  }
+  const response = await authorizedFetch(path, { headers: { Accept: "application/octet-stream" } });
   const url = URL.createObjectURL(await response.blob());
   clickDownload(url, file);
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);

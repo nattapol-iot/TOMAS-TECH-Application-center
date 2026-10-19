@@ -6,6 +6,7 @@ import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Icon, PageHeader, Panel, SearchInput, Tabs, Toolbar } from "../ui";
 import { SourceRepositories } from "./SourceRepositories";
+import { SkillHub } from "./SkillHub";
 
 type Notify = (message: string) => void;
 
@@ -35,7 +36,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
   const [query, setQuery] = useState("");
   const [revision, setRevision] = useState(0);
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [tab, setTab] = useState<"files" | "repositories">("files");
+  const [tab, setTab] = useState<"files" | "repositories" | "skills">("files");
 
   useEffect(() => {
     let active = true;
@@ -57,6 +58,9 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
     setDownloading(key);
     try {
       await downloadCenterFile(category.folder, file.name);
+      setCategories((current) => current?.map((item) => item.folder === category.folder
+        ? { ...item, files: item.files.map((entry) => entry.name === file.name ? { ...entry, downloadCount: entry.downloadCount + 1 } : entry) }
+        : item) ?? null);
     } catch (reason) {
       notify(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -69,9 +73,9 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
       <PageHeader title="Download Center" subtitle="Downloads.subtitle"
         actions={tab === "files" ? <button className="btn default" type="button" onClick={() => { setCategories(null); setRevision((value) => value + 1); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button> : undefined} />
 
-      <Tabs tabs={[{ id: "files", label: "Downloads.tabFiles", count: categories ? total : undefined }, { id: "repositories", label: "Repos.tab" }]} active={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: "files", label: "Downloads.tabFiles", count: categories ? total : undefined }, { id: "repositories", label: "Repos.tab" }, { id: "skills", label: "Skills.tab" }]} active={tab} onChange={setTab} />
 
-      {tab === "repositories" ? <SourceRepositories canManage={canManageRepositories} notify={notify} /> : <>
+      {tab === "skills" ? <SkillHub notify={notify} /> : tab === "repositories" ? <SourceRepositories canManage={canManageRepositories} notify={notify} /> : <>
       {canManage ? (
         <div className="download-center-note" role="note">
           <Icon name="folder" />
@@ -103,13 +107,14 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
           <div className="panel-body flush">
             <div className="table-wrap">
               <table className="grid download-center-table">
-                <colgroup><col /><col style={{ width: 110 }} /><col style={{ width: 100 }} /><col style={{ width: 130 }} /><col style={{ width: 150 }} /></colgroup>
+                <colgroup><col /><col style={{ width: 100 }} /><col style={{ width: 90 }} /><col style={{ width: 120 }} /><col style={{ width: 100 }} /><col style={{ width: 140 }} /></colgroup>
                 <thead>
                   <tr>
                     <th><LocalizedText text={"Downloads.file"} /></th>
                     <th><LocalizedText text={"Downloads.version"} /></th>
                     <th className="num"><LocalizedText text={"Downloads.size"} /></th>
                     <th><LocalizedText text={"Downloads.updated"} /></th>
+                    <th className="num"><LocalizedText text={"Downloads.count"} /></th>
                     <th aria-label={t("Downloads.action")} />
                   </tr>
                 </thead>
@@ -128,6 +133,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
                         <td>{file.version || "—"}</td>
                         <td className="num">{formatSize(file.sizeBytes)}</td>
                         <td>{dateFormat.format(new Date(file.modifiedAt))}</td>
+                        <td className="num" title={t("Downloads.countTitle").replace("{n}", String(file.downloaderCount))}>{file.downloadCount}</td>
                         <td>
                           <button className="btn primary sm" type="button" disabled={downloading !== null} onClick={() => void download(category, file)}>
                             <Icon name="download" /><LocalizedText text={downloading === key ? "Downloads.downloading" : "Downloads.download"} />

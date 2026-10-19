@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import sql from "mssql";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
@@ -170,13 +171,23 @@ export function parseByteRange(header: string | undefined, size: number): { star
   return { start, end };
 }
 
-export function registerDownloadCenterRoutes(app: FastifyInstance, config: AppConfig, _database: Database, users: CurrentUserService): void {
+export function registerDownloadCenterRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
   const rootPath = resolveStoragePath(config.documentStorage, DOWNLOAD_CENTER_ROOT);
 
   // Every signed-in member of the department may browse and download.
   app.get("/api/v1/download-center", async (request) => {
     await users.required(request);
-    return { categories: await readDownloadCatalog(rootPath) };
+    const categories = await readDownloadCatalog(rootPath);
+    const result = await database.query<{ category_folder: string; file_name: string; downloadCount: number; downloaderCount: number }>(`
+      SELECT category_folder, file_name, COUNT(*) AS downloadCount, COUNT(DISTINCT user_id) AS downloaderCount
+      FROM dbo.download_center_downloads
+      GROUP BY category_folder, file_name;
+    `);
+    const counts = new Map(result.recordset.map((row) => [JSON.stringify([row.category_folder, row.file_name]), row]));
+    return { categories: categories.map((category) => ({ ...category, files: category.files.map((file) => {
+      const count = counts.get(JSON.stringify([category.folder, file.name]));
+      return { ...file, downloadCount: count?.downloadCount ?? 0, downloaderCount: count?.downloaderCount ?? 0 };
+    }) })) };
   });
 
   const sendFile = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -218,7 +229,22 @@ export function registerDownloadCenterRoutes(app: FastifyInstance, config: AppCo
       reply.header("Content-Range", `bytes */${size}`);
       return reply.code(416).send();
     }
-    if (range && (!ifRange || ifRange === new Date(file.modifiedAt).toUTCString())) {
+    const partial = range && (!ifRange || ifRange === new Date(file.modifiedAt).toUTCString());
+    if (request.method === "GET" && (!partial || range?.start === 0)) {
+      try {
+        await database.query(`
+          INSERT dbo.download_center_downloads(category_folder, file_name, user_id)
+          VALUES (@category_folder, @file_name, @user_id);
+        `, (req) => {
+          req.input("category_folder", sql.NVarChar(200), category.folder);
+          req.input("file_name", sql.NVarChar(260), file.name);
+          req.input("user_id", sql.BigInt, actor.id);
+        });
+      } catch (error) {
+        request.log.warn({ err: error, category: category.folder, file: file.name }, "Could not record Download Center download");
+      }
+    }
+    if (range && partial) {
       reply.code(206);
       reply.header("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
       reply.header("Content-Length", String(range.end - range.start + 1));

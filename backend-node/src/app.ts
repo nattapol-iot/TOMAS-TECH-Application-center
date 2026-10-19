@@ -51,6 +51,7 @@ import { registerKnowledgeDocumentRoutes } from "./routes/knowledge-documents.js
 import { registerKnowledgeWorkflowRoutes } from "./routes/knowledge-workflow.js";
 import { registerKnowledgeSalesMaterialRoutes } from "./routes/knowledge-sales-materials.js";
 import { registerDownloadCenterRoutes } from "./routes/download-center.js";
+import { registerSkillHubRoutes } from "./routes/skill-hub.js";
 import { registerSourceRepositoryRoutes } from "./routes/source-repositories.js";
 import { registerTmthubRepositoryRoutes } from "./routes/tmthub-repositories.js";
 import { registerSiteMonitorRoutes } from "./routes/site-monitor.js";
@@ -221,6 +222,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerKnowledgeWorkflowRoutes(app, config, database, users);
   registerKnowledgeSalesMaterialRoutes(app, config, database, users);
   registerDownloadCenterRoutes(app, config, database, users);
+  registerSkillHubRoutes(app, users);
   // TMTHub when it is configured (real git repositories); otherwise plain folders on the NAS.
   if (config.tmthub) registerTmthubRepositoryRoutes(app, config, database, users);
   else registerSourceRepositoryRoutes(app, config, database, users);
