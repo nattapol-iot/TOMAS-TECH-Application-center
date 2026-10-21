@@ -23,6 +23,7 @@ import { useActivitySubView } from "../use-activity-presence";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
 import { EffortModal, WorkQueue } from "./WorkQueue";
 import { WorkloadGantt } from "./WorkloadGantt";
+import { TeamBoard } from "./TeamBoard";
 import { loadWorkload, saveWorkOrder, type Workload, type WorkloadCapacity } from "../resource-workload-client";
 import {
   orderWork,
@@ -46,7 +47,10 @@ type Props = {
   /** Accepted for the shell's shared props; inquiry ownership is assigned on the Inquiry screen. */
   refreshBootstrap?: () => Promise<void>;
 };
-type ResourceTab = "workload" | "tasks";
+// The team board and its list come first (owner decision 2026-10-21); the weekly workload and Tasks need schedule access.
+type ResourceTab = "board" | "list" | "workload" | "tasks";
+const BOARD_TABS: readonly ResourceTab[] = ["board", "list"];
+const PLAN_TABS: readonly ResourceTab[] = ["workload", "tasks"];
 type WorkloadView = "table" | "gantt";
 type Focus = "over" | "overdue" | "late" | "missing";
 const MANAGER_ROLES = ["Admin", "Engineering Manager", "Project Manager"];
@@ -56,6 +60,7 @@ const tones: Record<Commitment["type"], Tone> = {
   Inquiry: "blue",
   Estimate: "violet",
   Project: "green",
+  Task: "slate",
 };
 const initials = (s: string) =>
   s
@@ -108,7 +113,14 @@ export function ProductionResourcePlan({
   openInquiry,
 }: Props) {
   const { t } = useLanguage();
-  const [tab, setTab] = useState<ResourceTab>(() => readStored(tabStorageKey(bootstrap.user.id), ["workload", "tasks"], "workload"));
+  const canRead =
+    bootstrap.permissions.includes("schedule.read") &&
+    bootstrap.permissions.includes("project.read");
+  const canBoard = bootstrap.permissions.includes("team.board");
+  const allowedTabs = [...(canBoard ? BOARD_TABS : []), ...(canRead ? PLAN_TABS : [])];
+  const [storedTab, setTab] = useState<ResourceTab>(() => readStored(tabStorageKey(bootstrap.user.id), ["board", "list", "workload", "tasks"], "board"));
+  // A remembered tab the person may no longer open falls back to the first one they may.
+  const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : allowedTabs[0] ?? "board";
   const [view, setView] = useState<WorkloadView>(() => readStored(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table"));
   // Team Activity sees which Resource Plan tab is open (keys follow the tab ids).
   useActivitySubView(`resources-${tab}`);
@@ -126,9 +138,6 @@ export function ProductionResourcePlan({
     [unassignedOpen, setUnassignedOpen] = useState(false),
     [edit, setEdit] = useState<Commitment | null>(null),
     [capacityUser, setCapacityUser] = useState<number | null>(null);
-  const canRead =
-    bootstrap.permissions.includes("schedule.read") &&
-    bootstrap.permissions.includes("project.read");
   const canPlan = bootstrap.permissions.includes("schedule.plan");
   // Anyone orders their own work; Admin, Engineering Managers and Project Managers may order anyone's (the API agrees).
   const manages = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => MANAGER_ROLES.includes(role));
@@ -211,12 +220,15 @@ export function ProductionResourcePlan({
   const person = personId === null ? null : rows.find((row) => row.user.id === personId) ?? null;
   const currentWeek = weeks.find((week) => week.start <= todayIso && todayIso <= week.end)?.start;
   const departments = [...new Set(bootstrap.team.map((user) => user.department))].sort();
+  // A team task opens on the board, not here.
   const open = (item: Commitment) =>
-    item.type === "Project"
-      ? openProjectSchedule?.(item.entityId)
-      : item.type === "Estimate"
-        ? openEstimate?.(item.entityId)
-        : openInquiry?.(item.entityId);
+    item.type === "Task" || item.hidden
+      ? undefined
+      : item.type === "Project"
+        ? openProjectSchedule?.(item.entityId)
+        : item.type === "Estimate"
+          ? openEstimate?.(item.entityId)
+          : openInquiry?.(item.entityId);
   // Whole-inquiry and estimate effort is planned here; tasks and plan rows carry their own effort.
   // Whole inquiries and estimates are planned by planners with write access; an estimate section also by its own
   // engineers (the API checks the section). Plan tasks and Resource Plan tasks carry their effort in their own plan.
@@ -277,20 +289,21 @@ export function ProductionResourcePlan({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  if (!canRead)
+  if (!allowedTabs.length)
     return (
       <EmptyState
         icon="shield"
         title={t("Permission denied")}
-        message="project.read + schedule.read"
+        message="team.board"
       />
     );
+  const onBoard = tab === "board" || tab === "list";
   return (
     <div className="workload-page">
       <PageHeader
         eyebrow="ENGINEERING RESOURCE"
-        title="Workload.title"
-        subtitle="Workload.subtitle"
+        title="Team overview"
+        subtitle={onBoard ? "TeamBoard.subtitle" : "Workload.subtitle"}
         actions={
           tab === "workload" ? (
             <>
@@ -310,11 +323,13 @@ export function ProductionResourcePlan({
         active={tab}
         onChange={changeTab}
         tabs={[
-          { id: "workload", label: "Workload.title" },
-          { id: "tasks", label: "Workload.tabTasks" },
+          ...(canBoard ? [{ id: "board" as const, label: "TeamBoard.tabBoard" }, { id: "list" as const, label: "TeamBoard.tabList" }] : []),
+          ...(canRead ? [{ id: "workload" as const, label: "TeamBoard.tabWeekly" }, { id: "tasks" as const, label: "Workload.tabTasks" }] : []),
         ]}
       />
-      {tab === "tasks" ? (
+      {onBoard ? (
+        <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} />
+      ) : tab === "tasks" ? (
         <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} onChanged={() => setData(null)} openProjectSchedule={openProjectSchedule} />
       ) : (
         <>
@@ -507,6 +522,7 @@ export function ProductionResourcePlan({
             canRequestDays={person.user.id === bootstrap.user.id && bootstrap.permissions.includes("schedule.progress")}
             canPlanEffort={canPlanEffort}
             onOpen={open}
+            canOpen={(item) => item.type !== "Task"}
             onEffort={setEdit}
             onSaveOrder={(keys) => saveOrder(person.user.id, keys)}
             onRequested={() => {
@@ -563,10 +579,12 @@ function WorkList({
       {[...items].sort(byDueDate).map((item) => (
         <li key={item.key}>
           <div className="workload-item-head">
-            <Badge tone={tones[item.type]}>{t(item.type)}</Badge>
-            <button type="button" className="workload-item-link" onClick={() => onOpen(item)}>
-              {item.reference}
-            </button>
+            <Badge tone={tones[item.type]}>{t(item.type === "Task" ? (item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask") : item.type)}</Badge>
+            {item.type === "Task" ? null : (
+              <button type="button" className="workload-item-link" onClick={() => onOpen(item)}>
+                {item.reference}
+              </button>
+            )}
             {item.end && item.end < today ? <Badge tone="red">{t("overdue")}</Badge> : null}
             {item.tentative ? <Badge tone="amber">{t("Workload.awaitingApproval")}</Badge> : null}
           </div>

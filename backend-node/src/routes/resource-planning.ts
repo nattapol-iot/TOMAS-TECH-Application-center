@@ -78,7 +78,9 @@ export function registerResourcePlanningRoutes(
       .input("actor", sql.BigInt, actor.id)
       .input("project_elevated", sql.Bit, isProjectElevated(actor))
       // Admin, Engineering Managers and Project Managers see every inquiry task; others see the ones they are part of.
-      .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor)));
+      .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor))
+      // Only the team board (routes/team-board.ts) reads work outside the caller's own scope.
+      .input("all_work", sql.Bit, false));
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
     const holidays = holidayDates(sets[2]);
     const work = workloadItems(sets.slice(3), new Set(holidays));

@@ -85,9 +85,9 @@ test("every sub-view a screen reports is accepted, named after its parent view a
   }
   // A key missing from the allowlist answers 400, so that tab would silently never count.
   assert.deepEqual(used.filter(({ key }) => !accepted.has(key)), []);
-  // The approved Projects and Resource Plan tabs; Resource Plan keys follow its real tab ids (workload, tasks).
+  // The approved Projects and Team overview tabs; Team overview keys follow its real tab ids (board, list, workload, tasks).
   const subViews = [...accepted].filter((key) => !views.has(key) && /^(projects|resources)-/.test(key));
-  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "projects-timeline", "resources-tasks", "resources-workload"]);
+  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "projects-timeline", "resources-board", "resources-list", "resources-tasks", "resources-workload"]);
   const resourceTabs = tabIds(await source("app/system/production/ResourcePlanningScreen.tsx"));
   assert.deepEqual(subViews.filter((key) => key.startsWith("resources-")).map((key) => key.slice("resources-".length)).sort(), [...resourceTabs].sort());
   for (const key of subViews) {

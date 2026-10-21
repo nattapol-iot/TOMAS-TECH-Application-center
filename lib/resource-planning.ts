@@ -4,7 +4,8 @@ export type Commitment = {
   key: string;
   /** The work itself, whoever does it (backend-node/src/resource-workload.ts); a person's work order names these. */
   workKey: string;
-  type: "Inquiry" | "Estimate" | "Project";
+  /** Task: work added on the team board (dbo.team_tasks), whose entityId is the task's own id. */
+  type: "Inquiry" | "Estimate" | "Project" | "Task";
   entityId: number;
   ownerId: number | null;
   reference: string;
@@ -19,6 +20,10 @@ export type Commitment = {
   effort?: { kind: "Inquiry" | "Estimate" | "EstimateSection"; id: number };
   /** A Resource Plan task awaiting approval, counted at its proposed plan. */
   tentative?: boolean;
+  /** A team task's kind: an appointment or a task. */
+  taskKind?: "Appointment" | "Task";
+  /** On the team board only: work outside the reader's own access; it counts, with no reference, title or customer. */
+  hidden?: boolean;
 };
 const DAY = 86400000;
 /** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */

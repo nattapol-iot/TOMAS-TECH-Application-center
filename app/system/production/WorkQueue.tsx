@@ -12,7 +12,9 @@ import { loadWorkload, saveWorkOrder, type Workload, type WorkloadEffort } from 
 import { orderWork, projectWork, weeklyCapacity, type Commitment } from "../../../lib/resource-planning";
 import "./workload.css";
 
-const TONES: Record<Commitment["type"], Tone> = { Inquiry: "blue", Estimate: "violet", Project: "green" };
+const TONES: Record<Commitment["type"], Tone> = { Inquiry: "blue", Estimate: "violet", Project: "green", Task: "slate" };
+/** A team task is named by its kind; it has no reference of its own. */
+const typeLabel = (item: Commitment) => item.type !== "Task" ? item.type : item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask";
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** The schedule task behind a plan task's work key (Project-<task id>). */
@@ -105,7 +107,7 @@ export function WorkQueue({
               <span className="work-queue-rank">{index + 1}</span>
               <div className="work-queue-body">
                 <div className="workload-item-head">
-                  <Badge tone={TONES[item.type]}>{t(item.type)}</Badge>
+                  <Badge tone={TONES[item.type]}>{t(typeLabel(item))}</Badge>
                   {onOpen && canOpen(item) ? (
                     <button type="button" className="workload-item-link" onClick={() => onOpen(item)}>{item.reference}</button>
                   ) : (

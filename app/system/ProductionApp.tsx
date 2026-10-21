@@ -115,6 +115,8 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   { items: [
     { view: "dashboard", label: "Dashboard", icon: "grid" },
     { view: "my-work", label: "My Work", icon: "user", anyPermissions: ["schedule.progress", "crm.read"] },
+    // Everyone's work on one page, with the weekly workload inside it (owner decision 2026-10-21).
+    { view: "resources", label: "Team overview", icon: "users", anyPermissions: ["team.board", "schedule.read"] },
     { view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" },
     { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
     { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
@@ -137,9 +139,6 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "price", label: "Price Library", icon: "book", permission: "estimate.read" },
     { view: "quotations", label: "Supplier Quotation", icon: "quote", permission: "estimate.read" },
     { view: "missing", label: "Waiting Supplier Price", icon: "clock", permission: "estimate.read" },
-  ] },
-  { group: "PLANNING", items: [
-    { view: "resources", label: "Resource Plan", icon: "calendar", permissions: ["project.read", "schedule.read"] },
   ] },
   { group: "MATERIAL & PROCUREMENT", items: [
     { view: "procurement", label: "Procurement Dashboard", icon: "trendingUp", permission: "procurement.read" },
@@ -594,6 +593,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (item.entityType === "SupportTicket" && item.entityId) openSupport(item.entityId);
     // A new project, or a task given to you on one, opens that project's plan.
     if (item.entityType === "Project" && item.entityId) openProjectSchedule(item.entityId);
+    // A team task given to you opens the team board.
+    if (item.entityType === "TeamTask") setView("resources");
   };
 
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {

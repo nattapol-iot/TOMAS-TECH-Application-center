@@ -110,6 +110,34 @@ test("a schedule that cannot be resolved is named, and the rest still counts", (
   assert.deepEqual(items, []);
 });
 
+test("the team board's own tasks count as work, and rows outside the reader's access are marked hidden", () => {
+  const teamTasks = [
+    { id: 21, kind: "Appointment", title: "Site survey", customer_name: "ACME", assignee_id: 7, start_date: "2026-10-22", end_date: "2026-10-22", man_days: 0.5 },
+    { id: 22, kind: "Task", title: "Draft BOQ", customer_name: null, assignee_id: null, start_date: "2026-10-27", end_date: "2026-10-28", man_days: 2 },
+  ];
+  const hiddenInquiry = [{ ...inquiries[0], visible: false }];
+  const hiddenProject = [{ ...projects[0], visible: 0 }];
+  const { items } = workloadItems([hiddenInquiry, [], [], [], hiddenProject, schedule, pics, [], teamTasks], new Set());
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  assert.deepEqual(byKey.get("TeamTask-21"), { key: "TeamTask-21", workKey: "TeamTask-21", type: "Task", entityId: 21, ownerId: 7, reference: "", title: "Site survey",
+    customer: "ACME", start: "2026-10-22", end: "2026-10-22", manDays: 0.5, progress: 0, status: "Planned", taskKind: "Appointment" });
+  // Nobody yet: it waits on the unassigned row.
+  assert.equal(byKey.get("TeamTask-22")?.ownerId, null);
+  assert.equal(byKey.get("TeamTask-22")?.taskKind, "Task");
+  assert.match("TeamTask-22", WORK_KEY);
+  // Work outside the reader's access still counts; the board leaves its details out.
+  assert.equal(byKey.get("Inquiry-3")?.hidden, true);
+  assert.equal(byKey.get("Project-11-7")?.hidden, true);
+  assert.equal(byKey.get("TeamTask-21")?.hidden, undefined);
+  // Rows the reader may see carry no flag at all.
+  assert.equal(workloadItems(workSets, new Set()).items.some((item) => "hidden" in item), false);
+  // With @all_work the board reads everyone's projects and inquiry tasks; `visible` keeps each row's own scope.
+  assert.match(WORKLOAD_SQL, /WHERE @all_work=1 OR scope\.visible=1;/);
+  assert.match(WORKLOAD_SQL, /AND \(@all_work=1 OR @task_elevated=1 OR i\.estimate_owner_id=@actor/);
+  assert.match(WORKLOAD_SQL, /DECLARE @inquiries bit = CASE WHEN @all_work=1 THEN 1 ELSE @inquiry_visible END;/);
+  assert.match(WORKLOAD_SQL, /FROM dbo\.team_tasks t LEFT JOIN dbo\.customers c ON c\.id=t\.customer_id\s+WHERE t\.deleted_at IS NULL AND t\.status=N'Planned' AND t\.kind IN\(N'Appointment',N'Task'\)/);
+});
+
 test("finished work and the default capacity are one rule", () => {
   assert.equal(DEFAULT_WEEKLY_CAPACITY, 5);
   for (const status of FINISHED_WORK_STATUSES) assert.equal(isOpenWork({ progress: 0, status }), false, status);
@@ -168,7 +196,8 @@ test("the Workload read needs schedule.read and project.read, then reads everyth
     const response = await app.inject({ method: "GET", url: "/api/v1/resource-planning/workload" });
     assert.equal(response.statusCode, 200);
     assert.deepEqual(demanded, ["schedule.read", "project.read"]);
-    assert.deepEqual(bound, { actor: 7, project_elevated: false, task_elevated: false });
+    // Only the team board reads everyone's work.
+    assert.deepEqual(bound, { actor: 7, project_elevated: false, task_elevated: false, all_work: false });
     const statement = statements[0]!;
     assert.ok(statement.includes(WORKLOAD_SQL));
     // Projects as GET /projects lists them; inquiry tasks as /resource-tasks/commitments scopes them.

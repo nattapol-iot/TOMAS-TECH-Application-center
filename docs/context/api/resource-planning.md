@@ -2,16 +2,16 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `8c91db80`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `0ede4efb`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/resource-planning` | 62–71 |
-| GET | `/api/v1/resource-planning/workload` | 73–96 |
-| PUT | `/api/v1/resource-planning/work-order/:userId` | 99–122 |
-| PUT | `/api/v1/resource-planning/:kind/:id` | 123–228 |
+| GET | `/api/v1/resource-planning/workload` | 73–98 |
+| PUT | `/api/v1/resource-planning/work-order/:userId` | 101–124 |
+| PUT | `/api/v1/resource-planning/:kind/:id` | 125–230 |
 
 ## Named functions
 
@@ -20,7 +20,7 @@ Evidence: source snapshot `8c91db80`; generated, do not edit. [backend-node/src/
 | `map` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 20–29 |
 | `decimal` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 30–44 |
 | `holidayDates` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 56–56 |
-| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 57–229 |
+| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 57–231 |
 
 ## Direct local dependencies
 

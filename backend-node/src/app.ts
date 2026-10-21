@@ -11,6 +11,7 @@ import { registerUnifiedReportRoutes } from "./routes/unified-reports.js";
 import { registerReportTemplateRoutes } from "./routes/report-templates.js";
 import { registerPerformanceRoutes } from "./routes/performance.js";
 import { registerResourcePlanningRoutes } from "./routes/resource-planning.js";
+import { registerTeamBoardRoutes } from "./routes/team-board.js";
 import { registerResourceTaskRoutes } from "./routes/resource-tasks.js";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
@@ -247,6 +248,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerScheduleRoutes(app, database, users, config.businessTimeZone, email);
   registerScheduleTemplateRoutes(app, database, users);
   registerResourcePlanningRoutes(app, database, users);
+  registerTeamBoardRoutes(app, database, users);
   registerResourceTaskRoutes(app, database, users, email);
   registerSalesIntakeRoutes(app, config, database, users);
   registerSiteVisitReadRoutes(app, config, database, users);

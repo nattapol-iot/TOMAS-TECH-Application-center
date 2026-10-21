@@ -70,6 +70,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 82, fileName: "082_repository_write.sql", name: "Repository write permission" },
   { version: 83, fileName: "083_download_center_counts.sql", name: "Download Center download counts" },
   { version: 84, fileName: "084_project_number_placeholder.sql", name: "Placeholder project number may repeat" },
+  { version: 85, fileName: "085_team_tasks.sql", name: "Team board and team tasks" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

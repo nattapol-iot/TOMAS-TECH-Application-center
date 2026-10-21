@@ -29,3 +29,71 @@ export const loadWorkload = (options: { mine?: boolean } = {}) =>
 /** Saves a person's order of work; the person themself or an Admin / Engineering Manager / Project Manager. */
 export const saveWorkOrder = (userId: number, keys: string[]) =>
   apiRequest<WorkOrder>(`/api/v1/resource-planning/work-order/${userId}`, { method: "PUT", body: JSON.stringify({ keys }) });
+
+export type TeamTaskKind = "Appointment" | "Task" | "Away";
+export type TeamTaskSlot = "Day" | "AM" | "PM";
+export type TeamTaskStatus = "Planned" | "Done" | "Cancelled";
+/** Work added on the team board (dbo.team_tasks, backend-node/src/routes/team-board.ts). */
+export type TeamTask = {
+  id: number;
+  kind: TeamTaskKind;
+  title: string;
+  customerId: number | null;
+  customer: string;
+  /** Null: nobody yet, on the board's unassigned row. */
+  assigneeId: number | null;
+  startDate: string;
+  endDate: string;
+  slot: TeamTaskSlot;
+  startTime: string | null;
+  manDays: number;
+  status: TeamTaskStatus;
+  inquiryId: number | null;
+  /** Empty for someone without inquiry.read. */
+  inquiryNo: string;
+  projectId: number | null;
+  /** Empty for someone without project.read. */
+  projectNo: string;
+  note: string;
+  createdBy: number;
+  createdByName: string;
+  createdAt: string;
+  rowVersion: string;
+};
+/** What a save sends; the server works out the man-days when they are left empty. */
+export type TeamTaskInput = Omit<TeamTask, "id" | "customer" | "inquiryNo" | "projectNo" | "createdBy" | "createdByName" | "createdAt" | "rowVersion" | "manDays"> & { manDays: number | null };
+/** A site visit on the board, once per visit with every engineer on it; number and customer are empty without visit.read. */
+export type BoardVisit = { id: number; number: string; status: string; customer: string; start: string | null; end: string | null; time: string | null; engineerIds: number[] };
+/** Leave or another absence recorded for Site Visit planning (dbo.engineer_availability). */
+export type BoardAway = { id: number; userId: number; kind: string; start: string | null; end: string | null };
+/**
+ * GET /api/v1/team-board: everyone's work (details only of what the reader may open), the team tasks, site visits and
+ * days away in the window, and the capacities and holidays the load is worked out against.
+ */
+export type TeamBoardData = {
+  capacities: { userId: number; daysPerWeek: number }[];
+  holidays: string[];
+  items: Commitment[];
+  warnings: string[];
+  tasks: TeamTask[];
+  visits: BoardVisit[];
+  away: BoardAway[];
+  /** Admin, Engineering and Project Managers may change anyone's team task. */
+  canChangeAll: boolean;
+};
+export type TeamTaskChange = { action: string; actor: string; at: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null };
+
+export const loadTeamBoard = (from: string, to: string) =>
+  apiRequest<TeamBoardData>(`/api/v1/team-board?from=${from}&to=${to}`);
+export const createTeamTask = (task: TeamTaskInput) =>
+  apiRequest<{ id: number; rowVersion: string; manDays: number }>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
+export const updateTeamTask = (id: number, task: TeamTaskInput, rowVersion: string) =>
+  apiRequest<{ id: number; rowVersion: string; manDays: number }>(`/api/v1/team-tasks/${id}`, { method: "PUT", body: JSON.stringify({ ...task, rowVersion }) });
+export const deleteTeamTask = (id: number, rowVersion: string) =>
+  apiRequest<{ id: number; deleted: true }>(`/api/v1/team-tasks/${id}?rowVersion=${encodeURIComponent(rowVersion)}`, { method: "DELETE" });
+export const loadTeamTaskHistory = (id: number) => apiRequest<TeamTaskChange[]>(`/api/v1/team-tasks/${id}/history`);
+/** A saved task back into the shape a save sends. */
+export const teamTaskInput = (task: TeamTask): TeamTaskInput => ({
+  kind: task.kind, title: task.title, customerId: task.customerId, assigneeId: task.assigneeId, startDate: task.startDate, endDate: task.endDate,
+  slot: task.slot, startTime: task.startTime, manDays: task.manDays, status: task.status, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note,
+});

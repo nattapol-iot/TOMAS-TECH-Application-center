@@ -773,4 +773,8 @@ GO
 -- database/migrations/083_download_center_counts.sql
 GRANT SELECT, INSERT ON OBJECT::dbo.download_center_downloads TO [iot_team_app_role];
 GO
+
+-- database/migrations/085_team_tasks.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.team_tasks TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

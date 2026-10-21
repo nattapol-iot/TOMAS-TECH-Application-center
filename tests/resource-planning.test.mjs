@@ -108,13 +108,16 @@ test("anyone without a saved capacity works the default 5 days, as the server as
   assert.equal(isOpenWork({ progress: 100, status: "In Progress" }), false);
   assert.equal(isOpenWork({ progress: 0, status: "Rejected" }), false);
 });
-test("the Workload screen reads once, opens on the workload and lists each person's work in a drawer", async () => {
+test("Team overview opens on the team board; its weekly workload reads once and lists each person's work in a drawer", async () => {
   const screen = await readFile(new URL("../app/system/production/ResourcePlanningScreen.tsx", import.meta.url), "utf8");
   // One request instead of every inquiry, every estimate workspace and every project schedule.
   assert.match(screen, /setData\(await loadWorkload\(\)\)/);
   assert.doesNotMatch(screen, /loadEstimateCostWorkspace|loadSchedules|listInquiries|listEstimates|resource-tasks\/commitments/);
-  // Two tabs, Workload first, and the last one used is remembered per person.
-  assert.match(screen, /\{ id: "workload", label: "Workload\.title" \},\s*\{ id: "tasks", label: "Workload\.tabTasks" \}/);
+  // The team board and its list first (team.board), then the weekly workload and Tasks (schedule access); the last tab is remembered per person.
+  assert.match(screen, /\{ id: "board" as const, label: "TeamBoard\.tabBoard" \}, \{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
+  assert.match(screen, /\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \}, \{ id: "tasks" as const, label: "Workload\.tabTasks" \}/);
+  assert.match(screen, /readStored\(tabStorageKey\(bootstrap\.user\.id\), \["board", "list", "workload", "tasks"\], "board"\)/);
+  assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : allowedTabs\[0\] \?\? "board";/);
   assert.match(screen, /tomas-tech-resource-plan-tab:\$\{userId\}/);
   assert.doesNotMatch(screen, /id: "gantt"|id: "items"|KpiCard|BarChart/);
   // Chips filter the one table; a person opens a drawer with their open work and the effort and capacity edits.
