@@ -52,7 +52,8 @@ test("work the reader cannot open keeps its dates and effort, and loses what it 
     key: "Project-11-7", workKey: "Project-11", type: "Project", entityId: 0, ownerId: 7, reference: "", title: "", customer: "",
     start: "2026-10-19", end: "2026-10-23", manDays: 4, progress: 20, status: "In Progress", hidden: true,
   });
-  const visible = { ...item, hidden: undefined };
+  const visible: WorkloadItem = { ...item };
+  delete visible.hidden;
   assert.equal(redactWork(visible), visible);
 });
 
