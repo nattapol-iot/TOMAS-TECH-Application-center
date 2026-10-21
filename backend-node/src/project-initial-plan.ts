@@ -17,6 +17,8 @@ import { MASTER_PLAN_PHASE } from "./schedule-phases.js";
 export { MASTER_PLAN_PHASE };
 export const TEAM_PLAN_PHASE = "Team plan";
 export const PROJECT_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{1,29}$/;
+/** PJ000000 and the like: the ERP has not issued the number yet, so several projects may share it (migration 084). */
+export const isPlaceholderProjectNumber = (number: string): boolean => number.includes("0") && !/[1-9]/.test(number);
 const MAX_ROWS = 50;
 const MAX_PLAN_DAYS = 3650;
 

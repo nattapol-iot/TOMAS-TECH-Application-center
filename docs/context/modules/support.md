@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ และคู่มือ
 
-Evidence: snapshot `45d4c155`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `8c91db80`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -23,10 +23,10 @@ Shared screens contain other modules: use the symbol and line range instead of r
 | `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 22–47 |
 | `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 49–68 |
 | `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 71–71 |
-| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 72–78 |
-| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 79–107 |
-| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 110–117 |
-| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 119–122 |
+| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 72–80 |
+| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 81–109 |
+| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 112–119 |
+| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 121–124 |
 | `employeeManualLabel` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 55–55 |
 | `EmployeeManualScreen` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 57–101 |
 

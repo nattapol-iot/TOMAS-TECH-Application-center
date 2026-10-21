@@ -2,7 +2,7 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `45d4c155`; generated, do not edit. [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `8c91db80`; generated, do not edit. [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -16,7 +16,7 @@ Evidence: source snapshot `45d4c155`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `normalize` | [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>) | 16–16 |
 | `publicRow` | [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>) | 18–20 |
-| `registerHistoricalPrRoutes` | [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>) | 22–196 |
+| `registerHistoricalPrRoutes` | [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>) | 22–199 |
 
 ## Direct local dependencies
 

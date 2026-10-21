@@ -184,7 +184,10 @@ export function registerHistoricalPrRoutes(app: FastifyInstance, database: Datab
     return database.transaction(async transaction => {
       const row = await read(id, transaction); await scope(actor, row, transaction);
       const q = new sql.Request(transaction).input("number", sql.NVarChar(100), row.source_project_number).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("version", sql.VarBinary(8), version);
-      const p = (await q.query<{ id: number }>("SELECT id FROM dbo.projects WHERE project_no=@number AND deleted_at IS NULL;")).recordset[0];
+      const found = (await q.query<{ id: number }>("SELECT id FROM dbo.projects WHERE project_no=@number AND deleted_at IS NULL;")).recordset;
+      // A placeholder number (PJ000000) can belong to several projects: never guess which one.
+      if (found.length > 1) throw new ApiError(409, "ambiguous_project", "พบ Project มากกว่าหนึ่งรายการ กรุณาตรวจเลข Project");
+      const p = found[0];
       if (!p) throw new ApiError(409, "project_not_found", `ยังไม่พบ Project ${row.source_project_number} ในระบบ`);
       await demandProjectScope(database, actor, Number(p.id), transaction); q.input("project", sql.BigInt, p.id);
       const updated = await q.query("UPDATE dbo.historical_pr_imports SET project_id=@project,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.id WHERE id=@id AND is_current=1 AND project_id IS NULL AND row_version=@version;");

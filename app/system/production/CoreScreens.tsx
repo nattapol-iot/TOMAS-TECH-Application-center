@@ -67,6 +67,7 @@ import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUser
 import { ContactPicker, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
   type MasterPlanDraft, type TeamPlanDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
+import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import { BusinessCardScanner } from "./BusinessCardScanner";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
@@ -1292,7 +1293,13 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
     {!loadingOptions&&(missingFields.length||planIssues.length)?<p role="status">{t("CRM.missingProjectFields")}: {[...missingFields.map(field=>t(field)), ...planIssues].join(", ")}</p>:null}
     <div className="form-grid">
       {standalone ? <>
-        <label className="field span-2"><span><LocalizedText text={"Customer *"} /></span><select disabled={busy} value={form.customerId ?? 0} onChange={(event) => update({ customerId: Number(event.target.value), contactIds: [], endUserCustomerId: null })}><option value={0}>{t("CRM.selectCustomer")}</option>{bootstrap.customers.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
+        {/* Typed search, not a long select: the customer list runs to hundreds of names. */}
+        <div className="field span-2"><span><LocalizedText text={"Customer *"} /></span><SearchSelect value={form.customerId ? String(form.customerId) : ""} required disabled={busy}
+          options={bootstrap.customers.map((item) => ({ value: String(item.id), label: `${item.code} — ${item.name}`,
+            detail: [item.nameTh, item.nameEn, item.nameJa].filter((name) => name && name !== item.name).join(" / ") }))}
+          onChange={(value) => update({ customerId: Number(value) || 0, contactIds: [], endUserCustomerId: null })}
+          label={t("Customer *")} placeholder={t("CRM.searchCustomer")} noMatchText={t("CRM.noMatch")} clearLabel={t("CRM.clearChoice")}
+          showLabel={t("CRM.showOptions")} moreText={t("CRM.listCut")} /></div>
         <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.projectName ?? ""} onChange={(event) => update({ projectName: event.target.value })} /></label>
         <label className="field"><span><LocalizedText text={"Project type *"} /></span><select disabled={busy} value={form.projectType ?? ""} onChange={(event) => update({ projectType: event.target.value })}><option value="">{t("CRM.selectProjectType")}</option>{PROJECT_TYPES.map((type) => <option key={type} value={type}>{t(type)}</option>)}</select></label>
       </> : <>

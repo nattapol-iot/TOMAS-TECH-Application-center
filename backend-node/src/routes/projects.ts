@@ -11,7 +11,7 @@ import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
-import { insertInitialPlan, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
+import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
@@ -351,10 +351,11 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       }
       const endUser = await validateEndUser(transaction, source.endUserId);
       // The number comes from the ERP. It stays reserved by a project in the trash, so the
-      // same ERP number is never issued to two records here.
+      // same ERP number is never issued to two records here. Only the all-zero placeholder
+      // (PJ000000), used before the ERP issues a number, may repeat.
       const number = input.projectNumber;
       const taken = new sql.Request(transaction); taken.input("number", sql.NVarChar(30), number);
-      if ((await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
+      if (!isPlaceholderProjectNumber(number) && (await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
         throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
       }
       const insert = new sql.Request(transaction);
