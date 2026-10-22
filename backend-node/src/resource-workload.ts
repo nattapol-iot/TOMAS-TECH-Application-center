@@ -104,11 +104,13 @@ export const WORKLOAD_SQL = `
       SELECT pic.task_id,pic.user_id FROM dbo.schedule_task_pics pic JOIN dbo.schedule_tasks t ON t.id=pic.task_id JOIN @projects p ON p.id=t.project_id
       WHERE t.deleted_at IS NULL ORDER BY pic.task_id,pic.user_id;
       SELECT user_id,work_key FROM dbo.work_priorities ORDER BY user_id,sort_order;
-      -- Work added on the team board: an appointment or a task takes its person's time until it is done or cancelled.
-      SELECT t.id,t.kind,t.title,c.name customer_name,t.assignee_id,t.start_date,t.end_date,t.man_days
+      -- Work added on the team board: an appointment or a task takes each of its people's time (its man-days apiece)
+      -- until it is done or cancelled; one with nobody yet is one row with no person.
+      SELECT t.id,t.kind,t.title,c.name customer_name,a.user_id assignee_id,t.start_date,t.end_date,t.man_days
       FROM dbo.team_tasks t LEFT JOIN dbo.customers c ON c.id=t.customer_id
+      LEFT JOIN dbo.team_task_assignees a ON a.task_id=t.id
       WHERE t.deleted_at IS NULL AND t.status=N'Planned' AND t.kind IN(N'Appointment',N'Task')
-      ORDER BY t.start_date,t.id;`;
+      ORDER BY t.start_date,t.id,a.sort_order;`;
 
 type Row = Record<string, unknown>;
 const text = (row: Row, key: string) => String(row[key] ?? "");
@@ -204,9 +206,10 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
       });
     }
   }
-  // Team tasks are everyone's to see: they were added on the board for the team.
+  // Team tasks are everyone's to see: they were added on the board for the team. One row per person, each with the
+  // whole effort (a site visit for two takes both their days).
   for (const r of teamTasks) items.push({
-    key: `TeamTask-${id(r, "id")}`, workKey: `TeamTask-${id(r, "id")}`, type: "Task", entityId: id(r, "id"), ownerId: optional(r, "assignee_id"),
+    key: `TeamTask-${id(r, "id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamTask-${id(r, "id")}`, type: "Task", entityId: id(r, "id"), ownerId: optional(r, "assignee_id"),
     reference: "", title: text(r, "title"), customer: text(r, "customer_name"),
     start: day(r, "start_date"), end: day(r, "end_date"), manDays: Number(r.man_days ?? 0), progress: 0, status: "Planned",
     taskKind: r.kind === "Appointment" ? "Appointment" : "Task",

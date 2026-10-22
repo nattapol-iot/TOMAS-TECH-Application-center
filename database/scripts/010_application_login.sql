@@ -777,4 +777,8 @@ GO
 -- database/migrations/085_team_tasks.sql
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.team_tasks TO [iot_team_app_role];
 GO
+
+-- database/migrations/086_team_task_people.sql
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.team_task_assignees TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

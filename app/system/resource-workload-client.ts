@@ -40,8 +40,8 @@ export type TeamTask = {
   title: string;
   customerId: number | null;
   customer: string;
-  /** Null: nobody yet, on the board's unassigned row. */
-  assigneeId: number | null;
+  /** Everyone it is for, in the order chosen; empty: nobody yet, on the board's unassigned row. Each spends the man-days. */
+  assigneeIds: number[];
   startDate: string;
   endDate: string;
   slot: TeamTaskSlot;
@@ -96,6 +96,6 @@ export const deleteTeamTask = (id: number, rowVersion: string) =>
 export const loadTeamTaskHistory = (id: number) => apiRequest<TeamTaskChange[]>(`/api/v1/team-tasks/${id}/history`);
 /** A saved task back into the shape a save sends. */
 export const teamTaskInput = (task: TeamTask): TeamTaskInput => ({
-  kind: task.kind, title: task.title, customerId: task.customerId, assigneeId: task.assigneeId, startDate: task.startDate, endDate: task.endDate,
+  kind: task.kind, title: task.title, customerId: task.customerId, assigneeIds: [...task.assigneeIds], startDate: task.startDate, endDate: task.endDate,
   slot: task.slot, startTime: task.startTime, manDays: task.manDays, status: task.status, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note,
 });

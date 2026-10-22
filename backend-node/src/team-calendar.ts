@@ -1,6 +1,7 @@
-// Outlook invitations for team-board work (owner decision 2026-10-22): an appointment or a task with a person on it
-// reaches that person's calendar as a meeting request from the system mailbox. A change sends the same event again
-// (same UID, higher SEQUENCE), and a cancellation, a removal or a new person cancels it. Days away are never sent.
+// Outlook invitations for team-board work (owner decision 2026-10-22): an appointment or a task with people on it
+// reaches their calendars as one meeting request from the system mailbox, listing everyone on it. A change sends the
+// same event again (same UID, higher SEQUENCE); someone taken off it, a cancellation or a removal cancels it for them.
+// Days away are never sent.
 
 /** The parts of a team task its calendar entry is made from. */
 export type CalendarTask = {
@@ -68,9 +69,9 @@ export function foldLine(line: string) {
   return parts.join("\r\n ");
 }
 
-/** A meeting request (REQUEST) or its cancellation (CANCEL) for one person. */
+/** A meeting request (REQUEST) for everyone on it, or its cancellation (CANCEL) for the people it no longer includes. */
 export function calendarEvent(task: CalendarTask, options: {
-  method: "REQUEST" | "CANCEL"; organizer: string; attendee: { name: string; email: string }; sequence: number; link: string; now?: Date;
+  method: "REQUEST" | "CANCEL"; organizer: string; attendees: { name: string; email: string }[]; sequence: number; link: string; now?: Date;
 }) {
   const times = eventTimes(task);
   const busy = task.kind === "Appointment";
@@ -92,7 +93,8 @@ export function calendarEvent(task: CalendarTask, options: {
     `DESCRIPTION:${icsText(description)}`,
     `ORGANIZER;CN=Engineering Center:mailto:${options.organizer}`,
     // No replies: the organizer is the system mailbox, which nobody reads.
-    `ATTENDEE;CN="${options.attendee.name.replace(/["\r\n]/g, "")}";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${options.attendee.email}`,
+    ...options.attendees.map((attendee) =>
+      `ATTENDEE;CN="${attendee.name.replace(/["\r\n]/g, "")}";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${attendee.email}`),
     `STATUS:${options.method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
     // An appointment blocks the time; a task shows as free so a day of desk work does not refuse meetings.
     `TRANSP:${busy ? "OPAQUE" : "TRANSPARENT"}`,
@@ -113,12 +115,12 @@ const base64Lines = (value: string) => (Buffer.from(value, "utf8").toString("bas
  * Microsoft Graph sendMail takes it base64-encoded with Content-Type text/plain.
  */
 export function calendarMime(message: {
-  from: string; to: { name: string; email: string }; subject: string; text: string; html: string; ics: string; method: "REQUEST" | "CANCEL"; boundary: string;
+  from: string; to: { name: string; email: string }[]; subject: string; text: string; html: string; ics: string; method: "REQUEST" | "CANCEL"; boundary: string;
 }) {
   const part = (type: string, body: string) => [`--${message.boundary}`, `Content-Type: ${type}`, "Content-Transfer-Encoding: base64", "", base64Lines(body)].join("\r\n");
   return [
     `From: Engineering Center <${message.from}>`,
-    `To: ${header(message.to.name.replace(/[<>"]/g, ""))} <${message.to.email}>`,
+    `To: ${message.to.map((person) => `${header(person.name.replace(/[<>",]/g, ""))} <${person.email}>`).join(", ")}`,
     `Subject: ${header(message.subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${message.boundary}"`,
@@ -131,23 +133,25 @@ export function calendarMime(message: {
   ].join("\r\n");
 }
 
-/** Whether a task, in this state, belongs in its person's calendar. */
-export const invited = (task: { kind: string; assigneeId: number | null; status: string }) =>
-  task.assigneeId !== null && task.kind !== "Away" && task.status !== "Cancelled";
+/** The people whose calendars a task, in this state, belongs in. */
+export const invitedPeople = (task: { kind: string; assigneeIds: readonly number[]; status: string }) =>
+  task.kind !== "Away" && task.status !== "Cancelled" ? [...task.assigneeIds] : [];
 
 /** The fields that change what the calendar entry says; a status change to Done alone sends nothing. */
 const CALENDAR_FIELDS = ["kind", "title", "customer", "note", "startDate", "endDate", "slot", "startTime"] as const;
 
 /** A task as the calendar compares it; a day away is a state too, never sent. */
-export type CalendarState = Omit<Pick<CalendarTask, (typeof CALENDAR_FIELDS)[number]>, "kind"> & { kind: CalendarTask["kind"] | "Away"; assigneeId: number | null; status: string };
+export type CalendarState = Omit<Pick<CalendarTask, (typeof CALENDAR_FIELDS)[number]>, "kind"> & { kind: CalendarTask["kind"] | "Away"; assigneeIds: number[]; status: string };
 
-/** What to send when a task goes from `before` (null: new) to `after` (null: removed). */
+/**
+ * What to send when a task goes from `before` (null: new) to `after` (null: removed): a cancellation for the people
+ * it no longer includes, and a request for everyone still on it when anyone joined or left (their copy lists who is
+ * coming) or what it says changed.
+ */
 export function calendarActions(before: CalendarState | null, after: CalendarState | null) {
-  const actions: { method: "REQUEST" | "CANCEL"; userId: number }[] = [];
-  const had = before && invited(before) ? before.assigneeId : null;
-  const has = after && invited(after) ? after.assigneeId : null;
-  if (had !== null && had !== has) actions.push({ method: "CANCEL", userId: had });
-  if (has !== null && (had !== has || CALENDAR_FIELDS.some((field) => (before?.[field] ?? null) !== (after?.[field] ?? null))))
-    actions.push({ method: "REQUEST", userId: has });
-  return actions;
+  const had = before ? invitedPeople(before) : [], has = after ? invitedPeople(after) : [];
+  const cancel = had.filter((id) => !has.includes(id));
+  const joined = has.some((id) => !had.includes(id));
+  const changed = CALENDAR_FIELDS.some((field) => (before?.[field] ?? null) !== (after?.[field] ?? null));
+  return { cancel, request: has.length && (joined || cancel.length > 0 || changed) ? has : [] };
 }

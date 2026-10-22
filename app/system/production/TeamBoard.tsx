@@ -4,6 +4,7 @@ import { ApiClientError, listInquiries, listProjects, type BootstrapData } from 
 import { Drawer, EmptyState, Icon, Modal, SearchInput } from "../ui";
 import { localeFor, useLanguage } from "../i18n";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
+import { SearchMultiPicker, type PickerOption } from "./SearchMultiPicker";
 import {
   createTeamTask,
   deleteTeamTask,
@@ -68,32 +69,37 @@ const fill = (text: string, values: Record<string, string | number>) =>
   Object.entries(values).reduce((out, [key, value]) => out.replaceAll(`{${key}}`, String(value)), text);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+/** Who a history entry says the task was for: a list since migration 086, one assigneeId before it. */
+const peopleOf = (state: Record<string, unknown>) =>
+  Array.isArray(state.assigneeIds) ? state.assigneeIds.map(Number) : state.assigneeId === null || state.assigneeId === undefined ? [] : [Number(state.assigneeId)];
+
 /** What a task form holds; empty strings for "not chosen". */
 type Draft = {
-  kind: TeamTaskKind; title: string; customerId: string; assigneeId: string; startDate: string; endDate: string; slot: TeamTaskSlot;
+  kind: TeamTaskKind; title: string; customerId: string; assigneeIds: number[]; startDate: string; endDate: string; slot: TeamTaskSlot;
   startTime: string; manDays: string; status: TeamTaskStatus; inquiryId: string; projectId: string; note: string;
 };
 const draftOf = (task: TeamTask | null, preset: { assigneeId?: number | null; date?: string } = {}): Draft => task ? {
-  kind: task.kind, title: task.title, customerId: task.customerId ? String(task.customerId) : "", assigneeId: task.assigneeId ? String(task.assigneeId) : "",
+  kind: task.kind, title: task.title, customerId: task.customerId ? String(task.customerId) : "", assigneeIds: [...task.assigneeIds],
   startDate: task.startDate, endDate: task.endDate, slot: task.slot, startTime: task.startTime ?? "", manDays: String(task.manDays), status: task.status,
   inquiryId: task.inquiryId ? String(task.inquiryId) : "", projectId: task.projectId ? String(task.projectId) : "", note: task.note,
 } : {
-  kind: "Appointment", title: "", customerId: "", assigneeId: preset.assigneeId ? String(preset.assigneeId) : "", startDate: preset.date ?? "",
+  kind: "Appointment", title: "", customerId: "", assigneeIds: preset.assigneeId ? [preset.assigneeId] : [], startDate: preset.date ?? "",
   endDate: preset.date ?? "", slot: "Day", startTime: "", manDays: "", status: "Planned", inquiryId: "", projectId: "", note: "",
 };
 const inputOf = (draft: Draft): TeamTaskInput => ({
   kind: draft.kind, title: draft.title.trim(), customerId: draft.customerId ? Number(draft.customerId) : null,
-  assigneeId: draft.assigneeId ? Number(draft.assigneeId) : null, startDate: draft.startDate, endDate: draft.endDate || draft.startDate,
+  assigneeIds: draft.assigneeIds, startDate: draft.startDate, endDate: draft.endDate || draft.startDate,
   slot: draft.slot, startTime: draft.kind === "Appointment" && draft.startTime ? draft.startTime : null,
   manDays: draft.kind === "Away" ? 0 : draft.manDays.trim() === "" ? null : Number(draft.manDays), status: draft.status,
   inquiryId: draft.inquiryId ? Number(draft.inquiryId) : null, projectId: draft.projectId ? Number(draft.projectId) : null, note: draft.note.trim(),
 });
-/** A team task as the load counts it: planned appointments and tasks only. */
-const taskWork = (task: TeamTask): Commitment | null => task.status !== "Planned" || task.kind === "Away" ? null : {
-  key: `TeamTask-${task.id}`, workKey: `TeamTask-${task.id}`, type: "Task", entityId: task.id, ownerId: task.assigneeId, reference: "",
-  title: task.title, customer: task.customer, start: task.startDate, end: task.endDate, manDays: task.manDays, progress: 0, status: "Planned",
-  taskKind: task.kind === "Appointment" ? "Appointment" : "Task",
-};
+/** A team task as the load counts it: planned appointments and tasks only, its whole effort for each of its people. */
+const taskWork = (task: TeamTask): Commitment[] => task.status !== "Planned" || task.kind === "Away" ? [] :
+  (task.assigneeIds.length ? task.assigneeIds : [null]).map((ownerId) => ({
+    key: `TeamTask-${task.id}-${ownerId ?? "none"}`, workKey: `TeamTask-${task.id}`, type: "Task" as const, entityId: task.id, ownerId, reference: "",
+    title: task.title, customer: task.customer, start: task.startDate, end: task.endDate, manDays: task.manDays, progress: 0, status: "Planned",
+    taskKind: task.kind === "Appointment" ? "Appointment" as const : "Task" as const,
+  }));
 
 export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, onChanged }: {
   bootstrap: BootstrapData;
@@ -127,7 +133,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
 
   const me = bootstrap.user.id;
-  const canChange = (task: TeamTask) => task.createdBy === me || task.assigneeId === me || Boolean(data?.canChangeAll);
+  const canChange = (task: TeamTask) => task.createdBy === me || task.assigneeIds.includes(me) || Boolean(data?.canChangeAll);
   const nameOf = useMemo(() => new Map(bootstrap.team.map((user) => [user.id, user.name])), [bootstrap.team]);
   const holidays = useMemo(() => data?.holidays ?? [], [data]);
   const days = useMemo(() => boardDays(start, weeks, holidays, today), [start, weeks, holidays, today]);
@@ -138,14 +144,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     const spans = new Map<number, { start: string | null; end: string | null }[]>();
     const add = (userId: number | null, from: string | null, to: string | null) => { if (userId) spans.set(userId, [...(spans.get(userId) ?? []), { start: from, end: to }]); };
     for (const entry of data?.away ?? []) add(entry.userId, entry.start, entry.end);
-    for (const task of data?.tasks ?? []) if (task.kind === "Away" && task.status !== "Cancelled") add(task.assigneeId, task.startDate, task.endDate);
+    for (const task of data?.tasks ?? []) if (task.kind === "Away" && task.status !== "Cancelled") for (const userId of task.assigneeIds) add(userId, task.startDate, task.endDate);
     return (userId: number, date: string) => (spans.get(userId) ?? []).some((span) => covers(span.start, span.end, date));
   }, [data]);
 
   const people: Person[] = useMemo(() => {
     if (!data) return [];
     const capacities = new Map(data.capacities.map((entry) => [entry.userId, entry.daysPerWeek]));
-    const lateTasks = (userId: number) => data.tasks.filter((task) => task.assigneeId === userId && task.status === "Planned" && task.kind !== "Away" && task.endDate < today).length;
+    const lateTasks = (userId: number) => data.tasks.filter((task) => task.assigneeIds.includes(userId) && task.status === "Planned" && task.kind !== "Away" && task.endDate < today).length;
     return bootstrap.team.map((user) => {
       const items = data.items.filter((item) => item.ownerId === user.id);
       const capacity = weeklyCapacity(capacities.get(user.id));
@@ -176,7 +182,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       if (task.status === "Cancelled") continue;
       const kind = task.kind === "Away" ? "away" : task.kind === "Appointment" ? "appointment" : "task";
       for (const day of days) if (covers(task.startDate, task.endDate, day.date))
-        add(task.assigneeId, day.date, { kind, key: `task-${task.id}`, task, late: task.status === "Planned" && task.kind !== "Away" && task.endDate < today });
+        for (const userId of task.assigneeIds.length ? task.assigneeIds : [null])
+          add(userId, day.date, { kind, key: `task-${task.id}`, task, late: task.status === "Planned" && task.kind !== "Away" && task.endDate < today });
     }
     for (const visit of data.visits) for (const day of days) if (covers(visit.start, visit.end, day.date))
       for (const engineerId of visit.engineerIds) add(engineerId, day.date, { kind: "visit", key: `visit-${visit.id}`, visit, late: false });
@@ -194,7 +201,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       rows.push({ key: item.key, category: itemCategory(item), start: item.start, end: item.end, ownerIds: item.ownerId ? [item.ownerId] : [], manDays: item.manDays, late: Boolean(item.end && item.end < today), item });
     for (const task of data.tasks) if (task.status === "Planned")
       rows.push({ key: `task-${task.id}`, category: task.kind === "Away" ? "away" : task.kind === "Appointment" ? "appointment" : "task", start: task.startDate, end: task.endDate,
-        ownerIds: task.assigneeId ? [task.assigneeId] : [], manDays: task.kind === "Away" ? null : task.manDays, late: task.kind !== "Away" && task.endDate < today, task });
+        ownerIds: task.assigneeIds, manDays: task.kind === "Away" ? null : task.manDays, late: task.kind !== "Away" && task.endDate < today, task });
     for (const visit of data.visits)
       rows.push({ key: `visit-${visit.id}`, category: "appointment", start: visit.start, end: visit.end, ownerIds: visit.engineerIds, manDays: null, late: false, visit });
     for (const entry of data.away)
@@ -215,7 +222,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     && (personId === null || row.ownerIds.includes(personId))
     && (!query || rowText(row).includes(query)));
   const overPeople = people.filter((person) => (person.week.utilisation ?? 0) > 100 && inDepartment(person.userId));
-  const unassignedTasks = (data?.tasks ?? []).filter((task) => task.assigneeId === null && task.status === "Planned");
+  const unassignedTasks = (data?.tasks ?? []).filter((task) => !task.assigneeIds.length && task.status === "Planned");
   const counts = {
     all: scopedRows.length,
     ...(Object.fromEntries(CATEGORIES.map(({ key }) => [key, scopedRows.filter((row) => row.category === key).length])) as Record<Category, number>),
@@ -249,8 +256,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     if (!current) return current;
     const id = task?.id ?? removedId!;
     const tasks = current.tasks.filter((entry) => entry.id !== id);
-    const items = current.items.filter((item) => item.key !== `TeamTask-${id}`);
-    if (task) { tasks.push(task); const work = taskWork(task); if (work) items.push(work); }
+    const items = current.items.filter((item) => item.workKey !== `TeamTask-${id}`);
+    if (task) { tasks.push(task); items.push(...taskWork(task)); }
     return { ...current, tasks, items };
   }); };
   const customerName = (id: number | null) => (id === null ? "" : bootstrap.customers.find((customer) => customer.id === id)?.name ?? "");
@@ -511,7 +518,11 @@ type FormContext = {
 };
 
 /** The fields a team task shares between adding and changing it, with the chosen person's load on its first day. */
-function TaskFields({ draft, set, context, disabled = false, focusSubject = false }: { draft: Draft; set: (draft: Draft) => void; context: FormContext; disabled?: boolean; focusSubject?: boolean }) {
+function TaskFields({ draft, set, context, disabled = false, focusSubject = false, original = null }: {
+  draft: Draft; set: (draft: Draft) => void; context: FormContext; disabled?: boolean; focusSubject?: boolean;
+  /** The task as saved, when changing one: its own share is already in the load and is not counted twice. */
+  original?: TeamTask | null;
+}) {
   const { t } = useLanguage();
   const copy = useSearchCopy();
   const { bootstrap, people, personById, days, holidays, longDate } = context;
@@ -522,20 +533,30 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
     const timer = setTimeout(() => subject.current?.focus(), 0);
     return () => clearTimeout(timer);
   }, [focusSubject]);
-  const personOptions = useMemo(() => peopleOptions(bootstrap.team), [bootstrap.team]);
+  const personOptions = useMemo<PickerOption[]>(() => bootstrap.team.map((user) => ({ id: user.id, label: user.name, detail: user.department, searchText: `${user.nickname} ${user.email}` })), [bootstrap.team]);
   const customers = useMemo(() => customerOptions(bootstrap.customers), [bootstrap.customers]);
   const auto = defaultTaskManDays(draft.startDate, draft.endDate || draft.startDate, draft.slot, holidays);
   const manDays = draft.manDays.trim() === "" ? auto : Number(draft.manDays) || 0;
   const span = draft.startDate ? workingDays(draft.startDate, draft.endDate || draft.startDate, holidays).length || 1 : 1;
-  const person = draft.assigneeId ? personById.get(Number(draft.assigneeId)) : undefined;
-  const day = person?.load.find((entry) => entry.date === draft.startDate);
-  const after = withExtra(day, manDays / span);
+  // Each person chosen, with their load on the first day before and after this task (each spends its man-days).
+  const ownShare = (userId: number) => original && original.status === "Planned" && original.kind !== "Away" && original.assigneeIds.includes(userId)
+    && covers(original.startDate, original.endDate, draft.startDate)
+    ? original.manDays / (workingDays(original.startDate, original.endDate, holidays).length || 1) : 0;
+  const loads = draft.assigneeIds.map((id) => personById.get(id)).filter((person): person is Person => Boolean(person)).map((person) => {
+    const saved = person.load.find((entry) => entry.date === draft.startDate);
+    // Without this task as saved: the load it would have otherwise.
+    const day = saved && { ...saved, manDays: Math.max(0, saved.manDays - ownShare(person.userId)) };
+    return { person, now: withExtra(day, 0), after: withExtra(day, manDays / span), away: person.away(draft.startDate) };
+  });
   const shown = days.some((entry) => entry.date === draft.startDate);
+  const worst = loads.filter((load) => !load.away && load.after !== null && load.after > 100).sort((a, b) => (b.after ?? 0) - (a.after ?? 0))[0];
+  const highest = Math.max(0, ...loads.filter((load) => !load.away).map((load) => load.after ?? 0));
   // Their own team first; someone from another team only if they do planned work at all (not, say, a salesperson).
-  const freer = person && after !== null && after > 100
-    ? freestOn(people.filter((entry) => entry.userId !== person.userId
-      && (entry.user.department === person.user.department || entry.load.some((load) => load.manDays > 0))),
-    draft.startDate, 3, (entry) => entry.user.department === person.user.department) : [];
+  const freer = worst
+    ? freestOn(people.filter((entry) => !draft.assigneeIds.includes(entry.userId)
+      && (entry.user.department === worst.person.user.department || entry.load.some((load) => load.manDays > 0))),
+    draft.startDate, 3, (entry) => entry.user.department === worst.person.user.department) : [];
+  const swap = (from: number, to: number) => set({ ...draft, assigneeIds: draft.assigneeIds.map((id) => (id === from ? to : id)) });
   const kinds: { kind: TeamTaskKind; label: string }[] = [
     { kind: "Appointment", label: "TeamBoard.kindAppointment" }, { kind: "Task", label: "TeamBoard.kindTask" }, { kind: "Away", label: "TeamBoard.kindAway" },
   ];
@@ -551,17 +572,19 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
         <span>{t("TeamBoard.subject")} <b className="board-req">*</b></span>
         <input ref={subject} required maxLength={300} disabled={disabled} value={draft.title} placeholder={t("TeamBoard.subjectPlaceholder")} onChange={(event) => set({ ...draft, title: event.target.value })} />
       </label>
-      <div className="board-form-row">
-        <div className="field">
-          <span>{t("TeamBoard.customer")}</span>
-          <SearchSelect value={draft.customerId} options={customers} onChange={(value) => set({ ...draft, customerId: value })} label={t("TeamBoard.customer")}
-            placeholder={t("CRM.searchCustomer")} disabled={disabled} {...copy} />
-        </div>
-        <div className="field">
-          <span>{t("TeamBoard.assignee")}{draft.kind === "Away" ? <b className="board-req"> *</b> : null}</span>
-          <SearchSelect value={draft.assigneeId} options={personOptions} onChange={(value) => set({ ...draft, assigneeId: value })} label={t("TeamBoard.assignee")}
-            placeholder={t("CRM.searchPerson")} required={draft.kind === "Away"} disabled={disabled} {...copy} />
-        </div>
+      <div className="field">
+        <span>{t("TeamBoard.customer")}</span>
+        <SearchSelect value={draft.customerId} options={customers} onChange={(value) => set({ ...draft, customerId: value })} label={t("TeamBoard.customer")}
+          placeholder={t("CRM.searchCustomer")} disabled={disabled} {...copy} />
+      </div>
+      <div className="field board-people">
+        <span>{t("TeamBoard.people")}{draft.kind === "Away" ? <b className="board-req"> *</b> : null}</span>
+        {disabled ? (
+          <span className="board-people-names">{loads.map((load) => load.person.user.name).join(", ") || t("TeamBoard.unassigned")}</span>
+        ) : (
+          <SearchMultiPicker options={personOptions} value={draft.assigneeIds} onChange={(assigneeIds) => set({ ...draft, assigneeIds })} label={t("TeamBoard.people")}
+            placeholder={t("Schedule.searchPeople")} removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
+        )}
       </div>
       <div className="board-form-row three">
         <label className="field">
@@ -590,23 +613,28 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           </div>
         </div>
       ) : null}
-      {draft.kind !== "Away" && person ? <p className="muted small board-outlook"><Icon name="calendar" />{t("TeamBoard.outlookHint")}</p> : null}
+      {draft.kind !== "Away" && loads.length ? <p className="muted small board-outlook"><Icon name="calendar" />{t("TeamBoard.outlookHint")}</p> : null}
       {draft.kind === "Away" ? (
-        !draft.assigneeId ? <p className="callout warning" role="status">{t("TeamBoard.awayNeedsPerson")}</p> : null
-      ) : !person ? (
+        !draft.assigneeIds.length ? <p className="callout warning" role="status">{t("TeamBoard.awayNeedsPerson")}</p> : null
+      ) : !loads.length ? (
         <p className="muted small">{t("TeamBoard.noAssigneeHint")}</p>
-      ) : !shown || !day ? (
+      ) : !shown ? (
         <p className="muted small">{t("TeamBoard.loadOutside")}</p>
-      ) : person.away(draft.startDate) ? (
-        <p className="callout warning" role="status">{fill(t("TeamBoard.awayThatDay"), { name: person.user.name })}</p>
       ) : (
-        <div className={`callout ${after !== null && after > 100 ? "danger" : after !== null && after >= 85 ? "warning" : "info"}`} role="status">
-          <span>{fill(t("TeamBoard.loadNow"), { name: person.user.name, now: pct(day.utilisation ?? 0), after: pct(after) })} · {longDate(draft.startDate)}</span>
-          {freer.length ? (
+        <div className={`callout ${highest > 100 ? "danger" : highest >= 85 ? "warning" : "info"}`} role="status">
+          <span>{fill(t("TeamBoard.loadThatDay"), { date: longDate(draft.startDate) })}</span>
+          <ul className="board-loads">
+            {loads.map(({ person, now, after, away }) => (
+              <li key={person.userId} className={away ? "away" : loadBand(after)}>
+                <strong>{person.user.name}</strong> {away ? t("TeamBoard.awayShort") : `${pct(now ?? 0)} → ${pct(after)}`}
+              </li>
+            ))}
+          </ul>
+          {worst && freer.length ? (
             <div className="board-freer">
-              {t("TeamBoard.freer")}
+              {fill(t("TeamBoard.swapFor"), { name: worst.person.user.name })}
               {freer.map(({ person: other, utilisation }) => (
-                <button key={other.userId} type="button" className="board-free" disabled={disabled} onClick={() => set({ ...draft, assigneeId: String(other.userId) })}>
+                <button key={other.userId} type="button" className="board-free" disabled={disabled} onClick={() => swap(worst.person.userId, other.userId)}>
                   <span className="board-avatar small" aria-hidden="true">{initials(other.user.name)}</span>{other.user.name} {pct(utilisation)}
                 </button>
               ))}
@@ -636,7 +664,7 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
 
 const draftProblem = (draft: Draft) =>
   !draft.title.trim() || !draft.startDate ? "" : draft.endDate && draft.endDate < draft.startDate ? "TeamBoard.endBeforeStart"
-    : draft.kind === "Away" && !draft.assigneeId ? "TeamBoard.awayNeedsPerson" : "";
+    : draft.kind === "Away" && !draft.assigneeIds.length ? "TeamBoard.awayNeedsPerson" : "";
 const draftReady = (draft: Draft) => Boolean(draft.title.trim() && draft.startDate) && !draftProblem(draft);
 
 function AddTaskModal({ preset, onClose, onSave, ...context }: FormContext & {
@@ -710,7 +738,7 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, ...context }: 
     const before = change.before ?? {}, after = change.after ?? {};
     const fields = [
       before.startDate !== after.startDate || before.endDate !== after.endDate ? t("TeamBoard.fieldDate") : "",
-      String(before.assigneeId ?? "") !== String(after.assigneeId ?? "") ? t("TeamBoard.fieldAssignee") : "",
+      JSON.stringify(peopleOf(before)) !== JSON.stringify(peopleOf(after)) ? t("TeamBoard.fieldAssignee") : "",
       before.status !== after.status ? t("TeamBoard.fieldStatus") : "",
       before.title !== after.title ? t("TeamBoard.fieldTitle") : "",
     ].filter(Boolean);
@@ -730,7 +758,7 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, ...context }: 
         {error ? <div className="callout danger" role="alert">{error}</div> : null}
         {!canChange ? <div className="callout info" role="status">{t("TeamBoard.readOnly")}</div> : null}
         {draftProblem(draft) && draftProblem(draft) !== "TeamBoard.awayNeedsPerson" ? <div className="callout warning" role="status">{t(draftProblem(draft))}</div> : null}
-        <TaskFields draft={draft} set={setDraft} context={context} disabled={!canChange || busy} />
+        <TaskFields draft={draft} set={setDraft} context={context} disabled={!canChange || busy} original={task} />
         <div className="field">
           <span>{t("TeamBoard.status")}</span>
           <div className="chip-select" role="group" aria-label={t("TeamBoard.status")}>
@@ -796,7 +824,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
   const add = async () => {
     if (!draftReady(draft) || busy) return;
     setBusy(true); setError("");
-    try { await onCreate(inputOf(draft)); setDraft({ ...blank(), kind: draft.kind, assigneeId: draft.assigneeId, startDate: draft.startDate, endDate: draft.startDate }); }
+    try { await onCreate(inputOf(draft)); setDraft({ ...blank(), kind: draft.kind, assigneeIds: draft.assigneeIds, startDate: draft.startDate, endDate: draft.startDate }); }
     catch (failure) { setError(errorText(failure)); }
     finally { setBusy(false); }
   };
@@ -838,7 +866,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                   onChange={(event) => setDraft({ ...draft, title: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void add(); } }} />
               </td>
               <td>
-                <SearchSelect value={draft.assigneeId} options={people} onChange={(value) => setDraft({ ...draft, assigneeId: value })} label={t("TeamBoard.assignee")}
+                <SearchSelect value={draft.assigneeIds[0] ? String(draft.assigneeIds[0]) : ""} options={people} onChange={(value) => setDraft({ ...draft, assigneeIds: value ? [Number(value)] : [] })} label={t("TeamBoard.assignee")}
                   placeholder={t("CRM.searchPerson")} {...copy} />
               </td>
               <td><input type="date" aria-label={t("TeamBoard.startDate")} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value, endDate: draft.endDate < event.target.value ? event.target.value : draft.endDate })} /></td>
@@ -867,9 +895,9 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                       {row.task && (row.task.inquiryNo || row.task.projectNo) ? <small className="board-links">{[row.task.inquiryNo, row.task.projectNo].filter(Boolean).join(" · ")}</small> : null}
                     </td>
                     <td>
-                      {row.task && canChange(row.task) && row.task.kind !== "Away" ? (
-                        <SearchSelect value={row.task.assigneeId ? String(row.task.assigneeId) : ""} options={people} label={t("TeamBoard.assignee")}
-                          placeholder={t("TeamBoard.unassigned")} onChange={(value) => void change(row.task!, { assigneeId: value ? Number(value) : null })} {...copy} />
+                      {row.task && canChange(row.task) && row.task.kind !== "Away" && row.task.assigneeIds.length <= 1 ? (
+                        <SearchSelect value={row.task.assigneeIds[0] ? String(row.task.assigneeIds[0]) : ""} options={people} label={t("TeamBoard.assignee")}
+                          placeholder={t("TeamBoard.unassigned")} onChange={(value) => void change(row.task!, { assigneeIds: value ? [Number(value)] : [] })} {...copy} />
                       ) : <span className={row.ownerIds.length ? "" : "board-need"}>{owners(row) || t("TeamBoard.unassigned")}</span>}
                     </td>
                     <td>

@@ -125,6 +125,13 @@ button.board-chip:hover { filter: brightness(.97); text-decoration: underline; }
 .board-outlook .icon { flex: none; }
 .board-form .callout { margin: 0; flex-direction: column; }
 .team-board .callout.info, .board-form .callout.info, .board-drawer .callout.info { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
+.board-loads { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; }
+.board-loads li { white-space: nowrap; }
+.board-loads li.over strong, .board-loads li.over { color: var(--red-text); }
+.board-loads li.away { color: var(--ink-soft); }
+.board-people .search-multi-picker { display: flex; flex-direction: column; gap: 6px; }
+.board-people .project-contact-search { max-width: none; }
+.board-people-names { min-height: 32px; display: flex; align-items: center; }
 .board-freer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .board-free {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 3px; border: 1px solid var(--green-line);

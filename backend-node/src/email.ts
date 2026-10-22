@@ -88,7 +88,8 @@ export type ProjectTaskAssignmentEmail = {
 export type TeamTaskCalendarEmail = {
   method: "REQUEST" | "CANCEL";
   task: CalendarTask;
-  recipient: EmailRecipient;
+  /** Everyone on a request (each sees who else is coming), or the people a cancellation is for. */
+  recipients: EmailRecipient[];
   /** Whoever added or changed the task. */
   sentBy: string;
 };
@@ -182,9 +183,10 @@ export class EmailService {
    * replace it (same UID). Sent as the system mailbox, which is also the organizer; no replies are asked for.
    */
   async sendTeamTaskCalendar(message: TeamTaskCalendarEmail): Promise<EmailDeliveryResult> {
-    const [recipient] = normalizedRecipients([message.recipient]);
-    if (!recipient) return { status: "sent", recipients: [] };
-    if (this.config.mode === "Disabled") return { status: "disabled", recipients: [recipient.email] };
+    const recipients = normalizedRecipients(message.recipients);
+    const addresses = recipients.map((recipient) => recipient.email);
+    if (!recipients.length) return { status: "sent", recipients: [] };
+    if (this.config.mode === "Disabled") return { status: "disabled", recipients: addresses };
     try {
       const appUrl = `${this.config.applicationBaseUrl!.replace(/\/$/, "")}/`;
       const link = `${appUrl}#/resources`;
@@ -198,8 +200,8 @@ export class EmailService {
         + rows.filter(([, value]) => value).map(([label, value]) => `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>`).join("")
         + `</table><p><a href="${escapeHtml(link)}">เปิดภาพรวมงานทีม / Open the Team overview</a></p>`;
       const text = [task.title, ...rows.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`), link].join("\n");
-      const ics = calendarEvent(task, { method: message.method, organizer: this.config.senderUser!, attendee: recipient, sequence: calendarSequence(), link });
-      const mime = calendarMime({ from: this.config.senderUser!, to: recipient, subject, text, html, ics, method: message.method, boundary: `team-task-${task.id}-${Date.now()}` });
+      const ics = calendarEvent(task, { method: message.method, organizer: this.config.senderUser!, attendees: recipients, sequence: calendarSequence(), link });
+      const mime = calendarMime({ from: this.config.senderUser!, to: recipients, subject, text, html, ics, method: message.method, boundary: `team-task-${task.id}-${Date.now()}` });
       const accessToken = await this.accessToken();
       // Graph takes a whole MIME message base64-encoded with Content-Type text/plain.
       const response = await this.fetcher(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(this.config.senderUser!)}/sendMail`, {
@@ -209,10 +211,10 @@ export class EmailService {
         body: Buffer.from(mime, "utf8").toString("base64"),
       });
       if (!response.ok) throw new Error(`Microsoft Graph sendMail (calendar) returned HTTP ${response.status}.`);
-      return { status: "sent", recipients: [recipient.email] };
+      return { status: "sent", recipients: addresses };
     } catch (error) {
       this.reportError(error);
-      return { status: "failed", recipients: [recipient.email] };
+      return { status: "failed", recipients: addresses };
     }
   }
 

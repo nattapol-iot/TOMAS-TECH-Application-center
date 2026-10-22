@@ -28,12 +28,15 @@ const DAY = 86_400_000;
 /** The longest board window, and the longest task. */
 const MAX_WINDOW_DAYS = 400;
 const MAX_TASK_DAYS = 366;
+/** The most people one task can be for. */
+const MAX_PEOPLE = 20;
 
 export type TeamTaskInput = {
   kind: (typeof TEAM_TASK_KINDS)[number];
   title: string;
   customerId: number | null;
-  assigneeId: number | null;
+  /** Everyone on it, in the order chosen; empty: nobody yet. Each spends the task's man-days. */
+  assigneeIds: number[];
   startDate: string;
   endDate: string;
   slot: (typeof TEAM_TASK_SLOTS)[number];
@@ -66,8 +69,11 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
   if (endDate < startDate) throw new ApiError(400, "validation_failed", "The end date cannot be before the start date.");
   if (dayNumber(endDate) - dayNumber(startDate) > MAX_TASK_DAYS)
     throw new ApiError(400, "validation_failed", `A team task can span at most ${MAX_TASK_DAYS} days.`);
-  const assigneeId = optionalId(body.assigneeId, "Assignee");
-  if (kind === "Away" && assigneeId === null) throw new ApiError(400, "validation_failed", "Choose who is away.");
+  // A list of people; a single assigneeId (an older page) is a list of one.
+  const people = Array.isArray(body.assigneeIds) ? body.assigneeIds : body.assigneeId === undefined || body.assigneeId === null || body.assigneeId === "" ? [] : [body.assigneeId];
+  if (people.length > MAX_PEOPLE) throw new ApiError(400, "validation_failed", `A team task can have at most ${MAX_PEOPLE} people.`);
+  const assigneeIds = [...new Set(people.map((person: unknown) => optionalId(person, "Person")).filter((person): person is number => person !== null))];
+  if (kind === "Away" && !assigneeIds.length) throw new ApiError(400, "validation_failed", "Choose who is away.");
   const startTime = body.startTime === undefined || body.startTime === null || body.startTime === "" ? null : String(body.startTime);
   if (startTime !== null && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startTime))
     throw new ApiError(400, "validation_failed", "The time must be HH:MM.");
@@ -82,7 +88,7 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
     kind,
     title: requiredText(body.title, 300, "Subject"),
     customerId: optionalId(body.customerId, "Customer"),
-    assigneeId,
+    assigneeIds,
     startDate,
     endDate,
     slot: choice(body.slot, TEAM_TASK_SLOTS, "Day", "Time of day"),
@@ -109,9 +115,12 @@ export function defaultManDays(task: Pick<TeamTaskInput, "kind" | "startDate" | 
   return (working || to - from + 1) * share;
 }
 
-/** Who may change or remove a team task: whoever added it, whoever it is for, and Admin / Engineering / Project Managers. */
-export const canChangeTeamTask = (actor: CurrentUser, task: Row) =>
-  Number(task.created_by) === actor.id || (task.assignee_id !== null && Number(task.assignee_id) === actor.id) || isProjectManagerRole(actor);
+/** Who may change or remove a team task: whoever added it, anyone it is for, and Admin / Engineering / Project Managers. */
+export const canChangeTeamTask = (actor: CurrentUser, task: Row, assigneeIds: readonly number[]) =>
+  Number(task.created_by) === actor.id || assigneeIds.includes(actor.id) || isProjectManagerRole(actor);
+
+/** A task's people from STRING_AGG ("7,9"), in the order chosen. */
+const idList = (value: unknown) => (value ? String(value).split(",").map(Number).filter((id) => Number.isSafeInteger(id) && id > 0) : []);
 
 /** Work the caller may not open still shows when and how much; what it is, and for whom, is left out. */
 export function redactWork(item: WorkloadItem): WorkloadItem {
@@ -123,7 +132,9 @@ export function redactWork(item: WorkloadItem): WorkloadItem {
   };
 }
 
-const TEAM_TASK_COLUMNS = `t.id,t.kind,t.title,t.customer_id,c.name customer_name,t.assignee_id,t.start_date,t.end_date,t.time_slot,
+const TEAM_TASK_COLUMNS = `t.id,t.kind,t.title,t.customer_id,c.name customer_name,
+        (SELECT STRING_AGG(CONVERT(nvarchar(20),a.user_id),N',') WITHIN GROUP (ORDER BY a.sort_order,a.user_id)
+          FROM dbo.team_task_assignees a WHERE a.task_id=t.id) assignee_ids,t.start_date,t.end_date,t.time_slot,
         CONVERT(char(5),t.start_time,108) start_time,t.man_days,t.status,t.inquiry_id,i.inquiry_no,t.project_id,p.project_no,t.note,
         t.created_by,cu.name created_by_name,t.created_at,t.row_version
       FROM dbo.team_tasks t
@@ -171,7 +182,7 @@ export function teamTaskDto(r: Row, can: { inquiries: boolean; projects: boolean
     title: String(r.title ?? ""),
     customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id),
     customer: String(r.customer_name ?? ""),
-    assigneeId: r.assignee_id === null || r.assignee_id === undefined ? null : Number(r.assignee_id),
+    assigneeIds: idList(r.assignee_ids),
     startDate: dateOnly(r.start_date as Date | string),
     endDate: dateOnly(r.end_date as Date | string),
     slot: String(r.time_slot ?? "Day"),
@@ -193,19 +204,21 @@ export function teamTaskDto(r: Row, can: { inquiries: boolean; projects: boolean
 /** Checks that what a task points at exists, and works out its effort when none was entered. */
 async function prepare(transaction: TransactionType, input: TeamTaskInput) {
   const q = new sql.Request(transaction);
-  q.input("customer", sql.BigInt, input.customerId).input("assignee", sql.BigInt, input.assigneeId)
+  q.input("customer", sql.BigInt, input.customerId).input("people", sql.NVarChar(sql.MAX), JSON.stringify(input.assigneeIds))
+    .input("people_count", sql.Int, input.assigneeIds.length)
     .input("inquiry", sql.BigInt, input.inquiryId).input("project", sql.BigInt, input.projectId)
     .input("start", sql.Date, input.startDate).input("end", sql.Date, input.endDate);
   const result = await q.query<Row>(`
     SELECT CASE WHEN @customer IS NULL OR EXISTS(SELECT 1 FROM dbo.customers WHERE id=@customer) THEN 1 ELSE 0 END customer_ok,
-      CASE WHEN @assignee IS NULL OR EXISTS(SELECT 1 FROM dbo.users WHERE id=@assignee AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END assignee_ok,
+      CASE WHEN (SELECT COUNT(*) FROM dbo.users WHERE is_active=1 AND deleted_at IS NULL
+        AND id IN (SELECT CONVERT(bigint,[value]) FROM OPENJSON(@people)))=@people_count THEN 1 ELSE 0 END assignee_ok,
       CASE WHEN @inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND deleted_at IS NULL) THEN 1 ELSE 0 END inquiry_ok,
       CASE WHEN @project IS NULL OR EXISTS(SELECT 1 FROM dbo.projects WHERE id=@project AND deleted_at IS NULL) THEN 1 ELSE 0 END project_ok;
     SELECT holiday_date FROM dbo.holidays WHERE holiday_date BETWEEN @start AND @end;`);
   const [checks] = result.recordsets as unknown as Row[][];
   const check = checks?.[0] ?? {};
   if (!Number(check.customer_ok)) throw new ApiError(400, "validation_failed", "That customer does not exist.");
-  if (!Number(check.assignee_ok)) throw new ApiError(400, "validation_failed", "That person is not an active user.");
+  if (!Number(check.assignee_ok)) throw new ApiError(400, "validation_failed", "Someone chosen is not an active user.");
   if (!Number(check.inquiry_ok)) throw new ApiError(400, "validation_failed", "That RFQ does not exist.");
   if (!Number(check.project_ok)) throw new ApiError(400, "validation_failed", "That project does not exist.");
   const holidays = new Set(((result.recordsets as unknown as Row[][])[1] ?? []).map((r) => dateOnly(r.holiday_date as Date)!));
@@ -214,44 +227,65 @@ async function prepare(transaction: TransactionType, input: TeamTaskInput) {
 
 const bind = (q: sql.Request, task: TeamTaskInput & { manDays: number }, actor: number) => q
   .input("kind", sql.NVarChar(20), task.kind).input("title", sql.NVarChar(300), task.title)
-  .input("customer", sql.BigInt, task.customerId).input("assignee", sql.BigInt, task.assigneeId)
+  .input("customer", sql.BigInt, task.customerId)
   .input("start", sql.Date, task.startDate).input("end", sql.Date, task.endDate)
   .input("slot", sql.NVarChar(10), task.slot).input("time", sql.NVarChar(5), task.startTime)
   .input("man_days", sql.Decimal(6, 2), task.manDays).input("status", sql.NVarChar(20), task.status)
   .input("inquiry", sql.BigInt, task.inquiryId).input("project", sql.BigInt, task.projectId)
   .input("note", sql.NVarChar(2000), task.note).input("actor", sql.BigInt, actor);
 
-/** Tells the person a task was given to, unless they gave it to themselves. */
-async function tellAssignee(transaction: TransactionType, actor: CurrentUser, id: number, task: TeamTaskInput) {
-  if (task.assigneeId === null || task.assigneeId === actor.id || task.status !== "Planned") return;
+/** Sets a task's people, in the order chosen. */
+async function savePeople(transaction: TransactionType, id: number, assigneeIds: readonly number[]) {
+  await new sql.Request(transaction).input("id", sql.BigInt, id).input("people", sql.NVarChar(sql.MAX), JSON.stringify(assigneeIds)).query(`
+    DELETE FROM dbo.team_task_assignees WHERE task_id=@id;
+    INSERT dbo.team_task_assignees(task_id,user_id,sort_order)
+    SELECT @id,CONVERT(bigint,people.[value]),CONVERT(int,people.[key])+1 FROM OPENJSON(@people) people;`);
+}
+
+/** A task's people as saved, for a change or a removal. */
+async function currentPeople(transaction: TransactionType, id: number) {
+  const rows = (await new sql.Request(transaction).input("id", sql.BigInt, id)
+    .query<Row>("SELECT user_id FROM dbo.team_task_assignees WHERE task_id=@id ORDER BY sort_order,user_id;")).recordset;
+  return rows.map((r) => Number(r.user_id));
+}
+
+/** Tells the people a task was given to, except whoever gave it. */
+async function tellPeople(transaction: TransactionType, actor: CurrentUser, id: number, task: TeamTaskInput, userIds: readonly number[]) {
+  const recipients = userIds.filter((userId) => userId !== actor.id);
+  if (!recipients.length || task.status !== "Planned") return;
   const when = task.endDate === task.startDate ? task.startDate : `${task.startDate} → ${task.endDate}`;
-  await notifyUsers(transaction, [task.assigneeId], "TEAM_TASK_ASSIGNED", task.title.slice(0, 300),
-    `${when}${task.startTime ? ` ${task.startTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.assigneeId}-${task.startDate}`);
+  await notifyUsers(transaction, recipients, "TEAM_TASK_ASSIGNED", task.title.slice(0, 300),
+    `${when}${task.startTime ? ` ${task.startTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.startDate}`);
 }
 
 /** A task's state as the calendar sees it; the customer by id, so a rename elsewhere sends nothing. */
-const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; assigneeId: number | null; status: string }): CalendarState => ({
+const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; assigneeIds: number[]; status: string }): CalendarState => ({
   kind: task.kind as CalendarState["kind"], title: task.title, customer: task.customerId === null ? "" : String(task.customerId), note: task.note,
-  startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, assigneeId: task.assigneeId, status: task.status,
+  startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, assigneeIds: task.assigneeIds, status: task.status,
 });
-const rowState = (r: Row) => calendarState({
+const rowState = (r: Row, assigneeIds: number[]) => calendarState({
   kind: String(r.kind), title: String(r.title), customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id), note: String(r.note ?? ""),
   startDate: dateOnly(r.start_date as Date)!, endDate: dateOnly(r.end_date as Date)!, slot: String(r.time_slot ?? "Day"),
   startTime: r.start_time ? (r.start_time instanceof Date ? r.start_time.toISOString().slice(11, 16) : String(r.start_time).slice(0, 5)) : null,
-  assigneeId: r.assignee_id === null || r.assignee_id === undefined ? null : Number(r.assignee_id), status: String(r.status),
+  assigneeIds, status: String(r.status),
 });
 
 /** What the person's Outlook got: "none" when nothing needed sending. */
 export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
 
 /**
- * Sends the Outlook requests and cancellations a change calls for, after it is saved. A request carries the task as
- * it is now; a cancellation, the task as the person had it. Delivery never undoes the save.
+ * Sends the Outlook messages a change calls for, after it is saved: one request to everyone on the task, carrying it
+ * as it is now, and one cancellation to whoever it no longer includes, carrying it as they had it. Delivery never
+ * undoes the save.
  */
 async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeamTaskCalendar">, id: number, before: CalendarState | null, after: CalendarState | null, sentBy: string): Promise<CalendarDelivery> {
-  const actions = calendarActions(before, after);
+  const { cancel, request } = calendarActions(before, after);
+  const actions = [
+    ...(cancel.length ? [{ method: "CANCEL" as const, userIds: cancel, state: before! }] : []),
+    ...(request.length ? [{ method: "REQUEST" as const, userIds: request, state: after! }] : []),
+  ];
   if (!actions.length) return "none";
-  const userIds = [...new Set(actions.map((action) => action.userId))];
+  const userIds = [...new Set([...cancel, ...request])];
   const customerIds = [...new Set([before?.customer, after?.customer].filter((value): value is string => Boolean(value)).map(Number))];
   const lookup = await db.query<Row>(`
     SELECT id,name,email FROM dbo.users WHERE id IN (SELECT CONVERT(bigint,[value]) FROM OPENJSON(@users));
@@ -260,12 +294,13 @@ async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeam
   const [people = [], customers = []] = lookup.recordsets as unknown as Row[][];
   const customerName = (value: string) => (value ? String(customers.find((r) => String(r.id) === value)?.name ?? "") : "");
   const results: CalendarDelivery[] = [];
-  for (const action of actions) {
-    const state = action.method === "CANCEL" ? before! : after!;
-    const person = people.find((r) => Number(r.id) === action.userId);
-    if (!person?.email) continue;
+  for (const { method, userIds: ids, state } of actions) {
+    // In the order chosen, and only people with an address.
+    const recipients = ids.map((userId) => people.find((r) => Number(r.id) === userId)).filter((person): person is Row => Boolean(person?.email))
+      .map((person) => ({ name: String(person.name ?? ""), email: String(person.email) }));
+    if (!recipients.length) continue;
     const result = await email.sendTeamTaskCalendar({
-      method: action.method, recipient: { name: String(person.name ?? ""), email: String(person.email) }, sentBy,
+      method, recipients, sentBy,
       task: { id, kind: state.kind === "Appointment" ? "Appointment" : "Task", title: state.title, customer: customerName(state.customer), note: state.note,
         startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime },
     });
@@ -332,12 +367,13 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       const task = await prepare(transaction, input);
       const insert = bind(new sql.Request(transaction), task, actor.id);
       const row = (await insert.query<Row>(`
-        INSERT dbo.team_tasks(kind,title,customer_id,assignee_id,start_date,end_date,time_slot,start_time,man_days,status,inquiry_id,project_id,note,created_by)
+        INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,man_days,status,inquiry_id,project_id,note,created_by)
         OUTPUT inserted.id,inserted.row_version
-        VALUES(@kind,@title,@customer,@assignee,@start,@end,@slot,CONVERT(time(0),@time),@man_days,@status,@inquiry,@project,@note,@actor);`)).recordset[0]!;
+        VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),@man_days,@status,@inquiry,@project,@note,@actor);`)).recordset[0]!;
       const id = Number(row.id);
+      await savePeople(transaction, id, task.assigneeIds);
       await insertAudit(transaction, actor.id, ENTITY, id, "", "Created", null, task);
-      await tellAssignee(transaction, actor, id, task);
+      await tellPeople(transaction, actor, id, task, task.assigneeIds);
       return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays };
     });
     const calendar = await deliverCalendar(db, email, created.id, null, calendarState(input), actor.name);
@@ -356,26 +392,29 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
         "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
-      if (!canChangeTeamTask(actor, current))
-        throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, whoever it is for, or a manager can change it.");
+      const people = await currentPeople(transaction, id);
+      if (!canChangeTeamTask(actor, current, people))
+        throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can change it.");
       if (!(current.row_version as Buffer).equals(expected))
         throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before saving.");
       const task = await prepare(transaction, input);
       const update = bind(new sql.Request(transaction), task, actor.id).input("id", sql.BigInt, id);
       const row = (await update.query<Row>(`
-        UPDATE dbo.team_tasks SET kind=@kind,title=@title,customer_id=@customer,assignee_id=@assignee,start_date=@start,end_date=@end,
+        UPDATE dbo.team_tasks SET kind=@kind,title=@title,customer_id=@customer,start_date=@start,end_date=@end,
           time_slot=@slot,start_time=CONVERT(time(0),@time),man_days=@man_days,status=@status,inquiry_id=@inquiry,project_id=@project,note=@note,
           updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0]!;
+      await savePeople(transaction, id, task.assigneeIds);
       const before = {
-        kind: current.kind, title: current.title, customerId: current.customer_id, assigneeId: current.assignee_id,
+        kind: current.kind, title: current.title, customerId: current.customer_id, assigneeIds: people,
         startDate: dateOnly(current.start_date as Date), endDate: dateOnly(current.end_date as Date), slot: current.time_slot,
         manDays: Number(current.man_days), status: current.status, inquiryId: current.inquiry_id, projectId: current.project_id, note: current.note,
       };
       await insertAudit(transaction, actor.id, ENTITY, id, "", "Updated", before, task);
-      // Tell whoever it is for now, when that changed or the day moved.
-      if (Number(current.assignee_id) !== task.assigneeId || before.startDate !== task.startDate) await tellAssignee(transaction, actor, id, task);
-      return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays, before: rowState(current) };
+      // Tell the people who joined; everyone, when the day moved.
+      await tellPeople(transaction, actor, id, task,
+        before.startDate !== task.startDate ? task.assigneeIds : task.assigneeIds.filter((userId) => !people.includes(userId)));
+      return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays, before: rowState(current, people) };
     });
     const calendar = await deliverCalendar(db, email, id, saved.before, calendarState(input), actor.name);
     return { id, rowVersion: saved.rowVersion, manDays: saved.manDays, calendar };
@@ -390,14 +429,16 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
         "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
-      if (!canChangeTeamTask(actor, current))
-        throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, whoever it is for, or a manager can remove it.");
+      const people = await currentPeople(transaction, id);
+      if (!canChangeTeamTask(actor, current, people))
+        throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can remove it.");
       if (!(current.row_version as Buffer).equals(expected))
         throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before removing it.");
+      // The people stay recorded on the removed task, as its audit trail does.
       await new sql.Request(transaction).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id)
         .query("UPDATE dbo.team_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;");
-      await insertAudit(transaction, actor.id, ENTITY, id, "", "Deleted", { title: current.title, assigneeId: current.assignee_id }, null);
-      return rowState(current);
+      await insertAudit(transaction, actor.id, ENTITY, id, "", "Deleted", { title: current.title, assigneeIds: people }, null);
+      return rowState(current, people);
     });
     const calendar = await deliverCalendar(db, email, id, before, null, actor.name);
     return { id, deleted: true, calendar };

@@ -81,14 +81,24 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /onClick=\{\(\) => setAdding\(\{ assigneeId: userId, date: day\.date \}\)\}/);
   assert.match(board, /aria-label=\{fill\(t\("TeamBoard\.addFor"\), \{ name, date: longDate\(day\.date\) \}\)\}/);
   assert.match(board, /onClick=\{\(\) => \{ setPersonId\(person\.userId\); onMode\("list"\); \}\}/);
-  // The load check offers people with more room when the chosen one would be over 100%, their own team first.
-  assert.match(board, /freestOn\(people\.filter\(\(entry\) => entry\.userId !== person\.userId/);
-  assert.match(board, /draft\.startDate, 3, \(entry\) => entry\.user\.department === person\.user\.department\)/);
+  // Several people on a task (2026-10-22): picked with the shared multi-person picker, each with their load that day.
+  assert.match(board, /<SearchMultiPicker options=\{personOptions\} value=\{draft\.assigneeIds\} onChange=\{\(assigneeIds\) => set\(\{ \.\.\.draft, assigneeIds \}\)\}/);
+  assert.match(board, /\{loads\.map\(\(\{ person, now, after, away \}\) => \(/);
+  // Changing a saved task does not count its own share twice.
+  assert.match(board, /manDays: Math\.max\(0, saved\.manDays - ownShare\(person\.userId\)\)/);
+  assert.match(board, /<TaskFields draft=\{draft\} set=\{setDraft\} context=\{context\} disabled=\{!canChange \|\| busy\} original=\{task\} \/>/);
+  // The fullest person can be swapped for someone with more room, their own team first.
+  assert.match(board, /freestOn\(people\.filter\(\(entry\) => !draft\.assigneeIds\.includes\(entry\.userId\)/);
+  assert.match(board, /draft\.startDate, 3, \(entry\) => entry\.user\.department === worst\.person\.user\.department\)/);
+  assert.match(board, /onClick=\{\(\) => swap\(worst\.person\.userId, other\.userId\)\}/);
+  // A task with several people counts for each of them, on each of their rows.
+  assert.match(board, /\(task\.assigneeIds\.length \? task\.assigneeIds : \[null\]\)\.map\(\(ownerId\) => \(\{/);
+  assert.match(board, /for \(const userId of task\.assigneeIds\.length \? task\.assigneeIds : \[null\]\)/);
   // Saves update the board in place; a conflict reloads it.
   assert.match(board, /failure\.status === 409 \|\| failure\.status === 404\)\) \{ notify\(t\("TeamBoard\.conflict"\)\); await load\(\);/);
   assert.doesNotMatch(board, /<datalist|KpiCard/);
   // Outlook (owner decision 2026-10-22): the form says the person gets it in Outlook; the toast says whether it got there.
-  assert.match(board, /\{draft\.kind !== "Away" && person \? <p className="muted small board-outlook"><Icon name="calendar" \/>\{t\("TeamBoard\.outlookHint"\)\}<\/p> : null\}/);
+  assert.match(board, /\{draft\.kind !== "Away" && loads\.length \? <p className="muted small board-outlook"><Icon name="calendar" \/>\{t\("TeamBoard\.outlookHint"\)\}<\/p> : null\}/);
   assert.match(board, /notify\(`\$\{t\("TeamBoard\.added"\)\}\$\{outlook\(saved\.calendar\)\}`\)/);
   assert.match(client, /calendar: CalendarDelivery \}>\("\/api\/v1\/team-tasks"/);
   assert.match(board, /import "\.\/team-board\.css";/);
