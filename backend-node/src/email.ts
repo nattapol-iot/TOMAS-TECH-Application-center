@@ -194,7 +194,7 @@ export class EmailService {
       const when = task.endDate === task.startDate ? task.startDate : `${task.startDate} – ${task.endDate}`;
       const cancelled = message.method === "CANCEL";
       const subject = `${cancelled ? "[Engineering Center] Cancelled: " : "[Engineering Center] "}${task.title}`;
-      const rows: [string, string][] = [["Date", `${when}${task.startTime ? ` ${task.startTime}` : ""}`], ["Customer", task.customer], ["Note", task.note], ["Sent by", message.sentBy]];
+      const rows: [string, string][] = [["Date", `${when}${task.slot === "Time" && task.startTime ? ` ${task.startTime}–${task.endTime}` : ""}`], ["Customer", task.customer], ["Note", task.note], ["Sent by", message.sentBy]];
       const html = `<p>${cancelled ? "ยกเลิกนัดนี้แล้ว / This has been cancelled." : "นัดจากหน้าภาพรวมงานทีม / From the Team overview."}</p>`
         + `<p><strong>${escapeHtml(task.title)}</strong></p><table>`
         + rows.filter(([, value]) => value).map(([label, value]) => `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>`).join("")

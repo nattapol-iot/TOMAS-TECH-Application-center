@@ -148,11 +148,12 @@ GO
 :r database/migrations/084_project_number_placeholder.sql
 :r database/migrations/085_team_tasks.sql
 :r database/migrations/086_team_task_people.sql
+:r database/migrations/087_team_task_time_range.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 86) <> 86
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 87) <> 87
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

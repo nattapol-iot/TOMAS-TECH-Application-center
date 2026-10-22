@@ -21,7 +21,8 @@ import { calendarActions, type CalendarState } from "../team-calendar.js";
 
 type Row = Record<string, unknown>;
 export const TEAM_TASK_KINDS = ["Appointment", "Task", "Away"] as const;
-export const TEAM_TASK_SLOTS = ["Day", "AM", "PM"] as const;
+/** A whole day, a morning, an afternoon, or the task's own time range (startTime–endTime). */
+export const TEAM_TASK_SLOTS = ["Day", "AM", "PM", "Time"] as const;
 export const TEAM_TASK_STATUSES = ["Planned", "Done", "Cancelled"] as const;
 const ENTITY = "Team Task";
 const DAY = 86_400_000;
@@ -40,7 +41,9 @@ export type TeamTaskInput = {
   startDate: string;
   endDate: string;
   slot: (typeof TEAM_TASK_SLOTS)[number];
+  /** Only for the Time slot: from startTime on the first day until endTime on the last. */
   startTime: string | null;
+  endTime: string | null;
   /** Null: work it out from the days (a whole day is 1 MD, a morning or an afternoon 0.5). */
   manDays: number | null;
   status: (typeof TEAM_TASK_STATUSES)[number];
@@ -74,9 +77,18 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
   if (people.length > MAX_PEOPLE) throw new ApiError(400, "validation_failed", `A team task can have at most ${MAX_PEOPLE} people.`);
   const assigneeIds = [...new Set(people.map((person: unknown) => optionalId(person, "Person")).filter((person): person is number => person !== null))];
   if (kind === "Away" && !assigneeIds.length) throw new ApiError(400, "validation_failed", "Choose who is away.");
-  const startTime = body.startTime === undefined || body.startTime === null || body.startTime === "" ? null : String(body.startTime);
-  if (startTime !== null && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startTime))
-    throw new ApiError(400, "validation_failed", "The time must be HH:MM.");
+  const slot = choice(body.slot, TEAM_TASK_SLOTS, "Day", "Time of day");
+  const time = (value: unknown, label: string) => {
+    if (value === undefined || value === null || value === "") return null;
+    if (typeof value !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new ApiError(400, "validation_failed", `${label} must be HH:MM.`);
+    return value;
+  };
+  // Times belong to the Time slot only; a whole day, a morning or an afternoon has fixed hours.
+  const startTime = slot === "Time" ? time(body.startTime, "The start time") : null;
+  const endTime = slot === "Time" ? time(body.endTime, "The end time") : null;
+  if (slot === "Time" && (!startTime || !endTime)) throw new ApiError(400, "validation_failed", "Enter the time from and until.");
+  if (slot === "Time" && endDate === startDate && endTime! <= startTime!)
+    throw new ApiError(400, "validation_failed", "The end time must be after the start time.");
   let manDays: number | null = null;
   if (body.manDays !== undefined && body.manDays !== null && body.manDays !== "") {
     const amount = body.manDays;
@@ -91,8 +103,9 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
     assigneeIds,
     startDate,
     endDate,
-    slot: choice(body.slot, TEAM_TASK_SLOTS, "Day", "Time of day"),
+    slot,
     startTime,
+    endTime,
     // A day away takes nobody's effort.
     manDays: kind === "Away" ? 0 : manDays,
     status: choice(body.status, TEAM_TASK_STATUSES, "Planned", "Status"),
@@ -102,10 +115,15 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
   };
 }
 
-/** The effort a task takes when nobody entered one: each working day in it, whole or half; a task on a day off counts its calendar days. */
-export function defaultManDays(task: Pick<TeamTaskInput, "kind" | "startDate" | "endDate" | "slot">, holidays: ReadonlySet<string>) {
+/**
+ * The effort a task takes when nobody entered one: each working day in it, whole or half (a task on a day off counts
+ * its calendar days). A one-day time range counts its hours against an 8-hour day, lunch (12:00–13:00) left out,
+ * to the nearest quarter day and at least one quarter.
+ */
+export function defaultManDays(task: Pick<TeamTaskInput, "kind" | "startDate" | "endDate" | "slot"> & Partial<Pick<TeamTaskInput, "startTime" | "endTime">>, holidays: ReadonlySet<string>) {
   if (task.kind === "Away") return 0;
-  const share = task.slot === "Day" ? 1 : 0.5;
+  if (task.slot === "Time" && task.startDate === task.endDate && task.startTime && task.endTime) return timeRangeManDays(task.startTime, task.endTime);
+  const share = task.slot === "AM" || task.slot === "PM" ? 0.5 : 1;
   let working = 0;
   const from = dayNumber(task.startDate), to = dayNumber(task.endDate);
   for (let d = from; d <= to; d++) {
@@ -113,6 +131,14 @@ export function defaultManDays(task: Pick<TeamTaskInput, "kind" | "startDate" | 
     if (weekday !== 0 && weekday !== 6 && !holidays.has(date.toISOString().slice(0, 10))) working++;
   }
   return (working || to - from + 1) * share;
+}
+
+const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+/** Man-days for a time range on one day: its minutes less any lunch hour, over 480, to the nearest quarter (at least 0.25). */
+export function timeRangeManDays(startTime: string, endTime: string) {
+  const from = minutesOf(startTime), until = minutesOf(endTime);
+  const lunch = Math.max(0, Math.min(until, 13 * 60) - Math.max(from, 12 * 60));
+  return Math.max(0.25, Math.round(((until - from - lunch) / 480) * 4) / 4);
 }
 
 /** Who may change or remove a team task: whoever added it, anyone it is for, and Admin / Engineering / Project Managers. */
@@ -135,7 +161,7 @@ export function redactWork(item: WorkloadItem): WorkloadItem {
 const TEAM_TASK_COLUMNS = `t.id,t.kind,t.title,t.customer_id,c.name customer_name,
         (SELECT STRING_AGG(CONVERT(nvarchar(20),a.user_id),N',') WITHIN GROUP (ORDER BY a.sort_order,a.user_id)
           FROM dbo.team_task_assignees a WHERE a.task_id=t.id) assignee_ids,t.start_date,t.end_date,t.time_slot,
-        CONVERT(char(5),t.start_time,108) start_time,t.man_days,t.status,t.inquiry_id,i.inquiry_no,t.project_id,p.project_no,t.note,
+        CONVERT(char(5),t.start_time,108) start_time,CONVERT(char(5),t.end_time,108) end_time,t.man_days,t.status,t.inquiry_id,i.inquiry_no,t.project_id,p.project_no,t.note,
         t.created_by,cu.name created_by_name,t.created_at,t.row_version
       FROM dbo.team_tasks t
       LEFT JOIN dbo.customers c ON c.id=t.customer_id
@@ -187,6 +213,7 @@ export function teamTaskDto(r: Row, can: { inquiries: boolean; projects: boolean
     endDate: dateOnly(r.end_date as Date | string),
     slot: String(r.time_slot ?? "Day"),
     startTime: r.start_time ? String(r.start_time).trim() : null,
+    endTime: r.end_time ? String(r.end_time).trim() : null,
     manDays: Number(r.man_days ?? 0),
     status: String(r.status),
     inquiryId: r.inquiry_id === null || r.inquiry_id === undefined ? null : Number(r.inquiry_id),
@@ -229,7 +256,7 @@ const bind = (q: sql.Request, task: TeamTaskInput & { manDays: number }, actor: 
   .input("kind", sql.NVarChar(20), task.kind).input("title", sql.NVarChar(300), task.title)
   .input("customer", sql.BigInt, task.customerId)
   .input("start", sql.Date, task.startDate).input("end", sql.Date, task.endDate)
-  .input("slot", sql.NVarChar(10), task.slot).input("time", sql.NVarChar(5), task.startTime)
+  .input("slot", sql.NVarChar(10), task.slot).input("time", sql.NVarChar(5), task.startTime).input("end_time", sql.NVarChar(5), task.endTime)
   .input("man_days", sql.Decimal(6, 2), task.manDays).input("status", sql.NVarChar(20), task.status)
   .input("inquiry", sql.BigInt, task.inquiryId).input("project", sql.BigInt, task.projectId)
   .input("note", sql.NVarChar(2000), task.note).input("actor", sql.BigInt, actor);
@@ -255,18 +282,20 @@ async function tellPeople(transaction: TransactionType, actor: CurrentUser, id: 
   if (!recipients.length || task.status !== "Planned") return;
   const when = task.endDate === task.startDate ? task.startDate : `${task.startDate} → ${task.endDate}`;
   await notifyUsers(transaction, recipients, "TEAM_TASK_ASSIGNED", task.title.slice(0, 300),
-    `${when}${task.startTime ? ` ${task.startTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.startDate}`);
+    `${when}${task.startTime ? ` ${task.startTime}–${task.endTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.startDate}`);
 }
 
 /** A task's state as the calendar sees it; the customer by id, so a rename elsewhere sends nothing. */
-const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; assigneeIds: number[]; status: string }): CalendarState => ({
+const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; endTime: string | null; assigneeIds: number[]; status: string }): CalendarState => ({
   kind: task.kind as CalendarState["kind"], title: task.title, customer: task.customerId === null ? "" : String(task.customerId), note: task.note,
-  startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, assigneeIds: task.assigneeIds, status: task.status,
+  startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, endTime: task.endTime, assigneeIds: task.assigneeIds, status: task.status,
 });
+/** A time(0) column as HH:MM; the driver returns it as a Date on 1970-01-01 UTC. */
+const clock = (value: unknown) => (value ? (value instanceof Date ? value.toISOString().slice(11, 16) : String(value).slice(0, 5)) : null);
 const rowState = (r: Row, assigneeIds: number[]) => calendarState({
   kind: String(r.kind), title: String(r.title), customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id), note: String(r.note ?? ""),
   startDate: dateOnly(r.start_date as Date)!, endDate: dateOnly(r.end_date as Date)!, slot: String(r.time_slot ?? "Day"),
-  startTime: r.start_time ? (r.start_time instanceof Date ? r.start_time.toISOString().slice(11, 16) : String(r.start_time).slice(0, 5)) : null,
+  startTime: clock(r.start_time), endTime: clock(r.end_time),
   assigneeIds, status: String(r.status),
 });
 
@@ -302,7 +331,7 @@ async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeam
     const result = await email.sendTeamTaskCalendar({
       method, recipients, sentBy,
       task: { id, kind: state.kind === "Appointment" ? "Appointment" : "Task", title: state.title, customer: customerName(state.customer), note: state.note,
-        startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime },
+        startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime, endTime: state.endTime },
     });
     results.push(result.status);
   }
@@ -367,9 +396,9 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       const task = await prepare(transaction, input);
       const insert = bind(new sql.Request(transaction), task, actor.id);
       const row = (await insert.query<Row>(`
-        INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,man_days,status,inquiry_id,project_id,note,created_by)
+        INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,end_time,man_days,status,inquiry_id,project_id,note,created_by)
         OUTPUT inserted.id,inserted.row_version
-        VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),@man_days,@status,@inquiry,@project,@note,@actor);`)).recordset[0]!;
+        VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),CONVERT(time(0),@end_time),@man_days,@status,@inquiry,@project,@note,@actor);`)).recordset[0]!;
       const id = Number(row.id);
       await savePeople(transaction, id, task.assigneeIds);
       await insertAudit(transaction, actor.id, ENTITY, id, "", "Created", null, task);
@@ -401,13 +430,13 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       const update = bind(new sql.Request(transaction), task, actor.id).input("id", sql.BigInt, id);
       const row = (await update.query<Row>(`
         UPDATE dbo.team_tasks SET kind=@kind,title=@title,customer_id=@customer,start_date=@start,end_date=@end,
-          time_slot=@slot,start_time=CONVERT(time(0),@time),man_days=@man_days,status=@status,inquiry_id=@inquiry,project_id=@project,note=@note,
+          time_slot=@slot,start_time=CONVERT(time(0),@time),end_time=CONVERT(time(0),@end_time),man_days=@man_days,status=@status,inquiry_id=@inquiry,project_id=@project,note=@note,
           updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0]!;
       await savePeople(transaction, id, task.assigneeIds);
       const before = {
         kind: current.kind, title: current.title, customerId: current.customer_id, assigneeIds: people,
-        startDate: dateOnly(current.start_date as Date), endDate: dateOnly(current.end_date as Date), slot: current.time_slot,
+        startDate: dateOnly(current.start_date as Date), endDate: dateOnly(current.end_date as Date), slot: current.time_slot, startTime: clock(current.start_time), endTime: clock(current.end_time),
         manDays: Number(current.man_days), status: current.status, inquiryId: current.inquiry_id, projectId: current.project_id, note: current.note,
       };
       await insertAudit(transaction, actor.id, ENTITY, id, "", "Updated", before, task);

@@ -9,7 +9,7 @@ const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
   ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers } =
+const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange } =
   await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
@@ -55,6 +55,11 @@ test("a new task's default effort and the list's due groups", () => {
   assert.equal(defaultTaskManDays("2026-10-22", "2026-10-22", "PM"), 0.5);
   assert.equal(defaultTaskManDays("2026-10-24", "2026-10-24", "Day"), 1);
   assert.equal(defaultTaskManDays("2026-10-24", "2026-10-22", "Day"), 0);
+  // A one-day time range, as the server works it out: 2.5 hours is a quarter day; 11:00-14:00 leaves lunch out.
+  assert.deepEqual([defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "09:00", "11:30"), defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "11:00", "14:00"),
+    defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "08:30", "17:30"), defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "11:00", "10:00")], [0.25, 0.25, 1, 0]);
+  assert.equal(timeRange({ slot: "Time", startTime: "09:00", endTime: "11:30" }), "09:00–11:30");
+  assert.equal(timeRange({ slot: "AM", startTime: null, endTime: null }), "");
   // Wednesday 21 October.
   assert.deepEqual(["2026-10-20", "2026-10-25", "2026-10-26", "2026-11-01", "2026-11-02", null].map((end) => dueGroup(end, "2026-10-21")),
     ["late", "thisWeek", "nextWeek", "nextWeek", "later", "none"]);
@@ -81,6 +86,11 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /onClick=\{\(\) => setAdding\(\{ assigneeId: userId, date: day\.date \}\)\}/);
   assert.match(board, /aria-label=\{fill\(t\("TeamBoard\.addFor"\), \{ name, date: longDate\(day\.date\) \}\)\}/);
   assert.match(board, /onClick=\{\(\) => \{ setPersonId\(person\.userId\); onMode\("list"\); \}\}/);
+  // A time range (2026-10-22): a fourth choice beside the whole day, the morning and the afternoon, with from and until.
+  assert.match(board, /\{ slot: "Time", label: "TeamBoard\.slotTime" \}/);
+  assert.match(board, /\{draft\.slot === "Time" \? \(\s*<div className="board-time-range">/);
+  assert.match(board, /startTime: draft\.kind !== "Away" && draft\.slot === "Time" \? draft\.startTime \|\| null : null,/);
+  assert.match(board, /if \(!draft\.startTime \|\| !draft\.endTime\) return "TeamBoard\.timeNeeded";/);
   // Several people on a task (2026-10-22): picked with the shared multi-person picker, each with their load that day.
   assert.match(board, /<SearchMultiPicker options=\{personOptions\} value=\{draft\.assigneeIds\} onChange=\{\(assigneeIds\) => set\(\{ \.\.\.draft, assigneeIds \}\)\}/);
   assert.match(board, /\{loads\.map\(\(\{ person, now, after, away \}\) => \(/);

@@ -9,20 +9,27 @@ import type { CurrentUserService } from "../src/users.js";
 import type { WorkloadItem } from "../src/resource-workload.js";
 import type { TeamTaskCalendarEmail } from "../src/email.js";
 import { WORKLOAD_SQL } from "../src/resource-workload.js";
-import { TEAM_BOARD_SQL, canChangeTeamTask, defaultManDays, parseTeamTask, redactWork, registerTeamBoardRoutes } from "../src/routes/team-board.js";
+import { TEAM_BOARD_SQL, canChangeTeamTask, defaultManDays, parseTeamTask, redactWork, registerTeamBoardRoutes, timeRangeManDays } from "../src/routes/team-board.js";
 
 const user = (id: number, roles: string[]): CurrentUser => ({ id, entraObjectId: "", email: "", name: `User ${id}`, role: roles[0]!, roles, department: "", isActive: true });
 
 test("a team task needs only a subject and a date; the rest has defaults", () => {
   assert.deepEqual(parseTeamTask({ title: "  Site survey  ", startDate: "2026-10-22" }), {
     kind: "Task", title: "Site survey", customerId: null, assigneeIds: [], startDate: "2026-10-22", endDate: "2026-10-22", slot: "Day",
-    startTime: null, manDays: null, status: "Planned", inquiryId: null, projectId: null, note: "",
+    startTime: null, endTime: null, manDays: null, status: "Planned", inquiryId: null, projectId: null, note: "",
   });
   // A day away takes no effort, whatever was sent.
   assert.equal(parseTeamTask({ kind: "Away", title: "Leave", startDate: "2026-10-22", assigneeIds: [7], manDays: 3 }).manDays, 0);
   // Several people, in the order chosen, each once; an older page's single assigneeId is a list of one.
   assert.deepEqual(parseTeamTask({ title: "Survey", startDate: "2026-10-22", assigneeIds: [9, "7", 9] }).assigneeIds, [9, 7]);
   assert.deepEqual(parseTeamTask({ title: "Survey", startDate: "2026-10-22", assigneeId: 9 }).assigneeIds, [9]);
+  // A time range goes with the Time slot; any other slot drops times it was sent.
+  const timed = parseTeamTask({ title: "Survey", startDate: "2026-10-22", slot: "Time", startTime: "09:00", endTime: "11:30" });
+  assert.deepEqual([timed.slot, timed.startTime, timed.endTime], ["Time", "09:00", "11:30"]);
+  const morning = parseTeamTask({ title: "Survey", startDate: "2026-10-22", slot: "AM", startTime: "09:00", endTime: "11:30" });
+  assert.deepEqual([morning.slot, morning.startTime, morning.endTime], ["AM", null, null]);
+  // Over two days the end time may be earlier than the start time.
+  assert.equal(parseTeamTask({ title: "Install", startDate: "2026-10-22", endDate: "2026-10-23", slot: "Time", startTime: "13:00", endTime: "10:00" }).endTime, "10:00");
   for (const [body, label] of [
     [{ title: "", startDate: "2026-10-22" }, "no subject"],
     [{ title: "x" }, "no date"],
@@ -33,7 +40,10 @@ test("a team task needs only a subject and a date; the rest has defaults", () =>
     [{ title: "x", startDate: "2026-10-22", assigneeIds: [0] }, "not a person"],
     [{ title: "x", startDate: "2026-10-22", assigneeIds: Array.from({ length: 21 }, (_, index) => index + 1) }, "more than twenty people"],
     [{ title: "x", kind: "Meeting", startDate: "2026-10-22" }, "unknown kind"],
-    [{ title: "x", startDate: "2026-10-22", startTime: "25:00" }, "bad time"],
+    [{ title: "x", startDate: "2026-10-22", slot: "Time", startTime: "25:00", endTime: "26:00" }, "bad time"],
+    [{ title: "x", startDate: "2026-10-22", slot: "Time", startTime: "09:00" }, "no end time"],
+    [{ title: "x", startDate: "2026-10-22", slot: "Time", startTime: "11:00", endTime: "11:00" }, "ends when it starts"],
+    [{ title: "x", startDate: "2026-10-22", slot: "Evening" }, "unknown slot"],
     [{ title: "x", startDate: "2026-10-22", manDays: -1 }, "negative effort"],
     [{ title: "x", startDate: "2026-10-22", manDays: 0.333 }, "three decimals"],
     [{ title: "x", startDate: "2026-10-22", status: "Started" }, "unknown status"],
@@ -48,6 +58,12 @@ test("a task's default effort is a day for each working day, half for a morning 
   // Booked on a Saturday: the day still counts.
   assert.equal(defaultManDays({ kind: "Appointment", startDate: "2026-10-24", endDate: "2026-10-24", slot: "Day" }, holidays), 1);
   assert.equal(defaultManDays({ kind: "Away", startDate: "2026-10-22", endDate: "2026-10-26", slot: "Day" }, holidays), 0);
+  // A time range on one day counts its hours against an 8-hour day, lunch left out, to the nearest quarter.
+  const range = (startTime: string, endTime: string) => defaultManDays({ kind: "Task", startDate: "2026-10-22", endDate: "2026-10-22", slot: "Time", startTime, endTime }, holidays);
+  assert.deepEqual([range("09:00", "11:30"), range("13:30", "17:30"), range("08:30", "17:30"), range("11:00", "14:00"), range("10:00", "10:15")], [0.25, 0.5, 1, 0.25, 0.25]);
+  assert.deepEqual([timeRangeManDays("09:00", "13:00"), timeRangeManDays("09:00", "15:00")], [0.5, 0.75]);
+  // Over several days it counts each working day whole.
+  assert.equal(defaultManDays({ kind: "Task", startDate: "2026-10-22", endDate: "2026-10-26", slot: "Time", startTime: "13:00", endTime: "10:00" }, holidays), 2);
 });
 
 test("work the reader cannot open keeps its dates and effort, and loses what it is", () => {
@@ -111,7 +127,7 @@ test("the board reads everyone's work for team.board, and names only what the re
   ];
   const task = {
     id: 21, kind: "Appointment", title: "Site survey", customer_id: 4, customer_name: "ACME", assignee_ids: "7,9", start_date: new Date("2026-10-22T00:00:00Z"),
-    end_date: new Date("2026-10-22T00:00:00Z"), time_slot: "AM", start_time: "09:30", man_days: 0.5, status: "Planned", inquiry_id: 3, inquiry_no: "INQ-3",
+    end_date: new Date("2026-10-22T00:00:00Z"), time_slot: "Time", start_time: "09:30", end_time: "11:00", man_days: 0.5, status: "Planned", inquiry_id: 3, inquiry_no: "INQ-3",
     project_id: null, project_no: null, note: "", created_by: 5, created_by_name: "Sales", created_at: "2026-10-21T07:00:00Z", row_version: Buffer.alloc(8, 1),
   };
   const visits = [
@@ -142,7 +158,7 @@ test("the board reads everyone's work for team.board, and names only what the re
     // The linked RFQ number needs inquiry.read; this reader has none.
     assert.equal(body.tasks[0].inquiryNo, "");
     assert.equal(body.tasks[0].inquiryId, 3);
-    assert.deepEqual([body.tasks[0].startDate, body.tasks[0].slot, body.tasks[0].startTime, body.tasks[0].rowVersion], ["2026-10-22", "AM", "09:30", Buffer.alloc(8, 1).toString("base64")]);
+    assert.deepEqual([body.tasks[0].startDate, body.tasks[0].slot, body.tasks[0].startTime, body.tasks[0].endTime, body.tasks[0].rowVersion], ["2026-10-22", "Time", "09:30", "11:00", Buffer.alloc(8, 1).toString("base64")]);
     // One visit with two engineers; without visit.read its number and customer stay out.
     assert.deepEqual(body.visits, [{ id: 8, number: "", status: "Confirmed", customer: "", start: "2026-10-21", end: "2026-10-21", time: "10:00", engineerIds: [7, 9] }]);
     assert.deepEqual(body.away, [{ id: 2, userId: 9, kind: "Leave", start: "2026-10-22", end: "2026-10-23" }]);

@@ -24,7 +24,7 @@ import {
   type TeamTaskStatus,
 } from "../resource-workload-client";
 import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
-import { boardDays, covers, dailyLoad, defaultTaskManDays, dueGroup, freestOn, loadBand, weekTotals, withExtra, type DayLoad } from "../../../lib/team-board";
+import { boardDays, covers, dailyLoad, defaultTaskManDays, dueGroup, freestOn, loadBand, timeRange, weekTotals, withExtra, type DayLoad } from "../../../lib/team-board";
 import "./team-board.css";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, a day grid coloured by load, a list of all
@@ -76,20 +76,23 @@ const peopleOf = (state: Record<string, unknown>) =>
 /** What a task form holds; empty strings for "not chosen". */
 type Draft = {
   kind: TeamTaskKind; title: string; customerId: string; assigneeIds: number[]; startDate: string; endDate: string; slot: TeamTaskSlot;
-  startTime: string; manDays: string; status: TeamTaskStatus; inquiryId: string; projectId: string; note: string;
+  startTime: string; endTime: string; manDays: string; status: TeamTaskStatus; inquiryId: string; projectId: string; note: string;
 };
 const draftOf = (task: TeamTask | null, preset: { assigneeId?: number | null; date?: string } = {}): Draft => task ? {
   kind: task.kind, title: task.title, customerId: task.customerId ? String(task.customerId) : "", assigneeIds: [...task.assigneeIds],
-  startDate: task.startDate, endDate: task.endDate, slot: task.slot, startTime: task.startTime ?? "", manDays: String(task.manDays), status: task.status,
+  startDate: task.startDate, endDate: task.endDate, slot: task.slot, startTime: task.startTime ?? "", endTime: task.endTime ?? "", manDays: String(task.manDays), status: task.status,
   inquiryId: task.inquiryId ? String(task.inquiryId) : "", projectId: task.projectId ? String(task.projectId) : "", note: task.note,
 } : {
   kind: "Appointment", title: "", customerId: "", assigneeIds: preset.assigneeId ? [preset.assigneeId] : [], startDate: preset.date ?? "",
-  endDate: preset.date ?? "", slot: "Day", startTime: "", manDays: "", status: "Planned", inquiryId: "", projectId: "", note: "",
+  endDate: preset.date ?? "", slot: "Day", startTime: "", endTime: "", manDays: "", status: "Planned", inquiryId: "", projectId: "", note: "",
 };
 const inputOf = (draft: Draft): TeamTaskInput => ({
   kind: draft.kind, title: draft.title.trim(), customerId: draft.customerId ? Number(draft.customerId) : null,
   assigneeIds: draft.assigneeIds, startDate: draft.startDate, endDate: draft.endDate || draft.startDate,
-  slot: draft.slot, startTime: draft.kind === "Appointment" && draft.startTime ? draft.startTime : null,
+  // Times go with the Time slot only, and never with a day away.
+  slot: draft.kind === "Away" ? "Day" : draft.slot,
+  startTime: draft.kind !== "Away" && draft.slot === "Time" ? draft.startTime || null : null,
+  endTime: draft.kind !== "Away" && draft.slot === "Time" ? draft.endTime || null : null,
   manDays: draft.kind === "Away" ? 0 : draft.manDays.trim() === "" ? null : Number(draft.manDays), status: draft.status,
   inquiryId: draft.inquiryId ? Number(draft.inquiryId) : null, projectId: draft.projectId ? Number(draft.projectId) : null, note: draft.note.trim(),
 });
@@ -306,8 +309,9 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
         const what = event.kind === "prj" ? event.item.title : event.item.customer || event.item.title;
         return event.late ? `${t("TeamBoard.late")} · ${what}` : `${prefix} · ${what}`;
       }
-      case "appointment": return `${t("TeamBoard.chipAppointment")}${event.task.startTime ? ` ${event.task.startTime}` : ""} · ${event.task.title}`;
-      case "task": case "away": return event.task.title;
+      case "appointment": return `${t("TeamBoard.chipAppointment")}${timeRange(event.task) ? ` ${timeRange(event.task)}` : ""} · ${event.task.title}`;
+      case "task": return timeRange(event.task) ? `${timeRange(event.task)} ${event.task.title}` : event.task.title;
+      case "away": return event.task.title;
       case "visit": return `${t("TeamBoard.chipVisit")}${event.visit.time ? ` ${event.visit.time}` : ""}${event.visit.customer ? ` · ${event.visit.customer}` : ""}`;
       case "leave": return t(event.away.kind);
     }
@@ -535,7 +539,7 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
   }, [focusSubject]);
   const personOptions = useMemo<PickerOption[]>(() => bootstrap.team.map((user) => ({ id: user.id, label: user.name, detail: user.department, searchText: `${user.nickname} ${user.email}` })), [bootstrap.team]);
   const customers = useMemo(() => customerOptions(bootstrap.customers), [bootstrap.customers]);
-  const auto = defaultTaskManDays(draft.startDate, draft.endDate || draft.startDate, draft.slot, holidays);
+  const auto = defaultTaskManDays(draft.startDate, draft.endDate || draft.startDate, draft.slot, holidays, draft.startTime, draft.endTime);
   const manDays = draft.manDays.trim() === "" ? auto : Number(draft.manDays) || 0;
   const span = draft.startDate ? workingDays(draft.startDate, draft.endDate || draft.startDate, holidays).length || 1 : 1;
   // Each person chosen, with their load on the first day before and after this task (each spends its man-days).
@@ -560,7 +564,9 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
   const kinds: { kind: TeamTaskKind; label: string }[] = [
     { kind: "Appointment", label: "TeamBoard.kindAppointment" }, { kind: "Task", label: "TeamBoard.kindTask" }, { kind: "Away", label: "TeamBoard.kindAway" },
   ];
-  const slots: { slot: TeamTaskSlot; label: string }[] = [{ slot: "Day", label: "TeamBoard.slotDay" }, { slot: "AM", label: "TeamBoard.slotAm" }, { slot: "PM", label: "TeamBoard.slotPm" }];
+  const slots: { slot: TeamTaskSlot; label: string }[] = [
+    { slot: "Day", label: "TeamBoard.slotDay" }, { slot: "AM", label: "TeamBoard.slotAm" }, { slot: "PM", label: "TeamBoard.slotPm" }, { slot: "Time", label: "TeamBoard.slotTime" },
+  ];
   return (
     <div className="board-form">
       <div className="chip-select" role="group" aria-label={t("TeamBoard.kind")}>
@@ -586,7 +592,7 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
             placeholder={t("Schedule.searchPeople")} removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
         )}
       </div>
-      <div className="board-form-row three">
+      <div className="board-form-row">
         <label className="field">
           <span>{t("TeamBoard.startDate")} <b className="board-req">*</b></span>
           <input type="date" required disabled={disabled} value={draft.startDate}
@@ -596,12 +602,6 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           <span>{t("TeamBoard.endDate")}</span>
           <input type="date" disabled={disabled} min={draft.startDate || undefined} value={draft.endDate} onChange={(event) => set({ ...draft, endDate: event.target.value })} />
         </label>
-        {draft.kind === "Appointment" ? (
-          <label className="field">
-            <span>{t("TeamBoard.time")}</span>
-            <input type="time" disabled={disabled} value={draft.startTime} onChange={(event) => set({ ...draft, startTime: event.target.value })} />
-          </label>
-        ) : <span />}
       </div>
       {draft.kind !== "Away" ? (
         <div className="field">
@@ -611,6 +611,18 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
               <button key={slot} type="button" disabled={disabled} className={draft.slot === slot ? "chip on" : "chip"} aria-pressed={draft.slot === slot} onClick={() => set({ ...draft, slot })}>{t(label)}</button>
             ))}
           </div>
+          {draft.slot === "Time" ? (
+            <div className="board-time-range">
+              <label className="field">
+                <span>{t("TeamBoard.timeFrom")} <b className="board-req">*</b></span>
+                <input type="time" required disabled={disabled} value={draft.startTime} onChange={(event) => set({ ...draft, startTime: event.target.value })} />
+              </label>
+              <label className="field">
+                <span>{t("TeamBoard.timeUntil")} <b className="board-req">*</b></span>
+                <input type="time" required disabled={disabled} value={draft.endTime} onChange={(event) => set({ ...draft, endTime: event.target.value })} />
+              </label>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {draft.kind !== "Away" && loads.length ? <p className="muted small board-outlook"><Icon name="calendar" />{t("TeamBoard.outlookHint")}</p> : null}
@@ -662,9 +674,14 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
   );
 }
 
-const draftProblem = (draft: Draft) =>
-  !draft.title.trim() || !draft.startDate ? "" : draft.endDate && draft.endDate < draft.startDate ? "TeamBoard.endBeforeStart"
-    : draft.kind === "Away" && !draft.assigneeIds.length ? "TeamBoard.awayNeedsPerson" : "";
+const draftProblem = (draft: Draft) => {
+  if (!draft.title.trim() || !draft.startDate) return "";
+  if (draft.endDate && draft.endDate < draft.startDate) return "TeamBoard.endBeforeStart";
+  if (draft.kind === "Away") return draft.assigneeIds.length ? "" : "TeamBoard.awayNeedsPerson";
+  if (draft.slot !== "Time") return "";
+  if (!draft.startTime || !draft.endTime) return "TeamBoard.timeNeeded";
+  return (draft.endDate || draft.startDate) === draft.startDate && draft.endTime <= draft.startTime ? "TeamBoard.timeOrder" : "";
+};
 const draftReady = (draft: Draft) => Boolean(draft.title.trim() && draft.startDate) && !draftProblem(draft);
 
 function AddTaskModal({ preset, onClose, onSave, ...context }: FormContext & {
@@ -872,7 +889,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
               <td><input type="date" aria-label={t("TeamBoard.startDate")} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value, endDate: draft.endDate < event.target.value ? event.target.value : draft.endDate })} /></td>
               <td><input type="date" aria-label={t("TeamBoard.endDate")} min={draft.startDate} value={draft.endDate} onChange={(event) => setDraft({ ...draft, endDate: event.target.value })} /></td>
               <td><input type="number" className="num" aria-label={t("TeamBoard.manDays")} min="0" max="999" step="0.5" disabled={draft.kind === "Away"} value={draft.manDays}
-                placeholder={fmt(defaultTaskManDays(draft.startDate, draft.endDate || draft.startDate, draft.slot))} onChange={(event) => setDraft({ ...draft, manDays: event.target.value })} /></td>
+                placeholder={fmt(defaultTaskManDays(draft.startDate, draft.endDate || draft.startDate, draft.slot === "Time" ? "Day" : draft.slot))} onChange={(event) => setDraft({ ...draft, manDays: event.target.value })} /></td>
               <td><span className="muted small">{t("TeamBoard.statusPlanned")}</span></td>
               <td><button type="button" className="btn primary sm" disabled={busy || !draftReady(draft)} onClick={() => void add()}>{t("TeamBoard.addButton")}</button></td>
             </tr>
@@ -902,9 +919,10 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                     </td>
                     <td>
                       {row.task && canChange(row.task) ? (
-                        <input type="date" className="board-inline" aria-label={t("TeamBoard.startDate")} value={row.task.startDate}
+                        <><input type="date" className="board-inline" aria-label={t("TeamBoard.startDate")} value={row.task.startDate}
                           onChange={(event) => { const startDate = event.target.value; if (startDate) void change(row.task!, { startDate, endDate: row.task!.endDate < startDate ? startDate : row.task!.endDate }); }} />
-                      ) : shortDate(row.start)}
+                        {timeRange(row.task) ? <small className="board-time">{timeRange(row.task)}</small> : null}</>
+                      ) : <>{shortDate(row.start)}{row.task && timeRange(row.task) ? <small className="board-time">{timeRange(row.task)}</small> : null}</>}
                     </td>
                     <td>{row.late && row.end ? <span className="red-text">{shortDate(row.end)} · {fill(t("TeamBoard.lateDays"), { n: lateDays(row.end) })}</span> : shortDate(row.end)}</td>
                     <td className="num">

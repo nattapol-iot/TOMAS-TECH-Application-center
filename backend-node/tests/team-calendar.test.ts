@@ -9,20 +9,20 @@ const unfold = (ics: string) => ics.replace(/\r\n /g, "");
 
 const task: CalendarTask = {
   id: 31, kind: "Appointment", title: "Site survey, Line 2", customer: "ACME; Rayong", note: "Bring the PLC laptop", startDate: "2026-10-22", endDate: "2026-10-22",
-  slot: "AM", startTime: null,
+  slot: "AM", startTime: null, endTime: null,
 };
 
-test("an entry is all day for a whole day or several days, otherwise a block of the Bangkok working day in UTC", () => {
+test("an entry is all day for a whole day or several days, a block of the Bangkok working day, or the task's own time range, in UTC", () => {
   assert.deepEqual(eventTimes({ ...task, slot: "Day" }), { allDay: true, start: "20261022", end: "20261023" });
-  assert.deepEqual(eventTimes({ ...task, endDate: "2026-10-24", startTime: "09:00" }), { allDay: true, start: "20261022", end: "20261025" });
+  assert.deepEqual(eventTimes({ ...task, endDate: "2026-10-24" }), { allDay: true, start: "20261022", end: "20261025" });
   // 08:30-12:00 and 13:00-17:30 Bangkok are 01:30-05:00 and 06:00-10:30 UTC.
   assert.deepEqual(eventTimes(task), { allDay: false, start: "20261022T013000Z", end: "20261022T050000Z" });
   assert.deepEqual(eventTimes({ ...task, slot: "PM" }), { allDay: false, start: "20261022T060000Z", end: "20261022T103000Z" });
-  assert.deepEqual(eventTimes({ ...task, slot: "PM", startTime: "13:30" }), { allDay: false, start: "20261022T063000Z", end: "20261022T103000Z" });
-  assert.deepEqual(eventTimes({ ...task, slot: "Day", startTime: "10:00" }), { allDay: false, start: "20261022T030000Z", end: "20261022T103000Z" });
-  // A time at or after the slot's end still gets an hour; one just after midnight Bangkok is the previous UTC day.
-  assert.deepEqual(eventTimes({ ...task, startTime: "12:30" }), { allDay: false, start: "20261022T053000Z", end: "20261022T063000Z" });
-  assert.deepEqual(eventTimes({ ...task, slot: "Day", startTime: "00:30" }).start, "20261021T173000Z");
+  // A time range is kept as given: 09:00-11:30 Bangkok is 02:00-04:30 UTC; across days it runs from the first day to the last.
+  assert.deepEqual(eventTimes({ ...task, slot: "Time", startTime: "09:00", endTime: "11:30" }), { allDay: false, start: "20261022T020000Z", end: "20261022T043000Z" });
+  assert.deepEqual(eventTimes({ ...task, slot: "Time", startTime: "13:00", endTime: "10:00", endDate: "2026-10-23" }), { allDay: false, start: "20261022T060000Z", end: "20261023T030000Z" });
+  // Just after midnight Bangkok is the previous UTC day.
+  assert.deepEqual(eventTimes({ ...task, slot: "Time", startTime: "00:30", endTime: "01:00" }).start, "20261021T173000Z");
 });
 
 test("a request and its cancellation are the same event, escaped and folded as RFC 5545 asks", () => {
@@ -51,7 +51,7 @@ test("a request and its cancellation are the same event, escaped and folded as R
 });
 
 test("only a change to what the entry says, or to who is on it, is sent", () => {
-  const state: CalendarState = { kind: "Appointment", title: "Survey", customer: "4", note: "", startDate: "2026-10-22", endDate: "2026-10-22", slot: "AM", startTime: null, assigneeIds: [9], status: "Planned" };
+  const state: CalendarState = { kind: "Appointment", title: "Survey", customer: "4", note: "", startDate: "2026-10-22", endDate: "2026-10-22", slot: "AM", startTime: null, endTime: null, assigneeIds: [9], status: "Planned" };
   const none = { cancel: [], request: [] };
   assert.deepEqual(calendarActions(null, state), { cancel: [], request: [9] });
   assert.deepEqual(calendarActions(null, { ...state, assigneeIds: [] }), none);

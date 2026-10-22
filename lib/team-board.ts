@@ -78,12 +78,27 @@ export function freestOn<T extends { userId: number; load: DayLoad[]; away: (dat
 export const withExtra = (day: DayLoad | undefined, extra: number) =>
   !day ? null : day.available > 0 ? ((day.manDays + extra) / day.available) * 100 : day.manDays + extra > 0 ? Infinity : null;
 
-/** Effort a new task takes by default: each working day, whole or half; a day off counts as a day. */
-export function defaultTaskManDays(start: string, end: string, slot: "Day" | "AM" | "PM", holidays: readonly string[] = []) {
+const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+/**
+ * Effort a new task takes by default: each working day, whole or half (a day off counts as a day). A one-day time
+ * range counts its hours against an 8-hour day, lunch (12:00–13:00) left out, to the nearest quarter and at least
+ * one quarter; backend-node/src/routes/team-board.ts works it out the same way.
+ */
+export function defaultTaskManDays(start: string, end: string, slot: "Day" | "AM" | "PM" | "Time", holidays: readonly string[] = [], startTime = "", endTime = "") {
   if (!start || !end || end < start) return 0;
+  if (slot === "Time" && start === end && startTime && endTime) {
+    const from = minutesOf(startTime), until = minutesOf(endTime);
+    if (until <= from) return 0;
+    const lunch = Math.max(0, Math.min(until, 13 * 60) - Math.max(from, 12 * 60));
+    return Math.max(0.25, Math.round(((until - from - lunch) / 480) * 4) / 4);
+  }
   const days = workingDays(start, end, holidays).length || dayNumber(end) - dayNumber(start) + 1;
-  return days * (slot === "Day" ? 1 : 0.5);
+  return days * (slot === "AM" || slot === "PM" ? 0.5 : 1);
 }
+
+/** A task's time as the board shows it: its own range, or nothing for a whole day, a morning or an afternoon. */
+export const timeRange = (task: { slot: string; startTime: string | null; endTime: string | null }) =>
+  task.slot === "Time" && task.startTime ? `${task.startTime}–${task.endTime ?? ""}` : "";
 
 /** How the list groups work by its due date: past it, this week, next week, later, no date. */
 export function dueGroup(end: string | null, today: string): "late" | "thisWeek" | "nextWeek" | "later" | "none" {

@@ -31,7 +31,8 @@ export const saveWorkOrder = (userId: number, keys: string[]) =>
   apiRequest<WorkOrder>(`/api/v1/resource-planning/work-order/${userId}`, { method: "PUT", body: JSON.stringify({ keys }) });
 
 export type TeamTaskKind = "Appointment" | "Task" | "Away";
-export type TeamTaskSlot = "Day" | "AM" | "PM";
+/** A whole day, a morning (08:30–12:00), an afternoon (13:00–17:30), or its own time range. */
+export type TeamTaskSlot = "Day" | "AM" | "PM" | "Time";
 export type TeamTaskStatus = "Planned" | "Done" | "Cancelled";
 /** Work added on the team board (dbo.team_tasks, backend-node/src/routes/team-board.ts). */
 export type TeamTask = {
@@ -45,7 +46,9 @@ export type TeamTask = {
   startDate: string;
   endDate: string;
   slot: TeamTaskSlot;
+  /** Only for the Time slot: from startTime on the first day until endTime on the last. */
   startTime: string | null;
+  endTime: string | null;
   manDays: number;
   status: TeamTaskStatus;
   inquiryId: number | null;
@@ -97,5 +100,5 @@ export const loadTeamTaskHistory = (id: number) => apiRequest<TeamTaskChange[]>(
 /** A saved task back into the shape a save sends. */
 export const teamTaskInput = (task: TeamTask): TeamTaskInput => ({
   kind: task.kind, title: task.title, customerId: task.customerId, assigneeIds: [...task.assigneeIds], startDate: task.startDate, endDate: task.endDate,
-  slot: task.slot, startTime: task.startTime, manDays: task.manDays, status: task.status, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note,
+  slot: task.slot, startTime: task.startTime, endTime: task.endTime, manDays: task.manDays, status: task.status, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note,
 });

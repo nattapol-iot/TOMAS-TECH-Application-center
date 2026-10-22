@@ -125,6 +125,8 @@ button.board-chip:hover { filter: brightness(.97); text-decoration: underline; }
 .board-outlook .icon { flex: none; }
 .board-form .callout { margin: 0; flex-direction: column; }
 .team-board .callout.info, .board-form .callout.info, .board-drawer .callout.info { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
+.board-time-range { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); gap: 10px; margin-top: 8px; }
+.board-time { display: block; color: var(--muted); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 .board-loads { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; }
 .board-loads li { white-space: nowrap; }
 .board-loads li.over strong, .board-loads li.over { color: var(--red-text); }

@@ -12,13 +12,15 @@ export type CalendarTask = {
   note: string;
   startDate: string;
   endDate: string;
-  slot: "Day" | "AM" | "PM";
+  /** Time: the task's own range, from startTime on its first day until endTime on its last. */
+  slot: "Day" | "AM" | "PM" | "Time";
   startTime: string | null;
+  endTime: string | null;
 };
 
 /**
- * The working day a morning or an afternoon stands for when no time was given (Bangkok time). A day's task without a
- * time is an all-day entry, and so is anything spanning several days.
+ * The hours a morning and an afternoon stand for (Bangkok time). A whole day is an all-day entry, and so is a morning
+ * or an afternoon spread over several days; a Time task keeps its own times.
  */
 export const WORKING_HOURS = { start: "08:30", noon: "12:00", afternoon: "13:00", end: "17:30" } as const;
 /** Bangkok has no daylight saving: local times convert to UTC with one fixed offset. */
@@ -41,14 +43,14 @@ function utcStamp(date: string, minutes: number) {
 const stampOf = (moment: Date) => moment.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
 /** When the entry starts and ends: an all-day span, or a block of the working day. */
-export function eventTimes(task: Pick<CalendarTask, "startDate" | "endDate" | "slot" | "startTime">) {
-  if (task.endDate > task.startDate || (task.slot === "Day" && !task.startTime))
+export function eventTimes(task: Pick<CalendarTask, "startDate" | "endDate" | "slot" | "startTime" | "endTime">) {
+  if (task.slot === "Time" && task.startTime && task.endTime)
+    return { allDay: false as const, start: utcStamp(task.startDate, minutesOf(task.startTime)), end: utcStamp(task.endDate, minutesOf(task.endTime)) };
+  if (task.endDate > task.startDate || task.slot === "Day" || task.slot === "Time")
     return { allDay: true as const, start: compactDate(task.startDate), end: compactDate(nextDay(task.endDate)) };
-  const from = minutesOf(task.startTime ?? (task.slot === "PM" ? WORKING_HOURS.afternoon : WORKING_HOURS.start));
-  let until = minutesOf(task.slot === "AM" ? WORKING_HOURS.noon : WORKING_HOURS.end);
-  // A time at or after the slot's end still gets an hour.
-  if (until <= from) until = from + 60;
-  return { allDay: false as const, start: utcStamp(task.startDate, from), end: utcStamp(task.startDate, until) };
+  return task.slot === "AM"
+    ? { allDay: false as const, start: utcStamp(task.startDate, minutesOf(WORKING_HOURS.start)), end: utcStamp(task.startDate, minutesOf(WORKING_HOURS.noon)) }
+    : { allDay: false as const, start: utcStamp(task.startDate, minutesOf(WORKING_HOURS.afternoon)), end: utcStamp(task.startDate, minutesOf(WORKING_HOURS.end)) };
 }
 
 /** iCalendar TEXT: backslash, semicolon, comma and line breaks escaped. */
@@ -138,7 +140,7 @@ export const invitedPeople = (task: { kind: string; assigneeIds: readonly number
   task.kind !== "Away" && task.status !== "Cancelled" ? [...task.assigneeIds] : [];
 
 /** The fields that change what the calendar entry says; a status change to Done alone sends nothing. */
-const CALENDAR_FIELDS = ["kind", "title", "customer", "note", "startDate", "endDate", "slot", "startTime"] as const;
+const CALENDAR_FIELDS = ["kind", "title", "customer", "note", "startDate", "endDate", "slot", "startTime", "endTime"] as const;
 
 /** A task as the calendar compares it; a day away is a state too, never sent. */
 export type CalendarState = Omit<Pick<CalendarTask, (typeof CALENDAR_FIELDS)[number]>, "kind"> & { kind: CalendarTask["kind"] | "Away"; assigneeIds: number[]; status: string };
