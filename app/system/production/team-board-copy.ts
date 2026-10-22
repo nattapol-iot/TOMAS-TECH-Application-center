@@ -11,6 +11,7 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
   ["TeamBoard.window", "Weeks shown", "ช่วงที่แสดง", "表示期間"],
   ["TeamBoard.allTeams", "All teams", "ทุกทีม", "全チーム"],
   ["TeamBoard.team", "Team", "ทีม", "チーム"],
+  ["TeamBoard.teamsChosen", "{n} teams", "{n} ทีม", "{n}チーム"],
   ["TeamBoard.searchPeople", "Search a person or team…", "ค้นหาคนหรือทีม…", "人またはチームを検索…"],
   ["TeamBoard.searchWork", "Search work, customer or person…", "ค้นหางาน ลูกค้า หรือคน…", "作業・顧客・担当者を検索…"],
   ["TeamBoard.chips", "Filter the board", "กรองงาน", "絞り込み"],

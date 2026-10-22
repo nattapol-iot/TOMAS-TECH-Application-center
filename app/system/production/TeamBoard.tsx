@@ -44,7 +44,16 @@ type ListRow = {
 };
 type Person = { user: BootstrapData["team"][number]; load: DayLoad[]; capacity: number; week: ReturnType<typeof weekTotals>; late: number; awayDays: number; away: (date: string) => boolean; userId: number };
 
-const ALL = "";
+/** The teams a person last filtered the board by; a convenience, so blocked storage only forgets them. */
+const teamsKey = (userId: number) => `tomas-tech-team-board-teams:${userId}`;
+function readTeams(userId: number): string[] {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(teamsKey(userId)) ?? "[]");
+    return Array.isArray(stored) ? stored.filter((team): team is string => typeof team === "string") : [];
+  } catch {
+    return [];
+  }
+}
 const LIST_PAGE = 100;
 const CATEGORIES: { key: Category; label: string; colour: string }[] = [
   { key: "rfq", label: "TeamBoard.typeRfq", colour: "var(--blue)" },
@@ -120,7 +129,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const [weeks, setWeeks] = useState<2 | 4>(2);
   const [data, setData] = useState<TeamBoardData | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
-  const [department, setDepartment] = useState(ALL), [search, setSearch] = useState("");
+  const [chosenTeams, setChosenTeams] = useState<string[]>(() => (typeof window === "undefined" ? [] : readTeams(bootstrap.user.id)));
+  const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null), [attention, setAttention] = useState<Attention | null>(null);
   const [personId, setPersonId] = useState<number | null>(null), [listShown, setListShown] = useState(LIST_PAGE);
   const [adding, setAdding] = useState<{ assigneeId: number | null; date: string } | null>(null);
@@ -213,15 +223,27 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   }, [data, today]);
 
   const departments = useMemo(() => [...new Set(bootstrap.team.map((user) => user.department).filter(Boolean))].sort(), [bootstrap.team]);
+  const teamCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const user of bootstrap.team) if (user.department) counts.set(user.department, (counts.get(user.department) ?? 0) + 1);
+    return counts;
+  }, [bootstrap.team]);
+  // Several teams at once; none chosen is everyone. A remembered team that no longer exists is left out.
+  const teams = chosenTeams.filter((team) => departments.includes(team));
+  const pickTeams = (next: string[]) => {
+    setChosenTeams(next);
+    setListShown(LIST_PAGE);
+    try { window.localStorage.setItem(teamsKey(me), JSON.stringify(next)); } catch { /* remembered teams are a convenience */ }
+  };
   const query = search.trim().toLocaleLowerCase();
-  const inDepartment = (userId: number) => department === ALL || bootstrap.team.find((user) => user.id === userId)?.department === department;
+  const inDepartment = (userId: number) => !teams.length || teams.includes(bootstrap.team.find((user) => user.id === userId)?.department ?? "");
   const rowText = (row: ListRow) => [
     row.item?.reference, row.item?.title, row.item?.customer, row.task?.title, row.task?.customer, row.visit?.number, row.visit?.customer,
     ...row.ownerIds.map((id) => nameOf.get(id) ?? ""),
   ].join(" ").toLocaleLowerCase();
   // The department, search and person filters; the chips count within them.
   const scopedRows = allRows.filter((row) =>
-    (department === ALL || row.ownerIds.some(inDepartment) || (!row.ownerIds.length && row.task !== undefined))
+    (!teams.length || row.ownerIds.some(inDepartment) || (!row.ownerIds.length && row.task !== undefined))
     && (personId === null || row.ownerIds.includes(personId))
     && (!query || rowText(row).includes(query)));
   const overPeople = people.filter((person) => (person.week.utilisation ?? 0) > 100 && inDepartment(person.userId));
@@ -366,14 +388,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     <div className="team-board">
       <div className="board-toolbar">
         <SearchInput value={search} onChange={(value) => { setSearch(value); setListShown(LIST_PAGE); }} placeholder={mode === "board" ? "TeamBoard.searchPeople" : "TeamBoard.searchWork"} />
-        <label className="select-field">
-          <span className="sr-only">{t("TeamBoard.team")}</span>
-          <select value={department} aria-label={t("TeamBoard.team")} onChange={(event) => { setDepartment(event.target.value); setListShown(LIST_PAGE); }}>
-            <option value={ALL}>{t("TeamBoard.allTeams")}</option>
-            {departments.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
-          <Icon name="chevronDown" />
-        </label>
+        <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
         {mode === "board" ? (
           <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
             <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}><Icon name="chevronLeft" /></button>
@@ -497,6 +512,42 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
         />
       ) : null}
     </div>
+  );
+}
+
+/** Pick one or more teams; none ticked is everyone. Closes when the reader clicks elsewhere or presses Escape. */
+function TeamFilter({ departments, counts, value, onChange }: { departments: string[]; counts: Map<string, number>; value: string[]; onChange: (teams: string[]) => void }) {
+  const { t } = useLanguage();
+  const box = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: MouseEvent) => { if (box.current && !box.current.contains(event.target as Node)) box.current.open = false; };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape" && box.current) box.current.open = false; };
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("mousedown", outside); document.removeEventListener("keydown", escape); };
+  }, [open]);
+  const label = !value.length ? t("TeamBoard.allTeams") : value.length === 1 ? value[0]! : fill(t("TeamBoard.teamsChosen"), { n: value.length });
+  const toggle = (team: string, on: boolean) => onChange(on ? departments.filter((name) => name === team || value.includes(name)) : value.filter((name) => name !== team));
+  return (
+    <details ref={box} className="board-team-filter" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="btn default" aria-label={`${t("TeamBoard.team")}: ${label}`}>
+        <Icon name="users" /><span className="board-team-label">{label}</span><Icon name="chevronDown" />
+      </summary>
+      <div className="board-team-menu" role="group" aria-label={t("TeamBoard.team")}>
+        <label className="board-team-option all">
+          <input type="checkbox" checked={!value.length} onChange={() => onChange([])} />
+          <span>{t("TeamBoard.allTeams")}</span>
+        </label>
+        {departments.map((name) => (
+          <label key={name} className="board-team-option">
+            <input type="checkbox" checked={value.includes(name)} onChange={(event) => toggle(name, event.target.checked)} />
+            <span>{name}</span><small>{counts.get(name) ?? 0}</small>
+          </label>
+        ))}
+      </div>
+    </details>
   );
 }
 

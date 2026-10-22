@@ -2,7 +2,7 @@
 
 [Module](../modules/site-monitor.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a2113e08`; generated, do not edit. [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `73282065`; generated, do not edit. [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

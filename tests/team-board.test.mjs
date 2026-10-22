@@ -86,6 +86,12 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /onClick=\{\(\) => setAdding\(\{ assigneeId: userId, date: day\.date \}\)\}/);
   assert.match(board, /aria-label=\{fill\(t\("TeamBoard\.addFor"\), \{ name, date: longDate\(day\.date\) \}\)\}/);
   assert.match(board, /onClick=\{\(\) => \{ setPersonId\(person\.userId\); onMode\("list"\); \}\}/);
+  // More than one team at once (2026-10-22); none ticked is everyone, and the choice is remembered per person.
+  assert.match(board, /<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>/);
+  assert.match(board, /const inDepartment = \(userId: number\) => !teams\.length \|\| teams\.includes\(/);
+  assert.match(board, /const teams = chosenTeams\.filter\(\(team\) => departments\.includes\(team\)\);/);
+  assert.match(board, /try \{ window\.localStorage\.setItem\(teamsKey\(me\), JSON\.stringify\(next\)\); \} catch/);
+  assert.doesNotMatch(board, /setDepartment\(/);
   // A time range (2026-10-22): a fourth choice beside the whole day, the morning and the afternoon, with from and until.
   assert.match(board, /\{ slot: "Time", label: "TeamBoard\.slotTime" \}/);
   assert.match(board, /\{draft\.slot === "Time" \? \(\s*<div className="board-time-range">/);
