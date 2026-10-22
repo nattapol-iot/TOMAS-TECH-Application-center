@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GANTT_ZOOMS, ganttFitWindow, ganttPoint, ganttSlip, ganttSpan, ganttWindow, shiftGanttAnchor } from "../lib/gantt.ts";
+import { GANTT_ZOOMS, ganttFitWindow, ganttLanes, ganttPoint, ganttSlip, ganttSpan, ganttWindow, shiftGanttAnchor } from "../lib/gantt.ts";
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message ?? ""} ${actual} ≠ ${expected}`);
 
@@ -78,4 +78,18 @@ test("shifting moves most of one window and month windows ignore the day of the 
   assert.equal(shiftGanttAnchor("year", "2026-10-31", -1), "2025-12-01");
   // A shifted anchor always yields a valid window.
   for (const zoom of GANTT_ZOOMS) assert.ok(ganttWindow(zoom, shiftGanttAnchor(zoom, "2026-01-31", 1)).columns.length > 0, zoom);
+});
+
+test("overlapping spans stack in lanes; the first free lane is reused, and past the cap they share the one that frees first", () => {
+  const spans = [
+    { start: "2026-10-05", finish: "2026-10-09" },
+    { start: "2026-10-07", finish: "2026-10-08" },
+    { start: "2026-10-12", finish: "2026-10-12" },
+    { start: "2026-10-09", finish: "2026-10-20" },
+  ];
+  // Given out of order: lanes follow start dates, and a span that starts on another's last day still overlaps it.
+  assert.deepEqual(ganttLanes(spans), { lanes: [0, 1, 0, 1], count: 2 });
+  assert.deepEqual(ganttLanes([]), { lanes: [], count: 1 });
+  const crowded = ["2026-10-01", "2026-10-02", "2026-10-03"].map((start, index) => ({ start, finish: `2026-10-1${index}` }));
+  assert.deepEqual(ganttLanes(crowded, 2), { lanes: [0, 1, 0], count: 2 });
 });

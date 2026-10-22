@@ -102,6 +102,14 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /work: listRows\.filter\(\(row\) => row\.ownerIds\.includes\(person\.userId\)\)\.map\(ganttWork\)/);
   const gantt = await read("app/system/production/TeamBoardGantt.tsx");
   assert.match(gantt, /<GanttChart rows=\{rows\} range=\{range\} today=\{today\} sideHeader="TeamBoard\.person" label="TeamBoard\.ganttLabel" \/>/);
+  // A person's own row draws all their work on one line (2026-10-22), not one long bar from the first to the last.
+  assert.match(gantt, /start: null, finish: null, tone: "slate",\s+segments: person\.work\.map\(\(work\) => \(\{ key: work\.key, start: work\.start, finish: work\.end \?\? work\.start, tone: work\.tone/);
+  // Full screen fills the window; the chart scrolls inside it.
+  const boardCss = await read("app/system/production/team-board.css");
+  assert.match(boardCss, /\.board-gantt\.is-fullscreen \.gantt \{ flex: 1; min-height: 0; max-height: none; \}/);
+  const chart = await read("app/system/production/GanttChart.tsx");
+  assert.match(chart, /const bar = row\.milestone \|\| segments \? null : ganttSpan\(row\.start, row\.finish, range\);/);
+  assert.match(chart, /top: segments\.count > 1 \? 8 \+ lane \* 10 : 15/);
   // More than one team at once (2026-10-22); none ticked is everyone, and the choice is remembered per person.
   assert.match(board, /<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>/);
   assert.match(board, /const inDepartment = \(userId: number\) => !teams\.length \|\| teams\.includes\(/);

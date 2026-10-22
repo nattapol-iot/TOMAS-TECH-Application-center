@@ -74,7 +74,6 @@ const rowTime = (row: ListRow) => (row.task ? timeRange(row.task) : row.visit?.t
 const rowStatus = (row: ListRow, t: (key: string) => string) =>
   row.item ? `${t(row.item.status)}${row.item.progress ? ` ${Math.round(row.item.progress)}%` : ""}` : row.visit ? t(row.visit.status) : row.task ? t("TeamBoard.statusPlanned") : "";
 const rowTone = (row: ListRow): Tone => row.late ? "red" : row.category === "rfq" ? "blue" : row.category === "est" ? "green" : row.category === "prj" ? "violet" : row.category === "appointment" ? "amber" : "slate";
-const bandTone = (band: ReturnType<typeof loadBand>): Tone => (band === "over" ? "red" : band === "full" ? "amber" : band === "ok" ? "green" : "slate");
 /** Day grid or Gantt, remembered per person like the teams. */
 const viewKey = (userId: number) => `tomas-tech-team-board-view:${userId}`;
 function readView(userId: number): "grid" | "gantt" {
@@ -409,10 +408,10 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     ...(row.task ? { onOpen: () => setEditing(row.task!) } : row.item && !row.item.hidden ? { onOpen: () => openItem(row.item!) } : {}),
   });
   const ganttPeople: GanttPerson[] = [
-    ...(showUnassigned ? [{ key: "none", name: t("TeamBoard.unassignedRow"), meta: t("TeamBoard.unassigned"), tone: "amber" as Tone,
+    ...(showUnassigned ? [{ key: "none", name: t("TeamBoard.unassignedRow"), meta: t("TeamBoard.unassigned"),
       work: listRows.filter((row) => row.task && !row.ownerIds.length).map(ganttWork) }] : []),
     ...(showPeople ? gridPeople.map((person) => ({
-      key: String(person.userId), name: person.user.name, tone: bandTone(loadBand(person.week.utilisation)),
+      key: String(person.userId), name: person.user.name,
       meta: `${person.user.department} · ${fmt(person.week.manDays)} / ${fmt(person.week.available)} MD`,
       work: listRows.filter((row) => row.ownerIds.includes(person.userId)).map(ganttWork),
     })) : []),

@@ -106,3 +106,23 @@ export function ganttSlip(planFinish: string | null | undefined, forecastFinish:
   if (!planFinish || !forecastFinish || forecastFinish <= planFinish) return null;
   return ganttSpan(dateFromDay(dayNumber(planFinish) + 1), forecastFinish, window);
 }
+
+/**
+ * Stacks spans that overlap into lanes, so several pieces of work can share one row: each span takes the first
+ * lane that is free on its start day, by start date. Past `max` lanes a span shares the lane that frees up first.
+ * Returns each span's lane, in the order given, and how many lanes there are.
+ */
+export function ganttLanes(spans: readonly { start: string; finish: string }[], max = 4): { lanes: number[]; count: number } {
+  const lanes = spans.map(() => 0);
+  const laneEnds: string[] = [];
+  const order = spans.map((_, index) => index).sort((a, b) => spans[a]!.start.localeCompare(spans[b]!.start) || spans[a]!.finish.localeCompare(spans[b]!.finish));
+  for (const index of order) {
+    const { start, finish } = spans[index]!;
+    let lane = laneEnds.findIndex((end) => end < start);
+    if (lane < 0 && laneEnds.length < max) lane = laneEnds.length;
+    if (lane < 0) lane = laneEnds.reduce((first, end, at) => (end < laneEnds[first]! ? at : first), 0);
+    laneEnds[lane] = laneEnds[lane] && laneEnds[lane]! > finish ? laneEnds[lane]! : finish;
+    lanes[index] = lane;
+  }
+  return { lanes, count: Math.max(1, laneEnds.length) };
+}

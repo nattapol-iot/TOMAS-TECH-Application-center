@@ -8,8 +8,25 @@
 .board-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .board-gantt-note { font-size: var(--fs-xs); }
 .board-gantt-empty { margin: 16px 0; }
-.board-gantt:fullscreen { width: 100%; height: 100%; overflow: auto; }
-.board-gantt.is-overlay { position: fixed; inset: 0; z-index: 90; overflow: auto; }
+/* Full screen (the browser's, or the page's own overlay): the block fills the window and the chart scrolls inside it
+   instead of stopping at 70vh, as the workload and portfolio Gantts do. */
+.board-gantt:fullscreen { width: 100%; height: 100%; overflow: hidden; }
+.board-gantt.is-overlay { position: fixed; inset: 0; z-index: 90; overflow: hidden; }
+.board-gantt.is-fullscreen .gantt { flex: 1; min-height: 0; max-height: none; }
+/* Team work has no progress to fill in, so its bars are solid in their colour, as on the person's row, rather than
+   the project plan's empty boxes. */
+.board-gantt .gantt-row.task .gantt-bar { border: 0; background: var(--blue); }
+.board-gantt .gantt-row.task .gantt-bar.green { background: var(--green); }
+.board-gantt .gantt-row.task .gantt-bar.amber { background: var(--amber); }
+.board-gantt .gantt-row.task .gantt-bar.red { background: var(--red); }
+.board-gantt .gantt-row.task .gantt-bar.violet { background: var(--violet); }
+.board-gantt .gantt-row.task .gantt-bar.slate { background: var(--n-400); }
+.board-gantt-key { display: inline-block; width: 14px; height: 8px; border-radius: var(--r-pill); background: var(--n-400); }
+.board-gantt-key.blue { background: var(--blue); }
+.board-gantt-key.green { background: var(--green); }
+.board-gantt-key.violet { background: var(--violet); }
+.board-gantt-key.amber { background: var(--amber); }
+.board-gantt-key.red { background: var(--red); }
 .board-gantt .board-type { height: 16px; margin-right: 4px; padding: 0 5px; font-size: var(--fs-3xs); vertical-align: middle; }
 .board-team-filter { position: relative; }
 .board-team-filter > summary { list-style: none; cursor: pointer; }

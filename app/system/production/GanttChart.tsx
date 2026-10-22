@@ -6,7 +6,7 @@
    names; each chart remembers its width in this browser, and a double-click on the grip resets it. */
 
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { GANTT_ZOOMS, ganttPoint, ganttSlip, ganttSpan, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
+import { GANTT_ZOOMS, ganttLanes, ganttPoint, ganttSlip, ganttSpan, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
 import { currentLocale, useT } from "../i18n";
 import { Icon, type Tone } from "../ui";
 import "./gantt.css";
@@ -38,7 +38,20 @@ export type GanttRowSpec = {
   title: string;
   /** Shown in the track instead of a bar, e.g. while a project's tasks are loading. Plain text. */
   placeholder?: string;
+  /** Several bars on one row in place of start–finish, e.g. everything one person has on; overlapping ones stack in lanes. */
+  segments?: GanttSegment[];
 };
+export type GanttSegment = { key: string; start: string | null; finish: string | null; tone: Tone; title: string; onOpen?: () => void };
+
+/** A row's segments that fall in the window, each with its lane. */
+function placeSegments(segments: GanttSegment[], range: GanttWindow) {
+  const shown = segments.flatMap((segment) => {
+    const span = ganttSpan(segment.start, segment.finish ?? segment.start, range);
+    return span && segment.start ? [{ segment, span, start: segment.start, finish: segment.finish ?? segment.start }] : [];
+  });
+  const { lanes, count } = ganttLanes(shown);
+  return { shown: shown.map((entry, index) => ({ ...entry, lane: lanes[index]! })), count };
+}
 
 /**
  * One colour rule for a scheduled row, the same as the project health rules: done is green; blocked
@@ -175,7 +188,8 @@ export function GanttChart({ rows, range, today, sideHeader, label }: {
       </div>
     </div>
     {rows.map((row) => {
-      const bar = row.milestone ? null : ganttSpan(row.start, row.finish, range);
+      const segments = row.segments ? placeSegments(row.segments, range) : null;
+      const bar = row.milestone || segments ? null : ganttSpan(row.start, row.finish, range);
       const diamond = row.milestone ? ganttPoint(row.finish ?? row.start, range) : null;
       const slip = ganttSlip(row.finish, row.forecastFinish, range);
       const baseline = ganttSpan(row.baselineStart ?? null, row.baselineFinish ?? null, range);
@@ -192,7 +206,7 @@ export function GanttChart({ rows, range, today, sideHeader, label }: {
             : <span className="gantt-label" title={row.title}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</span>}
           {row.status ? <span className="gantt-status">{row.status}</span> : null}
         </div>
-        <div className="gantt-track">
+        <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: 14 + segments.count * 10 } : undefined}>
           {range.columns.map((column) => {
             const span = ganttSpan(column.start, column.end, range);
             return span ? <span key={column.start} className="gantt-gridline" style={{ left: `${span.left}%` }} aria-hidden="true" /> : null;
@@ -203,11 +217,15 @@ export function GanttChart({ rows, range, today, sideHeader, label }: {
             {progress !== null ? <i style={{ width: `${progress}%` }} /> : null}
             {progress !== null && bar.width > 6 ? <span>{progress}%</span> : null}
           </button> : null}
+          {segments?.shown.map(({ segment, span, lane }) => <button key={segment.key} type="button"
+            className={`gantt-bar gantt-segment ${segment.tone}${span.clippedStart ? " clip-start" : ""}${span.clippedEnd ? " clip-end" : ""}`}
+            style={{ left: `${span.left}%`, width: `${span.width}%`, top: segments.count > 1 ? 8 + lane * 10 : 15 }}
+            title={segment.title} aria-label={segment.title} onClick={segment.onOpen} disabled={!segment.onOpen} tabIndex={-1} />)}
           {slip ? <span className="gantt-slip" style={{ left: `${slip.left}%`, width: `${slip.width}%` }} title={`${t("Gantt.legendSlip")} → ${row.forecastFinish}`} aria-hidden="true" /> : null}
           {diamond !== null ? <button type="button" className={`gantt-diamond ${row.tone}${done ? " done" : ""}`} style={{ left: `${diamond}%` }} title={row.title} aria-label={row.title} onClick={row.onOpen} disabled={!row.onOpen} tabIndex={-1} /> : null}
           {target !== null ? <span className="gantt-target" style={{ left: `${target}%` }} title={`${t("Gantt.legendTarget")} ${row.target}`} aria-hidden="true" /> : null}
           {todayAt !== null ? <span className="gantt-today" style={{ left: `${todayAt}%` }} aria-hidden="true" /> : null}
-          {!bar && diamond === null ? <span className="gantt-undated">{row.placeholder ?? (row.start || row.finish ? t("Gantt.outside") : t("Gantt.undated"))}</span> : null}
+          {!bar && diamond === null && !segments?.shown.length ? <span className="gantt-undated">{row.placeholder ?? (row.start || row.finish ? t("Gantt.outside") : t("Gantt.undated"))}</span> : null}
         </div>
       </div>;
     })}

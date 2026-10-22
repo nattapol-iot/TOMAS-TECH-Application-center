@@ -1,7 +1,9 @@
 "use client";
 /* The team board as a Gantt (owner request 2026-10-22): one row per person, expanded into their work in the same
    filters as the grid and the list (RFQs, estimates, project work, appointments and site visits, added tasks, days
-   away). Bars are planned dates; clicking one opens the task or the work, as a chip on the grid does. */
+   away). A person's own row draws every piece of their work on one line, stacked where they overlap, so a collapsed
+   chart still shows who is busy when. Bars are planned dates; clicking one opens the task or the work, as a chip on
+   the grid does. */
 
 import { useMemo, useState, type ReactNode } from "react";
 import { ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
@@ -21,10 +23,13 @@ export type GanttWork = {
   tone: Tone;
   onOpen?: () => void;
 };
-export type GanttPerson = { key: string; name: string; meta: string; tone: Tone; work: GanttWork[] };
+export type GanttPerson = { key: string; name: string; meta: string; work: GanttWork[] };
 
-const earliest = (values: Array<string | null>) => values.filter((value): value is string => value !== null).sort()[0] ?? null;
-const latest = (values: Array<string | null>) => values.filter((value): value is string => value !== null).sort().at(-1) ?? null;
+/** The bar colours, as the board's rowTone sets them. */
+const LEGEND: Array<[Tone, string[]]> = [
+  ["blue", ["TeamBoard.listRfq"]], ["green", ["TeamBoard.listEst"]], ["violet", ["TeamBoard.chipPrj"]],
+  ["amber", ["TeamBoard.listAppointment"]], ["slate", ["TeamBoard.kindTask", "TeamBoard.typeAway"]], ["red", ["TeamBoard.late"]],
+];
 
 export function TeamBoardGantt({ people, today }: { people: GanttPerson[]; today: string }) {
   const t = useT();
@@ -46,9 +51,9 @@ export function TeamBoardGantt({ people, today }: { people: GanttPerson[]; today
     const open = !collapsed.has(person.key);
     rows.push({
       key: `person:${person.key}`, depth: 0, kind: "project", label: person.name, meta: person.meta,
-      expandable: true, expanded: open, onToggle: () => toggle(person.key),
-      start: earliest(person.work.map((work) => work.start)), finish: latest(person.work.map((work) => work.end ?? work.start)),
-      tone: person.tone, title: `${person.name} · ${person.meta}`,
+      expandable: true, expanded: open, onToggle: () => toggle(person.key), start: null, finish: null, tone: "slate",
+      segments: person.work.map((work) => ({ key: work.key, start: work.start, finish: work.end ?? work.start, tone: work.tone, title: work.title, ...(work.onOpen ? { onOpen: work.onOpen } : {}) })),
+      title: `${person.name} · ${person.meta}`,
     });
     if (open) for (const work of person.work)
       rows.push({
@@ -67,6 +72,9 @@ export function TeamBoardGantt({ people, today }: { people: GanttPerson[]; today
           <Icon name={active ? "minimize" : "maximize"} />{t(active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}
         </button>
       </div>
+      <ul className="gantt-legend board-gantt-legend" aria-label={t("Gantt.legend")}>
+        {LEGEND.map(([tone, keys]) => <li key={tone}><i className={`board-gantt-key ${tone}`} aria-hidden="true" />{keys.map((key) => t(key)).join(" · ")}</li>)}
+      </ul>
       <span className="muted board-gantt-note">{t("TeamBoard.ganttNote")}</span>
     </div>
     {rows.length

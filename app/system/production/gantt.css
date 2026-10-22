@@ -92,6 +92,16 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-bar.violet i { background: var(--violet); }
 .gantt-bar.slate { border-color: var(--n-300); background: var(--n-100); }
 .gantt-bar.slate i { background: var(--n-400); }
+/* A row of segments (GanttRowSpec.segments): a thin solid bar per piece of work, stacked when they overlap. */
+.gantt-bar.gantt-segment { height: 8px; min-width: 3px; border: 0; border-radius: var(--r-pill); }
+.gantt-bar.gantt-segment.clip-start { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.gantt-bar.gantt-segment.clip-end { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.gantt-bar.gantt-segment.blue { background: var(--blue); }
+.gantt-bar.gantt-segment.green { background: var(--green); }
+.gantt-bar.gantt-segment.amber { background: var(--amber); }
+.gantt-bar.gantt-segment.red { background: var(--red); }
+.gantt-bar.gantt-segment.violet { background: var(--violet); }
+.gantt-bar.gantt-segment.slate { background: var(--n-400); }
 .gantt-slip { position: absolute; top: 12px; height: 12px; border: 1px dashed var(--amber); border-left: 0; border-radius: 0 var(--r-xs) var(--r-xs) 0; background: var(--amber-soft); pointer-events: none; z-index: 1; }
 .gantt-diamond {
   position: absolute;

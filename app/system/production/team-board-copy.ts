@@ -15,7 +15,7 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
   ["TeamBoard.viewGrid", "Day grid", "ตารางรายวัน", "日別表"],
   ["TeamBoard.viewGantt", "Gantt chart", "Gantt Chart", "ガントチャート"],
   ["TeamBoard.ganttLabel", "The team's work as a Gantt chart", "งานของทีมแบบ Gantt Chart", "チームの作業（ガントチャート）"],
-  ["TeamBoard.ganttNote", "One row per person, then their work, with the filters above. Click a bar to open it.", "แถวละคน ตามด้วยงานของคนนั้น ใช้ตัวกรองด้านบนร่วมกัน กดแท่งเพื่อเปิดงาน", "1行に1人、その下に作業。上の絞り込みが効きます。バーをクリックすると開きます。"],
+  ["TeamBoard.ganttNote", "A person's row shows all their work on one line; expand it for a row per piece of work. Uses the filters above; click a bar to open it.", "แถวของแต่ละคนรวมงานทั้งหมดไว้บรรทัดเดียว กดลูกศรเพื่อแยกเป็นงานละแถว ใช้ตัวกรองด้านบนร่วมกัน กดแท่งเพื่อเปิดงาน", "各人の行に全作業を1行で表示し、展開すると作業ごとの行になります。上の絞り込みが効きます。バーをクリックすると開きます。"],
   ["TeamBoard.copyTable", "Copy table", "คัดลอกตาราง", "表をコピー"],
   ["TeamBoard.copyTableHint", "Copies what is shown, to paste into Excel, Outlook or a chat.", "คัดลอกสิ่งที่แสดงอยู่ ไปวางใน Excel, Outlook หรือแชท", "表示中の内容をコピーし、Excel・Outlook・チャットに貼り付けられます。"],
   ["TeamBoard.copied", "Copied {n} rows. Paste them into Excel, Outlook or a chat.", "คัดลอก {n} แถวแล้ว วางใน Excel, Outlook หรือแชทได้เลย", "{n}行をコピーしました。Excel・Outlook・チャットに貼り付けられます。"],
