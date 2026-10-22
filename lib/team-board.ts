@@ -96,6 +96,22 @@ export function defaultTaskManDays(start: string, end: string, slot: "Day" | "AM
   return days * (slot === "AM" || slot === "PM" ? 0.5 : 1);
 }
 
+/**
+ * One cell of a copied table: tabs and line breaks become spaces, and text a spreadsheet would run as a formula
+ * (starting with =, + or @) is kept as text.
+ */
+const cellText = (value: unknown) => {
+  const text = String(value ?? "").replace(/[\t\r\n]+/g, " ").trim();
+  return /^[=+@]/.test(text) ? `'${text}` : text;
+};
+const escapeHtml = (value: string) => value.replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]!);
+/** Rows as tab-separated text: Excel pastes it into columns, a chat shows it as lines. The first row is the heading. */
+export const tableTsv = (rows: unknown[][]) => rows.map((row) => row.map(cellText).join("\t")).join("\r\n");
+/** The same rows as an HTML table, for Outlook, Teams or Word, which paste it as a table. */
+export const tableHtml = (rows: unknown[][]) =>
+  `<table border="1" cellspacing="0" cellpadding="4">${rows.map((row, index) =>
+    `<tr>${row.map((cell) => (index ? `<td>${escapeHtml(cellText(cell))}</td>` : `<th>${escapeHtml(cellText(cell))}</th>`)).join("")}</tr>`).join("")}</table>`;
+
 /** A task's time as the board shows it: its own range, or nothing for a whole day, a morning or an afternoon. */
 export const timeRange = (task: { slot: string; startTime: string | null; endTime: string | null }) =>
   task.slot === "Time" && task.startTime ? `${task.startTime}–${task.endTime ?? ""}` : "";

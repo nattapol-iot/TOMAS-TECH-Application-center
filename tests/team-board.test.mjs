@@ -9,7 +9,7 @@ const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
   ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange } =
+const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml } =
   await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
@@ -68,6 +68,12 @@ test("a new task's default effort and the list's due groups", () => {
   assert.equal(covers(null, null, "2026-10-20"), false);
 });
 
+test("a copied table pastes as columns into Excel and as a table into Outlook, never as a formula", () => {
+  const rows = [["Kind", "Work"], ["Task", "Survey\tLine 2\nnote"], ["Task", "=HYPERLINK(\"x\")"], ["Task", "<b>&"]];
+  assert.equal(tableTsv(rows), "Kind\tWork\r\nTask\tSurvey Line 2 note\r\nTask\t'=HYPERLINK(\"x\")\r\nTask\t<b>&");
+  assert.equal(tableHtml(rows.slice(0, 1).concat([rows[3]])), '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Kind</th><th>Work</th></tr><tr><td>Task</td><td>&lt;b&gt;&amp;</td></tr></table>');
+});
+
 test("Team overview replaces Resource Plan in the menu and opens on the board for everyone with team.board", async () => {
   const [shell, screen, board, client] = await Promise.all([
     read("app/system/ProductionApp.tsx"), read("app/system/production/ResourcePlanningScreen.tsx"),
@@ -86,6 +92,16 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /onClick=\{\(\) => setAdding\(\{ assigneeId: userId, date: day\.date \}\)\}/);
   assert.match(board, /aria-label=\{fill\(t\("TeamBoard\.addFor"\), \{ name, date: longDate\(day\.date\) \}\)\}/);
   assert.match(board, /onClick=\{\(\) => \{ setPersonId\(person\.userId\); onMode\("list"\); \}\}/);
+  // Copy (2026-10-22): a task starts a new one from all its fields; the table copies what is on screen.
+  assert.match(board, /const copyTask = \(task: TeamTask\) => \{ setEditing\(null\); setAdding\(\{ assigneeId: null, date: task\.startDate, copy: task \}\); \};/);
+  assert.match(board, /useState<Draft>\(\(\) => \(copyFrom \? \{ \.\.\.draftOf\(copyFrom\), status: "Planned" \} : draftOf\(null, preset\)\)\)/);
+  assert.match(board, /navigator\.clipboard\.write\(\[new ClipboardItem\(\{ "text\/plain": new Blob\(\[text\]/);
+  assert.match(board, /else await navigator\.clipboard\.writeText\(text\);/);
+  // A Gantt view of the same people and filtered work, remembered per person.
+  assert.match(board, /<TeamBoardGantt people=\{ganttPeople\} today=\{today\} \/>/);
+  assert.match(board, /work: listRows\.filter\(\(row\) => row\.ownerIds\.includes\(person\.userId\)\)\.map\(ganttWork\)/);
+  const gantt = await read("app/system/production/TeamBoardGantt.tsx");
+  assert.match(gantt, /<GanttChart rows=\{rows\} range=\{range\} today=\{today\} sideHeader="TeamBoard\.person" label="TeamBoard\.ganttLabel" \/>/);
   // More than one team at once (2026-10-22); none ticked is everyone, and the choice is remembered per person.
   assert.match(board, /<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>/);
   assert.match(board, /const inDepartment = \(userId: number\) => !teams\.length \|\| teams\.includes\(/);

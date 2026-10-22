@@ -2,7 +2,7 @@
 
 [Module](../modules/downloads.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `73282065`; generated, do not edit. [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `8981119d`; generated, do not edit. [backend-node/src/routes/source-repositories.ts](<../../../backend-node/src/routes/source-repositories.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

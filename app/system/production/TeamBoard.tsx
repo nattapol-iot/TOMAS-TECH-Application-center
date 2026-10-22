@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiClientError, listInquiries, listProjects, type BootstrapData } from "../api-client";
-import { Drawer, EmptyState, Icon, Modal, SearchInput } from "../ui";
+import { Drawer, EmptyState, Icon, Modal, SearchInput, type Tone } from "../ui";
 import { localeFor, useLanguage } from "../i18n";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
 import { SearchMultiPicker, type PickerOption } from "./SearchMultiPicker";
+import { TeamBoardGantt, type GanttPerson, type GanttWork } from "./TeamBoardGantt";
 import {
   createTeamTask,
   deleteTeamTask,
@@ -24,7 +25,7 @@ import {
   type TeamTaskStatus,
 } from "../resource-workload-client";
 import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
-import { boardDays, covers, dailyLoad, defaultTaskManDays, dueGroup, freestOn, loadBand, timeRange, weekTotals, withExtra, type DayLoad } from "../../../lib/team-board";
+import { boardDays, covers, dailyLoad, defaultTaskManDays, dueGroup, freestOn, loadBand, tableHtml, tableTsv, timeRange, weekTotals, withExtra, type DayLoad } from "../../../lib/team-board";
 import "./team-board.css";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, a day grid coloured by load, a list of all
@@ -63,6 +64,23 @@ const CATEGORIES: { key: Category; label: string; colour: string }[] = [
   { key: "task", label: "TeamBoard.typeTask", colour: "var(--n-500)" },
   { key: "away", label: "TeamBoard.typeAway", colour: "var(--n-300)" },
 ];
+/** How a list row names its kind, what it is, its customer, time and status: shared by the list, the Gantt and a copy. */
+const rowTypeLabel = (row: ListRow) => (row.visit ? "TeamBoard.chipVisit" : LIST_TYPES[row.category]);
+const rowTitle = (row: ListRow, t: (key: string) => string) => row.item
+  ? (row.item.hidden ? t("TeamBoard.hiddenWork") : [row.item.reference, row.item.title].filter(Boolean).join(" · "))
+  : row.task ? row.task.title : row.visit ? row.visit.number || t("TeamBoard.chipVisit") : t(row.away!.kind);
+const rowCustomer = (row: ListRow) => row.item?.customer || row.task?.customer || row.visit?.customer || "";
+const rowTime = (row: ListRow) => (row.task ? timeRange(row.task) : row.visit?.time ?? "");
+const rowStatus = (row: ListRow, t: (key: string) => string) =>
+  row.item ? `${t(row.item.status)}${row.item.progress ? ` ${Math.round(row.item.progress)}%` : ""}` : row.visit ? t(row.visit.status) : row.task ? t("TeamBoard.statusPlanned") : "";
+const rowTone = (row: ListRow): Tone => row.late ? "red" : row.category === "rfq" ? "blue" : row.category === "est" ? "green" : row.category === "prj" ? "violet" : row.category === "appointment" ? "amber" : "slate";
+const bandTone = (band: ReturnType<typeof loadBand>): Tone => (band === "over" ? "red" : band === "full" ? "amber" : band === "ok" ? "green" : "slate");
+/** Day grid or Gantt, remembered per person like the teams. */
+const viewKey = (userId: number) => `tomas-tech-team-board-view:${userId}`;
+function readView(userId: number): "grid" | "gantt" {
+  try { return typeof window !== "undefined" && window.localStorage.getItem(viewKey(userId)) === "gantt" ? "gantt" : "grid"; } catch { return "grid"; }
+}
+
 const LIST_TYPES: Record<Category, string> = {
   rfq: "TeamBoard.listRfq", est: "TeamBoard.listEst", prj: "TeamBoard.chipPrj", appointment: "TeamBoard.listAppointment", task: "TeamBoard.kindTask", away: "TeamBoard.typeAway",
 };
@@ -133,7 +151,13 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null), [attention, setAttention] = useState<Attention | null>(null);
   const [personId, setPersonId] = useState<number | null>(null), [listShown, setListShown] = useState(LIST_PAGE);
-  const [adding, setAdding] = useState<{ assigneeId: number | null; date: string } | null>(null);
+  // A new task: blank for a person and day, or a copy of one to change and save as new.
+  const [adding, setAdding] = useState<{ assigneeId: number | null; date: string; copy?: TeamTask } | null>(null);
+  const [boardView, setBoardView] = useState<"grid" | "gantt">(() => readView(bootstrap.user.id));
+  const pickView = (next: "grid" | "gantt") => {
+    setBoardView(next);
+    try { window.localStorage.setItem(viewKey(bootstrap.user.id), next); } catch { /* the view is a convenience */ }
+  };
   const [editing, setEditing] = useState<TeamTask | null>(null);
   // The window the grid shows, read with four months after it so the list sees what is coming.
   const range = useMemo(() => ({ from: start, to: dateFromDay(dayNumber(start) + Math.max(weeks * 7, 120) - 1) }), [start, weeks]);
@@ -375,6 +399,53 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     );
   };
 
+  // The Gantt: the same people and the same filtered work as the grid and the list.
+  const ganttWork = (row: ListRow): GanttWork => ({
+    key: row.key,
+    label: <><span className={`board-type ${row.visit ? "visit" : row.category}`}>{t(rowTypeLabel(row))}</span> {rowTitle(row, t)}</>,
+    meta: [rowCustomer(row), rowTime(row)].filter(Boolean).join(" · "),
+    title: `${rowTitle(row, t)} · ${row.start ?? "—"} → ${row.end ?? row.start ?? "—"}`,
+    start: row.start, end: row.end ?? row.start, tone: rowTone(row),
+    ...(row.task ? { onOpen: () => setEditing(row.task!) } : row.item && !row.item.hidden ? { onOpen: () => openItem(row.item!) } : {}),
+  });
+  const ganttPeople: GanttPerson[] = [
+    ...(showUnassigned ? [{ key: "none", name: t("TeamBoard.unassignedRow"), meta: t("TeamBoard.unassigned"), tone: "amber" as Tone,
+      work: listRows.filter((row) => row.task && !row.ownerIds.length).map(ganttWork) }] : []),
+    ...(showPeople ? gridPeople.map((person) => ({
+      key: String(person.userId), name: person.user.name, tone: bandTone(loadBand(person.week.utilisation)),
+      meta: `${person.user.department} · ${fmt(person.week.manDays)} / ${fmt(person.week.available)} MD`,
+      work: listRows.filter((row) => row.ownerIds.includes(person.userId)).map(ganttWork),
+    })) : []),
+  ];
+
+  /** Copies what is on screen: the day grid as a grid, otherwise the filtered work as a list. Excel and chats take the text; Outlook and Teams the table. */
+  const copyTable = async () => {
+    if (!data) return;
+    const rows: unknown[][] = mode === "board" && boardView === "grid"
+      ? [[t("TeamBoard.person"), t("TeamBoard.team"), ...days.map((day) => longDate(day.date))],
+        ...gridPeople.map((person) => [person.user.name, person.user.department, ...days.map((day, index) => {
+          const load = person.load[index];
+          const shown = (events.get(`${person.userId}|${day.date}`) ?? []).filter((event) => !category || categoryOf(event) === category);
+          return [day.holiday ? t("TeamBoard.holiday") : load && load.manDays ? pct(load.utilisation) : "", ...shown.map(eventLabel)].filter(Boolean).join(" · ");
+        })])]
+      : [[t("TeamBoard.kind"), t("TeamBoard.colWork"), t("TeamBoard.colCustomer"), t("TeamBoard.assignee"), t("TeamBoard.colStart"), t("TeamBoard.colDue"),
+        t("TeamBoard.colTime"), t("TeamBoard.colEffort"), t("TeamBoard.status")],
+        ...listRows.map((row) => [t(rowTypeLabel(row)), rowTitle(row, t), rowCustomer(row),
+          row.ownerIds.map((id) => nameOf.get(id) ?? `#${id}`).join(", ") || t("TeamBoard.unassigned"),
+          row.start ?? "", row.end ?? "", rowTime(row), row.manDays ?? "", rowStatus(row, t)])];
+    try {
+      const text = tableTsv(rows);
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write)
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([text], { type: "text/plain" }), "text/html": new Blob([tableHtml(rows)], { type: "text/html" }) })]);
+      else await navigator.clipboard.writeText(text);
+      notify(fill(t("TeamBoard.copied"), { n: rows.length - 1 }));
+    } catch {
+      notify(t("TeamBoard.copyFailed"));
+    }
+  };
+  /** A task to save again as a new one: everything filled in, to change the date or the people. */
+  const copyTask = (task: TeamTask) => { setEditing(null); setAdding({ assigneeId: null, date: task.startDate, copy: task }); };
+
   const groups = new Map<string, Person[]>();
   for (const person of gridPeople) groups.set(person.user.department || "—", [...(groups.get(person.user.department || "—") ?? []), person]);
   const personName = personId === null ? "" : nameOf.get(personId) ?? "";
@@ -390,6 +461,12 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
         <SearchInput value={search} onChange={(value) => { setSearch(value); setListShown(LIST_PAGE); }} placeholder={mode === "board" ? "TeamBoard.searchPeople" : "TeamBoard.searchWork"} />
         <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
         {mode === "board" ? (
+          <div className="chip-select" role="group" aria-label={t("TeamBoard.view")}>
+            <button type="button" className={boardView === "grid" ? "chip on" : "chip"} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}><Icon name="table" />{t("TeamBoard.viewGrid")}</button>
+            <button type="button" className={boardView === "gantt" ? "chip on" : "chip"} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}><Icon name="calendar" />{t("TeamBoard.viewGantt")}</button>
+          </div>
+        ) : null}
+        {mode === "board" && boardView === "grid" ? (
           <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
             <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}><Icon name="chevronLeft" /></button>
             <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>{t("Today")}</button>
@@ -401,6 +478,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
             </div>
           </div>
         ) : null}
+        <button type="button" className="btn default" disabled={!data} onClick={() => void copyTable()} title={t("TeamBoard.copyTableHint")}><Icon name="copy" />{t("TeamBoard.copyTable")}</button>
         <button type="button" className="btn default" disabled={loading} onClick={() => void load()}><Icon name="refresh" />{t("Refresh")}</button>
         <button type="button" className="btn primary" onClick={() => setAdding({ assigneeId: null, date: today })}><Icon name="plus" />{t("TeamBoard.add")}</button>
       </div>
@@ -424,6 +502,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
 
       {!data ? (
         <div className="panel"><div className="empty">{loading ? <><span className="spinner" />{t("Loading from SQL Server…")}</> : null}</div></div>
+      ) : mode === "board" && boardView === "gantt" ? (
+        <section className="panel board-panel"><TeamBoardGantt people={ganttPeople} today={today} /></section>
       ) : mode === "board" ? (
         <section className="panel board-panel">
           <div className="board-scroll">
@@ -491,14 +571,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       ) : (
         <WorkList
           rows={listRows} shown={listShown} onMore={() => setListShown((n) => n + LIST_PAGE)} today={today} bootstrap={bootstrap} nameOf={nameOf}
-          shortDate={shortDate} lateDays={lateDays} canChange={canChange} onCreate={create} onUpdate={update} onEdit={setEditing} openItem={openItem}
+          shortDate={shortDate} lateDays={lateDays} canChange={canChange} onCreate={create} onUpdate={update} onEdit={setEditing} onCopy={copyTask} openItem={openItem}
         />
       )}
       <p className="workload-method">{t("TeamBoard.method")}</p>
 
       {adding ? (
         <AddTaskModal
-          preset={adding} bootstrap={bootstrap} people={people} personById={personById} days={days} holidays={holidays} longDate={longDate}
+          preset={adding} copyFrom={adding.copy ?? null} bootstrap={bootstrap} people={people} personById={personById} days={days} holidays={holidays} longDate={longDate}
           onClose={() => setAdding(null)} onSave={async (input) => { await create(input); setAdding(null); }}
         />
       ) : null}
@@ -509,6 +589,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
           // Saved, or someone else's change won and the board was reloaded: either way this copy is done.
           onSave={async (input) => { await update(editing, input); setEditing(null); }}
           onDelete={async () => { await remove(editing); setEditing(null); }}
+          onCopy={() => copyTask(editing)}
         />
       ) : null}
     </div>
@@ -735,12 +816,14 @@ const draftProblem = (draft: Draft) => {
 };
 const draftReady = (draft: Draft) => Boolean(draft.title.trim() && draft.startDate) && !draftProblem(draft);
 
-function AddTaskModal({ preset, onClose, onSave, ...context }: FormContext & {
+function AddTaskModal({ preset, copyFrom = null, onClose, onSave, ...context }: FormContext & {
   preset: { assigneeId: number | null; date: string }; onClose: () => void; onSave: (input: TeamTaskInput) => Promise<void>;
+  /** A saved task this one starts from: every field filled in, saved as a new, planned task. */
+  copyFrom?: TeamTask | null;
 }) {
   const { t } = useLanguage();
   const formId = useId();
-  const [draft, setDraft] = useState(() => draftOf(null, preset));
+  const [draft, setDraft] = useState<Draft>(() => (copyFrom ? { ...draftOf(copyFrom), status: "Planned" } : draftOf(null, preset)));
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const submit = async () => {
     if (!draftReady(draft) || busy) return;
@@ -750,7 +833,7 @@ function AddTaskModal({ preset, onClose, onSave, ...context }: FormContext & {
   };
   const problem = draftProblem(draft);
   return (
-    <Modal title="TeamBoard.addTitle" subtitle="TeamBoard.addHint" onClose={onClose} size="md" footer={<>
+    <Modal title={copyFrom ? "TeamBoard.copyTask" : "TeamBoard.addTitle"} subtitle={copyFrom ? "TeamBoard.copyHint" : "TeamBoard.addHint"} onClose={onClose} size="md" footer={<>
       <button type="button" className="btn default" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
       <button type="submit" form={formId} className="btn primary" disabled={busy || !draftReady(draft)}><Icon name="plus" />{t("TeamBoard.addButton")}</button>
     </>}>
@@ -763,8 +846,10 @@ function AddTaskModal({ preset, onClose, onSave, ...context }: FormContext & {
   );
 }
 
-function TaskDrawer({ task, canChange, onClose, onSave, onDelete, ...context }: FormContext & {
+function TaskDrawer({ task, canChange, onClose, onSave, onDelete, onCopy, ...context }: FormContext & {
   task: TeamTask; canChange: boolean; onClose: () => void; onSave: (input: TeamTaskInput) => Promise<void>; onDelete: () => Promise<void>;
+  /** Starts a new task from this one; anyone on the board may. */
+  onCopy: () => void;
 }) {
   const { t, lang } = useLanguage();
   const copy = useSearchCopy();
@@ -814,14 +899,19 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, ...context }: 
   };
   const kindLabel = task.kind === "Appointment" ? "TeamBoard.kindAppointment" : task.kind === "Away" ? "TeamBoard.kindAway" : "TeamBoard.kindTask";
   return (
-    <Drawer title={task.title} subtitle={`${t(kindLabel)} · ${fill(t("TeamBoard.addedBy"), { name: task.createdByName, when: when(task.createdAt) })}`} onClose={onClose} width={560} footer={canChange ? <>
-      <button type="button" className="btn ghost board-delete" disabled={busy} onClick={() => { if (window.confirm(t("TeamBoard.confirmDelete"))) void onDelete().catch((failure) => setError(errorText(failure))); }}>
-        <Icon name="trash" />{t("TeamBoard.delete")}
-      </button>
+    <Drawer title={task.title} subtitle={`${t(kindLabel)} · ${fill(t("TeamBoard.addedBy"), { name: task.createdByName, when: when(task.createdAt) })}`} onClose={onClose} width={560} footer={<>
+      {canChange ? (
+        <button type="button" className="btn ghost board-delete" disabled={busy} onClick={() => { if (window.confirm(t("TeamBoard.confirmDelete"))) void onDelete().catch((failure) => setError(errorText(failure))); }}>
+          <Icon name="trash" />{t("TeamBoard.delete")}
+        </button>
+      ) : null}
+      <button type="button" className="btn ghost" disabled={busy} onClick={onCopy}><Icon name="copy" />{t("TeamBoard.copyTask")}</button>
       <span className="board-spacer" />
-      <button type="button" className="btn default" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
-      <button type="submit" form={formId} className="btn primary" disabled={busy || !draftReady(draft)}>{t("Save")}</button>
-    </> : undefined}>
+      {canChange ? <>
+        <button type="button" className="btn default" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
+        <button type="submit" form={formId} className="btn primary" disabled={busy || !draftReady(draft)}>{t("Save")}</button>
+      </> : <button type="button" className="btn default" onClick={onClose}>{t("Close")}</button>}
+    </>}>
       <form id={formId} className="board-drawer" onSubmit={(event) => { event.preventDefault(); void save(draft); }}>
         {error ? <div className="callout danger" role="alert">{error}</div> : null}
         {!canChange ? <div className="callout info" role="status">{t("TeamBoard.readOnly")}</div> : null}
@@ -877,11 +967,11 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, ...context }: 
 }
 
 /** The list of all work: one quick-add row on top, then everything grouped by when it is due. */
-function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, lateDays, canChange, onCreate, onUpdate, onEdit, openItem }: {
+function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, lateDays, canChange, onCreate, onUpdate, onEdit, onCopy, openItem }: {
   rows: ListRow[]; shown: number; onMore: () => void; today: string; bootstrap: BootstrapData; nameOf: Map<number, string>;
   shortDate: (date: string | null) => string; lateDays: (end: string) => number; canChange: (task: TeamTask) => boolean;
   onCreate: (input: TeamTaskInput) => Promise<void>; onUpdate: (task: TeamTask, input: TeamTaskInput, message?: string) => Promise<TeamTask | null>;
-  onEdit: (task: TeamTask) => void; openItem: (item: Commitment) => void;
+  onEdit: (task: TeamTask) => void; onCopy: (task: TeamTask) => void; openItem: (item: Commitment) => void;
 }) {
   const { t } = useLanguage();
   const copy = useSearchCopy();
@@ -907,7 +997,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
   const order: ReturnType<typeof dueGroup>[] = ["late", "thisWeek", "nextWeek", "later", "none"];
   const grouped = order.map((group) => ({ group, rows: visible.filter((row) => (row.late ? "late" : dueGroup(row.end ?? row.start, today)) === group) })).filter((entry) => entry.rows.length);
   // Short names: the column is narrow, and the chips above already say "due".
-  const typeLabel = (row: ListRow) => row.visit ? "TeamBoard.chipVisit" : LIST_TYPES[row.category];
+  const typeLabel = rowTypeLabel;
   const owners = (row: ListRow) => row.ownerIds.map((id) => nameOf.get(id) ?? `#${id}`).join(", ");
   return (
     <section className="panel board-list">
@@ -955,9 +1045,8 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                         <InlineText value={row.task.title} label={t("TeamBoard.subject")} onCommit={(title) => void change(row.task!, { title })} />
                       ) : (
                         <span className="board-work">
-                          <strong>{row.item ? (row.item.hidden ? t("TeamBoard.hiddenWork") : [row.item.reference, row.item.title].filter(Boolean).join(" · "))
-                            : row.task ? row.task.title : row.visit ? row.visit.number || t("TeamBoard.chipVisit") : t(row.away!.kind)}</strong>
-                          <small>{row.item?.customer || row.task?.customer || row.visit?.customer || ""}</small>
+                          <strong>{rowTitle(row, t)}</strong>
+                          <small>{rowCustomer(row)}</small>
                         </span>
                       )}
                       {row.task && (row.task.inquiryNo || row.task.projectNo) ? <small className="board-links">{[row.task.inquiryNo, row.task.projectNo].filter(Boolean).join(" · ")}</small> : null}
@@ -981,11 +1070,12 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                         <InlineNumber value={row.task.manDays} label={t("TeamBoard.manDays")} onCommit={(manDays) => void change(row.task!, { manDays })} />
                       ) : row.manDays === null ? "—" : fmt(row.manDays)}
                     </td>
-                    <td>{row.item ? `${t(row.item.status)}${row.item.progress ? ` ${Math.round(row.item.progress)}%` : ""}` : row.visit ? t(row.visit.status) : row.task ? t("TeamBoard.statusPlanned") : ""}</td>
+                    <td>{rowStatus(row, t)}</td>
                     <td className="board-actions">
                       {row.task ? <>
                         {canChange(row.task) && row.task.kind !== "Away" ? <button type="button" className="btn default sm" onClick={() => void change(row.task!, { status: "Done" }, "TeamBoard.markedDone")}>{t("TeamBoard.markDone")}</button> : null}
                         <button type="button" className="icon-btn" aria-label={t("TeamBoard.open")} title={t("TeamBoard.open")} onClick={() => onEdit(row.task!)}><Icon name="edit" /></button>
+                        <button type="button" className="icon-btn" aria-label={t("TeamBoard.copyTask")} title={t("TeamBoard.copyTask")} onClick={() => onCopy(row.task!)}><Icon name="copy" /></button>
                       </> : row.item && !row.item.hidden ? (
                         <button type="button" className="btn ghost sm" onClick={() => openItem(row.item!)}>{t("TeamBoard.open")}<Icon name="externalLink" /></button>
                       ) : null}

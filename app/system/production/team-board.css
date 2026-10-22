@@ -4,6 +4,13 @@
 .board-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .board-toolbar .search-field { flex: 1 1 240px; max-width: 360px; }
 .board-toolbar > .btn.primary { margin-left: auto; }
+.board-gantt { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 14px; background: var(--surface); }
+.board-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.board-gantt-note { font-size: var(--fs-xs); }
+.board-gantt-empty { margin: 16px 0; }
+.board-gantt:fullscreen { width: 100%; height: 100%; overflow: auto; }
+.board-gantt.is-overlay { position: fixed; inset: 0; z-index: 90; overflow: auto; }
+.board-gantt .board-type { height: 16px; margin-right: 4px; padding: 0 5px; font-size: var(--fs-3xs); vertical-align: middle; }
 .board-team-filter { position: relative; }
 .board-team-filter > summary { list-style: none; cursor: pointer; }
 .board-team-filter > summary::-webkit-details-marker { display: none; }
