@@ -11,6 +11,8 @@ import { isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { elevated } from "../resource-task-service.js";
 import { notifyUsers } from "../site-visit-common.js";
 import { WORKLOAD_SQL, workloadItems, type WorkloadItem } from "../resource-workload.js";
+import type { EmailService } from "../email.js";
+import { calendarActions, type CalendarState } from "../team-calendar.js";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, so that a customer who calls to book can be
 // given a day at once, and work the system does not know yet (an appointment, a task, a day away) can be added with a
@@ -227,7 +229,52 @@ async function tellAssignee(transaction: TransactionType, actor: CurrentUser, id
     `${when}${task.startTime ? ` ${task.startTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.assigneeId}-${task.startDate}`);
 }
 
-export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService) {
+/** A task's state as the calendar sees it; the customer by id, so a rename elsewhere sends nothing. */
+const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; assigneeId: number | null; status: string }): CalendarState => ({
+  kind: task.kind as CalendarState["kind"], title: task.title, customer: task.customerId === null ? "" : String(task.customerId), note: task.note,
+  startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, assigneeId: task.assigneeId, status: task.status,
+});
+const rowState = (r: Row) => calendarState({
+  kind: String(r.kind), title: String(r.title), customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id), note: String(r.note ?? ""),
+  startDate: dateOnly(r.start_date as Date)!, endDate: dateOnly(r.end_date as Date)!, slot: String(r.time_slot ?? "Day"),
+  startTime: r.start_time ? (r.start_time instanceof Date ? r.start_time.toISOString().slice(11, 16) : String(r.start_time).slice(0, 5)) : null,
+  assigneeId: r.assignee_id === null || r.assignee_id === undefined ? null : Number(r.assignee_id), status: String(r.status),
+});
+
+/** What the person's Outlook got: "none" when nothing needed sending. */
+export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
+
+/**
+ * Sends the Outlook requests and cancellations a change calls for, after it is saved. A request carries the task as
+ * it is now; a cancellation, the task as the person had it. Delivery never undoes the save.
+ */
+async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeamTaskCalendar">, id: number, before: CalendarState | null, after: CalendarState | null, sentBy: string): Promise<CalendarDelivery> {
+  const actions = calendarActions(before, after);
+  if (!actions.length) return "none";
+  const userIds = [...new Set(actions.map((action) => action.userId))];
+  const customerIds = [...new Set([before?.customer, after?.customer].filter((value): value is string => Boolean(value)).map(Number))];
+  const lookup = await db.query<Row>(`
+    SELECT id,name,email FROM dbo.users WHERE id IN (SELECT CONVERT(bigint,[value]) FROM OPENJSON(@users));
+    SELECT id,name FROM dbo.customers WHERE id IN (SELECT CONVERT(bigint,[value]) FROM OPENJSON(@customers));`,
+  (q) => q.input("users", sql.NVarChar(sql.MAX), JSON.stringify(userIds)).input("customers", sql.NVarChar(sql.MAX), JSON.stringify(customerIds)));
+  const [people = [], customers = []] = lookup.recordsets as unknown as Row[][];
+  const customerName = (value: string) => (value ? String(customers.find((r) => String(r.id) === value)?.name ?? "") : "");
+  const results: CalendarDelivery[] = [];
+  for (const action of actions) {
+    const state = action.method === "CANCEL" ? before! : after!;
+    const person = people.find((r) => Number(r.id) === action.userId);
+    if (!person?.email) continue;
+    const result = await email.sendTeamTaskCalendar({
+      method: action.method, recipient: { name: String(person.name ?? ""), email: String(person.email) }, sentBy,
+      task: { id, kind: state.kind === "Appointment" ? "Appointment" : "Task", title: state.title, customer: customerName(state.customer), note: state.note,
+        startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime },
+    });
+    results.push(result.status);
+  }
+  return results.includes("failed") ? "failed" : results.includes("disabled") ? "disabled" : results.length ? "sent" : "none";
+}
+
+export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService, email: Pick<EmailService, "sendTeamTaskCalendar">) {
   app.get("/api/v1/team-board", async (request) => {
     await users.demandPermission(request, "team.board");
     const actor = await users.required(request);
@@ -293,8 +340,9 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       await tellAssignee(transaction, actor, id, task);
       return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays };
     });
+    const calendar = await deliverCalendar(db, email, created.id, null, calendarState(input), actor.name);
     reply.code(201);
-    return created;
+    return { ...created, calendar };
   });
 
   app.put("/api/v1/team-tasks/:id", async (request) => {
@@ -304,7 +352,7 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     const body = bodyObject(request.body);
     const expected = parseRowVersion(body.rowVersion);
     const input = parseTeamTask(body);
-    return db.transaction(async (transaction) => {
+    const saved = await db.transaction(async (transaction) => {
       const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
         "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
@@ -327,8 +375,10 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       await insertAudit(transaction, actor.id, ENTITY, id, "", "Updated", before, task);
       // Tell whoever it is for now, when that changed or the day moved.
       if (Number(current.assignee_id) !== task.assigneeId || before.startDate !== task.startDate) await tellAssignee(transaction, actor, id, task);
-      return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays };
+      return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays, before: rowState(current) };
     });
+    const calendar = await deliverCalendar(db, email, id, saved.before, calendarState(input), actor.name);
+    return { id, rowVersion: saved.rowVersion, manDays: saved.manDays, calendar };
   });
 
   app.delete("/api/v1/team-tasks/:id", async (request) => {
@@ -336,7 +386,7 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Task id");
     const expected = parseRowVersion((request.query as Record<string, unknown>).rowVersion);
-    return db.transaction(async (transaction) => {
+    const before = await db.transaction(async (transaction) => {
       const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
         "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
@@ -347,8 +397,10 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       await new sql.Request(transaction).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id)
         .query("UPDATE dbo.team_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;");
       await insertAudit(transaction, actor.id, ENTITY, id, "", "Deleted", { title: current.title, assigneeId: current.assignee_id }, null);
-      return { id, deleted: true };
+      return rowState(current);
     });
+    const calendar = await deliverCalendar(db, email, id, before, null, actor.name);
+    return { id, deleted: true, calendar };
   });
 
   // Who added and changed a task, newest first, from the audit log.

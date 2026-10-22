@@ -121,6 +121,8 @@ button.board-chip:hover { filter: brightness(.97); text-decoration: underline; }
 .board-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .board-form-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .board-req { color: var(--red-text); }
+.board-outlook { display: flex; align-items: center; gap: 6px; margin: 0; }
+.board-outlook .icon { flex: none; }
 .board-form .callout { margin: 0; flex-direction: column; }
 .team-board .callout.info, .board-form .callout.info, .board-drawer .callout.info { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
 .board-freer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

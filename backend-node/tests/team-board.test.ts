@@ -7,6 +7,7 @@ import { registerErrorHandler } from "../src/errors.js";
 import type { CurrentUser } from "../src/types.js";
 import type { CurrentUserService } from "../src/users.js";
 import type { WorkloadItem } from "../src/resource-workload.js";
+import type { TeamTaskCalendarEmail } from "../src/email.js";
 import { WORKLOAD_SQL } from "../src/resource-workload.js";
 import { TEAM_BOARD_SQL, canChangeTeamTask, defaultManDays, parseTeamTask, redactWork, registerTeamBoardRoutes } from "../src/routes/team-board.js";
 
@@ -66,24 +67,30 @@ test("a team task is changed by whoever added it, whoever it is for, or a manage
   assert.equal(canChangeTeamTask(user(3, ["Engineer"]), { created_by: 5, assignee_id: null }), false);
 });
 
+/** People and customers the calendar delivery looks up, by id. */
+const directory = [[{ id: 9, name: "Napa K.", email: "napa@example.com" }, { id: 7, name: "Wichai S.", email: "wichai@example.com" }], [{ id: 4, name: "ACME" }]];
+
 function boardServer(actor: CurrentUser, sets: unknown[][] = []) {
   const demanded: string[] = [];
   const statements: string[] = [];
   const bound: Record<string, unknown> = {};
+  const invites: TeamTaskCalendarEmail[] = [];
+  const email = { async sendTeamTaskCalendar(message: TeamTaskCalendarEmail) { invites.push(message); return { status: "sent" as const, recipients: [message.recipient.email] }; } };
   const users = { demandPermission: async (_request: unknown, permission: string) => { demanded.push(permission); }, required: async () => actor };
   const database = {
     async query(statement: string, bind?: (request: unknown) => void) {
       statements.push(statement);
       const request = { input(key: string, _type: unknown, value: unknown) { bound[key] = value; return request; } };
       bind?.(request);
+      if (statement.includes("FROM dbo.users WHERE id IN")) return { recordsets: directory, recordset: directory[0] };
       return { recordsets: sets, recordset: sets[0] ?? [] };
     },
     async transaction(action: (transaction: object) => Promise<unknown>) { return action({}); },
   };
   const app = Fastify();
   registerErrorHandler(app);
-  registerTeamBoardRoutes(app, database as unknown as Database, users as unknown as CurrentUserService);
-  return { app, demanded, statements, bound };
+  registerTeamBoardRoutes(app, database as unknown as Database, users as unknown as CurrentUserService, email);
+  return { app, demanded, statements, bound, invites };
 }
 
 test("the board reads everyone's work for team.board, and names only what the reader may open", async () => {
@@ -144,13 +151,18 @@ test("adding a task works out its effort, records it and tells the person it is 
     if (statement.includes("INSERT dbo.team_tasks")) return { recordset: [{ id: 31, row_version: Buffer.alloc(8, 2) }] };
     return { recordset: [] };
   });
-  const { app, demanded } = boardServer(user(5, ["Sales Engineer"]));
+  const { app, demanded, invites } = boardServer(user(5, ["Sales Engineer"]));
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { kind: "Task", title: "Draft BOQ", assigneeId: 9, startDate: "2026-10-22", endDate: "2026-10-26" } });
+    const response = await app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { kind: "Task", title: "Draft BOQ", assigneeId: 9, customerId: 4, startDate: "2026-10-22", endDate: "2026-10-26" } });
     assert.equal(response.statusCode, 201);
     assert.deepEqual(demanded, ["team.board"]);
-    // Thursday and Monday; Friday 23 is a holiday.
-    assert.deepEqual(response.json(), { id: 31, rowVersion: Buffer.alloc(8, 2).toString("base64"), manDays: 2 });
+    // Thursday and Monday; Friday 23 is a holiday. The person's Outlook got the request.
+    assert.deepEqual(response.json(), { id: 31, rowVersion: Buffer.alloc(8, 2).toString("base64"), manDays: 2, calendar: "sent" });
+    assert.deepEqual(invites.map((invite) => [invite.method, invite.recipient.email, invite.task.id, invite.task.customer, invite.sentBy]), [["REQUEST", "napa@example.com", 31, "ACME", "User 5"]]);
+    // A day away never goes to Outlook.
+    const away = await app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { kind: "Away", title: "Leave", assigneeId: 9, startDate: "2026-10-22" } });
+    assert.equal(away.json().calendar, "none");
+    assert.equal(invites.length, 1);
     const insert = statements.find((entry) => entry.statement.includes("INSERT dbo.team_tasks"))!;
     assert.deepEqual([insert.parameters.title, insert.parameters.assignee, insert.parameters.man_days, insert.parameters.actor], ["Draft BOQ", 9, 2, 5]);
     assert.ok(statements.some((entry) => entry.statement.includes("INSERT INTO dbo.audit_log") && entry.parameters.entity_type === "Team Task" && entry.parameters.action === "Created"));
@@ -188,9 +200,17 @@ test("someone else's task cannot be changed, and a stale copy is refused", async
     assert.equal(stale.statusCode, 409);
     const saved = await assignee.app.inject({ method: "PUT", url: "/api/v1/team-tasks/31", payload });
     assert.equal(saved.statusCode, 200);
-    assert.deepEqual(saved.json(), { id: 31, rowVersion: Buffer.alloc(8, 4).toString("base64"), manDays: 1 });
+    assert.deepEqual(saved.json(), { id: 31, rowVersion: Buffer.alloc(8, 4).toString("base64"), manDays: 1, calendar: "sent" });
+    // The day moved: the same person gets the event again, at its new date.
+    assert.deepEqual(assignee.invites.map((invite) => [invite.method, invite.recipient.email, invite.task.startDate]), [["REQUEST", "napa@example.com", "2026-10-27"]]);
+    // Handed to someone else: the first person's entry is cancelled, as they had it, and the new one is invited.
+    await assignee.app.inject({ method: "PUT", url: "/api/v1/team-tasks/31", payload: { ...payload, assigneeId: 7 } });
+    assert.deepEqual(assignee.invites.slice(1).map((invite) => [invite.method, invite.recipient.email, invite.task.startDate]),
+      [["CANCEL", "napa@example.com", "2026-10-22"], ["REQUEST", "wichai@example.com", "2026-10-27"]]);
     const removed = await assignee.app.inject({ method: "DELETE", url: `/api/v1/team-tasks/31?rowVersion=${encodeURIComponent(payload.rowVersion)}` });
     assert.equal(removed.statusCode, 200);
+    assert.deepEqual(removed.json(), { id: 31, deleted: true, calendar: "sent" });
+    assert.deepEqual(assignee.invites.at(-1)!.method, "CANCEL");
     assert.ok(statements.some((statement) => statement.includes("SET deleted_at=SYSUTCDATETIME()")));
   } finally {
     await assignee.app.close();

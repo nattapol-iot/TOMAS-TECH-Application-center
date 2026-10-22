@@ -2,34 +2,37 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `0ede4efb`; generated, do not edit. [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c8c9c274`; generated, do not edit. [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/team-board` | 231–278 |
-| POST | `/api/v1/team-tasks` | 280–298 |
-| PUT | `/api/v1/team-tasks/:id` | 300–332 |
-| DELETE | `/api/v1/team-tasks/:id` | 334–352 |
-| GET | `/api/v1/team-tasks/:id/history` | 355–365 |
+| GET | `/api/v1/team-board` | 278–325 |
+| POST | `/api/v1/team-tasks` | 327–346 |
+| PUT | `/api/v1/team-tasks/:id` | 348–382 |
+| DELETE | `/api/v1/team-tasks/:id` | 384–404 |
+| GET | `/api/v1/team-tasks/:id/history` | 407–417 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `dayNumber` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 47–47 |
-| `choice` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 48–53 |
-| `optionalId` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 55–56 |
-| `parseTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 59–95 |
-| `defaultManDays` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 98–108 |
-| `canChangeTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 111–112 |
-| `redactWork` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 115–122 |
-| `teamTaskDto` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 165–189 |
-| `prepare` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 192–211 |
-| `bind` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 213–220 |
-| `tellAssignee` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 223–228 |
-| `registerTeamBoardRoutes` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 230–366 |
+| `dayNumber` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 49–49 |
+| `choice` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 50–55 |
+| `optionalId` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 57–58 |
+| `parseTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 61–97 |
+| `defaultManDays` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 100–110 |
+| `canChangeTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 113–114 |
+| `redactWork` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 117–124 |
+| `teamTaskDto` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 167–191 |
+| `prepare` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 194–213 |
+| `bind` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 215–222 |
+| `tellAssignee` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 225–230 |
+| `calendarState` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 233–236 |
+| `rowState` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 237–242 |
+| `deliverCalendar` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 251–275 |
+| `registerTeamBoardRoutes` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 277–418 |
 
 ## Direct local dependencies
 
@@ -43,6 +46,8 @@ Evidence: source snapshot `0ede4efb`; generated, do not edit. [backend-node/src/
 - [backend-node/src/resource-task-service.ts](<../../../backend-node/src/resource-task-service.ts>)
 - [backend-node/src/site-visit-common.ts](<../../../backend-node/src/site-visit-common.ts>)
 - [backend-node/src/resource-workload.ts](<../../../backend-node/src/resource-workload.ts>)
+- [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
+- [backend-node/src/team-calendar.ts](<../../../backend-node/src/team-calendar.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 

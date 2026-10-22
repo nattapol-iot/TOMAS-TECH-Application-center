@@ -83,14 +83,16 @@ export type TeamBoardData = {
 };
 export type TeamTaskChange = { action: string; actor: string; at: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null };
 
+/** What the person's Outlook got from a save (an invitation, an update or a cancellation); "none" when nothing was due. */
+export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
 export const loadTeamBoard = (from: string, to: string) =>
   apiRequest<TeamBoardData>(`/api/v1/team-board?from=${from}&to=${to}`);
 export const createTeamTask = (task: TeamTaskInput) =>
-  apiRequest<{ id: number; rowVersion: string; manDays: number }>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
+  apiRequest<{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery }>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
 export const updateTeamTask = (id: number, task: TeamTaskInput, rowVersion: string) =>
-  apiRequest<{ id: number; rowVersion: string; manDays: number }>(`/api/v1/team-tasks/${id}`, { method: "PUT", body: JSON.stringify({ ...task, rowVersion }) });
+  apiRequest<{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery }>(`/api/v1/team-tasks/${id}`, { method: "PUT", body: JSON.stringify({ ...task, rowVersion }) });
 export const deleteTeamTask = (id: number, rowVersion: string) =>
-  apiRequest<{ id: number; deleted: true }>(`/api/v1/team-tasks/${id}?rowVersion=${encodeURIComponent(rowVersion)}`, { method: "DELETE" });
+  apiRequest<{ id: number; deleted: true; calendar: CalendarDelivery }>(`/api/v1/team-tasks/${id}?rowVersion=${encodeURIComponent(rowVersion)}`, { method: "DELETE" });
 export const loadTeamTaskHistory = (id: number) => apiRequest<TeamTaskChange[]>(`/api/v1/team-tasks/${id}/history`);
 /** A saved task back into the shape a save sends. */
 export const teamTaskInput = (task: TeamTask): TeamTaskInput => ({

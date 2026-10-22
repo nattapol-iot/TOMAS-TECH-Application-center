@@ -87,6 +87,10 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   // Saves update the board in place; a conflict reloads it.
   assert.match(board, /failure\.status === 409 \|\| failure\.status === 404\)\) \{ notify\(t\("TeamBoard\.conflict"\)\); await load\(\);/);
   assert.doesNotMatch(board, /<datalist|KpiCard/);
+  // Outlook (owner decision 2026-10-22): the form says the person gets it in Outlook; the toast says whether it got there.
+  assert.match(board, /\{draft\.kind !== "Away" && person \? <p className="muted small board-outlook"><Icon name="calendar" \/>\{t\("TeamBoard\.outlookHint"\)\}<\/p> : null\}/);
+  assert.match(board, /notify\(`\$\{t\("TeamBoard\.added"\)\}\$\{outlook\(saved\.calendar\)\}`\)/);
+  assert.match(client, /calendar: CalendarDelivery \}>\("\/api\/v1\/team-tasks"/);
   assert.match(board, /import "\.\/team-board\.css";/);
 });
 

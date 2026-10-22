@@ -1,4 +1,5 @@
 import type { AppConfig } from "./config.js";
+import { calendarEvent, calendarMime, calendarSequence, type CalendarTask } from "./team-calendar.js";
 
 export type EmailRecipient = { name: string; email: string };
 export type EmailDeliveryResult = {
@@ -83,6 +84,15 @@ export type ProjectTaskAssignmentEmail = {
   recipients: EmailRecipient[];
 };
 
+/** A team-board appointment or task for one person's Outlook calendar (team-calendar.ts): a request, or its cancellation. */
+export type TeamTaskCalendarEmail = {
+  method: "REQUEST" | "CANCEL";
+  task: CalendarTask;
+  recipient: EmailRecipient;
+  /** Whoever added or changed the task. */
+  sentBy: string;
+};
+
 type FetchLike = typeof fetch;
 
 function escapeHtml(value: string): string {
@@ -165,6 +175,45 @@ export class EmailService {
       + `<tr><td><strong>Plan</strong></td><td>${escapeHtml(message.start)} – ${escapeHtml(message.finish)}</td></tr>`
       + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
       + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}/task/${message.taskId}">เปิดงานนี้ใน Project ${escapeHtml(message.projectNumber)} / Open this task</a></p>`);
+  }
+
+  /**
+   * A meeting request (or its cancellation) in MIME, so Outlook files it in the person's calendar and later copies
+   * replace it (same UID). Sent as the system mailbox, which is also the organizer; no replies are asked for.
+   */
+  async sendTeamTaskCalendar(message: TeamTaskCalendarEmail): Promise<EmailDeliveryResult> {
+    const [recipient] = normalizedRecipients([message.recipient]);
+    if (!recipient) return { status: "sent", recipients: [] };
+    if (this.config.mode === "Disabled") return { status: "disabled", recipients: [recipient.email] };
+    try {
+      const appUrl = `${this.config.applicationBaseUrl!.replace(/\/$/, "")}/`;
+      const link = `${appUrl}#/resources`;
+      const { task } = message;
+      const when = task.endDate === task.startDate ? task.startDate : `${task.startDate} – ${task.endDate}`;
+      const cancelled = message.method === "CANCEL";
+      const subject = `${cancelled ? "[Engineering Center] Cancelled: " : "[Engineering Center] "}${task.title}`;
+      const rows: [string, string][] = [["Date", `${when}${task.startTime ? ` ${task.startTime}` : ""}`], ["Customer", task.customer], ["Note", task.note], ["Sent by", message.sentBy]];
+      const html = `<p>${cancelled ? "ยกเลิกนัดนี้แล้ว / This has been cancelled." : "นัดจากหน้าภาพรวมงานทีม / From the Team overview."}</p>`
+        + `<p><strong>${escapeHtml(task.title)}</strong></p><table>`
+        + rows.filter(([, value]) => value).map(([label, value]) => `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>`).join("")
+        + `</table><p><a href="${escapeHtml(link)}">เปิดภาพรวมงานทีม / Open the Team overview</a></p>`;
+      const text = [task.title, ...rows.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`), link].join("\n");
+      const ics = calendarEvent(task, { method: message.method, organizer: this.config.senderUser!, attendee: recipient, sequence: calendarSequence(), link });
+      const mime = calendarMime({ from: this.config.senderUser!, to: recipient, subject, text, html, ics, method: message.method, boundary: `team-task-${task.id}-${Date.now()}` });
+      const accessToken = await this.accessToken();
+      // Graph takes a whole MIME message base64-encoded with Content-Type text/plain.
+      const response = await this.fetcher(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(this.config.senderUser!)}/sendMail`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "text/plain" },
+        signal: AbortSignal.timeout(10_000),
+        body: Buffer.from(mime, "utf8").toString("base64"),
+      });
+      if (!response.ok) throw new Error(`Microsoft Graph sendMail (calendar) returned HTTP ${response.status}.`);
+      return { status: "sent", recipients: [recipient.email] };
+    } catch (error) {
+      this.reportError(error);
+      return { status: "failed", recipients: [recipient.email] };
+    }
   }
 
   // Fires for a ticket being created, commented on, (re)assigned, or changing status --

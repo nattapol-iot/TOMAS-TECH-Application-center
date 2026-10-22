@@ -12,6 +12,7 @@ import {
   teamTaskInput,
   updateTeamTask,
   type BoardAway,
+  type CalendarDelivery,
   type BoardVisit,
   type TeamBoardData,
   type TeamTask,
@@ -262,17 +263,19 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     if (failure instanceof ApiClientError && (failure.status === 409 || failure.status === 404)) { notify(t("TeamBoard.conflict")); await load(); return true; }
     return false;
   };
+  // One toast for the save and what reached the person's Outlook.
+  const outlook = (calendar: CalendarDelivery) => calendar === "sent" ? ` ${t("TeamBoard.outlookSent")}` : calendar === "failed" ? ` ${t("TeamBoard.outlookFailed")}` : "";
   const create = async (input: TeamTaskInput) => {
     const saved = await createTeamTask(input);
     applyTask(savedTask(null, input, saved));
-    notify(t("TeamBoard.added"));
+    notify(`${t("TeamBoard.added")}${outlook(saved.calendar)}`);
   };
   const update = async (task: TeamTask, input: TeamTaskInput, message = "Saved") => {
     try {
       const saved = await updateTeamTask(task.id, input, task.rowVersion);
       const next = savedTask(task, input, saved);
       applyTask(next);
-      notify(t(message));
+      notify(`${t(message)}${outlook(saved.calendar)}`);
       return next;
     } catch (failure) {
       if (await conflict(failure)) return null;
@@ -280,7 +283,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     }
   };
   const remove = async (task: TeamTask) => {
-    try { await deleteTeamTask(task.id, task.rowVersion); applyTask(null, task.id); notify(t("TeamBoard.deleted")); }
+    try { const removed = await deleteTeamTask(task.id, task.rowVersion); applyTask(null, task.id); notify(`${t("TeamBoard.deleted")}${outlook(removed.calendar)}`); }
     catch (failure) { if (!(await conflict(failure))) throw failure; }
   };
 
@@ -587,6 +590,7 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           </div>
         </div>
       ) : null}
+      {draft.kind !== "Away" && person ? <p className="muted small board-outlook"><Icon name="calendar" />{t("TeamBoard.outlookHint")}</p> : null}
       {draft.kind === "Away" ? (
         !draft.assigneeId ? <p className="callout warning" role="status">{t("TeamBoard.awayNeedsPerson")}</p> : null
       ) : !person ? (
