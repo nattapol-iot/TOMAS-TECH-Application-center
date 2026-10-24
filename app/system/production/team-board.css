@@ -72,6 +72,10 @@
 .board-grid thead th small { display: block; font-size: var(--fs-3xs); font-weight: 700; }
 .board-grid thead th.today { background: var(--blue-soft); color: var(--blue-text); }
 .board-grid thead th.holiday { background: var(--n-100); }
+/* Saturday and Sunday (2026-10-24): narrower, shaded, no load; a weekend appointment still shows and can be added. */
+.board-grid.weeks-2 col.weekend { width: 64px; }
+.board-grid.weeks-4 col.weekend { width: 40px; }
+.board-grid thead th.weekend { background: var(--n-50); white-space: normal; overflow: hidden; line-height: 1.2; }
 .board-grid .week-start { border-left: 2px solid var(--n-300); }
 .board-grid .board-who { position: sticky; left: 0; z-index: 2; background: var(--surface); text-align: left; padding: 0; }
 .board-grid thead .board-who { z-index: 4; padding: 0 12px; background: var(--n-25); text-align: left; }
@@ -109,6 +113,7 @@ button.board-person:hover strong { color: var(--blue-text); text-decoration: und
 .board-cell.tone-full { background: var(--amber-soft); }
 .board-cell.tone-over { background: var(--red-soft); }
 .board-cell.tone-holiday { background: var(--n-50); }
+.board-cell.tone-weekend { background: var(--n-25); }
 .board-cell.tone-away { background: repeating-linear-gradient(135deg, var(--n-50) 0 6px, var(--n-100) 6px 12px); }
 .board-cell.today { box-shadow: inset 2px 0 0 var(--blue), inset -2px 0 0 var(--blue); }
 .board-cell-add {

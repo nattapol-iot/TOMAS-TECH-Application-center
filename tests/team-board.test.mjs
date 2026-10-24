@@ -15,10 +15,11 @@ const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, default
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
   start: "2026-10-19", end: "2026-10-23", manDays: 4, progress: 0, status: "In Progress", ...change });
 
-test("the board shows weekdays from the Monday of the week, with holidays and today marked", () => {
+test("the board shows Monday to Sunday from the Monday of the week, with holidays, weekends and today marked", () => {
   const days = boardDays("2026-10-21", 2, ["2026-10-23"], "2026-10-21");
-  assert.equal(days.length, 10);
-  assert.deepEqual(days.map((day) => day.date).slice(0, 6), ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-26"]);
+  assert.equal(days.length, 14);
+  assert.deepEqual(days.map((day) => day.date).slice(0, 8), ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"]);
+  assert.deepEqual(days.filter((day) => day.weekend).map((day) => day.date), ["2026-10-24", "2026-10-25", "2026-10-31", "2026-11-01"]);
   assert.deepEqual(days.filter((day) => day.holiday).map((day) => day.date), ["2026-10-23"]);
   assert.deepEqual(days.filter((day) => day.today).map((day) => day.date), ["2026-10-21"]);
   assert.deepEqual(days.filter((day) => day.weekStart).map((day) => day.date), ["2026-10-19", "2026-10-26"]);
@@ -28,12 +29,14 @@ test("a day's load spreads each item over its working days, as the weekly worklo
   const days = boardDays("2026-10-19", 1, ["2026-10-23"], "2026-10-21");
   // 4 MD over Monday to Thursday (Friday is a holiday): 1 MD a day; a 4-day week gives 0.8 MD a day.
   const load = dailyLoad([work({}), work({ key: "done", status: "Done" }), work({ key: "unknown", manDays: null })], days, 4, ["2026-10-23"]);
-  assert.deepEqual(load.map((day) => Number(day.manDays.toFixed(2))), [1, 1, 1, 1, 0]);
-  assert.deepEqual(load.map((day) => day.available), [0.8, 0.8, 0.8, 0.8, 0]);
+  assert.deepEqual(load.map((day) => Number(day.manDays.toFixed(2))), [1, 1, 1, 1, 0, 0, 0]);
+  // Saturday and Sunday offer nothing, like the holiday, and nothing is spread onto them.
+  assert.deepEqual(load.map((day) => day.available), [0.8, 0.8, 0.8, 0.8, 0, 0, 0]);
+  assert.deepEqual(load.slice(5).map((day) => day.utilisation), [null, null]);
   assert.equal(Math.round(load[0].utilisation), 125);
   // A holiday with nothing planned has no load at all; work on a holiday is infinitely over; a full day on a working day is 100%.
   assert.equal(load[4].utilisation, null);
-  assert.equal(dailyLoad([work({ start: "2026-10-23", end: "2026-10-23", manDays: 1 })], days, 5, []).at(-1).utilisation, Infinity);
+  assert.equal(dailyLoad([work({ start: "2026-10-23", end: "2026-10-23", manDays: 1 })], days, 5, []).at(4).utilisation, Infinity);
   assert.equal(dailyLoad([work({ start: "2026-10-22", end: "2026-10-22", manDays: 1 })], days, 5, []).at(3).utilisation, 100);
   assert.deepEqual([loadBand(null), loadBand(40), loadBand(85), loadBand(100), loadBand(101)], ["none", "ok", "full", "full", "over"]);
   const week = weekTotals(load, "2026-10-19", "2026-10-23");
@@ -123,7 +126,10 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /if \(!draft\.startTime \|\| !draft\.endTime\) return "TeamBoard\.timeNeeded";/);
   // Several people on a task (2026-10-22): picked with the shared multi-person picker, each with their load that day.
   assert.match(board, /<SearchMultiPicker options=\{personOptions\} value=\{draft\.assigneeIds\} onChange=\{\(assigneeIds\) => set\(\{ \.\.\.draft, assigneeIds \}\)\}/);
-  assert.match(board, /\{loads\.map\(\(\{ person, now, after, away \}\) => \(/);
+  assert.match(board, /\{loads\.map\(\(\{ person, now, after, away, off \}\) => \(/);
+  // Saturday and Sunday are on the grid (2026-10-24): shaded, with no load, and a day off rather than an overload in the form.
+  assert.match(board, /day\.holiday \? "holiday" : day\.weekend \? "weekend" :/);
+  assert.match(board, /\{away \? t\("TeamBoard\.awayShort"\) : off \? t\("TeamBoard\.holiday"\) :/);
   // Changing a saved task does not count its own share twice.
   assert.match(board, /manDays: Math\.max\(0, saved\.manDays - ownShare\(person\.userId\)\)/);
   assert.match(board, /<TaskFields draft=\{draft\} set=\{setDraft\} context=\{context\} disabled=\{!canChange \|\| busy\} original=\{task\} \/>/);

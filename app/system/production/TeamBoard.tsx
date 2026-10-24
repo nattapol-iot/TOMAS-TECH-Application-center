@@ -196,7 +196,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       return {
         user, userId: user.id, load, capacity, week: weekTotals(load, week.from, week.to), away,
         late: items.filter((item) => item.type !== "Task" && item.end && item.end < today).length + lateTasks(user.id),
-        awayDays: days.filter((day) => day.date >= week.from && day.date <= week.to && !day.holiday && away(day.date)).length,
+        awayDays: days.filter((day) => day.date >= week.from && day.date <= week.to && !day.holiday && !day.weekend && away(day.date)).length,
       };
     }).sort((a, b) => a.user.department.localeCompare(b.user.department) || a.user.name.localeCompare(b.user.name));
   }, [bootstrap.team, data, days, week, today, awayOf]);
@@ -342,7 +342,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     catch (failure) { if (!(await conflict(failure))) throw failure; }
   };
 
-  const dayLabel = (date: string) => new Intl.DateTimeFormat(localeFor(lang), { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+  // The narrow weekday ("ส", "อา") fits the slim weekend columns of four weeks.
+  const dayLabel = (date: string, narrow = false) => new Intl.DateTimeFormat(localeFor(lang), { weekday: narrow ? "narrow" : "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const longDate = (date: string) => new Intl.DateTimeFormat(localeFor(lang), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const shortDate = (date: string | null) => (date ? new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`)) : "—");
   const lateDays = (end: string) => workingDays(dateFromDay(dayNumber(end) + 1), today, holidays).length || 1;
@@ -380,7 +381,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     const shown = category ? all.filter((event) => categoryOf(event) === category) : all;
     const band = load ? loadBand(load.utilisation) : "none";
     // Prefixed: a bare "empty" is the app-wide EmptyState box and would turn the cell into a flex column.
-    const tone = `tone-${away ? "away" : day.holiday ? "holiday" : load && load.manDays > 0 ? band : "blank"}`;
+    const tone = `tone-${away ? "away" : day.holiday ? "holiday" : day.weekend ? "weekend" : load && load.manDays > 0 ? band : "blank"}`;
     return (
       <td key={day.date} className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}`}
         title={shown.map((event) => eventLabel(event)).join("\n") || undefined}>
@@ -388,7 +389,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
           aria-label={fill(t("TeamBoard.addFor"), { name, date: longDate(day.date) })}>
           <Icon name="plus" />
         </button>
-        {load && !day.holiday && load.manDays ? <span className="board-pct">{pct(load.utilisation)}</span> : null}
+        {load && !day.holiday && !day.weekend && load.manDays ? <span className="board-pct">{pct(load.utilisation)}</span> : null}
         {shown.slice(0, 2).map((event) => clickable(event)
           ? <button key={event.key} type="button" className={`board-chip ${event.kind}${event.late ? " late" : ""}${"task" in event && event.task.status === "Done" ? " done" : ""}`}
             title={eventTitle(event)} onClick={() => openEvent(event)}>{eventLabel(event)}</button>
@@ -506,14 +507,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       ) : mode === "board" ? (
         <section className="panel board-panel">
           <div className="board-scroll">
-            <table className="board-grid" style={{ minWidth: 220 + days.length * (weeks === 2 ? 96 : 64) }}>
-              <colgroup><col className="board-who-col" />{days.map((day) => <col key={day.date} />)}</colgroup>
+            <table className={`board-grid weeks-${weeks}`} style={{ minWidth: 220 + days.reduce((sum, day) => sum + (weeks === 2 ? (day.weekend ? 64 : 84) : (day.weekend ? 40 : 52)), 0) }}>
+              <colgroup><col className="board-who-col" />{days.map((day) => <col key={day.date} className={day.weekend ? "weekend" : undefined} />)}</colgroup>
               <thead>
                 <tr>
                   <th scope="col" className="board-who">{t("TeamBoard.person")}</th>
                   {days.map((day) => (
-                    <th key={day.date} scope="col" className={`${day.today ? "today" : ""}${day.holiday ? " holiday" : ""}${day.weekStart ? " week-start" : ""}`}>
-                      {dayLabel(day.date)}{day.today ? <small>{t("TeamBoard.today")}</small> : day.holiday ? <small>{t("TeamBoard.holiday")}</small> : null}
+                    <th key={day.date} scope="col" className={`${day.today ? "today" : ""}${day.holiday ? " holiday" : ""}${day.weekend ? " weekend" : ""}${day.weekStart ? " week-start" : ""}`}>
+                      {dayLabel(day.date, weeks === 4 && day.weekend)}{day.today ? <small>{t("TeamBoard.today")}</small> : day.holiday ? <small>{t("TeamBoard.holiday")}</small> : null}
                     </th>
                   ))}
                 </tr>
@@ -681,11 +682,11 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
     const saved = person.load.find((entry) => entry.date === draft.startDate);
     // Without this task as saved: the load it would have otherwise.
     const day = saved && { ...saved, manDays: Math.max(0, saved.manDays - ownShare(person.userId)) };
-    return { person, now: withExtra(day, 0), after: withExtra(day, manDays / span), away: person.away(draft.startDate) };
+    return { person, now: withExtra(day, 0), after: withExtra(day, manDays / span), away: person.away(draft.startDate), off: saved?.available === 0 };
   });
   const shown = days.some((entry) => entry.date === draft.startDate);
-  const worst = loads.filter((load) => !load.away && load.after !== null && load.after > 100).sort((a, b) => (b.after ?? 0) - (a.after ?? 0))[0];
-  const highest = Math.max(0, ...loads.filter((load) => !load.away).map((load) => load.after ?? 0));
+  const worst = loads.filter((load) => !load.away && !load.off && load.after !== null && load.after > 100).sort((a, b) => (b.after ?? 0) - (a.after ?? 0))[0];
+  const highest = Math.max(0, ...loads.filter((load) => !load.away && !load.off).map((load) => load.after ?? 0));
   // Their own team first; someone from another team only if they do planned work at all (not, say, a salesperson).
   const freer = worst
     ? freestOn(people.filter((entry) => !draft.assigneeIds.includes(entry.userId)
@@ -767,9 +768,9 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
         <div className={`callout ${highest > 100 ? "danger" : highest >= 85 ? "warning" : "info"}`} role="status">
           <span>{fill(t("TeamBoard.loadThatDay"), { date: longDate(draft.startDate) })}</span>
           <ul className="board-loads">
-            {loads.map(({ person, now, after, away }) => (
-              <li key={person.userId} className={away ? "away" : loadBand(after)}>
-                <strong>{person.user.name}</strong> {away ? t("TeamBoard.awayShort") : `${pct(now ?? 0)} → ${pct(after)}`}
+            {loads.map(({ person, now, after, away, off }) => (
+              <li key={person.userId} className={away ? "away" : off ? "none" : loadBand(after)}>
+                <strong>{person.user.name}</strong> {away ? t("TeamBoard.awayShort") : off ? t("TeamBoard.holiday") : `${pct(now ?? 0)} → ${pct(after)}`}
               </li>
             ))}
           </ul>

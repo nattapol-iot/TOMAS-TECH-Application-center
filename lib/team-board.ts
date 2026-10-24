@@ -4,17 +4,21 @@ import { dateFromDay, dayNumber, isOpenWork, workingDays, type Commitment } from
 // the weekly Workload works it out, and what falls on each day.
 
 const DAY = 86400000;
-export type BoardDay = { date: string; holiday: boolean; today: boolean; /** The first day of its week, so the grid can rule weeks apart. */ weekStart: boolean };
+export type BoardDay = {
+  date: string; holiday: boolean; today: boolean;
+  /** The first day of its week, so the grid can rule weeks apart. */ weekStart: boolean;
+  /** Saturday or Sunday: shown, so weekend appointments can be seen and added, but not a working day. */ weekend: boolean;
+};
 
-/** Monday to Friday of `weeks` weeks from the Monday of `start`, with company holidays and today marked. */
+/** Monday to Sunday of `weeks` weeks from the Monday of `start`, with company holidays, weekends and today marked. */
 export function boardDays(start: string, weeks: number, holidays: readonly string[], today: string): BoardDay[] {
   const first = dayNumber(start), monday = first - ((new Date(first * DAY).getUTCDay() + 6) % 7);
   const closed = new Set(holidays);
   const days: BoardDay[] = [];
   for (let week = 0; week < weeks; week++)
-    for (let weekday = 0; weekday < 5; weekday++) {
+    for (let weekday = 0; weekday < 7; weekday++) {
       const date = dateFromDay(monday + week * 7 + weekday);
-      days.push({ date, holiday: closed.has(date), today: date === today, weekStart: weekday === 0 });
+      days.push({ date, holiday: closed.has(date), today: date === today, weekStart: weekday === 0, weekend: weekday >= 5 });
     }
   return days;
 }
@@ -23,7 +27,7 @@ export type DayLoad = { date: string; manDays: number; available: number; /** Nu
 
 /**
  * A person's planned man-days on each day: every open item's effort spread evenly over its working days, as
- * planningLoad spreads it over weeks. A working day offers capacity / 5 man-days; a holiday offers none. Leave is not
+ * planningLoad spreads it over weeks. A working day offers capacity / 5 man-days; a holiday or a weekend offers none. Leave is not
  * deducted (owner decision 2026-10-21): the board only shows it.
  */
 export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: number, holidays: readonly string[] = []): DayLoad[] {
@@ -36,8 +40,8 @@ export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: numbe
     for (const date of span) spread.set(date, (spread.get(date) ?? 0) + share);
   }
   const daily = capacity / 5;
-  return days.map(({ date, holiday }) => {
-    const manDays = spread.get(date) ?? 0, available = holiday ? 0 : daily;
+  return days.map(({ date, holiday, weekend }) => {
+    const manDays = spread.get(date) ?? 0, available = holiday || weekend ? 0 : daily;
     const utilisation = available > 0 ? (manDays / available) * 100 : manDays > 0 ? Infinity : null;
     return { date, manDays, available, utilisation };
   });
