@@ -183,15 +183,25 @@ export async function demandAssignedLeaf(transaction: TransactionType, task: Tas
   const allowed = Boolean((await request.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) allowed;`)).recordset[0]?.allowed);
   if (!allowed || task.kind === "phase") throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC can change a non-phase leaf task.");
 }
-export type ProgressRights = { isLeaf: boolean; isPic: boolean; isManager: boolean; isAdmin: boolean; managed: boolean };
-/** Who may post progress on a row: a PIC, the project manager or an Admin, on a non-phase leaf. A row Resource Plan manages stays with its PIC (its assignee). */
-export function canPostProgress(rights: ProgressRights): boolean { return rights.isLeaf && (rights.isPic || (!rights.managed && (rights.isManager || rights.isAdmin))); }
+export type ProgressRights = { isLeaf: boolean; isPic: boolean; isManager: boolean; isAdmin: boolean; managed: boolean; isMember: boolean; unassigned: boolean };
+/**
+ * Who may post progress on a row: a PIC, the project manager or an Admin, on a non-phase leaf; and on a row with no PIC
+ * at all, any member of the project (owner decision 2026-10-26). A row Resource Plan manages stays with its PIC (its assignee).
+ */
+export function canPostProgress(rights: ProgressRights): boolean { return rights.isLeaf && (rights.isPic || (!rights.managed && (rights.isManager || rights.isAdmin || (rights.isMember && rights.unassigned)))); }
+/** True when @actor is the manager or lead engineer of @project or listed in its members: what My Work and demandProjectScope call assigned. */
+export const PROJECT_MEMBER_SQL = "EXISTS(SELECT 1 FROM dbo.projects member_project WHERE member_project.id=@project AND (member_project.manager_id=@actor OR member_project.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members member WHERE member.project_id=member_project.id AND member.user_id=@actor)))";
+export async function isProjectMember(transaction: TransactionType, projectId: number, actorId: number): Promise<boolean> {
+  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("actor", sql.BigInt, actorId);
+  return Boolean((await request.query<{ value: boolean }>(`SELECT CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value);
+}
 /** The progress route's check. Day requests, member details and drawing workflow keep demandAssignedLeaf (PIC only). */
 export async function demandProgressWriter(transaction: TransactionType, task: TaskRow, project: ProjectRow, actor: CurrentUser): Promise<void> {
-  const request = new sql.Request(transaction); request.input("task", sql.BigInt, task.id); request.input("actor", sql.BigInt, actor.id);
-  const row = (await request.query<{ is_pic: boolean; has_children: boolean; managed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed;`)).recordset[0];
-  const rights = { isLeaf: task.kind !== "phase" && !row?.has_children, isPic: Boolean(row?.is_pic), isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"), managed: Boolean(row?.managed) };
-  if (!canPostProgress(rights)) throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager or an Admin can update this task's progress.");
+  const request = new sql.Request(transaction); request.input("task", sql.BigInt, task.id); request.input("actor", sql.BigInt, actor.id); request.input("project", sql.BigInt, project.id);
+  const row = (await request.query<{ is_pic: boolean; has_pics: boolean; has_children: boolean; managed: boolean; is_member: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task) THEN 1 ELSE 0 END AS bit) has_pics,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed,CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) is_member;`)).recordset[0];
+  const rights = { isLeaf: task.kind !== "phase" && !row?.has_children, isPic: Boolean(row?.is_pic), isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"), managed: Boolean(row?.managed),
+    isMember: Boolean(row?.is_member), unassigned: !row?.has_pics };
+  if (!canPostProgress(rights)) throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager, an Admin or, on a task with no PIC, a project member can update this task's progress.");
 }
 /**
  * Who may answer a day request: the project manager, or anyone holding Engineering Manager or Admin as any
@@ -240,6 +250,8 @@ export function scheduleCalculation(tasks: TaskRow[]) {
 /** What the reader may do on each row. projectCanProgress = the project is not Closed and the reader has schedule.progress. */
 export type TaskAccess = {
   actorId: number; managed: Map<number, ManagedTask>; projectCanProgress: boolean; isManager: boolean; isAdmin: boolean;
+  /** The reader is the manager, lead engineer or a listed member (PROJECT_MEMBER_SQL): they may update rows that have no PIC. */
+  isMember: boolean;
   /** Master Plan frame leaves that the shared summary leaves out (project-health.ts countedLeaves); the screens' late and blocked rules skip them too. */
   frameIds?: Set<number>;
 };
@@ -248,7 +260,8 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
   const managedTask = access?.managed.get(task.id), managed = managedTask !== undefined;
   // A managed row also needs what the resource-tasks.ts preHandler demands, or the POST is refused with acknowledgment_required.
   const flags = access ? { managedByResourcePlan: managed, countsTowardHealth: !access.frameIds?.has(task.id), canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
-    isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed }) } : {};
+    isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed,
+    isMember: access.isMember, unassigned: !(pics.get(task.id) ?? []).length }) } : {};
   return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
     isMilestone: task.isMilestone, origin: task.origin, visibility: task.visibility, planStart: resolved.planStart, planFinish: resolved.planFinish,
     // The start as stored, for an edit to send back unchanged; planStart above is the resolved one.

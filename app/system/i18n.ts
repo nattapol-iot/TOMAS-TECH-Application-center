@@ -2468,6 +2468,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "MyWork.noReportYet": { en: "No progress reported yet", th: "ยังไม่เคยรายงานความคืบหน้า", jp: "進捗報告なし" },
   "MyWork.inquiryWork": { en: "Inquiry estimate work", th: "งานประเมินราคาจาก Inquiry", jp: "引合い見積作業" },
   "MyWork.inquiryWorkHint": { en: "Acknowledged estimate assignments that are not on a project plan", th: "งานประเมินราคาที่รับทราบแล้วและยังไม่อยู่ในแผนโครงการ", jp: "確認済みでプロジェクト計画外の見積担当作業" },
+  "MyWork.unassignedTitle": { en: "Project tasks without a PIC", th: "งานในโครงการที่ยังไม่มี PIC", jp: "PIC未設定のプロジェクトタスク" },
+  "MyWork.unassignedHint": { en: "Open tasks on your projects that nobody owns yet. Any project member can update their progress; the project manager sets the PIC and the dates.", th: "งานที่ยังเปิดอยู่ในโครงการของคุณและยังไม่มีใครเป็นเจ้าของ สมาชิกโครงการทุกคนอัปเดตความคืบหน้าได้ ส่วน PIC และวันที่ให้ PM เป็นคนตั้ง", jp: "担当者がまだいない、あなたのプロジェクトの未完了タスクです。プロジェクトメンバーなら誰でも進捗を更新できます。PICと日程はPMが設定します。" },
   "ResourceTasks.acknowledge": { en: "Acknowledge", th: "รับทราบ", jp: "確認する" },
   "ResourceTasks.acknowledgeAll": { en: "Acknowledge all ({n})", th: "รับทราบทั้งหมด ({n})", jp: "すべて確認 ({n})" },
   "ResourceTasks.acknowledged": { en: "assignments acknowledged", th: "งานที่รับทราบแล้ว", jp: "件の担当を確認しました" },

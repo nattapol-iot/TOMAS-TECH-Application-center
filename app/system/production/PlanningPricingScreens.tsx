@@ -118,6 +118,8 @@ type MyWorkItem = {
   managedByResourcePlan?: boolean;
   /** Server verdict: canUpdate, not managed, and no request already waiting. */
   canRequestDays?: boolean;
+  /** A row with no PIC on one of the reader's projects: any member may update its progress. Kept out of the personal counts. */
+  unassigned?: boolean;
   taskId: number;
   parentId: number | null;
   wbs: string;
@@ -1148,14 +1150,16 @@ export function ProductionMyWork({
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const open = useMemo(() => items.filter((item) => item.status !== "Done"), [items]);
+  // Rows without a PIC are listed for any member to update, but they are nobody's own work: the counts stay personal.
+  const assignedItems = useMemo(() => items.filter((item) => !item.unassigned), [items]);
+  const open = useMemo(() => assignedItems.filter((item) => item.status !== "Done"), [assignedItems]);
   const actionableOpen = useMemo(() => open.filter((item) => item.canUpdate), [open]);
   const needsUpdate = useMemo(() => actionableOpen.filter(workNeedsUpdate), [actionableOpen]);
   const dueThisWeek = useMemo(() => actionableOpen.filter((item) => {
     const days = daysFromToday(workEffectiveFinish(item));
     return days !== null && days >= 0 && days <= 7;
   }), [actionableOpen]);
-  const waiting = useMemo(() => items.filter((item) => item.pendingRequest), [items]);
+  const waiting = useMemo(() => assignedItems.filter((item) => item.pendingRequest), [assignedItems]);
   const actionableEstimateAssignments = useMemo(() => estimateQueue.assignments.filter(isActionableAssignment), [estimateQueue.assignments]);
   const lateEstimateAssignments = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "overdue"), [actionableEstimateAssignments, todayIso]);
   const dueEstimateAssignments = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "due-soon"), [actionableEstimateAssignments, todayIso]);
@@ -1177,11 +1181,14 @@ export function ProductionMyWork({
     });
   }, [items, projectFilter, sourceFilter, taskSearch]);
   const scheduleGroups = useMemo(() => {
-    const groups = groupScheduleWork(visibleScheduleItems).filter((group) => group.items.some((item) => matchesWorkFilter(item, taskFilter)));
+    const groups = groupScheduleWork(visibleScheduleItems.filter((item) => !item.unassigned)).filter((group) => group.items.some((item) => matchesWorkFilter(item, taskFilter)));
     if (taskSort === "project") return [...groups].sort((left, right) => `${left.projectNo}:${left.phaseWbs ?? ""}`.localeCompare(`${right.projectNo}:${right.phaseWbs ?? ""}`, undefined, { numeric: true }));
     if (taskSort === "due") return [...groups].sort((left, right) => (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31"));
     return groups;
   }, [taskFilter, taskSort, visibleScheduleItems]);
+  // Shown under "All open" only, so the Late / Blocked / Needs update drill-downs stay the reader's own.
+  const unassignedGroups = useMemo(() => taskFilter !== "open" ? [] : groupScheduleWork(visibleScheduleItems.filter((item) => item.unassigned))
+    .map((group) => ({ ...group, key: `unassigned:${group.key}` })), [taskFilter, visibleScheduleItems]);
   const visibleEstimateGroups = useMemo(() => {
     if (sourceFilter !== "all" && sourceFilter !== "estimate") return [];
     if (projectFilter !== "all") return [];
@@ -1402,6 +1409,24 @@ export function ProductionMyWork({
         </div>
       </Panel>
 
+      {unassignedGroups.length ? <Panel title="MyWork.unassignedTitle" subtitle="MyWork.unassignedHint" flush><div className="my-work-task-list work-group-list">
+        {/* Nobody owns these rows, so there is no day request, personal task or delete here (the server sends those flags false). */}
+        {unassignedGroups.map((group) => <ProductionScheduleWorkGroup
+          key={group.key}
+          group={group}
+          expanded={isGroupExpanded(group.key, false)}
+          onToggle={() => toggleGroup(group.key, isGroupExpanded(group.key, false))}
+          saving={saving}
+          notify={notify}
+          patchProgress={patchProgress}
+          openProjectSchedule={openProjectSchedule}
+          onEdit={setEditingFor}
+          onRequest={setRequestFor}
+          onAdd={() => undefined}
+          onDelete={async () => undefined}
+        />)}
+      </div></Panel> : null}
+
       {(sourceFilter === "all" || sourceFilter === "estimate") && inquiryWork.length ? <Panel title="MyWork.inquiryWork" subtitle="MyWork.inquiryWorkHint" flush><div className="my-work-task-list">
         {inquiryWork.map((task) => <article key={task.id} className={`my-task-card${isLateAgainstPlan({ status: task.status, planFinish: task.end }, todayIso) ? " late" : ""}${task.status === "Blocked" ? " blocked" : ""}`}>
           <div className="my-task-card-main">
@@ -1416,7 +1441,7 @@ export function ProductionMyWork({
             editable={inquirySaving === null} taskNotes={false} notify={notify} onPatch={(patch, message) => { void saveInquiryProgress(task, patch, message); }} />
         </article>)}
       </div></Panel> : null}
-      {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !items.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} /></Panel> : null}
+      {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !assignedItems.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} /></Panel> : null}
       {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
       </> : null}
     </> : null}
@@ -1624,6 +1649,7 @@ function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify
       <div className="schedule-work-group-title">
         <div className="estimate-work-reference">
           <Badge tone={group.source === "personal" ? "blue" : "slate"}><LocalizedText text={group.source === "personal" ? "Personal" : "Project"} /></Badge>
+          {group.items.every((item) => item.unassigned) ? <Badge tone="amber"><LocalizedText text={"No PIC"} /></Badge> : null}
           <strong className="mono">{group.projectNo}</strong>
           {group.phaseWbs ? <span className="mono">WBS {group.phaseWbs}</span> : null}
         </div>

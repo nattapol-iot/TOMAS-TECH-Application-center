@@ -81,13 +81,13 @@ function harness(actor: Actor, options: { managedAssignee?: number | null; permi
 
 const lockedScheduleVersion = (statement: string) => /SELECT TOP\(1\) row_version FROM dbo\.schedule_tasks WITH \(UPDLOCK,HOLDLOCK\)/.test(statement);
 
-/** Answers for the progress route on task 11. rights = what the is_pic/has_children/managed probe returns. */
-function progressAnswers(task: Record<string, unknown>, rights: { isPic: boolean; hasChildren?: boolean; managed?: boolean }) {
+/** Answers for the progress route on task 11. rights = what the is_pic/has_pics/has_children/managed/is_member probe returns; the row has a PIC unless hasPics is false. */
+function progressAnswers(task: Record<string, unknown>, rights: { isPic: boolean; hasPics?: boolean; hasChildren?: boolean; managed?: boolean; isMember?: boolean }) {
   return (statement: string): Answer | undefined => {
     if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [task] };
     if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
     if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
-    if (statement.includes(" is_pic,")) return { recordset: [{ is_pic: rights.isPic, has_children: rights.hasChildren ?? false, managed: rights.managed ?? false }] };
+    if (statement.includes(" is_pic,")) return { recordset: [{ is_pic: rights.isPic, has_pics: rights.hasPics ?? true, has_children: rights.hasChildren ?? false, managed: rights.managed ?? false, is_member: rights.isMember ?? false }] };
     if (statement.includes("UPDATE dbo.schedule_tasks SET percent_done=")) return { recordset: [{ row_version: NEXT_VERSION }] };
     if (statement.includes("SELECT project_id FROM dbo.schedule_tasks WHERE id=@source")) return { recordset: [{ project_id: PROJECT_ID }] };
     if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: NEXT_VERSION }] };
@@ -101,7 +101,7 @@ const progressPayload = (rowVersion = TASK_VERSION) => ({
 });
 
 test("canPostProgress: a PIC, the project manager or an Admin may post on a leaf; a Resource Plan row stays with its PIC", () => {
-  const leaf = { isLeaf: true, isPic: false, isManager: false, isAdmin: false, managed: false };
+  const leaf = { isLeaf: true, isPic: false, isManager: false, isAdmin: false, managed: false, isMember: false, unassigned: false };
   assert.equal(canPostProgress({ ...leaf, isPic: true }), true);
   assert.equal(canPostProgress({ ...leaf, isManager: true }), true);
   assert.equal(canPostProgress({ ...leaf, isAdmin: true }), true);
@@ -110,6 +110,15 @@ test("canPostProgress: a PIC, the project manager or an Admin may post on a leaf
   assert.equal(canPostProgress({ ...leaf, managed: true, isPic: true }), true);
   assert.equal(canPostProgress({ ...leaf, managed: true, isManager: true }), false);
   assert.equal(canPostProgress({ ...leaf, managed: true, isAdmin: true }), false);
+});
+
+test("canPostProgress: a project member may post on a leaf that has no PIC, never on someone else's row", () => {
+  const leaf = { isLeaf: true, isPic: false, isManager: false, isAdmin: false, managed: false, isMember: true, unassigned: true };
+  assert.equal(canPostProgress(leaf), true);
+  assert.equal(canPostProgress({ ...leaf, unassigned: false }), false, "another member is PIC of the row");
+  assert.equal(canPostProgress({ ...leaf, isMember: false }), false, "not on the project");
+  assert.equal(canPostProgress({ ...leaf, isLeaf: false }), false, "phase or roll-up row");
+  assert.equal(canPostProgress({ ...leaf, managed: true }), false, "a Resource Plan row stays with its assignee");
 });
 
 test("businessToday reads the date in the business time zone, not UTC", () => {
@@ -202,22 +211,36 @@ test("an assigned PIC still posts progress", async (t) => {
   } finally { await app.close(); }
 });
 
+test("a project member posts progress on a task that has no PIC", async (t) => {
+  const { app, transactions } = harness({ id: 31, role: "Engineer" });
+  const statements = installSqlMock(t, progressAnswers(taskRaw({ id: 11 }), { isPic: false, hasPics: false, isMember: true }));
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/updates", payload: progressPayload() });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(transactions, ["committed"]);
+    const probe = statements.find((entry) => entry.statement.includes(" is_pic,"))!;
+    assert.equal(probe.params.project, PROJECT_ID, "membership is read for the task's own project");
+  } finally { await app.close(); }
+});
+
 test("progress is refused for someone who is not PIC, manager or Admin, and on phase and roll-up rows", async (t) => {
-  const cases: Array<{ actor: Actor; task: Record<string, unknown>; rights: { isPic: boolean; hasChildren?: boolean } }> = [
+  const cases: Array<{ actor: Actor; task: Record<string, unknown>; rights: { isPic: boolean; hasPics?: boolean; hasChildren?: boolean; isMember?: boolean } }> = [
     { actor: { id: 31, role: "Engineer" }, task: taskRaw({ id: 11 }), rights: { isPic: false } },
+    { actor: { id: 31, role: "Engineer" }, task: taskRaw({ id: 11 }), rights: { isPic: false, isMember: true } },
+    { actor: { id: 32, role: "Engineer" }, task: taskRaw({ id: 11 }), rights: { isPic: false, hasPics: false } },
     { actor: { id: MANAGER_ID, role: "Project Manager" }, task: taskRaw({ id: 11, kind: "phase", plan_start: null }), rights: { isPic: false } },
     { actor: { id: 99, role: "Admin" }, task: taskRaw({ id: 11 }), rights: { isPic: false, hasChildren: true } },
     { actor: { id: 30, role: "Engineer" }, task: taskRaw({ id: 11 }), rights: { isPic: true, hasChildren: true } },
   ];
   for (const { actor, task, rights } of cases) {
-    await t.test(`actor ${actor.id} on ${String(task.kind)}${rights.hasChildren ? " roll-up" : ""}`, async (sub) => {
+    await t.test(`actor ${actor.id} on ${String(task.kind)}${rights.hasChildren ? " roll-up" : ""}${rights.isMember ? " as member" : ""}${rights.hasPics === false ? " without PIC" : ""}`, async (sub) => {
       const { app, transactions } = harness(actor);
       const statements = installSqlMock(sub, progressAnswers(task, rights));
       try {
         const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/updates", payload: progressPayload() });
         assert.equal(response.statusCode, 403, response.body);
         assert.equal(response.json().code, "schedule_pic_required");
-        assert.equal(response.json().message, "Only an assigned PIC, the project manager or an Admin can update this task's progress.");
+        assert.equal(response.json().message, "Only an assigned PIC, the project manager, an Admin or, on a task with no PIC, a project member can update this task's progress.");
         assert.deepEqual(transactions, ["rolled-back"]);
         assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET percent_done=")), false);
       } finally { await app.close(); }
@@ -346,6 +369,20 @@ test("GET schedule: canProgress and managedByResourcePlan per row", async (t) =>
       assert.equal(flags[4]!.can, false, "not PIC, not manager, not Admin");
     } finally { await app.close(); }
   });
+  for (const isMember of [true, false]) {
+    await t.test(isMember ? "project member: rows with no PIC" : "reader who is not on the project: rows with no PIC", async (sub) => {
+      const { app } = harness({ id: 31, role: "Engineer" });
+      const answers = scheduleAnswers([{ task: 5, user: 30 }, { task: 4, user: 30 }]);
+      installSqlMock(sub, (statement) => statement.includes("member_project") ? { recordset: [{ value: isMember }] } : answers(statement));
+      try {
+        const flags = flagsById((await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json().tasks);
+        assert.deepEqual(flags, {
+          1: { managed: false, can: false }, 2: { managed: false, can: isMember }, 3: { managed: false, can: false }, 4: { managed: false, can: false },
+          5: { managed: true, can: false }, 6: { managed: false, can: false }, 7: { managed: false, can: isMember },
+        }, "only leaves without a PIC open to members; a colleague's, a managed or a roll-up row stays closed");
+      } finally { await app.close(); }
+    });
+  }
   await t.test("Admin", async (sub) => {
     const { app } = harness({ id: 99, role: "Admin" });
     installSqlMock(sub, scheduleAnswers([{ task: 5, user: 30 }]));
@@ -429,6 +466,39 @@ test("GET me/work: a task shared by several PICs takes no personal task, and qui
     assert.equal(byId[8]!.lastProgressAt, "2026-09-20T03:00:00Z");
     assert.equal(byId[10]!.lastProgressAt, null);
   } finally { await app.close(); }
+});
+
+test("GET me/work: a project member also gets the open rows that have no PIC, to update but not to replan", async (t) => {
+  const actor = { id: 30, role: "Engineer" };
+  const rows = [
+    taskRaw({ id: 3, kind: "phase", name: "Execution", plan_start: null, plan_days: 1 }),
+    taskRaw({ id: 8, parent_id: 3, name: "Mine", plan_start: "2027-03-01" }),
+    taskRaw({ id: 12, parent_id: 3, sort_order: 2, name: "Nobody yet", plan_start: "2027-03-01" }),
+    taskRaw({ id: 13, parent_id: 3, sort_order: 3, name: "Nobody, finished", plan_start: "2027-03-01", status: "Done", percent_done: 100 }),
+    taskRaw({ id: 14, parent_id: 3, sort_order: 4, name: "Colleague's", plan_start: "2027-03-01" }),
+  ];
+  for (const isMember of [true, false]) {
+    await t.test(isMember ? "member" : "elevated reader who is not on the project", async (sub) => {
+      const { app } = harness(actor);
+      const statements = installSqlMock(sub, (statement) => {
+        if (statement.includes("SELECT DISTINCT p.id,p.project_no")) return { recordset: [{ id: PROJECT_ID, project_no: "P-26-007", name: "Line 3 IoT", manager_id: MANAGER_ID, manager_name: "PM", status: "Design", can_update: true, is_member: isMember }] };
+        if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: rows };
+        if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [{ task_id: 8, id: 30, name: "Me", email: "me@example.test" }, { task_id: 14, id: 31, name: "Colleague", email: "c@example.test" }] };
+        if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+        return undefined;
+      });
+      try {
+        const response = await app.inject({ method: "GET", url: "/api/v1/me/work" });
+        assert.equal(response.statusCode, 200, response.body);
+        const byId = Object.fromEntries((response.json() as Array<Record<string, unknown>>).map((item) => [item.taskId, item]));
+        assert.deepEqual(Object.keys(byId).map(Number).sort((a, b) => a - b), isMember ? [8, 12] : [8]);
+        assert.equal(byId[8]!.unassigned, false);
+        if (isMember) assert.deepEqual([byId[12]!.unassigned, byId[12]!.canUpdate, byId[12]!.canRequestDays, byId[12]!.canAddDetail, byId[12]!.canDeleteDetail], [true, true, false, false, false]);
+        const projects = statements.find((entry) => entry.statement.includes("SELECT DISTINCT p.id,p.project_no"))!.statement;
+        assert.match(projects, /p\.status<>N'Closed' AND \(p\.manager_id=@actor/, "a project counts without a PIC row while the reader is on it");
+      } finally { await app.close(); }
+    });
+  }
 });
 
 test("GET day-requests/pending lists requests the user can answer, with their WBS", async (t) => {
