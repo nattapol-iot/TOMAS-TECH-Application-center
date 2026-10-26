@@ -83,6 +83,34 @@
 }
 .crm-link:hover { text-decoration: underline; }
 
+/* The deal table (DealTable): five columns of two lines that fit the screen, so nobody scrolls sideways while
+   presenting. Long names and customers wrap to two lines and end in an ellipsis; the full text is in the tooltip. */
+.crm-deal-table { table-layout: fixed; }
+.crm-deal-table tbody td { white-space: normal; vertical-align: top; }
+.crm-deal-table .num { text-align: right; }
+.crm-deal-table .crm-col-deal { width: 31%; }
+.crm-deal-table .crm-col-customer { width: 21%; }
+.crm-deal-table .crm-col-stage { width: 16%; }
+.crm-deal-table .crm-col-value { width: 10%; }
+.crm-deal-table .crm-col-owner { width: 22%; }
+.crm-deal-table .crm-col-edit { width: 72px; }
+.crm-deal-table.with-value .crm-col-value { width: 13%; }
+.crm-deal-table.with-value .crm-col-deal { width: 29%; }
+.crm-deal-table.with-value .crm-col-customer { width: 20%; }
+.crm-deal-name, .crm-deal-clamp {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+}
+.crm-deal-name { font-size: var(--fs-sm); }
+.crm-deal-sub {
+  display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: var(--fs-2xs); text-overflow: ellipsis; white-space: nowrap;
+}
+.crm-deal-sub.crm-deal-clamp { display: -webkit-box; white-space: normal; }
+.crm-deal-sub .crm-link { font-size: inherit; }
+.crm-deal-value { display: block; color: var(--ink); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+/* The owner, then what needs attention on the same line, so a flag does not add a row. */
+.crm-deal-ownerline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.crm-deal-owner { overflow: hidden; color: var(--ink); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
 /* --------------------------------------------------------------------------
    Pipeline board
    -------------------------------------------------------------------------- */
@@ -372,6 +400,8 @@ button.crm-opportunity-card:hover { border-color: var(--n-300); box-shadow: var(
   .crm-filters .select-field select { width: 100%; }
   .crm-action { align-items: flex-start; flex-direction: column; gap: 8px; }
   .crm-funnel { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+  /* A phone scrolls the deal table rather than crushing five columns into its width. */
+  .crm-deal-table { min-width: 760px; }
 }
 
 @media (max-width: 620px) {

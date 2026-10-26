@@ -344,4 +344,11 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.selectCustomer", "Select customer", "เลือกลูกค้า", "顧客を選択"],
  ["CRM.selectProjectType", "Select project type", "เลือกประเภทงาน", "案件区分を選択"],
  ["Project without an estimate", "Project without an estimate", "Project ที่ไม่มี Estimate", "見積なしのプロジェクト"],
+ // The deal table in five columns, and filters that say what "all" they mean (2026-10-25).
+ ["CRM.dealColumn", "Opportunity", "โอกาสขาย", "商談"],
+ ["CRM.valueCloseColumn", "Value · expected close", "มูลค่า · คาดว่าปิด", "金額・受注予定"],
+ ["CRM.ownerNextColumn", "Owner · next action", "ผู้รับผิดชอบ · สิ่งที่ต้องทำต่อ", "担当・次のアクション"],
+ ["CRM.allStages", "Sales status: all", "สถานะงานขาย: ทั้งหมด", "営業状況：すべて"],
+ ["CRM.allOwners", "Owner: everyone", "ผู้รับผิดชอบ: ทุกคน", "担当者：全員"],
+ ["CRM.allFollowups", "Follow-up: all", "การติดตาม: ทั้งหมด", "フォロー：すべて"],
 ].map(([key,en,th,jp])=>[key,{en,th,jp}]));

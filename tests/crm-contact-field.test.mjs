@@ -82,3 +82,20 @@ test("every new string has English, Thai and Japanese", () => {
   for (const key of keys) for (const language of ["en", "th", "jp"]) assert.ok(CRM_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
   assert.match(CRM_COPY["CRM.listCut"].th, /\{shown\}.*\{total\}/);
 });
+
+test("the deal table fits the screen in five columns of two lines, and the filters say what they show", () => {
+  // Presented to management (2026-10-25): ten fields in five columns instead of ten that scroll sideways.
+  assert.match(screen, /<DealTable openInquiry=\{openInquiry\} rows=\{rows\} commercial=\{bootstrap\.permissions\.includes\("crm\.commercial\.read"\)\}/);
+  assert.doesNotMatch(screen, /columns=\{\["opportunityNo","name","customerName","stage","inquiryNo","inquiryStatus","expectedValue"/);
+  assert.match(screen, /<th>\{t\("CRM\.dealColumn"\)\}<\/th><th>\{t\("CRM\.customerName"\)\}<\/th><th>\{t\("CRM\.salesStage"\)\}<\/th>/);
+  // The value only for people who may see it; a flag sits beside the owner rather than on a line of its own.
+  assert.match(screen, /commercial&&r\.expectedValue!=null\?<><strong className="crm-deal-value">\{money\(r\.expectedValue\)\}<\/strong>/);
+  assert.match(screen, /<span className="crm-deal-ownerline"><span className="crm-deal-owner">/);
+  assert.match(crmCss, /\.crm-deal-table \{ table-layout: fixed; \}/);
+  assert.match(crmCss, /\.crm-deal-table tbody td \{ white-space: normal; vertical-align: top; \}/);
+  assert.match(screen, /label:t\("CRM\.allStages"\)/);
+  assert.match(screen, /label:t\("CRM\.allOwners"\)/);
+  assert.match(screen, /label:t\("CRM\.allFollowups"\)/);
+  for (const key of ["CRM.dealColumn", "CRM.valueCloseColumn", "CRM.ownerNextColumn", "CRM.allStages", "CRM.allOwners", "CRM.allFollowups"])
+    for (const language of ["en", "th", "jp"]) assert.ok(CRM_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
+});
