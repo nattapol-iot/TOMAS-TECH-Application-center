@@ -2,29 +2,30 @@
 
 [Module](../modules/site-monitor.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4dccb750`; generated, do not edit. [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `61a4812b`; generated, do not edit. [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/monitor/agent/ping` | 326–329 |
-| POST | `/api/v1/monitor/agent/heartbeat` | 335–457 |
-| GET | `/api/v1/monitor/agent/commands` | 460–490 |
-| POST | `/api/v1/monitor/agent/commands/:commandId/result` | 492–514 |
-| GET | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 565–565 |
-| HEAD | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 566–566 |
-| GET | `/api/v1/monitor/sites` | 570–582 |
-| GET | `/api/v1/monitor/sites/:siteId` | 584–651 |
-| GET | `/api/v1/monitor/sites/:siteId/logs` | 653–686 |
-| GET | `/api/v1/monitor/commands/:commandId` | 688–696 |
-| POST | `/api/v1/monitor/programs/:programId/commands` | 700–750 |
-| POST | `/api/v1/monitor/incidents/:incidentId/acknowledge` | 752–771 |
-| POST | `/api/v1/monitor/sites` | 794–823 |
-| PUT | `/api/v1/monitor/sites/:siteId` | 825–865 |
-| POST | `/api/v1/monitor/sites/:siteId/agents` | 867–895 |
-| POST | `/api/v1/monitor/agents/:agentId/rotate-key` | 897–917 |
-| POST | `/api/v1/monitor/agents/:agentId/revoke` | 919–945 |
+| GET | `/api/v1/monitor/agent/ping` | 341–344 |
+| POST | `/api/v1/monitor/agent/heartbeat` | 350–472 |
+| GET | `/api/v1/monitor/agent/commands` | 475–505 |
+| POST | `/api/v1/monitor/agent/commands/:commandId/result` | 507–529 |
+| GET | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 580–580 |
+| HEAD | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 581–581 |
+| GET | `/api/v1/monitor/sites` | 585–597 |
+| GET | `/api/v1/monitor/sites/:siteId` | 599–666 |
+| GET | `/api/v1/monitor/sites/:siteId/logs` | 668–701 |
+| GET | `/api/v1/monitor/commands/:commandId` | 703–711 |
+| POST | `/api/v1/monitor/programs/:programId/commands` | 715–765 |
+| POST | `/api/v1/monitor/incidents/:incidentId/acknowledge` | 767–786 |
+| POST | `/api/v1/monitor/sites` | 809–838 |
+| PUT | `/api/v1/monitor/sites/:siteId` | 840–880 |
+| POST | `/api/v1/monitor/sites/:siteId/agents` | 882–910 |
+| POST | `/api/v1/monitor/agents/:agentId/rotate-key` | 912–932 |
+| POST | `/api/v1/monitor/agents/:agentId/revoke` | 934–960 |
+| PUT | `/api/v1/monitor/agents/:agentId/tmtdesk` | 963–983 |
 
 ## Named functions
 
@@ -41,10 +42,11 @@ Evidence: source snapshot `4dccb750`; generated, do not edit. [backend-node/src/
 | `header` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 89–92 |
 | `isDuplicateKey` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 94–97 |
 | `parseSiteInput` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 110–131 |
-| `siteDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 178–198 |
-| `agentDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 200–221 |
-| `commandDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 223–229 |
-| `registerSiteMonitorRoutes` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 291–946 |
+| `siteDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 179–199 |
+| `parseTmtdeskId` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 205–212 |
+| `agentDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 214–236 |
+| `commandDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 238–244 |
+| `registerSiteMonitorRoutes` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 306–984 |
 
 ## Direct local dependencies
 

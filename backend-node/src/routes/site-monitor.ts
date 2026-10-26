@@ -144,6 +144,7 @@ type AgentRow = {
   allows_control: boolean; is_online: boolean; last_seen_at: Date | null; status_changed_at: Date | null; created_at: Date;
   host_cpu_percent: number | null; host_memory_used_bytes: number | string | null; host_memory_total_bytes: number | string | null;
   host_disk_free_bytes: number | string | null; host_disk_total_bytes: number | string | null; host_uptime_seconds: number | string | null;
+  tmtdesk_id: string | null;
 };
 type ProgramRow = {
   id: number | string; agent_id: number | string; program_key: string; name: string; group_label: string;
@@ -197,6 +198,19 @@ function siteDto(row: SiteRow, contacts: ContactRow[]) {
   };
 }
 
+/**
+ * A TMTDesk ID is nine digits; people paste it as shown in TMTDesk ("123 456 789"), so spaces and
+ * dashes are dropped. Empty clears it. Anything else is rejected rather than stored.
+ */
+export function parseTmtdeskId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") throw new ApiError(400, "monitor_tmtdesk_id_invalid", "The TMTDesk ID must be 9 digits.");
+  const digits = value.replace(/[\s-]/g, "");
+  if (!digits) return null;
+  if (!/^\d{9}$/.test(digits)) throw new ApiError(400, "monitor_tmtdesk_id_invalid", "The TMTDesk ID must be 9 digits.");
+  return digits;
+}
+
 function agentDto(row: AgentRow) {
   return {
     id: Number(row.id),
@@ -209,6 +223,7 @@ function agentDto(row: AgentRow) {
     lastSeenAt: iso(row.last_seen_at),
     statusChangedAt: iso(row.status_changed_at),
     createdAt: iso(row.created_at),
+    tmtdeskId: row.tmtdesk_id ? row.tmtdesk_id.trim() : null,
     host: {
       cpuPercent: numberOrNull(row.host_cpu_percent),
       memoryUsedBytes: numberOrNull(row.host_memory_used_bytes),
@@ -592,7 +607,7 @@ export function registerSiteMonitorRoutes(
       FROM dbo.monitor_site_contacts c INNER JOIN dbo.users u ON u.id = c.user_id
       WHERE c.site_id = @site ORDER BY c.priority;
 
-      SELECT id, name, key_hint, machine_name, agent_version, allows_control, is_online, last_seen_at, status_changed_at, created_at,
+      SELECT id, name, key_hint, machine_name, agent_version, allows_control, is_online, last_seen_at, status_changed_at, created_at, tmtdesk_id,
              host_cpu_percent, host_memory_used_bytes, host_memory_total_bytes, host_disk_free_bytes, host_disk_total_bytes, host_uptime_seconds
       FROM dbo.monitor_agents
       WHERE site_id = @site AND revoked_at IS NULL
@@ -942,5 +957,28 @@ export function registerSiteMonitorRoutes(
     });
     wakeAgent(agentId);
     return { ok: true };
+  });
+
+  // The TMTDesk ID only labels the machine for the Remote button; TMTDesk still asks for its own password.
+  app.put("/api/v1/monitor/agents/:agentId/tmtdesk", async (request) => {
+    await users.demandPermission(request, MANAGE);
+    const user = await users.required(request);
+    const agentId = id((request.params as Record<string, unknown>).agentId, "agentId");
+    const tmtdeskId = parseTmtdeskId((request.body as Record<string, unknown> | null)?.tmtdeskId);
+    await database.transaction(async (transaction) => {
+      const updated = await new sql.Request(transaction)
+        .input("id", sql.BigInt, agentId)
+        .input("tmtdesk", sql.Char(9), tmtdeskId)
+        .query<{ updated: number; name: string | null; previous: string | null }>(`
+          DECLARE @previous char(9) = (SELECT tmtdesk_id FROM dbo.monitor_agents WHERE id = @id AND revoked_at IS NULL);
+          UPDATE dbo.monitor_agents SET tmtdesk_id = @tmtdesk WHERE id = @id AND revoked_at IS NULL;
+          SELECT @@ROWCOUNT AS updated, (SELECT name FROM dbo.monitor_agents WHERE id = @id) AS name, @previous AS previous;
+        `);
+      const row = updated.recordset[0];
+      if (!row?.updated) throw new ApiError(404, "monitor_agent_not_found", "The machine was not found or was removed.");
+      await insertAudit(transaction, user.id, "MonitorAgent", agentId, (row.name ?? "").slice(0, 50), "TMTDesk ID changed",
+        { tmtdeskId: row.previous ? row.previous.trim() : null }, { tmtdeskId });
+    });
+    return { tmtdeskId };
   });
 }

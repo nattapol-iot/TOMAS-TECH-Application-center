@@ -4835,6 +4835,7 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .site-monitor-footnote { margin: 0; padding: 8px 14px; color: var(--muted); font-size: var(--fs-xs); }
 .site-monitor-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
 .site-monitor-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.site-monitor-remote { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .site-monitor-meter { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .site-monitor-meter span { color: var(--ink-soft); font-size: var(--fs-2xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .site-monitor-problems { border-color: var(--red-line); }

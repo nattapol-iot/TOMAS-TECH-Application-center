@@ -3,7 +3,7 @@ import test from "node:test";
 import type { AppConfig } from "../src/config.js";
 import { EmailService } from "../src/email.js";
 import { ApiError } from "../src/errors.js";
-import { parseSiteInput } from "../src/routes/site-monitor.js";
+import { parseSiteInput, parseTmtdeskId } from "../src/routes/site-monitor.js";
 import {
   AGENT_KEY_PATTERN,
   agentKeyHint,
@@ -159,4 +159,15 @@ test("incident email names the site, program and recent errors, escaped", async 
   assert.match(sent[0]!.content, /Port 80 in use &amp; busy/);
   assert.match(sent[0]!.content, /#\/site-monitor/);
   assert.deepEqual(sent[0]?.to, ["somchai@example.com"]);
+});
+
+test("a TMTDesk ID is nine digits; spaces and dashes are dropped and empty clears it", () => {
+  assert.equal(parseTmtdeskId("123 456 789"), "123456789");
+  assert.equal(parseTmtdeskId("123-456-789"), "123456789");
+  assert.equal(parseTmtdeskId(""), null);
+  assert.equal(parseTmtdeskId("  "), null);
+  assert.equal(parseTmtdeskId(undefined), null);
+  for (const bad of ["12345678", "1234567890", "12345678a", "123456789/../x", 123456789, "١٢٣٤٥٦٧٨٩"]) {
+    assert.throws(() => parseTmtdeskId(bad), (error: unknown) => error instanceof ApiError && error.statusCode === 400, String(bad));
+  }
 });

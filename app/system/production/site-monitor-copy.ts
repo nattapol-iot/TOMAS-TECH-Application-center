@@ -124,6 +124,20 @@ export const SITE_MONITOR_COPY: Record<string, Copy> = {
   "Monitor.offline": { th: "ออฟไลน์", en: "Offline", jp: "オフライン" },
   "Monitor.newKey": { th: "ออก Key ใหม่", en: "New key", jp: "新しいキー" },
   "Monitor.removeMachine": { th: "ลบเครื่อง", en: "Remove", jp: "削除" },
+  "Monitor.remote": { th: "รีโมทด้วย TMTDesk", en: "Remote with TMTDesk", jp: "TMTDesk でリモート" },
+  "Monitor.remoteHint": {
+    th: "เปิด TMTDesk เพื่อเชื่อมต่อเครื่องนี้ (ต้องใช้ TMTDesk 0.7 ขึ้นไป และยังต้องใส่รหัสผ่านของเครื่อง)",
+    en: "Opens TMTDesk to connect to this machine (needs TMTDesk 0.7 or later; the machine password is still required)",
+    jp: "TMTDesk を開いてこのマシンに接続します（TMTDesk 0.7 以降が必要。マシンのパスワードは引き続き必要です）",
+  },
+  "Monitor.tmtdeskId": { th: "TMTDesk ID", en: "TMTDesk ID", jp: "TMTDesk ID" },
+  "Monitor.tmtdeskIdHint": {
+    th: "ใส่ ID ของ TMTDesk บนเครื่องนี้ เพื่อแสดงปุ่มรีโมทในหน้านี้ เว้นว่างเพื่อลบ",
+    en: "Enter this machine's TMTDesk ID to show a Remote button here. Leave empty to remove it.",
+    jp: "このマシンの TMTDesk ID を入力するとリモートボタンが表示されます。空欄で削除します。",
+  },
+  "Monitor.tmtdeskIdFormat": { th: "ตัวเลข 9 หลัก ตามที่แสดงในหน้าต่าง TMTDesk", en: "9 digits, as shown in the TMTDesk window", jp: "TMTDesk ウィンドウに表示される 9 桁の数字" },
+  "Monitor.tmtdeskSaved": { th: "บันทึก TMTDesk ID แล้ว", en: "TMTDesk ID saved", jp: "TMTDesk ID を保存しました" },
   "Monitor.agentRemoved": { th: "ลบเครื่องแล้ว Key เดิมใช้ไม่ได้อีก", en: "Machine removed. Its key no longer works.", jp: "マシンを削除しました。キーは無効になりました。" },
 
   "Monitor.responsible": { th: "ผู้ดูแล (แจ้งอีเมลตามลำดับ)", en: "Responsible people (emailed in order)", jp: "担当者（順番にメール通知）" },

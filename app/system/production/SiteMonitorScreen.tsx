@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   acknowledgeMonitorIncident, createMonitorAgent, createMonitorSite, getMonitorCommand, getMonitorLogs, getMonitorSite,
-  getMonitorSites, revokeMonitorAgent, rotateMonitorAgentKey, sendMonitorCommand, updateMonitorSite,
+  getMonitorSites, revokeMonitorAgent, rotateMonitorAgentKey, sendMonitorCommand, setMonitorAgentTmtdeskId, updateMonitorSite,
   type BootstrapData, type MonitorAgent, type MonitorCommand, type MonitorIncident, type MonitorLog, type MonitorProgram,
   type MonitorSite, type MonitorSiteDetail, type MonitorSiteInput, type MonitorVerb,
 } from "../api-client";
@@ -93,6 +93,16 @@ function useDateTime() {
   const { lang } = useLanguage();
   const format = new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   return (iso: string | null) => (iso ? format.format(new Date(iso)) : "—");
+}
+
+/** "123456789" -> "123 456 789", the way TMTDesk shows an ID. */
+function tmtdeskIdText(id: string): string {
+  return id.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+}
+
+/** TMTDesk opens tmtdesk:// links and asks before connecting, so the link itself grants nothing. */
+function tmtdeskLink(agent: MonitorAgent): string {
+  return `tmtdesk://connect/${agent.tmtdeskId}?name=${encodeURIComponent(agent.machineName ?? agent.name)}`;
 }
 
 function serverUrl(): string {
@@ -263,6 +273,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
   const [busy, setBusy] = useState(false);
   const [addingAgent, setAddingAgent] = useState(false);
   const [shownKey, setShownKey] = useState<{ machine: string; key: string } | null>(null);
+  const [editingTmtdesk, setEditingTmtdesk] = useState<MonitorAgent | null>(null);
   const [deploying, setDeploying] = useState<{ program: MonitorProgram; agentName: string } | null>(null);
   const mounted = useRef(true);
 
@@ -535,6 +546,14 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
                                 {" · "}{t("Monitor.lastReport")} {ago(agent.lastSeenAt)}
                               </span>
                             </div>
+                            {agent.tmtdeskId ? (
+                              <div className="site-monitor-remote">
+                                <a className="btn default sm" href={tmtdeskLink(agent)} title={t("Monitor.remoteHint")}>
+                                  <Icon name="externalLink" /><LocalizedText text={"Monitor.remote"} />
+                                </a>
+                                <span className="muted">TMTDesk {tmtdeskIdText(agent.tmtdeskId)}</span>
+                              </div>
+                            ) : null}
                           </td>
                           <td><Badge tone={agent.isOnline ? "green" : "amber"} dot>{agent.isOnline ? "Monitor.online" : "Monitor.offline"}</Badge></td>
                           <td className="num">{agent.isOnline ? percentText(agent.host.cpuPercent) : "—"}</td>
@@ -558,6 +577,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
                           {canManage ? (
                             <td>
                               <div className="site-monitor-actions">
+                                <button className="btn default sm" type="button" onClick={() => setEditingTmtdesk(agent)}><LocalizedText text={"Monitor.tmtdeskId"} /></button>
                                 <button className="btn default sm" type="button" onClick={() => setConfirm({ kind: "rotate", agent })}><LocalizedText text={"Monitor.newKey"} /></button>
                                 <button className="btn danger sm" type="button" onClick={() => setConfirm({ kind: "revoke", agent })}><LocalizedText text={"Monitor.removeMachine"} /></button>
                               </div>
@@ -643,6 +663,10 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
           onCreated={(machine, key) => { setAddingAgent(false); setShownKey({ machine, key }); refresh(); }} />
       ) : null}
       {shownKey ? <AgentKeyModal machine={shownKey.machine} agentKey={shownKey.key} onClose={() => setShownKey(null)} /> : null}
+      {editingTmtdesk ? (
+        <TmtdeskIdModal agent={editingTmtdesk} notify={notify} onClose={() => setEditingTmtdesk(null)}
+          onSaved={() => { setEditingTmtdesk(null); notify(t("Monitor.tmtdeskSaved")); refresh(); }} />
+      ) : null}
       {deploying ? (
         <DeployModal program={deploying.program} agentName={deploying.agentName} canLinkRepository={canManage} notify={notify}
           onClose={() => setDeploying(null)} onRequested={() => { setDeploying(null); refresh(); }} />
@@ -807,6 +831,38 @@ function AddMachineModal({ siteId, notify, onClose, onCreated }: {
       <div className="form-grid two">
         <Field label="Monitor.machineName" hint="Monitor.machineNameHint" span={2}>
           <input value={name} maxLength={150} onChange={(event) => setName(event.target.value)} placeholder={t("Monitor.machineNamePlaceholder")} />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function TmtdeskIdModal({ agent, notify, onClose, onSaved }: {
+  agent: MonitorAgent; notify: Notify; onClose: () => void; onSaved: () => void;
+}) {
+  const [value, setValue] = useState(agent.tmtdeskId ? tmtdeskIdText(agent.tmtdeskId) : "");
+  const [busy, setBusy] = useState(false);
+  const digits = value.replace(/[\s-]/g, "");
+  const valid = digits === "" || /^\d{9}$/.test(digits);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await setMonitorAgentTmtdeskId(agent.id, digits);
+      onSaved();
+    } catch (reason) {
+      notify(errorText(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="Monitor.tmtdeskId" subtitle="Monitor.tmtdeskIdHint" size="sm" onClose={onClose} footer={<>
+      <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+      <button className="btn primary" type="button" disabled={busy || !valid} onClick={() => void save()}><LocalizedText text={"Save"} /></button>
+    </>}>
+      <div className="form-grid two">
+        <Field label="Monitor.tmtdeskId" hint="Monitor.tmtdeskIdFormat" span={2}>
+          <input value={value} maxLength={13} inputMode="numeric" onChange={(event) => setValue(event.target.value)} placeholder="123 456 789" aria-invalid={!valid} />
         </Field>
       </div>
     </Modal>

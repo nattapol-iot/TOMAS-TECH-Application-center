@@ -3272,6 +3272,8 @@ export type MonitorAgent = {
   lastSeenAt: string | null;
   statusChangedAt: string | null;
   createdAt: string | null;
+  /** 9-digit TMTDesk ID for the Remote button, or null when not set. */
+  tmtdeskId: string | null;
   host: {
     cpuPercent: number | null;
     memoryUsedBytes: number | null;
@@ -3417,6 +3419,8 @@ export const createMonitorAgent = (siteId: number, name: string) =>
   apiRequest<{ agent: { id: number; name: string; keyHint: string }; key: string }>(`/api/v1/monitor/sites/${siteId}/agents`, { method: "POST", body: JSON.stringify({ name }) });
 export const rotateMonitorAgentKey = (agentId: number) =>
   apiRequest<{ key: string; keyHint: string }>(`/api/v1/monitor/agents/${agentId}/rotate-key`, { method: "POST", body: "{}" });
+export const setMonitorAgentTmtdeskId = (agentId: number, tmtdeskId: string) =>
+  apiRequest<{ tmtdeskId: string | null }>(`/api/v1/monitor/agents/${agentId}/tmtdesk`, { method: "PUT", body: JSON.stringify({ tmtdeskId }) });
 export const revokeMonitorAgent = (agentId: number) =>
   apiRequest<{ ok: boolean }>(`/api/v1/monitor/agents/${agentId}/revoke`, { method: "POST", body: "{}" });
 
