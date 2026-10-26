@@ -220,6 +220,7 @@ test("a project member posts progress on a task that has no PIC", async (t) => {
     assert.deepEqual(transactions, ["committed"]);
     const probe = statements.find((entry) => entry.statement.includes(" is_pic,"))!;
     assert.equal(probe.params.project, PROJECT_ID, "membership is read for the task's own project");
+    assert.match(probe.statement, /u\.is_active=1[^]*pic_member\.user_id=u\.id[^]*\) has_pics/, "a PIC who left or was taken off the team does not hold the row");
   } finally { await app.close(); }
 });
 
@@ -300,12 +301,12 @@ type ManagedRaw = { state: string; acknowledged_at: string | null; assignee_id: 
 const readyManaged: ManagedRaw = { state: "Approved", acknowledged_at: "2026-10-02T03:00:00Z", assignee_id: 30 };
 const managedQuery = "SELECT schedule_task_id,state,acknowledged_at,assignee_id FROM dbo.resource_tasks WHERE project_id=@project AND schedule_task_id IS NOT NULL";
 
-function scheduleAnswers(pics: Array<{ task: number; user: number }>, status = "Design", managed: ManagedRaw = readyManaged) {
+function scheduleAnswers(pics: Array<{ task: number; user: number; active?: boolean }>, status = "Design", managed: ManagedRaw = readyManaged) {
   return (statement: string): Answer | undefined => {
     if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
     if (statement.includes("SELECT id,project_no,name,manager_id,status,target_delivery FROM dbo.projects")) return { recordset: [projectRaw(status)] };
     if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: scheduleRows };
-    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: pics.map(({ task, user }) => ({ task_id: task, id: user, name: `User ${user}`, email: `u${user}@example.test` })) };
+    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: pics.map(({ task, user, active = true }) => ({ task_id: task, id: user, name: `User ${user}`, email: `u${user}@example.test`, active })) };
     if (statement.includes(managedQuery)) return { recordset: [{ schedule_task_id: 5, ...managed }] };
     if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
     return undefined;
@@ -383,6 +384,19 @@ test("GET schedule: canProgress and managedByResourcePlan per row", async (t) =>
       } finally { await app.close(); }
     });
   }
+  await t.test("project member: a row whose only PIC left the team is open to members", async (sub) => {
+    const { app } = harness({ id: 31, role: "Engineer" });
+    const answers = scheduleAnswers([{ task: 5, user: 30 }, { task: 4, user: 40, active: false }, { task: 7, user: 30 }]);
+    installSqlMock(sub, (statement) => statement.includes("member_project") ? { recordset: [{ value: true }] } : answers(statement));
+    try {
+      const response = (await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json();
+      const flags = flagsById(response.tasks);
+      assert.equal(flags[4]!.can, true, "user 40 is no longer an active team member");
+      assert.equal(flags[7]!.can, false, "user 30 still holds row 7");
+      const row4 = flatten(response.tasks).find((task) => task.id === 4) as TaskNode & { pics: Array<{ id: number; active: boolean }> };
+      assert.deepEqual(row4.pics.map((pic) => [pic.id, pic.active]), [[40, false]], "the plan still names the old PIC, marked inactive");
+    } finally { await app.close(); }
+  });
   await t.test("Admin", async (sub) => {
     const { app } = harness({ id: 99, role: "Admin" });
     installSqlMock(sub, scheduleAnswers([{ task: 5, user: 30 }]));
@@ -476,6 +490,7 @@ test("GET me/work: a project member also gets the open rows that have no PIC, to
     taskRaw({ id: 12, parent_id: 3, sort_order: 2, name: "Nobody yet", plan_start: "2027-03-01" }),
     taskRaw({ id: 13, parent_id: 3, sort_order: 3, name: "Nobody, finished", plan_start: "2027-03-01", status: "Done", percent_done: 100 }),
     taskRaw({ id: 14, parent_id: 3, sort_order: 4, name: "Colleague's", plan_start: "2027-03-01" }),
+    taskRaw({ id: 15, parent_id: 3, sort_order: 5, name: "Held by someone who left", plan_start: "2027-03-01" }),
   ];
   for (const isMember of [true, false]) {
     await t.test(isMember ? "member" : "elevated reader who is not on the project", async (sub) => {
@@ -483,7 +498,7 @@ test("GET me/work: a project member also gets the open rows that have no PIC, to
       const statements = installSqlMock(sub, (statement) => {
         if (statement.includes("SELECT DISTINCT p.id,p.project_no")) return { recordset: [{ id: PROJECT_ID, project_no: "P-26-007", name: "Line 3 IoT", manager_id: MANAGER_ID, manager_name: "PM", status: "Design", can_update: true, is_member: isMember }] };
         if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: rows };
-        if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [{ task_id: 8, id: 30, name: "Me", email: "me@example.test" }, { task_id: 14, id: 31, name: "Colleague", email: "c@example.test" }] };
+        if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [{ task_id: 8, id: 30, name: "Me", email: "me@example.test" }, { task_id: 14, id: 31, name: "Colleague", email: "c@example.test" }, { task_id: 15, id: 40, name: "Left", email: "l@example.test", active: false }] };
         if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
         return undefined;
       });
@@ -491,7 +506,7 @@ test("GET me/work: a project member also gets the open rows that have no PIC, to
         const response = await app.inject({ method: "GET", url: "/api/v1/me/work" });
         assert.equal(response.statusCode, 200, response.body);
         const byId = Object.fromEntries((response.json() as Array<Record<string, unknown>>).map((item) => [item.taskId, item]));
-        assert.deepEqual(Object.keys(byId).map(Number).sort((a, b) => a - b), isMember ? [8, 12] : [8]);
+        assert.deepEqual(Object.keys(byId).map(Number).sort((a, b) => a - b), isMember ? [8, 12, 15] : [8]);
         assert.equal(byId[8]!.unassigned, false);
         if (isMember) assert.deepEqual([byId[12]!.unassigned, byId[12]!.canUpdate, byId[12]!.canRequestDays, byId[12]!.canAddDetail, byId[12]!.canDeleteDetail], [true, true, false, false, false]);
         const projects = statements.find((entry) => entry.statement.includes("SELECT DISTINCT p.id,p.project_no"))!.statement;

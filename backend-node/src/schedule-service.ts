@@ -9,7 +9,8 @@ import { resolveSchedule, type ResolvedScheduleTask, type ScheduleCalculationTas
 import type { CurrentUser } from "./types.js";
 
 export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; status: string; targetDelivery: string | null };
-export type PicRow = { id: number; name: string; email: string };
+/** active: the PIC can still answer for the row (an active account on the project's team); a PIC who left or was taken off the team does not hold it. */
+export type PicRow = { id: number; name: string; email: string; active: boolean };
 export type TaskRow = {
   id: number; projectId: number; parentId: number | null; sortOrder: number; kind: string; name: string; isMilestone: boolean;
   origin: string; createdBy: number; visibility: string; planStart: string | null; planDays: number; startMode: string;
@@ -138,11 +139,15 @@ export async function demandPlanOwner(transaction: TransactionType, projectId: n
 export async function readHolidays(transaction: TransactionType): Promise<Set<string>> {
   return new Set((await new sql.Request(transaction).query<{ holiday_date: Date | string }>(`SELECT holiday_date FROM dbo.holidays;`)).recordset.map((row) => dateOnly(row.holiday_date)!));
 }
+/** A PIC row (alias pic, user u) whose user is active and still on the team of task t's project: manager, lead engineer or listed member. */
+const ACTIVE_PIC_SQL = "u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.projects pic_project WHERE pic_project.id=t.project_id AND (pic_project.manager_id=u.id OR pic_project.lead_engineer_id=u.id OR EXISTS(SELECT 1 FROM dbo.project_members pic_member WHERE pic_member.project_id=pic_project.id AND pic_member.user_id=u.id)))";
+/** No PIC who can still answer for the row: it is open to every project member (canPostProgress). */
+export const hasNoActivePic = (pics: PicRow[] | undefined): boolean => !(pics ?? []).some((pic) => pic.active);
 export async function readPics(transaction: TransactionType, projectId: number): Promise<Map<number, PicRow[]>> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const rows = (await request.query<Record<string, unknown>>(`SELECT pic.task_id,u.id,u.name,u.email FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`)).recordset;
+  const rows = (await request.query<Record<string, unknown>>(`SELECT pic.task_id,u.id,u.name,u.email,CAST(CASE WHEN ${ACTIVE_PIC_SQL} THEN 1 ELSE 0 END AS bit) active FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`)).recordset;
   const result = new Map<number, PicRow[]>();
-  for (const row of rows) { const id = Number(row.task_id); const list = result.get(id) ?? []; list.push({ id: Number(row.id), name: String(row.name), email: String(row.email) }); result.set(id, list); }
+  for (const row of rows) { const id = Number(row.task_id); const list = result.get(id) ?? []; list.push({ id: Number(row.id), name: String(row.name), email: String(row.email), active: row.active !== false }); result.set(id, list); }
   return result;
 }
 export async function currentScheduleVersion(transaction: TransactionType, projectId: number, lock = false): Promise<Buffer | null> {
@@ -186,7 +191,7 @@ export async function demandAssignedLeaf(transaction: TransactionType, task: Tas
 export type ProgressRights = { isLeaf: boolean; isPic: boolean; isManager: boolean; isAdmin: boolean; managed: boolean; isMember: boolean; unassigned: boolean };
 /**
  * Who may post progress on a row: a PIC, the project manager or an Admin, on a non-phase leaf; and on a row with no PIC
- * at all, any member of the project (owner decision 2026-10-26). A row Resource Plan manages stays with its PIC (its assignee).
+ * that no active team member holds (none, or only people who left or were taken off the team), any member of the project (owner decision 2026-10-26). A row Resource Plan manages stays with its PIC (its assignee).
  */
 export function canPostProgress(rights: ProgressRights): boolean { return rights.isLeaf && (rights.isPic || (!rights.managed && (rights.isManager || rights.isAdmin || (rights.isMember && rights.unassigned)))); }
 /** True when @actor is the manager or lead engineer of @project or listed in its members: what My Work and demandProjectScope call assigned. */
@@ -198,7 +203,7 @@ export async function isProjectMember(transaction: TransactionType, projectId: n
 /** The progress route's check. Day requests, member details and drawing workflow keep demandAssignedLeaf (PIC only). */
 export async function demandProgressWriter(transaction: TransactionType, task: TaskRow, project: ProjectRow, actor: CurrentUser): Promise<void> {
   const request = new sql.Request(transaction); request.input("task", sql.BigInt, task.id); request.input("actor", sql.BigInt, actor.id); request.input("project", sql.BigInt, project.id);
-  const row = (await request.query<{ is_pic: boolean; has_pics: boolean; has_children: boolean; managed: boolean; is_member: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task) THEN 1 ELSE 0 END AS bit) has_pics,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed,CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) is_member;`)).recordset[0];
+  const row = (await request.query<{ is_pic: boolean; has_pics: boolean; has_children: boolean; managed: boolean; is_member: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics pic WITH (UPDLOCK,HOLDLOCK) INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE pic.task_id=@task AND ${ACTIVE_PIC_SQL}) THEN 1 ELSE 0 END AS bit) has_pics,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed,CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) is_member;`)).recordset[0];
   const rights = { isLeaf: task.kind !== "phase" && !row?.has_children, isPic: Boolean(row?.is_pic), isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"), managed: Boolean(row?.managed),
     isMember: Boolean(row?.is_member), unassigned: !row?.has_pics };
   if (!canPostProgress(rights)) throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager, an Admin or, on a task with no PIC, a project member can update this task's progress.");
@@ -261,7 +266,7 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
   // A managed row also needs what the resource-tasks.ts preHandler demands, or the POST is refused with acknowledgment_required.
   const flags = access ? { managedByResourcePlan: managed, countsTowardHealth: !access.frameIds?.has(task.id), canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
     isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed,
-    isMember: access.isMember, unassigned: !(pics.get(task.id) ?? []).length }) } : {};
+    isMember: access.isMember, unassigned: hasNoActivePic(pics.get(task.id)) }) } : {};
   return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
     isMilestone: task.isMilestone, origin: task.origin, visibility: task.visibility, planStart: resolved.planStart, planFinish: resolved.planFinish,
     // The start as stored, for an edit to send back unchanged; planStart above is the resolved one.

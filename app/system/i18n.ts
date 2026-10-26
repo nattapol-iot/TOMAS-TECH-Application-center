@@ -2425,6 +2425,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Plan.filterWaiting": { en: "Waiting for the PM", th: "รอ PM ตอบ", jp: "PMの回答待ち" },
   "Plan.filterMine": { en: "My tasks", th: "งานของฉัน", jp: "自分のタスク" },
   "Plan.waitingBadge": { en: "Waiting for PM", th: "รอ PM", jp: "PM待ち" },
+  "Plan.picLeft": { en: "no longer on the team", th: "ไม่อยู่ในทีมแล้ว", jp: "チーム外" },
   "Plan.noMatch": { en: "No task matches this filter", th: "ไม่มีงานตรงกับตัวกรองนี้", jp: "このフィルターに合うタスクはありません" },
   "Plan.noMatchHint": { en: "Clear the filter to see the whole plan.", th: "ล้างตัวกรองเพื่อดูทั้งแผน", jp: "フィルターを解除すると計画全体が表示されます。" },
   "Plan.changedReloaded": { en: "was changed by someone else; the latest plan is loaded", th: "ถูกแก้โดยผู้อื่น โหลดแผนล่าสุดแล้ว", jp: "他のユーザーが変更しました。最新の計画を読み込みました" },

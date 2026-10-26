@@ -170,7 +170,8 @@ type MyWorkUpdate = {
   occurredAt: string;
 };
 
-type SchedulePic = { id: number; name: string; email: string };
+/** active false: the PIC left or was taken off the team, so the row is open to every project member until the PM sets a new PIC. */
+type SchedulePic = { id: number; name: string; email: string; active?: boolean };
 
 export type ScheduleTask = {
   id: number;
@@ -2274,7 +2275,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     return {
       key: `task:${task.id}`, depth: task.depth, kind: summaryRow ? "phase" : "task",
       label: <><span className="mono">{task.wbs}</span> {task.name}</>,
-      meta: [task.pics.map((pic) => pic.name).join(", ") || task.picExternal, uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].filter(Boolean).join(" · "),
+      meta: [task.pics.map((pic) => pic.active === false ? `${pic.name} (${uiText("Plan.picLeft")})` : pic.name).join(", ") || task.picExternal, uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].filter(Boolean).join(" · "),
       ...(lock ? { status: lock } : {}),
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
@@ -2441,7 +2442,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
   });
   const leaf = isLeafTask(task);
   const history = activeSchedule.recentUpdates.filter((update) => update.taskId === task.id && historyShown(update));
-  const pic = task.pics.map((person) => person.name).join(", ") || task.picExternal || "—";
+  const pic = task.pics.map((person) => person.active === false ? `${person.name} (${uiText("Plan.picLeft")})` : person.name).join(", ") || task.picExternal || "—";
   return <Drawer title={`${task.wbs} · ${task.name}`} subtitle={activeSchedule.projectNo} onClose={onClose} width={560}>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
     {managed ? <div className="info-strip"><ResourcePlanLock /><span>{uiText("Plan.managedHint")}</span></div> : null}
