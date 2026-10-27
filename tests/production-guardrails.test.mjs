@@ -1454,3 +1454,15 @@ test("the ERP sheet renames the lines whose wording it owns, and leaves the purc
   assert.match(sheet, /<EstimateModuleEditor workspace={workspace} moduleKey="summary"/);
   assert.doesNotMatch(sheet, /moduleKey: "summary"/);
 });
+
+test("the summary sheet shows what one Hardware set costs, on screen only", async () => {
+  const sheet = await readFile(new URL("app/system/production/EstimateErpSheet.tsx", root), "utf8");
+  // Owner request 2026-10-27: the amount divided by the quantity, for Hardware rows only.
+  assert.match(sheet, /<th className="num cb-money-col"><LocalizedText text=\{"Unit cost"\} \/><\/th>/);
+  assert.match(sheet, /heading\.category === "Hardware" && rowQuantity > 0 \? <>\{money\(row\.amount \/ rowQuantity\)\}/);
+  // Every spanning row and footer counts the new column.
+  assert.doesNotMatch(sheet, /colSpan=\{4\}|colSpan=\{6\}/);
+  // The ERP workbook is imported into another system; its layout does not change.
+  const workbook = await readFile(new URL("lib/erp-estimate-workbook.ts", root), "utf8");
+  assert.doesNotMatch(workbook, /Unit cost|unitCostPerSet/);
+});

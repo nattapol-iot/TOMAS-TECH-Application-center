@@ -500,6 +500,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
               await onChanged(copy("บันทึกจำนวนและหน่วยแล้ว", "Quantity and unit saved", "数量と単位を保存しました")); await load();
             } finally { setBusy(false); }
           }} /> : <><td className="num">{quantity(rowQuantity)}</td><td>{rowUnit}</td></>}
+        <td className="num cb-unit-cost">{heading.category === "Hardware" && rowQuantity > 0 ? <>{money(row.amount / rowQuantity)}<small className="muted"> /{rowUnit}</small></> : null}</td>
         <td className="num"><strong>{money(row.amount)}</strong></td>
         <td className="cb-erp-col"><div className="cb-module-controls">
           <select disabled={!canEdit || !row.erpKeys.length} aria-label={"ERP category for " + title} className={heading.category === "Unmapped" ? "est-unmapped" : undefined} value={heading.category} onChange={(event) => classify(row.erpKeys, event.target.value as DraftCategory)}>
@@ -517,7 +518,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
       </tr>
       {open ? row.lines.map((line) => <tr key={line.key} className="cb-line">
         <td /><td style={{ paddingLeft: 28 }}>{line.title}<div className="muted">{line.details.join(" · ")} · {line.source === "in-house" ? inHouseLabel : outsourcedLabel} · <LocalizedText text="Unit cost" />: {line.priceSetKey && !line.isPriceSet ? copy("รวมในราคาเซ็ต", "Included in set", "セットに含む") : money(line.unitCost)}</div></td>
-        <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td>
+        <td className="num">{quantity(line.quantity)}</td><td>{line.unit}</td><td />
         <td className="num">{line.priceSetKey && !line.isPriceSet ? "—" : money(line.amount)}</td>
         <td />
       </tr>) : null}
@@ -549,7 +550,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
           {heading.category === "Unmapped" ? <Icon name="alertTriangle" /> : null}<strong className="cb-title">{heading.category === "Unmapped" ? unmappedLabel : heading.category} ({heading.rows.length})</strong>
           {empty ? <span className="muted small"> {copy("ลากรายการมาวางที่นี่", "Drag a line here", "ここに行をドラッグ")}</span> : null}
         </td>
-        <td colSpan={2} />
+        <td colSpan={3} />
         <td className="num"><strong>{money(heading.amount)}</strong></td>
         <td className="cb-erp-col">
           {empty && addedHeadings.includes(heading.category)
@@ -669,16 +670,17 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
           <th><LocalizedText text={"Description"} /></th>
           <th className="num cb-qty-col"><LocalizedText text={"Qty"} /></th>
           <th className="cb-unit-col"><LocalizedText text={"Unit"} /></th>
-
+          {/* Hardware only (owner request 2026-10-27): what one set costs. The ERP export does not carry it. */}
+          <th className="num cb-money-col"><LocalizedText text={"Unit cost"} /></th>
           <th className="num cb-money-col"><LocalizedText text={"Amount"} /></th>
           <th className="cb-erp-col">{copy("หมวด", "Heading", "見出し")}</th>
         </tr></thead>
         {headings.map(renderHeading)}
-        {!hasVisibleRows && (search.trim() || unmappedOnly) ? <tbody><tr><td colSpan={6} className="muted">{copy("ไม่พบรายการตามตัวกรอง ลองเปลี่ยนคำค้นหรือปิดตัวกรอง", "No matching items. Change your search or clear the filter.", "一致する明細がありません。検索条件を変更してください。")}</td></tr></tbody> : null}
+        {!hasVisibleRows && (search.trim() || unmappedOnly) ? <tbody><tr><td colSpan={7} className="muted">{copy("ไม่พบรายการตามตัวกรอง ลองเปลี่ยนคำค้นหรือปิดตัวกรอง", "No matching items. Change your search or clear the filter.", "一致する明細がありません。検索条件を変更してください。")}</td></tr></tbody> : null}
         <tfoot>
-          <tr className="cb-foot"><td colSpan={4} className="num">{copy("รวมก่อนเงินเผื่อสำรอง", "Subtotal", "小計")}</td><td className="num">{money(Number(totals.subtotal))}</td><td /></tr>
-          <tr className="cb-foot"><td colSpan={4} className="num"><LocalizedText text={"Contingency"} /> {quantity(Number(contingencyRate))}%</td><td className="num">{money(Number(totals.contingency))}</td><td className="cb-erp-col">{contingencyLine ? <select disabled={!canEdit} aria-label={copy("หมวด ERP ของ Contingency", "ERP category for the contingency", "予備費のERP分類")} className={draftOf(contingencyLine) === "Unmapped" ? "est-unmapped" : undefined} value={draftOf(contingencyLine)} onChange={(event) => classify([erpKey(contingencyLine)], event.target.value as DraftCategory)}><option value="Unmapped">{unmappedLabel}</option>{ERP_COST_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}</td></tr>
-          <tr className="cb-total"><td colSpan={4} className="num"><LocalizedText text={"Total estimated cost"} /></td><td className="num"><strong>{money(Number(totals.total))}</strong></td><td /></tr>
+          <tr className="cb-foot"><td colSpan={5} className="num">{copy("รวมก่อนเงินเผื่อสำรอง", "Subtotal", "小計")}</td><td className="num">{money(Number(totals.subtotal))}</td><td /></tr>
+          <tr className="cb-foot"><td colSpan={5} className="num"><LocalizedText text={"Contingency"} /> {quantity(Number(contingencyRate))}%</td><td className="num">{money(Number(totals.contingency))}</td><td className="cb-erp-col">{contingencyLine ? <select disabled={!canEdit} aria-label={copy("หมวด ERP ของ Contingency", "ERP category for the contingency", "予備費のERP分類")} className={draftOf(contingencyLine) === "Unmapped" ? "est-unmapped" : undefined} value={draftOf(contingencyLine)} onChange={(event) => classify([erpKey(contingencyLine)], event.target.value as DraftCategory)}><option value="Unmapped">{unmappedLabel}</option>{ERP_COST_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}</td></tr>
+          <tr className="cb-total"><td colSpan={5} className="num"><LocalizedText text={"Total estimated cost"} /></td><td className="num"><strong>{money(Number(totals.total))}</strong></td><td /></tr>
         </tfoot>
       </table></div>
 
