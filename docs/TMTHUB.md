@@ -10,6 +10,7 @@ TMTHub คือ [Forgejo](https://forgejo.org) (git server แบบ GitHub) �
 | เข้าสู่ระบบ | ปุ่ม **Sign in with TMT-ID** (บัญชีเดียวกับ Engineering Center) |
 | git บน command line | HTTPS + Personal Access Token (ไม่มี SSH) |
 | Organization | `TMT` องค์กรเดียวรวมทุกโครงการ ตั้งชื่อ repo ขึ้นต้นด้วยเลขโครงการ เช่น `PJ-26-012-gateway-firmware` |
+| สมาชิก | ทุกบัญชี TMT ID เข้าทีม `TMT/Members` อัตโนมัติเมื่อ login (อ่าน/เขียนทุก repo และสร้าง repo ใน org ได้) — ทีม `Owners` ยังจัดการเองตามเดิม |
 | ผู้ดูแล | admin กำหนดใน `TMTHUB_ADMIN_EMAIL` (ค่าเริ่มต้นใน `scripts/macos/deploy.sh`) |
 
 ## เริ่มใช้งาน (ครั้งแรก)
@@ -52,6 +53,9 @@ git push tmthub --tags
   - สร้าง DNS `tmthub.tomastc.com A <ip เดียวกับ PUBLIC_HOST>` (DNS-only) ถ้ายังไม่มี และจะไม่เขียนทับ record ที่มีอยู่
   - ตั้งค่า login ผ่าน TMT ID (auth source `TMT-ID`, Keycloak client เดียวกับแอป) และอัปเดต secret ทุกครั้ง
   - สร้างบัญชี admin (`TMTHUB_ADMIN_EMAIL`) ก่อนใครเข้า แล้ว TMT ID จะผูกบัญชีให้ด้วย email
+  - สร้างทีม `TMT/Members` ครั้งแรกครั้งเดียว และตั้ง auth source `TMT-ID` ให้ใช้ claim `iss` (realm `internal`
+    ซึ่งมีแต่บัญชีบริษัท) เป็น group → map เข้าทีมนี้ทุกครั้งที่ login (`--group-team-map`, ไม่เปิด removal
+    สมาชิกที่ owner เพิ่มเองจึงไม่หาย) และเพิ่มบัญชี TMT ID เดิมที่ยังไม่อยู่ใน org ให้ตอน deploy
 - **ที่เก็บข้อมูล = NAS** `IoT Department\IoT Team Center\TMTHub\`
   - `repositories\` (git repo ทั้งหมด), `lfs\`, `attachments\` — VM ของ Mac mini mount ผ่าน **NFS** (volume `tmthub-nas`)
     ไม่ใช้ SMB ของ macOS เพราะ macOS สร้างไฟล์ `._*` ข้างไฟล์ และ `._pack-*.idx` ทำให้ git อ่าน repo เสีย
@@ -89,6 +93,12 @@ git push tmthub --tags
    - เปิด **Allow connections from non-privileged ports** และ **Allow users to access mounted subfolders**
 3. ถ้า path ของ share ไม่ใช่ `/volume1/IoT Department` ให้ใส่ `TMTHUB_NFS_PATH=/volumeX/IoT Department/IoT Team Center/TMTHub`
    ใน `.env` บน Mac mini (ดู path ได้ที่หน้า NFS Permissions ด้านล่าง "Mount path")
+
+**NFSv4.1 กับ v3:** deploy ลอง v4.1 ก่อนแล้วถอยไป v3 เอง ใช้ได้ทั้งคู่ (ใช้เวลา probe ไม่ถึง 1 วินาที)
+- ถ้า log ขึ้น `NFSv4.1 is not offered by the NAS; using NFSv3` แปลว่า NAS ตอบ v4 ว่า `no such file or directory`
+  ทุก path รวมถึง `/` (ตรวจจาก VM เมื่อ 2026-10-27) คือ NFSv4 ยังปิดอยู่ที่ DSM
+  → **File Services → NFS → Maximum NFS protocol = NFSv4.1** แล้ว deploy ใหม่ probe จะเลือก v4.1 เอง
+- หลังย้ายไป v4.1 ให้ทดสอบ push ที่มี delta ใหญ่ก่อน และอย่าเอา `pack.threads=1` ออกโดยไม่ได้ทดสอบ
 
 ### กู้คืนจาก backup
 

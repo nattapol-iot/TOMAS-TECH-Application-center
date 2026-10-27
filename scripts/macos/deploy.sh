@@ -247,7 +247,11 @@ deploy_tmthub() {
       result=0
     fi
     # One line per attempt in the job log, so a refusal says why (mount error, ownership, read-only).
-    log "NFS $1 (${2#rw,}): $([[ $result == 0 ]] && echo ok || printf '%s' "$output" | tr '\n' ' ' | tail -c 400)"
+    # A refused mount is cut to the kernel's reason; anything else keeps the tail of the output.
+    if [[ $result != 0 ]]; then
+      output="$(printf '%s' "$output" | tr '\n' ' ' | /usr/bin/perl -ne 'print /failed to mount local volume:.*: ([^:]+?)\s+Run /s ? "not mounted ($1)" : substr($_, -400)')"
+    fi
+    log "NFS $1 (${2#rw,}): $([[ $result == 0 ]] && echo ok || printf '%s' "$output")"
     docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
     return "$result"
   }
@@ -273,6 +277,10 @@ deploy_tmthub() {
       echo "::warning title=TMTHub skipped::No NFS path on the NAS could be mounted and written; check the NFS rule (docs/TMTHUB.md)"
       return 0
     fi
+    # A NAS that answers v4 with "no such file or directory" for every path, "/" included, has
+    # NFSv4 switched off (DSM: File Services > NFS > Maximum NFS protocol). v3 works the same here;
+    # the probe picks v4.1 by itself once it is switched on.
+    [[ "$nfs_options" == "$v4" ]] || log "NFSv4.1 is not offered by the NAS; using NFSv3 (enable NFSv4.1 in DSM to switch, docs/TMTHUB.md)"
   fi
   export TMTHUB_NFS_PATH="$nfs_path" TMTHUB_NFS_OPTIONS="$nfs_options"
   log "Starting TMTHub with its repositories on the NAS (NFS $nfs_path, ${nfs_options#rw,})"
@@ -308,9 +316,15 @@ deploy_tmthub() {
   [[ -n "$oidc_secret" ]] || die "TMTHUB_OIDC_CLIENT_SECRET (GitHub Actions secret or .env) is required for TMTHub sign-in."
   auth_id="$(forgejo_admin auth list | awk '$2 == "TMT-ID" { print $1 }')"
   if [[ -n "$auth_id" ]]; then auth_verb="update-oauth --id $auth_id"; else auth_verb="add-oauth"; fi
+  TMTHUB_ORG="$(env_value TMTHUB_ORG)"; TMTHUB_ORG="${TMTHUB_ORG:-TMT}"
+  members_team=Members
+  # Every company account joins the organisation's Members team at sign-in. Only realm internal
+  # (company accounts) can sign in, and its tokens all carry iss = the realm URL, so the issuer is
+  # used as the group claim. No removal: memberships an owner adds by hand stay.
+  team_map="{\"$OIDC_ISSUER_VALUE\":{\"$TMTHUB_ORG\":[\"$members_team\"]}}"
   log "Configuring TMTHub sign-in through TMT ID, client $OIDC_CLIENT_ID_VALUE ($auth_verb)"
-  printf '%s\n' "$oidc_secret" | tcompose exec -T -u git tmthub sh -c \
-    "IFS= read -r secret; forgejo admin auth $auth_verb --name TMT-ID --provider openidConnect --key '$OIDC_CLIENT_ID_VALUE' --secret \"\$secret\" --auto-discover-url '$OIDC_ISSUER_VALUE/.well-known/openid-configuration' --skip-local-2fa" >/dev/null
+  printf '%s\n' "$oidc_secret" | tcompose exec -T -u git -e TEAM_MAP="$team_map" tmthub sh -c \
+    "IFS= read -r secret; forgejo admin auth $auth_verb --name TMT-ID --provider openidConnect --key '$OIDC_CLIENT_ID_VALUE' --secret \"\$secret\" --auto-discover-url '$OIDC_ISSUER_VALUE/.well-known/openid-configuration' --skip-local-2fa --group-claim-name iss --group-team-map \"\$TEAM_MAP\"" >/dev/null
   unset oidc_secret
 
   # The administrator exists before first sign-in; TMT ID then links to it by email.
@@ -325,7 +339,6 @@ deploy_tmthub() {
   # One organisation for every project, created once. The CLI has no organisation command, so a
   # short-lived admin token makes the API call and is then removed from the database.
   tmthub_sql() { tcompose exec -T -u git tmthub sqlite3 /data/gitea/gitea.db "$1"; }
-  TMTHUB_ORG="$(env_value TMTHUB_ORG)"; TMTHUB_ORG="${TMTHUB_ORG:-TMT}"
   org_lower="$(printf '%s' "$TMTHUB_ORG" | tr '[:upper:]' '[:lower:]')"
   if [[ "$(tmthub_sql "SELECT COUNT(*) FROM [user] WHERE lower_name='$org_lower' AND type=1;" | tr -d '\r')" != "1" ]]; then
     log "Creating TMTHub organisation $TMTHUB_ORG"
@@ -367,6 +380,26 @@ deploy_tmthub() {
     compose up -d --no-deps --force-recreate api
     wait_for "$API_URL" "API readiness"
   fi
+
+  # The Members team the sign-in mapping above fills: read and write on every repository of the
+  # organisation, and new repositories in it. Created once through the service account; people
+  # who already had an account join here, since the mapping only runs when someone signs in.
+  printf 'Authorization: token %s\n' "$(env_value TMTHUB_API_TOKEN)" > "$api_token_header"
+  hub() { curl -fsS --max-time 20 --resolve "$TMTHUB_HOST:$TMTHUB_PORT:$TMTHUB_IP" -H @"$api_token_header" -H 'Content-Type: application/json' "$@"; }
+  HUB_API="https://$TMTHUB_HOST:$TMTHUB_PORT/api/v1"
+  team_id="$(tmthub_sql "SELECT t.id FROM team t JOIN [user] o ON o.id=t.org_id WHERE o.lower_name='$org_lower' AND t.lower_name='$(printf '%s' "$members_team" | tr '[:upper:]' '[:lower:]')';" | tr -d '\r')"
+  if [[ -z "$team_id" ]]; then
+    log "Creating the $TMTHUB_ORG/$members_team team for every company account"
+    team_id="$(hub -X POST "$HUB_API/orgs/$TMTHUB_ORG/teams" --data "{\"name\":\"$members_team\",\"description\":\"Every TMT ID account, joined at sign-in\",\"includes_all_repositories\":true,\"can_create_org_repo\":true,\"units_map\":{\"repo.code\":\"write\",\"repo.issues\":\"write\",\"repo.pulls\":\"write\",\"repo.releases\":\"write\",\"repo.wiki\":\"write\",\"repo.projects\":\"write\",\"repo.packages\":\"write\",\"repo.actions\":\"write\",\"repo.ext_issues\":\"read\",\"repo.ext_wiki\":\"read\"}}" \
+      | /usr/bin/perl -MJSON::PP -0777 -ne 'print decode_json($_)->{id}')" \
+      || die "Creating the $TMTHUB_ORG/$members_team team failed."
+  fi
+  # TMT ID accounts (login type 6 = OAuth2) that belong to no team of the organisation yet.
+  joiners="$(tmthub_sql "SELECT name FROM [user] u WHERE u.type=0 AND u.login_type=6 AND NOT EXISTS (SELECT 1 FROM org_user ou JOIN [user] o ON o.id=ou.org_id WHERE ou.uid=u.id AND o.lower_name='$org_lower');" | tr -d '\r')"
+  for joiner in $joiners; do
+    log "Adding $joiner to $TMTHUB_ORG/$members_team"
+    hub -X PUT "$HUB_API/teams/$team_id/members/$joiner" >/dev/null || log "WARNING: could not add $joiner to $TMTHUB_ORG/$members_team"
+  done
   rm -f "$api_token_header"
 
   # The backup container dumps once at start; show its result in this log.
