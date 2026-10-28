@@ -206,6 +206,21 @@ try {
   assert.equal(new Set(creates().slice(-3).map((entry) => entry.args.external_ref)).size, 1, "every try of one PR carries the same external_ref");
   assert.equal((await call("GET", `/purchase-requisitions/${pr3.id}`, "Requester")).erp.error, null);
 
+  // Opening the list reads open ERP PRs with the viewer's token: none were synced in the last 15 minutes until we age them; PR 1 is final.
+  const listSync = () => call("POST", "/purchase-requisitions/erp-sync", "Requester", {});
+  assert.deepEqual(await listSync(), { checked: 0, updated: 0 });
+  await run(`UPDATE dbo.mat_prs SET erp_synced_at=DATEADD(hour,-1,SYSUTCDATETIME()) WHERE id IN(${Number(pr2.id)},${Number(pr3.id)})`);
+  // A signed-out viewer stops the round without marking the PR, so the next open reads it.
+  signedOut.add("procurement-ci-Requester");
+  assert.deepEqual(await listSync(), { checked: 1, updated: 0 });
+  signedOut.delete("procurement-ci-Requester");
+  const ref2 = String(creates().find((entry) => entry.args.department === "IOTENG")!.args.external_ref);
+  erpRequests.set(ref2, { ...erpRequests.get(ref2)!, status: "CONVERTED", status_label: "Converted", po_no: "PO2610-0008" });
+  assert.deepEqual(await listSync(), { checked: 2, updated: 1 });
+  assert.deepEqual(await listSync(), { checked: 0, updated: 0 }, "a PR read in the last 15 minutes is not read again");
+  const row2 = ((await call("GET", "/purchase-requisitions", "Requester")) as unknown as Json[]).find((row) => row.id === pr2.id)!;
+  assert.deepEqual([row2.status, row2.erpPoRef], ["Converted to PO", "PO2610-0008"]);
+
   // The PR cycle report counts the ERP order as the PR becoming a purchase order, and times how long each PR took to reach the ERP.
   const cycle = await call("GET", `/reports/pr-cycle-time?projectId=${fresh}`, "Requester");
   assert.equal(cycle.lifecycle.prCount, 3);

@@ -24,6 +24,9 @@ export type ErpOutcome = { sent: boolean; prNo?: string; message?: string; kind?
 // "Estimate" is the estimate's own unit cost: the planner's default, and honest about where the price came from.
 const priceSources = ["Estimate", "Price Library", "Supplier Quotation", "Previous Purchase", "Manual"];
 const lineTypes: PrLineKind[] = ["Planned", "Substitute", "Unplanned"];
+// The ERP team allows reading a PR's status every 5-15 minutes; one list open reads at most a batch of PRs, one after another.
+const ERP_LIST_SYNC_MINUTES = 15;
+const ERP_LIST_SYNC_BATCH = 20;
 type PrHeader = { id: number | string; pr_no: string; project_id: number | string; bom_id: number | string; requested_by: number | string; status: string; priority: string;
   required_date: Date | string; erp_po_ref: string | null; purpose: string | null; erp_ref: string | null; erp_department: string | null; erp_pr_no: string | null;
   erp_status: string | null; erp_status_label: string | null; erp_url: string | null; erp_revision_no: number | null; erp_rejection_reason: string | null;
@@ -305,7 +308,34 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     return outcome;
   });
 
-  // Reads the PR from the ERP with the viewer's own token: the ERP allows no background polling and sends no webhook.
+  // Opening the PR list reads the viewer's open ERP PRs with the viewer's token. The ERP sends no webhook and allows a read every 5-15 minutes,
+  // so a PR synced in the last 15 minutes is skipped, and one whose read failed waits the same 15 minutes in memory.
+  const listChecked = new Map<number, number>();
+  app.post("/api/v1/purchase-requisitions/erp-sync", async (request) => { await users.demandPermission(request, "procurement.read"); const actor = await users.required(request);
+    if (!erp) return { checked: 0, updated: 0 };
+    const now = Date.now(); for (const [prId, at] of listChecked) if (now - at >= ERP_LIST_SYNC_MINUTES * 60_000) listChecked.delete(prId);
+    const due = (await database.query<{ id: number | string; status: string; erp_ref: string; erp_status: string | null; erp_po_ref: string | null }>(`SELECT TOP(100) pr.id,pr.status,pr.erp_ref,pr.erp_status,pr.erp_po_ref
+      FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id WHERE pr.deleted_at IS NULL AND pr.erp_ref IS NOT NULL AND pr.erp_pr_no IS NOT NULL
+        AND (pr.erp_status IS NULL OR pr.erp_status NOT IN(N'CONVERTED',N'REJECTED',N'CANCELLED')) AND (pr.erp_synced_at IS NULL OR pr.erp_synced_at<DATEADD(minute,-@minutes,SYSUTCDATETIME()))
+        AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) ORDER BY pr.erp_synced_at,pr.id;`, (r) => {
+      r.input("minutes", sql.Int, ERP_LIST_SYNC_MINUTES); r.input("actor", sql.BigInt, actor.id); r.input("elevated", sql.Bit, isProjectElevated(actor)); }))
+      .recordset.filter((row) => !listChecked.has(Number(row.id))).slice(0, ERP_LIST_SYNC_BATCH);
+    let checked = 0, updated = 0;
+    for (const row of due) { const prId = Number(row.id); listChecked.set(prId, Date.now()); checked += 1;
+      const result = await erp.gateway.call<{ request: ErpRequest }>(actor.entraObjectId, "purchase_request_get", { external_ref: row.erp_ref });
+      if (!result.ok) {
+        // The viewer's sign-in failed, not the PR: leave it for the next viewer. An ERP that is down keeps the mark, so it is not asked again on every open.
+        if (result.kind === "signed_out" || result.kind === "unauthorized") { listChecked.delete(prId); break; }
+        if (result.kind === "unavailable") break;
+        continue;
+      }
+      const status = await recordErp(prId, row.status, result.data.request, actor.id);
+      if (status !== row.status || result.data.request.status !== row.erp_status || (result.data.request.po_no ?? row.erp_po_ref) !== row.erp_po_ref) updated += 1;
+    }
+    return { checked, updated };
+  });
+
+  // Reads one PR from the ERP with the viewer's own token when they open it.
   app.post("/api/v1/purchase-requisitions/:id/erp-sync", async (request) => { await users.demandPermission(request, "procurement.read"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
     if (!erp) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
     const header = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction); return h; });
