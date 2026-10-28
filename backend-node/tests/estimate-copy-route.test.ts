@@ -298,6 +298,26 @@ test("a section selection restricts what the copy reads and writes", async (t) =
   } finally { await app.close(); }
 });
 
+test("a module selection copies only the chosen modules of that discipline, and a malformed one is refused", async (t) => {
+  const base = defaultAnswer(() => []);
+  const remote = { ...costRows[0]!, id: 503, module: "Remote I/O", item_code: "RIO-01" };
+  const { app, answer } = harness({ id: 7, role: "Engineer" }, (statement, params) => {
+    if (statement.includes("FROM dbo.cost_items c WITH (HOLDLOCK)")) return { recordsets: [[...costRows, remote], [], [], [], takenCodes] };
+    return base(statement, params);
+  });
+  const statements = installSqlMock(t, answer);
+  try {
+    const bad = await app.inject({ method: "POST", url: `/api/v1/estimates/${TARGET_ID}/copy-from`, payload: { ...payload, modules: { "01": "Main panel" } } });
+    assert.equal(bad.statusCode, 400, bad.body);
+    assert.equal(statements.filter((entry) => mutating(entry.statement)).length, 0);
+    const response = await app.inject({ method: "POST", url: `/api/v1/estimates/${TARGET_ID}/copy-from`, payload: { ...payload, sections: ["01"], modules: { "01": ["Remote I/O"] } } });
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal(response.json().costItems, 1);
+    const inserted = statements.filter((entry) => entry.statement.includes("INSERT INTO dbo.cost_items"));
+    assert.deepEqual(inserted.map((entry) => entry.params.module), ["Remote I/O"]);
+  } finally { await app.close(); }
+});
+
 test("a locked target refuses the copy through the shared editable-estimate lock", async (t) => {
   const base = defaultAnswer(() => []);
   const { app, transactions, answer } = harness({ id: 7, role: "Engineer" }, (statement, params) => {

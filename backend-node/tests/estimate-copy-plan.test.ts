@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  ESTIMATE_SECTION_CODES, MANHOUR_SECTION_CODE, copiedLineOwnerId, expenseSectionCode,
-  otherCostSectionCode, requestedSections, resolveCopiedSupplier, touchedSections,
+  ESTIMATE_SECTION_CODES, MANHOUR_SECTION_CODE, copiedLineOwnerId, expenseSectionCode, moduleSelected,
+  otherCostSectionCode, requestedModules, requestedSections, resolveCopiedSupplier, touchedSections,
 } from "../src/estimate-copy-plan.js";
 
 test("expense and other-cost lines resolve to the section that controls them", () => {
@@ -45,4 +45,18 @@ test("a copied line stays with the engineer who already owns the section", () =>
   assert.equal(copiedLineOwnerId(9, 7), 9);
   assert.equal(copiedLineOwnerId(null, 7), 7);
   assert.equal(copiedLineOwnerId(0, 7), 7);
+});
+
+test("a module selection limits only the sections it lists, and a malformed one is refused", () => {
+  assert.equal(requestedModules(undefined), null);
+  assert.equal(requestedModules(null), null);
+  for (const bad of [["01"], "01", 3, { "99": ["A"] }, { "01": "A" }, { "01": [1] }]) assert.equal(requestedModules(bad), "invalid");
+  const selection = requestedModules({ "01": [" PLC Master ", ""] });
+  assert.ok(selection && selection !== "invalid");
+  assert.equal(moduleSelected(selection, "01", "PLC Master"), true);
+  assert.equal(moduleSelected(selection, "01", "  "), true);
+  assert.equal(moduleSelected(selection, "01", "Remote I/O"), false);
+  assert.equal(moduleSelected(selection, "03", "Remote I/O"), true);
+  assert.equal(moduleSelected(null, "01", "Remote I/O"), true);
+  assert.equal(moduleSelected(requestedModules({ "01": [] }) as never, "01", "PLC Master"), false);
 });

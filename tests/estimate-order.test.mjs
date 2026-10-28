@@ -24,6 +24,18 @@ test("Summary retains persisted module and child order instead of sorting by nam
  assert.deepEqual(breakdownModules(sections[0])[1].lines.map(l=>l.key),["cost:3","cost:1"]);
 });
 
+ test("dragging a module drops the whole block before or after another, keeping its children in order", async () => {
+  const { placeModule } = await import("../lib/estimate-order.ts");
+  const lines = [{ id: 1, module: "A" },{ id: 2, module: "A" },{ id: 3, module: "B" },{ id: 4, module: "C" },{ id: 5, module: "C" }];
+  const ids = (moved) => moved.map(l => l.id);
+  assert.deepEqual(ids(placeModule(lines,l => l.module,"A","C",true)),[3,4,5,1,2]);
+  assert.deepEqual(ids(placeModule(lines,l => l.module,"A","C",false)),[3,1,2,4,5]);
+  assert.deepEqual(ids(placeModule(lines,l => l.module,"C","A",false)),[4,5,1,2,3]);
+  assert.deepEqual(ids(placeModule(lines,l => l.module,"C","B",false)),[1,2,4,5,3]);
+  for (const [key,target] of [["A","A"],["Z","A"],["A","Z"]]) assert.deepEqual(ids(placeModule(lines,l => l.module,key,target,true)),[1,2,3,4,5]);
+  assert.deepEqual(ids(lines),[1,2,3,4,5]);
+ });
+
  test("drag insertion supports both directions, module boundaries and hidden rows", async () => {
   const { insertCostLine } = await import("../lib/estimate-order.ts");
   const ids = [1,2,3,4,5];

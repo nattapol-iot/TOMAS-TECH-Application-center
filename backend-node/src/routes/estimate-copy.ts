@@ -7,9 +7,9 @@ import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import {
-  expenseSectionCode, isEstimateSectionCode, MANHOUR_SECTION_CODE,
+  expenseSectionCode, isEstimateSectionCode, MANHOUR_SECTION_CODE, moduleSelected, requestedModules,
   otherCostSectionCode, requestedSections, resolveCopiedSupplier, touchedSections,
-  type EstimateSectionCode, type SupplierState,
+  type EstimateSectionCode, type ModuleSelection, type SupplierState,
 } from "../estimate-copy-plan.js";
 import { inferredDiscipline } from "../estimate-disciplines.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
@@ -137,8 +137,10 @@ export function copyLedgersFrom(body: Record<string, unknown>): EstimateCopyLedg
 export async function copyEstimateLines(transaction: TransactionType, input: {
   actor: CurrentUser; targetId: number; estimate: EditableEstimate; sourceId: number; ownerId: number;
   sections: readonly EstimateSectionCode[]; include: EstimateCopyLedgers; today: string;
+  /** Cost-item modules to copy per section; absent copies every module. */
+  modules?: ModuleSelection | null;
 }) {
-  const { actor, targetId, estimate, sourceId, ownerId, sections, include, today } = input;
+  const { actor, targetId, estimate, sourceId, ownerId, sections, include, today, modules = null } = input;
   const source = await readSource(transaction, sourceId, targetId);
   // `sections` holds only values from ESTIMATE_SECTION_CODES — never request text — so this list is a constant, not user input.
   const sectionList = sections.map((code) => `'${code}'`).join(",");
@@ -182,7 +184,7 @@ export async function copyEstimateLines(transaction: TransactionType, input: {
     SELECT item_code FROM dbo.cost_items WITH (UPDLOCK,HOLDLOCK)
     WHERE estimate_id=@target_id AND revision=@target_revision AND deleted_at IS NULL;`);
 
-  const costRows = ledgers.recordsets[0] as unknown as CostRow[];
+  const costRows = (ledgers.recordsets[0] as unknown as CostRow[]).filter((row) => moduleSelected(modules, row.category_code, row.module));
   const manhourRows = ledgers.recordsets[1] as unknown as ManhourRow[];
   const expenseRows = (ledgers.recordsets[2] as unknown as ExpenseRow[])
     .filter((row) => { const section = expenseSectionCode(row.expense_type); return section !== null && sections.includes(section); });
@@ -354,12 +356,14 @@ export function registerEstimateCopyRoutes(app: FastifyInstance, config: AppConf
     const ownerId = requiredInteger(body.ownerId, "Owner", 1);
     const sections = requestedSections(body.sections);
     if (!sections.length) throw new ApiError(400, "validation_failed", "Select at least one estimate section to copy.");
+    const modules = requestedModules(body.modules);
+    if (modules === "invalid") throw new ApiError(400, "validation_failed", "Modules must map an estimate section to a list of module names.");
     const include = copyLedgersFrom(body);
     const today = businessToday(config.businessTimeZone);
 
     const copied = await database.transaction(async (transaction) => {
       const estimate: EditableEstimate = await lockEditableEstimate(transaction, targetId, estimateRowVersion);
-      return copyEstimateLines(transaction, { actor, targetId, estimate, sourceId, ownerId, sections, include, today });
+      return copyEstimateLines(transaction, { actor, targetId, estimate, sourceId, ownerId, sections, include, today, modules });
     });
     return reply.status(201).send(copied);
   });

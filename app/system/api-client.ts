@@ -1599,6 +1599,8 @@ export type EstimateCopyInput = {
   includeExpenses?: boolean;
   includeOtherCosts?: boolean;
   includeErpCategories?: boolean;
+  /** Cost-item modules to copy per section ("" = lines with no module); a section not listed copies every module. */
+  modules?: Record<string, string[]>;
 };
 
 export type EstimateCopyResult = {
