@@ -12,6 +12,7 @@ flowchart LR
   API --> Storage[Configured document storage / NAS]
   API --> Parser[Python PDF parser]
   API --> Identity[TMT ID / Entra / Team Test mode]
+  API --> ERP[Pegasus ERP MCP]
 ```
 
 ## Entry points
@@ -53,6 +54,11 @@ Inquiry and Estimate each have one active implementation, in `InquiryScreens.tsx
 - Labor package defaults are reusable inputs; applying them is not permission to copy historical internal rates. Start at [labor](modules/labor.md).
 - Signing, resource task workflow and report approval overlap but have distinct identity and state rules. Read both module cards when changing the handoff.
 - Site Monitor has two callers. `/api/v1/monitor/agent/*` is used by TMT Control Panel on customer machines: these routes are `config.public` (no signed-in person) and authenticate with the `X-Agent-Key` header, stored only as a SHA-256 hash in `dbo.monitor_agents`. Everything else under `/api/v1/monitor/*` is the screen and uses `monitor.read` / `monitor.control` / `monitor.manage`. Web start/stop/restart is a queued `dbo.monitor_commands` row that the agent long-polls; it never reaches the machine directly. Customer sites reach the agent routes without a VPN through a Cloudflare Tunnel hostname (`SiteMonitor__AgentPublicUrl`, compose service `cloudflared`); on that hostname `app.ts` answers 404 for every route outside `/api/v1/monitor/agent/*` ([SITE_MONITOR_TUNNEL.md](../SITE_MONITOR_TUNNEL.md)). The sweeper in [site-monitor.ts](../../backend-node/src/site-monitor.ts) (one per process, 30 s) marks silent agents offline, expires commands and emails the site's responsible people 1 → 2 → 3; every email is preceded by an atomic claim in SQL, so several API processes on one database never send the same email twice. The incident rules (unexpected stop only, one open incident per program) are in the heartbeat SQL of [routes/site-monitor.ts](../../backend-node/src/routes/site-monitor.ts).
+
+- Purchase requisitions end in the company Pegasus ERP, which picks suppliers and raises the PO. This app only approves a PR against the module budgets of its BOM. Only the Node API calls the ERP: JSON-RPC `tools/call` to its MCP endpoint (`PEGASUS_MCP_URL`; `off` disables), carrying the person's own TMT ID access token, which needs audience `pegasus-erp-mcp`. No service account and no browser call is involved. AI agents writing this code need no ERP connector; the ERP team confirmed this on 2026-10-28.
+  - Sending: final approval sends the PR as its requester. The requester's refresh token is sealed in `dbo.user_oidc_tokens` ([token-vault.ts](../../backend-node/src/tmt-id/token-vault.ts)). Each PR gets one `external_ref` (`ENGAPP-PR-<UUID>`), reused on every retry. When a send fails, the PR stays Approved and the requester gets a `PR_ERP_SEND` notification to press "ส่งเข้า ERP". A `ref_deleted` answer is never retried automatically.
+  - Status: the ERP has no webhook. Status is read when someone opens the PR list or one PR, with the viewer's token, at most once per PR per 15 minutes. Do not add a background poller without asking: it would need the requester's token, which expires with their SSO session.
+  - Where to start: [erp-purchasing.ts](../../backend-node/src/erp-purchasing.ts) (client, mapping, limits) and the ERP routes in [purchase-requisitions.ts](../../backend-node/src/routes/purchase-requisitions.ts). The contract agreed with the ERP team, with its open questions, is in [PEGASUS_ERP_PR_INTEGRATION_TH.md](../PEGASUS_ERP_PR_INTEGRATION_TH.md). Tests: [erp-purchasing.test.ts](../../backend-node/tests/erp-purchasing.test.ts), [procurement-integration.ts](../../backend-node/tests/procurement-integration.ts) (LocalDB, run with `scripts/Test-ProcurementLocalDb.ps1`) and [procurement-lean.test.mjs](../../tests/procurement-lean.test.mjs).
 
 ## Runtime versus repository
 

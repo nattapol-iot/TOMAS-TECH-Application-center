@@ -38,7 +38,7 @@ These project rules guide both agents; they do not override host/system policies
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — Engineering Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `89e3c066` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `4f3e899e` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 
@@ -65,7 +65,7 @@ These project rules guide both agents; they do not override host/system policies
 | [Price Library / Supplier Quotation](docs/context/modules/pricing.md) | ราคาย้อนหลัง ใบเสนอราคา PDF parser และติดตามราคาที่ขาด |
 | [Projects / Project Documents](docs/context/modules/projects.md) | ทะเบียนโครงการ end user และรับส่งเอกสารจาก inquiry/site visit |
 | [Schedule / Resource / My Work](docs/context/modules/planning.md) | แผนงาน timeline กำลังคน lifecycle งานและคำขอปรับวัน |
-| [BOM / PR / PO / Approvals](docs/context/modules/procurement.md) | จัดซื้อ อนุมัติ และประวัติ PR |
+| [BOM / PR / PO / Approvals](docs/context/modules/procurement.md) | ขอซื้อจาก BOM อนุมัติตามงบ Module ส่ง PR เข้า Pegasus ERP และประวัติ PR |
 | [Inventory / Receiving / Issues](docs/context/modules/inventory.md) | รับของ เบิกของ stock ledger และการควบคุมยอด |
 | [Sign Drawing / Documents / Stamps](docs/context/modules/signing.md) | ลงนาม inbox ลายเซ็น ตราบริษัท และตรวจ certificate |
 | [Reports / Inspection / Report Templates](docs/context/modules/reports.md) | แก้รายงาน workflow หลักฐาน ส่งออก PDF/PPTX และ customer acknowledgment |
@@ -96,10 +96,11 @@ These project rules guide both agents; they do not override host/system policies
 - เลือก Template ไม่ได้ → templates และ estimate → apply-template + tests/estimate-template-selection.test.mjs
 - Sign Drawing → signing และ planning → drawing-workflow + resource-tasks
 - Supplier PDF / upload / ราคา → pricing → supplier-quotations + pdf-parser/main.py
+- PR ส่งเข้า ERP / สถานะ ERP / เลข PO → procurement → purchase-requisitions (erp-send, erp-sync) + backend-node/src/erp-purchasing.ts + docs/PEGASUS_ERP_PR_INTEGRATION_TH.md
 
 ## Contract
 
 Node API ที่ใช้อ้างอิงอยู่ backend-node/; backend/ (.NET), backend-php/ และ worker/ เป็นเส้นทางอีกชุด อย่าแก้โดยสมมติว่าเป็น runtime เดียวกัน. Permission, role, scope และสถานะงานต้องตรวจในโค้ดเส้นทางจริง; requirement ที่ผู้ใช้เคยขอไม่ได้ยืนยันว่า implemented แล้ว.
 
-Generated inventory: 25 modules, 73 route files, 470 literal HTTP operations. ไฟล์ที่ใช้ร่วมกันอาจปรากฏหลาย module; endpoint extraction ไม่ได้แทนการตรวจ runtime.
+Generated inventory: 25 modules, 73 route files, 471 literal HTTP operations. ไฟล์ที่ใช้ร่วมกันอาจปรากฏหลาย module; endpoint extraction ไม่ได้แทนการตรวจ runtime.
 <!-- PROJECT-CONTEXT:END -->
