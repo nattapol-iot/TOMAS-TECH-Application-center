@@ -9,7 +9,8 @@ import type { CurrentUserService } from "../src/users.js";
 import type { WorkloadItem } from "../src/resource-workload.js";
 import type { TeamTaskCalendarEmail } from "../src/email.js";
 import { WORKLOAD_SQL } from "../src/resource-workload.js";
-import { TEAM_BOARD_SQL, canChangeTeamTask, defaultManDays, parseTeamTask, redactWork, registerTeamBoardRoutes, timeRangeManDays } from "../src/routes/team-board.js";
+import { outlookRows } from "../src/outlook-calendar.js";
+import { TEAM_BOARD_SQL, assertMayAssign, canAssignOthers, canChangeTeamTask, defaultManDays, parseTeamTask, redactWork, registerTeamBoardRoutes, timeRangeManDays } from "../src/routes/team-board.js";
 
 const user = (id: number, roles: string[]): CurrentUser => ({ id, entraObjectId: "", email: "", name: `User ${id}`, role: roles[0]!, roles, department: "", isActive: true });
 
@@ -178,9 +179,10 @@ test("adding a task works out its effort, records its people and tells them, in 
     if (statement.includes("INSERT dbo.team_tasks")) return { recordset: [{ id: 31, row_version: Buffer.alloc(8, 2) }] };
     return { recordset: [] };
   });
-  const { app, demanded, invites } = boardServer(user(5, ["Sales Engineer"]));
+  // A manager may put work on other people's rows (owner decision 2026-10-28).
+  const { app, demanded, invites } = boardServer(user(5, ["Sales Manager"]));
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { kind: "Task", title: "Draft BOQ", assigneeIds: [9, 7], customerId: 4, startDate: "2026-10-22", endDate: "2026-10-26" } });
+    const response = await app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { kind: "Task", title: "Draft BOQ", note: "BOQ for the line 4 retrofit", assigneeIds: [9, 7], customerId: 4, startDate: "2026-10-22", endDate: "2026-10-26" } });
     assert.equal(response.statusCode, 201);
     assert.deepEqual(demanded, ["team.board"]);
     // Thursday and Monday; Friday 23 is a holiday. The person's Outlook got the request.
@@ -229,7 +231,8 @@ test("someone else's task cannot be changed, and a stale copy is refused", async
   } finally {
     await outsider.app.close();
   }
-  const assignee = boardServer(user(9, ["Engineer"]));
+  // A Leader on the task, so handing it to someone else is allowed.
+  const assignee = boardServer(user(9, ["Engineer", "Leader"]));
   try {
     const stale = await assignee.app.inject({ method: "PUT", url: "/api/v1/team-tasks/31", payload: { ...payload, rowVersion: Buffer.alloc(8, 9).toString("base64") } });
     assert.equal(stale.statusCode, 409);
@@ -253,4 +256,46 @@ test("someone else's task cannot be changed, and a stale copy is refused", async
   } finally {
     await assignee.app.close();
   }
+});
+
+test("only Admins, Managers and Leaders add work for someone else, and new work says what it is", async (t) => {
+  t.mock.method(sql.Request.prototype, "query", async function (statement: string) {
+    if (statement.includes("customer_ok")) return { recordset: [], recordsets: [[{ customer_ok: 1, assignee_ok: 1, inquiry_ok: 1, project_ok: 1 }], []] };
+    if (statement.includes("INSERT dbo.team_tasks")) return { recordset: [{ id: 41, row_version: Buffer.alloc(8, 5) }] };
+    return { recordset: [] };
+  });
+  assert.deepEqual([["Engineer"], ["Leader"], ["Admin"], ["Engineering Manager"], ["Project Manager"], ["Sales Engineer"]].map((roles) => canAssignOthers(user(1, roles))),
+    [false, true, true, true, true, false]);
+  const engineer = boardServer(user(9, ["Engineer"]));
+  try {
+    const base = { kind: "Task", title: "Commissioning", note: "Line 2 PLC test", startDate: "2026-10-22" };
+    const forOthers = await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [7] } });
+    assert.equal(forOthers.statusCode, 403);
+    assert.equal(forOthers.json().code, "team_task_assign_forbidden");
+    assert.equal((await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [9] } })).statusCode, 201);
+    assert.equal((await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [] } })).statusCode, 201, "for nobody yet");
+    const noDetail = await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, note: " ", assigneeIds: [9] } });
+    assert.equal(noDetail.statusCode, 400);
+    // A day away needs no detail.
+    assert.equal((await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { kind: "Away", title: "Leave", assigneeIds: [9], startDate: "2026-10-22" } })).statusCode, 201);
+  } finally {
+    await engineer.app.close();
+  }
+  // People already on a task stay when someone without the right saves it; adding another does not.
+  assert.doesNotThrow(() => assertMayAssign(user(9, ["Engineer"]), [9, 7], [7]));
+  assert.throws(() => assertMayAssign(user(9, ["Engineer"]), [9, 7, 3], [7]), /Only Admins, Managers and Leaders/);
+});
+
+test("Outlook events keep busy time, hide private subjects and skip what the board already sent", () => {
+  const rows = outlookRows([
+    { id: "a", subject: "Customer meeting", showAs: "busy", start: { dateTime: "2026-10-28T09:00:00.0000000" }, end: { dateTime: "2026-10-28T10:30:00.0000000" }, location: { displayName: "ACME" } },
+    { id: "b", subject: "Doctor", sensitivity: "private", showAs: "oof", isAllDay: true, start: { dateTime: "2026-10-29T00:00:00.0000000" }, end: { dateTime: "2026-10-30T00:00:00.0000000" } },
+    { id: "c", subject: "Lunch", showAs: "free", start: { dateTime: "2026-10-28T12:00:00" }, end: { dateTime: "2026-10-28T13:00:00" } },
+    { id: "d", subject: "Cancelled", isCancelled: true, start: { dateTime: "2026-10-28T14:00:00" }, end: { dateTime: "2026-10-28T15:00:00" } },
+    { id: "e", iCalUId: "team-task-31@iot-team-center", subject: "Board task", start: { dateTime: "2026-10-28T08:30:00" }, end: { dateTime: "2026-10-28T12:00:00" } },
+  ]);
+  assert.deepEqual(rows, [
+    { eventId: "a", subject: "Customer meeting", location: "ACME", isPrivate: false, isAllDay: false, showAs: "busy", start: "2026-10-28T09:00:00", end: "2026-10-28T10:30:00" },
+    { eventId: "b", subject: null, location: null, isPrivate: true, isAllDay: true, showAs: "oof", start: "2026-10-29T00:00:00", end: "2026-10-30T00:00:00" },
+  ]);
 });

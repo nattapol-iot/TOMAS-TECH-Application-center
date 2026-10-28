@@ -781,4 +781,9 @@ GO
 -- database/migrations/086_team_task_people.sql
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.team_task_assignees TO [iot_team_app_role];
 GO
+
+-- database/migrations/089_outlook_calendar_events.sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.outlook_events TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.outlook_sync TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

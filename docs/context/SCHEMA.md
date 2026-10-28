@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `5924a744`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `c177aeff`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -94,5 +94,6 @@ Evidence: repository migrations at `5924a744`. Highest file number is not proof 
 | [086_team_task_people.sql](<../../database/migrations/086_team_task_people.sql>) | `dbo.team_task_assignees` |
 | [087_team_task_time_range.sql](<../../database/migrations/087_team_task_time_range.sql>) | Inspect migration SQL |
 | [088_monitor_agent_tmtdesk_id.sql](<../../database/migrations/088_monitor_agent_tmtdesk_id.sql>) | Inspect migration SQL |
+| [089_outlook_calendar_events.sql](<../../database/migrations/089_outlook_calendar_events.sql>) | `dbo.outlook_events`, `dbo.outlook_sync` |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

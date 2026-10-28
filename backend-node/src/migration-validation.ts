@@ -73,6 +73,8 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 85, fileName: "085_team_tasks.sql", name: "Team board and team tasks" },
   { version: 86, fileName: "086_team_task_people.sql", name: "Several people on a team task" },
   { version: 87, fileName: "087_team_task_time_range.sql", name: "Time range on a team task" },
+  { version: 88, fileName: "088_monitor_agent_tmtdesk_id.sql", name: "TMTDesk ID on a monitored machine" },
+  { version: 89, fileName: "089_outlook_calendar_events.sql", name: "Outlook calendar events on the team board" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

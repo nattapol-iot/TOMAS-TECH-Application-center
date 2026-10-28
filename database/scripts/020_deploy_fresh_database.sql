@@ -149,11 +149,13 @@ GO
 :r database/migrations/085_team_tasks.sql
 :r database/migrations/086_team_task_people.sql
 :r database/migrations/087_team_task_time_range.sql
+:r database/migrations/088_monitor_agent_tmtdesk_id.sql
+:r database/migrations/089_outlook_calendar_events.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 87) <> 87
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 89) <> 89
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -210,7 +212,9 @@ IF EXISTS (
         (75, N'Installed base: customer equipment and software'),
         (76, N'Release deployments to monitored programs'),
         (77, N'Site credentials vault'),
-        (78, N'Project without estimate')
+        (78, N'Project without estimate'),
+        (88, N'TMTDesk ID on a monitored machine'),
+        (89, N'Outlook calendar events on the team board')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name
