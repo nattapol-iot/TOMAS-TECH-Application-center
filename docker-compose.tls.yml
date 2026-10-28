@@ -96,6 +96,8 @@ services:
   # CLOUDFLARE_TUNNEL_TOKEN is in .env. See docs/SITE_MONITOR_TUNNEL.md.
   cloudflared:
     image: cloudflare/cloudflared:latest
+    # deploy.sh pulls it (with a time limit) only when missing; 'up' never pulls on its own.
+    pull_policy: missing
     profiles: [tunnel]
     command: tunnel --no-autoupdate run
     environment:
