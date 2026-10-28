@@ -6,7 +6,7 @@ import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
 import { useDraftHold } from "./RecordPresence";
 import { automaticLaborCategory } from "../../../lib/erp-category-suggest";
 import { classifyErpGroups, erpSheetAmounts, erpGroupsByMember, erpKeyOfBreakdownKey, splitRowsByCategory, type ErpGroup } from "../../../lib/erp-estimate-groups";
-import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
+import { ERP_COST_CATEGORIES, ERP_ESTIMATE_TEMPLATE_VERSION, buildErpEstimateWorkbook, downloadErpEstimateWorkbookBytes, erpEstimateWorkbookFilename } from "../../../lib/erp-estimate-workbook";
 import { LABOR_MODULE_NAMES, erpSheetQuantity, breakdownSheetModules, buildEstimateCostBreakdown, groupErpLaborSections, type BreakdownLine, type BreakdownSection } from "../../../lib/estimate-cost-breakdown";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
@@ -393,7 +393,7 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     if (!summary || workspace.header.status !== "Approved" || !summary.capabilities.canExport || unsaved.length || !approvedOverhead) return;
     setBusy(true); setError("");
     try {
-      const filename = `${workspace.header.number}_R${String(workspace.header.revision).padStart(2, "0")}_ERP_EstimateCost.xlsx`;
+      const filename = erpEstimateWorkbookFilename(workspace.header.number, workspace.header.projectName, workspace.header.revision);
       const bytes = buildErpEstimateWorkbook({
         metadata: {
           projectName: workspace.header.projectName,
@@ -407,6 +407,13 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
         },
         summary: { ...summary, lines: exportRows() },
         approvedOverhead: { amount: overheadAmount, approved: approvedOverhead },
+        /* Every cost item again, one sheet per category after Summary cost; a price set's members say so. */
+        costItems: workspace.costItems.map((line) => ({
+          categoryCode: line.categoryCode, category: line.category, module: line.module,
+          modelPartNumber: line.model || line.itemCode, description: line.description, supplier: line.supplierName ?? "",
+          brand: line.brand, unitPrice: Number(line.unitCost), quantity: Number(line.quantity), unit: line.unit, amount: Number(line.lineTotal),
+          remark: [line.isPriceSet ? "Price set" : line.priceSetKey ? "In price set" : "", line.remark ?? ""].filter(Boolean).join(" · "),
+        })),
       });
       const digestInput = new Uint8Array(bytes.byteLength);
       digestInput.set(bytes);
