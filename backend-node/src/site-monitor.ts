@@ -11,6 +11,23 @@ import { ApiError } from "./errors.js";
  * they can be unit-tested without a database; routes/site-monitor.ts wires them to HTTP.
  */
 
+/** Every route TMT Control Panel calls; the only routes that exist on the agents' public hostname. */
+export const AGENT_ROUTE_PREFIX = "/api/v1/monitor/agent/";
+
+/**
+ * Whether a request may proceed. On the agents' public hostname (SiteMonitor__AgentPublicUrl, a
+ * Cloudflare Tunnel open to the internet) only the agent API exists, whatever the tunnel routes:
+ * the screens, sign-in and every other API stay reachable on the private address alone.
+ * routeUrl is the matched route pattern, so path tricks such as /api/v1/monitor/agent/../x cannot pass.
+ */
+export function agentHostAllows(hostname: string, routeUrl: string | undefined, agentPublicHost: string | undefined): boolean {
+  if (!agentPublicHost || hostname.toLowerCase() !== agentPublicHost) return true;
+  return typeof routeUrl === "string" && routeUrl.startsWith(AGENT_ROUTE_PREFIX);
+}
+
+/** Wrong agent keys per address per minute before the API answers 429. Real keys are 256-bit. */
+export const AGENT_FAILED_KEYS_PER_MINUTE = 20;
+
 /** How often agents are asked to report. Offline detection uses the site's offline_minutes. */
 export const HEARTBEAT_SECONDS = 15;
 /** Longest a command long-poll is held open. */
@@ -331,6 +348,7 @@ export function stopSiteMonitorSweeper(sweeper: SiteMonitorSweeper): void {
  */
 export class SiteMonitorSweeper {
   private timer: NodeJS.Timeout | null = null;
+  private firstRun: NodeJS.Timeout | null = null;
   private running = false;
   private again = false;
   private lastPurge = 0;
@@ -354,12 +372,15 @@ export class SiteMonitorSweeper {
     if (this.timer) return;
     this.timer = setInterval(() => this.kick(), SWEEP_INTERVAL_MS);
     this.timer.unref();
-    setTimeout(() => this.kick(), 5_000).unref();
+    this.firstRun = setTimeout(() => this.kick(), 5_000);
+    this.firstRun.unref();
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.firstRun) clearTimeout(this.firstRun);
     this.timer = null;
+    this.firstRun = null;
   }
 
   kick(): void {

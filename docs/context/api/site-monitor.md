@@ -2,51 +2,51 @@
 
 [Module](../modules/site-monitor.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `8f4da29c`; generated, do not edit. [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `5924a744`; generated, do not edit. [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/monitor/agent/ping` | 341–344 |
-| POST | `/api/v1/monitor/agent/heartbeat` | 350–472 |
-| GET | `/api/v1/monitor/agent/commands` | 475–505 |
-| POST | `/api/v1/monitor/agent/commands/:commandId/result` | 507–529 |
-| GET | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 580–580 |
-| HEAD | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 581–581 |
-| GET | `/api/v1/monitor/sites` | 585–597 |
-| GET | `/api/v1/monitor/sites/:siteId` | 599–666 |
-| GET | `/api/v1/monitor/sites/:siteId/logs` | 668–701 |
-| GET | `/api/v1/monitor/commands/:commandId` | 703–711 |
-| POST | `/api/v1/monitor/programs/:programId/commands` | 715–765 |
-| POST | `/api/v1/monitor/incidents/:incidentId/acknowledge` | 767–786 |
-| POST | `/api/v1/monitor/sites` | 809–838 |
-| PUT | `/api/v1/monitor/sites/:siteId` | 840–880 |
-| POST | `/api/v1/monitor/sites/:siteId/agents` | 882–910 |
-| POST | `/api/v1/monitor/agents/:agentId/rotate-key` | 912–932 |
-| POST | `/api/v1/monitor/agents/:agentId/revoke` | 934–960 |
-| PUT | `/api/v1/monitor/agents/:agentId/tmtdesk` | 963–983 |
+| GET | `/api/v1/monitor/agent/ping` | 361–364 |
+| POST | `/api/v1/monitor/agent/heartbeat` | 370–492 |
+| GET | `/api/v1/monitor/agent/commands` | 495–525 |
+| POST | `/api/v1/monitor/agent/commands/:commandId/result` | 527–549 |
+| GET | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 600–600 |
+| HEAD | `/api/v1/monitor/agent/deployments/:deploymentId/artifact` | 601–601 |
+| GET | `/api/v1/monitor/sites` | 605–617 |
+| GET | `/api/v1/monitor/sites/:siteId` | 619–687 |
+| GET | `/api/v1/monitor/sites/:siteId/logs` | 689–722 |
+| GET | `/api/v1/monitor/commands/:commandId` | 724–732 |
+| POST | `/api/v1/monitor/programs/:programId/commands` | 736–786 |
+| POST | `/api/v1/monitor/incidents/:incidentId/acknowledge` | 788–807 |
+| POST | `/api/v1/monitor/sites` | 830–859 |
+| PUT | `/api/v1/monitor/sites/:siteId` | 861–901 |
+| POST | `/api/v1/monitor/sites/:siteId/agents` | 903–931 |
+| POST | `/api/v1/monitor/agents/:agentId/rotate-key` | 933–953 |
+| POST | `/api/v1/monitor/agents/:agentId/revoke` | 955–981 |
+| PUT | `/api/v1/monitor/agents/:agentId/tmtdesk` | 984–1004 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `iso` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 45–47 |
-| `numberOrNull` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 49–51 |
-| `id` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 53–57 |
-| `body` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 59–62 |
-| `requiredText` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 64–69 |
-| `optionalText` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 71–75 |
-| `integerInRange` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 77–82 |
-| `verb` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 84–87 |
-| `header` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 89–92 |
-| `isDuplicateKey` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 94–97 |
-| `parseSiteInput` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 110–131 |
-| `siteDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 179–199 |
-| `parseTmtdeskId` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 205–212 |
-| `agentDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 214–236 |
-| `commandDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 238–244 |
-| `registerSiteMonitorRoutes` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 306–984 |
+| `iso` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 54–56 |
+| `numberOrNull` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 58–60 |
+| `id` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 62–66 |
+| `body` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 68–71 |
+| `requiredText` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 73–78 |
+| `optionalText` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 80–84 |
+| `integerInRange` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 86–91 |
+| `verb` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 93–96 |
+| `header` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 98–101 |
+| `isDuplicateKey` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 103–106 |
+| `parseSiteInput` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 119–140 |
+| `siteDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 188–208 |
+| `parseTmtdeskId` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 214–221 |
+| `agentDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 223–245 |
+| `commandDto` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 247–253 |
+| `registerSiteMonitorRoutes` | [backend-node/src/routes/site-monitor.ts](<../../../backend-node/src/routes/site-monitor.ts>) | 315–1005 |
 
 ## Direct local dependencies
 
@@ -57,6 +57,7 @@ Evidence: source snapshot `8f4da29c`; generated, do not edit. [backend-node/src/
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
+- [backend-node/src/rate-limits.ts](<../../../backend-node/src/rate-limits.ts>)
 - [backend-node/src/site-monitor.ts](<../../../backend-node/src/site-monitor.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 

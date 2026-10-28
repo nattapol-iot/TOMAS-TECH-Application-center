@@ -28,6 +28,9 @@ services:
       # Site credentials vault key ring, generated once by scripts/macos/deploy.sh into .env. Losing it
       # makes every stored site secret unreadable: keep a copy outside this host (docs/CREDENTIAL_VAULT.md).
       CREDENTIAL_VAULT_KEYS: ${CREDENTIAL_VAULT_KEYS:-}
+      # Site Monitor: the public origin customer machines report to through the Cloudflare Tunnel
+      # (service cloudflared below). On that hostname the API serves /api/v1/monitor/agent/* only.
+      SiteMonitor__AgentPublicUrl: ${SITE_MONITOR_AGENT_URL:-}
 
   frontend:
     # The dev file bind-mounts the checkout and runs 'npm run dev', and a Vite dev server
@@ -79,6 +82,28 @@ services:
       - frontend
     restart: unless-stopped
     mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # Site Monitor tunnel: customer machines running TMT Control Panel reach the agent API without a
+  # VPN. Outbound-only (no port is opened here); the tunnel's public hostname routes
+  # /api/v1/monitor/agent/* to http://api:5106 and the API refuses every other path on that hostname
+  # anyway. cloudflared sets X-Forwarded-For, which Http__TrustProxy above believes, so the API's
+  # per-address limits see each customer site. Profile "tunnel": deploy.sh starts it when
+  # CLOUDFLARE_TUNNEL_TOKEN is in .env. See docs/SITE_MONITOR_TUNNEL.md.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - api
+    restart: unless-stopped
+    mem_limit: 128m
     logging:
       driver: json-file
       options:

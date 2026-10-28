@@ -184,6 +184,41 @@ docker --context "$DOCKER_CONTEXT" image prune -f >/dev/null
 compose ps
 
 # ---------------------------------------------------------------------------------------------
+# Site Monitor tunnel. Customer machines running TMT Control Panel report through a Cloudflare
+# Tunnel instead of a VPN (docs/SITE_MONITOR_TUNNEL.md). Runs after the application is healthy and
+# only warns: a tunnel problem must never take the application down.
+deploy_site_monitor_tunnel() {
+  local token agent_url ping_status probe_status
+  token="$(env_value CLOUDFLARE_TUNNEL_TOKEN)"
+  agent_url="$(env_value SITE_MONITOR_AGENT_URL)"
+  if [[ -z "$token" ]]; then
+    compose --profile tunnel rm -sf cloudflared >/dev/null 2>&1 || true
+    [[ -n "$agent_url" ]] && log "WARNING: SITE_MONITOR_AGENT_URL is set but CLOUDFLARE_TUNNEL_TOKEN is not; nothing here connects the tunnel."
+    return 0
+  fi
+  [[ -n "$agent_url" ]] || { echo "::warning title=Site Monitor tunnel::CLOUDFLARE_TUNNEL_TOKEN is set without SITE_MONITOR_AGENT_URL; the API will not accept the tunnel hostname."; return 0; }
+  log "Starting the Site Monitor tunnel connector"
+  if ! compose --profile tunnel up -d --force-recreate cloudflared; then
+    echo "::warning title=Site Monitor tunnel::cloudflared did not start; customer sites cannot report."
+    return 0
+  fi
+  # Through the tunnel, the agent API must answer 401 for a missing key, and any other API must be 404.
+  for _ in $(seq 1 12); do
+    ping_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$agent_url/api/v1/monitor/agent/ping" || true)"
+    [[ "$ping_status" == "401" ]] && break
+    sleep 5
+  done
+  probe_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$agent_url/api/v1/monitor/sites" || true)"
+  if [[ "$ping_status" == "401" && "$probe_status" == "404" ]]; then
+    log "Site Monitor tunnel is up: $agent_url serves the agent API only"
+  else
+    echo "::warning title=Site Monitor tunnel::$agent_url answered agent ping $ping_status (want 401) and /api/v1/monitor/sites $probe_status (want 404); check the tunnel's public hostname route."
+    compose --profile tunnel logs --tail=40 cloudflared
+  fi
+}
+deploy_site_monitor_tunnel
+
+# ---------------------------------------------------------------------------------------------
 # TMTHub. Runs after the application is healthy, as a function so that a NAS that is not ready
 # for it yet skips TMTHub with a warning; any other TMTHub problem fails the job loudly without
 # taking the application down.

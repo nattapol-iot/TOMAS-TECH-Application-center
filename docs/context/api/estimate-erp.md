@@ -2,7 +2,7 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `8f4da29c`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `5924a744`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
