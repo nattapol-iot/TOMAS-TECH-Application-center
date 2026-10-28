@@ -3330,6 +3330,8 @@ export type MonitorCommand = {
 };
 export type MonitorLog = { id: number; agentId: number; agentName: string; level: "Info" | "Warning" | "Error"; message: string; loggedAt: string };
 export type MonitorSiteDetail = {
+  /** Public origin customer machines report to (Cloudflare Tunnel); null when only the private address exists. */
+  agentServerUrl: string | null;
   site: MonitorSite;
   agents: MonitorAgent[];
   programs: MonitorProgram[];
@@ -3348,7 +3350,7 @@ export type MonitorSiteInput = {
 };
 
 export const getMonitorSites = () =>
-  apiRequest<{ sites: MonitorSite[]; heartbeatSeconds: number }>("/api/v1/monitor/sites");
+  apiRequest<{ sites: MonitorSite[]; heartbeatSeconds: number; agentServerUrl: string | null }>("/api/v1/monitor/sites");
 export const getMonitorSite = (siteId: number) =>
   apiRequest<MonitorSiteDetail>(`/api/v1/monitor/sites/${siteId}`);
 export const getMonitorLogs = (siteId: number, filter: { level?: string; agentId?: number; q?: string; beforeId?: number; limit?: number }) => {

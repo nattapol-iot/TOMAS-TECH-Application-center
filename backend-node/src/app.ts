@@ -56,6 +56,7 @@ import { registerSkillHubRoutes } from "./routes/skill-hub.js";
 import { registerSourceRepositoryRoutes } from "./routes/source-repositories.js";
 import { registerTmthubRepositoryRoutes } from "./routes/tmthub-repositories.js";
 import { registerSiteMonitorRoutes } from "./routes/site-monitor.js";
+import { agentHostAllows } from "./site-monitor.js";
 import { registerInstalledAssetRoutes } from "./routes/installed-assets.js";
 import { registerReleaseDeploymentRoutes } from "./routes/release-deployments.js";
 import { registerSiteCredentialRoutes } from "./routes/site-credentials.js";
@@ -171,6 +172,10 @@ export async function buildApp(config: AppConfig): Promise<Application> {
       throw Object.assign(new Error("Host is not allowed."), {
         statusCode: 400,
       });
+    }
+    // Site Monitor's public hostname serves the agent API and nothing else (see agentHostAllows).
+    if (!agentHostAllows(host, request.routeOptions.url, config.siteMonitor?.agentPublicHost)) {
+      throw new ApiError(404, "not_found", "Not found.");
     }
   });
   app.addHook("onSend", async (_request, reply, payload) => {

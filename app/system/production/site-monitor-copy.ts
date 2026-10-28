@@ -230,6 +230,16 @@ export const SITE_MONITOR_COPY: Record<string, Copy> = {
   },
   "Monitor.keySaved": { th: "คัดลอกแล้ว ปิด", en: "I have copied it", jp: "コピーしました" },
   "Monitor.serverUrl": { th: "Server URL", en: "Server URL", jp: "サーバー URL" },
+  "Monitor.firewallHint": {
+    th: "ถ้าเครือข่ายลูกค้ามี firewall ให้อนุญาต HTTPS ขาออก (port 443) ไปยัง",
+    en: "If the customer network has a firewall, allow outbound HTTPS (port 443) to",
+    jp: "顧客ネットワークにファイアウォールがある場合は、次への送信 HTTPS（ポート 443）を許可してください：",
+  },
+  "Monitor.internalOnly": {
+    th: "URL นี้ใช้ได้เฉพาะเครื่องที่อยู่ในเครือข่ายบริษัท (VPN) เครื่องที่ Site ลูกค้าต้องใช้ URL ของ Site Monitor tunnel ให้ผู้ดูแลระบบตั้ง SITE_MONITOR_AGENT_URL ก่อน",
+    en: "This URL works only for machines inside the company network (VPN). Customer sites need the Site Monitor tunnel URL: ask an administrator to set SITE_MONITOR_AGENT_URL.",
+    jp: "この URL は社内ネットワーク（VPN）内のマシンでのみ使えます。顧客サイトには Site Monitor トンネルの URL が必要です。管理者に SITE_MONITOR_AGENT_URL の設定を依頼してください。",
+  },
   "Monitor.agentKey": { th: "Agent key", en: "Agent key", jp: "エージェントキー" },
   "Monitor.copy": { th: "คัดลอก", en: "Copy", jp: "コピー" },
   "Monitor.setup.step1": {

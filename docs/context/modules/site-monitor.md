@@ -4,7 +4,7 @@
 
 สถานะโปรแกรม resource และ log ที่ TMT Control Panel (agent) ส่งมา สั่ง start/stop/restart และแจ้งเมลผู้ดูแลลำดับ 1-2-3
 
-Evidence: snapshot `8f4da29c`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `5924a744`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -27,17 +27,17 @@ Shared screens contain other modules: use the symbol and line range instead of r
 | `useDateTime` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 92–96 |
 | `tmtdeskIdText` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 99–101 |
 | `tmtdeskLink` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 104–106 |
-| `serverUrl` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 108–111 |
-| `SiteMonitorScreen` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 115–144 |
-| `SiteOverview` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 148–251 |
-| `SiteDetailView` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 260–676 |
-| `BackLink` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 679–685 |
-| `LogsPanel` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 692–789 |
-| `ConfirmModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 793–807 |
-| `AddMachineModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 809–838 |
-| `TmtdeskIdModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 840–870 |
-| `AgentKeyModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 872–905 |
-| `SiteEditorModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 907–1001 |
+| `internalServerUrl` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 109–112 |
+| `SiteMonitorScreen` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 116–145 |
+| `SiteOverview` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 149–252 |
+| `SiteDetailView` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 261–677 |
+| `BackLink` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 680–686 |
+| `LogsPanel` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 693–790 |
+| `ConfirmModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 794–808 |
+| `AddMachineModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 810–839 |
+| `TmtdeskIdModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 841–871 |
+| `AgentKeyModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 873–916 |
+| `SiteEditorModal` | [app/system/production/SiteMonitorScreen.tsx](<../../../app/system/production/SiteMonitorScreen.tsx>) | 918–1012 |
 | `errorText` | [app/system/production/MonitorDeployments.tsx](<../../../app/system/production/MonitorDeployments.tsx>) | 19–21 |
 | `formatSize` | [app/system/production/MonitorDeployments.tsx](<../../../app/system/production/MonitorDeployments.tsx>) | 23–27 |
 | `DeploymentsPanel` | [app/system/production/MonitorDeployments.tsx](<../../../app/system/production/MonitorDeployments.tsx>) | 33–101 |
@@ -49,6 +49,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/routes/download-center.ts](<../../../backend-node/src/routes/download-center.ts>)
+- [backend-node/src/rate-limits.ts](<../../../backend-node/src/rate-limits.ts>)
 - [backend-node/src/site-monitor.ts](<../../../backend-node/src/site-monitor.ts>)
 - [backend-node/src/release-deployment.ts](<../../../backend-node/src/release-deployment.ts>)
 - [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
@@ -64,6 +65,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Candidate regression tests
 
 - [backend-node/tests/release-deployment.test.ts](<../../../backend-node/tests/release-deployment.test.ts>)
+- [backend-node/tests/site-monitor-public-host.test.ts](<../../../backend-node/tests/site-monitor-public-host.test.ts>)
 - [backend-node/tests/site-monitor.test.ts](<../../../backend-node/tests/site-monitor.test.ts>)
 
 ## Client contract lookup

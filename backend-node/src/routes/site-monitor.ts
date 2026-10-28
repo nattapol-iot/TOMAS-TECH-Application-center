@@ -10,7 +10,9 @@ import { resolveStoragePath } from "../document-storage.js";
 import type { EmailService } from "../email.js";
 import { parseByteRange } from "./download-center.js";
 import { ApiError } from "../errors.js";
+import { failedSignInLimit } from "../rate-limits.js";
 import {
+  AGENT_FAILED_KEYS_PER_MINUTE,
   AGENT_KEY_PATTERN,
   COMMAND_WAIT_SECONDS,
   HEARTBEAT_SECONDS,
@@ -27,6 +29,13 @@ import {
   wakeAllAgents,
 } from "../site-monitor.js";
 import type { CurrentUserService } from "../users.js";
+
+/**
+ * A heartbeat carries at most 500 log lines of 2,000 characters (Thai is three bytes a character in
+ * UTF-8). Without a route limit the app-wide limit, sized for document uploads, would apply to an
+ * endpoint that is open to the internet.
+ */
+const AGENT_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
 
 /**
  * Site Monitor HTTP API.
@@ -321,9 +330,20 @@ export function registerSiteMonitorRoutes(
 
   // ── agent authentication ───────────────────────────────────────────────
 
+  /** What customer machines should be configured with, shown beside a new key on the screen. */
+  const agentServerUrl = config.siteMonitor?.agentPublicUrl ?? null;
+
+  // The agent routes are reachable from the internet through the tunnel: wrong keys are counted per
+  // address and answered 429 once over the allowance, so guessing gets nowhere and costs no SQL.
+  const failedKeys = failedSignInLimit(AGENT_FAILED_KEYS_PER_MINUTE);
+  const rejectKey = (request: FastifyRequest, message: string): never => {
+    failedKeys.record(request.ip);
+    throw new ApiError(401, "invalid_agent_key", message);
+  };
+
   const agentFrom = async (request: FastifyRequest): Promise<AgentIdentity> => {
     const key = header(request, "x-agent-key");
-    if (!AGENT_KEY_PATTERN.test(key)) throw new ApiError(401, "invalid_agent_key", "The agent key is missing or invalid.");
+    if (!AGENT_KEY_PATTERN.test(key)) rejectKey(request, "The agent key is missing or invalid.");
     const result = await database.query<{ id: number | string; site_id: number | string; name: string; site_name: string }>(`
       SELECT a.id, a.site_id, a.name, s.name AS site_name
       FROM dbo.monitor_agents a
@@ -331,7 +351,7 @@ export function registerSiteMonitorRoutes(
       WHERE a.key_hash = @hash AND a.revoked_at IS NULL;
     `, (request) => request.input("hash", sql.Char(64), hashAgentKey(key)));
     const row = result.recordset[0];
-    if (!row) throw new ApiError(401, "invalid_agent_key", "The agent key is not recognised or has been revoked.");
+    if (!row) return rejectKey(request, "The agent key is not recognised or has been revoked.");
     return { id: Number(row.id), siteId: Number(row.site_id), name: row.name, siteName: row.site_name };
   };
 
@@ -347,7 +367,7 @@ export function registerSiteMonitorRoutes(
    * Program state, resources, transitions and log lines. A repeated batchId (the agent retrying
    * after a lost response) refreshes state but never inserts the same logs or incidents twice.
    */
-  app.post("/api/v1/monitor/agent/heartbeat", { config: { public: true } }, async (request) => {
+  app.post("/api/v1/monitor/agent/heartbeat", { config: { public: true }, bodyLimit: AGENT_BODY_LIMIT_BYTES }, async (request) => {
     const agent = await agentFrom(request);
     const input = parseHeartbeat(request.body);
     const programs = JSON.stringify(input.programs.map((program) => ({
@@ -504,7 +524,7 @@ export function registerSiteMonitorRoutes(
     }
   });
 
-  app.post("/api/v1/monitor/agent/commands/:commandId/result", { config: { public: true } }, async (request) => {
+  app.post("/api/v1/monitor/agent/commands/:commandId/result", { config: { public: true }, bodyLimit: AGENT_BODY_LIMIT_BYTES }, async (request) => {
     const agent = await agentFrom(request);
     const commandId = id((request.params as Record<string, unknown>).commandId, "commandId");
     const input = body(request);
@@ -593,7 +613,7 @@ export function registerSiteMonitorRoutes(
       ORDER BY c.site_id, c.priority;
     `);
     const [sites, contacts] = result.recordsets as unknown as [SiteRow[], ContactRow[]];
-    return { sites: sites.map((site) => siteDto(site, contacts)), heartbeatSeconds: HEARTBEAT_SECONDS };
+    return { sites: sites.map((site) => siteDto(site, contacts)), heartbeatSeconds: HEARTBEAT_SECONDS, agentServerUrl };
   });
 
   app.get("/api/v1/monitor/sites/:siteId", async (request) => {
@@ -645,6 +665,7 @@ export function registerSiteMonitorRoutes(
     const site = sites[0];
     if (!site) throw new ApiError(404, "monitor_site_not_found", "The site was not found.");
     return {
+      agentServerUrl,
       site: siteDto(site, contacts),
       agents: agents.map(agentDto),
       programs: programs.map((row) => ({

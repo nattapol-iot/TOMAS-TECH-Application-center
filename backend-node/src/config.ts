@@ -69,7 +69,37 @@ export type AppConfig = {
   tmthub?: TmthubConfig;
   /** Site credentials vault keys (CREDENTIAL_VAULT_KEYS); without them secrets can be neither stored nor revealed. */
   credentialVault?: VaultKeys;
+  /** Site Monitor agents reaching the API from customer sites through a public hostname. */
+  siteMonitor?: SiteMonitorConfig;
 };
+
+export type SiteMonitorConfig = {
+  /** Public origin TMT Control Panel uses from customer sites, e.g. https://monitor-agent.tomastc.com. */
+  agentPublicUrl: string;
+  /** Its host name. Requests carrying this Host may reach only /api/v1/monitor/agent/* (app.ts). */
+  agentPublicHost: string;
+};
+
+/**
+ * SiteMonitor__AgentPublicUrl: the internet-facing origin (a Cloudflare Tunnel) that customer machines
+ * report to without a VPN. Unset, agents can only reach the API on its private address.
+ */
+export function loadSiteMonitorConfig(env: NodeJS.ProcessEnv): SiteMonitorConfig | undefined {
+  const value = optional(env, "SiteMonitor__AgentPublicUrl");
+  if (!value) return undefined;
+  const origin = value.replace(/\/+$/, "");
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    throw new Error("SiteMonitor__AgentPublicUrl must be an https origin such as https://monitor-agent.example.com.");
+  }
+  const local = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  if (url.pathname !== "/" || url.search || url.hash || url.username || url.password || (url.protocol !== "https:" && !local)) {
+    throw new Error("SiteMonitor__AgentPublicUrl must be an https origin such as https://monitor-agent.example.com.");
+  }
+  return { agentPublicUrl: url.origin, agentPublicHost: url.hostname.toLowerCase() };
+}
 
 export type TmthubConfig = {
   /** Server-to-server base, e.g. http://tmthub:3000 on the compose network. */
@@ -355,10 +385,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       throw new Error("Authentication__RequiredScope must be one scope name.");
   }
 
+  const siteMonitor = loadSiteMonitorConfig(env);
   const allowedHosts = (optional(env, "AllowedHosts") ?? "localhost;127.0.0.1")
     .split(";")
     .map((value) => value.trim())
     .filter(Boolean);
+  // The agents' public hostname is allowed with the setting that names it, so one value configures it.
+  if (siteMonitor && !allowedHosts.some((host) => host.toLowerCase() === siteMonitor.agentPublicHost)) {
+    allowedHosts.push(siteMonitor.agentPublicHost);
+  }
   if (
     environment !== "development" &&
     (allowedHosts.length === 0 ||
@@ -531,5 +566,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     pdfParserUrl: optional(env, "PDF_PARSER_URL") ?? "http://pdf-parser:8000",
     ...(tmthub ? { tmthub } : {}),
     ...(credentialVault ? { credentialVault } : {}),
+    ...(siteMonitor ? { siteMonitor } : {}),
   };
 }

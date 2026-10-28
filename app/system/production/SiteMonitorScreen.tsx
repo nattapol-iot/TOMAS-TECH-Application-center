@@ -105,7 +105,8 @@ function tmtdeskLink(agent: MonitorAgent): string {
   return `tmtdesk://connect/${agent.tmtdeskId}?name=${encodeURIComponent(agent.machineName ?? agent.name)}`;
 }
 
-function serverUrl(): string {
+/** The web's own address: reachable only inside the company network (VPN). */
+function internalServerUrl(): string {
   if (API_BASE_URL) return API_BASE_URL;
   return typeof window === "undefined" ? "" : window.location.origin;
 }
@@ -662,7 +663,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
         <AddMachineModal siteId={site.id} notify={notify} onClose={() => setAddingAgent(false)}
           onCreated={(machine, key) => { setAddingAgent(false); setShownKey({ machine, key }); refresh(); }} />
       ) : null}
-      {shownKey ? <AgentKeyModal machine={shownKey.machine} agentKey={shownKey.key} onClose={() => setShownKey(null)} /> : null}
+      {shownKey ? <AgentKeyModal machine={shownKey.machine} agentKey={shownKey.key} publicUrl={detail.agentServerUrl} onClose={() => setShownKey(null)} /> : null}
       {editingTmtdesk ? (
         <TmtdeskIdModal agent={editingTmtdesk} notify={notify} onClose={() => setEditingTmtdesk(null)}
           onSaved={() => { setEditingTmtdesk(null); notify(t("Monitor.tmtdeskSaved")); refresh(); }} />
@@ -869,10 +870,15 @@ function TmtdeskIdModal({ agent, notify, onClose, onSaved }: {
   );
 }
 
-function AgentKeyModal({ machine, agentKey, onClose }: { machine: string; agentKey: string; onClose: () => void }) {
+function AgentKeyModal({ machine, agentKey, publicUrl, onClose }: {
+  machine: string; agentKey: string; publicUrl: string | null; onClose: () => void;
+}) {
   const t = useT();
   const [copied, setCopied] = useState<"url" | "key" | null>(null);
-  const url = serverUrl();
+  // Customer sites report through the public tunnel address; without one, only machines inside the
+  // company network (VPN) can reach the web.
+  const url = publicUrl ?? internalServerUrl();
+  const host = (() => { try { return new URL(url).host; } catch { return url; } })();
   const copy = async (what: "url" | "key", value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -900,6 +906,11 @@ function AgentKeyModal({ machine, agentKey, onClose }: { machine: string; agentK
         <li><LocalizedText text={"Monitor.setup.step2"} /></li>
         <li><LocalizedText text={"Monitor.setup.step3"} /></li>
       </ol>
+      {publicUrl ? (
+        <p className="site-monitor-footnote"><LocalizedText text={"Monitor.firewallHint"} /> <code>{host}</code></p>
+      ) : (
+        <p className="site-monitor-stale" role="note"><Icon name="alertTriangle" /><LocalizedText text={"Monitor.internalOnly"} /></p>
+      )}
     </Modal>
   );
 }

@@ -238,6 +238,8 @@ DEV_API_ALLOWED_HOSTS       iot-team-center.tomastc.com;iot-team-center.tomastc.
 PUBLIC_HOST                 iot-team-center.tomastc.com
 CLOUDFLARE_API_TOKEN        Zone.DNS edit on tomastc.com (the token cms-caddy already uses)
 OIDC_ISSUER / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / PUBLIC_BASE_URL / SESSION_SECRET / SESSION_COOKIE_SECURE
+SITE_MONITOR_AGENT_URL      https://monitor-agent.tomastc.com (optional: customer sites without VPN)
+CLOUDFLARE_TUNNEL_TOKEN     tunnel token for that hostname (optional; see docs/SITE_MONITOR_TUNNEL.md)
 ```
 
 `DEV_SITE_ORIGIN` feeds both the frontend's `SITE_ORIGIN` and the API's
