@@ -32,6 +32,10 @@ test("an approved PR goes to the ERP, which picks suppliers and raises the PO; n
   assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-send`/);
   assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-sync`/);
   assert.match(editor, /\/api\/v1\/erp\/purchasing\/options/);
+  // Opening the list reads its open PRs from the ERP, each at most once per 15 minutes (the ERP team allows 5-15).
+  assert.match(requisitions, /app\.post\("\/api\/v1\/purchase-requisitions\/erp-sync"/);
+  assert.match(requisitions, /const ERP_LIST_SYNC_MINUTES = 15;/);
+  assert.match(material, /apiRequest<\{ checked: number; updated: number \}>\("\/api\/v1\/purchase-requisitions\/erp-sync"/);
   assert.match(shell, /item\.entityType === "PurchaseRequisition"\) setView\("purchase"\)/);
 });
 

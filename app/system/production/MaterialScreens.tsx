@@ -664,6 +664,18 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const visible = useMemo(() => endpoint.data.filter((item) => (status === "All status" || item.status === status)
     && (!search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.bomNumber} ${item.requestedByName} ${item.erpPoRef ?? ""} ${item.erp.prNo ?? ""}`, search))), [endpoint.data, search, status]);
 
+  // Opening the list reads the ERP status of its open PRs with the viewer's token (the server reads each at most once per 15 minutes),
+  // so the ERP column and PO numbers are current without opening every PR.
+  const listSynced = useRef(false);
+  const { data: listed, reload: reloadList } = endpoint;
+  useEffect(() => {
+    if (listSynced.current || !listed.some((item) => item.erp.prNo && !ERP_FINAL.includes(item.erp.status ?? ""))) return;
+    listSynced.current = true;
+    void apiRequest<{ checked: number; updated: number }>("/api/v1/purchase-requisitions/erp-sync", { method: "POST", body: "{}" })
+      .then((result) => { if (result.updated) reloadList(); })
+      .catch(() => undefined);
+  }, [listed, reloadList]);
+
   const submit = async (item: PurchaseRequisition) => {
     if (!window.confirm(`${uiText("Submit")} ${item.number}?`)) return;
     setBusyId(item.id); setActionError("");
@@ -766,7 +778,7 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onClose }: { id: numb
   const currentPage = Math.min(page, pageCount);
   const shown = lines.slice((currentPage - 1) * PR_DETAIL_PAGE, currentPage * PR_DETAIL_PAGE);
 
-  // The ERP sends no webhook and allows no background polling, so its status is read when someone opens the PR, with their own token.
+  // The ERP sends no webhook, so its status is also read when someone opens the PR, with their own token.
   const synced = useRef(false);
   const { reload } = endpoint;
   useEffect(() => {
