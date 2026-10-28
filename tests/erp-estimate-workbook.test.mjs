@@ -237,3 +237,38 @@ test("every row is in ascending order and every cell sits in the row that declar
     }
   }
 });
+
+const costItems = [
+  { categoryCode: "03", category: "Electrical", module: "Control panel", modelPartNumber: "CB-10", description: "Breaker", supplier: "Supplier B", brand: "Schneider", unitPrice: 500, quantity: 4, unit: "EA", amount: 2000, remark: "" },
+  { categoryCode: "01", category: "Hardware", module: "PLC Master", modelPartNumber: "FX5U", description: "PLC", supplier: "Supplier A", brand: "Mitsubishi", unitPrice: 10000, quantity: 2, unit: "EA", amount: 20000, remark: "Price set" },
+  { categoryCode: "01", category: "Hardware", module: "", modelPartNumber: "XL-1", description: "Loose cable", supplier: "", brand: "", unitPrice: 100, quantity: 3, unit: "M", amount: 300, remark: "" },
+];
+
+test("cost items add one sheet per category after Summary cost, which is written exactly as before", () => {
+  const plain = workbookXml();
+  const withItems = workbookXml({ ...fixture(), costItems });
+  assert.equal(withItems["xl/worksheets/sheet1.xml"], plain["xl/worksheets/sheet1.xml"]);
+  assert.equal(withItems["xl/styles.xml"], plain["xl/styles.xml"]);
+  assert.equal(plain["xl/worksheets/sheet2.xml"], undefined);
+  assert.equal(plain["xl/workbook.xml"].match(/<sheet /g).length, 1);
+  const names = [...withItems["xl/workbook.xml"].matchAll(/<sheet name="([^"]+)" sheetId="(\d+)" r:id="(rId\d+)"/g)].map(match => match.slice(1));
+  assert.deepEqual(names, [["Summary cost", "1", "rId1"], ["01 Hardware", "2", "rId3"], ["03 Electrical", "3", "rId4"]]);
+  assert.match(withItems["xl/_rels/workbook.xml.rels"], /Id="rId1"[^>]*Target="worksheets\/sheet1.xml"/);
+  assert.match(withItems["xl/_rels/workbook.xml.rels"], /Id="rId2"[^>]*Target="styles.xml"/);
+  assert.match(withItems["xl/_rels/workbook.xml.rels"], /Id="rId4"[^>]*Target="worksheets\/sheet3.xml"/);
+  assert.match(withItems["[Content_Types].xml"], /PartName="\/xl\/worksheets\/sheet3.xml"/);
+  const hardware = withItems["xl/worksheets/sheet2.xml"];
+  for (const text of ["01 Hardware", "PLC Master", "FX5U", "Mitsubishi", "Supplier A", "Price set", "Loose cable"]) assert.ok(hardware.includes(text), text);
+  assert.ok(!hardware.includes("Breaker"));
+  assert.match(hardware, /<t xml:space="preserve">Total<\/t><\/is><\/c><c r="L\d+" s="17"><v>20300<\/v>/);
+  assert.ok(withItems["xl/worksheets/sheet3.xml"].includes("Breaker"));
+});
+
+test("the ERP file name carries the project name, cleaned for a file system", async () => {
+  const { erpEstimateWorkbookFilename } = await import("../lib/erp-estimate-workbook.ts");
+  assert.equal(erpEstimateWorkbookFilename("EST-2610-0019", "AI Camera", 0), "EST-2610-0019_AI Camera_R00_ERP_EstimateCost.xlsx");
+  assert.equal(erpEstimateWorkbookFilename("EST-1", "Line 4: A/B  \"retrofit\"?", 3), "EST-1_Line 4- A-B -retrofit-_R03_ERP_EstimateCost.xlsx");
+  assert.equal(erpEstimateWorkbookFilename("EST-1", "  ", 1), "EST-1_R01_ERP_EstimateCost.xlsx");
+  const long = erpEstimateWorkbookFilename("EST-1", "x".repeat(500), 1);
+  assert.ok(long.length < 200 && !/[\\:*?"<>|/]/.test(long) && long.endsWith(".xlsx"), long);
+});

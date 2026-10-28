@@ -103,6 +103,7 @@ import {
   type Tone,
 } from "../ui";
 import { exportXlsx } from "../../../lib/export-xlsx";
+import { erpEstimateWorkbookFilename } from "../../../lib/erp-estimate-workbook";
 import { readSpreadsheet, type SpreadsheetRow } from "../../../lib/import-spreadsheet";
 
 type Props = {
@@ -955,7 +956,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     {approved ? <section className="panel est-handoff" aria-label={copy("ส่งต่อ", "Hand-off", "引き継ぎ")}>
       <div className="est-handoff-title"><strong>{copy("ส่งต่อ", "Hand-off", "引き継ぎ")}</strong><span className="muted">{copy(`ใช้ต้นทุน ${revisionCode(header.revision)} ต่อ · Revision นี้ล็อกแล้ว แก้ไขผ่านการสร้าง Revision ใหม่`, `Carry the ${revisionCode(header.revision)} cost forward · this revision is locked; changes go through a new revision`, `${revisionCode(header.revision)} の原価を引き継ぎ · この改訂はロック済み`)}</span></div>
       <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="file" /><strong>{copy("ไฟล์ ERP", "ERP file", "ERPファイル")}</strong>{erpUnclassified === 0 ? <Badge tone="green"><span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span></Badge> : erpUnclassified ? <Badge tone="amber"><span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span></Badge> : null}<span className="spacer" />{erpExport ? <button className="link-btn" type="button" onClick={() => erpExport.run()}>Export</button> : null}</div>
-        <span className="mono">{`${header.number}_${revisionCode(header.revision)}_ERP_EstimateCost.xlsx`}</span></div>
+        <span className="mono">{erpEstimateWorkbookFilename(header.number, header.projectName, header.revision)}</span></div>
       <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="users" /><strong>{copy("ฝ่ายขาย", "Sales", "営業")}</strong></div><span>{copy(`ทำใบเสนอราคาต่อจาก RFQ ${header.inquiryNumber}`, `Prepares the quotation from RFQ ${header.inquiryNumber}`, `RFQ ${header.inquiryNumber} から見積書を作成`)}</span></div>
       <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="folder" /><strong>Project</strong></div><span>{copy("สร้างจาก RFQ ได้เมื่อลูกค้ายืนยันสั่งซื้อ", "Created from the RFQ once the customer orders", "受注確定後にRFQから作成")}</span></div>
     </section> : null}

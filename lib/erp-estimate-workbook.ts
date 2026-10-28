@@ -65,10 +65,28 @@ export type ErpEstimateSummaryContract = {
   lines: ErpEstimateWorkbookRow[];
 };
 
+/** One cost item on its category's sheet. */
+export type ErpCostItemSheetLine = {
+  categoryCode: string;
+  category: string;
+  module: string;
+  modelPartNumber: string;
+  description: string;
+  supplier: string;
+  brand: string;
+  unitPrice: number;
+  quantity: number;
+  unit: string;
+  amount: number;
+  remark: string;
+};
+
 export type ErpEstimateWorkbookInput = {
   metadata: ErpEstimateWorkbookMetadata;
   summary: ErpEstimateSummaryContract;
   approvedOverhead: { amount: number; approved: boolean };
+  /** Cost items, one sheet per category after "Summary cost" (owner request 2026-10-28). */
+  costItems?: readonly ErpCostItemSheetLine[];
 };
 
 export const ERP_ESTIMATE_TEMPLATE_VERSION = "ERP_SUMMARY_V1";
@@ -111,6 +129,13 @@ const columnName = (index: number) => {
 };
 
 const finite = (value: number) => Number.isFinite(value);
+
+/* The file name carries the project name (owner request 2026-10-28). Characters a file name cannot hold become "-",
+   and the name stays well inside the export record's 200 characters. */
+export function erpEstimateWorkbookFilename(estimateNumber: string, projectName: string, revision: number): string {
+  const project = projectName.split("").filter(writableInXml).join("").replace(/[\\/:*?"<>|\t\r\n]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 80).trim();
+  return `${[estimateNumber, project].filter(Boolean).join("_")}_R${String(revision).padStart(2, "0")}_ERP_EstimateCost.xlsx`;
+}
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export function validateErpEstimateWorkbook(input: ErpEstimateWorkbookInput): void {
@@ -173,26 +198,31 @@ const HEADER_MERGES = [
   "C6:D6", "H6:J6", "L6:M6", "C7:O7", "N8:O8",
 ];
 
-function worksheetRows(input: ErpEstimateWorkbookInput): Sheet {
+/** The form's header block and column heads, the same on every sheet but for its page name and page number. */
+function headerRows(metadata: ErpEstimateWorkbookMetadata, pageName: string, page: string): Cell[][] {
   const label = (value: string) => ({ value, style: STYLE.label });
   const boxed = (value: string) => ({ value, style: STYLE.headerValue });
   const centred = (value: string) => ({ value, style: STYLE.headerCentre });
-  const rows: Cell[][] = [
+  return [
     [{}, {}, { value: "ESTIMATE COST", style: STYLE.title }],
-    [{}, {}, label("Project name"), {}, boxed(input.metadata.projectName), { value: "001", style: STYLE.headerItalic },
+    [{}, {}, label("Project name"), {}, boxed(metadata.projectName), { value: "001", style: STYLE.headerItalic },
       centred("Rev."), centred("Discription"), {}, {}, centred("Creator"), centred("Date"), {}, centred("Page")],
-    [{}, {}, label("Custumer"), {}, boxed(input.metadata.customer), {},
-      centred("△1"), boxed(input.metadata.revisionDescription ?? ""), {}, {}, boxed(input.metadata.creator),
-      boxed(input.metadata.exportDate), {}, centred("(1/1)")],
-    [{}, {}, label("Shot name"), {}, boxed(input.metadata.shortName ?? ""), {}, centred("△2")],
-    [{}, {}, label("Project Number"), {}, boxed(input.metadata.projectNumber ?? ""), {}, centred("△3")],
-    [{}, {}, label("Page name"), {}, boxed("Summary cost"), {}, centred("△4")],
+    [{}, {}, label("Custumer"), {}, boxed(metadata.customer), {},
+      centred("△1"), boxed(metadata.revisionDescription ?? ""), {}, {}, boxed(metadata.creator),
+      boxed(metadata.exportDate), {}, centred(page)],
+    [{}, {}, label("Shot name"), {}, boxed(metadata.shortName ?? ""), {}, centred("△2")],
+    [{}, {}, label("Project Number"), {}, boxed(metadata.projectNumber ?? ""), {}, centred("△3")],
+    [{}, {}, label("Page name"), {}, boxed(pageName), {}, centred("△4")],
     [],
     [{}, {}, ...[
       "Item", "Model/Part Number", "Discription/Detial", "Suppier", "Brand", "Lead Time",
       "Quote Rev.", "Unit price", "Quantity", "Total (BATH)", "Unit", "Remark",
     ].map(value => ({ value, style: STYLE.columnHead }))],
   ];
+}
+
+function worksheetRows(input: ErpEstimateWorkbookInput): Sheet {
+  const rows: Cell[][] = headerRows(input.metadata, "Summary cost", "(1/1)");
   const merges = [...HEADER_MERGES];
 
   let item = 1;
@@ -231,6 +261,67 @@ function worksheetRows(input: ErpEstimateWorkbookInput): Sheet {
   total("Approved Overhead", input.approvedOverhead.amount, STYLE.totalLabel, STYLE.totalMoney);
   total("Grand Total", input.summary.canonicalTotal, STYLE.grandTotalLabel, STYLE.grandTotalMoney);
   return { rows, merges };
+}
+
+/*
+ * A category's cost items, in the same form and columns as "Summary cost". Each module opens with its name and
+ * subtotal; the category total closes the sheet. Model/Part Number holds the part number here, as on the form's own
+ * detail sheets. Nothing on these sheets feeds the Summary cost sheet, which stays exactly as it was.
+ */
+type CostItemSheet = Sheet & { name: string };
+const SHEET_NAME_FORBIDDEN = /[[\]:*?/\\]/g;
+const amountOf = (value: number) => Number.isFinite(value) ? money(value) : 0;
+
+function costItemSheets(input: ErpEstimateWorkbookInput): CostItemSheet[] {
+  const byCategory = new Map<string, ErpCostItemSheetLine[]>();
+  for (const line of input.costItems ?? []) {
+    const lines = byCategory.get(line.categoryCode) ?? [];
+    lines.push(line);
+    byCategory.set(line.categoryCode, lines);
+  }
+  return [...byCategory.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([code, lines]) => {
+    const name = `${code} ${lines[0]!.category}`.replace(SHEET_NAME_FORBIDDEN, "-").slice(0, 31);
+    const rows: Cell[][] = headerRows(input.metadata, name, "");
+    const merges = [...HEADER_MERGES];
+    const modules = new Map<string, ErpCostItemSheetLine[]>();
+    for (const line of lines) {
+      const group = modules.get(line.module.trim()) ?? [];
+      group.push(line);
+      modules.set(line.module.trim(), group);
+    }
+    const blank = { value: "", style: STYLE.text };
+    let item = 1;
+    for (const [module, moduleLines] of modules) {
+      if (module) {
+        rows.push([{}, {}, { value: "", style: STYLE.item }, blank, { value: module, style: STYLE.blockName },
+          blank, blank, blank, blank, blank, blank,
+          { value: amountOf(moduleLines.reduce((sum, line) => sum + amountOf(line.amount), 0)), style: STYLE.totalMoney },
+          blank, blank, blank]);
+        merges.push(`N${rows.length}:O${rows.length}`);
+      }
+      for (const line of moduleLines) {
+        rows.push([{}, {},
+          { value: item++, style: STYLE.item },
+          { value: line.modelPartNumber, style: STYLE.text },
+          { value: line.description, style: STYLE.description },
+          { value: line.supplier, style: STYLE.text },
+          { value: line.brand, style: STYLE.text },
+          blank,
+          blank,
+          { value: amountOf(line.unitPrice), style: STYLE.money },
+          { value: Number.isFinite(line.quantity) ? line.quantity : 0, style: STYLE.quantity },
+          { value: amountOf(line.amount), style: STYLE.money },
+          { value: line.unit, style: STYLE.text },
+          { value: line.remark, style: STYLE.text },
+          blank,
+        ]);
+        merges.push(`N${rows.length}:O${rows.length}`);
+      }
+    }
+    rows.push([{}, {}, {}, {}, {}, {}, {}, {}, {}, { value: "Total", style: STYLE.grandTotalLabel }, {},
+      { value: amountOf(lines.reduce((sum, line) => sum + amountOf(line.amount), 0)), style: STYLE.grandTotalMoney }]);
+    return { name, rows, merges };
+  });
 }
 
 /** Row heights come from the form: a tall title, a banded header, then the lines. */
@@ -285,16 +376,27 @@ const ACCOUNTING_WHOLE = `_(* #,##0_);_(* \\(#,##0\\);_(* &quot;-&quot;??_);_(@_
 
 const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="187" formatCode="${ACCOUNTING}"/><numFmt numFmtId="188" formatCode="${ACCOUNTING_WHOLE}"/></numFmts><fonts count="7">${FONT.body}${FONT.bodyBold}${FONT.title}${FONT.columnHead}${FONT.label}${FONT.header}${FONT.total}</fonts><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00B050"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFCE4D6"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right><top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="18"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="6" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="187" fontId="3" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="187" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="188" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf><xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="187" fontId="6" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="6" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="187" fontId="6" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 
+/* The cost item sheets follow "Summary cost": it stays sheet 1 with relationship rId1 and styles keep rId2, so the
+   part the ERP system reads is written exactly as before. With no cost items every part is the one-sheet original. */
+const withSheetTypes = (count: number) => contentTypes.replace("</Types>",
+  `${Array.from({ length: count }, (_, index) => `<Override PartName="/xl/worksheets/sheet${index + 2}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`);
+const withSheets = (lastRow: number, sheets: readonly CostItemSheet[]) => workbookXml(lastRow).replace("</sheets>",
+  `${sheets.map((sheet, index) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${index + 2}" r:id="rId${index + 3}"/>`).join("")}</sheets>`);
+const withSheetRelationships = (count: number) => workbookRelationships.replace("</Relationships>",
+  `${Array.from({ length: count }, (_, index) => `<Relationship Id="rId${index + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 2}.xml"/>`).join("")}</Relationships>`);
+
 export function buildErpEstimateWorkbook(input: ErpEstimateWorkbookInput): Uint8Array {
   validateErpEstimateWorkbook(input);
   const sheet = worksheetRows(input);
+  const extra = costItemSheets(input);
   return zipSync({
-    "[Content_Types].xml": strToU8(contentTypes),
+    "[Content_Types].xml": strToU8(extra.length ? withSheetTypes(extra.length) : contentTypes),
     "_rels/.rels": strToU8(rootRelationships),
-    "xl/workbook.xml": strToU8(workbookXml(sheet.rows.length)),
-    "xl/_rels/workbook.xml.rels": strToU8(workbookRelationships),
+    "xl/workbook.xml": strToU8(extra.length ? withSheets(sheet.rows.length, extra) : workbookXml(sheet.rows.length)),
+    "xl/_rels/workbook.xml.rels": strToU8(extra.length ? withSheetRelationships(extra.length) : workbookRelationships),
     "xl/styles.xml": strToU8(styles),
     "xl/worksheets/sheet1.xml": strToU8(worksheetXml(sheet)),
+    ...Object.fromEntries(extra.map((costSheet, index) => [`xl/worksheets/sheet${index + 2}.xml`, strToU8(worksheetXml(costSheet))])),
   });
 }
 
