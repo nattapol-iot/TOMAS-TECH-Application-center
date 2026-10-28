@@ -11,7 +11,7 @@ import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImpor
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
-import { insertCostLine, moveModule, moveSibling, type ReorderEstimate } from "../../../lib/estimate-order";
+import { insertCostLine, moveModule, moveSibling, placeModule, type ReorderEstimate } from "../../../lib/estimate-order";
 
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
 import "./estimate-flow.css";
@@ -1131,6 +1131,11 @@ type CostModuleGroup = {
 
 const MATERIAL_CODES = ["01", "02", "03", "04", "05"];
 const moduleKeyOf = (categoryCode: string, module: string) => `${categoryCode}::${module}`;
+/* The band a line sits under: its module, else its price set, else the line alone. */
+const costGroupKeyOf = (line: EstimateCostItem) => {
+  const moduleName = line.module.trim();
+  return moduleName ? moduleKeyOf(line.categoryCode, moduleName) : (line.priceSetKey ? `set:${line.priceSetKey}` : `standalone:${line.id}`);
+};
 /* A set component is priced by its set header, so only the header can be waiting for a price. */
 const lineNeedsPrice = (line: EstimateCostItem) => numberOf(line.unitCost) <= 0 && (!line.priceSetKey || Boolean(line.isPriceSet));
 const lineNeedsSupplier = (line: EstimateCostItem) => !line.supplierId && MATERIAL_CODES.includes(line.categoryCode);
@@ -1139,7 +1144,7 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
   const groups = new Map<string, CostModuleGroup>();
   for (const line of lines) {
     const moduleName = line.module.trim();
-    const key = moduleName ? moduleKeyOf(line.categoryCode, moduleName) : (line.priceSetKey ? `set:${line.priceSetKey}` : `standalone:${line.id}`);
+    const key = costGroupKeyOf(line);
     let group = groups.get(key);
     if (!group) {
       group = { key, module: moduleName, categoryCode: line.categoryCode, category: line.category, lines: [], total: 0, needPrice: 0, needSupplier: 0 };
@@ -1306,11 +1311,31 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   };
   const moveCostModule = (group: CostModuleGroup, direction: -1 | 1) => {
     const siblings = workspace.costItems.filter(line => line.categoryCode === group.categoryCode);
-    const moved = moveModule(siblings, line => line.module.trim() ? moduleKeyOf(line.categoryCode, line.module.trim()) : `standalone:${line.id}`, group.key, direction);
+    const moved = moveModule(siblings, costGroupKeyOf, group.key, direction);
     let offset = 0;
     const ordered = workspace.costItems.map(line => line.categoryCode === group.categoryCode ? moved[offset++] : line);
     void onReorder("CostItem", ordered.map(line => line.id));
   };
+  /* Dragging a module by its grip moves the whole block within its discipline. A module dropped on a band lands
+     before or after it by the pointer's half; dropped on a module's items, it lands after that module. */
+  const [draggedModule, setDraggedModule] = useState<{ key: string; categoryCode: string } | null>(null);
+  const clearModuleDrag = () => { setDraggedModule(null); setDropMarker(""); };
+  const allowModuleDrop = (event: React.DragEvent, target: { key: string; categoryCode: string }, after: boolean) => {
+    if (!canAdd || busy || quickSaving || !draggedModule || draggedModule.categoryCode !== target.categoryCode || draggedModule.key === target.key) return;
+    event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropMarker(`mod:${target.key}:${after ? "after" : "before"}`);
+  };
+  const dropModule = (event: React.DragEvent, target: { key: string; categoryCode: string }, after: boolean) => {
+    event.preventDefault();
+    const dragged = draggedModule;
+    clearModuleDrag();
+    if (!canAdd || busy || quickSaving || !dragged || dragged.categoryCode !== target.categoryCode || dragged.key === target.key) return;
+    const siblings = workspace.costItems.filter(line => line.categoryCode === target.categoryCode);
+    const moved = placeModule(siblings, costGroupKeyOf, dragged.key, target.key, after);
+    if (moved.every((line, index) => line.id === siblings[index]!.id)) return;
+    let offset = 0;
+    void onReorder("CostItem", workspace.costItems.map(line => line.categoryCode === target.categoryCode ? moved[offset++]!.id : line.id));
+  };
+  const pointerAfter = (event: React.DragEvent) => { const bounds = event.currentTarget.getBoundingClientRect(); return event.clientY >= bounds.top + bounds.height / 2; };
   const moveCostLine = (group: CostModuleGroup, index: number, direction: -1 | 1) => {
     const moved = moveSibling(group.lines, index, direction);
     const ids = new Set(group.lines.map(line => line.id)); let offset = 0;
@@ -1396,9 +1421,11 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     const bandLines = groups.find((entry) => entry.key === group.key)?.lines ?? [];
     const errors = bandLines.filter((line) => lineSeverity.get(line.id) === "error").length;
     const warnings = bandLines.filter((line) => lineSeverity.get(line.id) !== "error" && (lineSeverity.has(line.id) || lineNeedsPrice(line) || lineNeedsSupplier(line))).length;
-    return <tr className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "")} onDragOver={event => { if (lineCount) allowDrop(event, group.key); }} onDrop={event => { const target = groups.find(entry => entry.key === group.key)?.lines.at(-1); if (target) dropCost(event, target.id, true); }} key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
+    const moduleMarker = dropMarker === `mod:${group.key}:before` ? " cost-drop-before" : dropMarker === `mod:${group.key}:after` && isCollapsed(group.key) ? " cost-drop-after" : "";
+    return <tr className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "") + moduleMarker} onDragOver={event => { if (draggedModule) allowModuleDrop(event, group, pointerAfter(event)); else if (lineCount) allowDrop(event, group.key); }} onDrop={event => { if (draggedModule) { dropModule(event, group, pointerAfter(event)); return; } const target = groups.find(entry => entry.key === group.key)?.lines.at(-1); if (target) dropCost(event, target.id, true); }} key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
 
     <td colSpan={colCount}><div className="row band">
+      {canAdd && lineCount ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag module " + group.module} title={estimateCopy("ลากเพื่อย้ายโมดูล", "Drag to move the module", "ドラッグしてモジュールを移動")} onDragStart={event => { setDraggedModule({ key: group.key, categoryCode: group.categoryCode }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", group.key); }} onDragEnd={clearModuleDrag}>⠿</button> : null}
       <button type="button" className="module-toggle" aria-label={(isCollapsed(group.key) ? "Expand " : "Collapse ") + group.module} aria-expanded={!isCollapsed(group.key)} onClick={() => toggleModule(group.key)}>
         <Icon name={isCollapsed(group.key) ? "chevronRight" : "chevronDown"} />
       </button>
@@ -1469,7 +1496,7 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
           if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total)];
           return [
             group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total) : null,
-            ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" ? " cost-drop-after" : "")} onDragOver={event => { const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
+            ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" || (dropMarker === `mod:${group.key}:after` && index === group.lines.length - 1) ? " cost-drop-after" : "")} onDragOver={event => { if (draggedModule) { allowModuleDrop(event, group, true); return; } const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { if (draggedModule) { dropModule(event, group, true); return; } const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
               <td><span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span></td>
               <td><span className="cell-text">{canAdd && line.canEdit && !line.priceSetKey ? <input type="checkbox" aria-label={"Select for price set " + line.itemCode} checked={setSelection.includes(line.id)} onChange={event=>setSetSelection(current=>event.target.checked?[...current,line.id]:current.filter(id=>id!==line.id))}/> : null}<strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong></span></td>
               <td><div className="cell-primary"><strong>{line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}{line.description}</strong>{line.priceSetKey && !line.isPriceSet ? <span>{line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต</span> : null}{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
@@ -1604,6 +1631,9 @@ function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }
   const [sourceId, setSourceId] = useState(0);
   const [sourceWorkspace, setSourceWorkspace] = useState<EstimateCostWorkspace | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  /* Modules left out of the copy (moduleKeyOf), and the disciplines whose module list is open. */
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [openSections, setOpenSections] = useState<string[]>([]);
   const [ledgers, setLedgers] = useState({ manhour: true, expenses: true, otherCosts: true, erpCategories: true });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1620,21 +1650,46 @@ function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }
   useEffect(() => {
     if (!sourceId) return;
     let active = true;
-    void loadEstimateCostWorkspace(sourceId).then((loaded) => { if (active) { setSourceWorkspace(loaded); setSelected([...new Set(loaded.costItems.map((line) => line.categoryCode))]); } }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
+    void loadEstimateCostWorkspace(sourceId).then((loaded) => { if (active) { setSourceWorkspace(loaded); setSelected([...new Set(loaded.costItems.map((line) => line.categoryCode))]); setExcluded([]); setOpenSections([]); } }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [sourceId]);
   const source = estimates.find((item) => item.id === sourceId);
   const allowedSection = (code: string) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code);
+  /* A discipline's modules in sheet order, with their line counts; "" holds the lines with no module. */
+  const sectionModules = (code: string) => {
+    const modules = new Map<string, number>();
+    for (const line of sourceWorkspace?.costItems ?? []) if (line.categoryCode === code) modules.set(line.module.trim(), (modules.get(line.module.trim()) ?? 0) + 1);
+    return [...modules];
+  };
+  const moduleIncluded = (code: string, module: string) => !excluded.includes(moduleKeyOf(code, module));
   const sectionCounts = (code: string) => {
     if (!sourceWorkspace) return 0;
-    const costs = sourceWorkspace.costItems.filter((line) => line.categoryCode === code).length;
+    const costs = sourceWorkspace.costItems.filter((line) => line.categoryCode === code && moduleIncluded(code, line.module.trim())).length;
     const manhour = code === "06" && ledgers.manhour ? sourceWorkspace.manhourLines.length : 0;
     const expenses = ledgers.expenses ? sourceWorkspace.expenseLines.filter((line) => EXPENSE_SECTION_BY_TYPE[line.expenseType] === code).length : 0;
     const other = ledgers.otherCosts ? sourceWorkspace.otherCostLines.filter((line) => OTHER_COST_SECTION_BY_CATEGORY[line.category] === code).length : 0;
     return costs + manhour + expenses + other;
   };
   const totalLines = COST_CATEGORIES.reduce((sum, [code]) => sum + (selected.includes(code) && allowedSection(code) ? sectionCounts(code) : 0), 0);
-  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว" size="wide" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !totalLines} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: selected.filter(allowedSection), includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: ledgers.erpCategories }); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} /></button></>}>
+  /* Only disciplines with a module left out are sent; any other selected discipline copies all of its modules. */
+  const moduleSelection = () => {
+    const modules: Record<string, string[]> = {};
+    for (const code of selected.filter(allowedSection)) {
+      const names = sectionModules(code).map(([name]) => name);
+      if (names.some((name) => !moduleIncluded(code, name))) modules[code] = names.filter((name) => moduleIncluded(code, name));
+    }
+    return Object.keys(modules).length ? modules : undefined;
+  };
+  const toggleModule = (code: string, module: string, on: boolean) => {
+    const key = moduleKeyOf(code, module);
+    setExcluded((current) => on ? current.filter((item) => item !== key) : [...current, key]);
+    if (on && !selected.includes(code)) setSelected((current) => [...current, code]);
+  };
+  const setAllModules = (code: string, on: boolean) => {
+    const keys = sectionModules(code).map(([name]) => moduleKeyOf(code, name));
+    setExcluded((current) => on ? current.filter((item) => !keys.includes(item)) : [...new Set([...current, ...keys])]);
+  };
+  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว" size="wide" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !totalLines} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: selected.filter(allowedSection), includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: ledgers.erpCategories, modules: moduleSelection() }); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} /></button></>}>
     {sources?.(busy)}
     <div className="est-source-narrow">
     <Field label="Source estimate *"><select value={sourceId} disabled={loading && !estimates.length} onChange={(event) => { setLoading(true); setError(""); setSourceId(Number(event.target.value)); }}>{estimates.map((estimate) => <option key={estimate.id} value={estimate.id}>{estimate.number} <LocalizedText text={"·"} /> {estimate.projectName} <LocalizedText text={"·"} /> {estimate.customerName}</option>)}</select></Field>
@@ -1645,7 +1700,18 @@ function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }
         const count = sectionCounts(code);
         if (!count) return null;
         const allowed = allowedSection(code);
-        return <div key={code} className="check-row"><input id={`copy-category-${code}`} type="checkbox" disabled={!allowed} checked={allowed && selected.includes(code)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, code] : current.filter((item) => item !== code))} /><label htmlFor={`copy-category-${code}`}><strong>{code} — {name}</strong><small>{count} <LocalizedText text={"line(s)"} />{allowed ? "" : " · no permission for this section"}</small></label></div>;
+        const modules = sectionModules(code);
+        const chosen = modules.filter(([module]) => moduleIncluded(code, module)).length;
+        const open = openSections.includes(code);
+        return <div key={code} className="copy-section">
+          <div className="check-row"><input id={`copy-category-${code}`} type="checkbox" disabled={!allowed} checked={allowed && selected.includes(code)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, code] : current.filter((item) => item !== code))} /><label htmlFor={`copy-category-${code}`}><strong>{code} — {name}</strong> <small>{count} <LocalizedText text={"line(s)"} />{allowed ? "" : " · no permission for this section"}</small></label>
+            {allowed && modules.length > 1 ? <button type="button" className="btn ghost sm copy-module-toggle" aria-expanded={open} onClick={() => setOpenSections((current) => open ? current.filter((item) => item !== code) : [...current, code])}><Icon name={open ? "chevronDown" : "chevronRight"} />{estimateCopy(`เลือกโมดูล ${chosen}/${modules.length}`, `Modules ${chosen}/${modules.length}`, `モジュール ${chosen}/${modules.length}`)}</button> : null}
+          </div>
+          {allowed && open && modules.length > 1 ? <div className="copy-module-list">
+            <div className="copy-module-all"><button type="button" className="link-btn" onClick={() => setAllModules(code, true)}>{estimateCopy("เลือกทั้งหมด", "Select all", "すべて選択")}</button><button type="button" className="link-btn" onClick={() => setAllModules(code, false)}>{estimateCopy("ไม่เลือกเลย", "Select none", "選択解除")}</button></div>
+            {modules.map(([module, lines], index) => <label key={module || "-"} className="copy-module-option"><input type="checkbox" checked={selected.includes(code) && moduleIncluded(code, module)} onChange={(event) => toggleModule(code, module, event.target.checked)} /><span>{index + 1} · {module || estimateCopy("(ไม่มีโมดูล)", "(no module)", "（モジュールなし）")}</span><small>{lines} <LocalizedText text={"line(s)"} /></small></label>)}
+          </div> : null}
+        </div>;
       })}</div>
       <div className="settings-list" style={{ marginTop: 12 }}>
         {([["manhour", "Engineering man-hour", sourceWorkspace.manhourLines.length], ["expenses", "Expenses", sourceWorkspace.expenseLines.length], ["otherCosts", "Other project cost", sourceWorkspace.otherCostLines.length], ["erpCategories", "ERP classifications", 0]] as const).map(([key, label, count]) => (

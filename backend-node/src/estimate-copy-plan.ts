@@ -99,3 +99,29 @@ export function requestedSections(value: unknown): EstimateSectionCode[] {
   const selected = value.filter(isEstimateSectionCode);
   return [...new Set(selected)].sort();
 }
+
+/** Modules to copy per section; a section that is not listed copies every one of its modules. */
+export type ModuleSelection = ReadonlyMap<EstimateSectionCode, ReadonlySet<string>>;
+
+/**
+ * Module selection, normalised: `{ "01": ["PLC Master", ""] }` copies only those cost-item modules of section 01
+ * ("" is the lines with no module). Missing means every module. Returns "invalid" for any other shape, so a
+ * malformed request is refused rather than quietly copying everything.
+ */
+export function requestedModules(value: unknown): ModuleSelection | null | "invalid" {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) return "invalid";
+  const selection = new Map<EstimateSectionCode, Set<string>>();
+  for (const [section, modules] of Object.entries(value as Record<string, unknown>)) {
+    if (!isEstimateSectionCode(section) || !Array.isArray(modules) || !modules.every((name) => typeof name === "string")) return "invalid";
+    selection.set(section, new Set((modules as string[]).map((name) => name.trim())));
+  }
+  return selection;
+}
+
+/** Whether a cost item in `section` under `module` is part of the copy. */
+export function moduleSelected(selection: ModuleSelection | null, section: string, module: string): boolean {
+  if (!selection || !isEstimateSectionCode(section)) return true;
+  const modules = selection.get(section);
+  return !modules || modules.has(module.trim());
+}
