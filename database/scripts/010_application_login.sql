@@ -786,4 +786,8 @@ GO
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.outlook_events TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.outlook_sync TO [iot_team_app_role];
 GO
+
+-- database/migrations/090_pegasus_erp_purchase_requests.sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.user_oidc_tokens TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

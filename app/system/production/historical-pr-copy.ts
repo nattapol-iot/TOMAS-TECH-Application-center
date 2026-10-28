@@ -634,11 +634,6 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Rows with a red note",
     "jp": "赤字のある行"
   },
-  "แล้วฝ่ายจัดซื้อเลือก Supplier": {
-    "th": "แล้วฝ่ายจัดซื้อเลือก Supplier",
-    "en": "then Purchasing chooses suppliers",
-    "jp": "その後購買が仕入先を選定"
-  },
   "ยอดขอซื้อ": {
     "th": "ยอดขอซื้อ",
     "en": "Requested value",
@@ -668,11 +663,6 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "ขอซื้อ (PR)",
     "en": "Purchase request (PR)",
     "jp": "購買申請（PR）"
-  },
-  "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · Supplier ให้ฝ่ายจัดซื้อเลือก": {
-    "th": "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · Supplier ให้ฝ่ายจัดซื้อเลือก",
-    "en": "Starts from what the BOM still needs. Swap an item or add one the estimate missed; within the module budget no extra approval is needed · Purchasing chooses suppliers",
-    "jp": "BOMの未申請分から開始。品目の変更や見積外品目の追加が可能で、モジュール予算内なら追加承認は不要・仕入先は購買が選定"
   },
   "ค้นหา รหัส / Part No. / รายละเอียด / ยี่ห้อ": {
     "th": "ค้นหา รหัส / Part No. / รายละเอียด / ยี่ห้อ",
@@ -759,60 +749,15 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Describe the substitute item",
     "jp": "代替品を記入"
   },
-  "บันทึก PO จาก ERP": {
-    "th": "บันทึก PO จาก ERP",
-    "en": "Record ERP PO",
-    "jp": "ERPの発注番号を記録"
-  },
-  "ฝ่ายจัดซื้อเลือก Supplier": {
-    "th": "ฝ่ายจัดซื้อเลือก Supplier",
-    "en": "Purchasing chooses suppliers",
-    "jp": "購買が仕入先を選定"
-  },
-  "ใช้กับรายการที่เลือก": {
-    "th": "ใช้กับรายการที่เลือก",
-    "en": "Apply to selected lines",
-    "jp": "選択明細に適用"
-  },
-  "รอจัดซื้อเลือก": {
-    "th": "รอจัดซื้อเลือก",
-    "en": "Awaiting Purchasing",
-    "jp": "購買の選定待ち"
-  },
   "ขอซื้อแล้ว": {
     "th": "ขอซื้อแล้ว",
     "en": "Requested",
     "jp": "申請済み"
   },
-  "ยังไม่มี Supplier": {
-    "th": "ยังไม่มี Supplier",
-    "en": "Without supplier",
-    "jp": "仕入先未設定"
-  },
-  "บันทึก Supplier": {
-    "th": "บันทึก Supplier",
-    "en": "Save suppliers",
-    "jp": "仕入先を保存"
-  },
-  "เลือกทั้งหน้า": {
-    "th": "เลือกทั้งหน้า",
-    "en": "Select this page",
-    "jp": "このページを選択"
-  },
-  "เลือกรายการนี้": {
-    "th": "เลือกรายการนี้",
-    "en": "Select this line",
-    "jp": "この明細を選択"
-  },
   "สร้าง PR จาก BOM ที่ release แล้ว": {
     "th": "สร้าง PR จาก BOM ที่ release แล้ว",
     "en": "Create a PR from a released BOM",
     "jp": "リリース済みBOMから購買申請を作成"
-  },
-  "ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วฝ่ายจัดซื้อเลือก Supplier และออก PO ใน ERP": {
-    "th": "ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วฝ่ายจัดซื้อเลือก Supplier และออก PO ใน ERP",
-    "en": "Request from the BOM, approve against module budgets; Purchasing chooses suppliers and raises the PO in the ERP",
-    "jp": "BOMから申請し、モジュール予算で承認。購買が仕入先を選びERPで発注"
   },
   "ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ": {
     "th": "ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ",
@@ -824,19 +769,84 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "PM approves, then Purchasing · the Engineering Manager when a module is over budget by more than 10%",
     "jp": "PM承認の後に購買・モジュール予算超過10%超はエンジニアリングマネージャーも承認"
   },
-  "ออก PO ในระบบ ERP แล้วใส่เลข PO ที่นี่ (หลายใบคั่นด้วย , )": {
-    "th": "ออก PO ในระบบ ERP แล้วใส่เลข PO ที่นี่ (หลายใบคั่นด้วย , )",
-    "en": "Raise the PO in the ERP, then enter its number here (separate several with commas)",
-    "jp": "ERPで発注後、発注番号をここに入力（複数はカンマ区切り）"
-  },
-  "เลข PO ใน ERP": {
-    "th": "เลข PO ใน ERP",
-    "en": "ERP PO number",
-    "jp": "ERP発注番号"
-  },
   "Ordered in ERP": {
     "th": "สั่งซื้อใน ERP แล้ว",
     "en": "Ordered in ERP",
     "jp": "ERPで発注済み"
+  },
+  "แผนกใน ERP": {
+    "th": "แผนกใน ERP",
+    "en": "ERP department",
+    "jp": "ERP部門"
+  },
+  "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ": {
+    "th": "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ",
+    "en": "Start from what the BOM still needs. Change a make or add unplanned items; within the module budget no extra approval is needed · Once approved it goes to the ERP for Purchasing",
+    "jp": "BOMの未購入品から開始。型式変更や計画外品の追加が可能で、モジュール予算内なら追加承認は不要・承認後ERPへ送り購買部が処理"
+  },
+  "แล้วส่งเข้า ERP อัตโนมัติ": {
+    "th": "แล้วส่งเข้า ERP อัตโนมัติ",
+    "en": "then sent to the ERP automatically",
+    "jp": "その後ERPへ自動送信"
+  },
+  "ยังไม่ได้ส่ง ERP · แจ้งผู้ขอแล้ว": {
+    "th": "ยังไม่ได้ส่ง ERP · แจ้งผู้ขอแล้ว",
+    "en": "Not sent to the ERP · requester notified",
+    "jp": "ERP未送信・依頼者へ通知済み"
+  },
+  "ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO": {
+    "th": "ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO",
+    "en": "Request from the BOM, approve against each module's budget, then send to the ERP where Purchasing picks the supplier and raises the PO",
+    "jp": "BOMから購買依頼し、モジュール予算で承認後ERPへ送信。購買部が仕入先を選び発注書を発行"
+  },
+  "ส่งเข้า ERP": {
+    "th": "ส่งเข้า ERP",
+    "en": "Send to ERP",
+    "jp": "ERPへ送信"
+  },
+  "ส่ง ERP ไม่สำเร็จ": {
+    "th": "ส่ง ERP ไม่สำเร็จ",
+    "en": "ERP send failed",
+    "jp": "ERP送信失敗"
+  },
+  "รอส่ง ERP": {
+    "th": "รอส่ง ERP",
+    "en": "Waiting to send to ERP",
+    "jp": "ERP送信待ち"
+  },
+  "เข้าสู่ระบบด้วย TMT ID อีกครั้ง แล้วกดส่งเข้า ERP": {
+    "th": "เข้าสู่ระบบด้วย TMT ID อีกครั้ง แล้วกดส่งเข้า ERP",
+    "en": "Sign in with TMT ID again, then press Send to ERP",
+    "jp": "TMT IDで再ログインしてからERPへ送信を押してください"
+  },
+  "กำลังส่ง…": {
+    "th": "กำลังส่ง…",
+    "en": "Sending…",
+    "jp": "送信中…"
+  },
+  "อัปเดตจาก ERP": {
+    "th": "อัปเดตจาก ERP",
+    "en": "Updated from ERP",
+    "jp": "ERPから更新"
+  },
+  "ยังไม่ได้ส่งเข้า ERP": {
+    "th": "ยังไม่ได้ส่งเข้า ERP",
+    "en": "Not sent to the ERP yet",
+    "jp": "ERP未送信"
+  },
+  "กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO": {
+    "th": "กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO",
+    "en": "Send it to the ERP so Purchasing can raise the PO",
+    "jp": "ERPへ送信すると購買部が発注書を発行します"
+  },
+  "รอผู้ขอซื้อส่งเข้า ERP": {
+    "th": "รอผู้ขอซื้อส่งเข้า ERP",
+    "en": "Waiting for the requester to send it to the ERP",
+    "jp": "依頼者のERP送信待ち"
+  },
+  "PM อนุมัติ · Engineering Manager เมื่อ Module เกินงบเกิน 10% · แล้วส่งเข้า ERP": {
+    "th": "PM อนุมัติ · Engineering Manager เมื่อ Module เกินงบเกิน 10% · แล้วส่งเข้า ERP",
+    "en": "PM approves · Engineering Manager when a module is over budget by more than 10% · then sent to the ERP",
+    "jp": "PM承認・モジュール予算超過10%超はエンジニアリングマネージャー・その後ERPへ送信"
   }
 };

@@ -228,9 +228,12 @@ export function registerReportRoutes(app: FastifyInstance, config: AppConfig, da
       first_po AS (SELECT orders.pr_id,MIN(orders.converted_at) converted_at FROM (
           SELECT po.pr_id,po.created_at converted_at FROM dbo.mat_pos po INNER JOIN scoped_pr pr ON pr.id=po.pr_id WHERE po.deleted_at IS NULL
           UNION ALL
-          -- Orders raised in the ERP leave no in-app PO; Purchasing recording the ERP number completes the PO Creation step.
+          -- Orders raised in the ERP leave no in-app PO. Before the ERP link, Purchasing recording the ERP number completed PO Creation;
+          -- since, the first read that finds the ERP PR converted marks it (a converted PR is not read again).
           SELECT step.pr_id,step.acted_at FROM dbo.mat_pr_approval_steps step INNER JOIN scoped_pr pr ON pr.id=step.pr_id
-          WHERE step.name=N'PO Creation' AND step.status=N'Completed' AND step.acted_at IS NOT NULL) orders GROUP BY orders.pr_id)
+          WHERE step.name=N'PO Creation' AND step.status=N'Completed' AND step.acted_at IS NOT NULL
+          UNION ALL
+          SELECT erp.id,erp.erp_synced_at FROM dbo.mat_prs erp INNER JOIN scoped_pr pr ON pr.id=erp.id WHERE erp.erp_status=N'CONVERTED' AND erp.erp_synced_at IS NOT NULL) orders GROUP BY orders.pr_id)
       SELECT COUNT_BIG(*) pr_count,AVG(CONVERT(decimal(19,4),DATEDIFF_BIG(second,pr.created_at,pr.submitted_at)/3600.0)) created_to_submitted,
         AVG(CASE WHEN approval.approved_at IS NOT NULL THEN CONVERT(decimal(19,4),DATEDIFF_BIG(second,pr.submitted_at,approval.approved_at)/3600.0) END) submitted_to_approved,
         AVG(CASE WHEN po.converted_at IS NOT NULL AND approval.approved_at IS NOT NULL THEN CONVERT(decimal(19,4),DATEDIFF_BIG(second,approval.approved_at,po.converted_at)/3600.0) END) approved_to_po,

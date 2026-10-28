@@ -1,4 +1,4 @@
-// Invoked only by scripts/Test-ProcurementLocalDb.ps1 against its newly created instance (schema 74, seeded by procurement-074-seed.sql).
+// Invoked only by scripts/Test-ProcurementLocalDb.ps1 against its newly created instance (schema 90, seeded by procurement-074-seed.sql).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -13,6 +13,7 @@ import { registerBomRoutes } from "../src/routes/boms.js";
 import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requisitions.js";
 import { registerReportRoutes } from "../src/routes/reports.js";
 import type { CurrentUser } from "../src/types.js";
+import type { ErpGateway, ErpRequest } from "../src/erp-purchasing.js";
 
 if (!/^\(localdb\)\\IoTProcCI_[a-f0-9]{16}$/.test(process.env.PROCUREMENT_TEST_SERVER ?? "")) throw Error("Private procurement LocalDB instance required");
 const bridge = spawn("pwsh", ["-NoProfile", "-File", fileURLToPath(new URL("./helpers/procurement-sql-bridge.ps1", import.meta.url))], { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
@@ -51,12 +52,34 @@ const database = {
   async transaction<T>(fn: (tx: sql.Transaction) => Promise<T>) { await run("BEGIN TRANSACTION"); try { const result = await fn(new sql.Transaction()); await run("COMMIT"); return result; } catch (error) { await run("IF @@TRANCOUNT>0 ROLLBACK"); throw error; } },
 } as unknown as Database;
 
+// A stand-in for the Pegasus ERP's MCP tools: one PR per external_ref, people who are signed out, and a refusal on demand.
+type ErpCall = { subject: string; tool: string; args: Record<string, unknown> };
+const erpCalls: ErpCall[] = [], erpRequests = new Map<string, ErpRequest>(), signedOut = new Set<string>();
+let refuseNextCreate = false;
+const gateway: ErpGateway = { async call<T>(subject: string, tool: string, args: Record<string, unknown>) {
+  erpCalls.push({ subject, tool, args });
+  const ok = (data: unknown) => ({ ok: true as const, data: data as T });
+  if (!subject || signedOut.has(subject)) return { ok: false, kind: "signed_out", message: "Sign in with TMT ID again." };
+  if (tool === "purchasing_options_get") return ok({ departments: [{ value: "APPENG", label: "Application Engineer" }, { value: "IOTENG", label: "IoT Engineer" }] });
+  if (tool === "purchase_request_get") { const found = erpRequests.get(String(args.external_ref)); return found ? ok({ request: found }) : { ok: false, kind: "not_found", message: "Not found." }; }
+  if (tool !== "purchase_request_create") return { ok: false, kind: "error", message: `Unexpected tool ${tool}` };
+  if (refuseNextCreate) { refuseNextCreate = false; return { ok: false, kind: "validation", message: "The given data was invalid.", errors: { department: ["Unknown department."] } }; }
+  const ref = String(args.external_ref), existing = erpRequests.get(ref);
+  if (existing) return ok({ created: false, request: existing });
+  const next = erpRequests.size + 1;
+  const request: ErpRequest = { pr_id: next, pr_no: `PR2610-${String(next).padStart(4, "0")}`, external_ref: ref, status: "QUOTES_PENDING", status_label: "Quotes pending",
+    revision_no: 0, requester: { employee_id: 7, name: "Requester" }, rejection_reason: null, po_no: null, url: `https://erp.test/pr/${next}` };
+  erpRequests.set(ref, request);
+  return ok({ created: true, request });
+} };
+const creates = () => erpCalls.filter((entry) => entry.tool === "purchase_request_create");
+
 const users = new CurrentUserService(database), config = { businessTimeZone: "Asia/Bangkok" } as AppConfig;
 const app = Fastify({ forceCloseConnections: true }); registerErrorHandler(app);
 let actors: CurrentUser[] = [];
 app.addHook("onRequest", async (request) => { const actor = actors.find((a) => a.name === request.headers["x-test-actor"]); if (actor) request.currentUser = actor; });
 app.addHook("onError", async (_request, _reply, error) => { if (!error.statusCode || error.statusCode >= 500) console.error("Procurement test route error:", error.message); });
-registerBomRoutes(app, config, database, users); registerPurchaseRequisitionRoutes(app, config, database, users); registerReportRoutes(app, config, database, users);
+registerBomRoutes(app, config, database, users); registerPurchaseRequisitionRoutes(app, config, database, users, { gateway, appBaseUrl: "https://eng.test" }); registerReportRoutes(app, config, database, users);
 type Json = Record<string, unknown> & { [key: string]: any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 async function call(method: "GET" | "POST" | "PUT", url: string, actor: string, body?: unknown, status = 200): Promise<Json> {
   const response = await app.inject({ method, url: `/api/v1${url}`, headers: { "x-test-actor": actor }, ...(body ? { payload: body as object } : {}) });
@@ -66,7 +89,7 @@ async function call(method: "GET" | "POST" | "PUT", url: string, actor: string, 
 
 try {
   actors = (await run(`SELECT u.id,u.name,u.email,u.department,r.code role FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.email LIKE 'procurement-ci-%@test.invalid'`)).recordset
-    .map((r) => ({ id: Number(r.id), name: String(r.name), email: String(r.email), department: String(r.department), role: String(r.role), roles: [String(r.role)], entraObjectId: "", isActive: true }));
+    .map((r) => ({ id: Number(r.id), name: String(r.name), email: String(r.email), department: String(r.department), role: String(r.role), roles: [String(r.role)], entraObjectId: `procurement-ci-${String(r.name)}`, isActive: true }));
   assert.equal(actors.length, 5);
   const fresh = Number((await run(`SELECT id FROM dbo.projects WHERE project_no=N'PC-FRESH'`)).recordset[0]!.id);
   const legacy = Number((await run(`SELECT id FROM dbo.boms WHERE bom_no=N'BOM-PC-LEGACY'`)).recordset[0]!.id);
@@ -87,7 +110,7 @@ try {
   assert.deepEqual(workspace.modules.map((m: Json) => [m.module, m.budget, m.requested]), [["Panel", 25000, 0], ["Software", 30000, 0]]);
 
   // PR 1: a planned line, a substitute, an unplanned item and the software, with no supplier. Panel lands exactly on its budget.
-  const pr1 = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01", lines: [
+  const pr1 = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG", lines: [
     { bomLineId: byCode["PLC-01"]!.id, quantity: 2, unitPrice: 10000 },
     { lineType: "Substitute", bomLineId: byCode["CBL-01"]!.id, partNumber: "CBL-ALT", description: "Cable drum, other make", unit: "roll", quantity: 1, unitPrice: 4500 },
     { lineType: "Unplanned", module: "panel", description: "Mounting bracket", unit: "pcs", quantity: 5, unitPrice: 100 },
@@ -118,46 +141,76 @@ try {
   assert.deepEqual(submitted2.ruleFlags.map((flag: Json) => [flag.level, flag.text]), [["manager", "Panel: 2,000 THB over budget (8.0%)"]]);
   assert.deepEqual(submitted3.ruleFlags.map((flag: Json) => [flag.level, flag.text]), [["management", "Software: 5,000 THB over budget (16.7%)"]]);
   const steps = async (id: number) => (await call("GET", `/purchase-requisitions/${id}`, "Requester")).steps.map((step: Json) => step.name);
-  assert.deepEqual(await steps(pr1.id), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", "PO Creation"]);
-  assert.deepEqual(await steps(pr2.id), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", "PO Creation"]);
-  assert.deepEqual(await steps(pr3.id), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", "Management Approval", "PO Creation"]);
+  assert.deepEqual(await steps(pr1.id), ["Submitted by Requester", "Project Manager Approval", "Sent to ERP"]);
+  assert.deepEqual(await steps(pr2.id), ["Submitted by Requester", "Project Manager Approval", "Sent to ERP"]);
+  assert.deepEqual(await steps(pr3.id), ["Submitted by Requester", "Project Manager Approval", "Management Approval", "Sent to ERP"]);
   assert.equal((await call("GET", "/procurement/approvals/attention", "PM")).waiting, 3);
 
-  // PR 1 through PM and Purchasing, who first has to choose a supplier for every line, then the ERP order number.
-  await call("POST", `/purchase-requisitions/${pr1.id}/decide`, "PM", { decision: "Approve" });
+  // PR 1: the PM's approval is the last one, so it goes to the ERP at once, as its requester, with every line.
+  const approved1 = await call("POST", `/purchase-requisitions/${pr1.id}/decide`, "PM", { decision: "Approve" });
+  assert.deepEqual([approved1.status, approved1.erp.sent, approved1.erp.prNo], ["Approved", true, "PR2610-0001"]);
   await call("POST", `/purchase-requisitions/${pr1.id}/decide`, "Buyer", { decision: "Approve" }, 409);
-  const suppliers = (await run(`SELECT id FROM dbo.suppliers WHERE code IN (N'PROC-S1',N'PROC-S2') ORDER BY code`)).recordset.map((row) => Number(row.id));
-  detail = await call("GET", `/purchase-requisitions/${pr1.id}`, "Buyer");
-  const assigned = await call("PUT", `/purchase-requisitions/${pr1.id}/suppliers`, "Buyer", { assignments: detail.lines.map((line: Json, index: number) => ({ lineId: line.id, supplierId: suppliers[index % 2] })) });
-  assert.deepEqual([assigned.assigned, assigned.missingSuppliers], [4, 0]);
-  await call("PUT", `/purchase-requisitions/${pr1.id}/suppliers`, "Requester", { assignments: [{ lineId: detail.lines[0].id, supplierId: suppliers[0] }] }, 403);
-  assert.equal((await call("POST", `/purchase-requisitions/${pr1.id}/decide`, "Buyer", { decision: "Approve" })).status, "Approved");
-  const approved = (await call("GET", "/purchase-requisitions?status=Approved", "Buyer")) as unknown as Json[];
-  const row1 = approved.find((row) => row.id === pr1.id)!;
-  const ordered = await call("POST", `/purchase-requisitions/${pr1.id}/erp-order`, "Buyer", { rowVersion: row1.rowVersion, erpPoRef: "ERP-PO-2099-001" });
-  assert.equal(ordered.status, "Converted to PO");
+  const sent1 = creates()[0]!;
+  const ref1 = String(sent1.args.external_ref);
+  assert.equal(sent1.subject, "procurement-ci-Requester");
+  assert.match(ref1, /^ENGAPP-PR-[0-9a-f-]{36}$/);
+  assert.deepEqual([sent1.args.department, sent1.args.needed_by_date, sent1.args.est_cost_url, (sent1.args.lines as unknown[]).length], ["APPENG", "2099-03-01", "https://eng.test/#/purchase", 4]);
   detail = await call("GET", `/purchase-requisitions/${pr1.id}`, "Requester");
-  assert.equal(detail.purchaseRequisition.erpPoRef, "ERP-PO-2099-001");
-  assert.deepEqual(detail.steps.at(-1).decision, "Ordered in ERP");
+  assert.deepEqual([detail.erp.prNo, detail.erp.status, detail.erp.ref, detail.erp.enabled], ["PR2610-0001", "QUOTES_PENDING", ref1, true]);
+  assert.deepEqual([detail.steps.at(-1).status, detail.steps.at(-1).comment], ["Completed", "PR2610-0001"]);
+  // Sending again returns the same ERP PR; only the requester may send it.
+  assert.deepEqual(await call("POST", `/purchase-requisitions/${pr1.id}/erp-send`, "Requester", {}), { sent: true, prNo: "PR2610-0001" });
+  assert.equal(creates().length, 1);
+  await call("POST", `/purchase-requisitions/${pr1.id}/erp-send`, "PM", {}, 403);
+
+  // Purchasing raises the PO in the ERP; the next person to open the PR reads it with their own token, and the PR is ordered.
+  erpRequests.set(ref1, { ...erpRequests.get(ref1)!, status: "CONVERTED", status_label: "Converted", po_no: "PO2610-0007" });
+  const synced = await call("POST", `/purchase-requisitions/${pr1.id}/erp-sync`, "PM", {});
+  assert.deepEqual([synced.synced, synced.status, synced.erp.poNo], [true, "Converted to PO", "PO2610-0007"]);
+  assert.equal(erpCalls.at(-1)!.subject, "procurement-ci-PM");
+  const reads = () => erpCalls.filter((entry) => entry.tool === "purchase_request_get").length;
+  const readsBefore = reads();
+  await call("POST", `/purchase-requisitions/${pr1.id}/erp-sync`, "Requester", {});
+  assert.equal(reads(), readsBefore, "a converted PR is not read again");
+  detail = await call("GET", `/purchase-requisitions/${pr1.id}`, "Requester");
+  assert.deepEqual([detail.purchaseRequisition.status, detail.purchaseRequisition.erpPoRef], ["Converted to PO", "PO2610-0007"]);
   assert.equal(Number((await run(`SELECT COUNT(*) n FROM dbo.mat_pos WHERE pr_id=${Number(pr1.id)}`)).recordset[0]!.n), 0);
-  // The PR cycle report counts an ERP order as the PR becoming a purchase order.
-  const cycle = await call("GET", `/reports/pr-cycle-time?projectId=${fresh}`, "Requester");
-  assert.equal(cycle.lifecycle.prCount, 3);
-  assert.notEqual(cycle.lifecycle.averageCreatedToFirstPurchaseOrderHours, null);
-  assert.ok(cycle.stages.some((stage: Json) => stage.stage === "PO Creation" && stage.completedCount === 1));
+  const listed = (await call("GET", "/purchase-requisitions", "Requester")) as unknown as Json[];
+  assert.equal(listed.find((row) => row.id === pr1.id)!.erp.prNo, "PR2610-0001");
   // Ordered lines keep covering their BOM lines.
   assert.ok((await call("GET", `/boms/${bom.id}`, "Requester")).lines.every((line: Json) => line.purchaseRequired === 0));
 
-  // PR 2: a flagged approval needs a comment. PR 3: the Engineering Manager approves after the PM.
+  // PR 2: a flagged approval needs a comment. Its requester's TMT ID session has ended, so the PR waits Approved and they are told;
+  // signed in again, they send it, and the ERP department is matched from their own.
   await call("POST", `/purchase-requisitions/${pr2.id}/decide`, "PM", { decision: "Approve" }, 400);
-  await call("POST", `/purchase-requisitions/${pr2.id}/decide`, "PM", { decision: "Approve", comment: "terminals forgotten in the estimate" });
+  signedOut.add("procurement-ci-Requester");
+  const approved2 = await call("POST", `/purchase-requisitions/${pr2.id}/decide`, "PM", { decision: "Approve", comment: "terminals forgotten in the estimate" });
+  assert.deepEqual([approved2.status, approved2.erp.sent, approved2.erp.kind], ["Approved", false, "signed_out"]);
+  const requesterId = actors.find((actor) => actor.name === "Requester")!.id;
+  assert.equal(Number((await run(`SELECT COUNT(*) n FROM dbo.notifications WHERE user_id=${requesterId} AND kind=N'PR_ERP_SEND' AND entity_type=N'PurchaseRequisition' AND entity_id=${Number(pr2.id)}`)).recordset[0]!.n), 1);
+  assert.equal((await call("GET", `/purchase-requisitions/${pr2.id}`, "Requester")).erp.prNo, null);
+  signedOut.delete("procurement-ci-Requester");
+  const sent2 = await call("POST", `/purchase-requisitions/${pr2.id}/erp-send`, "Requester", {});
+  assert.deepEqual([sent2.sent, creates().at(-1)!.args.department], [true, "IOTENG"]);
+
+  // PR 3: the Engineering Manager approves after the PM. The ERP refuses it twice; the requester sends it again under the same ref.
   await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "PM", { decision: "Approve", comment: "needed for the historian" });
-  await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "Buyer", { decision: "Approve", comment: "x" }, 409);
-  const pr3Lines = (await call("GET", `/purchase-requisitions/${pr3.id}`, "Buyer")).lines;
-  await call("PUT", `/purchase-requisitions/${pr3.id}/suppliers`, "Buyer", { assignments: [{ lineId: pr3Lines[0].id, supplierId: suppliers[0] }] });
-  await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "Buyer", { decision: "Approve", comment: "quoted" });
   await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "PM", { decision: "Approve", comment: "me again" }, 403);
-  assert.equal((await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "EM", { decision: "Approve", comment: "accepted overrun" })).status, "Approved");
+  refuseNextCreate = true;
+  const approved3 = await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "EM", { decision: "Approve", comment: "accepted overrun" });
+  assert.deepEqual([approved3.status, approved3.erp.sent, approved3.erp.kind], ["Approved", false, "validation"]);
+  assert.match((await call("GET", `/purchase-requisitions/${pr3.id}`, "Requester")).erp.error, /Unknown department/);
+  refuseNextCreate = true;
+  await call("POST", `/purchase-requisitions/${pr3.id}/erp-send`, "Requester", { department: "APPENG" }, 422);
+  assert.equal((await call("POST", `/purchase-requisitions/${pr3.id}/erp-send`, "Requester", { department: "APPENG" })).sent, true);
+  assert.equal(new Set(creates().slice(-3).map((entry) => entry.args.external_ref)).size, 1, "every try of one PR carries the same external_ref");
+  assert.equal((await call("GET", `/purchase-requisitions/${pr3.id}`, "Requester")).erp.error, null);
+
+  // The PR cycle report counts the ERP order as the PR becoming a purchase order, and times how long each PR took to reach the ERP.
+  const cycle = await call("GET", `/reports/pr-cycle-time?projectId=${fresh}`, "Requester");
+  assert.equal(cycle.lifecycle.prCount, 3);
+  assert.notEqual(cycle.lifecycle.averageCreatedToFirstPurchaseOrderHours, null);
+  assert.ok(cycle.stages.some((stage: Json) => stage.stage === "Sent to ERP" && stage.completedCount === 3));
 
   // A thousand unplanned lines are one PR in one request; cancelling the draft returns the module's budget.
   const started = Date.now();

@@ -21,6 +21,8 @@ import { registerAuthentication } from "./auth.js";
 import { createTmtIdRuntime } from "./tmt-id/runtime.js";
 import { registerTmtIdAuthRoutes } from "./routes/auth-tmt-id.js";
 import { createUserProvisioning } from "./tmt-id/user-provisioning.js";
+import { TmtIdTokenVault } from "./tmt-id/token-vault.js";
+import { createErpGateway, PegasusMcp } from "./erp-purchasing.js";
 import { Database } from "./db.js";
 import { EmailService } from "./email.js";
 import { ApiError, registerErrorHandler } from "./errors.js";
@@ -191,8 +193,15 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     app.log.warn("TMT_ID_DEFAULT_ROLE_CODE is ignored: only people registered in Employee Master can sign in.");
   }
   // A read-only API cannot link anyone; people already linked still sign in.
+  // The Pegasus ERP takes a requisition only with its requester's own TMT ID token, so sign-in keeps their refresh token.
+  const tokenVault = tmtId && config.credentialVault && !config.database.readOnly && config.pegasusMcpUrl
+    ? new TmtIdTokenVault(database, config.credentialVault, tmtId.provider, (error) => app.log.warn({ err: error }, "TMT ID token refresh failed"))
+    : null;
+  const erp = tokenVault && tmtId && config.pegasusMcpUrl
+    ? { gateway: createErpGateway(new PegasusMcp(config.pegasusMcpUrl), tokenVault), appBaseUrl: tmtId.settings.appBaseUrl }
+    : null;
   if (tmtId) {
-    registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database, tmtId.settings.autoRegisterDomains));
+    registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database, tmtId.settings.autoRegisterDomains), tokenVault);
   }
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
@@ -247,7 +256,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerProjectDocumentRoutes(app, config, database, users);
   registerSigningRoutes(app, config, database, users);
   registerSignatureMasterRoutes(app, config, database, users);
-  registerPurchaseRequisitionRoutes(app, config, database, users);
+  registerPurchaseRequisitionRoutes(app, config, database, users, erp);
   registerHistoricalPrRoutes(app, database, users);
   registerReportRoutes(app, config, database, users);
   registerScheduleRoutes(app, database, users, config.businessTimeZone, email);
