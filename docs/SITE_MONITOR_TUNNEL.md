@@ -53,6 +53,12 @@ answers; if it does not, use option A. With option B leave `CLOUDFLARE_TUNNEL_TO
 - *Security → WAF → Rate limiting*: e.g. 120 requests per minute per IP on that host. A machine
   normally makes about 6 per minute.
 - Optional: allow only the customers' public IPs (WAF rule *Block* when `ip.src` is not in the list).
+- *Caching → Cache Rules*: **Bypass cache** for `http.host eq "monitor-agent.tomastc.com"`. A zone-wide
+  *Cache Everything* rule would otherwise cache answers (and a 404) for the agents.
+- **DNS**: `monitor-agent` must be a CNAME to `<tunnel-id>.cfargotunnel.com` (Cloudflare creates it with
+  the public hostname, but not when a record of that name already exists: delete the old one first).
+- **Never** set *HTTP Host Header* in the hostname's origin settings: the API recognises the agent
+  hostname by the Host header, and an override would bypass the 404 guard.
 
 ## 2. `.env` on the Mac mini deploy directory
 
@@ -88,4 +94,21 @@ Anything else is a warning in the deploy log; the application itself is never st
 | HTML page / 403 / challenge | Bot Fight Mode or a WAF rule; add the skip rule above. |
 | `502` / `530` from Cloudflare | `cloudflared` is not running or the service URL is wrong (`docker compose --profile tunnel logs cloudflared`). |
 | `429 rate_limited` | Too many wrong keys from that address; wait a minute. |
+| HTML 404 page with `cf-cache-status: HIT` | The hostname is not on the tunnel yet (old DNS record) and a cache rule stores the answer; fix the DNS record and add the cache bypass rule, then purge that URL. |
+| Deploy log: pulling `cloudflare/cloudflared` did not finish | Docker Hub is unreachable from the colima VM. Load the image instead (below), then deploy again. |
 | Timeout from the customer server | Customer firewall/proxy blocks 443 to the hostname. |
+
+## Loading the cloudflared image without Docker Hub
+
+On any machine that can pull it, save it to a file, copy the file to the Mac mini, then load it into
+the colima VM (deploy.sh only pulls when the image is missing):
+
+```
+docker pull --platform linux/arm64 cloudflare/cloudflared:latest
+docker save cloudflare/cloudflared:latest -o cloudflared.tar
+# on the Mac mini:
+docker --context colima-iot load -i cloudflared.tar
+```
+
+Check the VM's architecture first with `docker --context colima-iot info --format '{{.Architecture}}'`
+(`aarch64` → `linux/arm64`, `x86_64` → `linux/amd64`).

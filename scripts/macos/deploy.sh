@@ -197,8 +197,19 @@ deploy_site_monitor_tunnel() {
     return 0
   fi
   [[ -n "$agent_url" ]] || { echo "::warning title=Site Monitor tunnel::CLOUDFLARE_TUNNEL_TOKEN is set without SITE_MONITOR_AGENT_URL; the API will not accept the tunnel hostname."; return 0; }
+  # Docker Hub can be unreachable or crawl from the colima VM, and a pull has no timeout of its own:
+  # a stuck pull held the whole deploy job (and every queued deploy behind it). Pull only when the
+  # image is missing, give up after 5 minutes, and never let it hold the deploy.
+  if ! docker --context "$DOCKER_CONTEXT" image inspect cloudflare/cloudflared:latest >/dev/null 2>&1; then
+    log "Pulling cloudflare/cloudflared (at most 5 minutes)"
+    if ! perl -e 'alarm shift; exec @ARGV' 300 docker --context "$DOCKER_CONTEXT" pull cloudflare/cloudflared:latest; then
+      echo "::warning title=Site Monitor tunnel::Pulling cloudflare/cloudflared did not finish within 5 minutes (is Docker Hub reachable from the colima VM?). The application is deployed; the tunnel was not started. See docs/SITE_MONITOR_TUNNEL.md."
+      return 0
+    fi
+  fi
   log "Starting the Site Monitor tunnel connector"
-  if ! compose --profile tunnel up -d --force-recreate cloudflared; then
+  # --no-deps: the API was just recreated above; starting cloudflared must not restart it again.
+  if ! compose --profile tunnel up -d --no-deps --force-recreate cloudflared; then
     echo "::warning title=Site Monitor tunnel::cloudflared did not start; customer sites cannot report."
     return 0
   fi
