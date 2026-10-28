@@ -20,7 +20,7 @@ Renderer and localized captions: `scripts/employee_manual_illustrated.py`.
 Capture provenance and hashes: `docs/manual/screenshots/manifest.json`.
 Application integration: `docs/employee-manual-integration.md`.
 
-The build verifies 40 chapters and matching identifiers for all 101 procedures in
+The build verifies 43 chapters and matching identifiers for all 110 procedures in
 each language. Screenshots were captured in Chrome from the real Team Test app
 on 2026-09-06, in TH/EN/JP. No business transactions were submitted for capture.
 Source UI strings that remain untranslated are preserved in the screenshots.
@@ -48,26 +48,29 @@ Images show accessible pages, not proof that every transaction was exercised.
 | 18 My Work และ Team Activity: รับงาน รายงาน และติดตามคะแนน | my-work, activity | `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/TeamActivityScreen.tsx`, `app/system/ProductionApp.tsx` |
 | 19 Punchlist: ติดตาม Issue ของลูกค้าจนปิด | Projects → Punchlist · Issue ลูกค้า | `app/system/production/ResourceTaskWorkspace.tsx`, `docs/resource-task-workflow.md` |
 | 20 Procurement Dashboard และ BOM | procurement, boms | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/boms.ts`, `backend-node/src/routes/stock-control.ts` |
-| 21 Purchase Requisition: ขอซื้อและอนุมัติ | purchase | `app/system/production/MaterialScreens.tsx`, `backend-node/src/procurement-rules.ts`, `backend-node/src/routes/purchase-requisitions.ts` |
+| 21 Purchase Requisition: ขอซื้อ อนุมัติ และส่งเข้า ERP | purchase | `app/system/production/MaterialScreens.tsx`, `app/system/production/PurchaseRequestEditor.tsx`, `backend-node/src/procurement-rules.ts`, `backend-node/src/routes/purchase-requisitions.ts`, `backend-node/src/erp-purchasing.ts`, `docs/PEGASUS_ERP_PR_INTEGRATION_TH.md` |
 | 22 PR ย้อนหลัง: นำเข้า เก็บประวัติ และเทียบงบ | Purchase Requisition → PR ย้อนหลัง | `docs/historical-pr-import.md`, `app/system/production/HistoricalPrPanel.tsx`, `backend-node/src/routes/historical-pr.ts` |
-| 23 Purchase Orders: ออก PO และติดตามของ | pos | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/purchase-requisitions.ts` |
+| 23 Purchase Orders: PO เดิมในแอปและ PO จาก ERP | pos | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/purchase-requisitions.ts` |
 | 24 Goods Receiving: รับของเต็มและบางส่วน | receiving | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/goods-receipts.ts` |
 | 25 Inventory: ยอดคงเหลือ ปรับยอด และ Quarantine | inventory | `app/system/production/CoreScreens.tsx`, `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/inventory.ts`, `backend-node/src/routes/stock-control.ts` |
 | 26 Material Issues: ขอเบิก จ่าย รับ และคืน | issues | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/material-issues.ts` |
 | 27 Approvals: รวมคิวอนุมัติวัสดุ | approvals | `app/system/production/MaterialScreens.tsx` |
 | 28 Knowledge Hub: ค้นหาและควบคุมความรู้ทีม | knowledge | `app/system/production/KnowledgeScreens.tsx`, `app/system/SolutionLibrary.tsx`, `docs/knowledge-sales-library.md`, `backend-node/src/routes/knowledge-workflow.ts` |
-| 29 ตั้งค่าลายเซ็นส่วนตัวและตราบริษัท | signature, stamps | `app/system/production/SigningScreens.tsx`, `backend-node/src/routes/signature-master.ts` |
-| 30 Sign Inbox และ Signed Documents | signing, documents | `app/system/production/SigningScreens.tsx`, `app/system/production/SigningPreview.tsx`, `docs/signing-preview.md`, `docs/drawing-release.md` |
-| 31 Reports: รายงานปฏิบัติงาน 5 ประเภท | reports | `docs/unified-reports.md`, `app/system/production/ReportScreens.tsx`, `app/system/production/ReportDocumentForm.tsx`, `docs/four-feature-completion.md` |
-| 32 Template รายงานและการรับรองจากลูกค้า | Reports → Templates / รายงาน → Customer signing | `docs/unified-reports.md`, `app/system/production/ReportTemplateLibrary.tsx`, `app/system/ReportCustomerSign.tsx` |
-| 33 Reports: รายงานวิเคราะห์ | Reports → Analytics | `app/system/production/AdminAnalyticsScreens.tsx`, `app/system/ProductionApp.tsx` |
-| 34 KPI & Growth: ประเมินตนเองและพัฒนางาน | performance | `app/system/production/PerformanceScreen.tsx`, `docs/kpi-performance-reviews.md`, `docs/four-feature-completion.md` |
-| 35 Support Center: แจ้งปัญหาและติดตามคำตอบ | support | `app/system/production/SupportScreens.tsx`, `app/system/support-copy.ts`, `docs/support-center-implementation.md`, `backend-node/src/support-rules.ts` |
-| 36 Master Data และ Engineering rates | master, rates | `app/system/production/CoreScreens.tsx`, `app/system/production/AdminAnalyticsScreens.tsx` |
-| 37 Visit Master Data: ตั้งค่าการออกหน้างาน | visit-master | `app/system/production/SiteVisitScreens.tsx`, `backend-node/src/routes/visit-master.ts` |
-| 38 Audit Log และ Settings | audit, settings | `app/system/production/AdminAnalyticsScreens.tsx` |
-| 39 เมื่อทำต่อไม่ได้: วิธีตรวจและแก้เบื้องต้น | ใช้ได้ทุกโมดูล | `app/system/api-client.ts`, `docs/resource-planning.md`, `docs/unified-reports.md`, `docs/support-center-implementation.md` |
-| 40 คำศัพท์ สถานะ และรายการตรวจงาน | ภาคอ้างอิง | `app/system/ProductionApp.tsx`, `docs/four-feature-completion.md`, `docs/support-center-implementation.md` |
+| 29 Download Center: โปรแกรม Repository โค้ด และ Skill Hub | downloads | `app/system/production/DownloadCenterScreen.tsx`, `app/system/production/SourceRepositories.tsx`, `app/system/production/SkillHub.tsx`, `app/system/production/download-center-copy.ts` |
+| 30 Site Monitor: เฝ้าระวังโปรแกรมที่ Site ลูกค้า | site-monitor | `app/system/production/SiteMonitorScreen.tsx`, `app/system/production/site-monitor-copy.ts`, `backend-node/src/routes/site-monitor.ts` |
+| 31 Installed Base: ทะเบียนอุปกรณ์ลูกค้า | installed-base | `app/system/production/InstalledBaseScreen.tsx`, `app/system/production/installed-base-copy.ts`, `backend-node/src/routes/installed-assets.ts` |
+| 32 ตั้งค่าลายเซ็นส่วนตัวและตราบริษัท | signature, stamps | `app/system/production/SigningScreens.tsx`, `backend-node/src/routes/signature-master.ts` |
+| 33 Sign Inbox และ Signed Documents | signing, documents | `app/system/production/SigningScreens.tsx`, `app/system/production/SigningPreview.tsx`, `docs/signing-preview.md`, `docs/drawing-release.md` |
+| 34 Reports: รายงานปฏิบัติงาน 5 ประเภท | reports | `docs/unified-reports.md`, `app/system/production/ReportScreens.tsx`, `app/system/production/ReportDocumentForm.tsx`, `docs/four-feature-completion.md` |
+| 35 Template รายงานและการรับรองจากลูกค้า | Reports → Templates / รายงาน → Customer signing | `docs/unified-reports.md`, `app/system/production/ReportTemplateLibrary.tsx`, `app/system/ReportCustomerSign.tsx` |
+| 36 Reports: รายงานวิเคราะห์ | Reports → Analytics | `app/system/production/AdminAnalyticsScreens.tsx`, `app/system/ProductionApp.tsx` |
+| 37 KPI & Growth: ประเมินตนเองและพัฒนางาน | performance | `app/system/production/PerformanceScreen.tsx`, `docs/kpi-performance-reviews.md`, `docs/four-feature-completion.md` |
+| 38 Support Center: แจ้งปัญหาและติดตามคำตอบ | support | `app/system/production/SupportScreens.tsx`, `app/system/support-copy.ts`, `docs/support-center-implementation.md`, `backend-node/src/support-rules.ts` |
+| 39 Master Data และ Engineering rates | master, rates | `app/system/production/CoreScreens.tsx`, `app/system/production/AdminAnalyticsScreens.tsx` |
+| 40 Visit Master Data: ตั้งค่าการออกหน้างาน | visit-master | `app/system/production/SiteVisitScreens.tsx`, `backend-node/src/routes/visit-master.ts` |
+| 41 Audit Log และ Settings | audit, settings | `app/system/production/AdminAnalyticsScreens.tsx` |
+| 42 เมื่อทำต่อไม่ได้: วิธีตรวจและแก้เบื้องต้น | ใช้ได้ทุกโมดูล | `app/system/api-client.ts`, `docs/resource-planning.md`, `docs/unified-reports.md`, `docs/support-center-implementation.md` |
+| 43 คำศัพท์ สถานะ และรายการตรวจงาน | ภาคอ้างอิง | `app/system/ProductionApp.tsx`, `docs/four-feature-completion.md`, `docs/support-center-implementation.md` |
 
 Important distinctions preserved in the manual:
 
@@ -77,6 +80,7 @@ Important distinctions preserved in the manual:
 - Done versus verified Closed; proposed plans versus committed workload.
 - Current supplier follow-up is derived from source prices, not an RFQ dispatch tool.
 - Historical PR archives create no live PO, receipt or stock transaction.
+- PRs are approved in the app against module budgets, then sent to Pegasus ERP; PO, receiving and stock for them happen in the ERP.
 - Site Visit reports versus five unified operational report types.
 - Latest positioned PDF signing alongside legacy HTML certificate outputs.
 - Report document language versus interface language; one-use customer links.
