@@ -1,5 +1,29 @@
 # Illustrated employee manual — edition 2.0
 
+## Update 2026-10-28
+
+What changed:
+- Chapter 21 now covers the Pegasus ERP purchasing flow:
+  - a PR within module budgets: no supplier, substitutes and unplanned lines, Excel round trip;
+  - approval by the PM, and by the Engineering Manager when a module is more than 10% over;
+  - the automatic send to the ERP, the "ส่งเข้า ERP" fallback, and the ERP status and PO number.
+- Chapter 23 now says that new POs are raised in the ERP; the in-app list keeps earlier POs only.
+- Smaller fixes:
+  - the chapter 3 purchasing row;
+  - chapter 20 now says the BOM takes material lines only.
+- New chapters 29 Download Center, 30 Site Monitor and 31 Installed Base. The chapters after them moved by three, and their procedures were renumbered to match.
+  - These menus had no chapter before, so the build gate had been failing.
+
+Results:
+- The rebuild passes with 43 chapters and 110 procedures, matching in TH, EN and JP. It covers all 28 navigation views, and every source reference resolves.
+- Every internal fragment link resolves. The HTML outside scripts and styles has balanced tags, and the embedded script passes `node --check`.
+
+Not done:
+- The screenshots are still the 2026-09-06 captures. The PR screenshot shows the older screen, with a Supplier column. The three new chapters have no screenshot.
+- There was no browser visual review in this update.
+
+The rest of this page records the 2026-09-07 validation.
+
 Validation completed on 2026-09-07 (Asia/Bangkok), using the 2026-09-06 content and screenshot baseline.
 
 - Thai, English and Japanese: 40 chapters, matching identifiers for all 95 procedures, and 9 tables in each language.

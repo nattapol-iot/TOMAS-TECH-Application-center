@@ -106,7 +106,7 @@ C('daily', 'Daily work by role || 役割別の日常業務', 'Dashboard → rele
     ['Sales / customer coordinator || 営業・顧客窓口', '<a href="#inquiry">Check Inquiry and deadlines</a> || <a href="#inquiry">Inquiryと期限を確認</a>', 'Meeting Log → requirements → visit or estimate → follow-up and handover. || Meeting Log → 要件 → 現地訪問または原価見積 → 追跡・引継ぎ。'],
     ['Engineer / assignee || エンジニア・担当者', '<a href="#my-work">Task inbox</a> and <a href="#assignments">My Assignments</a> || <a href="#my-work">Task inbox</a> と <a href="#assignments">My Assignments</a>', 'Accept work → update progress and actual dates → report problems/replan → submit reports/drawings → await verification. || 受諾 → 進捗・実績日更新 → 問題報告・計画変更 → 報告書・図面提出 → 検収。'],
     ['PM / Planner / engineering lead || PM・計画担当・技術責任者', '<a href="#resources">Check workload</a> and approval queues || <a href="#resources">負荷</a> と承認待ちを確認', 'Approve plans, resolve bottlenecks, review costs/reports/drawings and verify Tasks/Punchlist. || 計画承認、障害解消、原価・報告書・図面の確認、Task・Punchlistの検収。'],
-    ['Purchasing || 購買', '<a href="#procurement">Procurement queue</a> || <a href="#procurement">購買処理待ち</a>', 'BOM and stock → PR → approval → PO → delivery follow-up. || BOM・在庫 → PR → 承認 → PO → 納期追跡。'],
+    ['Requesters / PM || 申請者・PM', '<a href="#pr">PRs and the ERP column</a> || <a href="#pr">PRとERP列</a>', 'BOM → PR within module budgets → approval → send to the ERP → follow the PO number from the ERP. || BOM → Module予算内でPR → 承認 → ERPへ送信 → ERPのPO番号を確認。'],
     ['Store / Inventory Controller || 倉庫・在庫管理', '<a href="#receiving">Receipts</a> and <a href="#issues">issues</a> || <a href="#receiving">入庫</a> と <a href="#issues">出庫</a>', 'GRN → confirm receipt → issue material → returns, stock checks and quarantine decisions. || GRN → 入庫確定 → 資材出庫 → 返品・棚卸・隔離品処理。'],
     ['Document owner / signer || 書類担当・署名者', '<a href="#signing">Sign Inbox</a> || <a href="#signing">Sign Inbox</a>', 'Read the file/revision, review or sign your step, and return with reasons when needed. || ファイル・版を確認し、自分の工程でレビュー・署名。必要なら理由付きで差し戻し。'],
     ['Admin / Support category owner || 管理者・Support分類担当', '<a href="#support">Support queue</a> || <a href="#support">Support処理待ち</a>', 'Take and reply to tickets, maintain assigned master data/permissions, record reasons and follow through to closure. || 受付・回答、担当範囲のマスター・権限管理、理由記録、完了まで追跡。']
@@ -516,7 +516,7 @@ C('procurement', 'Procurement Dashboard and BOM || 購買DashboardとBOM', 'Proc
   ], 'Each follow-up total or queue can be traced to its source documents. || フォロー対象の集計・待ち項目を元書類まで追跡できます。') +
   P('20.2 Generate and release a BOM || 20.2 BOMの生成とRelease', [
     'Open BOM → Generate BOM and select a project with an approved/locked estimate. || BOM → Generate BOMで承認済み・Locked見積を持つProjectを選びます。',
-    'Verify estimate number/revision and generate the BOM. || 見積番号・版を確認してBOMを生成します。',
+    'Verify estimate number/revision and generate the BOM. Only material lines (categories 01-05) enter the BOM; labor, outsource and travel do not. || 見積番号・版を確認してBOMを生成します。BOMには資材行（区分01-05）のみが入り、労務、外注、旅費は入りません。',
     'Open View and inspect modules, items, quantities, reference budgets, stock and shortages. || ViewでModule、項目、数量、参照予算、在庫、不足を確認します。',
     'An authorized user selects Release once complete, with any required note. || 完全性確認後、権限者が必要メモを付けてReleaseします。',
     'Use the released BOM as the source for PR and MIR. || Released BOMをPRとMIRの元データに使います。'
@@ -529,23 +529,32 @@ C('procurement', 'Procurement Dashboard and BOM || 購買DashboardとBOM', 'Proc
   ], 'The quantity is reserved for the project and excluded from stock freely available to other work. || 対象Projectに引当され、他案件の自由使用可能数量から除かれます。',
     'Reservation is not physical issue. MIR and Issue are required to record material leaving stock. || 引当は実出庫ではありません。持出記録にはMIRとIssue工程が必要です。'))
 
-C('pr', 'Purchase Requisition: request and approve || Purchase Requisition：購買申請・承認', 'Purchase Requisition || Purchase Requisition', 'Requesters / Purchasing / routed approvers || 申請者・購買・指定承認者',
+C('pr', 'Purchase Requisition: request, approve and send to the ERP || Purchase Requisition：購買申請・承認・ERP送信', 'Purchase Requisition || Purchase Requisition', 'Requesters (engineers) / PM / Engineering Manager || 申請者（エンジニア）・PM・Engineering Manager',
   P('21.1 Create a PR from a released BOM || 21.1 Released BOMからPRを作成', [
-    'Open Purchase Requisition → New PR and select a Released BOM. || Purchase Requisition → New PRでReleased BOMを選びます。',
-    'Set priority, required date and purpose. || 優先度、必要日、目的を設定します。',
-    'Select purchase lines and review remaining demand, stock, purchase quantity, supplier and unit price. || 購入行を選び、残需要、在庫、購入数量、仕入先、単価を確認します。',
-    'Check price sources, estimate budgets and variances. Supply required reasons for purchasing despite available stock or outside the plan. || 価格情報源、見積予算、差異を確認します。在庫がある購入や計画外購入には指定の理由を記入します。',
-    'Save Draft and review all lines in detail before Submit. || Draft保存後、詳細で全行を確認してSubmitします。'
-  ], 'The PR has a number and an approval route generated for its actual conditions. || PR番号と実際の条件に応じた承認経路が設定されます。',
-    'The PR stock snapshot records conditions at that time. Current available stock can change through other work. || PRの在庫スナップショットはその時点の判断根拠です。現在の使用可能在庫は他の業務で変動します。') +
-  P('21.2 Review a PR and track its decision || 21.2 PR審査と結果確認', [
-    'Open the PR or Approvals and verify that Approval route is at your step. || PRまたはApprovalsで承認経路が自分の工程か確認します。',
-    'Check estimate/module/BOM sources, suppliers, quantities, prices, variances and exceptional reasons. || 元見積・Module・BOM、仕入先、数量、価格、差異、特別理由を確認します。',
-    'Choose the permitted Approve or Reject action and enter required comments. || 許可されたApprove・Rejectを選び、必須コメントを記入します。',
-    'The requester reviews the result and follows the currently allowed correction workflow. || 申請者は結果を確認し、現状態で許可される修正手順に従います。',
-    'Create a PO only after all approval steps are complete. || 全承認完了後にのみPOを作成します。'
-  ], 'Every step records actor, time and explanation; all approval precedes PO creation. || 各工程に実施者・日時・説明が残り、PO作成前に承認が完了します。',
-    'Requesters cannot approve their own PR. Variance, off-plan or stock conditions may add approvers; follow the document’s actual route. || 申請者は自分のPRを承認できません。差異・計画外・在庫条件で承認者が追加されるため、実書類の経路に従います。'))
+    'Open Purchase Requisition → <b>New PR</b> and select the project’s <b>Released BOM</b>. || Purchase Requisition → <b>PRを作成</b>でProjectの<b>Released BOM</b>を選びます。',
+    'Set priority, required date and purpose, then check the <b>ERP department</b> preselected from your own department; change it if it is wrong. || 優先度、必要日、目的を設定し、自分の部門から選ばれた<b>ERP部門</b>を確認します。違う場合は変更します。',
+    'In the lines table, use <b>Buy everything still needed</b> or pick rows, then edit Qty and Unit price. Do not choose a supplier: Purchasing chooses it in the ERP. || 明細表で<b>残り全てを購入</b>を使うか行を選び、数量と単価を修正します。仕入先は選びません。購買がERPで選びます。',
+    'To buy another model instead of an estimate item, use <b>Use another item</b> (<b>Back to estimate item</b> undoes it). For something not in the estimate, use <b>Add Unplanned Item</b> and choose the module whose budget it uses. || 見積品目の代わりに別機種を買う場合は<b>別品目に変更</b>（<b>見積品目に戻す</b>で元に戻ります）。見積にない品は<b>計画外品目を追加</b>で予算を使うModuleを選びます。',
+    'For many lines (up to 2,000 per PR), use <b>Download Excel</b>, fill in the file and <b>Import Excel</b>. The TOMAS PR form can be imported too. || 明細が多い場合（1件の申請で最大2,000行）は<b>Excelをダウンロード</b>してファイルに記入し、<b>Excel取込</b>で戻します。TOMAS PR書式も取り込めます。',
+    'Check each module’s budget (Estimate budget, Earlier PRs, This PR, Left after this PR), fix every row with red text, then press <b>New PR</b>. || Module別予算（見積予算、先行の購買申請、この購買申請、この申請後の残額）を確認し、赤字の行を全て直してから<b>PRを作成</b>を押します。',
+    'The new PR is a Draft. Open it from the list and press <b>Submit</b> to send it for approval. || 作成したPRはDraftです。一覧から開き<b>Submit</b>で承認へ送ります。'
+  ], 'The PR has a number and an approval route based on each module’s budget. || PR番号とModule別予算に基づく承認経路が設定されます。',
+    'A Draft PR can be withdrawn with <b>Cancel PR</b>, and its module budget is released. Substitutes and unplanned items within a module’s budget need no extra approval. || Draftの申請は<b>購買申請を取消</b>で取り消せ、Module予算が戻ります。Module予算内の代替品・計画外品に追加承認は不要です。') +
+  P('21.2 Approve a PR against module budgets || 21.2 Module予算に基づいてPRを承認', [
+    'The project PM opens Purchase Requisition or Approvals and checks that the PR is at their step. || ProjectのPMがPurchase RequisitionまたはApprovalsを開き、自分の工程か確認します。',
+    'Review the lines, their kind (Planned / Substitute / Unplanned), the totals against each module’s budget and the requester’s reasons. || 明細、種類（計画通り・代替品・計画外）、Module別予算との比較、申請者の理由を確認します。',
+    'Choose Approve or Reject. Reject needs a reason; Approve may be left without a comment unless the system set a special condition on the PR. || ApproveまたはRejectを選びます。Rejectは理由が必須です。Approveは、システムが特別条件を付けたPR以外はコメントなしで構いません。',
+    'A module up to 10% over budget is the PM’s decision. Beyond 10%, the Engineering Manager approves next. || 予算超過が10%以内のModuleはPMが判断します。10%を超えるとEngineering Managerが続けて承認します。'
+  ], 'Once fully approved, the PR is Approved and is sent to the ERP straight away. || 承認完了でPRはApprovedになり、直ちにERPへ送信されます。',
+    'Requesters cannot approve their own PR. Follow the approval route shown on the document. || 申請者は自分のPRを承認できません。書類に表示された承認経路に従います。') +
+  P('21.3 Send to the ERP and follow its status || 21.3 ERPへ送信し状態を確認', [
+    'On full approval the system sends the PR to Pegasus ERP in the requester’s name. The ERP column shows the ERP PR number and status. || 承認完了時、システムが申請者名でPegasus ERPへPRを送信します。ERP列にERPのPR番号と状態が表示されます。',
+    'If the ERP column shows <b>Waiting to send to ERP</b> or <b>ERP send failed</b>, the requester is notified. The requester opens the PR and presses <b>Send to ERP</b>; if it says the sign-in has ended, sign in again first. || ERP列が<b>ERP送信待ち</b>または<b>ERP送信失敗</b>の場合、申請者に通知されます。申請者がPRを開き<b>ERPへ送信</b>を押します。サインイン切れと表示されたら先にサインインし直します。',
+    'If the ERP reports missing data such as the department, choose the right ERP department and send again. The same reference is reused, so the ERP does not create a second PR. || 部門などの不足をERPが返した場合は、正しいERP部門を選んで再送信します。同じ参照番号を使うため、ERPに重複PRは作られません。',
+    'From then on Purchasing works in the ERP: quotations, supplier choice, approval and the PO. Click the ERP PR number to open it in the ERP (company network or VPN required). || 以降は購買がERPで見積依頼、仕入先選定、承認、PO発行を行います。ERPのPR番号を押すとERPで開けます（社内ネットワークまたはVPNが必要）。',
+    'Opening the PR list or a PR reads the latest status from the ERP. When the ERP has raised the PO, the status becomes <b>Ordered in ERP</b> with the PO number; if the ERP rejected or cancelled it, the status is Rejected with the reason. || PR一覧やPRを開くとERPの最新状態を読み込みます。ERPでPOが発行されると状態が<b>ERPで発注済み</b>になりPO番号が表示されます。ERPで却下・取消された場合はRejectedと理由が表示されます。'
+  ], 'Every approved PR has an ERP PR number, and shows the PO number once ordered. || 承認済みの全PRにERPのPR番号があり、発注後はPO番号が表示されます。',
+    'Each PR’s ERP status is read at most once every 15 minutes, so a change made in the ERP can take up to about 15 minutes to show. Do not create a new PR to replace one that failed to send; send the same PR again. || 各PRのERP状態は15分に1回まで読み込むため、ERPでの変更の表示に最大約15分かかります。送信に失敗したPRの代わりに新しいPRを作らず、同じPRを再送信します。'))
 
 C('historical-pr', 'Historical PR: import, archive and compare || 過去PR：取込・履歴保管・予算比較', 'Purchase Requisition → Historical PR || Purchase Requisition → Historical PR', 'Purchasing / authorized import and mapping users || 購買・取込・紐付け権限者',
   P('22.1 Import an existing PR workbook || 22.1 既存PRブックを取り込む', [
@@ -565,15 +574,14 @@ C('historical-pr', 'Historical PR: import, archive and compare || 過去PR：取
   ], 'Variance covers mapped Active rows in that document, with traceable history. || その書類の紐付け済み有効行の差異と履歴を確認できます。',
     'Blank actual cost means unknown, not zero. Blank/zero estimate budget does not prove overspend. A newly imported source version starts without mappings; this view is not total project expenditure. || 実績原価の空欄は不明であり0ではありません。予算の空欄・0だけで超過とは断定できません。新しい取込版の紐付けは初期化され、この画面はProject全支出ではありません。'))
 
-C('po', 'Purchase Orders: issue and follow up || Purchase Orders：発注と納入追跡', 'Approved PR → Create PO / Purchase Orders || 承認済みPR → Create PO / Purchase Orders', 'Purchasing || 購買',
-  P('23.1 Create purchase orders from an approved PR || 23.1 承認済みPRからPOを作成', [
-    'Open an Approved PR and check that its items are ready for purchasing. || ApprovedのPRを開き、明細が発注可能か確認します。',
-    'Select Create PO, enter expected delivery date and check suppliers. || Create POで納入予定日を入力し、仕入先を確認します。',
-    'Confirm; the system splits purchase orders by supplier. || 確定すると仕入先ごとにPOが作成されます。',
-    'Find the new POs in Purchase Orders and verify items, quantities, prices and expected receipt dates. || Purchase Ordersで作成POを検索し、明細、数量、価格、入庫予定日を確認します。',
-    'Track ordered versus received quantities and hand over to receiving staff when goods arrive. || 発注・入庫済み数量を追跡し、到着時は入庫担当へ引き継ぎます。'
-  ], 'Each PO links the correct PR and supplier and shows received/outstanding quantities. || 各POが正しいPR・仕入先に紐づき、入庫済み・未入庫数量を表示します。',
-    'Creating a PO does not mean it was emailed or dispatched to the supplier. Use the company’s purchasing communication process. || PO作成だけではメール送信や仕入先への発注連絡は行われません。会社の購買連絡手順を実施します。'))
+C('po', 'Purchase Orders: earlier in-app POs and POs from the ERP || Purchase Orders：アプリ内の旧POとERPのPO', 'Purchase Orders || Purchase Orders', 'Purchasing / PM / requesters || 購買・PM・申請者',
+  P('23.1 Follow the PO of a PR sent to the ERP || 23.1 ERPへ送信したPRのPOを確認', [
+    'New POs are raised only in Pegasus ERP; this app no longer has a Create PO button. || 新しいPOはPegasus ERPでのみ発行されます。このアプリにCreate POボタンはありません。',
+    'See a PR’s PO number in Purchase Requisition: the Status column shows <b>Ordered in ERP</b> with the PO number, or open the PR and read its ERP strip. || PRのPO番号はPurchase Requisitionで確認します。Status列に<b>ERPで発注済み</b>とPO番号が表示されます。PRを開いてERP欄でも確認できます。',
+    'For PO details, suppliers, prices or delivery dates, click the ERP PR number to open it in the ERP, or ask Purchasing. || POの詳細、仕入先、価格、納期はERPのPR番号を押してERPで開くか、購買に確認します。',
+    'The Purchase Orders page keeps only the POs raised in this app before the ERP link; use it to find them and follow their receipts. || Purchase Orders画面にはERP連携前にアプリで発行したPOだけが残ります。その検索と入庫追跡に使います。'
+  ], 'You know a PR’s PO number and order status from the ERP without entering it again in the app. || PRのPO番号と発注状況をアプリへ再入力せずにERPから確認できます。',
+    'Receiving and stock for POs raised in the ERP are handled in the ERP, following Purchasing and warehouse procedures. || ERPで発行したPOの入庫と在庫は、購買・倉庫の手順に従いERPで処理します。'))
 
 C('receiving', 'Goods Receiving: full and partial receipts || Goods Receiving：全量・分納入庫', 'Purchase Orders → Receive / Goods Receiving || Purchase Orders → Receive / Goods Receiving', 'Receiving staff / warehouse || 入庫担当・倉庫',
   P('24.1 Record a GRN for goods actually received || 24.1 実際の到着品でGRNを記録', [
@@ -685,22 +693,73 @@ C('knowledge', 'Knowledge Hub: find and control team knowledge || Knowledge Hub�
   ], 'The library structure and numbering remain usable and consistent. || ライブラリー構成と採番の連続性が維持されます。',
     'Do not use Superseded, Archived or Expired documents as the basis for new work; find the effective revision. || 新規業務ではSuperseded・Archived・Expiredを根拠にせず、有効版を探します。'))
 
-C('signature', 'Personal signatures and company stamps || 個人署名と社印の設定', 'User menu → My signature / Company Stamps || ユーザーメニュー → My signature / Company Stamps', 'Signers / authorized stamp administrators || 署名者・社印管理権限者',
-  P('29.1 Prepare your own signature specimen || 29.1 自分の署名見本を準備', [
+C('downloads', 'Download Center: software, project repositories and Skill Hub || ダウンロードセンター：ソフトウェア・リポジトリ・Skill Hub', 'Download Center || ダウンロードセンター', 'All employees / engineers who keep project code || 全従業員・プロジェクトコード担当エンジニア',
+  P('29.1 Download department software and files || 29.1 部門のソフトウェアとファイルをダウンロード', [
+    'Open <b>Download Center</b>, tab <b>Software &amp; files</b>, and search by file name, description or category. || <b>ダウンロードセンター</b>の<b>ソフトウェアとファイル</b>タブで、ファイル名、説明、カテゴリで検索します。',
+    'Check the version, size and update date; a file marked <b>Recommended</b> is the one to use. || バージョン、サイズ、更新日を確認します。<b>おすすめ</b>の付いたファイルが推奨版です。',
+    'Press <b>Download</b>. The file comes straight from the department NAS, and the number of people who downloaded it is counted. || <b>ダウンロード</b>を押します。ファイルは部門のNASから直接配信され、ダウンロードした人数が記録されます。'
+  ], 'You have the version you need, such as TMTDesk. || TMTDeskなど必要なバージョンを入手できます。',
+    'Administrators add or replace files by copying them into a category folder on the NAS, as the screen shows; there is no upload on the page. || 管理者は画面に表示されるNASのカテゴリフォルダーへコピーしてファイルを追加・置換します。画面からのアップロードはありません。') +
+  P('29.2 Keep project source code in a repository || 29.2 プロジェクトのソースコードをリポジトリに保管', [
+    'In <b>Project repositories</b>, search or filter by project. Authorized users press <b>New repository</b>, give it an English name and link it to a project. || <b>プロジェクトのリポジトリ</b>でプロジェクトごとに検索・絞り込みます。権限者は<b>新規リポジトリ</b>で英字名を付け、プロジェクトに紐付けます。',
+    'Open a repository to see its code tree, README and <b>Change history</b>; use <b>Download ZIP</b> for the whole set. || リポジトリを開くとコードツリー、README、<b>変更履歴</b>を確認できます。一式は<b>ZIP をダウンロード</b>で取得します。',
+    'Send code with <b>Upload code</b> (a whole .zip or several files, with a change message), or <b>Clone with git</b> and push. When git asks for a password, enter a TMTHub access token. || <b>コードをアップロード</b>（.zip一式または複数ファイルと変更メッセージ）で送るか、<b>git でクローン</b>してpushします。gitがパスワードを求めたらTMTHubのアクセストークンを入力します。'
+  ], 'Project code is on the department NAS with a history of who changed what and when. || プロジェクトのコードが部門NASに保管され、誰がいつ何を変更したか追跡できます。',
+    'Files over the page’s upload ceiling go through git push. || 画面の上限を超えるファイルはgit pushで送ります。') +
+  P('29.3 Install a Claude Code / Codex skill || 29.3 Claude Code・Codexのスキルをインストール', [
+    'In <b>Skill Hub</b>, search for a skill and press <b>View SKILL.md</b> to read what it does. || <b>Skill Hub</b>でスキルを検索し、<b>SKILL.md を表示</b>で内容を確認します。',
+    'Press <b>Install for Claude</b> or <b>Install for Codex</b> to download a .cmd file, then double-click it to install. || <b>Claude にインストール</b>または<b>Codex にインストール</b>で.cmdファイルをダウンロードし、ダブルクリックしてインストールします。',
+    'Restart Claude Code or Codex to see the installed skill. || Claude CodeまたはCodexを再起動するとスキルが表示されます。'
+  ], 'The skill is ready in Claude Code or Codex on your computer. || 自分のPCのClaude CodeまたはCodexでスキルを使えます。',
+    'Installing replaces an existing skill of the same name. || 同名の既存スキルは置き換えられます。'))
+
+C('site-monitor', 'Site Monitor: watch programs at customer sites || Site Monitor：顧客サイトのプログラム監視', 'Site Monitor || Site Monitor', 'Engineers looking after sites / responsible persons 1-2-3 / site managers || サイト担当エンジニア・担当者1-2-3・サイト管理権限者',
+  P('30.1 Check status and acknowledge problems || 30.1 状態を確認し問題を受領', [
+    'Open <b>Site Monitor</b> and read each site’s status: <b>Healthy</b>, <b>Problem</b>, <b>Offline</b>. The page updates itself every 20 seconds. || <b>Site Monitor</b>で各サイトの状態（<b>正常</b>、<b>問題あり</b>、<b>オフライン</b>）を確認します。画面は20秒ごとに自動更新されます。',
+    'Open a site to see its <b>Programs &amp; services</b>, CPU, memory, uptime and the machines (agents) reporting from TMT Control Panel. || サイトを開くと<b>プログラム / サービス</b>、CPU、メモリ、稼働時間、TMT Control Panelから報告するマシン（エージェント）を確認できます。',
+    'When a program stops unexpectedly or a machine stops reporting, the <b>responsible people</b> are emailed in order. Whoever takes it presses <b>Acknowledge (stop escalating)</b> so the next person is not emailed. || プログラムの予期しない停止やマシンの報告停止が起きると、<b>担当者</b>へ順番にメールが送られます。対応する人は<b>確認（エスカレーション停止）</b>を押し、次の担当者への送信を止めます。',
+    'Use <b>Resolved problems (14 days)</b> to review when problems recovered. || <b>解決済みの問題（14 日間）</b>で復旧した時刻を確認します。'
+  ], 'You know which sites have problems and that someone has taken them. || 問題のあるサイトと受領済みであることが分かります。') +
+  P('30.2 Start / Stop / Restart and remote access || 30.2 Start・Stop・Restartとリモート接続', [
+    'Users with control rights press Start, Stop or Restart on a program and confirm; the command is recorded under their name. || 操作権限者がプログラムのStart、Stop、Restartを押して確定します。コマンドは操作者名で記録されます。',
+    'Follow the result in <b>Recent commands</b> (waiting / running / succeeded / failed / expired). || 結果は<b>最近のコマンド</b>（待機・実行中・成功・失敗・期限切れ）で確認します。',
+    'To work on the machine yourself, press <b>Remote with TMTDesk</b> (the machine’s TMTDesk ID must be set, and the machine password is still needed). || マシンを直接操作する場合は<b>TMTDesk でリモート</b>を押します（マシンのTMTDesk IDの設定が必要で、マシンのパスワードも必要です）。'
+  ], 'The program changes state as commanded, with a record of who sent it. || プログラムがコマンドどおりに状態を変え、操作者が記録されます。',
+    'Commands cannot be sent when the machine is offline, the site is inactive, or remote control is turned off in TMT Control Panel on that machine. || マシンがオフライン、サイトが監視停止中、またはそのマシンのTMT Control Panelでリモート操作がオフの場合はコマンドを送れません。') +
+  P('30.3 Add sites, machines and responsible people || 30.3 サイト・マシン・担当者を追加', [
+    'Site managers press <b>Add site</b> and set the name, location and responsible people 1-2-3 with the escalation style (one by one or all at once). || サイト管理権限者が<b>サイトを追加</b>で名称、所在地、担当者1-2-3と通知方法（順番または同時）を設定します。',
+    'Under <b>Machines (agents)</b>, add a machine to create an agent key and enter it in TMT Control Panel on that machine. || <b>マシン（エージェント）</b>でマシンを追加してエージェントキーを作成し、そのマシンのTMT Control Panelに入力します。',
+    'If a key leaks or the machine changes, use <b>New key</b> (the old key stops working at once) or remove the machine from the site. || キーの漏えいやマシン交換時は<b>新しいキー</b>（旧キーは即時無効）を使うか、マシンをサイトから削除します。'
+  ], 'The machine reports in, and the responsible people are emailed when something goes wrong. || マシンから報告が届き、問題発生時に担当者へメールが送られます。'))
+
+C('installed-base', 'Installed Base: register of customer equipment || 納入機器台帳：顧客の機器登録', 'Installed Base || 納入機器台帳', 'Engineers / PM / register maintainers || エンジニア・PM・台帳管理権限者',
+  P('31.1 Find and register equipment || 31.1 機器を検索・登録', [
+    'Open <b>Installed Base</b> and search by asset number, name, serial, model, IP or customer; filter by customer, status, category or <b>Warranty</b>, e.g. expiring within 60 days. || <b>納入機器台帳</b>で機器番号、名称、シリアル、型式、IP、顧客で検索し、顧客、状態、分類、<b>保証</b>（例：60 日以内に保証終了）で絞り込みます。',
+    'Authorized users press <b>Register asset</b>; an AST-xxxxxx number is assigned. Enter customer, customer site, project, make, model, serial, IP, installed location, installed date and warranty end. || 権限者が<b>機器を登録</b>を押すとAST-xxxxxx番号が付きます。顧客、顧客拠点、プロジェクト、メーカー、型式、シリアル、IP、設置場所、設置日、保証期限を入力します。',
+    'For software, enter the TMTHub repository and link the <b>Monitored program</b> in Site Monitor to see its live state from the register. || ソフトウェアはTMTHubリポジトリを入力し、Site Monitorの<b>監視対象プログラム</b>を紐付けると台帳から稼働状態を確認できます。'
+  ], 'The equipment has an AST number linked to its customer, project and Site Monitor. || 機器にAST番号が付き、顧客、プロジェクト、Site Monitorに紐付きます。') +
+  P('31.2 Record history and remove from the register || 31.2 履歴を記録し台帳から削除', [
+    'Open the asset; in <b>Asset history</b> choose the entry type, write what was done, e.g. replaced the power supply or a routine check, and press <b>Add entry</b>. || 機器を開き<b>履歴</b>で記録の種類を選び、作業内容（例：電源交換、定期点検）を書いて<b>記録</b>を押します。',
+    'When the model or firmware changes, edit the asset; the change is recorded in its history. || 型式やファームウェアが変わったら機器を編集します。変更は履歴に記録されます。',
+    'For equipment that has been taken out, use <b>Remove from register</b> as your permission allows. || 撤去した機器は権限に応じて<b>台帳から削除</b>を使います。'
+  ], 'Each piece of equipment has a traceable history of installation, repairs and changes. || 各機器の設置、修理、変更の履歴を追跡できます。'))
+
+C('signature','Personal signatures and company stamps || 個人署名と社印の設定', 'User menu → My signature / Company Stamps || ユーザーメニュー → My signature / Company Stamps', 'Signers / authorized stamp administrators || 署名者・社印管理権限者',
+  P('32.1 Prepare your own signature specimen || 32.1 自分の署名見本を準備', [
     'Open My signature and check for your Active specimen. || My signatureで自分のActive署名見本を確認します。',
     'Use Create / Replace to draw, upload or type your name using the offered methods. Verify that it is legible and your own mark. || Create・Replaceで描画、アップロード、氏名入力の方法を使い、判読可能な自分の署名か確認します。',
     'Add initials or a short signature for drawing title blocks if needed, then Save specimen. || 必要なら図面枠用のイニシャル・略式署名を追加し、Save specimenします。',
     'Use supported specimen-management actions for changes; subsequent signing uses the Active specimen. || 変更は見本管理操作を使います。次回以降の署名にはActiveの見本を使います。'
   ], 'Your Active specimen is ready for your own signing steps. || 自分の署名工程で使うActive見本が用意されています。',
     'Saving a specimen does not sign a document or replace signatures in previously signed evidence. || 見本保存は書類への署名ではなく、過去の署名証拠の画像も変更しません。') +
-  P('29.2 Register company stamps and check authority || 29.2 社印登録と使用権限の確認', [
+  P('32.2 Register company stamps and check authority || 32.2 社印登録と使用権限の確認', [
     'Open Company Stamps and inspect stamp records and status. || Company Stampsで社印一覧と状態を確認します。',
     'Authorized users use New stamp to register the company-assigned stamp and image. Grant/revoke authority are separate stamp actions. || 権限者はNew stampで会社から指定された印と画像を登録します。使用権限の付与・撤回は別操作です。',
     'Before stamping, check authorized person, document classes and validity period. || 押印前に権限者、書類種類、有効期間を確認します。',
     'If a stamp or authority is unavailable, contact the administrator; do not substitute another stamp merely to pass submission. || 印や権限がない場合は管理者へ連絡し、提出条件を通す目的で別印を代用しないでください。'
   ], 'Stamps are used only by authorized people and within the granted scope. || 権限のある本人が付与範囲内で社印を使用します。',
     'Admin does not automatically carry business stamping authority. Flows that do not require a stamp can proceed without one. || Admin権限だけでは業務上の押印権限は得られません。社印不要のフローでは未選択で進められます。') +
-  P('29.3 Grant/revoke stamp authority and read signature flows || 29.3 社印権限の付与・撤回と署名フロー確認', [
+  P('32.3 Grant/revoke stamp authority and read signature flows || 32.3 社印権限の付与・撤回と署名フロー確認', [
     'Users authorized to Grant open the correct stamp and select a grantee, document scope and validity, then save. || Grant権限者が正しい社印を開き、付与相手、書類範囲、有効期間を設定して保存します。',
     'To revoke, choose that person’s row, use Revoke with a reason and verify state. || 撤回時は対象者の行でRevokeと理由を記録し、状態を確認します。',
     'Read Signature flows for document class, template version, mandatory blocks, ordered/any-order steps and distinct-person rules. || Signature flowsで書類種類、Template版、必須署名欄、順次・順不同、同一人物禁止条件を確認します。',
@@ -709,7 +768,7 @@ C('signature', 'Personal signatures and company stamps || 個人署名と社印�
     'An existing request uses the template version captured for its round; a newer template does not immediately rewrite pending requests. || 進行中の依頼はその回のTemplate版を使い、新Templateが承認待ち依頼を即座に書き換えることはありません。'))
 
 C('signing', 'Sign Inbox and Signed Documents || Sign InboxとSigned Documents', 'Sign Inbox / Signed Documents || Sign Inbox / Signed Documents', 'Named preparers / reviewers / approvers || 指定された作成者・審査者・承認者',
-  P('30.1 Sign at your own step || 30.1 自分の工程で署名', [
+  P('33.1 Sign at your own step || 33.1 自分の工程で署名', [
     'Open Sign Inbox and a request at your step. Check document number, project, revision and previous signers. || Sign Inboxで自分の工程の依頼を開き、番号、Project、版、前の署名者を確認します。',
     'Read the full source file. Use Preview, move &amp; resize signature when placement is needed. || 原本を全て読み、配置が必要ならPreview, move &amp; resize signatureを開きます。',
     'Choose the page and drag/resize the signature box or enter coordinates. Arrow keys move it; Shift + arrows resize it. || ページを選び、枠を移動・拡縮または座標入力します。矢印キーは移動、Shift＋矢印はサイズ変更です。',
@@ -717,14 +776,14 @@ C('signing', 'Sign Inbox and Signed Documents || Sign InboxとSigned Documents',
     'Read the consent and select SIGN DOCUMENT only when ready. Return incorrect content with the required reason. || 同意内容を読み、準備できたらSIGN DOCUMENTを実行します。不備があれば理由付きで差し戻します。'
   ], 'Your identity/time is recorded and the request moves to the next step or completion. || 本人と日時が記録され、次工程または完了へ進みます。',
     'Use these positions confirms placement only. Positioned signing supports readable PDF/PNG/JPEG, with PDFs of 1–200 pages. Obtain a supported source if encrypted, unreadable or externally digitally signed. || Use these positionsは位置確定だけで、署名ではありません。読取可能なPDF・PNG・JPEG、PDFは1～200ページが対象です。暗号化、読取不可、外部電子署名付きの場合は適切な元ファイルを用意します。') +
-  P('30.2 Inspect signed files and history || 30.2 署名済みファイルと履歴を確認', [
+  P('33.2 Inspect signed files and history || 33.2 署名済みファイルと履歴を確認', [
     'Search Signed Documents by document/project and check status. || Signed Documentsで番号・Projectを検索し、状態を確認します。',
     'Open details for file revision, request rounds, signers and evidence. || 詳細でファイル版、依頼回、署名者、証拠を確認します。',
     'After mandatory steps finish, use View signed file and download; check Downloads. || 必須工程完了後にView signed fileで表示・ダウンロードし、Downloadsを確認します。',
     'Read earlier rounds or use the document’s verification code/link to inspect the record in the system. || 過去の回を確認するか、書類の検証コード・リンクでシステム記録を確認します。'
   ], 'The output and evidence correspond to the intended revision and completed state. || 出力と証拠が意図した版・完了状態に一致します。',
     'Some older outputs are HTML certificates; positioned rounds produce PDF outputs with an appendix. Completed signatures cannot be repositioned; use a new revision and round. || 旧出力にはHTML証明書があり、位置指定する回では付録付きPDFを作成します。完了署名は位置変更できず、新版・新しい回が必要です。') +
-  P('30.3 Import and release a design drawing || 30.3 設計図面を取り込んで承認発行', [
+  P('33.3 Import and release a design drawing || 33.3 設計図面を取り込んで承認発行', [
     'The PM prepares a leaf Design task in Project Schedule and assigns its Member/PIC. || PMがProject Scheduleに末端のDesign Taskを用意し、Member・PICを割り当てます。',
     'The assigned member opens the row → Import Drawing, selects a supported PDF/image/project file and freezes its revision. || 担当者が行のImport Drawingから対応PDF・画像・Projectファイルを選び、版を固定します。',
     'Open the new drawing in Signed Documents → Request signatures and check named signers and any stamp. || Signed Documentsの新図面でRequest signaturesを選び、指定署名者と必要な社印を確認します。',
@@ -732,7 +791,7 @@ C('signing', 'Sign Inbox and Signed Documents || Sign InboxとSigned Documents',
     'If returned, the preparer imports a replacement revision and starts a new round; verify all three completed steps. || 差し戻し時は作成者が代替版を取り込み、新しい回を開始します。3工程すべての完了を確認します。'
   ], 'The drawing links its task/project and has three different named signers. || 図面がTask・Projectに紐づき、異なる指定3名の署名が揃います。',
     'All three must be Active with valid rights/specimens. Lead engineer and Manager are the people named on the project, not any user with the same role title. || 3名ともActiveで有効な権限・署名見本が必要です。Lead engineer・ManagerはProjectに指定された本人であり、同じ役割名の別ユーザーではありません。') +
-  P('30.4 Freeze other documents and request signatures || 30.4 その他の書類を固定して署名依頼', [
+  P('33.4 Freeze other documents and request signatures || 33.4 その他の書類を固定して署名依頼', [
     'Store the original under Project → Documents, then use the authorized create/Freeze action in Signed Documents. || 原本をProject → Documentsに保管し、Signed Documentsで権限のある作成・Freeze操作を使います。',
     'Select Project, Stored file, Document class, Revision and Title. Drawings also require My Design task. || Project、Stored file、Document class、Revision、Titleを選びます。DrawingはMy Design taskも必要です。',
     'Use Freeze document, open its details and select Request signatures. || Freeze documentで版を固定し、詳細からRequest signaturesを選びます。',
@@ -740,7 +799,7 @@ C('signing', 'Sign Inbox and Signed Documents || Sign InboxとSigned Documents',
     'Track details/Sign Inbox until complete; use New revision with a reason when the source file must change. || 詳細・Sign Inboxで完了まで追跡し、原本変更時は理由付きNew revisionを使います。'
   ], 'The signing file is frozen to a revision and a round has responsible people. || 署名対象が版固定され、担当者のある依頼回が始まります。',
     'Freeze is not signing, and requesting signatures is not approval. Each document class can use a different flow from Drawing. || Freezeは署名ではなく、署名依頼は承認ではありません。書類種類によりDrawingと異なるフローを使います。') +
-  P('30.5 Return, reject, delegate and attach paper signatures || 30.5 差し戻し・却下・委任・紙署名添付', [
+  P('33.5 Return, reject, delegate and attach paper signatures || 33.5 差し戻し・却下・委任・紙署名添付', [
     'Use Return with a reason for corrections; use Reject only when authorized and appropriate to the actual decision. || 修正は理由付きReturn、却下は権限と実際の判断に応じたRejectを使います。',
     'Where Delegate is supported, select an eligible replacement, record a reason and verify the new assignee. Never use another person’s account to sign. || Delegate対応工程では適格な引継ぎ先と理由を設定し、新担当者を確認します。他人のアカウントで署名しないでください。',
     'For Signed on paper steps, store a scan of the actually signed paper in Project Documents. || Signed on paper工程では実際に署名された紙のスキャンをProject Documentsに保存します。',
@@ -757,7 +816,7 @@ C('reports', 'Reports: five operational report types || Reports：5種類の業�
     ['Inspection || 点検', 'Inquiry or Project || InquiryまたはProject', 'Inspection points, targets, measured values, units, results and corrective actions. || 点検箇所、目標、測定値、単位、結果、是正。'],
     ['POC || 概念実証', 'Inquiry || Inquiry', 'Hypothesis, success criteria, baseline, trial method, results and limitations. || 仮説、成功基準、基準値、実験方法、結果、制約。']
   ]) +
-  P('31.1 Create and complete a report || 31.1 報告書を作成・入力', [
+  P('34.1 Create and complete a report || 34.1 報告書を作成・入力', [
     'Open Reports and choose a form/New report or a team template. || Reportsでフォーム・New reportまたはチームTemplateを選びます。',
     'Choose the correct Inquiry/Project and document language. Verify customer, End user, site, contact and work date. || 正しいInquiry・Projectと文書言語を選び、顧客、End user、現場、連絡先、作業日を確認します。',
     'Enter team, objective, type-specific content, summary, evidence references, pending actions, deliverables and remarks. || チーム、目的、種類別内容、概要、証拠参照、残アクション、成果物、備考を入力します。',
@@ -765,7 +824,7 @@ C('reports', 'Reports: five operational report types || Reports：5種類の業�
     'In Team &amp; approvals, choose an optional reviewer and required approver, all distinct from the preparer and one another, then Save draft. || Team &amp; approvalsで任意のReviewerと必須Approverを指定し、作成者を含め別人であることを確認して下書き保存します。'
   ], 'The draft has the correct source, report type, language and approval team. || 下書きの元案件、種類、言語、承認チームが正しいことを確認します。',
     'Evidence fields store reference numbers/links, not image uploads. Store evidence in an accessible work location and reference it. || Evidence欄は番号・リンクを保存し、画像を直接アップロードする欄ではありません。審査者が開ける業務保存先に証拠を置いて参照します。') +
-  P('31.2 Submit, review and approve || 31.2 提出・審査・承認', [
+  P('34.2 Submit, review and approve || 34.2 提出・審査・承認', [
     'Check required/type-specific Content and preview the report. || 必須項目と種類別Contentを確認し、報告書をプレビューします。',
     'The preparer needs an Active signature. Read consent and Submit to sign this draft snapshot. || 作成者はActive署名が必要です。同意を読み、Submitでこの下書きスナップショットに署名します。',
     'The named reviewer performs the optional review step; then the named approver reads and signs approval. || 指定Reviewerが任意の審査工程を行い、その後指定Approverが内容を読んで承認署名します。',
@@ -773,7 +832,7 @@ C('reports', 'Reports: five operational report types || Reports：5種類の業�
     'Use History to verify the sequence and decisions. || Historyで順序と判定を確認します。'
   ], 'The Approved report contains content and internal signatures from the same revision. || Approved報告書の内容と社内署名が同じ版に属しています。',
     'Approved content cannot be directly edited; old signatures do not transfer to a new revision. If a previous signer has lost eligibility, start a revision and select currently eligible people before submitting. || 承認済み内容は直接編集できず、旧署名は新版へ移りません。旧署名者が権限を失った場合は新版で現在の適格者を選んで提出します。') +
-  P('31.3 Print or export the correct report language || 31.3 正しい文書言語で印刷・出力', [
+  P('34.3 Print or export the correct report language || 34.3 正しい文書言語で印刷・出力', [
     'Open the report and verify its saved Document language and revision. || 報告書の保存済みDocument languageと版を確認します。',
     'Use Preview / Print and inspect headings, figures, dates and text. || Preview・Printで見出し、数値、日付、文章を確認します。',
     'Choose a printer or Save as PDF, and verify the output file before sharing. || プリンターまたはPDF保存を選び、共有前に出力を確認します。'
@@ -781,7 +840,7 @@ C('reports', 'Reports: five operational report types || Reports：5種類の業�
     'Report document language is separate from application interface language; changing TH/EN/JP in the app does not rewrite an approved report. || 報告書の文書言語とアプリ表示言語は別です。アプリのTH・EN・JPを変えても承認済み報告書は書き換わりません。'))
 
 C('report-templates', 'Report templates and customer acceptance || 報告書Templateと顧客確認', 'Reports → Team templates / Customer signing || Reports → Team templates / Customer signing', 'Preparers / approvers / customer representatives || 作成者・承認者・顧客代表',
-  P('32.1 Create and use a team template || 32.1 チームTemplateを作成・使用', [
+  P('35.1 Create and use a team template || 35.1 チームTemplateを作成・使用', [
     'Create in Reports → Templates or open a report and Save as template. || Reports → Templatesで作成するか、報告書のSave as templateを使います。',
     'Name it and keep reusable objectives, test steps, expected results, inspection points and deliverables. || 名前を付け、再利用する目的、試験手順、期待結果、点検箇所、成果物を残します。',
     'Manually review and remove customer-specific wording from instructions before saving. || 保存前に案内文を確認し、顧客固有の文言を手動で削除します。',
@@ -789,7 +848,7 @@ C('report-templates', 'Report templates and customer acceptance || 報告書Temp
     'Owners/authorized users can edit or Archive templates. Existing reports retain their own content and source-template version. || 責任者・権限者は編集・Archiveできます。既存報告書の内容と参照Template版は維持されます。'
   ], 'New reports reuse the structure without carrying old actual results or acceptance. || 旧案件の実測結果・確認を引き継がず、構成を再利用できます。',
     'Templates strip actual PASS/FAIL, site dates, participants, evidence, issues and signatures. Instructional free text still needs review. This is not Excel page-layout import. || Templateは実測PASS・FAIL、現場日付、参加者、証拠、問題、署名を除外しますが、自由入力の指示文は確認が必要です。Excelページレイアウトの取込ではありません。') +
-  P('32.2 Create a customer acceptance link || 32.2 顧客確認リンクを作成', [
+  P('35.2 Create a customer acceptance link || 35.2 顧客確認リンクを作成', [
     'Open an Approved report → Customer signing. || Approved報告書のCustomer signingを開きます。',
     'The preparer or approver creates an expiring link and verifies revision/expiry. || 作成者または承認者が期限付きリンクを作り、版と有効期限を確認します。',
     'Copy and send the link to the responsible customer representative through the agreed channel; verify that the recipient can reach the app network/URL. || 合意した連絡経路で担当顧客代表へ送り、アプリのネットワーク・URLへ到達できることを確認します。',
@@ -797,7 +856,7 @@ C('report-templates', 'Report templates and customer acceptance || 報告書Temp
     'The preparer checks Completed status and acceptance evidence. || 作成者がCompletedと確認証拠を確認します。'
   ], 'Customer acceptance is bound to the approved revision and is not retrospectively edited. || 顧客確認が承認版に紐づき、後から書き換えられません。',
     'Links are single-use. Creating a new link revokes the previous unused link. LAN Team Test links require network access. The entered representative identity is self-declared, not verified through the customer’s Microsoft account. || リンクは1回限りです。新リンク作成で未使用の旧リンクは無効になります。LANのTeam Testは到達可能なネットワークが必要です。代表者情報は本人入力であり、顧客Microsoftアカウントによる本人確認ではありません。') +
-  P('32.3 Revoke links and void obsolete reports || 32.3 リンク撤回と報告書の無効化', [
+  P('35.3 Revoke links and void obsolete reports || 35.3 リンク撤回と報告書の無効化', [
     'When offered in Customer signing, use Revoke customer link to stop use of the existing link. || Customer signingで操作可能ならRevoke customer linkで旧リンクを撤回します。',
     'Authorized users may Void report with a reason after checking report number/revision. || 権限者は番号・版を確認し、理由付きVoid reportを実行できます。',
     'Verify status and History. For corrected output, use Create a new revision when allowed. || 状態とHistoryを確認します。修正版は許可されたCreate a new revisionを使います。',
@@ -805,7 +864,7 @@ C('report-templates', 'Report templates and customer acceptance || 報告書Temp
   ], 'Revoked links or void reports are explicit, with reasons and earlier evidence preserved. || 撤回・無効状態と理由が明確になり、過去の証拠が残ります。'))
 
 C('analytics', 'Reports: analytics || Reports：分析レポート', 'Reports → View report analytics || Reports → View report analytics', 'Users with report and source-module access || レポート・元モジュール権限者',
-  P('33.1 Read and export analytics || 33.1 分析を確認・出力', [
+  P('36.1 Read and export analytics || 36.1 分析を確認・出力', [
     'Open report analytics and choose a tab available to your account. || 分析レポートを開き、アカウントに表示されるタブを選びます。',
     'Set the offered filters, project or period and wait for complete loading. || フィルター、Project、期間を設定して読込完了を待ちます。',
     'Use Inventory Value for stock value, Supplier Performance for suppliers, PR Cycle Time for approval duration and Project Cost for project costs. || 在庫評価はInventory Value、仕入先はSupplier Performance、承認期間はPR Cycle Time、案件原価はProject Costを使います。',
@@ -815,7 +874,7 @@ C('analytics', 'Reports: analytics || Reports：分析レポート', 'Reports �
     'This release has four analytics tabs subject to permissions, not the thirteen reports listed in an old prototype specification. || この版の分析は権限に応じた4タブで、旧試作仕様の13レポートとは異なります。'))
 
 C('performance', 'KPI & Growth: self-review and development || KPI & Growth：自己評価と能力開発', 'KPI & Growth || KPI & Growth', 'Employees / managers in Engineering or Sales frameworks || 従業員・EngineeringまたはSalesの評価管理者',
-  P('34.1 Complete your self-review || 34.1 自己評価を行う', [
+  P('37.1 Complete your self-review || 37.1 自己評価を行う', [
     'Select your review cycle and check the Engineering or Sales framework assigned by your primary role. || 評価期間を選び、主役割に応じたEngineering・Salesの評価基準を確認します。',
     'Read Work Evidence from the cycle, inspect sources and choose evidence explaining your actual contribution. || 期間内のWork Evidenceと元データを読み、自分の実際の貢献を説明できる証拠を選びます。',
     'Enter whole-number ratings 1–5 for each area with evidence and summary. Ratings 1, 2 and 5 require specific evidence. || 各項目を整数1～5で評価し、証拠・概要を記入します。1・2・5には具体的証拠が必須です。',
@@ -823,7 +882,7 @@ C('performance', 'KPI & Growth: self-review and development || KPI & Growth：�
     'Once all criteria/evidence are complete, submit Self review to Manager review and track state. || 全項目・証拠が揃ったらSelf reviewからManager reviewへ提出し、状態を追跡します。'
   ], 'Draft data persists and submission succeeds only with required content. || 下書きが保持され、必須内容を満たすと提出できます。',
     'An unrated area is a dash, not zero. Work Evidence supports decisions but does not assign the final human rating. || 未評価は「—」であり0ではありません。Work Evidenceは判断支援であり、最終評価を自動決定しません。') +
-  P('34.2 Manager review and calibration || 34.2 管理者評価と調整', [
+  P('37.2 Manager review and calibration || 37.2 管理者評価と調整', [
     'Open permitted employees in the cycle and check authority over their framework. || 期間内の許可された従業員を開き、その評価基準を管理できるか確認します。',
     'Read Self review and Work Evidence. Enter independent manager ratings; fields start blank rather than copying self-ratings. || 自己評価と証拠を読み、独立して管理者評価を入力します。初期値は空欄で、本人点数の自動コピーではありません。',
     'Save Draft during review, then submit to Calibration when complete. || 審査途中はDraft保存し、完成後Calibrationへ提出します。',
@@ -839,7 +898,7 @@ C('performance', 'KPI & Growth: self-review and development || KPI & Growth：�
   ]) + N('Estimate totals used as Sales KPI context are recorded costs, not sales or margin. Sparse evidence may produce no suggested rating. Support recognition does not automatically add KPI points. || Sales KPIの参考見積額は記録原価であり、売上・利益率ではありません。証拠不足では推奨点数が表示されない場合があります。Support感謝ポイントはKPIに自動加算されません。'))
 
 C('support', 'Support Center: report and follow up || Support Center：問題報告と回答追跡', 'Top bar → Report a problem / Support Center || 上部バー → Report a problem / Support Center', 'All employees / category owners || 全従業員・分類担当者',
-  P('35.1 Report a problem from your current screen || 35.1 使用中の画面から問題を報告', [
+  P('38.1 Report a problem from your current screen || 38.1 使用中の画面から問題を報告', [
     'Select Report a problem in the top bar. The form preserves your source screen. || 上部のReport a problemを押すと元画面を保持したままフォームが開きます。',
     'Choose Application, equipment/network, data/documents, work/coordination or other category. || アプリ、機器・ネットワーク、データ・書類、業務・調整、その他から分類を選びます。',
     'Enter title, description and impact: work can continue, partially blocked or unable to continue. || 題名、詳細、影響（継続可能・一部支障・継続不能）を入力します。',
@@ -847,14 +906,14 @@ C('support', 'Support Center: report and follow up || Support Center：問題報
     'Submit, note the ticket number and open details. If the ticket saved but attachments failed, Retry remaining uploads in the same ticket. || 送信後に番号と詳細を確認します。受付保存後に添付が失敗した場合は、同じTicketでRetry remaining uploadsを使います。'
   ], 'The ticket number exists and successfully attached files can be inspected. || Ticket番号が発行され、成功した添付を確認できます。',
     'Attach evidence needed to resolve the problem. Check screenshots for passwords or access codes before submitting. || 解決に必要な証拠を添付し、送信前に画像へパスワード・アクセスコードが写っていないか確認します。') +
-  P('35.2 Track replies and provide more information || 35.2 回答確認と追加情報提供', [
+  P('38.2 Track replies and provide more information || 38.2 回答確認と追加情報提供', [
     'Open Support Center → My tickets, search number/title and filter status/category. || Support Center → My ticketsで番号・題名を検索し、状態・分類で絞ります。',
     'Read Conversation &amp; history and reply or add files within the same ticket. || Conversation &amp; historyを読み、同じTicketに返信・添付します。',
     'For Waiting for reporter, provide the requested information so the owner can continue. || Waiting for reporterなら要求情報を回答し、担当者が続行できるようにします。',
     'After Resolved, test the actual behavior and reply. If unresolved, include current steps and results. || Resolved後に実動作を確認して返信します。未解決なら最新の手順と結果を伝えます。',
     'Use permitted close/cancel actions when appropriate and supply required reasons. || 適切な場合に許可された完了・取消操作を使い、必要理由を記入します。'
   ], 'The same ticket retains the history and latest information. || 同じTicketに履歴と最新情報がまとまります。') +
-  P('35.3 Take tickets and manage the queue || 35.3 受付担当と処理待ち管理', [
+  P('38.3 Take tickets and manage the queue || 38.3 受付担当と処理待ち管理', [
     'Open Support queue and filter Assigned to me or Unassigned in your categories. || Support queueで担当分類のAssigned to me・Unassignedを絞ります。',
     'Use Take this ticket for unassigned work. Admin uses Assign / categorize to change owner/category. || 未担当はTake this ticketで受け持ちます。AdminはAssign・categorizeで担当・分類を変更します。',
     'Update priority and actual status, for example Acknowledged → In progress → Waiting for reporter → Resolved → Closed, with reasons/solution. || 優先度と実状態を受付済み→対応中→報告者回答待ち→解決→完了などに更新し、理由・解決方法を記録します。',
@@ -862,7 +921,7 @@ C('support', 'Support Center: report and follow up || Support Center：問題報
     'Admin maintains category owners and separately grants recognition-award permission according to responsibility. || Adminは分類担当を管理し、担当に応じて感謝ポイント付与権限を別途設定します。'
   ], 'Tickets have owners and complete reply/status history. || Ticketに担当者と回答・状態履歴が揃います。',
     'Internal notes/files stay hidden from the reporter even if that reporter is also support staff. Notifications use the in-app bell; this module does not send email or Teams messages. || 内部メモ・ファイルは報告者がSupport担当でもその報告者には表示されません。通知はアプリのベルで、メール・Teams送信は行いません。') +
-  P('35.4 Recognition for helpful reports || 35.4 有益な報告への感謝ポイント', [
+  P('38.4 Recognition for helpful reports || 38.4 有益な報告への感謝ポイント', [
     'Employees open Contribution history to see thank-you messages, criteria and accumulated points. || 従業員はContribution historyで感謝メッセージ、基準、累計を確認します。',
     'Authorized awarders review the ticket and choose a thank-you with 0 points or Useful +5. || 付与権限者が内容を確認し、0点の感謝またはUseful＋5を選びます。',
     'After Useful, Detailed +3 and Actionable +2 may be selected, up to 10 per ticket. || Useful選択後にDetailed＋3、Actionable＋2を追加でき、1件最大10点です。',
@@ -871,7 +930,7 @@ C('support', 'Support Center: report and follow up || Support Center：問題報
     'Recognition is separate from KPI, with no public leaderboard or reward redemption. Points exist only after an authorized decision. || KPIとは別で、公開ランキング・景品交換はありません。権限者が判断して初めて点数が発生します。'))
 
 C('master', 'Master Data and engineering rates || マスターデータと技術原価単価', 'Master Data || Master Data', 'Master-data maintainers / authorized readers || マスター管理者・閲覧権限者',
-  P('36.1 Maintain reference data || 36.1 共通マスターを管理', [
+  P('39.1 Maintain reference data || 39.1 共通マスターを管理', [
     'Select Customers, Suppliers, Employees, Inventory items, Engineering rates or User accounts in Master Data. || Master DataのCustomers、Suppliers、Employees、Inventory items、Engineering rates、User accountsから選びます。',
     'Search before adding; check duplicate codes, names and Active state. || 追加前に検索し、コード重複、名称、Active状態を確認します。',
     'Authorized editors enter category fields: supplier contacts; item code/unit/reorder point; or employee ID, department, position and supported account links. || 編集権限者が分類ごとの項目を入力します。仕入先連絡先、品目コード・単位・再発注点、社員番号・部署・役職・対応するアカウント関連などです。',
@@ -880,7 +939,7 @@ C('master', 'Master Data and engineering rates || マスターデータと技術
     'The <b>Accounts not in Employee Master</b> panel lists accounts that can sign in but have no employee record, so they belong to no department (most were made as Admin by the first sign-in before 5 Oct 2026). <b>Add as employee</b> fills in the name and the same email; choose the department and save to link the account, then set the right role in User accounts, since adding an employee does not change the role. || <b>従業員マスター未登録のアカウント</b>には、サインインできるが従業員レコードがなく部署に属さないアカウントが表示されます（多くは2026年10月5日以前の初回サインインでAdminとして作成）。<b>従業員として追加</b>で名前と同じメールが入力されるので、部署を選んで保存するとアカウントが紐付きます。従業員の追加ではロールは変わらないため、User accountsで適切なロールに変更します。',
     'User accounts is a reference for company-provided accounts/roles; contact the account administrator when no edit action exists. || User accountsは会社設定のアカウント・役割の参照用です。編集操作がない場合はアカウント管理者へ依頼します。'
   ], 'Codes, names, units and relationships are correct for use in other modules. || 他のモジュールで使うコード、名称、単位、関連が正しく登録されています。') +
-  P('36.2 Maintain engineering cost rates || 36.2 技術労務単価を管理', [
+  P('39.2 Maintain engineering cost rates || 39.2 技術労務単価を管理', [
     'Open Engineering rates and inspect existing rates and effective dates. || Engineering ratesで既存単価と適用日を確認します。',
     'Authorized users add level, department or employee scope and hourly/daily Engineering and Installation rates as the form offers. || 権限者はレベル、部署または社員の範囲と、Engineering・Installationの時間・日単価を入力します。',
     'Check values and effective dates before saving, then search to verify. || 金額と適用日を確認して保存し、検索して確認します。',
@@ -899,13 +958,13 @@ C('visit-master', 'Visit Master Data: configure site work || Visit Master Data�
   ]) + N('After master changes, reopen a relevant request/visit form to check behavior. Do not assume new templates rewrite old visit checklists or evidence. || 設定後は関連申請・訪問フォームで結果を確認します。新Templateで過去のチェックリスト・証拠が書き換わるとは考えないでください。'))
 
 C('audit-settings', 'Audit Log and Settings || Audit LogとSettings', 'Audit Log / Settings || Audit Log / Settings', 'Authorized auditors / Admin || 監査閲覧権限者・Admin',
-  P('38.1 Inspect audit events || 38.1 操作履歴を確認', [
+  P('41.1 Inspect audit events || 41.1 操作履歴を確認', [
     'Open Audit Log and use offered filters/search for document, user, module or action. || Audit Logで書類、ユーザー、モジュール、操作の検索・フィルターを使います。',
     'Read date, actor, action and available before/after data or reasons. || 日付、実施者、操作、変更前後情報、理由を確認します。',
     'Compare with the current source document and note reference/time for any correction request. || 元書類の現在状態と比較し、修正依頼に必要な参照・時間を控えます。'
   ], 'You can explain who did what to which record and when. || 誰がいつどのレコードに何をしたか説明できます。',
     'Audit history is read-only evidence, not an undo or delete screen. || 履歴は閲覧専用の証拠であり、削除・取消操作の画面ではありません。') +
-  P('38.2 Use Settings when reporting an access problem || 38.2 Settingsでアクセス問題を確認', [
+  P('41.2 Use Settings when reporting an access problem || 41.2 Settingsでアクセス問題を確認', [
     'Open Settings and check Signed-in identity and Team Test/Production mode. || SettingsでSigned-in identityとTeam Test・Productionを確認します。',
     'Review Live connections, Business timezone and Permissions to describe the access issue. || Live connections、Business timezone、Permissionsを確認して問題を説明します。',
     'For account or system changes, send the relevant module and symptoms to the administrator through Support. || アカウント・システム変更が必要ならSupportで対象モジュールと症状を管理者へ伝えます。'
