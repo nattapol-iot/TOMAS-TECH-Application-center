@@ -47,6 +47,55 @@ export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: numbe
   });
 }
 
+/** An Outlook event as the board needs it: Bangkok local start and end ("YYYY-MM-DDTHH:MM:SS"); an all-day one ends at midnight after its last day. */
+export type OutlookSpan = { userId: number; start: string; end: string; allDay: boolean };
+
+const minutesOfDay = (stamp: string) => Number(stamp.slice(11, 13)) * 60 + Number(stamp.slice(14, 16));
+
+/** The days an Outlook event falls on. */
+export function outlookDates(event: OutlookSpan): string[] {
+  const first = event.start.slice(0, 10);
+  // An all-day event, or one that ends exactly at midnight, stops the day before its end.
+  const last = event.allDay || event.end.slice(11, 16) === "00:00" ? dateFromDay(Math.max(dayNumber(first), dayNumber(event.end.slice(0, 10)) - 1)) : event.end.slice(0, 10);
+  const dates: string[] = [];
+  for (let day = dayNumber(first); day <= dayNumber(last) && dates.length < 400; day++) dates.push(dateFromDay(day));
+  return dates;
+}
+
+/**
+ * Man-days an Outlook event takes on one day (owner decision 2026-10-28: counted by its hours). An all-day event is a
+ * whole day; a timed one is its minutes on that day less any lunch hour (12:00–13:00) over an 8-hour day.
+ */
+export function outlookManDays(event: OutlookSpan, date: string): number {
+  const dates = outlookDates(event);
+  if (!dates.includes(date)) return 0;
+  if (event.allDay) return 1;
+  const from = event.start.slice(0, 10) === date ? minutesOfDay(event.start) : 0;
+  const until = event.end.slice(0, 10) === date ? minutesOfDay(event.end) : 24 * 60;
+  const lunch = Math.max(0, Math.min(until, 13 * 60) - Math.max(from, 12 * 60));
+  return Math.max(0, until - from - lunch) / 480;
+}
+
+/** Each person's Outlook man-days per day, keyed "userId|date"; a day holds at most one man-day of meetings. */
+export function outlookLoad(events: readonly OutlookSpan[]): Map<string, number> {
+  const load = new Map<string, number>();
+  for (const event of events) for (const date of outlookDates(event)) {
+    const key = `${event.userId}|${date}`;
+    load.set(key, Math.min(1, (load.get(key) ?? 0) + outlookManDays(event, date)));
+  }
+  return load;
+}
+
+/** A day's load with Outlook's man-days added. */
+export function withOutlook(load: DayLoad[], extra: (date: string) => number): DayLoad[] {
+  return load.map((day) => {
+    const added = extra(day.date);
+    if (!added) return day;
+    const manDays = day.manDays + added;
+    return { ...day, manDays, utilisation: day.available > 0 ? (manDays / day.available) * 100 : manDays > 0 ? Infinity : null };
+  });
+}
+
 /** The same bands as the weekly Workload: under 85% has room, up to 100% is full, above is over. */
 export const loadBand = (utilisation: number | null): "none" | "ok" | "full" | "over" =>
   utilisation === null ? "none" : utilisation > 100 ? "over" : utilisation >= 85 ? "full" : "ok";

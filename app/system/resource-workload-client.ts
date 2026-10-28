@@ -69,6 +69,10 @@ export type TeamTaskInput = Omit<TeamTask, "id" | "customer" | "inquiryNo" | "pr
 export type BoardVisit = { id: number; number: string; status: string; customer: string; start: string | null; end: string | null; time: string | null; engineerIds: number[] };
 /** Leave or another absence recorded for Site Visit planning (dbo.engineer_availability). */
 export type BoardAway = { id: number; userId: number; kind: string; start: string | null; end: string | null };
+/** An Outlook calendar event (dbo.outlook_events); Bangkok local "YYYY-MM-DDTHH:MM:SS". A private one has no subject or place. */
+export type OutlookEvent = { id: number; userId: number; subject: string | null; location: string | null; private: boolean; allDay: boolean; showAs: string; start: string; end: string };
+/** How the last read of everyone's Outlook calendar went (backend-node/src/outlook-calendar.ts). */
+export type OutlookSyncStatus = { state: "never" | "running" | "ok" | "partial" | "denied" | "disabled" | "error"; syncedAt: string | null; message: string; people: number; failed: number };
 /**
  * GET /api/v1/team-board: everyone's work (details only of what the reader may open), the team tasks, site visits and
  * days away in the window, and the capacities and holidays the load is worked out against.
@@ -83,6 +87,10 @@ export type TeamBoardData = {
   away: BoardAway[];
   /** Admin, Engineering and Project Managers may change anyone's team task. */
   canChangeAll: boolean;
+  /** Admins, Leaders and managers may add work for someone else; everyone else only for themselves (or nobody yet). */
+  canAssignOthers: boolean;
+  outlook: OutlookEvent[];
+  outlookSync: OutlookSyncStatus;
 };
 export type TeamTaskChange = { action: string; actor: string; at: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null };
 
@@ -90,6 +98,8 @@ export type TeamTaskChange = { action: string; actor: string; at: string; before
 export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
 export const loadTeamBoard = (from: string, to: string) =>
   apiRequest<TeamBoardData>(`/api/v1/team-board?from=${from}&to=${to}`);
+/** Reads everyone's Outlook calendar now (or returns the read of a minute ago). */
+export const syncOutlookCalendars = () => apiRequest<OutlookSyncStatus>("/api/v1/team-board/outlook-sync", { method: "POST", body: "{}" });
 export const createTeamTask = (task: TeamTaskInput) =>
   apiRequest<{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery }>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
 export const updateTeamTask = (id: number, task: TeamTaskInput, rowVersion: string) =>

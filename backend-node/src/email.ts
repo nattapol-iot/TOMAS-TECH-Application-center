@@ -111,6 +111,11 @@ function normalizedRecipients(recipients: EmailRecipient[]): EmailRecipient[] {
   return [...unique.values()];
 }
 
+/** A Microsoft Graph read that did not succeed; status 403 is a permission the app has not been granted. */
+export class GraphReadError extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+}
+
 export class EmailService {
   private token: { value: string; expiresAt: number } | null = null;
 
@@ -257,6 +262,25 @@ export class EmailService {
       + `${message.state === "open" ? row("Escalation", `ผู้ดูแลลำดับที่ ${message.priority} / Responsible person #${message.priority}`) : ""}</table>`
       + logs
       + `<p><a href="${escapeHtml(appUrl)}#/site-monitor">เปิด Site Monitor / Open Site Monitor</a></p>`);
+  }
+
+  /** Whether Microsoft Graph is set up at all (Email__Mode=MicrosoftGraph). */
+  get graphEnabled(): boolean { return this.config.mode !== "Disabled"; }
+
+  /**
+   * A Graph GET with the app's own token: the team board reads Outlook calendars with it (application permission
+   * Calendars.Read). A path is under https://graph.microsoft.com/v1.0; a full URL (an @odata.nextLink) is used as is.
+   */
+  async graphGet<T>(pathOrUrl: string, headers: Record<string, string> = {}): Promise<T> {
+    if (!this.graphEnabled) throw new GraphReadError(0, "graph_disabled", "Microsoft Graph is not configured.");
+    const accessToken = await this.accessToken();
+    const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `https://graph.microsoft.com/v1.0${pathOrUrl}`;
+    const response = await this.fetcher(url, { headers: { Authorization: `Bearer ${accessToken}`, ...headers }, signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
+      throw new GraphReadError(response.status, body?.error?.code ?? "graph_error", body?.error?.message ?? `Microsoft Graph returned HTTP ${response.status}.`);
+    }
+    return await response.json() as T;
   }
 
   private async sendMail(rawRecipients: EmailRecipient[], subject: string, htmlBody: (appUrl: string) => string): Promise<EmailDeliveryResult> {

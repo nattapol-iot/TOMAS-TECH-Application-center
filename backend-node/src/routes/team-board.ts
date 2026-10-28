@@ -13,6 +13,8 @@ import { notifyUsers } from "../site-visit-common.js";
 import { WORKLOAD_SQL, workloadItems, type WorkloadItem } from "../resource-workload.js";
 import type { EmailService } from "../email.js";
 import { calendarActions, type CalendarState } from "../team-calendar.js";
+import { boardOutlookEvents, outlookStatus, refreshOutlookIfStale, syncOutlook } from "../outlook-calendar.js";
+import { rolesOf } from "../user-roles.js";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, so that a customer who calls to book can be
 // given a day at once, and work the system does not know yet (an appointment, a task, a day away) can be added with a
@@ -142,6 +144,19 @@ export function timeRangeManDays(startTime: string, endTime: string) {
 }
 
 /** Who may change or remove a team task: whoever added it, anyone it is for, and Admin / Engineering / Project Managers. */
+/**
+ * Who may put work on someone else's row (owner decision 2026-10-28): Admins, Leaders and managers (any role named
+ * "... Manager"). Everyone else adds work for themselves, or for nobody yet.
+ */
+export const canAssignOthers = (actor: CurrentUser) => rolesOf(actor).some((role) => role === "Admin" || role === "Leader" || /manager$/i.test(role));
+
+/** Refuses a save that puts someone new on a task, other than the actor, unless the actor may assign others. */
+export function assertMayAssign(actor: CurrentUser, assigneeIds: readonly number[], already: readonly number[] = []) {
+  if (canAssignOthers(actor)) return;
+  if (assigneeIds.some((id) => id !== actor.id && !already.includes(id)))
+    throw new ApiError(403, "team_task_assign_forbidden", "Only Admins, Managers and Leaders can add work for someone else. Add it for yourself.");
+}
+
 export const canChangeTeamTask = (actor: CurrentUser, task: Row, assigneeIds: readonly number[]) =>
   Number(task.created_by) === actor.id || assigneeIds.includes(actor.id) || isProjectManagerRole(actor);
 
@@ -338,7 +353,14 @@ async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeam
   return results.includes("failed") ? "failed" : results.includes("disabled") ? "disabled" : results.length ? "sent" : "none";
 }
 
-export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService, email: Pick<EmailService, "sendTeamTaskCalendar">) {
+type BoardMail = Pick<EmailService, "sendTeamTaskCalendar"> & Partial<Pick<EmailService, "graphGet" | "graphEnabled">>;
+/** The Graph reads for Outlook calendars; a mail service without them (a test harness) has Outlook switched off. */
+const graphOf = (email: BoardMail): Pick<EmailService, "graphGet" | "graphEnabled"> =>
+  typeof email.graphGet === "function" ? email as Pick<EmailService, "graphGet" | "graphEnabled">
+    : { graphEnabled: false, graphGet: () => Promise.reject(new Error("Microsoft Graph is not configured.")) };
+
+export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService, email: BoardMail) {
+  const graph = graphOf(email);
   app.get("/api/v1/team-board", async (request) => {
     await users.demandPermission(request, "team.board");
     const actor = await users.required(request);
@@ -355,6 +377,9 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       .input("from", sql.Date, from)
       .input("to", sql.Date, to));
     const sets = result.recordsets as unknown as Row[][];
+    // Outlook: the copy read last time, and a fresh read in the background when that one is old.
+    refreshOutlookIfStale(db, graph);
+    const outlook = graph.graphEnabled ? await boardOutlookEvents(db, from, to) : [];
     const holidays = (sets[1] ?? []).map((r) => dateOnly(r.holiday_date as Date)!);
     const work = workloadItems(sets.slice(2, 11), new Set(holidays));
     const [taskRows = [], visitRows = [], awayRows = [], permissionRows = []] = sets.slice(11);
@@ -385,13 +410,26 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       away: awayRows.map((r) => ({ id: Number(r.id), userId: Number(r.user_id), kind: String(r.kind), start: dateOnly(r.start_date as Date), end: dateOnly(r.end_date as Date) })),
       /** Admin, Engineering and Project Managers may change anyone's team task. */
       canChangeAll: isProjectManagerRole(actor),
+      /** Admins, Leaders and managers may add work for someone else; everyone else for themselves. */
+      canAssignOthers: canAssignOthers(actor),
+      outlook,
+      outlookSync: outlookStatus(),
     };
+  });
+
+  // "Sync Outlook" on the board: reads everyone's calendar now (or returns the read a minute ago) and says how it went.
+  app.post("/api/v1/team-board/outlook-sync", async (request) => {
+    await users.demandPermission(request, "team.board");
+    return syncOutlook(db, graph);
   });
 
   app.post("/api/v1/team-tasks", async (request, reply) => {
     await users.demandPermission(request, "team.board");
     const actor = await users.required(request);
     const input = parseTeamTask(request.body);
+    assertMayAssign(actor, input.assigneeIds);
+    // Owner decision 2026-10-28: new work says briefly what it is; a day away needs no detail.
+    if (input.kind !== "Away" && !input.note.trim()) throw new ApiError(400, "validation_failed", "Describe the work briefly.");
     const created = await db.transaction(async (transaction) => {
       const task = await prepare(transaction, input);
       const insert = bind(new sql.Request(transaction), task, actor.id);
@@ -424,6 +462,8 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       const people = await currentPeople(transaction, id);
       if (!canChangeTeamTask(actor, current, people))
         throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can change it.");
+      // People already on it may stay; adding someone else needs an Admin, a Manager or a Leader.
+      assertMayAssign(actor, input.assigneeIds, people);
       if (!(current.row_version as Buffer).equals(expected))
         throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before saving.");
       const task = await prepare(transaction, input);

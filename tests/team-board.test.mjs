@@ -9,7 +9,7 @@ const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
   ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml } =
+const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook } =
   await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
@@ -97,7 +97,7 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /onClick=\{\(\) => \{ setPersonId\(person\.userId\); onMode\("list"\); \}\}/);
   // Copy (2026-10-22): a task starts a new one from all its fields; the table copies what is on screen.
   assert.match(board, /const copyTask = \(task: TeamTask\) => \{ setEditing\(null\); setAdding\(\{ assigneeId: null, date: task\.startDate, copy: task \}\); \};/);
-  assert.match(board, /useState<Draft>\(\(\) => \(copyFrom \? \{ \.\.\.draftOf\(copyFrom\), status: "Planned" \} : draftOf\(null, preset\)\)\)/);
+  assert.match(board, /const start = copyFrom \? \{ \.\.\.draftOf\(copyFrom\), status: "Planned" as const \} : initial \?\? draftOf\(null, preset\);/);
   assert.match(board, /navigator\.clipboard\.write\(\[new ClipboardItem\(\{ "text\/plain": new Blob\(\[text\]/);
   assert.match(board, /else await navigator\.clipboard\.writeText\(text\);/);
   // A Gantt view of the same people and filtered work, remembered per person.
@@ -161,4 +161,33 @@ test("every team board string has English, Thai and Japanese, and no key is shor
     for (const value of [key, entry.en, entry.th, entry.jp]) if (/^[\x20-\x7e]+$/.test(value)) assert.ok(value.trim().length > 2, `${key}: "${value}" is too short`);
   const i18n = await read("app/system/i18n.ts");
   assert.match(i18n, /\.\.\.INSTALLED_BASE_COPY,\r?\n {2}\.\.\.TEAM_BOARD_COPY,/);
+});
+
+test("Outlook meetings count by their hours, lunch left out, a whole day at most", async () => {
+  const meeting = { userId: 7, start: "2026-10-28T09:00:00", end: "2026-10-28T13:30:00", allDay: false };
+  assert.deepEqual(outlookDates(meeting), ["2026-10-28"]);
+  assert.equal(outlookManDays(meeting, "2026-10-28"), 3.5 / 8, "09:00–13:30 less the lunch hour");
+  const allDay = { userId: 7, start: "2026-10-29T00:00:00", end: "2026-10-31T00:00:00", allDay: true };
+  assert.deepEqual(outlookDates(allDay), ["2026-10-29", "2026-10-30"], "an all-day event ends the day before its end");
+  const load = outlookLoad([meeting, { ...meeting, start: "2026-10-28T08:00:00", end: "2026-10-28T17:00:00" }, allDay]);
+  assert.equal(load.get("7|2026-10-28"), 1, "a day holds at most one man-day of meetings");
+  assert.equal(load.get("7|2026-10-30"), 1);
+  const [day] = withOutlook([{ date: "2026-10-28", manDays: 0.5, available: 1, utilisation: 50 }], () => 0.25);
+  assert.deepEqual(day, { date: "2026-10-28", manDays: 0.75, available: 1, utilisation: 75 });
+});
+
+test("only Admins, Leaders and managers add work on other people's rows; new work names its work and detail", async () => {
+  const board = await read("app/system/production/TeamBoard.tsx");
+  // The + in a cell: on your own row, the unassigned row, or anyone's for someone who may assign others.
+  assert.match(board, /\{canAssignOthers \|\| userId === me \|\| userId === null \? \(/);
+  assert.match(board, /const assignable = useMemo\(\(\) => \(canAssignOthers \? null : \[me\]\), \[canAssignOthers, me\]\);/);
+  assert.match(board, /\.filter\(\(user\) => assignable === null \|\| assignable\.includes\(user\.id\) \|\| Boolean\(original\?\.assigneeIds\.includes\(user\.id\)\)\)/);
+  // Which work it is for, chosen every time, and a brief detail; a day away needs neither.
+  assert.match(board, /const draftMissing = \(draft: Draft\): string\[\] => draft\.kind === "Away" \? \[\] : \[/);
+  assert.match(board, /const draftReady = \(draft: Draft\) => Boolean\(draft\.title\.trim\(\) && draft\.startDate\) && !draftProblem\(draft\) && !draftMissing\(draft\)\.length;/);
+  assert.match(board, /\["project", "TeamBoard\.workProject", work\.canProjects\], \["inquiry", "TeamBoard\.workInquiry", work\.canInquiries\], \["other", "TeamBoard\.workOther", true\]/);
+  // Outlook: on the cells, in the load, and a button to read the calendars now.
+  assert.match(board, /add\(event\.userId, date, \{ kind: "outlook", key: `outlook-\$\{event\.id\}`, event, late: false \}\);/);
+  assert.match(board, /const load = withOutlook\(dailyLoad\(items, days, capacity, data\.holidays\), \(date\) => outlookMd\.get/);
+  assert.match(board, /const result = await syncOutlookCalendars\(\);/);
 });
