@@ -101,7 +101,7 @@ test("submitting keeps a labor category a person chose on the ERP sheet", async 
 test("a new estimate can start from a previous one in the same transaction", async () => {
   const [estimates, copy] = await Promise.all([route("estimates"), route("estimate-copy")]);
   assert.match(copy, /export async function copyEstimateLines\(transaction: TransactionType,/);
-  assert.match(copy, /return copyEstimateLines\(transaction, \{ actor, targetId, estimate, sourceId, ownerId, sections, include, today \}\);/);
+  assert.match(copy, /return copyEstimateLines\(transaction, \{ actor, targetId, estimate, sourceId, ownerId, sections, include, today, modules \}\);/);
   const create = estimates.match(/app\.post\("\/api\/v1\/estimates", [\s\S]*?\n {2}\}\);/)?.[0] ?? "";
   assert.match(create, /if \(copyFrom\) await users\.demandPermission\(request, "estimate\.read"\);/);
   // Lock the R00 just inserted, then fill it, before the transaction commits.
