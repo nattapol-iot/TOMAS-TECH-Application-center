@@ -1,9 +1,10 @@
 [CmdletBinding()]
 param()
 
-# Migration 074 (flexible purchase requisition lines) and the PR API on a private LocalDB instance:
-# schema 73 with legacy PRs and POs -> 074 applied twice -> backfill, keys and line-kind checks -> the PR flow through the
-# real routes (substitute, unplanned, module budget, supplier choice, ERP order, a 1,000-line PR) -> a fresh deployment through 074.
+# Migrations 074 (flexible purchase requisition lines) and 090 (Pegasus ERP link) and the PR API on a private LocalDB instance:
+# schema 73 with legacy PRs and POs -> 074 applied twice -> backfill, keys and line-kind checks -> 075..090 (090 twice) -> the PR
+# flow through the real routes (substitute, unplanned, module budget, sending to a stand-in ERP, its PO, a 1,000-line PR)
+# -> a fresh deployment through 090.
 # Nothing outside the generated instance is touched.
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,7 @@ $freshDatabase = 'IoTTeamCenter_ProcFreshCI_' + $testSuffix
 $seed = Join-Path $repoRoot 'database/tests/procurement-074-seed.sql'
 $fixture = Join-Path $repoRoot 'database/tests/procurement-074.sql'
 $migration = Join-Path $repoRoot 'database/migrations/074_flexible_purchase_requisition_lines.sql'
+$erpMigration = Join-Path $repoRoot 'database/migrations/090_pegasus_erp_purchase_requests.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -50,6 +52,14 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $migration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $fixture)
 
+    Write-Output 'Applying 075 through 090 (090 twice) to the upgraded database.'
+    $laterMigrations = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'database/migrations') -File |
+        Where-Object { $_.Name -match '^\d{3}_[A-Za-z0-9_]+\.sql$' -and [int]$_.Name.Substring(0, 3) -ge 75 -and [int]$_.Name.Substring(0, 3) -le 90 } |
+        Sort-Object Name
+    foreach ($laterMigration in $laterMigrations) { Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $laterMigration.FullName) }
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $erpMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.user_oidc_tokens',N'U') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'erp_ref') IS NULL OR OBJECT_ID(N'dbo.CK_mat_prs_erp_status',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=90) THROW 51999, 'Migration 090 is missing its table, columns, check or version.', 1;")
+
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName
     $env:PROCUREMENT_TEST_DATABASE = $upgradeDatabase
@@ -57,13 +67,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Procurement API / SQL integration failed.' }
 
     $freshRunner = Get-Content -LiteralPath 'database/scripts/020_deploy_fresh_database.sql' -Raw
-    if ($freshRunner -match '074_flexible_purchase_requisition_lines\.sql') {
-        Write-Output 'Checking full fresh deployment through 074.'
+    if ($freshRunner -match '090_pegasus_erp_purchase_requests\.sql') {
+        Write-Output 'Checking full fresh deployment through 090.'
         Invoke-TestSql -SqlArguments @('-i', 'database/scripts/020_deploy_fresh_database.sql', '-v', "DatabaseName=$freshDatabase")
-        Invoke-TestSql -SqlArguments @('-d', $freshDatabase, '-Q', "IF COL_LENGTH(N'dbo.mat_pr_lines',N'line_type') IS NULL OR COLUMNPROPERTY(OBJECT_ID(N'dbo.mat_pr_lines'),N'supplier_id','AllowsNull')<>1 OR OBJECT_ID(N'dbo.CK_mat_pr_lines_line_type',N'C') IS NULL OR OBJECT_ID(N'dbo.FK_mat_po_lines_pr_line',N'F') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=74) THROW 51999, 'Fresh deployment is missing the 074 columns, keys or version.', 1;")
+        Invoke-TestSql -SqlArguments @('-d', $freshDatabase, '-Q', "IF COL_LENGTH(N'dbo.mat_pr_lines',N'line_type') IS NULL OR COLUMNPROPERTY(OBJECT_ID(N'dbo.mat_pr_lines'),N'supplier_id','AllowsNull')<>1 OR OBJECT_ID(N'dbo.CK_mat_pr_lines_line_type',N'C') IS NULL OR OBJECT_ID(N'dbo.FK_mat_po_lines_pr_line',N'F') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=74) OR COL_LENGTH(N'dbo.mat_prs',N'erp_pr_no') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=90) THROW 51999, 'Fresh deployment is missing the 074 or 090 columns, keys or version.', 1;")
     }
-    else { Write-Output 'SKIP: 020_deploy_fresh_database.sql does not run 074 yet.' }
-    Write-Output 'PASS: private LocalDB upgrade with legacy PRs, repeat application, backfill, keys, line kinds and the PR API.'
+    else { throw '020_deploy_fresh_database.sql does not run 090.' }
+    Write-Output 'PASS: private LocalDB upgrade with legacy PRs, repeat application, backfill, keys, line kinds, the ERP link and the PR API.'
 }
 finally {
     Remove-Item Env:PROCUREMENT_TEST_SERVER -ErrorAction SilentlyContinue

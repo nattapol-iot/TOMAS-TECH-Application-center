@@ -20,6 +20,8 @@ import { sanitizeNextPath } from "../tmt-id/next-path.js";
 import type { TmtIdRuntime } from "../tmt-id/runtime.js";
 import { deriveProvisionedUser, type UserProvisioning } from "../tmt-id/user-provisioning.js";
 import type { MeResponse, TmtIdSession } from "../tmt-id/types.js";
+import { tokenHasAudience, type IssuedTokens, type TmtIdTokenVault } from "../tmt-id/token-vault.js";
+import { ERP_AUDIENCE } from "../erp-purchasing.js";
 
 type LoginQuery = { next?: string; retry?: string };
 type CallbackQuery = { state?: string; code?: string; error?: string };
@@ -38,7 +40,9 @@ export function registerTmtIdAuthRoutes(
   app: FastifyInstance,
   runtime: TmtIdRuntime,
   provisioning: UserProvisioning | null,
+  tokenVault: TmtIdTokenVault | null = null,
 ): void {
+  let audienceWarned = false;
   const { cookies, provider, directory, redirectUri, settings } = runtime;
   const appHome = `${settings.appBaseUrl}/`;
 
@@ -125,6 +129,14 @@ export function registerTmtIdAuthRoutes(
         request.log.info({ emailVerified: claims?.email_verified ?? null }, "TMT ID email is not verified; it cannot open an account by its domain.");
       }
       await provisioning?.ensure(session, { emailVerified });
+      if (tokenVault) {
+        // Kept so an approved requisition can be sent to the ERP as this person; a failure here must not block sign-in.
+        if (!audienceWarned && !tokenHasAudience(tokens.access_token, ERP_AUDIENCE)) {
+          audienceWarned = true;
+          request.log.warn("TMT ID access tokens lack the pegasus-erp-mcp audience; the ERP will refuse them until the ERP team adds the audience mapper to this client.");
+        }
+        await tokenVault.save(sub, tokens as IssuedTokens).catch((error: unknown) => request.log.error({ err: error }, "Could not keep the TMT ID refresh token"));
+      }
       await cookies.writeSession(reply, session);
       return reply.redirect(`${settings.appBaseUrl}${action.login.next}`, 302);
     },
@@ -136,6 +148,7 @@ export function registerTmtIdAuthRoutes(
     async (request, reply) => {
       const session = await cookies.readSession(request);
       cookies.clearSession(reply);
+      if (session && tokenVault) await tokenVault.forget(session.sub).catch((error: unknown) => request.log.error({ err: error }, "Could not delete the TMT ID refresh token"));
       try {
         const configuration = await provider.configuration();
         // Clearing only the local cookie is not a sign-out: the provider still

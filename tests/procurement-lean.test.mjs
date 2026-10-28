@@ -20,12 +20,19 @@ test("the PR sheet reserves no stock here, asks no supplier of the engineer and 
   assert.doesNotMatch(material, /function CreatePrModal|function ConvertPrModal/);
 });
 
-test("Purchasing chooses suppliers for many lines at once and records the ERP order; nothing is ordered in this app", () => {
-  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/suppliers`, \{ method: "PUT"/);
-  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{item\.id\}\/erp-order/);
+test("an approved PR goes to the ERP, which picks suppliers and raises the PO; nothing is ordered in this app", () => {
+  // The ERP's Purchasing does what the in-app review and ERP-PO record did.
+  assert.doesNotMatch(material, /\/suppliers`|\/erp-order|function ErpOrderModal|missingSuppliers/);
+  assert.doesNotMatch(requisitions, /purchase-requisitions\/:id\/suppliers|purchase-requisitions\/:id\/erp-order|PURCHASING_REVIEW_STEP/);
   assert.doesNotMatch(material, /\/convert`/);
   assert.doesNotMatch(requisitions, /purchase-requisitions\/:id\/convert|INSERT INTO dbo\.mat_pos/);
-  assert.match(requisitions, /current\.name === PURCHASING_REVIEW_STEP/);
+  // Final approval sends it as the requester; the requester can send it again, and opening it reads the ERP's status.
+  assert.match(requisitions, /decided\.status === "Approved" && erp\)[\s\S]*sendToErp\(id, decided\.requestedBy/);
+  assert.match(requisitions, /notifyUsers\(transaction, \[decided\.requestedBy\], "PR_ERP_SEND"/);
+  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-send`/);
+  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-sync`/);
+  assert.match(editor, /\/api\/v1\/erp\/purchasing\/options/);
+  assert.match(shell, /item\.entityType === "PurchaseRequisition"\) setView\("purchase"\)/);
 });
 
 test("a BOM line without an inventory item can still be requested", () => {

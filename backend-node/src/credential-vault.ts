@@ -32,25 +32,34 @@ export function parseVaultKeys(raw: string | undefined): VaultKeys | undefined {
   return { keys, activeKeyId: Math.max(...keys.keys()) };
 }
 
-const associatedData = (credentialId: number) => Buffer.from(`tmt-site-credential:${credentialId}`, "utf8");
+const siteCredential = (credentialId: number) => `tmt-site-credential:${credentialId}`;
 
 export function sealSecret(vault: VaultKeys, credentialId: number, secret: string): SealedSecret {
   if (!secret) throw new ApiError(400, "validation_failed", "The secret cannot be empty.");
   if (secret.length > MAX_SECRET_LENGTH) throw new ApiError(400, "validation_failed", `The secret cannot exceed ${MAX_SECRET_LENGTH} characters.`);
+  return sealBound(vault, siteCredential(credentialId), secret);
+}
+
+export function openSecret(vault: VaultKeys, credentialId: number, sealed: SealedSecret): string {
+  return openBound(vault, siteCredential(credentialId), sealed);
+}
+
+/** The same sealing for other secrets: `binding` is the authenticated data that ties a ciphertext to its row. */
+export function sealBound(vault: VaultKeys, binding: string, secret: string): SealedSecret {
   const key = vault.keys.get(vault.activeKeyId)!;
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
-  cipher.setAAD(associatedData(credentialId));
+  cipher.setAAD(Buffer.from(binding, "utf8"));
   const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   return { cipher: encrypted, iv, tag: cipher.getAuthTag(), keyId: vault.activeKeyId };
 }
 
-export function openSecret(vault: VaultKeys, credentialId: number, sealed: SealedSecret): string {
+export function openBound(vault: VaultKeys, binding: string, sealed: SealedSecret): string {
   const key = vault.keys.get(sealed.keyId);
   if (!key) throw new ApiError(500, "credential_key_missing", `Vault key ${sealed.keyId} is not configured; the secret cannot be read.`);
   try {
     const decipher = createDecipheriv("aes-256-gcm", key, sealed.iv);
-    decipher.setAAD(associatedData(credentialId));
+    decipher.setAAD(Buffer.from(binding, "utf8"));
     decipher.setAuthTag(sealed.tag);
     return Buffer.concat([decipher.update(sealed.cipher), decipher.final()]).toString("utf8");
   } catch {

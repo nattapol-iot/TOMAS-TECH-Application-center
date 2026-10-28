@@ -9,24 +9,35 @@ import { hasRole } from "../user-roles.js";
 import { rolesOf } from "../user-roles.js";
 import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { approvalSteps, type BomLineForRequest, MAX_PR_LINES, moduleBudgets, NO_MODULE, PO_CREATION_STEP as poCreationStep, planPrLines, type PlannedPrLine,
-  type PrLineInput, type PrLineKind, procurementRuleFlags, PURCHASING_REVIEW_STEP, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
+import { approvalSteps, type BomLineForRequest, ERP_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, planPrLines, type PlannedPrLine,
+  type PrLineInput, type PrLineKind, procurementRuleFlags, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
+import { describeErpFailure, type ErpDepartment, type ErpFailure, type ErpGateway, type ErpLine, type ErpRequest, erpRequestArguments, isFinalErpStatus,
+  localStatusFor, newErpRef, suggestDepartment } from "../erp-purchasing.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
+import { notifyUsers } from "../site-visit-common.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
+
+export type ErpLink = { gateway: ErpGateway; appBaseUrl: string };
+export type ErpOutcome = { sent: boolean; prNo?: string; message?: string; kind?: ErpFailure["kind"] | "department_required" | "not_configured" };
 
 // "Estimate" is the estimate's own unit cost: the planner's default, and honest about where the price came from.
 const priceSources = ["Estimate", "Price Library", "Supplier Quotation", "Previous Purchase", "Manual"];
 const lineTypes: PrLineKind[] = ["Planned", "Substitute", "Unplanned"];
 type PrHeader = { id: number | string; pr_no: string; project_id: number | string; bom_id: number | string; requested_by: number | string; status: string; priority: string;
-  required_date: Date | string; erp_po_ref: string | null };
+  required_date: Date | string; erp_po_ref: string | null; purpose: string | null; erp_ref: string | null; erp_department: string | null; erp_pr_no: string | null;
+  erp_status: string | null; erp_status_label: string | null; erp_url: string | null; erp_revision_no: number | null; erp_rejection_reason: string | null;
+  erp_synced_at: Date | string | null; erp_error: string | null };
+const HEADER_COLUMNS = "id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref,purpose,erp_ref,erp_department,erp_pr_no,erp_status,erp_status_label,erp_url,erp_revision_no,erp_rejection_reason,erp_synced_at,erp_error";
+const erpView = (h: PrHeader) => ({ ref: h.erp_ref, department: h.erp_department, prNo: h.erp_pr_no, status: h.erp_status, statusLabel: h.erp_status_label, url: h.erp_url,
+  revisionNo: h.erp_revision_no, rejectionReason: h.erp_rejection_reason, poNo: h.erp_po_ref, syncedAt: h.erp_synced_at, error: h.erp_error });
 
 function todayIn(timeZone: string): string { const p = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const v = Object.fromEntries(p.map((x) => [x.type, x.value])); return `${v.year}-${v.month}-${v.day}`; }
 function decimal(value: unknown, minimum: number, maximum: number, label: string): number { if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) throw new ApiError(400, "validation_failed", `${label} is outside the supported range.`);
   if (!value.toString().toLowerCase().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > 4) throw new ApiError(400, "validation_failed", `${label} cannot have more than 4 decimal places.`); return value; }
 async function readHeader(transaction: TransactionType, id: number): Promise<PrHeader> { const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
-  const row = (await request.query<PrHeader>(`SELECT id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref FROM dbo.mat_prs WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+  const row = (await request.query<PrHeader>(`SELECT ${HEADER_COLUMNS} FROM dbo.mat_prs WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
   if (!row) throw new ApiError(404, "pr_not_found", "Purchase requisition not found."); return row; }
 
 /** A rejected field names its line: with a thousand lines, "Quantity is outside the supported range" alone is no help. */
@@ -93,11 +104,6 @@ async function insertLines(transaction: TransactionType, prId: number, bomId: nu
       budget_module nvarchar(200) '$.budgetModule', covered_qty decimal(19,4) '$.coveredQuantity') j ORDER BY j.ord;`);
 }
 
-async function missingSuppliers(transaction: TransactionType, prId: number): Promise<number> {
-  const request = new sql.Request(transaction); request.input("pr", sql.BigInt, prId);
-  return Number((await request.query<{ count: number }>(`SELECT COUNT(*) count FROM dbo.mat_pr_lines WHERE pr_id=@pr AND supplier_id IS NULL;`)).recordset[0]!.count);
-}
-
 async function buildApprovalRoute(transaction: TransactionType, prId: number, projectId: number, actor: CurrentUser, flags: RuleFlag[]): Promise<void> {
   const project = new sql.Request(transaction); project.input("id", sql.BigInt, projectId); const row = (await project.query<{ manager_id: number | string | null }>(`SELECT manager_id FROM dbo.projects WHERE id=@id AND deleted_at IS NULL;`)).recordset[0]!;
   const clear = new sql.Request(transaction); clear.input("pr", sql.BigInt, prId); await clear.query(`DELETE FROM dbo.mat_pr_approval_steps WHERE pr_id=@pr;`);
@@ -108,15 +114,78 @@ async function buildApprovalRoute(transaction: TransactionType, prId: number, pr
       VALUES(@pr,@sequence,@name,@role,@approver,@rule,@status,CASE WHEN @status=N'Completed' THEN N'Submitted' ELSE NULL END,CASE WHEN @status=N'Completed' THEN SYSUTCDATETIME() ELSE NULL END);`); }
 }
 
-export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
+export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, erp: ErpLink | null = null): void {
+  const subjectOf = async (userId: number) => String((await database.query<{ subject: string | null }>(`SELECT entra_object_id subject FROM dbo.users WHERE id=@id;`,
+    (r) => r.input("id", sql.BigInt, userId))).recordset[0]?.subject ?? "");
+
+  /** Writes what the ERP said about the PR, and moves our status when the ERP has ordered, rejected or cancelled it. */
+  const recordErp = async (prId: number, current: string, request: ErpRequest, actorId: number) => {
+    const status = localStatusFor(request.status, current);
+    await database.query(`UPDATE dbo.mat_prs SET erp_pr_id=@erp_id,erp_pr_no=@erp_no,erp_status=@erp_status,erp_status_label=@label,erp_url=@url,erp_revision_no=@revision,
+        erp_rejection_reason=@reason,erp_po_ref=COALESCE(@po,erp_po_ref),erp_synced_at=SYSUTCDATETIME(),erp_error=NULL,status=@status,updated_by=@actor,updated_at=SYSUTCDATETIME()
+      WHERE id=@id AND deleted_at IS NULL;
+      UPDATE dbo.mat_pr_approval_steps SET status=N'Completed',decision=N'Sent',comment=@erp_no,acted_at=COALESCE(acted_at,SYSUTCDATETIME()) WHERE pr_id=@id AND name=@step AND status<>N'Completed';`, (r) => {
+      r.input("erp_id", sql.BigInt, request.pr_id); r.input("erp_no", sql.NVarChar(50), request.pr_no); r.input("erp_status", sql.NVarChar(30), request.status);
+      r.input("label", sql.NVarChar(50), request.status_label); r.input("url", sql.NVarChar(500), request.url); r.input("revision", sql.Int, request.revision_no);
+      r.input("reason", sql.NVarChar(sql.MAX), request.rejection_reason); r.input("po", sql.NVarChar(200), request.po_no); r.input("status", sql.NVarChar(30), status);
+      r.input("actor", sql.BigInt, actorId); r.input("id", sql.BigInt, prId); r.input("step", sql.NVarChar(100), ERP_STEP); });
+    return status;
+  };
+  const recordError = (prId: number, message: string) => database.query(`UPDATE dbo.mat_prs SET erp_error=@error WHERE id=@id;`, (r) => {
+    r.input("error", sql.NVarChar(500), message.slice(0, 500)); r.input("id", sql.BigInt, prId); });
+
+  /**
+   * Sends an approved PR to the ERP as its requester. The external_ref is kept before the call, so a timeout or a second press
+   * returns the same ERP PR instead of making another. The department comes from the PR, or is matched from the requester's.
+   */
+  const sendToErp = async (prId: number, requesterId: number, actorId: number, department: string | null): Promise<ErpOutcome> => {
+    if (!erp) return { sent: false, kind: "not_configured", message: "The ERP connection is not configured on this server." };
+    const subject = await subjectOf(requesterId);
+    const prepared = await database.transaction(async (transaction) => {
+      const h = await readHeader(transaction, prId);
+      if (h.status !== "Approved") throw new ApiError(409, "pr_not_approved", `Only an approved requisition goes to the ERP; this one is '${h.status}'.`);
+      if (h.erp_pr_no) return { h, ref: h.erp_ref! };
+      const ref = h.erp_ref ?? newErpRef(); const update = new sql.Request(transaction); update.input("ref", sql.NVarChar(100), ref); update.input("department", sql.NVarChar(50), department); update.input("id", sql.BigInt, prId);
+      await update.query(`UPDATE dbo.mat_prs SET erp_ref=@ref,erp_department=COALESCE(@department,erp_department) WHERE id=@id;`);
+      return { h: { ...h, erp_ref: ref, erp_department: department ?? h.erp_department }, ref };
+    });
+    if (prepared.h.erp_pr_no) return { sent: true, prNo: prepared.h.erp_pr_no };
+    let erpDepartment = prepared.h.erp_department;
+    if (!erpDepartment) {
+      const options = await erp.gateway.call<{ departments?: ErpDepartment[] }>(subject, "purchasing_options_get", {});
+      if (!options.ok) { await recordError(prId, describeErpFailure(options)); return { sent: false, kind: options.kind, message: options.message }; }
+      const personDepartment = (await database.query<{ department: string | null }>(`SELECT department FROM dbo.users WHERE id=@id;`, (r) => r.input("id", sql.BigInt, requesterId))).recordset[0]?.department;
+      erpDepartment = suggestDepartment(personDepartment, options.data.departments ?? []);
+      if (!erpDepartment) { const message = "Choose the ERP department for this PR, then send it."; await recordError(prId, message); return { sent: false, kind: "department_required", message }; }
+      await database.query(`UPDATE dbo.mat_prs SET erp_department=@department WHERE id=@id;`, (r) => { r.input("department", sql.NVarChar(50), erpDepartment); r.input("id", sql.BigInt, prId); });
+    }
+    const detail = (await database.query<Record<string, unknown>>(`SELECT p.project_no,p.name project_name,b.bom_no FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id INNER JOIN dbo.boms b ON b.id=pr.bom_id WHERE pr.id=@id;
+      SELECT l.line_type,l.item_code,l.part_no,l.description,l.brand,l.qty,l.unit,l.unit_price,l.remark,l.budget_module,COALESCE(bi.item_code,ci.item_code,bl.description) original_code
+      FROM dbo.mat_pr_lines l LEFT JOIN dbo.bom_lines bl ON bl.id=l.bom_line_id LEFT JOIN dbo.mat_items bi ON bi.id=bl.item_id LEFT JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id
+      WHERE l.pr_id=@id ORDER BY l.id;`, (r) => r.input("id", sql.BigInt, prId)));
+    const project = (detail.recordsets[0]?.[0] ?? {}) as Record<string, unknown>;
+    const lines = (detail.recordsets[1] ?? []).map((row) => { const line = row as Record<string, unknown>; return { line_type: String(line.line_type), item_code: String(line.item_code ?? ""),
+      part_no: String(line.part_no ?? ""), description: String(line.description ?? ""), brand: String(line.brand ?? ""), qty: Number(line.qty), unit: String(line.unit ?? ""),
+      unit_price: Number(line.unit_price), remark: line.remark === null ? null : String(line.remark), budget_module: String(line.budget_module ?? ""),
+      original_code: line.original_code === null ? null : String(line.original_code) } satisfies ErpLine; });
+    const args = erpRequestArguments({ pr_no: prepared.h.pr_no, erp_ref: prepared.ref, erp_department: erpDepartment, required_date: prepared.h.required_date, purpose: prepared.h.purpose,
+      project_no: String(project.project_no ?? ""), project_name: String(project.project_name ?? ""), bom_no: String(project.bom_no ?? "") }, lines, erp.appBaseUrl);
+    const created = await erp.gateway.call<{ created: boolean; request: ErpRequest }>(subject, "purchase_request_create", args);
+    if (!created.ok) { await recordError(prId, describeErpFailure(created)); return { sent: false, kind: created.kind, message: describeErpFailure(created) }; }
+    await recordErp(prId, "Approved", created.data.request, actorId);
+    await database.transaction((transaction) => insertMaterialAudit(transaction, { id: actorId, role: "System" } as CurrentUser, "Sent to the ERP", "PR", prId, prepared.h.pr_no, null,
+      { erpPrNo: created.data.request.pr_no, erpStatus: created.data.request.status, created: created.data.created }, { projectId: Number(prepared.h.project_id) }));
+    return { sent: true, prNo: created.data.request.pr_no };
+  };
   app.get("/api/v1/purchase-requisitions", async (request) => { await users.demandPermission(request, "procurement.read"); const actor = await users.required(request); const q = request.query as Record<string, unknown>;
     const projectId = optionalPositiveLong(q.projectId, "Project id"); const status = optionalText(q.status, 30, "Status"); const waiting = booleanQuery(q.waitingForMe, false);
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT pr.id,pr.pr_no,pr.project_id,p.project_no,p.name project_name,pr.bom_id,b.bom_no,pr.requested_by,ru.name requested_by_name,
-      pr.priority,pr.required_date,pr.status,pr.submitted_at,pr.erp_po_ref,lines.line_count,lines.amount,lines.estimate_amount,lines.missing_suppliers,lines.substitutes,lines.unplanned,
+      pr.priority,pr.required_date,pr.status,pr.submitted_at,pr.erp_po_ref,pr.erp_pr_no,pr.erp_status,pr.erp_status_label,pr.erp_url,pr.erp_error,
+      lines.line_count,lines.amount,lines.estimate_amount,lines.substitutes,lines.unplanned,
       cs.name current_step,cs.approver_role,cs.approver_id,au.name approver_name,pr.row_version FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id
       INNER JOIN dbo.boms b ON b.id=pr.bom_id INNER JOIN dbo.users ru ON ru.id=pr.requested_by
       OUTER APPLY(SELECT COUNT(*) line_count,COALESCE(SUM(l.line_total),0) amount,COALESCE(SUM(l.estimate_total),0) estimate_amount,
-        SUM(CASE WHEN l.supplier_id IS NULL THEN 1 ELSE 0 END) missing_suppliers,SUM(CASE WHEN l.line_type=N'Substitute' THEN 1 ELSE 0 END) substitutes,
+        SUM(CASE WHEN l.line_type=N'Substitute' THEN 1 ELSE 0 END) substitutes,
         SUM(CASE WHEN l.line_type=N'Unplanned' THEN 1 ELSE 0 END) unplanned FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id) lines
       OUTER APPLY(SELECT TOP(1) s.name,s.approver_role,s.approver_id FROM dbo.mat_pr_approval_steps s WHERE s.pr_id=pr.id AND s.status=N'Current' ORDER BY s.sequence) cs
       LEFT JOIN dbo.users au ON au.id=cs.approver_id WHERE pr.deleted_at IS NULL AND (@project IS NULL OR pr.project_id=@project) AND (@status IS NULL OR pr.status=@status)
@@ -126,7 +195,8 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     return result.recordset.map((row) => { const amount = Number(row.amount), estimate = Number(row.estimate_amount); return { id: Number(row.id), number: row.pr_no, projectId: Number(row.project_id), projectNumber: row.project_no,
       projectName: row.project_name, bomId: Number(row.bom_id), bomNumber: row.bom_no, requestedById: Number(row.requested_by), requestedByName: row.requested_by_name, priority: row.priority,
       requiredDate: row.required_date, status: row.status, submittedAt: row.submitted_at, erpPoRef: row.erp_po_ref, lineCount: Number(row.line_count), amount, estimateAmount: estimate,
-      missingSuppliers: Number(row.missing_suppliers ?? 0), substituteLines: Number(row.substitutes ?? 0), unplannedLines: Number(row.unplanned ?? 0),
+      substituteLines: Number(row.substitutes ?? 0), unplannedLines: Number(row.unplanned ?? 0),
+      erp: { prNo: row.erp_pr_no ?? null, status: row.erp_status ?? null, statusLabel: row.erp_status_label ?? null, url: row.erp_url ?? null, error: row.erp_error ?? null },
       variancePercent: estimate > 0 ? Math.round(((amount - estimate) / estimate * 100) * 100) / 100 : 0, currentStep: row.current_step, currentApproverRole: row.approver_role,
       currentApproverId: row.approver_id === null ? null : Number(row.approver_id), currentApproverName: row.approver_name, rowVersion: row.row_version.toString("base64") }; });
   });
@@ -153,12 +223,13 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       const modules = (await moduleBudgets(transaction, Number(h.bom_id), id)).filter((module) => module.thisRequest > 0);
       const flags = await procurementRuleFlags(transaction, id);
       return { purchaseRequisition: { id: Number(h.id), number: h.pr_no, projectId: Number(h.project_id), bomId: Number(h.bom_id), requestedBy: Number(h.requested_by), status: h.status,
-        priority: h.priority, requiredDate: h.required_date, erpPoRef: h.erp_po_ref }, lines, steps, modules, ruleFlags: flags }; });
+        priority: h.priority, requiredDate: h.required_date, erpPoRef: h.erp_po_ref }, erp: { ...erpView(h), enabled: Boolean(erp) }, lines, steps, modules, ruleFlags: flags }; });
   });
 
   app.post("/api/v1/purchase-requisitions", async (request, reply) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const body = bodyObject(request.body);
     const bomId = requiredInteger(body.bomId, "BOM", 1); const priority = oneOf(requiredText(body.priority, 30, "Priority"), "Priority", ["Normal", "High", "Emergency"]);
     const requiredDate = parseDateOnly(body.requiredDate, "Required date")!; const purpose = optionalBodyText(body.purpose, 20_000, "Purpose"); const lines = parseLines(body.lines); const today = todayIn(config.businessTimeZone);
+    const erpDepartment = optionalBodyText(body.erpDepartment, 50, "ERP department");
     const created = await database.transaction(async (transaction) => { const lookup = new sql.Request(transaction); lookup.input("bom", sql.BigInt, bomId); const bom = (await lookup.query<{ project_id: number | string; status: string }>(`SELECT project_id,status FROM dbo.boms WITH (UPDLOCK,HOLDLOCK) WHERE id=@bom AND deleted_at IS NULL;`)).recordset[0];
       if (!bom) throw new ApiError(404, "bom_not_found", "BOM not found."); if (bom.status !== "Released") throw new ApiError(409, "bom_not_released", `A requisition can only be raised against a released BOM; this one is '${bom.status}'.`);
       const projectId = Number(bom.project_id); await demandProjectScope(database, actor, projectId, transaction);
@@ -167,8 +238,9 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       const number = await issueDocumentNumber(transaction, "PR", today); const insert = new sql.Request(transaction);
       insert.input("number", sql.NVarChar(30), number); insert.input("project", sql.BigInt, projectId); insert.input("bom", sql.BigInt, bomId); insert.input("actor", sql.BigInt, actor.id);
       insert.input("priority", sql.NVarChar(30), priority); insert.input("required", sql.Date, requiredDate); insert.input("purpose", sql.NVarChar(sql.MAX), purpose);
-      const pr = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.mat_prs(pr_no,project_id,bom_id,requested_by,priority,required_date,purpose,status,created_by,updated_by)
-        OUTPUT inserted.id,inserted.row_version VALUES(@number,@project,@bom,@actor,@priority,@required,@purpose,N'Draft',@actor,@actor);`)).recordset[0]!; const id = Number(pr.id);
+      insert.input("department", sql.NVarChar(50), erpDepartment);
+      const pr = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.mat_prs(pr_no,project_id,bom_id,requested_by,priority,required_date,purpose,status,created_by,updated_by,erp_department)
+        OUTPUT inserted.id,inserted.row_version VALUES(@number,@project,@bom,@actor,@priority,@required,@purpose,N'Draft',@actor,@actor,@department);`)).recordset[0]!; const id = Number(pr.id);
       await insertLines(transaction, id, bomId, planned); const totalRequest = new sql.Request(transaction); totalRequest.input("id", sql.BigInt, id);
       const total = Number((await totalRequest.query<{ total: number | string }>(`SELECT COALESCE(SUM(line_total),0) total FROM dbo.mat_pr_lines WHERE pr_id=@id;`)).recordset[0]!.total);
       const kinds = Object.fromEntries(lineTypes.map((kind) => [kind, planned.filter((line) => line.lineType === kind).length]));
@@ -192,43 +264,67 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   app.post("/api/v1/purchase-requisitions/:id/decide", async (request) => { await users.demandPermission(request, "procurement.approve"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
     // No "Request Changes": a PR's lines cannot be edited, so one sent back to Draft could only be resubmitted as it was. Reject it with the reason instead.
     const body = bodyObject(request.body); const decision = oneOf(requiredText(body.decision, 30, "Decision"), "Decision", ["Approve", "Reject"]); const comment = optionalBodyText(body.comment, 20_000, "Comment");
-    return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
+    const decided = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
       if (h.status !== "In Approval") throw new ApiError(409, "pr_not_in_approval", `This requisition is '${h.status}' and has no step waiting for a decision.`); if (Number(h.requested_by) === actor.id) throw new ApiError(403, "self_approval_forbidden", "The requester cannot decide their own requisition.");
       const currentRequest = new sql.Request(transaction); currentRequest.input("pr", sql.BigInt, id); const current = (await currentRequest.query<Record<string, unknown>>(`SELECT TOP(1) id,sequence,name,approver_role,approver_id,status FROM dbo.mat_pr_approval_steps WITH (UPDLOCK,HOLDLOCK) WHERE pr_id=@pr AND status=N'Current' ORDER BY sequence;`)).recordset[0];
       if (!current) throw new ApiError(409, "no_current_step", "No approval step is waiting for a decision."); const isNamed = Number(current.approver_id) === actor.id; const isRole = current.approver_id === null && rolesOf(actor).includes(String(current.approver_role ?? ""));
       if (!isNamed && !isRole && !hasRole(actor, "Admin")) throw new ApiError(403, "not_the_approver", `'${current.name}' is waiting for ${current.approver_id !== null ? "another user" : current.approver_role}.`);
-      // Purchasing chooses the suppliers the engineer left open; the PR cannot move on until every line has one.
-      if (decision === "Approve" && current.name === PURCHASING_REVIEW_STEP) { const missing = await missingSuppliers(transaction, id);
-        if (missing) throw new ApiError(409, "suppliers_required", `Choose a supplier for every line before approving Purchasing Review; ${missing} line(s) have none.`, { missing }); }
       const flags = await procurementRuleFlags(transaction, id); if ((decision !== "Approve" || flags.length) && !comment) throw new ApiError(400, "comment_required", flags.length && decision === "Approve" ? "This requisition is flagged; approving it requires a comment for the audit trail." : "A comment is required for this decision.");
       const step = new sql.Request(transaction); step.input("decision", sql.NVarChar(30), decision); step.input("comment", sql.NVarChar(sql.MAX), comment); step.input("actor", sql.BigInt, actor.id); step.input("step", sql.BigInt, Number(current.id));
       if ((await step.query(`UPDATE dbo.mat_pr_approval_steps SET status=N'Completed',decision=@decision,comment=@comment,acted_at=SYSUTCDATETIME(),approver_id=COALESCE(approver_id,@actor) WHERE id=@step AND status=N'Current';`)).rowsAffected[0] === 0) throw new ApiError(409, "concurrency_conflict", "This step was already decided. Reload and try again.");
       let nextStatus: string; if (decision === "Reject") { nextStatus = "Rejected"; const cancel = new sql.Request(transaction); cancel.input("pr", sql.BigInt, id); cancel.input("sequence", sql.Int, Number(current.sequence));
         await cancel.query(`UPDATE dbo.mat_pr_approval_steps SET status=N'Not Required' WHERE pr_id=@pr AND sequence>@sequence AND status IN(N'Pending',N'Current');`); }
-      else { const advance = new sql.Request(transaction); advance.input("pr", sql.BigInt, id); advance.input("po", sql.NVarChar(100), poCreationStep); const result = await advance.query(`UPDATE s SET s.status=N'Current' FROM dbo.mat_pr_approval_steps s WHERE s.pr_id=@pr AND s.status=N'Pending' AND s.name<>@po
-        AND s.sequence=(SELECT MIN(x.sequence) FROM dbo.mat_pr_approval_steps x WHERE x.pr_id=@pr AND x.status=N'Pending' AND x.name<>@po);`); nextStatus = (result.rowsAffected[0] ?? 0) > 0 ? "In Approval" : "Approved"; }
+      else { const advance = new sql.Request(transaction); advance.input("pr", sql.BigInt, id); advance.input("erp", sql.NVarChar(100), ERP_STEP); advance.input("po", sql.NVarChar(100), LEGACY_PO_CREATION_STEP);
+        // The ERP step (and the PO step of PRs routed before the ERP) is done by the system, never waited on by a person.
+        const result = await advance.query(`UPDATE s SET s.status=N'Current' FROM dbo.mat_pr_approval_steps s WHERE s.pr_id=@pr AND s.status=N'Pending' AND s.name NOT IN(@erp,@po)
+        AND s.sequence=(SELECT MIN(x.sequence) FROM dbo.mat_pr_approval_steps x WHERE x.pr_id=@pr AND x.status=N'Pending' AND x.name NOT IN(@erp,@po));`); nextStatus = (result.rowsAffected[0] ?? 0) > 0 ? "In Approval" : "Approved"; }
       const update = new sql.Request(transaction); update.input("status", sql.NVarChar(30), nextStatus); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id);
       const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET status=@status,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL;`)).recordset[0]!;
       await insertMaterialAudit(transaction, actor, `${decision} — ${current.name}`, "PR", id, h.pr_no, { step: current.name, status: h.status }, { status: nextStatus }, { projectId: Number(h.project_id), reason: comment, approverId: actor.id });
-      return { id, status: nextStatus, step: current.name, decision, rowVersion: row.row_version.toString("base64") }; });
+      return { id, number: h.pr_no, requestedBy: Number(h.requested_by), status: nextStatus, step: current.name, decision, rowVersion: row.row_version.toString("base64") }; });
+    // Fully approved: send it to the ERP as the requester now. If their TMT ID session has ended (or the ERP says no), the PR
+    // stays Approved and the requester is told to send it themselves.
+    let erpOutcome: ErpOutcome | null = null;
+    if (decided.status === "Approved" && erp) {
+      erpOutcome = await sendToErp(id, decided.requestedBy, actor.id, null).catch((error: unknown) => ({ sent: false, message: error instanceof Error ? error.message : String(error) }));
+      if (!erpOutcome.sent) await database.transaction((transaction) => notifyUsers(transaction, [decided.requestedBy], "PR_ERP_SEND", `PR ${decided.number} อนุมัติแล้ว · กดส่งเข้า ERP`,
+        erpOutcome?.message ?? "", "PurchaseRequisition", id, `pr-erp-send:${id}:${Date.now()}`));
+    }
+    return { id: decided.id, status: decided.status, step: decided.step, decision: decided.decision, rowVersion: decided.rowVersion, ...(erpOutcome ? { erp: erpOutcome } : {}) };
   });
 
-  // Purchasing sets the supplier of many lines at once, while the PR is still in approval or approved and not yet ordered.
-  app.put("/api/v1/purchase-requisitions/:id/suppliers", async (request) => { await users.demandPermission(request, "procurement.order"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
-    const body = bodyObject(request.body); if (!Array.isArray(body.assignments) || !body.assignments.length) throw new ApiError(400, "validation_failed", "At least one supplier assignment is required.");
-    if (body.assignments.length > MAX_PR_LINES) throw new ApiError(400, "validation_failed", `At most ${MAX_PR_LINES} lines can be assigned at once.`);
-    const assignments = body.assignments.map((raw: unknown) => { const item = bodyObject(raw); return { lineId: requiredInteger(item.lineId, "PR line", 1), supplierId: requiredInteger(item.supplierId, "Supplier", 1) }; });
-    if (new Set(assignments.map((item) => item.lineId)).size !== assignments.length) throw new ApiError(400, "validation_failed", "A PR line can appear only once.");
-    return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
-      if (h.status !== "In Approval" && h.status !== "Approved") throw new ApiError(409, "pr_not_open", `Suppliers are chosen while a requisition is in approval or approved; this one is '${h.status}'.`);
-      await assertActiveSuppliers(transaction, assignments.map((item) => item.supplierId));
-      const update = new sql.Request(transaction); update.input("pr", sql.BigInt, id); update.input("assignments", sql.NVarChar(sql.MAX), JSON.stringify(assignments));
-      const changed = (await update.query(`UPDATE l SET l.supplier_id=j.supplier_id FROM dbo.mat_pr_lines l
-        INNER JOIN OPENJSON(@assignments) WITH (line_id bigint '$.lineId', supplier_id bigint '$.supplierId') j ON j.line_id=l.id WHERE l.pr_id=@pr;`)).rowsAffected[0] ?? 0;
-      if (changed !== assignments.length) throw new ApiError(404, "pr_line_not_found", "A line does not belong to this requisition. Reload and try again.");
-      const missing = await missingSuppliers(transaction, id);
-      await insertMaterialAudit(transaction, actor, "Assigned suppliers", "PR", id, h.pr_no, null, { lines: changed, withoutSupplier: missing }, { projectId: Number(h.project_id) });
-      return { id, assigned: changed, missingSuppliers: missing }; });
+  // The approved PR's requester sends it (again) to the ERP, choosing the ERP department when it could not be matched.
+  app.post("/api/v1/purchase-requisitions/:id/erp-send", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
+    const body = bodyObject(request.body ?? {}); const department = optionalBodyText(body.department, 50, "ERP department");
+    if (!erp) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
+    const header = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction); return h; });
+    // The ERP names whoever's token sends the PR as its requester, so only the requester may send it.
+    if (Number(header.requested_by) !== actor.id) throw new ApiError(403, "requester_required", "Only the requester can send this requisition to the ERP: the ERP names the sender as the requester.");
+    const outcome = await sendToErp(id, actor.id, actor.id, department);
+    if (!outcome.sent && outcome.kind === "validation") throw new ApiError(422, "erp_validation_failed", outcome.message ?? "The ERP refused the requisition.");
+    return outcome;
+  });
+
+  // Reads the PR from the ERP with the viewer's own token: the ERP allows no background polling and sends no webhook.
+  app.post("/api/v1/purchase-requisitions/:id/erp-sync", async (request) => { await users.demandPermission(request, "procurement.read"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
+    if (!erp) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
+    const header = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction); return h; });
+    if (!header.erp_ref || !header.erp_pr_no) return { synced: false, erp: erpView(header) };
+    if (isFinalErpStatus(header.erp_status)) return { synced: true, erp: erpView(header) };
+    const result = await erp.gateway.call<{ request: ErpRequest }>(actor.entraObjectId, "purchase_request_get", { external_ref: header.erp_ref });
+    if (!result.ok) return { synced: false, message: result.message, kind: result.kind, erp: erpView(header) };
+    const status = await recordErp(id, header.status, result.data.request, actor.id);
+    const fresh = await database.transaction((transaction) => readHeader(transaction, id));
+    return { synced: true, status, erp: erpView(fresh) };
+  });
+
+  // The ERP's departments for the PR sheet, with the one matching the signed-in person's department preselected.
+  app.get("/api/v1/erp/purchasing/options", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request);
+    if (!erp) return { enabled: false, departments: [], suggestedDepartment: null };
+    const result = await erp.gateway.call<{ departments?: ErpDepartment[] }>(actor.entraObjectId, "purchasing_options_get", {});
+    if (!result.ok) return { enabled: true, departments: [], suggestedDepartment: null, message: result.message, kind: result.kind };
+    const departments = result.data.departments ?? [];
+    return { enabled: true, departments: departments.map((item) => ({ value: item.value, label: item.label })), suggestedDepartment: suggestDepartment(actor.department, departments) };
   });
 
   // A draft nobody will submit still counts as an open PR against its BOM lines, which blocks a new request for them. Its requester can withdraw it.
@@ -260,18 +356,4 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     return { waiting: Number(result.recordset[0]?.waiting ?? 0) };
   });
 
-  // The company ERP raises the purchase order. Purchasing records its number here, which closes the requisition; nothing is ordered in this app.
-  app.post("/api/v1/purchase-requisitions/:id/erp-order", async (request) => { await users.demandPermission(request, "procurement.order"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
-    const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const reference = requiredText(body.erpPoRef, 200, "ERP PO number"); const comment = optionalBodyText(body.comment, 20_000, "Comment");
-    return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
-      if (h.status !== "Approved") throw new ApiError(409, "pr_not_approved", `Only an approved requisition can be ordered; this one is '${h.status}'.`);
-      const missing = await missingSuppliers(transaction, id); if (missing) throw new ApiError(409, "suppliers_required", `${missing} line(s) have no supplier yet.`, { missing });
-      const complete = new sql.Request(transaction); complete.input("comment", sql.NVarChar(sql.MAX), comment ? `${reference} · ${comment}` : reference); complete.input("actor", sql.BigInt, actor.id); complete.input("pr", sql.BigInt, id); complete.input("step", sql.NVarChar(100), poCreationStep);
-      await complete.query(`UPDATE dbo.mat_pr_approval_steps SET status=N'Completed',decision=N'Ordered in ERP',comment=@comment,acted_at=SYSUTCDATETIME(),approver_id=COALESCE(approver_id,@actor) WHERE pr_id=@pr AND name=@step;`);
-      const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version); update.input("reference", sql.NVarChar(200), reference);
-      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET status=N'Converted to PO',erp_po_ref=@reference,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
-      if (!row) throw new ApiError(409, "concurrency_conflict", "This requisition changed. Reload and try again.");
-      await insertMaterialAudit(transaction, actor, "Ordered in ERP", "PR", id, h.pr_no, { status: "Approved" }, { status: "Converted to PO", erpPoRef: reference }, { projectId: Number(h.project_id), reason: comment });
-      return { id, status: "Converted to PO", erpPoRef: reference, rowVersion: row.row_version.toString("base64") }; });
-  });
 }

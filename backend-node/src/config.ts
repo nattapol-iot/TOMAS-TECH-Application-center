@@ -71,6 +71,8 @@ export type AppConfig = {
   credentialVault?: VaultKeys;
   /** Site Monitor agents reaching the API from customer sites through a public hostname. */
   siteMonitor?: SiteMonitorConfig;
+  /** The Pegasus ERP MCP endpoint approved requisitions are sent to (PEGASUS_MCP_URL; "off" disables). */
+  pegasusMcpUrl?: string;
 };
 
 export type SiteMonitorConfig = {
@@ -520,6 +522,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   const tmthub = loadTmthubConfig(env);
   const credentialVault = parseVaultKeys(env.CREDENTIAL_VAULT_KEYS);
+  const pegasusRaw = optional(env, "PEGASUS_MCP_URL") ?? "https://pegasus-erp.tomastc.com/mcp";
+  if (pegasusRaw !== "off" && !/^https:\/\/[^\s/]+\/\S*$/.test(pegasusRaw)) throw new Error("PEGASUS_MCP_URL must be an https URL, or off.");
   return {
     environment,
     host: optional(env, "HOST") ?? "127.0.0.1",
@@ -567,5 +571,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(tmthub ? { tmthub } : {}),
     ...(credentialVault ? { credentialVault } : {}),
     ...(siteMonitor ? { siteMonitor } : {}),
+    ...(pegasusRaw !== "off" ? { pegasusMcpUrl: pegasusRaw } : {}),
   };
 }

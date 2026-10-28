@@ -2,24 +2,24 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c177aeff`; generated, do not edit. [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `89e3c066`; generated, do not edit. [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/auth/login` | 45–66 |
-| GET | `/api/auth/callback` | 68–131 |
-| GET | `/api/auth/logout` | 133–158 |
-| GET | `/api/me` | 160–178 |
+| GET | `/api/auth/login` | 49–70 |
+| GET | `/api/auth/callback` | 72–143 |
+| GET | `/api/auth/logout` | 145–171 |
+| GET | `/api/me` | 173–191 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `unixSeconds` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 27–31 |
-| `claimText` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 33–35 |
-| `registerTmtIdAuthRoutes` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 37–179 |
+| `unixSeconds` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 29–33 |
+| `claimText` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 35–37 |
+| `registerTmtIdAuthRoutes` | [backend-node/src/routes/auth-tmt-id.ts](<../../../backend-node/src/routes/auth-tmt-id.ts>) | 39–192 |
 
 ## Direct local dependencies
 
@@ -30,6 +30,8 @@ Evidence: source snapshot `c177aeff`; generated, do not edit. [backend-node/src/
 - [backend-node/src/tmt-id/runtime.ts](<../../../backend-node/src/tmt-id/runtime.ts>)
 - [backend-node/src/tmt-id/user-provisioning.ts](<../../../backend-node/src/tmt-id/user-provisioning.ts>)
 - [backend-node/src/tmt-id/types.ts](<../../../backend-node/src/tmt-id/types.ts>)
+- [backend-node/src/tmt-id/token-vault.ts](<../../../backend-node/src/tmt-id/token-vault.ts>)
+- [backend-node/src/erp-purchasing.ts](<../../../backend-node/src/erp-purchasing.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 

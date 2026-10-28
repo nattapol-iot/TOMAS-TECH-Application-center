@@ -590,6 +590,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         .catch(() => { void refreshNotifications(); });
     }
     if (item.entityType === "GoodsReceipt") setView("receiving");
+    // An approved PR that could not go to the ERP by itself waits for its requester on the PR list.
+    if (item.entityType === "PurchaseRequisition") setView("purchase");
     if (item.entityType === "SupportTicket" && item.entityId) openSupport(item.entityId);
     // A new project, or a task given to you on one, opens that project's plan.
     if (item.entityType === "Project" && item.entityId) openProjectSchedule(item.entityId);

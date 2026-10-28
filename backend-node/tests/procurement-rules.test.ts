@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import type { AppConfig } from "../src/config.js";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { approvalSteps, type BomLineForRequest, MATERIAL_CATEGORY_CODES, MAX_PR_LINES, moduleBudgetFlags, PO_CREATION_STEP, planPrLines, type PrLineInput,
+import { approvalSteps, type BomLineForRequest, MATERIAL_CATEGORY_CODES, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
   remainingToRequest, type RuleFlag } from "../src/procurement-rules.js";
 import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requisitions.js";
 import type { CurrentUserService } from "../src/users.js";
@@ -13,9 +13,9 @@ const overByPm: RuleFlag = { code: "over_module_budget", level: "manager", text:
 const overByManagement: RuleFlag = { code: "over_module_budget", level: "management", text: "Panel: 5,000 THB over budget (50.0%)" };
 const names = (steps: ReturnType<typeof approvalSteps>) => steps.map((step) => step.name);
 
-test("a PR needs the project's PM and Purchasing, then Purchasing raises the order", () => {
+test("a PR needs the project's PM; then it goes to the ERP, where Purchasing collects quotes and orders", () => {
   const steps = approvalSteps(7, 3, []);
-  assert.deepEqual(names(steps), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", PO_CREATION_STEP]);
+  assert.deepEqual(names(steps), ["Submitted by Requester", "Project Manager Approval", ERP_STEP]);
   assert.deepEqual(steps[1], { name: "Project Manager Approval", role: null, approver: 3, rule: null, status: "Current" });
   assert.equal(steps[0]!.approver, 7);
   assert.equal(steps.filter((step) => step.status === "Current").length, 1);
@@ -32,17 +32,17 @@ test("a PM raising their own PR, or a project without a PM, goes to the Engineer
 
 test("a module up to 10% over is the PM's decision; the PM step names it and nobody else is added", () => {
   const steps = approvalSteps(7, 3, [overByPm]);
-  assert.deepEqual(names(steps), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", PO_CREATION_STEP]);
+  assert.deepEqual(names(steps), ["Submitted by Requester", "Project Manager Approval", ERP_STEP]);
   assert.equal(steps[1]!.rule, overByPm.text);
 });
 
 test("more than 10% over adds the Engineering Manager once, never a second Engineering Manager step", () => {
   const flagged = approvalSteps(7, 3, [overByManagement]);
-  assert.deepEqual(names(flagged), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", "Management Approval", PO_CREATION_STEP]);
-  assert.equal(flagged[3]!.rule, overByManagement.text);
+  assert.deepEqual(names(flagged), ["Submitted by Requester", "Project Manager Approval", "Management Approval", ERP_STEP]);
+  assert.equal(flagged[2]!.rule, overByManagement.text);
   // The PM is the requester, so the Engineering Manager already decides the project step.
   const own = approvalSteps(7, 7, [overByManagement]);
-  assert.deepEqual(names(own), ["Submitted by Requester", "Project Manager Approval", "Purchasing Review", PO_CREATION_STEP]);
+  assert.deepEqual(names(own), ["Submitted by Requester", "Project Manager Approval", ERP_STEP]);
   assert.equal(own[1]!.rule, overByManagement.text);
 });
 
@@ -155,8 +155,6 @@ test("input mistakes are refused before any database work, and name the line", a
         payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [line, line, { ...line, quantity: -1 }] } },
       { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 1: Line type/,
         payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [{ ...line, lineType: "Alternative" }] } },
-      { method: "PUT", url: "/api/v1/purchase-requisitions/9/suppliers", payload: { assignments: [{ lineId: 1, supplierId: 2 }, { lineId: 1, supplierId: 3 }] }, status: 400 },
-      { method: "POST", url: "/api/v1/purchase-requisitions/9/erp-order", payload: { rowVersion: "AAAAAAAAB9E=" }, status: 400, message: /ERP PO number/ },
     ];
     for (const item of cases) {
       const response = await server.inject({ method: item.method, url: item.url, payload: item.payload as object });
@@ -168,17 +166,21 @@ test("input mistakes are refused before any database work, and name the line", a
   } finally { await server.close(); }
 });
 
-test("only Purchasing sets suppliers or records the ERP order, and nothing is converted in this app any more", async () => {
+test("Purchasing no longer orders in this app; ERP calls need the requester and a configured ERP", async () => {
   const { state, database } = untouchedDatabase();
   const refused = app(database, denied);
   const allowed = app(database, approver);
   try {
     for (const call of [
-      { method: "PUT" as const, url: "/api/v1/purchase-requisitions/9/suppliers", payload: { assignments: [{ lineId: 1, supplierId: 2 }] } },
-      { method: "POST" as const, url: "/api/v1/purchase-requisitions/9/erp-order", payload: { rowVersion: "AAAAAAAAB9E=", erpPoRef: "PO-ERP-1" } },
+      { method: "POST" as const, url: "/api/v1/purchase-requisitions/9/erp-send", payload: {} },
+      { method: "POST" as const, url: "/api/v1/purchase-requisitions/9/erp-sync", payload: {} },
       { method: "POST" as const, url: "/api/v1/purchase-requisitions/9/cancel", payload: { rowVersion: "AAAAAAAAB9E=" } },
     ]) assert.equal((await refused.inject(call)).statusCode, 403, call.url);
-    assert.equal((await allowed.inject({ method: "POST", url: "/api/v1/purchase-requisitions/9/convert", payload: { rowVersion: "AAAAAAAAB9E=" } })).statusCode, 404);
+    for (const url of ["/api/v1/purchase-requisitions/9/convert", "/api/v1/purchase-requisitions/9/erp-order"]) assert.equal((await allowed.inject({ method: "POST", url, payload: { rowVersion: "AAAAAAAAB9E=" } })).statusCode, 404, url);
+    assert.equal((await allowed.inject({ method: "PUT", url: "/api/v1/purchase-requisitions/9/suppliers", payload: { assignments: [] } })).statusCode, 404);
+    // Without an ERP connection (a Team Test server) sending is refused before any database work, and the sheet simply hides the ERP fields.
+    assert.equal((await allowed.inject({ method: "POST", url: "/api/v1/purchase-requisitions/9/erp-send", payload: {} })).statusCode, 503);
+    assert.deepEqual((await allowed.inject({ method: "GET", url: "/api/v1/erp/purchasing/options" })).json(), { enabled: false, departments: [], suggestedDepartment: null });
     assert.equal(state.touched, false);
   } finally { await refused.close(); await allowed.close(); }
 });

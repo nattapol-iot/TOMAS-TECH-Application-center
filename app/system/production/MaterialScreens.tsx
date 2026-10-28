@@ -7,7 +7,7 @@ import { HistoricalPrPanel } from "./HistoricalPrPanel";
 import { PurchaseRequestEditor } from "./PurchaseRequestEditor";
 import { newestProjectFirst, projectOverviewPath } from "../project-overview-client";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
 import { useEndpoint } from "./material-endpoint";
 import {
@@ -116,7 +116,7 @@ type PurchaseRequisition = {
   submittedAt: string | null;
   erpPoRef: string | null;
   lineCount: number;
-  missingSuppliers: number;
+  erp: { prNo: string | null; status: string | null; statusLabel: string | null; url: string | null; error: string | null };
   substituteLines: number;
   unplannedLines: number;
   amount: number;
@@ -128,6 +128,11 @@ type PurchaseRequisition = {
   currentApproverName: string | null;
   rowVersion: string;
 };
+
+type ErpView = { ref: string | null; department: string | null; prNo: string | null; status: string | null; statusLabel: string | null; url: string | null;
+  revisionNo: number | null; rejectionReason: string | null; poNo: string | null; syncedAt: string | null; error: string | null };
+type ErpOutcome = { sent: boolean; prNo?: string; message?: string; kind?: string };
+type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
 
 type PurchaseRequisitionDetail = {
   purchaseRequisition: {
@@ -141,6 +146,7 @@ type PurchaseRequisitionDetail = {
     requiredDate: string;
     erpPoRef: string | null;
   };
+  erp: ErpView & { enabled: boolean };
   lines: Array<{
     id: number;
     lineType: "Planned" | "Substitute" | "Unplanned";
@@ -647,18 +653,16 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const boms = useEndpoint<BomSummary[]>(creating ? "/api/v1/boms/" : null, EMPTY);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [decision, setDecision] = useState<PrAction | null>(null);
-  const [orderItem, setOrderItem] = useState<PurchaseRequisition | null>(null);
   const [cancelItem, setCancelItem] = useState<PurchaseRequisition | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
   const canRequest = hasPermission(bootstrap, "procurement.request");
   const canApprove = hasPermission(bootstrap, "procurement.approve");
-  const canOrder = hasPermission(bootstrap, "procurement.order");
   // Every held role counts, as on the server: an approver by additional role must see the buttons too.
   const roles = bootstrap.user.roles;
   const isAdmin = roles.includes("Admin");
   const visible = useMemo(() => endpoint.data.filter((item) => (status === "All status" || item.status === status)
-    && (!search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.bomNumber} ${item.requestedByName} ${item.erpPoRef ?? ""}`, search))), [endpoint.data, search, status]);
+    && (!search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.bomNumber} ${item.requestedByName} ${item.erpPoRef ?? ""} ${item.erp.prNo ?? ""}`, search))), [endpoint.data, search, status]);
 
   const submit = async (item: PurchaseRequisition) => {
     if (!window.confirm(`${uiText("Submit")} ${item.number}?`)) return;
@@ -675,8 +679,9 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
     if (!decision) return;
     setBusyId(decision.item.id); setActionError("");
     try {
-      const result = await apiRequest<{ status: string }>(`/api/v1/purchase-requisitions/${decision.item.id}/decide`, body({ decision: decision.decision, comment }));
-      notify(`${decision.item.number}: ${result.status}`);
+      const result = await apiRequest<{ status: string; erp?: ErpOutcome }>(`/api/v1/purchase-requisitions/${decision.item.id}/decide`, body({ decision: decision.decision, comment }));
+      // A fully approved PR goes to the ERP as its requester; when that cannot happen now, the requester was told to send it.
+      notify(`${decision.item.number}: ${uiText(result.status)}${result.erp ? ` · ${result.erp.sent ? `ERP ${result.erp.prNo}` : uiText("ยังไม่ได้ส่ง ERP · แจ้งผู้ขอแล้ว")}` : ""}`);
       setDecision(null);
       endpoint.reload();
     } catch (error) { setActionError(toError(error)); }
@@ -706,109 +711,115 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
 
   return (
     <>
-      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วฝ่ายจัดซื้อเลือก Supplier และออก PO ใน ERP" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
+      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
       <HistoricalPrPanel canImport={canRequest} notify={notify} />
       <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={actionError} />
       <Panel title={`${visible.length} requisitions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project / BOM"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Lines"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => {
+        {visible.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project / BOM"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Lines"} /></th><th><LocalizedText text={"Amount"} /></th><th>ERP</th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => {
           const isCurrentApprover = item.status === "In Approval" && canApprove
             && item.requestedById !== bootstrap.user.id
             && (isAdmin || item.currentApproverId === bootstrap.user.id || (!item.currentApproverId && roles.includes(item.currentApproverRole ?? "")));
           const isOwnDraft = canRequest && item.status === "Draft" && (item.requestedById === bootstrap.user.id || isAdmin);
           const mix = [item.substituteLines ? `${uiText(PR_KIND_LABEL.Substitute)} ${item.substituteLines}` : "", item.unplannedLines ? `${uiText(PR_KIND_LABEL.Unplanned)} ${item.unplannedLines}` : ""].filter(Boolean).join(" · ");
-          return <tr key={item.id}><td><strong className="mono">{item.number}</strong><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span></div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}{mix ? <small className="muted">{mix}</small> : null}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td>{item.missingSuppliers ? <Badge tone="amber">{uiText("รอจัดซื้อเลือก")} {item.missingSuppliers}</Badge> : <Badge tone="green"><LocalizedText text={"ครบแล้ว"} /></Badge>}</td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td><td><Badge>{uiText(prStatusLabel(item.status))}</Badge>{item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}</td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{isOwnDraft ? <><button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => { void submit(item); }}><Icon name="send" /><LocalizedText text={"Submit"} /></button><button className="btn ghost sm" type="button" disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }}><Icon name="x" /><LocalizedText text={"Cancel PR"} /></button></> : null}{isCurrentApprover ? <><button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></> : null}{canOrder && item.status === "Approved" ? <button className="btn primary sm" type="button" onClick={() => setOrderItem(item)}><Icon name="truck" /><LocalizedText text={"บันทึก PO จาก ERP"} /></button> : null}</div></td></tr>;
+          return <tr key={item.id}><td><strong className="mono">{item.number}</strong><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span></div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}{mix ? <small className="muted">{mix}</small> : null}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td><ErpCell erp={item.erp} status={item.status} /></td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td><td><Badge>{uiText(prStatusLabel(item.status))}</Badge>{item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}</td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{isOwnDraft ? <><button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => { void submit(item); }}><Icon name="send" /><LocalizedText text={"Submit"} /></button><button className="btn ghost sm" type="button" disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }}><Icon name="x" /><LocalizedText text={"Cancel PR"} /></button></> : null}{isCurrentApprover ? <><button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></> : null}{item.status === "Approved" && !item.erp.prNo && item.requestedById === bootstrap.user.id ? <button className="btn primary sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="send" /><LocalizedText text={"ส่งเข้า ERP"} /></button> : null}</div></td></tr>;
         })}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="package" title="No purchase requisition found" message="Release a BOM, then create a requisition for its shortage lines" />}
       </Panel>
       {detailId ? <PrDetailModal id={detailId} bootstrap={bootstrap} notify={notify} onChanged={endpoint.reload} onClose={() => setDetailId(null)} /> : null}
       {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description={`${decision.item.currentStep || "Current approval step"} · ใส่เหตุผลเพื่อให้ audit trail ครบทุก approval rule`} confirmLabel={decision.decision} requireComment={decision.decision === "Reject"} busy={busyId === decision.item.id} error={actionError} onClose={() => { setDecision(null); setActionError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
       {cancelItem ? <CommentPrompt title={`${uiText("Cancel PR")} ${cancelItem.number}`} description="PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก" confirmLabel={uiText("Cancel PR")} busy={busyId === cancelItem.id} error={actionError} onClose={() => { setCancelItem(null); setActionError(""); }} onConfirm={(reason) => { void cancel(reason); }} /> : null}
-      {orderItem ? <ErpOrderModal item={orderItem} onClose={() => setOrderItem(null)} onOrdered={(reference) => { notify(`${orderItem.number}: ${reference}`); setOrderItem(null); endpoint.reload(); }} /> : null}
     </>
   );
 }
 
 const PR_DETAIL_PAGE = 100;
 
+const ERP_FINAL = ["CONVERTED", "REJECTED", "CANCELLED"];
+const ERP_TONE: Record<string, "green" | "amber" | "red" | "blue"> = { QUOTES_PENDING: "blue", PENDING_MANAGER: "amber", APPROVED: "blue", CONVERTED: "green", REJECTED: "red", CANCELLED: "red" };
+
+/** Where the PR stands in the ERP: its ERP number (a link into the ERP) and status, or that it still has to be sent. */
+function ErpCell({ erp, status }: { erp: PurchaseRequisition["erp"]; status: string }) {
+  if (erp.prNo) return <>{erp.url ? <a className="mono" href={erp.url} target="_blank" rel="noreferrer">{erp.prNo}</a> : <span className="mono">{erp.prNo}</span>}
+    <small className="muted">{erp.statusLabel ?? erp.status}</small></>;
+  if (status !== "Approved") return <span className="muted">—</span>;
+  return erp.error ? <Badge tone="red"><LocalizedText text={"ส่ง ERP ไม่สำเร็จ"} /></Badge> : <Badge tone="amber"><LocalizedText text={"รอส่ง ERP"} /></Badge>;
+}
+
 function PrDetailModal({ id, bootstrap, notify, onChanged, onClose }: { id: number; bootstrap: BootstrapData; notify: (message: string) => void; onChanged: () => void; onClose: () => void }) {
   const t = useUiText();
   const endpoint = useEndpoint<PurchaseRequisitionDetail | null>(`/api/v1/purchase-requisitions/${id}`, null);
   const detail = endpoint.data;
   const [page, setPage] = useState(1);
-  const [choices, setChoices] = useState<Record<number, number>>({});
-  const [picked, setPicked] = useState<Record<number, boolean>>({});
-  const [bulkSupplier, setBulkSupplier] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Purchasing chooses suppliers while the PR is in approval or approved; the engineer left them open.
-  const canAssign = Boolean(detail) && hasPermission(bootstrap, "procurement.order") && ["In Approval", "Approved"].includes(detail?.purchaseRequisition.status ?? "");
+  const [syncNote, setSyncNote] = useState("");
+  const erp = detail?.erp;
+  // Only the requester sends the PR: the ERP names whoever's token sends it as the requester.
+  const canSend = Boolean(erp?.enabled && !erp.prNo) && detail?.purchaseRequisition.status === "Approved" && detail.purchaseRequisition.requestedBy === bootstrap.user.id;
+  const [askDepartment, setAskDepartment] = useState(false);
+  const options = useEndpoint<ErpOptions | null>(canSend && (askDepartment || !erp?.department) ? "/api/v1/erp/purchasing/options" : null, null);
+  const [department, setDepartment] = useState("");
+  const chosenDepartment = department || erp?.department || options.data?.suggestedDepartment || "";
   const lines = detail?.lines ?? [];
   const pageCount = Math.max(1, Math.ceil(lines.length / PR_DETAIL_PAGE));
   const currentPage = Math.min(page, pageCount);
   const shown = lines.slice((currentPage - 1) * PR_DETAIL_PAGE, currentPage * PR_DETAIL_PAGE);
-  const supplierOf = (line: PurchaseRequisitionDetail["lines"][number]) => choices[line.id] ?? line.supplierId ?? 0;
-  const changes = lines.filter((line) => choices[line.id] && choices[line.id] !== line.supplierId);
-  const missing = lines.filter((line) => !supplierOf(line)).length;
-  const applyBulk = () => setChoices((current) => ({ ...current, ...Object.fromEntries(lines.filter((line) => picked[line.id]).map((line) => [line.id, bulkSupplier])) }));
-  const save = async () => {
+
+  // The ERP sends no webhook and allows no background polling, so its status is read when someone opens the PR, with their own token.
+  const synced = useRef(false);
+  const { reload } = endpoint;
+  useEffect(() => {
+    if (synced.current || !erp?.enabled || !erp.prNo || ERP_FINAL.includes(erp.status ?? "")) return;
+    synced.current = true;
+    void apiRequest<{ synced: boolean; status?: string; message?: string; erp: ErpView }>(`/api/v1/purchase-requisitions/${id}/erp-sync`, { method: "POST", body: "{}" })
+      .then((result) => {
+        if (!result.synced) { setSyncNote(result.message ?? ""); return; }
+        if (result.erp.status !== erp.status || result.erp.poNo !== erp.poNo) { reload(); onChanged(); }
+      })
+      .catch((syncError: unknown) => setSyncNote(toError(syncError)));
+  }, [erp, id, reload, onChanged]);
+
+  const send = async () => {
     setBusy(true); setError("");
     try {
-      const result = await apiRequest<{ assigned: number; missingSuppliers: number }>(`/api/v1/purchase-requisitions/${id}/suppliers`, { method: "PUT", body: JSON.stringify({ assignments: changes.map((line) => ({ lineId: line.id, supplierId: choices[line.id] })) }) });
-      notify(`${detail?.purchaseRequisition.number}: ${result.assigned} · ${t("ยังไม่มี Supplier")} ${result.missingSuppliers}`);
-      setChoices({}); setPicked({}); endpoint.reload(); onChanged();
-    } catch (saveError) { setError(toError(saveError)); }
+      const result = await apiRequest<ErpOutcome>(`/api/v1/purchase-requisitions/${id}/erp-send`, body({ department: chosenDepartment || undefined }));
+      if (result.sent) { notify(`${detail?.purchaseRequisition.number}: ERP ${result.prNo}`); reload(); onChanged(); return; }
+      if (result.kind === "department_required") setAskDepartment(true);
+      setError(result.kind === "signed_out" ? t("เข้าสู่ระบบด้วย TMT ID อีกครั้ง แล้วกดส่งเข้า ERP") : result.message ?? t("ส่ง ERP ไม่สำเร็จ"));
+      reload();
+    } catch (sendError) { setError(toError(sendError)); }
     finally { setBusy(false); }
   };
+  const showDepartment = canSend && (askDepartment || !erp?.department) && Boolean(options.data?.departments.length);
   return (
-    <Modal title={detail?.purchaseRequisition.number || "Purchase requisition"} subtitle={detail ? `${detail.purchaseRequisition.priority} · Required ${date(detail.purchaseRequisition.requiredDate)}${detail.purchaseRequisition.erpPoRef ? ` · ERP ${detail.purchaseRequisition.erpPoRef}` : ""}` : "Loading from production API…"} size="xl" onClose={onClose}
-      footer={<>{canAssign ? <button className="btn primary" type="button" disabled={busy || !changes.length} onClick={() => { void save(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <>{t("บันทึก Supplier")} ({changes.length})</>}</button> : null}<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button></>}>
+    <Modal title={detail?.purchaseRequisition.number || "Purchase requisition"} subtitle={detail ? `${detail.purchaseRequisition.priority} · Required ${date(detail.purchaseRequisition.requiredDate)}${erp?.prNo ? ` · ERP ${erp.prNo}` : ""}` : "Loading from production API…"} size="xl" onClose={onClose}
+      footer={<>{canSend ? <button className="btn primary" type="button" disabled={busy || (showDepartment && !chosenDepartment)} onClick={() => { void send(); }}><Icon name="send" />{busy ? <LocalizedText text={"กำลังส่ง…"} /> : <LocalizedText text={"ส่งเข้า ERP"} />}</button> : null}<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button></>}>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={error} />
-      {endpoint.loading && !detail ? <Loading /> : detail ? <>
+      {endpoint.loading && !detail ? <Loading /> : detail && erp ? <>
+        {erp.prNo ? <div className={`info-strip ${erp.status === "CONVERTED" ? "green" : erp.status === "REJECTED" || erp.status === "CANCELLED" ? "red" : ""}`}><Icon name="truck" />
+          <span><strong>ERP {erp.url ? <a className="mono" href={erp.url} target="_blank" rel="noreferrer">{erp.prNo}</a> : erp.prNo}</strong> <Badge tone={ERP_TONE[erp.status ?? ""] ?? "blue"}>{erp.statusLabel ?? erp.status}</Badge>
+            {erp.poNo ? <> · PO <strong className="mono">{erp.poNo}</strong></> : null}{erp.rejectionReason ? <> · {erp.rejectionReason}</> : null}</span>
+          <span className="spacer" /><small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small></div>
+          : detail.purchaseRequisition.status === "Approved" && erp.enabled ? <div className={`info-strip ${erp.error ? "red" : "amber"}`}><Icon name="alertTriangle" />
+            <span><strong><LocalizedText text={"ยังไม่ได้ส่งเข้า ERP"} /></strong> {erp.error ?? (canSend ? t("กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO") : t("รอผู้ขอซื้อส่งเข้า ERP"))}</span>
+            {showDepartment ? <><span className="spacer" /><select value={chosenDepartment} onChange={(event) => setDepartment(event.target.value)} aria-label={t("แผนกใน ERP")}>
+              <option value="">{t("แผนกใน ERP")}</option>{(options.data?.departments ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></> : null}</div> : null}
         {detail.ruleFlags.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Approval rules triggered"} /></strong>{detail.ruleFlags.map((flag) => `${flag.text} (${flag.level === "management" ? "Engineering Manager" : "PM"})`).join(" · ")}</span></div> : null}
         {detail.modules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"งบ Estimate"} /></th><th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th></tr></thead>
           <tbody>{detail.modules.map((module) => { const left = module.budget - module.requestedElsewhere - module.thisRequest; return <tr key={module.module}><td><strong>{module.module}</strong></td><td className="num">{money(module.budget)}</td><td className="num">{money(module.requestedElsewhere)}</td><td className="num">{money(module.thisRequest)}</td><td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td></tr>; })}</tbody></table></div> : null}
-        {canAssign ? <div className="info-strip blue"><Icon name="truck" /><span><strong><LocalizedText text={"ฝ่ายจัดซื้อเลือก Supplier"} /></strong> {t("ยังไม่มี Supplier")} {missing}</span><span className="spacer" />
-          <select value={bulkSupplier} onChange={(event) => setBulkSupplier(Number(event.target.value))} aria-label={t("Supplier")}><option value={0}>{t("Select…")}</option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}</select>
-          <button className="btn ghost sm" type="button" disabled={!bulkSupplier || !lines.some((line) => picked[line.id])} onClick={applyBulk}><LocalizedText text={"ใช้กับรายการที่เลือก"} /></button></div> : null}
-        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr>{canAssign ? <th><input type="checkbox" aria-label={t("เลือกทั้งหน้า")} checked={shown.length > 0 && shown.every((line) => picked[line.id])} onChange={(event) => setPicked((current) => ({ ...current, ...Object.fromEntries(shown.map((line) => [line.id, event.target.checked])) }))} /></th> : null}<th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Estimate"} /></th><th><LocalizedText text={"Supplier"} /></th></tr></thead><tbody>{shown.map((line) => <tr key={line.id}>
-          {canAssign ? <td><input type="checkbox" checked={Boolean(picked[line.id])} onChange={(event) => setPicked((current) => ({ ...current, [line.id]: event.target.checked }))} aria-label={t("เลือกรายการนี้")} /></td> : null}
+        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Estimate"} /></th></tr></thead><tbody>{shown.map((line) => <tr key={line.id}>
           <td><Badge tone={PR_KIND_TONE[line.lineType]}>{t(PR_KIND_LABEL[line.lineType])}</Badge>{line.lineType === "Substitute" && line.original ? <small className="muted"><LocalizedText text={"แทน"} /> {line.original.itemCode || line.original.description} × {quantity(line.coveredQuantity)} {line.original.unit}</small> : null}</td>
           <td><strong className="mono">{line.itemCode || line.partNumber || "—"}</strong><small className="muted">{[line.partNumber, line.brand].filter(Boolean).join(" · ")}</small></td>
           <td>{line.description}{line.remark ? <small className="muted">{line.remark}</small> : null}</td><td>{line.module}</td>
           <td className="num">{quantity(line.quantity)} {line.unit}</td><td className="num">{money(line.unitPrice)}</td><td className="num"><strong>{money(line.lineTotal)}</strong></td><td className="num">{money(line.estimateTotal)}</td>
-          <td>{canAssign ? <select value={supplierOf(line)} onChange={(event) => setChoices((current) => ({ ...current, [line.id]: Number(event.target.value) }))} aria-label={t("Supplier")}><option value={0}>{t("Select…")}</option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}</select>
-            : line.supplierName ?? <Badge tone="amber"><LocalizedText text={"รอจัดซื้อเลือก"} /></Badge>}</td>
         </tr>)}</tbody></table></div>
           {lines.length > PR_DETAIL_PAGE ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * PR_DETAIL_PAGE + 1} to={Math.min(currentPage * PR_DETAIL_PAGE, lines.length)} total={lines.length} onPage={setPage} /> : null}</Panel>
-        <Panel title="Approval route" subtitle="PM อนุมัติ แล้วฝ่ายจัดซื้อ · Engineering Manager เมื่อ Module เกินงบเกิน 10%" flush><div className="table-wrap"><table><thead><tr><th>#</th><th><LocalizedText text={"Step"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Rule"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Decision"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Acted"} /></th></tr></thead><tbody>{detail.steps.map((step) => <tr key={step.id}><td>{step.sequence}</td><td><strong>{step.name}</strong></td><td>{step.approverName || step.approverRole || "—"}</td><td>{step.ruleCode || "—"}</td><td><Badge>{step.status}</Badge></td><td>{step.decision || "—"}</td><td>{step.comment || "—"}</td><td>{dateTime(step.actedAt)}</td></tr>)}</tbody></table></div></Panel>
+        <Panel title="Approval route" subtitle="PM อนุมัติ · Engineering Manager เมื่อ Module เกินงบเกิน 10% · แล้วส่งเข้า ERP" flush><div className="table-wrap"><table><thead><tr><th>#</th><th><LocalizedText text={"Step"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Rule"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Decision"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Acted"} /></th></tr></thead><tbody>{detail.steps.map((step) => <tr key={step.id}><td>{step.sequence}</td><td><strong>{step.name}</strong></td><td>{step.approverName || step.approverRole || "—"}</td><td>{step.ruleCode || "—"}</td><td><Badge>{step.status}</Badge></td><td>{step.decision || "—"}</td><td>{step.comment || "—"}</td><td>{dateTime(step.actedAt)}</td></tr>)}</tbody></table></div></Panel>
       </> : null}
     </Modal>
   );
-}
-
-/** The ERP raises the purchase order; Purchasing records its number here, which closes the requisition. */
-function ErpOrderModal({ item, onClose, onOrdered }: { item: PurchaseRequisition; onClose: () => void; onOrdered: (reference: string) => void }) {
-  const t = useUiText();
-  const [reference, setReference] = useState("");
-  const [comment, setComment] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      await apiRequest(`/api/v1/purchase-requisitions/${item.id}/erp-order`, body({ rowVersion: item.rowVersion, erpPoRef: reference.trim(), comment: comment.trim() || undefined }));
-      onOrdered(reference.trim());
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
-  };
-  return <Modal title={`${t("บันทึก PO จาก ERP")} ${item.number}`} subtitle="ออก PO ในระบบ ERP แล้วใส่เลข PO ที่นี่ (หลายใบคั่นด้วย , )" size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || !reference.trim()}><Icon name="truck" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"บันทึก PO จาก ERP"} />}</button></>}>
-    <ActionError message={error} />
-    {item.missingSuppliers ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span>{t("ยังไม่มี Supplier")} {item.missingSuppliers}</span></div> : null}
-    <Field label="เลข PO ใน ERP"><input maxLength={200} value={reference} onChange={(event) => setReference(event.target.value)} placeholder="PO-2026-0001" /></Field>
-    <Field label="Comment / note"><textarea rows={3} maxLength={20_000} value={comment} onChange={(event) => setComment(event.target.value)} /></Field>
-  </Modal>;
 }
 
 export function ProductionPurchaseOrders({ bootstrap, notify }: MaterialScreenProps) {

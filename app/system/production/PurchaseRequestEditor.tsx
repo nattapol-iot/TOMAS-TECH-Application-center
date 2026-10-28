@@ -12,6 +12,7 @@ import { asPlanned, asSubstitute, draftFromBom, draftFromSheet, draftIssues, mod
 import { useEndpoint } from "./material-endpoint";
 
 type ReleasedBom = { id: number; number: string; status: string; projectNumber: string; projectName: string };
+type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
 type Workspace = { bom: { id: number; number: string; projectNumber: string; projectName: string }; lines: Array<PrBomLine & { purchaseRequired: number }>; modules: PrModuleBudget[] };
 
 const EMPTY: never[] = [];
@@ -31,7 +32,7 @@ function budgetNote(status: PrModuleStatus): string {
 /**
  * A full-page PR sheet for many lines. The engineer starts from everything the BOM still needs, changes what differs (another make, an item the
  * estimate missed), or round-trips the sheet through Excel; each module's budget decides whether an overrun needs more than the PM's approval.
- * No supplier here: Purchasing chooses it at Purchasing Review.
+ * No supplier here: once approved, the PR goes to the ERP, where Purchasing chooses it and raises the PO.
  */
 export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootstrap: BootstrapData; released: ReleasedBom[]; onClose: () => void; onCreated: (number: string) => void }) {
   const t = useT();
@@ -49,6 +50,10 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
   const [priority, setPriority] = useState("Normal");
   const [requiredDate, setRequiredDate] = useState(inDays(14));
   const [purpose, setPurpose] = useState("");
+  // The ERP files the PR under one of its departments; the person's own is preselected when it matches.
+  const erpOptions = useEndpoint<ErpOptions | null>("/api/v1/erp/purchasing/options", null);
+  const [erpDepartment, setErpDepartment] = useState<string | null>(null);
+  const department = erpDepartment ?? erpOptions.data?.suggestedDepartment ?? "";
   const [module, setModule] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -98,7 +103,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
   const submit = async () => {
     setBusy(true); setError(""); setServerIssue(null);
     try {
-      const created = await apiRequest<{ number: string }>("/api/v1/purchase-requisitions/", { method: "POST", body: JSON.stringify({ bomId: effectiveBomId, priority, requiredDate, purpose: purpose || undefined, lines: payloadLines(rows) }) });
+      const created = await apiRequest<{ number: string }>("/api/v1/purchase-requisitions/", { method: "POST", body: JSON.stringify({ bomId: effectiveBomId, priority, requiredDate, purpose: purpose || undefined, erpDepartment: department || undefined, lines: payloadLines(rows) }) });
       onCreated(created.number);
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : String(submitError);
@@ -111,7 +116,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
   };
 
   return (
-    <Panel title="ขอซื้อ (PR)" subtitle="เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · Supplier ให้ฝ่ายจัดซื้อเลือก"
+    <Panel title="ขอซื้อ (PR)" subtitle="เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ"
       actions={<button className="btn ghost" type="button" onClick={onClose} disabled={busy}><Icon name="arrowLeft" /><LocalizedText text={"กลับไปรายการ PR"} /></button>}>
       <div className="form-grid two">
         <Field label="Released BOM"><select value={effectiveBomId} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
@@ -119,6 +124,8 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
         <Field label="Priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
         <Field label="Required date"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
         <Field label="Purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
+        {erpOptions.data?.enabled && erpOptions.data.departments.length ? <Field label="แผนกใน ERP"><select value={department} onChange={(event) => setErpDepartment(event.target.value)}>
+          <option value="">{t("Select…")}</option>{erpOptions.data.departments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field> : null}
       </div>
       {workspace.error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{workspace.error}</span></div> : null}
       {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{error}</span></div> : null}
@@ -177,7 +184,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
         <div className="pr-plan-summary" aria-label={t("Purchase plan summary")}>
           <div><span><LocalizedText text={"รายการที่ซื้อ"} /></span><strong>{selected.length}</strong><small>{t(KIND_LABEL.Planned)} {kinds("Planned")} · {t(KIND_LABEL.Substitute)} {kinds("Substitute")} · {t(KIND_LABEL.Unplanned)} {kinds("Unplanned")}</small></div>
           <div><span><LocalizedText text={"ต้องแก้ก่อนส่ง"} /></span><strong>{issues.size}</strong><small><LocalizedText text={"แถวที่มีข้อความสีแดง"} /></small></div>
-          <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong>{needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วฝ่ายจัดซื้อเลือก Supplier"} /></small></div>
+          <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong>{needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วส่งเข้า ERP อัตโนมัติ"} /></small></div>
           <div className="accent"><span><LocalizedText text={"ยอดขอซื้อ"} /></span><strong>{money(total)}</strong><TablePageSize value={pageSize} onChange={(size) => { setPageSize(size); setPage(1); }} /></div>
         </div>
         <Toolbar>

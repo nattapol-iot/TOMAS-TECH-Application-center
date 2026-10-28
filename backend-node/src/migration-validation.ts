@@ -75,6 +75,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 87, fileName: "087_team_task_time_range.sql", name: "Time range on a team task" },
   { version: 88, fileName: "088_monitor_agent_tmtdesk_id.sql", name: "TMTDesk ID on a monitored machine" },
   { version: 89, fileName: "089_outlook_calendar_events.sql", name: "Outlook calendar events on the team board" },
+  { version: 90, fileName: "090_pegasus_erp_purchase_requests.sql", name: "Pegasus ERP purchase requests" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

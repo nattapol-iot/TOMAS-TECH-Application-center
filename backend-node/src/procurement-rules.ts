@@ -21,8 +21,11 @@ export type PlannedPrLine = { lineType: PrLineKind; bomLineId: number | null; it
 
 /** Estimate categories bought on a PR: Hardware, Software, Electrical, Mechanical, Robot. Engineering, outsource, travel and other costs are not material. */
 export const MATERIAL_CATEGORY_CODES = ["01", "02", "03", "04", "05"] as const;
-export const PO_CREATION_STEP = "PO Creation";
-export const PURCHASING_REVIEW_STEP = "Purchasing Review";
+/** The last step: the system sends the approved PR to the Pegasus ERP, where Purchasing collects quotes and raises the PO. */
+export const ERP_STEP = "Sent to ERP";
+/** Steps of PRs routed before the ERP took purchasing over; no step is ever made Current after them. */
+export const LEGACY_PO_CREATION_STEP = "PO Creation";
+export const SYSTEM_STEPS = [ERP_STEP, LEGACY_PO_CREATION_STEP];
 /** An overrun up to this share of the module's budget is the PM's call; beyond it the Engineering Manager approves too. */
 export const MANAGEMENT_OVERRUN_PERCENT = 10;
 export const MAX_PR_LINES = 2000;
@@ -52,7 +55,7 @@ export function moduleBudgetFlags(modules: ModuleBudget[]): RuleFlag[] {
   });
 }
 
-/** Two approvals: the project's PM, then Purchasing. Management joins only for a management-level flag, and never as a second step for the same role. */
+/** The project's PM approves; the Engineering Manager joins only for a management-level flag, and never as a second step for the same role. Then the ERP. */
 export function approvalSteps(requesterId: number, projectManagerId: number | null, flags: RuleFlag[]): ApprovalStepPlan[] {
   const describe = (list: RuleFlag[]) => list.length ? list.map((flag) => flag.text).join(" · ").slice(0, 100) : null;
   const management = flags.filter((flag) => flag.level === "management");
@@ -61,10 +64,9 @@ export function approvalSteps(requesterId: number, projectManagerId: number | nu
   const steps: ApprovalStepPlan[] = [
     { name: "Submitted by Requester", role: null, approver: requesterId, rule: null, status: "Completed" },
     { name: "Project Manager Approval", role: managerDecides ? "Engineering Manager" : null, approver: managerDecides ? null : projectManagerId, rule: describe(flags), status: "Current" },
-    { name: PURCHASING_REVIEW_STEP, role: "Purchasing", approver: null, rule: null, status: "Pending" },
   ];
   if (management.length && !managerDecides) steps.push({ name: "Management Approval", role: "Engineering Manager", approver: null, rule: describe(management), status: "Pending" });
-  steps.push({ name: PO_CREATION_STEP, role: "Purchasing", approver: null, rule: null, status: "Pending" });
+  steps.push({ name: ERP_STEP, role: null, approver: null, rule: null, status: "Pending" });
   return steps;
 }
 

@@ -151,11 +151,12 @@ GO
 :r database/migrations/087_team_task_time_range.sql
 :r database/migrations/088_monitor_agent_tmtdesk_id.sql
 :r database/migrations/089_outlook_calendar_events.sql
+:r database/migrations/090_pegasus_erp_purchase_requests.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 89) <> 89
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 90) <> 90
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (
@@ -214,7 +215,8 @@ IF EXISTS (
         (77, N'Site credentials vault'),
         (78, N'Project without estimate'),
         (88, N'TMTDesk ID on a monitored machine'),
-        (89, N'Outlook calendar events on the team board')
+        (89, N'Outlook calendar events on the team board'),
+        (90, N'Pegasus ERP purchase requests')
     ) expected(version, name)
     LEFT JOIN dbo.schema_versions installed
       ON installed.version = expected.version AND installed.name = expected.name
