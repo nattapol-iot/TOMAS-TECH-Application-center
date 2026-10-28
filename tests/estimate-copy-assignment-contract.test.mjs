@@ -32,6 +32,13 @@ test("the copy modal offers every ledger and only the sections the account may w
   assert.match(modal, /sections: selected\.filter\(allowedSection\)/);
 });
 
+test("the copy modal starts with every discipline ticked, so labor, outsource and travel come along by default", async () => {
+  const screen = await source("app/system/production/EstimateScreens.tsx");
+  const modal = screen.slice(screen.indexOf("function CopyPreviousEstimateModal"), screen.indexOf("const OTHER_COST_SECTION_BY_CATEGORY"));
+  assert.match(modal, /setSelected\(COST_CATEGORIES\.map\(\(\[code\]\) => code\)\)/);
+  assert.doesNotMatch(modal, /setSelected\(\[\.\.\.new Set\(loaded\.costItems/);
+});
+
 test("the copy route is one transaction that never writes to the source estimate", async () => {
   const route = await source("backend-node/src/routes/estimate-copy.ts");
   assert.match(route, /database\.transaction\(async \(transaction\) => \{/);
