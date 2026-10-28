@@ -1647,10 +1647,12 @@ function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }
     }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [workspace.header.id]);
+  /* Every discipline starts ticked: labor (06), outsource (07) and travel (08-10) often have no material line, and
+     ticking only the disciplines with material lines silently left them out of a whole-estimate copy. */
   useEffect(() => {
     if (!sourceId) return;
     let active = true;
-    void loadEstimateCostWorkspace(sourceId).then((loaded) => { if (active) { setSourceWorkspace(loaded); setSelected([...new Set(loaded.costItems.map((line) => line.categoryCode))]); setExcluded([]); setOpenSections([]); } }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
+    void loadEstimateCostWorkspace(sourceId).then((loaded) => { if (active) { setSourceWorkspace(loaded); setSelected(COST_CATEGORIES.map(([code]) => code)); setExcluded([]); setOpenSections([]); } }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [sourceId]);
   const source = estimates.find((item) => item.id === sourceId);
