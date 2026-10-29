@@ -3,7 +3,8 @@
 # already -- the SQLite database (users, issues, pull requests, permissions) and app.ini -- dumped
 # to /nas/backups at start (so every deploy leaves a fresh copy) and then once a day. The
 # repositories, LFS objects and attachments live on the NAS (/nas) and are not copied again.
-# The newest $TMTHUB_BACKUP_KEEP dumps are kept.
+# The newest $TMTHUB_BACKUP_KEEP dumps are kept. Every hour it also makes unreadable files on the
+# NAS readable again (heal, below).
 #
 # Forgejo refuses to run as root, so the dump runs as the git user.
 set -u
@@ -37,7 +38,32 @@ dump() {
   ls -1 "$TARGET"/tmthub-db-*.zip 2>/dev/null | sort -r | tail -n "+$((KEEP + 1))" | while read -r old; do rm -f "$old"; done
 }
 
+# Files on the NAS that read as mode 000 over NFS. Synology works out the mode of a file that
+# still inherits the share's Windows ACL, and that answer sometimes turns to "no access" without
+# anything here touching the file (seen 2026-10-29: whole mirror repositories at once); git then
+# reports "not a git repository" and the page says the Git data cannot be read. A chmod gives the
+# file an explicit mode, which has stayed readable since. Paths and change times are logged so
+# the NAS side can be traced.
+heal() {
+  list="$(mktemp /tmp/tmthub-heal.XXXXXX)"
+  find /nas/repositories /nas/lfs /nas/attachments ! -perm -u=r > "$list" 2>/dev/null
+  count="$(wc -l < "$list" | tr -d ' ')"
+  if [ "$count" -gt 0 ]; then
+    echo "tmthub-heal: $count unreadable file(s) on the NAS made readable again, in $(cut -d/ -f5 "$list" | sort -u | wc -l | tr -d ' ') repo(s):"
+    head -n 10 "$list" | while read -r path; do echo "  $(stat -c '%z' "$path" | cut -c1-19) ${path#/nas/}"; done
+    tr '\n' '\0' < "$list" | xargs -0 chmod a+rw
+  fi
+  rm -f "$list"
+}
+
+# Heal before the dump, so the dump's result stays the last thing in the log that deploy.sh reads.
+last_dump=0
 while true; do
-  dump || true
-  sleep 86400
+  heal || true
+  now="$(date +%s)"
+  if [ $((now - last_dump)) -ge 86400 ]; then
+    dump || true
+    last_dump="$now"
+  fi
+  sleep 3600
 done

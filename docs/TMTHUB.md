@@ -100,6 +100,18 @@ git push tmthub --tags
   → **File Services → NFS → Maximum NFS protocol = NFSv4.1** แล้ว deploy ใหม่ probe จะเลือก v4.1 เอง
 - หลังย้ายไป v4.1 ให้ทดสอบ push ที่มี delta ใหญ่ก่อน และอย่าเอา `pack.threads=1` ออกโดยไม่ได้ทดสอบ
 
+### "The Git data underlying this repository cannot be read"
+
+- สาเหตุที่พบ (2026-10-29): ไฟล์ของ repo บน NAS อ่านผ่าน NFS ได้ mode `000` (`----------`) git จึงตอบ
+  `not a git repository` — เกิดกับไฟล์ที่ยังสืบทอด Windows ACL ของ share และเปลี่ยนเองฝั่ง Synology
+  (ctime ไม่ขยับ, Forgejo ไม่ได้ chmod) ส่วนไฟล์ที่ chmod แล้วอ่านได้ต่อเนื่อง
+- `tmthub-backup` ซ่อมให้เองทุกชั่วโมง (`heal` ใน `deploy/tmthub/backup.sh`) และ log ชื่อไฟล์ + ctime
+  ดูได้ด้วย `docker logs src-tmthub-backup-1 | grep -A11 tmthub-heal`
+- ซ่อมทันทีด้วยมือ:
+  `docker --context colima-iot exec -u git src-tmthub-1 sh -c 'cd /nas && find repositories lfs attachments ! -perm -u=r -exec chmod a+rw {} +'`
+- ต้นเหตุฝั่ง NAS ยังไม่ได้แก้: ผู้ดูแล NAS ควรตรวจ ACL ของโฟลเดอร์ `IoT Team Center/TMTHub` (ให้ admin/Everyone
+  Read/Write ทั้ง tree) หรือ `chmod -R a+rwX` ทั้ง tree ครั้งเดียวเพื่อให้ทุกไฟล์มี mode ชัดเจน
+
 ### กู้คืนจาก backup
 
 repo อยู่บน NAS อยู่แล้ว (NAS snapshot ของ share ใช้กู้ไฟล์ได้) ส่วนฐานข้อมูลกู้จาก `backups\tmthub-db-*.zip`
