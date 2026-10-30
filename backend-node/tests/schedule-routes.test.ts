@@ -8,7 +8,7 @@ import type { Database } from "../src/db.js";
 import { ApiError, dayRequestAnswerError, registerErrorHandler } from "../src/errors.js";
 import { registerResourceTaskRoutes } from "../src/routes/resource-tasks.js";
 import { registerScheduleRoutes } from "../src/routes/schedule.js";
-import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady } from "../src/schedule-service.js";
+import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, placeInOrder } from "../src/schedule-service.js";
 import type { CurrentUserService } from "../src/users.js";
 
 const PROJECT_ID = 7;
@@ -889,4 +889,60 @@ test("GET day-requests/pending: an Engineering Manager held as an additional rol
     assert.match(query.statement, /s\.answer IS NULL/);
     assert.match(query.statement, /p\.status<>N'Closed'/);
   } finally { await app.close(); }
+});
+
+test("placeInOrder: a moved row takes a sort order between its new neighbours, and the siblings are numbered again only when there is no room", () => {
+  const siblings = [{ id: 1, sortOrder: 10 }, { id: 2, sortOrder: 20 }, { id: 3, sortOrder: 30 }];
+  assert.deepEqual(placeInOrder(siblings, 2, 9), { sortOrder: 15, renumber: [] });
+  assert.deepEqual(placeInOrder(siblings, null, 9), { sortOrder: 40, renumber: [] }, "last");
+  assert.deepEqual(placeInOrder(siblings, 1, 9), { sortOrder: 0, renumber: [] }, "first");
+  assert.deepEqual(placeInOrder([], null, 9), { sortOrder: 10, renumber: [] }, "the only row");
+  // 10 and 11 leave no room: number them again in tens, the moved row between them.
+  assert.deepEqual(placeInOrder([{ id: 1, sortOrder: 10 }, { id: 2, sortOrder: 11 }], 2, 9), { sortOrder: 20, renumber: [{ id: 2, sortOrder: 30 }] });
+  // At the edge of the allowed range the siblings are numbered again rather than going past it.
+  assert.deepEqual(placeInOrder([{ id: 1, sortOrder: -999_995 }], 1, 9), { sortOrder: 10, renumber: [{ id: 1, sortOrder: 20 }] });
+  assert.throws(() => placeInOrder(siblings, 99, 9), (error: unknown) => error instanceof ApiError && error.code === "schedule_move_target_invalid");
+});
+
+function moveAnswers(managed: boolean) {
+  return (statement: string): Answer | undefined => {
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11, parent_id: 1, sort_order: 10 })] };
+    if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+    if (statement.includes("FROM dbo.resource_tasks WHERE project_id=@project AND schedule_task_id IS NOT NULL")) return { recordset: managed ? [{ schedule_task_id: 11, state: "Approved", acknowledged_at: null, assignee_id: 30 }] : [] };
+    if (statement.includes("SELECT id,sort_order FROM dbo.schedule_tasks")) return { recordset: [{ id: 12, sort_order: 20 }, { id: 13, sort_order: 30 }] };
+    if (statement.includes("UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort")) return { recordset: [{ row_version: NEXT_VERSION }] };
+    return undefined;
+  };
+}
+
+test("POST move: a row moves between two siblings without touching the others, and is recorded in the plan's history", async (t) => {
+  const { app, transactions } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  const statements = installSqlMock(t, moveAnswers(false));
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/move",
+      payload: { rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64"), parentId: 1, beforeId: 13 } });
+    assert.equal(response.statusCode, 200, response.body);
+    const update = statements.find((entry) => entry.statement.includes("SET parent_id=@parent,sort_order=@sort"));
+    assert.equal(update?.params.sort, 25);
+    assert.equal(update?.params.parent, 1);
+    assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET sort_order=@sort")), false, "no sibling renumbered");
+    assert.ok(statements.some((entry) => entry.statement.includes("schedule_updates") && /INSERT/.test(entry.statement)), "a plan history entry");
+    assert.deepEqual(transactions, ["committed"]);
+  } finally { await app.close(); }
+});
+
+test("POST move: a Resource Plan row moves up or down where it is, but not into another phase", async (t) => {
+  for (const [parentId, refused] of [[1, false], [2, true]] as const) {
+    await t.test(`parent ${parentId}`, async (sub) => {
+      const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+      installSqlMock(sub, moveAnswers(true));
+      try {
+        const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/move",
+          payload: { rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64"), parentId, beforeId: null } });
+        if (refused) { assert.equal(response.statusCode, 409, response.body); assert.equal(response.json().code, "managed_resource_task"); }
+        else assert.equal(response.statusCode, 200, response.body);
+      } finally { await app.close(); }
+    });
+  }
 });

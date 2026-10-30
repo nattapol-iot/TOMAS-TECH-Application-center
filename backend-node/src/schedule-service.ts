@@ -29,7 +29,7 @@ export type ProgressInput = {
   actualFinish: string | null; forecastFinish: string | null; status: string; remark: string | null;
 };
 
-function optionalId(value: unknown, label: string): number | null {
+export function optionalId(value: unknown, label: string): number | null {
   if (value === null || value === undefined || value === "") return null;
   return requiredInteger(value, label, 1);
 }
@@ -254,6 +254,27 @@ export function datesWouldLoop(rows: ReadonlyMap<number, { parent: number | null
     visiting.delete(id); done.add(id); return false;
   };
   return [...rows.keys()].some(loops);
+}
+/**
+ * Where a row moved among its new siblings (in their order, without it) lands: before `beforeId`, or last when null.
+ * It takes a sort order between its new neighbours when there is room; otherwise the siblings are numbered again in
+ * tens and `renumber` lists the ones whose order changes. Sort orders stay within the API's ±1,000,000.
+ */
+export function placeInOrder(siblings: readonly { id: number; sortOrder: number }[], beforeId: number | null, movedId: number): { sortOrder: number; renumber: { id: number; sortOrder: number }[] } {
+  const index = beforeId === null ? siblings.length : siblings.findIndex((row) => row.id === beforeId);
+  if (index < 0) throw new ApiError(422, "schedule_move_target_invalid", "The row to place it before is not in that part of the plan.");
+  const previous = siblings[index - 1]?.sortOrder, next = siblings[index]?.sortOrder;
+  const between = previous === undefined && next === undefined ? 10
+    : previous === undefined ? next! - 10
+      : next === undefined ? previous + 10
+        : next - previous >= 2 ? Math.floor((previous + next) / 2) : null;
+  if (between !== null && Math.abs(between) <= 1_000_000) return { sortOrder: between, renumber: [] };
+  const order = [...siblings.slice(0, index), { id: movedId, sortOrder: Number.NaN }, ...siblings.slice(index)];
+  const numbered = order.map((row, at) => ({ id: row.id, sortOrder: (at + 1) * 10 }));
+  return {
+    sortOrder: numbered[index]!.sortOrder,
+    renumber: numbered.filter((row, at) => row.id !== movedId && order[at]!.sortOrder !== row.sortOrder),
+  };
 }
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
   if (taskId && (input.parentId === taskId || input.predecessorId === taskId)) throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");

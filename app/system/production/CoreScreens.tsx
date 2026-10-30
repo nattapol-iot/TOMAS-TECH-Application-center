@@ -60,6 +60,7 @@ import {
 import { listPendingDayRequests, listProjectOverview, type PendingDayRequest, type ProjectOverviewItem } from "../project-overview-client";
 import { ProjectPortfolioGantt } from "./ProjectPortfolioGantt";
 import { useActivitySubView } from "../use-activity-presence";
+import { choiceLink, flagLink, idLink, numberLink, optionalChoiceLink, optionalTextLink, textLink, useLinkedState } from "../screen-link";
 import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFOLIO_SORT_KEYS, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
   projectTeamOf, shownProjectTeam, type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
@@ -590,7 +591,11 @@ const PORTFOLIO_SORT_LABEL: Record<PortfolioSortKey, string> = {
   health: "Portfolio.colHealth", number: "Portfolio.colNumber", name: "Portfolio.colProject", pm: "Portfolio.colPm",
   target: "Portfolio.colTarget", slip: "Portfolio.colSlip", progress: "Portfolio.colProgress", lastUpdate: "Portfolio.colLastUpdate",
 };
-const portfolioModeStorageKey = (userId: number) => `tomas-tech-project-portfolio-mode:${userId}`;
+// The overview's filters are on its link and remembered for each person (screen-link.tsx); codecs are made once.
+const PORTFOLIO_MODE_LINK = choiceLink(["list", "timeline"] as const);
+const PORTFOLIO_HEALTH_LINK = optionalChoiceLink(PORTFOLIO_HEALTH_ORDER);
+const PORTFOLIO_CHIP_LINK = optionalChoiceLink(PORTFOLIO_CHIPS);
+const PORTFOLIO_STATUS_LINK = choiceLink(PROJECT_STAGE_FILTERS);
 
 export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode, openProjectSchedule, initialMode }: CommonProps & {
   teamTestMode: boolean;
@@ -599,28 +604,21 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   initialMode?: PortfolioMode;
 }) {
   const uiText = useUiText();
-  const modeStorageKey = portfolioModeStorageKey(bootstrap.user.id);
-  const [mode, setMode] = useState<PortfolioMode>(() => {
-    if (initialMode) return initialMode;
-    try { return window.localStorage.getItem(modeStorageKey) === "timeline" ? "timeline" : "list"; } catch { return "list"; }
-  });
+  const [mode, changeMode] = useLinkedState<PortfolioMode>("view", initialMode ?? "list", PORTFOLIO_MODE_LINK);
   const timelineMode = mode === "timeline";
   useActivitySubView(timelineMode ? "projects-timeline" : "projects-portfolio");
-  const changeMode = (next: PortfolioMode) => {
-    setMode(next);
-    try { window.localStorage.setItem(modeStorageKey, next); } catch { /* The mode is a convenience when storage is blocked. */ }
-  };
   const [overview, setOverview] = useState<{ items: ProjectOverviewItem[]; loadedAt: number } | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("All status");
-  const [managerId, setManagerId] = useState<number | null>(null);
-  const [team, setTeam] = useState<string | null>(null);
-  const [mine, setMine] = useState(false);
-  const [includeClosed, setIncludeClosed] = useState(false);
-  const [health, setHealth] = useState<ProjectHealth | null>(null);
-  const [chip, setChip] = useState<PortfolioChip | null>(null);
+  const [pageSize, setPageSize] = useLinkedState("rows", 10, numberLink);
+  // The search is on the link but not remembered: a forgotten word would hide projects next time.
+  const [search, setSearch] = useLinkedState("q", "", textLink, { remember: false });
+  const [status, setStatus] = useLinkedState("status", "All status", PORTFOLIO_STATUS_LINK);
+  const [managerId, setManagerId] = useLinkedState("pm", null, idLink);
+  const [team, setTeam] = useLinkedState("team", null, optionalTextLink);
+  const [mine, setMine] = useLinkedState("mine", false, flagLink);
+  const [includeClosed, setIncludeClosed] = useLinkedState("closed", false, flagLink);
+  const [health, setHealth] = useLinkedState<ProjectHealth | null>("health", null, PORTFOLIO_HEALTH_LINK);
+  const [chip, setChip] = useLinkedState<PortfolioChip | null>("attention", null, PORTFOLIO_CHIP_LINK);
   const sortStorageKey = portfolioSortStorageKey(bootstrap.user.id);
   const [sort, setSort] = useState<PortfolioSort>(() => { try { return parsePortfolioSort(window.localStorage.getItem(sortStorageKey)); } catch { return DEFAULT_PORTFOLIO_SORT; } });
   const [loading, setLoading] = useState(true);

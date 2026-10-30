@@ -13,7 +13,7 @@ import { normalizeBusinessTimeZone } from "../config.js";
 import { countedLeaves, scheduleLeaves, summarizeProjectSchedule } from "../project-health.js";
 import {
   appendUpdate, calendarDays, canAnswerDayRequests, concurrency, currentScheduleVersion, demandAssignedLeaf, demandPlanOwner, demandProgressWriter,
-  hasChildren, hasNoActivePic, hasPendingRequest, isProjectMember, permissionFor, planInput, progressInput, PROGRESS_REPORT_FIELDS_SQL, readHolidays, readManagedTaskIds, readPics, readProject,
+  hasChildren, hasNoActivePic, hasPendingRequest, isProjectMember, optionalId, permissionFor, placeInOrder, planInput, progressInput, PROGRESS_REPORT_FIELDS_SQL, readHolidays, readManagedTaskIds, readPics, readProject,
   readTask, readTasks, replacePics, resolveTasks, taskResponse, validateGraphAndHierarchy, validatePics,
   validateScheduleVersion, type PlanInput, type TaskRow,
 } from "../schedule-service.js";
@@ -154,6 +154,46 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
     });
     const { notices, ...task } = saved;
     return { ...task, notification: await deliverProjectNotices(email, notices) };
+  });
+
+  // Moves a row up or down the plan, or into another phase: its parent and its place among the new siblings. Dates,
+  // effort and people stay as they are; WBS numbers follow the new order when the plan is read.
+  app.post("/api/v1/schedule/tasks/:id/move", async (request) => {
+    await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Schedule task id"); const body = bodyObject(request.body);
+    const parentId = optionalId(body.parentId, "Parent task"), beforeId = optionalId(body.beforeId, "Place before task");
+    const expected = parseRowVersion(body.rowVersion);
+    const scheduleVersion = body.scheduleVersion === null || body.scheduleVersion === undefined ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
+    if (parentId === id || beforeId === id) throw new ApiError(400, "schedule_self_reference", "A row cannot be placed under or before itself.");
+    return database.transaction(async (transaction) => {
+      const existing = await readTask(transaction, id); const project = await demandPlanOwner(transaction, existing.projectId, actor);
+      await validateScheduleVersion(transaction, existing.projectId, scheduleVersion); if (!existing.rowVersion.equals(expected)) throw concurrency();
+      if (parentId !== existing.parentId) {
+        // Into another part of the plan: the parent rules of a plan edit, and a Resource Plan row stays where it is.
+        if ((await readManagedTaskIds(transaction, existing.projectId)).has(id)) throw new ApiError(409, "managed_resource_task", "A Resource Plan task keeps its place; it can only move up or down where it is.");
+        if (await hasPendingRequest(transaction, id) || (parentId && await hasPendingRequest(transaction, parentId))) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before moving this row.");
+        const pics = (await readPics(transaction, existing.projectId)).get(id) ?? [];
+        await validateGraphAndHierarchy(transaction, existing.projectId, id, { scheduleVersion, rowVersion: expected, parentId, sortOrder: existing.sortOrder, kind: existing.kind, name: existing.name,
+          isMilestone: existing.isMilestone, visibility: existing.visibility, planStart: existing.planStart, planDays: existing.planDays, startMode: existing.startMode,
+          predecessorId: existing.predecessorId, lagDays: existing.lagDays, picUserIds: pics.map((pic) => pic.id), picExternal: existing.picExternal, planManDays: existing.planManDays });
+      }
+      const read = new sql.Request(transaction); read.input("project", sql.BigInt, existing.projectId); read.input("parent", sql.BigInt, parentId); read.input("id", sql.BigInt, id);
+      const siblings = (await read.query<{ id: number | string; sort_order: number }>(`SELECT id,sort_order FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL AND id<>@id AND ((@parent IS NULL AND parent_id IS NULL) OR parent_id=@parent) ORDER BY sort_order,id;`)).recordset
+        .map((row) => ({ id: Number(row.id), sortOrder: Number(row.sort_order) }));
+      const placed = placeInOrder(siblings, beforeId, id);
+      for (const row of placed.renumber) {
+        const renumber = new sql.Request(transaction); renumber.input("id", sql.BigInt, row.id); renumber.input("sort", sql.Int, row.sortOrder);
+        await renumber.query(`UPDATE dbo.schedule_tasks SET sort_order=@sort WHERE id=@id AND deleted_at IS NULL;`);
+      }
+      const update = new sql.Request(transaction); update.input("id", sql.BigInt, id); update.input("parent", sql.BigInt, parentId); update.input("sort", sql.Int, placed.sortOrder);
+      update.input("actor", sql.BigInt, actor.id); update.input("version", sql.VarBinary(8), expected);
+      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`)).recordset[0];
+      if (!row) throw concurrency();
+      const before = { parentId: existing.parentId, sortOrder: existing.sortOrder }, after = { parentId, sortOrder: placed.sortOrder, beforeId };
+      await appendUpdate(transaction, existing.projectId, id, actor.id, "plan", JSON.stringify(before), JSON.stringify(after), "Moved in the plan");
+      await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Moved", before, { ...after, renumbered: placed.renumber.length });
+      return { id, rowVersion: row.row_version.toString("base64"), scheduleVersion: (await currentScheduleVersion(transaction, project.id))!.toString("base64") };
+    });
   });
 
   app.post("/api/v1/schedule/tasks/:id/updates", async (request) => {

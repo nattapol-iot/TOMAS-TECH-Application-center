@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { choiceLink, flagLink, idLink, optionalChoiceLink, textLink, useLinkedState, useScreenPlace } from "../screen-link";
 import { apiRequest, type BootstrapData } from "../api-client";
 import {
   Badge,
@@ -53,6 +54,11 @@ const BOARD_TABS: readonly ResourceTab[] = ["board", "list"];
 const PLAN_TABS: readonly ResourceTab[] = ["workload", "tasks"];
 type WorkloadView = "table" | "gantt";
 type Focus = "over" | "overdue" | "late" | "missing";
+// Team overview's link: "#/resources/<tab>?…" with the tab's filters (screen-link.tsx); codecs are made once.
+const RESOURCE_TABS: readonly ResourceTab[] = ["board", "list", "workload", "tasks"];
+const WORKLOAD_VIEW_LINK = choiceLink<WorkloadView>(["table", "gantt"]);
+const WORKLOAD_FOCUS_LINK = optionalChoiceLink<Focus>(["over", "overdue", "late", "missing"]);
+const WORKLOAD_WEEKS_LINK = choiceLink<string>(["8", "12", "16", "24"]);
 const MANAGER_ROLES = ["Admin", "Engineering Manager", "Project Manager"];
 const ALL_DEPARTMENTS = "All departments";
 const PAGE_SIZE = 50;
@@ -118,23 +124,26 @@ export function ProductionResourcePlan({
     bootstrap.permissions.includes("project.read");
   const canBoard = bootstrap.permissions.includes("team.board");
   const allowedTabs = [...(canBoard ? BOARD_TABS : []), ...(canRead ? PLAN_TABS : [])];
-  const [storedTab, setTab] = useState<ResourceTab>(() => readStored(tabStorageKey(bootstrap.user.id), ["board", "list", "workload", "tasks"], "board"));
+  // The tab is the link's place; without one, the tab last used here.
+  const [opened, place] = useScreenPlace();
+  const [storedTab, setTab] = useState<ResourceTab>(() => RESOURCE_TABS.find((tab) => tab === opened[0]) ?? readStored(tabStorageKey(bootstrap.user.id), RESOURCE_TABS, "board"));
   // A remembered tab the person may no longer open falls back to the first one they may.
   const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : allowedTabs[0] ?? "board";
-  const [view, setView] = useState<WorkloadView>(() => readStored(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table"));
+  const [view, setView] = useLinkedState<WorkloadView>("display", "table", WORKLOAD_VIEW_LINK, { legacy: () => readStored<WorkloadView>(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table") });
   // Team Activity sees which Resource Plan tab is open (keys follow the tab ids).
   useActivitySubView(`resources-${tab}`);
   const [data, setData] = useState<Workload | null>(null);
   const [loading, setLoading] = useState(false),
     [error, setError] = useState("");
-  const [search, setSearch] = useState(""),
-    [department, setDepartment] = useState(ALL_DEPARTMENTS),
-    [focus, setFocus] = useState<Focus | null>(null),
-    [showIdle, setShowIdle] = useState(false),
+  // The weekly workload's filters ("w…", apart from the board's) are on the link; the person whose drawer is open too, not remembered.
+  const [search, setSearch] = useLinkedState("wq", "", textLink, { remember: false }),
+    [department, setDepartment] = useLinkedState("wdept", ALL_DEPARTMENTS, textLink),
+    [focus, setFocus] = useLinkedState<Focus | null>("wattention", null, WORKLOAD_FOCUS_LINK),
+    [showIdle, setShowIdle] = useLinkedState("widle", false, flagLink),
     [page, setPage] = useState(1);
-  const [start, setStart] = useState(() => dateFromDay(dayNumber(today()) - 14)),
-    [horizon, setHorizon] = useState("12");
-  const [personId, setPersonId] = useState<number | null>(null),
+  const [start, setStart] = useLinkedState("wfrom", dateFromDay(dayNumber(today()) - 14), textLink, { remember: false }),
+    [horizon, setHorizon] = useLinkedState("wweeks", "12", WORKLOAD_WEEKS_LINK);
+  const [personId, setPersonId] = useLinkedState("wperson", null, idLink, { remember: false }),
     [unassignedOpen, setUnassignedOpen] = useState(false),
     [edit, setEdit] = useState<Commitment | null>(null),
     [capacityUser, setCapacityUser] = useState<number | null>(null);
@@ -163,11 +172,11 @@ export function ProductionResourcePlan({
   const changeTab = (next: ResourceTab) => {
     setTab(next);
     store(tabStorageKey(bootstrap.user.id), next);
+    place([next]);
   };
-  const changeView = (next: WorkloadView) => {
-    setView(next);
-    store(viewStorageKey(bootstrap.user.id), next);
-  };
+  const changeView = (next: WorkloadView) => setView(next);
+  // The address names the tab on show, so the page's link opens on it.
+  useEffect(() => { place([tab], "replace"); }, [tab, place]);
   const saveOrder = async (userId: number, keys: string[]) => {
     await saveWorkOrder(userId, keys);
     setData((current) => current && { ...current, priorities: [...current.priorities.filter((entry) => entry.userId !== userId), { userId, keys }] });
@@ -330,7 +339,7 @@ export function ProductionResourcePlan({
       {onBoard ? (
         <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} />
       ) : tab === "tasks" ? (
-        <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} onChanged={() => setData(null)} openProjectSchedule={openProjectSchedule} />
+        <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} linked onChanged={() => setData(null)} openProjectSchedule={openProjectSchedule} />
       ) : (
         <>
           {error ? (
@@ -393,7 +402,7 @@ export function ProductionResourcePlan({
                   </button>
                 ) : null}
                 {focused.length > busy.length ? (
-                  <button type="button" className="btn default sm" onClick={() => filtered(() => setShowIdle((value) => !value))}>
+                  <button type="button" className="btn default sm" onClick={() => filtered(() => setShowIdle(!showIdle))}>
                     {t(showIdle ? "Hide people without work" : "Show all engineers")}
                   </button>
                 ) : null}

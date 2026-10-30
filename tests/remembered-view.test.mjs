@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { documentRoute, hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
+import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
 
 const allowed = ["dashboard", "estimates", "labor-packages", "support", "documents", "activity", "profile"];
 test("canonical and emailed document links resolve to the same positive safe record ID", () => {
@@ -52,7 +52,7 @@ test("a screen's address opens that screen in a new tab, even over the remembere
 });
 
 test("workspace and document addresses name a screen; other record links and anchors do not", () => {
-  for (const hash of ["", "#", "#/", "#/Estimates", "#/a/b", "#performance-work-evidence", "#/1abc"]) {
+  for (const hash of ["", "#", "#/", "#/Estimates", "#/A/b", "#performance-work-evidence", "#/1abc"]) {
     assert.equal(viewFromHash(hash), null, hash);
   }
   assert.equal(hashView("#support"), "support");
@@ -86,4 +86,23 @@ test("menu entries are links to their screen and the address bar follows the ope
   assert.match(app, /if \(!allowedViews\(bootstrap\)\.includes\(target\) \|\| !setView\(target\)\)/);
   assert.match(app, /if \(next !== view && !confirmReportNavigation\(\)\) return false;/);
   assert.match(app, /restoredView\(saved, allowed, window\.location\.hash, initialVerifyCode, dailyLanding, requested => landingView\(requested as View, data\.permissions\)\)/);
+});
+
+test("a screen's own place and filters ride on its address and come back out unchanged", () => {
+  const hash = screenHash("projects", ["plan", 42, "task", 77], { team: "Application Team", pm: "12", status: "", q: null });
+  assert.equal(hash, "#/projects/plan/42/task/77?pm=12&team=Application+Team");
+  assert.deepEqual(parseScreenHash(hash), { view: "projects", path: ["plan", "42", "task", "77"], params: { pm: "12", team: "Application Team" } });
+  assert.equal(viewFromHash(hash), "projects");
+  assert.equal(hashView(hash), "projects");
+  assert.equal(baseHash(hash), "#/projects");
+  assert.equal(restoredView("dashboard", ["dashboard", "projects"], hash, undefined, "dashboard"), "projects");
+  // Path segments are encoded, so a name with a slash or a question mark stays one segment.
+  assert.deepEqual(parseScreenHash(screenHash("knowledge", ["a/b?c"])).path, ["a/b?c"]);
+  assert.equal(screenHash("resources"), "#/resources");
+  assert.deepEqual(parseScreenHash("#/resources/"), { view: "resources", path: [], params: {} });
+  // A document keeps its record in the part the shell owns, and may carry filters.
+  assert.equal(baseHash("#/estimates/42?tab=cost"), "#/estimates/42");
+  assert.deepEqual(documentRoute("#/estimates/42?tab=cost"), { view: "estimates", id: 42 });
+  for (const hash of ["#crm/4", "#support/7", "#/", "#/Projects", "#project/41/task/70"]) assert.equal(parseScreenHash(hash), null, hash);
+  assert.equal(baseHash("#support/7"), null);
 });

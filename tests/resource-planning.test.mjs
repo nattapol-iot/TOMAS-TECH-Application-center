@@ -116,7 +116,8 @@ test("Team overview opens on the team board; its weekly workload reads once and 
   // The team board and its list first (team.board), then the weekly workload and Tasks (schedule access); the last tab is remembered per person.
   assert.match(screen, /\{ id: "board" as const, label: "TeamBoard\.tabBoard" \}, \{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
   assert.match(screen, /\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \}, \{ id: "tasks" as const, label: "Workload\.tabTasks" \}/);
-  assert.match(screen, /readStored\(tabStorageKey\(bootstrap\.user\.id\), \["board", "list", "workload", "tasks"\], "board"\)/);
+  // A link names the tab; without one, the tab last used here.
+  assert.match(screen, /RESOURCE_TABS\.find\(\(tab\) => tab === opened\[0\]\) \?\? readStored\(tabStorageKey\(bootstrap\.user\.id\), RESOURCE_TABS, "board"\)/);
   assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : allowedTabs\[0\] \?\? "board";/);
   assert.match(screen, /tomas-tech-resource-plan-tab:\$\{userId\}/);
   assert.doesNotMatch(screen, /id: "gantt"|id: "items"|KpiCard|BarChart/);

@@ -28,6 +28,7 @@ import {
 } from "../resource-workload-client";
 import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
 import { boardDays, covers, dailyLoad, defaultTaskManDays, dueGroup, freestOn, loadBand, outlookDates, outlookLoad, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad } from "../../../lib/team-board";
+import { choiceLink, idLink, listLink, optionalChoiceLink, textLink, useLinkedState, type LinkCodec } from "../screen-link";
 import "./team-board.css";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, a day grid coloured by load, a list of all
@@ -59,6 +60,9 @@ function readTeams(userId: number): string[] {
   }
 }
 const LIST_PAGE = 100;
+// The board's link (screen-link.tsx): its window, teams, filters, layout and the task open in the drawer.
+const WEEKS_LINK: LinkCodec<2 | 4> = { parse: (text) => (text === "2" ? 2 : text === "4" ? 4 : null), format: String };
+const LAYOUT_LINK = choiceLink(["grid", "gantt"] as const);
 const CATEGORIES: { key: Category; label: string; colour: string }[] = [
   { key: "rfq", label: "TeamBoard.typeRfq", colour: "var(--blue)" },
   { key: "est", label: "TeamBoard.typeEst", colour: "var(--green)" },
@@ -83,6 +87,8 @@ function readView(userId: number): "grid" | "gantt" {
   try { return typeof window !== "undefined" && window.localStorage.getItem(viewKey(userId)) === "gantt" ? "gantt" : "grid"; } catch { return "grid"; }
 }
 
+const CATEGORY_LINK = optionalChoiceLink<Category>(["rfq", "est", "prj", "appointment", "task", "away"]);
+const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over"]);
 const LIST_TYPES: Record<Category, string> = {
   rfq: "TeamBoard.listRfq", est: "TeamBoard.listEst", prj: "TeamBoard.chipPrj", appointment: "TeamBoard.listAppointment", task: "TeamBoard.kindTask", away: "TeamBoard.typeAway",
 };
@@ -151,23 +157,20 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   onChanged?: () => void;
 }) {
   const { t, lang } = useLanguage();
-  const [start, setStart] = useState(() => mondayOf(today));
-  const [weeks, setWeeks] = useState<2 | 4>(2);
+  const [start, setStart] = useLinkedState("from", mondayOf(today), textLink, { remember: false });
+  const [weeks, setWeeks] = useLinkedState("weeks", 2, WEEKS_LINK);
   const [data, setData] = useState<TeamBoardData | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
-  const [chosenTeams, setChosenTeams] = useState<string[]>(() => (typeof window === "undefined" ? [] : readTeams(bootstrap.user.id)));
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<Category | null>(null), [attention, setAttention] = useState<Attention | null>(null);
-  const [personId, setPersonId] = useState<number | null>(null), [listShown, setListShown] = useState(LIST_PAGE);
+  const [chosenTeams, setChosenTeams] = useLinkedState("teams", [], listLink, { legacy: () => { const teams = readTeams(bootstrap.user.id); return teams.length ? teams : null; } });
+  const [search, setSearch] = useLinkedState("q", "", textLink, { remember: false });
+  const [category, setCategory] = useLinkedState<Category | null>("kind", null, CATEGORY_LINK), [attention, setAttention] = useLinkedState<Attention | null>("attention", null, ATTENTION_LINK);
+  const [personId, setPersonId] = useLinkedState("person", null, idLink, { remember: false }), [listShown, setListShown] = useState(LIST_PAGE);
   // A new task: blank for a person and day, or a copy of one to change and save as new.
   const [adding, setAdding] = useState<{ assigneeId: number | null; date: string; copy?: TeamTask; draft?: Draft } | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [boardView, setBoardView] = useState<"grid" | "gantt">(() => readView(bootstrap.user.id));
-  const pickView = (next: "grid" | "gantt") => {
-    setBoardView(next);
-    try { window.localStorage.setItem(viewKey(bootstrap.user.id), next); } catch { /* the view is a convenience */ }
-  };
-  const [editing, setEditing] = useState<TeamTask | null>(null);
+  const [boardView, pickView] = useLinkedState<"grid" | "gantt">("layout", "grid", LAYOUT_LINK, { legacy: () => readView(bootstrap.user.id) });
+  // The task open in the drawer is on the link by its id, so the link opens it once the board has read it.
+  const [editingId, setEditingId] = useLinkedState("task", null, idLink, { remember: false });
   // The window the grid shows, read with four months after it so the list sees what is coming.
   const range = useMemo(() => ({ from: start, to: dateFromDay(dayNumber(start) + Math.max(weeks * 7, 120) - 1) }), [start, weeks]);
   const load = useCallback(async () => {
@@ -179,6 +182,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
 
   const me = bootstrap.user.id;
+  const editing = editingId === null ? null : data?.tasks.find((task) => task.id === editingId) ?? null;
+  const setEditing = (task: TeamTask | null) => setEditingId(task?.id ?? null);
   // Owner decision 2026-10-28: Admins, Leaders and managers add work for anyone; everyone else on their own row.
   const canAssignOthers = Boolean(data?.canAssignOthers);
   const assignable = useMemo(() => (canAssignOthers ? null : [me]), [canAssignOthers, me]);
@@ -273,7 +278,6 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const pickTeams = (next: string[]) => {
     setChosenTeams(next);
     setListShown(LIST_PAGE);
-    try { window.localStorage.setItem(teamsKey(me), JSON.stringify(next)); } catch { /* remembered teams are a convenience */ }
   };
   const query = search.trim().toLocaleLowerCase();
   const inDepartment = (userId: number) => !teams.length || teams.includes(bootstrap.team.find((user) => user.id === userId)?.department ?? "");

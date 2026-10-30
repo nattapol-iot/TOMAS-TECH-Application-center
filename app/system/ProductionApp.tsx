@@ -5,7 +5,8 @@ import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { useActivityPresence } from "./use-activity-presence";
-import { documentRoute, hashView, isPlainClick, RECORD_LINK, restoredView, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
+import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, screenPlace, screenTail, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
+import { CopyLinkButton, ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
@@ -222,6 +223,14 @@ const WORKSPACE_LABEL = IS_LOCAL_READ_ONLY ? "LOCAL READ ONLY" : IS_TEAM_TEST_MO
 const LANGUAGE_STORAGE_KEY = "tomas-tech-language";
 const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups-v2";
 const DEFAULT_COLLAPSED_GROUPS = ["MASTER DATA", "ESTIMATING LIBRARY", "ADMINISTRATION", "HELP", "TEAM & PERFORMANCE", "DOCUMENTS & SIGNING"];
+type ProjectTab = "portfolio" | "schedule" | "punchlist";
+/** The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist". */
+const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist" };
+const projectTabOf = (hash: string): ProjectTab => {
+  const address = parseScreenHash(hash);
+  const segment = address?.view === "projects" ? address.path[0] : undefined;
+  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : "portfolio";
+};
 const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
 
 export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode?: string } = {}) {
@@ -238,7 +247,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [userOpen, setUserOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [projectTab, setProjectTab] = useState<"portfolio" | "schedule" | "punchlist">("portfolio");
+  const [projectTab, setProjectTab] = useState<ProjectTab>(() => (typeof window === "undefined" ? "portfolio" : projectTabOf(window.location.hash)));
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
   const [preferredScheduleTaskId, setPreferredScheduleTaskId] = useState<number | null>(null);
@@ -309,6 +318,23 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   /** The address identifies the open document as well as its workspace. */
   const recordId = view === "estimates" ? preferredEstimateId : view === "inquiries" ? preferredInquiryId : null;
   const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view, recordId);
+  // What the open screen has put after its address (its tab, record and filters; screen-link.tsx), and a counter that
+  // remounts the screen when Back, Forward or a pasted link changes that place under it.
+  const screenLink = useRef<ScreenLinkState>({ view: "", path: [], params: {}, fromLink: false });
+  const [linkRevision, setLinkRevision] = useState(0);
+  const screenLinkValue = useMemo(() => ({ view, base: address, userId: bootstrap?.user.id ?? 0, state: screenLink }), [view, address, bootstrap?.user.id]);
+  const linkStateFor = useCallback((open: string, base: string) => {
+    if (screenLink.current.view !== open) screenLink.current = screenPlace(window.location.hash, open, base);
+    return screenLink.current;
+  }, []);
+  /** Puts a place on the open screen's address, e.g. the Projects tab; Back returns to the last one. */
+  const placeScreen = useCallback((path: (string | number)[]) => {
+    const state = linkStateFor(view, address);
+    state.path = path.map(String);
+    const next = address + screenTail(state.path, state.params);
+    if (baseHash(window.location.hash) === address && window.location.hash !== next) window.history.pushState(null, "", window.location.pathname + window.location.search + next);
+  }, [view, address, linkStateFor]);
+  const changeProjectTab = (tab: ProjectTab) => { setProjectTab(tab); placeScreen(tab === "portfolio" ? [] : [PROJECT_TAB_SEGMENT[tab]]); };
   // Returns false when the person keeps unsaved changes. A #support/<id> fragment is left for the address
   // effect to replace with the next screen's, so Back reopens that ticket.
   const setView = useCallback((next: View) => {
@@ -430,6 +456,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const document = documentRoute(window.location.hash);
     setPreferredEstimateId(target === "estimates" ? document?.id ?? null : null);
     setPreferredInquiryId(target === "inquiries" ? document?.id ?? null : null);
+    if (target === "projects") setProjectTab(projectTabOf(window.location.hash));
     setViewState(target);
     setBootstrap(data);
   }, [initialVerifyCode]);
@@ -448,13 +475,17 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (!bootstrap) return;
     const hash = window.location.hash;
     if (RECORD_LINK.test(hash)) return;
-    if (hash !== address) {
+    // The screen's place (its tab, record and filters) follows the shell's part; a screen just opened may already have set it.
+    const place = view === "support" ? null : linkStateFor(view, address);
+    if (place && view === "projects" && !place.path.length && projectTab !== "portfolio") place.path = [PROJECT_TAB_SEGMENT[projectTab]];
+    const target = address + (place ? screenTail(place.path, place.params) : "");
+    if (baseHash(hash) !== address && hash !== address) {
       const document = documentRoute(hash);
       const replace = !addressed.current || (hashView(hash) === view && (!document || document.id === recordId));
-      window.history[replace ? "replaceState" : "pushState"](null, "", window.location.pathname + window.location.search + address);
-    }
+      window.history[replace ? "replaceState" : "pushState"](null, "", window.location.pathname + window.location.search + target);
+    } else if (hash !== target) window.history.replaceState(null, "", window.location.pathname + window.location.search + target);
     addressed.current = true;
-  }, [bootstrap, view, address, recordId]);
+  }, [bootstrap, view, address, recordId, projectTab, linkStateFor]);
 
   // Back, Forward and an edited address. A screen this person cannot open, or a change they decline
   // to discard, puts the open screen's address back.
@@ -465,17 +496,26 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       if (!requested) return;
       const target = landingView(requested as View, bootstrap.permissions);
       const document = documentRoute(window.location.hash);
-      if (target === view && (!document || document.id === recordId)) return;
+      if (target === view && (!document || document.id === recordId)) {
+        const place = linkStateFor(view, address);
+        if (window.location.hash !== address + screenTail(place.path, place.params)) {
+          screenLink.current = screenPlace(window.location.hash, view, address);
+          if (view === "projects") setProjectTab(projectTabOf(window.location.hash));
+          setLinkRevision((value) => value + 1);
+        }
+        return;
+      }
       if (!allowedViews(bootstrap).includes(target) || !setView(target)) {
         window.history.replaceState(null, "", window.location.pathname + window.location.search + address);
         return;
       }
       if (target === "estimates") setPreferredEstimateId(document?.id ?? null);
       if (target === "inquiries") setPreferredInquiryId(document?.id ?? null);
+      if (target === "projects") setProjectTab(projectTabOf(window.location.hash));
     };
     window.addEventListener("hashchange", follow);
     return () => window.removeEventListener("hashchange", follow);
-  }, [bootstrap, view, address, recordId, setView]);
+  }, [bootstrap, view, address, recordId, setView, linkStateFor]);
 
   useEffect(() => {
     if (!IS_AUTH_CONFIGURED) {
@@ -660,9 +700,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setPreferredScheduleTaskId(taskId ?? null);
     setScheduleLinkCount((count) => count + 1);
     setProjectTab("schedule");
-    setView("projects");
+    if (!setView("projects")) return;
+    // The plan writes its own place once it opens; until then the address already names the project.
+    screenLink.current = { view: "projects", path: ["plan", String(projectId), ...(taskId ? ["task", String(taskId)] : [])], params: {}, fromLink: true };
+    if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
     window.scrollTo({ top: 0 });
-  }, [setView]);
+  }, [setView, view]);
   const openSiteVisit = useCallback((visitId: number) => {
     setPreferredSiteVisitId(visitId);
     setView("site-visits");
@@ -797,6 +840,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           </button>
           <div className="production-indicator"><span className="status-dot online" /><strong>{t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</strong><small>{t("SQL Server API")}</small></div>
           <div className="topbar-right">
+            <CopyLinkButton notify={setToast} />
             <button className="btn default sm" type="button" onClick={() => setSupportCreate(true)}><Icon name="inbox" />{supportLabel("Report a problem", language)}</button>
             <div className="lang-switch" role="group" aria-label={t("Language")}>
               {LANGUAGES.map((code) => (
@@ -825,7 +869,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           </div>
         </header>
         {IS_LOCAL_READ_ONLY ? <div className="local-read-only-banner" role="status"><strong>Local read-only</strong><span>Remote Team Test database · schema {CONNECTED_SCHEMA_VERSION} · changes disabled</span></div> : null}
-        <main className="page">
+        <ScreenLinkProvider value={screenLinkValue}>
+        <main className="page" key={linkRevision}>
           {view === "dashboard" ? DASHBOARD_ROLES.includes(bootstrap.user.role) ? <ExecutiveDashboard bootstrap={bootstrap} personal={personalDashboard} onOpen={(destination, id) => {
             if (id && destination === "inquiries") openInquiry(id);
             else if (id && destination === "estimates") openEstimate(id);
@@ -838,9 +883,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /> : null}
           {view === "projects" ? <>
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
-            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={setProjectTab} /> : null}
+            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={changeProjectTab} /> : null}
             <div style={{ marginTop: 14 }}>
-              {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
+              {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues linked openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
             </div>
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
@@ -889,6 +934,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "manual" ? <EmployeeManualScreen /> : null}
           {view === "support" ? <SupportCenter externalRevision={supportRevision} ticketId={supportTicketId} onSelect={openSupport} onCreate={() => setSupportCreate(true)} notify={setToast} onDirtyChange={onSupportDirtyChange} /> : null}
         </main>
+        </ScreenLinkProvider>
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
