@@ -2,7 +2,7 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `df41e727`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `cbe55e4b`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -11,16 +11,17 @@ Evidence: source snapshot `df41e727`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/:projectId/schedule` | 107–113 |
 | POST | `/api/v1/projects/:projectId/schedule/tasks` | 115–132 |
 | PUT | `/api/v1/schedule/tasks/:id` | 134–157 |
-| POST | `/api/v1/schedule/tasks/:id/updates` | 159–175 |
-| POST | `/api/v1/schedule/tasks/:id/day-requests` | 177–186 |
-| POST | `/api/v1/schedule/day-requests/:id/answer` | 188–198 |
-| POST | `/api/v1/schedule/tasks/:id/details` | 200–204 |
-| DELETE | `/api/v1/schedule/tasks/:id/details` | 206–209 |
-| POST | `/api/v1/projects/:projectId/schedule/baseline` | 211–215 |
-| GET | `/api/v1/schedule/day-requests/pending` | 219–241 |
-| GET | `/api/v1/schedule/search` | 246–265 |
-| GET | `/api/v1/me/work` | 267–275 |
-| GET | `/api/v1/me/work/updates` | 277–280 |
+| POST | `/api/v1/schedule/tasks/:id/move` | 161–197 |
+| POST | `/api/v1/schedule/tasks/:id/updates` | 199–215 |
+| POST | `/api/v1/schedule/tasks/:id/day-requests` | 217–226 |
+| POST | `/api/v1/schedule/day-requests/:id/answer` | 228–238 |
+| POST | `/api/v1/schedule/tasks/:id/details` | 240–244 |
+| DELETE | `/api/v1/schedule/tasks/:id/details` | 246–249 |
+| POST | `/api/v1/projects/:projectId/schedule/baseline` | 251–255 |
+| GET | `/api/v1/schedule/day-requests/pending` | 259–281 |
+| GET | `/api/v1/schedule/search` | 286–305 |
+| GET | `/api/v1/me/work` | 307–315 |
+| GET | `/api/v1/me/work/updates` | 317–320 |
 
 ## Named functions
 
@@ -32,7 +33,7 @@ Evidence: source snapshot `df41e727`; generated, do not edit. [backend-node/src/
 | `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 51–57 |
 | `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 59–70 |
 | `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 72–102 |
-| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 105–281 |
+| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 105–321 |
 
 ## Direct local dependencies
 

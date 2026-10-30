@@ -84,7 +84,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
       ) : null}
 
       <Toolbar>
-        <SearchInput value={query} onChange={setQuery} placeholder="Downloads.search" />
+        <SearchInput link="q" value={query} onChange={setQuery} placeholder="Downloads.search" />
         {categories ? <span className="download-center-count">{total} <LocalizedText text={"Downloads.files"} /></span> : null}
       </Toolbar>
 

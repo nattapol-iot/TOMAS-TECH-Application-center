@@ -1,5 +1,6 @@
 "use client";
 
+import { optionalTextLink, textLink, useLinkedState } from "../screen-link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   createSourceRepository, deleteRepositoryPath, deleteSourceRepository, downloadRepositoryArchive, downloadRepositoryFile,
@@ -73,7 +74,7 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   const [project, setProject] = useState("");
   const [view, setView] = useState(readPreference);
   const [creating, setCreating] = useState(false);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useLinkedState("repo", null, optionalTextLink, { remember: false });
   const t = useT();
   const { lang } = useLanguage();
   const dateFormat = new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", year: "numeric" });
@@ -124,7 +125,7 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   return (
     <>
       <Toolbar>
-        <SearchInput value={query} onChange={setQuery} placeholder="Repos.search" />
+        <SearchInput link="rq" value={query} onChange={setQuery} placeholder="Repos.search" />
         <label className="select-field">
           <span className="sr-only">{t("Repos.project")}</span>
           <select value={project} onChange={(event) => setProject(event.target.value)}>
@@ -300,8 +301,8 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
   const t = useT();
   const [detail, setDetail] = useState<SourceRepositoryDetail | null>(null);
   const [tab, setTab] = useState<"code" | "history">("code");
-  const [path, setPath] = useState("");
-  const [file, setFile] = useState<string | null>(null);
+  const [path, setPath] = useLinkedState("path", "", textLink, { remember: false });
+  const [file, setFile] = useLinkedState("file", null, optionalTextLink, { remember: false });
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);

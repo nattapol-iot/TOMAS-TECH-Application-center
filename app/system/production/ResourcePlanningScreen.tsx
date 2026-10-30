@@ -331,6 +331,7 @@ export function ProductionResourcePlan({
       <Tabs
         active={tab}
         onChange={changeTab}
+        link={null}
         tabs={[
           ...(canBoard ? [{ id: "board" as const, label: "TeamBoard.tabBoard" }, { id: "list" as const, label: "TeamBoard.tabList" }] : []),
           ...(canRead ? [{ id: "workload" as const, label: "TeamBoard.tabWeekly" }, { id: "tasks" as const, label: "Workload.tabTasks" }] : []),

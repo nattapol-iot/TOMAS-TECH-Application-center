@@ -435,7 +435,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
         <button type="button" className={mine ? "on" : ""} aria-pressed={mine} onClick={() => { setMine(true); setOwnerId("All owners"); resetPage(); }}><LocalizedText text={"My estimates"} /></button>
         <button type="button" className={mine ? "" : "on"} aria-pressed={!mine} onClick={() => { setMine(false); resetPage(); }}><LocalizedText text={"All estimates"} /></button>
       </div> : null}
-      <SearchInput value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
+      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
       <div className="est-filter">
         <button className={advancedFiltersOpen || chips.length ? "btn default active" : "btn default"} type="button" aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((current) => !current)}><Icon name="filter" />{copy("ตัวกรอง", "Filters", "フィルター")}{chips.length ? <span className="est-count">{chips.length}</span> : null}</button>
         {advancedFiltersOpen ? <div className="est-filter-pop" role="group" aria-label={copy("ตัวกรองเพิ่มเติม", "More filters", "詳細フィルター")}>

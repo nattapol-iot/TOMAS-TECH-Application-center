@@ -7,6 +7,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { useT } from "./i18n";
+import { useLinkedControl } from "./screen-link";
 
 /* --------------------------------------------------------------------------
    Icons — inline so glyphs render identically on every workstation.
@@ -265,11 +266,16 @@ export function ProgressCell({ value }: { value: number }) {
   );
 }
 
-export function Tabs<T extends string>({ tabs, active, onChange }: {
+export function Tabs<T extends string>({ tabs, active, onChange, link }: {
   /* raw: the label is already in the reader's language; translating it again lets the alias map swap words. */
   tabs: { id: T; label: string; count?: number; raw?: boolean }[]; active: T; onChange: (id: T) => void;
+  /** The tab's name on the screen's link (screen-link.tsx); by default made from the first tab, null to leave it off. */
+  link?: string | null;
 }) {
   const t = useT();
+  const ids = tabs.map((tab) => tab.id as string).join("|");
+  useLinkedControl(link === undefined ? (tabs[0] ? `tab-${tabs[0].id}` : null) : link, active, onChange as (id: string) => void,
+    { empty: "", valid: (id) => ids.split("|").includes(id) });
   return (
     <div className="tabs" role="tablist">
       {tabs.map((tab) => (
@@ -297,14 +303,17 @@ export type FilterItem = {
 };
 
 /** A stacked bar with a legend; picking the active segment again clears the filter. */
-export function SegmentBar({ items, active, onPick, lead, label }: {
+export function SegmentBar({ items, active, onPick, lead, label, link }: {
   items: FilterItem[]; active: string | null; onPick: (key: string | null) => void;
   /** Shown before the bar, e.g. the total it describes. */
   lead?: React.ReactNode;
   /** Accessible name of the group; a dictionary key. */
   label?: string;
+  /** The filter's name on the screen's link, remembered for each person (screen-link.tsx). */
+  link?: string;
 }) {
   const t = useT();
+  useLinkedControl(link, active ?? "", (key) => onPick(key || null), { remember: true, valid: (key) => items.some((item) => item.key === key) });
   const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0);
   const pick = (key: string) => onPick(active === key ? null : key);
   return (
@@ -331,10 +340,13 @@ export function SegmentBar({ items, active, onPick, lead, label }: {
 }
 
 /** Counted shortcuts; a chip with nothing behind it is disabled unless it is the active filter. */
-export function FilterChips({ items, active, onPick, label }: {
+export function FilterChips({ items, active, onPick, label, link }: {
   items: FilterItem[]; active: string | null; onPick: (key: string | null) => void; label?: string;
+  /** The filter's name on the screen's link, remembered for each person (screen-link.tsx). */
+  link?: string;
 }) {
   const t = useT();
+  useLinkedControl(link, active ?? "", (key) => onPick(key || null), { remember: true, valid: (key) => items.some((item) => item.key === key) });
   return (
     <ul className="filter-chips" aria-label={label ? t(label) : undefined}>
       {items.map((item) => (
@@ -353,8 +365,12 @@ export function Toolbar({ children }: { children: React.ReactNode }) {
   return <div className="toolbar">{children}</div>;
 }
 
-export function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+export function SearchInput({ value, onChange, placeholder, link }: { value: string; onChange: (v: string) => void; placeholder: string;
+  /** The search's name on the screen's link (screen-link.tsx); not remembered. */
+  link?: string;
+}) {
   const t = useT();
+  useLinkedControl(link, value, onChange);
   return (
     <label className="search-field">
       <Icon name="search" />
@@ -364,10 +380,13 @@ export function SearchInput({ value, onChange, placeholder }: { value: string; o
   );
 }
 
-export function Select({ label, value, options, onChange, width }: {
+export function Select({ label, value, options, onChange, width, link }: {
   label: string; value: string; options: string[]; onChange: (v: string) => void; width?: number;
+  /** The filter's name on the screen's link, remembered for each person (screen-link.tsx); the first option is left out. */
+  link?: string;
 }) {
   const t = useT();
+  useLinkedControl(link, value, onChange, { remember: true, empty: options[0] ?? "", valid: (option) => options.includes(option) });
   return (
     <label className="select-field" style={width ? { width } : undefined}>
       <span className="sr-only">{t(label)}</span>
@@ -640,4 +659,22 @@ export function Pagination({ page, pageCount, from, to, total, onPage }: {
       </nav>
     </div>
   );
+}
+
+/** Copies the address of what is on screen (its tab, open record and filters; screen-link.tsx), ready to paste to a teammate. */
+export function CopyLinkButton({ notify, label = true, className = "btn default sm" }: { notify: (message: string) => void; label?: boolean; className?: string }) {
+  const t = useT();
+  const copy = async () => {
+    const href = window.location.href;
+    try {
+      await navigator.clipboard.writeText(href);
+      notify(t("Link.copied"));
+    } catch {
+      // No clipboard (an old browser or a blocked permission): show the link to copy by hand.
+      window.prompt(t("Link.copyPrompt"), href);
+    }
+  };
+  return <button className={className} type="button" onClick={() => { void copy(); }} title={t("Link.copyHint")} aria-label={t("Link.copy")}>
+    <Icon name="link" />{label ? t("Link.copy") : null}
+  </button>;
 }

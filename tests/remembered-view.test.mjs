@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
+import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, screenPlace, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
 
 const allowed = ["dashboard", "estimates", "labor-packages", "support", "documents", "activity", "profile"];
 test("canonical and emailed document links resolve to the same positive safe record ID", () => {
@@ -105,4 +105,14 @@ test("a screen's own place and filters ride on its address and come back out unc
   assert.deepEqual(documentRoute("#/estimates/42?tab=cost"), { view: "estimates", id: 42 });
   for (const hash of ["#crm/4", "#support/7", "#/", "#/Projects", "#project/41/task/70"]) assert.equal(parseScreenHash(hash), null, hash);
   assert.equal(baseHash("#support/7"), null);
+});
+
+test("a screen opened on a link keeps the filters it opened on apart from what its parts write later", () => {
+  const place = screenPlace("#/projects/plan/42?only=late", "projects", "#/projects");
+  assert.deepEqual(place, { view: "projects", path: ["plan", "42"], params: { only: "late" }, opened: { only: "late" }, fromLink: true });
+  place.params.q = "pump";
+  assert.deepEqual(place.opened, { only: "late" }, "a later part's filter is not taken for the link's");
+  assert.equal(screenPlace("#/projects", "projects", "#/projects").fromLink, false, "a plain menu address opens on remembered filters");
+  assert.deepEqual(screenPlace("#/resources/board", "projects", "#/projects"), { view: "projects", path: [], params: {}, opened: {}, fromLink: false }, "another screen's address");
+  assert.deepEqual(screenPlace("#/estimates/42?q=x", "estimates", "#/estimates/42").path, [], "the record is the shell's part");
 });

@@ -239,13 +239,13 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
     </div>
     <Toolbar>
       <div style={{ minWidth: 310, flex: 1 }}><label className="search-field"><Icon name="search" /><input maxLength={200} value={search} onChange={(event) => { setSearch(event.target.value); resetPage(); }} placeholder={uiText("Search inquiry, project, customer, end user or RFQ…")} />{search ? <button type="button" onClick={() => setSearch("")} aria-label={uiText("Clear search")}><Icon name="x" /></button> : null}</label></div>
-      <Select label="Customer" value={customer} onChange={(value) => { setCustomer(value); resetPage(); }} options={["All customers", ...bootstrap.customers.map((item) => item.code)]} />
-      <Select label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...types]} />
-      {queueScope === "team" ? <Select label="Estimate owner" value={owner} onChange={(value) => { setOwner(value); resetPage(); }} options={["All owners", ...bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role)).map((member) => member.name)]} /> : null}
-      <Select label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "New", "Estimating", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Approved", "Cancelled"]} />
-      <Select label="Priority" value={priority} onChange={(value) => { setPriority(value); resetPage(); }} options={["All priorities", "Urgent", "High", "Normal", "Low"]} />
-      <Select label="Customer interest" value={interestGrade} onChange={(value) => { setInterestGrade(value); resetPage(); }} options={["All grades", ...INTEREST_GRADES.map((item) => item.value)]} />
-      <Select label="Project probability" value={probabilityRange} onChange={(value) => { setProbabilityRange(value); resetPage(); }} options={PROBABILITY_RANGES.map((item) => item.label)} />
+      <Select link="customer" label="Customer" value={customer} onChange={(value) => { setCustomer(value); resetPage(); }} options={["All customers", ...bootstrap.customers.map((item) => item.code)]} />
+      <Select link="type" label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...types]} />
+      {queueScope === "team" ? <Select link="owner" label="Estimate owner" value={owner} onChange={(value) => { setOwner(value); resetPage(); }} options={["All owners", ...bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role)).map((member) => member.name)]} /> : null}
+      <Select link="status" label="Status" value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", "New", "Estimating", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Approved", "Cancelled"]} />
+      <Select link="priority" label="Priority" value={priority} onChange={(value) => { setPriority(value); resetPage(); }} options={["All priorities", "Urgent", "High", "Normal", "Low"]} />
+      <Select link="interest" label="Customer interest" value={interestGrade} onChange={(value) => { setInterestGrade(value); resetPage(); }} options={["All grades", ...INTEREST_GRADES.map((item) => item.value)]} />
+      <Select link="probability" label="Project probability" value={probabilityRange} onChange={(value) => { setProbabilityRange(value); resetPage(); }} options={PROBABILITY_RANGES.map((item) => item.label)} />
       <label className="btn ghost"><Icon name="calendar" /><span><LocalizedText text={"Inquiry date"} /></span><input aria-label={localizeCopy("Inquiry from date")} type="date" value={inquiryFrom} onChange={(event) => { setInquiryFrom(event.target.value); resetPage(); }} /></label>
       <label className="btn ghost"><Icon name="calendar" /><span><LocalizedText text={"Due date"} /></span><input aria-label={localizeCopy("Due through date")} type="date" value={dueTo} onChange={(event) => { setDueTo(event.target.value); resetPage(); }} /></label>
     </Toolbar>

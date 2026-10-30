@@ -1,5 +1,6 @@
 "use client";
 
+import { idLink, useLinkedState } from "../screen-link";
 import { LocalizedText } from "../LocalizedText";
 import { useT as useUiText } from "../i18n";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -133,7 +134,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
   const [reviewDue, setReviewDue] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [openDocumentId, setOpenDocumentId] = useState<number | null>(null);
+  const [openDocumentId, setOpenDocumentId] = useLinkedState("doc", null, idLink, { remember: false });
   const [creating, setCreating] = useState(false);
   const [acknowledgements, setAcknowledgements] = useState<KnowledgeAcknowledgement[]>([]);
   const [dashboard, setDashboard] = useState<KnowledgeDashboard | null>(null);
@@ -260,20 +261,20 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         {tab === "register" ? (
           <>
             <Toolbar>
-              <SearchInput
+              <SearchInput link="q"
                 value={search}
                 onChange={(value) => { setSearch(value); setPage(1); }}
                 placeholder="Search document number, title, tag, owner or category…"
               />
-              <Select label="Document type" value={documentType}
+              <Select link="type" label="Document type" value={documentType}
                 onChange={(value) => { setDocumentType(value); setPage(1); }} options={DOCUMENT_TYPE_FILTER} />
-              <Select label="Status" value={status}
+              <Select link="status" label="Status" value={status}
                 onChange={(value) => { setStatus(value); setPage(1); }} options={STATUS_FILTER} />
-              <Select label="Category" value={categoryName}
+              <Select link="category" label="Category" value={categoryName}
                 onChange={(value) => { setCategoryName(value); setPage(1); }} options={categoryOptions} />
-              <Select label="Confidentiality" value={confidentiality}
+              <Select link="confidentiality" label="Confidentiality" value={confidentiality}
                 onChange={(value) => { setConfidentiality(value); setPage(1); }} options={["All confidentiality", "Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"]} />
-              <Select label="Language" value={language}
+              <Select link="language" label="Language" value={language}
                 onChange={(value) => { setLanguage(value); setPage(1); }} options={["All languages", "EN", "TH", "JA"]} />
               <label className="check-inline">
                 <input type="checkbox" checked={reviewDue}
@@ -578,7 +579,7 @@ function ArticleLibrary({
   const [articleType, setArticleType] = useState("All article types");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useLinkedState("article", null, idLink, { remember: false });
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -596,8 +597,8 @@ function ArticleLibrary({
   return (
     <div className="stack">
       <Toolbar>
-        <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search how-to, troubleshooting, lessons learned…" />
-        <Select label="Article type" value={articleType} options={ARTICLE_TYPES} onChange={(value) => { setArticleType(value); setPage(1); }} />
+        <SearchInput link="aq" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search how-to, troubleshooting, lessons learned…" />
+        <Select link="atype" label="Article type" value={articleType} options={ARTICLE_TYPES} onChange={(value) => { setArticleType(value); setPage(1); }} />
         <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
         {canUpload ? <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" />{t("New article")}</button> : null}
       </Toolbar>

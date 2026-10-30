@@ -202,7 +202,7 @@ const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : v
     {unavailable ? <EmptyState icon="alertCircle" title={t("Labor packages are unavailable")} message={unavailable} /> : <div className="labor-workspace">
       <section className="labor-library" aria-label={t("Labor Packages")}>
         <div className="labor-library-tools">
-          <SearchInput value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder={t("Search name, code or activity")} />
+          <SearchInput link="q" value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder={t("Search name, code or activity")} />
           <div className="labor-status-filters" role="group" aria-label={t("Labor Packages")}>
             {[["", "All"], ["Active", "Ready to use"], ["Draft", "Draft"], ["Retired", "Retired"]].map(([value, label]) => <button key={value} className={status === value ? "is-active" : ""} type="button" aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }}>{t(label)}</button>)}
           </div>
