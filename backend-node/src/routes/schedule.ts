@@ -93,6 +93,8 @@ async function projectSchedule(transaction: TransactionType, database: Database,
       taskCount: shared.taskCount, doneCount: shared.doneCount, blockedCount: shared.blockedCount,
       health: shared.health, plannedProgress: shared.plannedProgress, overdueCount: shared.overdueCount, slipDays: shared.slipDays },
     latestBaseline: baselines[0] ?? null, baselines, recentUpdates: await readUpdates(transaction, projectId),
+    // Company holidays, so the plan screen places a linked row's start the way schedule-calculator.ts does.
+    holidays: [...holidays].sort(),
     tasks: calculation.roots.map((item) => taskResponse(item, new Map(tasks.map((task) => [task.id, task])), pics, {
       actorId: actor.id, managed, projectCanProgress: canProgressPermission && project.status !== "Closed", isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"),
       isMember,

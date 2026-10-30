@@ -107,6 +107,85 @@ export function ganttSlip(planFinish: string | null | undefined, forecastFinish:
   return ganttSpan(dateFromDay(dayNumber(planFinish) + 1), forecastFinish, window);
 }
 
+/** Whole days a sideways drag of `pixels` moves, on a track `width` pixels wide that shows `days` days. */
+export function ganttDragDays(pixels: number, width: number, days: number): number {
+  if (!(width > 0) || !(days > 0) || !Number.isFinite(pixels)) return 0;
+  return Math.round((pixels / width) * days) || 0;
+}
+
+/** An ISO date moved by whole days. */
+export const ganttShift = (date: string, days: number) => dateFromDay(dayNumber(date) + days);
+
+/** The first working day on or after `date`: not a Saturday, a Sunday or a company holiday (schedule-calculator.ts). */
+export function nextWorkDay(date: string, holidays: ReadonlySet<string>): string {
+  let day = dayNumber(date);
+  for (let guard = 0; guard < 400; guard++, day++) {
+    const weekday = new Date(day * DAY).getUTCDay(), candidate = dateFromDay(day);
+    if (weekday !== 0 && weekday !== 6 && !holidays.has(candidate)) return candidate;
+  }
+  return dateFromDay(day);
+}
+
+/**
+ * Where a row linked to a predecessor starts: the first working day after the predecessor's finish plus `lagDays`
+ * calendar days, as backend-node/src/schedule-calculator.ts places it. Null while the predecessor has no dates.
+ */
+export function linkedStart(predecessorFinish: string | null, lagDays: number, holidays: ReadonlySet<string>): string | null {
+  return predecessorFinish ? nextWorkDay(ganttShift(predecessorFinish, 1 + lagDays), holidays) : null;
+}
+
+/**
+ * The plan a dragged bar asks for. Plan days are calendar days from start to finish (schedule-calculator.ts) and a
+ * milestone stays one day. A linked row keeps its link: a new start becomes the lag after its predecessor's finish,
+ * and a stretch alone leaves the lag as it was.
+ */
+export function draggedPlan(
+  row: { startMode: string; isMilestone: boolean; storedPlanStart?: string | null; planStart: string | null; lagDays: number },
+  start: string, finish: string, predecessorFinish: string | null,
+): { planStart: string | null; planDays: number; lagDays: number } {
+  const planDays = row.isMilestone ? 1 : Math.max(1, dayNumber(finish) - dayNumber(start) + 1);
+  if (row.startMode !== "linked" || !predecessorFinish) return { planStart: start, planDays, lagDays: row.lagDays };
+  const lagDays = start === row.planStart ? row.lagDays : dayNumber(start) - dayNumber(predecessorFinish) - 1;
+  return { planStart: row.storedPlanStart ?? null, planDays, lagDays };
+}
+
+/**
+ * Whether a plan's dates would go round in a circle (the API refuses it as schedule_cycle): a row with children takes
+ * its dates from them, and a linked row without children from its predecessor. Used to leave such rows out of a
+ * predecessor list, e.g. a task's own phase.
+ */
+export function planDatesLoop(rows: readonly { id: number; parentId: number | null; predecessorId: number | null; startMode: string }[]): boolean {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const children = new Map<number, number[]>();
+  for (const row of rows) if (row.parentId !== null) children.set(row.parentId, [...(children.get(row.parentId) ?? []), row.id]);
+  const visiting = new Set<number>(), done = new Set<number>();
+  const loops = (id: number): boolean => {
+    if (done.has(id)) return false;
+    if (visiting.has(id)) return true;
+    visiting.add(id);
+    const row = byId.get(id), own = children.get(id);
+    const waitsOn = own?.length ? own : row && row.startMode === "linked" && row.predecessorId !== null && byId.has(row.predecessorId) ? [row.predecessorId] : [];
+    if (waitsOn.some(loops)) return true;
+    visiting.delete(id); done.add(id);
+    return false;
+  };
+  return rows.some((row) => loops(row.id));
+}
+
+export type GanttXY = { x: number; y: number };
+const px = (value: number) => Math.round(value * 10) / 10;
+/**
+ * The elbow a finish-to-start link draws, as an SVG path in pixels: out of the predecessor's end, down to the
+ * successor's row and into its start. When the successor starts too close to that end, the line first steps back
+ * along the boundary `rowGap` below (or above) the predecessor's row.
+ */
+export function ganttLinkPath(from: GanttXY, to: GanttXY, rowGap: number, stub = 6): string {
+  const out = from.x + stub;
+  if (to.x - out >= stub) return `M${px(from.x)} ${px(from.y)}H${px(out)}V${px(to.y)}H${px(to.x)}`;
+  const between = from.y + (to.y >= from.y ? rowGap : -rowGap);
+  return `M${px(from.x)} ${px(from.y)}H${px(out)}V${px(between)}H${px(to.x - stub)}V${px(to.y)}H${px(to.x)}`;
+}
+
 /**
  * Stacks spans that overlap into lanes, so several pieces of work can share one row: each span takes the first
  * lane that is free on its start day, by start date. Past `max` lanes a span shares the lane that frees up first.

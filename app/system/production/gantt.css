@@ -13,8 +13,11 @@
 .gantt-key.milestone { width: 9px; height: 9px; border: 0; border-radius: 1px; background: var(--violet); transform: rotate(45deg); }
 .gantt-key.target { width: 2px; height: 12px; border: 0; border-radius: 0; background: var(--red); }
 .gantt-key.today { width: 2px; height: 12px; border: 0; border-radius: 0; background: var(--blue); }
+.gantt-key.link { position: relative; width: 16px; height: 0; border: 0; border-top: 1.5px solid var(--n-500); border-radius: 0; background: none; }
+.gantt-key.link::after { content: ""; position: absolute; top: -4.5px; right: -2px; border-left: 6px solid var(--n-500); border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent; }
+.gantt-legend-hint { font-style: italic; }
 
-.gantt { --gantt-side: 300px; display: flex; flex-direction: column; min-width: 0; max-height: 70vh; overflow-y: auto; font-size: var(--fs-xs); }
+.gantt { --gantt-side: 300px; position: relative; display: flex; flex-direction: column; min-width: 0; max-height: 70vh; overflow-y: auto; font-size: var(--fs-xs); }
 .gantt-head, .gantt-row { display: grid; grid-template-columns: var(--gantt-side) minmax(0, 1fr); }
 .gantt-head { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); }
 .gantt-side-head { padding: 8px 10px; color: var(--muted); font-size: var(--fs-2xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid var(--line); }
@@ -121,6 +124,32 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-diamond.amber { background: var(--amber); }
 .gantt-diamond.done { background: var(--green); }
 .gantt-diamond:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* A bar the plan owner may reschedule (GanttRowSpec.reschedule): it drags by whole days, and its end grip stretches it. */
+.gantt-bar.movable, .gantt-diamond.movable { cursor: grab; touch-action: pan-y; }
+.gantt-bar.moving, .gantt-diamond.moving { cursor: grabbing; outline: 2px solid var(--blue); outline-offset: 1px; z-index: 3; }
+.gantt.dragging, .gantt.dragging * { user-select: none; }
+.gantt.dragging .gantt-bar, .gantt.dragging .gantt-diamond { cursor: grabbing; }
+.gantt-bar-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 1; }
+.gantt-bar-grip::after { content: ""; position: absolute; top: 3px; bottom: 3px; right: 2px; width: 2px; border-radius: var(--r-pill); background: var(--ink-soft); opacity: 0; }
+.gantt-bar.movable:hover .gantt-bar-grip::after, .gantt-bar.moving .gantt-bar-grip::after { opacity: 0.6; }
+.gantt-drop-label {
+  position: absolute;
+  top: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--blue-text);
+  font-size: var(--fs-3xs);
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 4;
+}
+/* Finish-to-start links, drawn over the track and under the bars. */
+.gantt-links { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; overflow: visible; }
+.gantt-links path { fill: none; stroke: var(--n-500); stroke-width: 1.25; }
+.gantt-links marker path { fill: var(--n-500); stroke: none; }
 .gantt-undated { position: absolute; left: 8px; top: 11px; color: var(--muted); font-size: var(--fs-3xs); }
 
 @media (max-width: 980px) {

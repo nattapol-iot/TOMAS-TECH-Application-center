@@ -13,8 +13,9 @@ import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
 import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
-import { ganttFitWindow, ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
-import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
+import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttLink, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
 import { HealthBadge } from "./ProjectPlanFields";
 import "./my-work.css";
 import {
@@ -275,6 +276,8 @@ export type ProjectSchedule = {
   baselines: ScheduleBaseline[];
   recentUpdates: ScheduleUpdate[];
   tasks: ScheduleTask[];
+  /** Company holidays, to place a linked row's start as the API does; an older API omits them. */
+  holidays?: string[];
 };
 
 type PriceRecord = {
@@ -1857,6 +1860,90 @@ function PicPicker({ options, value, onChange }: { options: { id: number; label:
     <small>{t("Schedule.picsHint")}</small></div>;
 }
 
+/** How a row's start is set: on a date, or after another row finishes, a lag of calendar days later (negative overlaps). */
+type StartDraft = { mode: "manual" | "linked"; planStart: string; predecessorId: string; lagDays: number };
+const startDraftOf = (task: ScheduleTask | null): StartDraft => task
+  ? { mode: task.startMode === "linked" ? "linked" : "manual", planStart: task.planStart ?? task.storedPlanStart ?? isoToday(), predecessorId: task.predecessorId ? String(task.predecessorId) : "", lagDays: task.lagDays }
+  : { mode: "manual", planStart: isoToday(), predecessorId: "", lagDays: 0 };
+const startReady = (start: StartDraft) => (start.mode === "linked" ? Boolean(start.predecessorId) : Boolean(start.planStart));
+/** The plan fields a start sends; a linked row keeps its stored date as the fallback while its predecessor has none. */
+const startBody = (start: StartDraft, stored: string | null) => start.mode === "linked"
+  ? { startMode: "linked", predecessorId: Number(start.predecessorId), lagDays: start.lagDays, planStart: stored }
+  : { startMode: "manual", predecessorId: null, lagDays: 0, planStart: start.planStart };
+
+/**
+ * The rows a row may follow: not itself, not a detail row or a Resource Plan row (the API refuses those), and none
+ * that would loop back to it, such as its own phase. parentId is where the row sits (or will sit, when new).
+ */
+function predecessorChoices(schedule: ProjectSchedule, taskId: number | null, parentId: number | null): ScheduleTask[] {
+  const rows = flattenTasks(schedule.tasks);
+  const self = taskId ?? -1;
+  const graph = [...rows.filter((row) => row.id !== self), { id: self, parentId, predecessorId: null, startMode: "manual" }]
+    .map((row) => ({ id: row.id, parentId: row.id === self ? parentId : row.parentId, predecessorId: row.predecessorId, startMode: row.startMode }));
+  // The API also refuses a link that its parent and predecessor chains would lead back through.
+  const edges = new Map(graph.map((row) => [row.id, [row.parentId, row.predecessorId].filter((id): id is number => id !== null)]));
+  const reaches = (from: number, seen: Set<number>): boolean => from === self || (!seen.has(from) && Boolean(seen.add(from)) && (edges.get(from) ?? []).some((next) => reaches(next, seen)));
+  return rows.filter((row) => row.id !== self && row.kind !== "detail" && !row.managedByResourcePlan && !reaches(row.id, new Set())
+    && !planDatesLoop(graph.map((entry) => (entry.id === self ? { ...entry, predecessorId: row.id, startMode: "linked" } : entry))));
+}
+
+/** The start fields of the add and edit forms: a date, or a predecessor and lag with the start that gives. */
+function PlanStartFields({ schedule, taskId, parentId, value, onChange }: {
+  schedule: ProjectSchedule; taskId: number | null; parentId: number | null; value: StartDraft; onChange: (value: StartDraft) => void;
+}) {
+  const t = useUiText();
+  const choices = useMemo(() => predecessorChoices(schedule, taskId, parentId), [schedule, taskId, parentId]);
+  const holidays = useMemo(() => new Set(schedule.holidays ?? []), [schedule.holidays]);
+  const predecessor = choices.find((row) => String(row.id) === value.predecessorId) ?? null;
+  const starts = predecessor ? linkedStart(predecessor.planFinish, value.lagDays, holidays) : null;
+  return <>
+    <label className="field"><span>{t("Schedule.startMode")} *</span>
+      <select value={value.mode} onChange={(event) => onChange({ ...value, mode: event.target.value === "linked" ? "linked" : "manual" })}>
+        <option value="manual">{t("Schedule.startOnDate")}</option>
+        <option value="linked" disabled={!choices.length && value.mode !== "linked"}>{t("Schedule.startAfter")}</option>
+      </select>
+    </label>
+    {value.mode === "manual" ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={value.planStart} onChange={(event) => onChange({ ...value, planStart: event.target.value })} /></label> : <>
+      <label className="field"><span>{t("Schedule.predecessor")} *</span>
+        <select value={predecessor ? value.predecessorId : ""} onChange={(event) => onChange({ ...value, predecessorId: event.target.value })}>
+          <option value="">{t("Schedule.pickPredecessor")}</option>
+          {choices.map((row) => <option key={row.id} value={row.id}>{row.wbs} · {row.name}{row.planFinish ? ` (${t("Schedule.finishesOn").replace("{date}", date(row.planFinish))})` : ""}</option>)}
+        </select>
+      </label>
+      <label className="field"><span>{t("Schedule.lagDays")}</span>
+        <input type="number" min={-365} max={3650} step={1} value={value.lagDays} onChange={(event) => onChange({ ...value, lagDays: Math.trunc(Number(event.target.value) || 0) })} />
+        <small>{t("Schedule.lagHint")}</small>
+      </label>
+      <p className="muted small plan-start-preview">{!predecessor ? t("Schedule.pickPredecessorHint") : starts ? t("Schedule.startsOn").replace("{date}", date(starts)) : t("Schedule.predecessorUndated")}</p>
+    </>}
+  </>;
+}
+
+/** The dates a form's row would take, to read its PICs' load over them. */
+function draftSpan(schedule: ProjectSchedule, start: StartDraft, planDays: number, milestone: boolean): { from: string | null; to: string | null } {
+  const predecessor = start.mode === "linked" ? flattenTasks(schedule.tasks).find((row) => String(row.id) === start.predecessorId) ?? null : null;
+  const from = start.mode === "linked" ? linkedStart(predecessor?.planFinish ?? null, start.lagDays, new Set(schedule.holidays ?? [])) : start.planStart || null;
+  return { from, to: from ? ganttShift(from, Math.max(1, milestone ? 1 : planDays) - 1) : null };
+}
+
+/** The PIC list with each person's load over the row's dates beside their department, and the chosen ones' load below it. */
+function PicFieldsWithLoad({ bootstrap, span, taskId, value, onChange, manDays }: {
+  bootstrap: BootstrapData; span: { from: string | null; to: string | null }; taskId: number | null; value: number[]; onChange: (value: number[]) => void; manDays: number;
+}) {
+  const picOptions = usePicOptions(bootstrap);
+  const loads = usePicLoads(bootstrap, span.from, span.to, taskId);
+  const note = useLoadNote();
+  const options = loads.state === "ready" ? picOptions.map((option) => {
+    const text = note(loads.byUser.get(option.id));
+    return text ? { ...option, detail: `${option.detail} · ${text}` } : option;
+  }) : picOptions;
+  return <>
+    <PicPicker options={options} value={value} onChange={onChange} />
+    <PicLoadPanel loads={loads} chosen={value} manDays={manDays} team={bootstrap.team} dateLabel={date}
+      onSwap={(from, to) => onChange(value.map((id) => (id === from ? to : id)))} />
+  </>;
+}
+
 function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onConflict }: {
   bootstrap: BootstrapData;
   schedule: ProjectSchedule;
@@ -1867,11 +1954,10 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   const [kind, setKind] = useState<"phase" | "task">("task");
   const [parentId, setParentId] = useState("");
   const [name, setName] = useState("");
-  const [planStart, setPlanStart] = useState(isoToday());
+  const [start, setStart] = useState<StartDraft>(() => startDraftOf(null));
   const [planDays, setPlanDays] = useState(1);
   const [visibility, setVisibility] = useState("Internal");
   const [picUserIds, setPicUserIds] = useState<number[]>([]);
-  const picOptions = usePicOptions(bootstrap);
   const [picExternal, setPicExternal] = useState("");
   const [planManDays, setPlanManDays] = useState(0);
   const [milestone, setMilestone] = useState(false);
@@ -1911,11 +1997,8 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
           name: name.trim(),
           isMilestone: milestone,
           visibility,
-          planStart,
+          ...startBody(start, null),
           planDays: milestone ? 1 : planDays,
-          startMode: "manual",
-          predecessorId: null,
-          lagDays: 0,
           picUserIds,
           picExternal: picExternal.trim(),
           planManDays,
@@ -1940,7 +2023,7 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   };
   return <Modal title="Add schedule row" subtitle={`${schedule.projectNo} · บันทึกแผนลงฐานข้อมูลจริง`} size="lg" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || !name.trim() || (kind === "task" && (!planStart || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create row"}</button>
+    <button className="btn primary" type="button" disabled={busy || !name.trim() || (kind === "task" && (!startReady(start) || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create row"}</button>
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
@@ -1949,10 +2032,10 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
       <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       {kind === "task" ? <>
         <label className="field"><span><LocalizedText text={"Parent phase"} /></span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value=""><LocalizedText text={"Top-level task"} /></option>{phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.wbs} <LocalizedText text={"·"} /> {phase.name}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={planStart} onChange={(event) => setPlanStart(event.target.value)} /></label>
+        <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
-        <PicPicker options={picOptions} value={picUserIds} onChange={setPicUserIds} />
+        <PicFieldsWithLoad bootstrap={bootstrap} span={draftSpan(schedule, start, planDays, milestone)} taskId={null} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
         <label className="field"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
         <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>
       </> : <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div>}
@@ -1961,9 +2044,9 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
 }
 
 /*
- * Changes one schedule row's plan: name, visibility, dates, effort and who is responsible.
- * Progress stays where it is. A row whose dates come from its detail rows or from a
- * predecessor keeps them; they are shown but not editable here.
+ * Changes one schedule row's plan: name, visibility, its start (a date or after another row),
+ * duration, effort and who is responsible. Progress stays where it is. A row whose dates come
+ * from its detail rows keeps them; they are shown but not editable here.
  */
 function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, onConflict }: {
   bootstrap: BootstrapData;
@@ -1975,18 +2058,19 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
 }) {
   const t = useUiText();
   const isPhase = task.kind === "phase";
-  const datesLocked = isPhase || task.children.length > 0 || task.startMode !== "manual";
+  const datesLocked = isPhase || task.children.length > 0;
   const [name, setName] = useState(task.name);
   const [visibility, setVisibility] = useState(task.visibility);
-  const [planStart, setPlanStart] = useState(task.storedPlanStart ?? task.planStart ?? isoToday());
+  const [start, setStart] = useState<StartDraft>(() => startDraftOf(task));
   const [planDays, setPlanDays] = useState(task.planDays);
   const [milestone, setMilestone] = useState(task.isMilestone);
   const [planManDays, setPlanManDays] = useState(task.planManDays);
   const [picUserIds, setPicUserIds] = useState<number[]>(task.pics.map((pic) => pic.id));
   const [picExternal, setPicExternal] = useState(task.picExternal);
-  const picOptions = usePicOptions(bootstrap);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Locked dates go back exactly as stored, so the API sees them unchanged.
+  const lockedStart = { startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, planStart: task.storedPlanStart ?? null };
   const submit = async () => {
     setBusy(true); setError("");
     try {
@@ -1995,10 +2079,8 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
         scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion,
         parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: name.trim(),
         isMilestone: isPhase ? false : milestone, visibility,
-        // Locked dates go back exactly as stored, so the API sees them unchanged.
-        planStart: isPhase ? null : datesLocked ? task.storedPlanStart ?? null : planStart,
+        ...(isPhase ? { ...lockedStart, planStart: null } : datesLocked ? lockedStart : startBody(start, task.storedPlanStart ?? null)),
         planDays: isPhase ? 1 : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : planDays,
-        startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays,
         picUserIds: isPhase ? [] : picUserIds, picExternal: isPhase ? "" : picExternal.trim(), planManDays: isPhase ? 0 : planManDays,
       }) });
       await onSaved();
@@ -2015,7 +2097,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   };
   return <Modal title="Schedule.editRow" subtitle={`${schedule.projectNo} · ${task.wbs} · ${task.name}`} size="lg" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!planStart || planDays < 1)) || planManDays < 0} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
+    <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
   </>}>
     {error ? <LoadError message={t(error)} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
@@ -2023,10 +2105,11 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
       {isPhase ? <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div> : <>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
-        <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={datesLocked ? task.planStart ?? "" : planStart} disabled={datesLocked} onChange={(event) => setPlanStart(event.target.value)} /></label>
+        {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={task.planStart ?? ""} disabled /></label>
+          : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>}
-        <PicPicker options={picOptions} value={picUserIds} onChange={setPicUserIds} />
+        <PicFieldsWithLoad bootstrap={bootstrap} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
         <label className="field span-2"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
       </>}
     </div>
@@ -2187,6 +2270,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [drawingTask, setDrawingTask] = useState<{projectId:number;taskId:number} | null>(null);
   const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
   const [saving, setSaving] = useState(false);
+  // A bar dropped on new dates: drawn there while it saves, then offered for undo until the next move.
+  const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
+  const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
@@ -2241,7 +2327,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
     setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
-    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError("");
+    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null);
     setLoadingSchedule(Boolean(nextId));
     setSelectedId(nextId);
     try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
@@ -2269,8 +2355,15 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today)
     : ganttWindow(zoom, anchor);
   const toggleRow = (taskId: number) => setCollapsed((current) => { const next = new Set(current); if (next.has(taskId)) next.delete(taskId); else next.add(taskId); return next; });
+  // The plan owner drags a leaf row's bar to new dates; the API refuses rows Resource Plan manages and rows waiting on a day request.
+  const canReschedule = (task: ScheduleTask) => canPlan && task.kind !== "phase" && task.children.length === 0 && !task.managedByResourcePlan
+    && !pendingTaskIds.has(task.id) && Boolean(task.planStart && task.planFinish) && !movePending && !saving;
+  const visibleIds = new Set(visible.map((task) => task.id));
+  const links: GanttLink[] = visible.filter((task) => task.startMode === "linked" && task.predecessorId !== null && visibleIds.has(task.predecessorId))
+    .map((task) => ({ from: `task:${task.predecessorId}`, to: `task:${task.id}` }));
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
+    const dropped = movePending?.taskId === task.id ? movePending : null;
     const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : null;
     return {
       key: `task:${task.id}`, depth: task.depth, kind: summaryRow ? "phase" : "task",
@@ -2279,7 +2372,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       ...(lock ? { status: lock } : {}),
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
-      start: task.planStart, finish: task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
+      ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
+      start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
       milestone: task.isMilestone, target, selected: drawerTaskId === task.id,
       title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
@@ -2308,6 +2402,49 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         await loadSchedule();
       }
     } finally { setSaving(false); }
+  };
+  /** Saves a row's plan with new dates, everything else as it is; returns the row's new version. */
+  const putDates = async (task: ScheduleTask, plan: { planStart: string | null; planDays: number; lagDays: number }) => {
+    const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${task.id}`, { method: "PUT", body: JSON.stringify({
+      scheduleVersion: activeSchedule?.scheduleVersion ?? null, rowVersion: task.rowVersion,
+      parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: task.name, isMilestone: task.isMilestone, visibility: task.visibility,
+      planStart: plan.planStart, planDays: plan.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: plan.lagDays,
+      picUserIds: task.pics.map((pic) => pic.id), picExternal: task.picExternal, planManDays: task.planManDays,
+    }) });
+    return saved.rowVersion;
+  };
+  const moveFailed = async (task: ScheduleTask, failure: unknown) => {
+    if (isConcurrencyConflict(failure)) notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
+    else { setError(toError(failure)); notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.saveFailed")}`); }
+  };
+  const moveTask = async (task: ScheduleTask, start: string, finish: string) => {
+    if (!activeSchedule) return;
+    const predecessorFinish = task.predecessorId === null ? null : taskById.get(task.predecessorId)?.planFinish ?? null;
+    const plan = draggedPlan(task, start, finish, predecessorFinish);
+    const label = `${task.wbs} ${task.name}`;
+    setMovePending({ taskId: task.id, start, finish }); setSaving(true); setError("");
+    try {
+      const rowVersion = await putDates(task, plan);
+      setLastMove({ taskId: task.id, label, rowVersion, before: { planStart: task.storedPlanStart ?? null, planDays: task.planDays, lagDays: task.lagDays } });
+      notify(`${activeSchedule.projectNo} · ${label} ${uiText("Plan.movedTo")} ${date(start)} – ${date(finish)}`);
+    } catch (failure) { await moveFailed(task, failure); }
+    finally {
+      await loadSchedule();
+      setMovePending(null); setSaving(false);
+    }
+  };
+  const undoMove = async () => {
+    const move = lastMove, task = move ? taskById.get(move.taskId) : null;
+    if (!move || !activeSchedule) return;
+    // Someone changed the row after the move: putting the old dates back would overwrite their change.
+    if (!task || task.rowVersion !== move.rowVersion) { setLastMove(null); notify(`${move.label} ${uiText("Plan.undoStale")}`); return; }
+    setSaving(true); setError("");
+    try {
+      await putDates(task, move.before);
+      setLastMove(null);
+      notify(`${activeSchedule.projectNo} · ${move.label} ${uiText("Plan.undone")}`);
+    } catch (failure) { await moveFailed(task, failure); }
+    finally { await loadSchedule(); setSaving(false); }
   };
   const summary = activeSchedule?.summary;
   const planned = summary?.plannedProgress === null || summary?.plannedProgress === undefined ? null : Math.round(summary.plannedProgress);
@@ -2354,8 +2491,12 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />
             <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
           </div>
-          <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} />
-          {visible.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" />
+          <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={links.length > 0} draggable={canPlan} />
+          {lastMove ? <div className="info-strip plan-undo" role="status"><Icon name="calendar" /><span>{lastMove.label} {uiText("Plan.movedShort")}</span>
+            <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
+            <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
+          </div> : null}
+          {visible.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" links={links} />
             : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
         </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
@@ -2441,6 +2582,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
     userId: bootstrap.user.id,
   });
   const leaf = isLeafTask(task);
+  const predecessor = task.startMode === "linked" && task.predecessorId !== null ? flattenTasks(activeSchedule.tasks).find((row) => row.id === task.predecessorId) ?? null : null;
   const history = activeSchedule.recentUpdates.filter((update) => update.taskId === task.id && historyShown(update));
   const pic = task.pics.map((person) => person.active === false ? `${person.name} (${uiText("Plan.picLeft")})` : person.name).join(", ") || task.picExternal || "—";
   return <Drawer title={`${task.wbs} · ${task.name}`} subtitle={activeSchedule.projectNo} onClose={onClose} width={560}>
@@ -2448,6 +2590,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
     {managed ? <div className="info-strip"><ResourcePlanLock /><span>{uiText("Plan.managedHint")}</span></div> : null}
     <dl className="plan-facts">
       <div><dt>{uiText("Plan")}</dt><dd>{date(task.planStart)} – {date(task.planFinish)} · {task.workDays} {uiText("work days")}</dd></div>
+      {predecessor ? <div><dt>{uiText("Schedule.predecessor")}</dt><dd>{predecessor.wbs} · {predecessor.name}{task.lagDays ? ` · ${task.lagDays > 0 ? "+" : ""}${task.lagDays} ${uiText("days")}` : ""}</dd></div> : null}
       {task.baselineFinish ? <div><dt>{uiText("Baseline")}</dt><dd>{date(task.baselineStart)} – {date(task.baselineFinish)}</dd></div> : null}
       {task.forecastFinish ? <div><dt>{uiText("Forecast")}</dt><dd>{date(task.forecastFinish)}</dd></div> : null}
       {task.actualStart ? <div><dt>{uiText("Plan.actualDates")}</dt><dd>{date(task.actualStart)} → {task.actualFinish ? date(task.actualFinish) : "…"}</dd></div> : null}

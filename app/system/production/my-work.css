@@ -421,6 +421,20 @@
 .plan-gantt { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
 .plan-gantt-controls, .plan-gantt > .gantt-legend { padding: 0 14px; }
 .plan-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+/* The last bar dragged to new dates, with its undo. */
+.plan-undo { margin: 0 14px; }
+.plan-undo > span { flex: 1; min-width: 0; }
+
+/* The add and edit forms: a linked row's start, and the PICs' load over the row's dates (PlanPicLoad.tsx). */
+.plan-start-preview { align-self: end; margin: 0 0 8px; }
+.plan-pic-note { display: flex; align-items: center; gap: 8px; margin: 0; }
+.plan-pic-load { margin: 0; }
+.plan-pic-load.info { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
+.plan-pic-load small { color: var(--ink-soft); }
+.plan-pic-loads { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 2px 0; padding: 0; list-style: none; }
+.plan-pic-loads li { white-space: nowrap; }
+.plan-pic-loads li.over { color: var(--red-text); font-weight: 600; }
+.plan-pic-freer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-direction: row; }
 
 /* The task drawer. */
 .plan-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0 0 14px; font-size: var(--fs-xs); }
