@@ -1,4 +1,5 @@
 "use client";
+import { idLink, useLinkedState } from "../screen-link";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useT as useUiText } from "../i18n";
@@ -542,7 +543,7 @@ export function ProductionBoms({ bootstrap, notify }: MaterialScreenProps) {
   const endpoint = useEndpoint<BomSummary[]>("/api/v1/boms/", EMPTY);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useLinkedState("open", null, idLink, { remember: false });
   const [generateOpen, setGenerateOpen] = useState(false);
   const [action, setAction] = useState<BomSummary | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -567,7 +568,7 @@ export function ProductionBoms({ bootstrap, notify }: MaterialScreenProps) {
   return (
     <>
       <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Bill of Materials")} subtitle="BOM ถูกสร้างจาก Estimate ที่อนุมัติและล็อกแล้ว พร้อมแสดง balance / shortage แบบ live" actions={canGenerate ? <button className="btn primary" type="button" onClick={() => setGenerateOpen(true)}><Icon name="plus" /><LocalizedText text={"Generate BOM"} /></button> : undefined} />
-      <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search BOM, project or estimate…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "Released", "Superseded"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search BOM, project or estimate…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "Released", "Superseded"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={actionError} />
       <Panel title={`${visible.length} BOM revisions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
@@ -651,7 +652,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const [status, setStatus] = useState("All status");
   const [creating, setCreating] = useState(false);
   const boms = useEndpoint<BomSummary[]>(creating ? "/api/v1/boms/" : null, EMPTY);
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useLinkedState("open", null, idLink, { remember: false });
   const [decision, setDecision] = useState<PrAction | null>(null);
   const [cancelItem, setCancelItem] = useState<PurchaseRequisition | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -725,7 +726,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
     <>
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
       <HistoricalPrPanel canImport={canRequest} notify={notify} />
-      <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={actionError} />
       <Panel title={`${visible.length} requisitions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
@@ -839,7 +840,7 @@ export function ProductionPurchaseOrders({ bootstrap, notify }: MaterialScreenPr
   const endpoint = useEndpoint<PurchaseOrder[]>("/api/v1/purchase-orders/", EMPTY);
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState("Open orders");
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useLinkedState("open", null, idLink, { remember: false });
   const [receiveId, setReceiveId] = useState<number | null>(null);
   const canReceive = hasPermission(bootstrap, "inventory.receive");
   const visible = useMemo(() => endpoint.data.filter((item) => (scope === "All orders" || isOpenPurchaseOrder(item))
@@ -853,7 +854,7 @@ export function ProductionPurchaseOrders({ bootstrap, notify }: MaterialScreenPr
     <>
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Orders")} subtitle="PO สร้างจาก PR ที่อนุมัติแล้วเท่านั้น และยอดรับคำนวณจาก confirmed GRN" />
       <div className="kpi-grid three"><KpiCard label="Ordered value" value={money(totals.ordered)} icon="truck" tone="blue" /><KpiCard label="Open commitment" value={money(totals.open)} icon="chart" tone="amber" /><KpiCard label="Outstanding units" value={quantity(totals.outstandingUnits)} icon="package" tone="violet" /></div>
-      <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search PO, PR, project or supplier…" /><Select label="Scope" value={scope} onChange={setScope} options={["Open orders", "All orders"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PO, PR, project or supplier…" /><Select label="Scope" value={scope} onChange={setScope} options={["Open orders", "All orders"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <Panel title={`${visible.length} purchase orders`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
         {visible.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PO"} /></th><th><LocalizedText text={"PR / project"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Order date"} /></th><th><LocalizedText text={"Expected"} /></th><th><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Value"} /></th><th><LocalizedText text={"Open"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.purchaseRequisitionNumber}</strong><small className="muted">{item.projectNumber}</small></td><td>{item.supplierName}</td><td>{date(item.orderDate)}</td><td>{date(item.expectedDate)}</td><td className="num">{quantity(item.orderedQuantity)}</td><td className="num">{quantity(item.receivedQuantity)}</td><td className="num">{money(item.value)}</td><td className="num"><strong>{money(item.openValue)}</strong></td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canReceive && isOpenPurchaseOrder(item) ? <button className="btn primary sm" type="button" onClick={() => setReceiveId(item.id)}><Icon name="download" /><LocalizedText text={"Receive"} /></button> : null}</div></td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="truck" title="No purchase order found" message="Approve a PR and convert it to a PO first" />}
@@ -961,7 +962,7 @@ export function ProductionGoodsReceiving({ bootstrap, notify }: MaterialScreenPr
   const endpoint = useEndpoint<GoodsReceipt[]>("/api/v1/goods-receipts/", EMPTY);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useLinkedState("open", null, idLink, { remember: false });
   const [confirmItem, setConfirmItem] = useState<GoodsReceipt | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
@@ -982,7 +983,7 @@ export function ProductionGoodsReceiving({ bootstrap, notify }: MaterialScreenPr
   return (
     <>
       <PageHeader eyebrow="INBOUND MATERIAL" title={uiText("Goods Receiving")} subtitle="Draft GRN เก็บหลักฐานการรับ; Confirm จะ append stock / quarantine ledger แบบ idempotent" />
-      <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search GRN, PO, supplier or delivery note…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "Confirmed"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search GRN, PO, supplier or delivery note…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "Confirmed"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}<ActionError message={actionError} />
       <Panel title={`${visible.length} goods receipts`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
         {visible.length ? <div className="table-wrap"><table><thead><tr><th>GRN</th><th><LocalizedText text={"PO"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Delivery note"} /></th><th><LocalizedText text={"Received date"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Accepted"} /></th><th><LocalizedText text={"Held"} /></th><th><LocalizedText text={"Received by"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td>{item.purchaseOrderNumber}</td><td>{item.supplierName}</td><td>{item.deliveryNote || "—"}</td><td>{date(item.receivedDate)}</td><td className="num">{quantity(item.receivedQuantity)}</td><td className="num">{quantity(item.acceptedQuantity)}</td><td className="num">{Number(item.heldQuantity) > 0 ? <Badge tone="amber">{quantity(item.heldQuantity)}</Badge> : "0"}</td><td>{item.receivedByName}<small className="muted">{item.confirmedByName ? `Confirmed by ${item.confirmedByName}` : ""}</small></td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canReceive && item.status === "Draft" ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => { setActionError(""); setConfirmItem(item); }}><Icon name="check" /><LocalizedText text={"Confirm"} /></button> : null}</div></td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="download" title="No goods receipt found" message="Open a purchase order and record the first delivery" />}
@@ -1012,7 +1013,7 @@ export function ProductionMaterialIssues({ bootstrap, notify }: MaterialScreenPr
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useLinkedState("open", null, idLink, { remember: false });
   const [action, setAction] = useState<MirAction | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
@@ -1042,7 +1043,7 @@ export function ProductionMaterialIssues({ bootstrap, notify }: MaterialScreenPr
   return (
     <>
       <PageHeader eyebrow="OUTBOUND MATERIAL" title={uiText("Material Issues")} subtitle="MIR คุม chain of custody ตั้งแต่ request, approval, issue, receipt ถึง return" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New MIR"} /></button> : undefined} />
-      <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search MIR, project or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Pending Approval", "Approved", "Picking", "Issued", "Received", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search MIR, project or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Pending Approval", "Approved", "Picking", "Issued", "Received", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}<ActionError message={actionError} />
       <Panel title={`${visible.length} material issue requests`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
         {visible.length ? <div className="table-wrap"><table><thead><tr><th>MIR</th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Requested"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Lines"} /></th><th><LocalizedText text={"Qty requested"} /></th><th><LocalizedText text={"Issued"} /></th><th><LocalizedText text={"Returned"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName}</span></div></td><td>{item.requestedByName}</td><td>{dateTime(item.requestedAt)}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num">{quantity(item.requestedQuantity)}</td><td className="num">{quantity(item.issuedQuantity)}</td><td className="num">{quantity(item.returnedQuantity)}</td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canApprove && item.status === "Pending Approval" && item.requestedById !== bootstrap.user.id ? <><button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></> : null}{canIssue && ["Approved", "Picking"].includes(item.status) ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Issue" })}><Icon name="upload" /><LocalizedText text={"Issue"} /></button> : null}{canRequest && item.status === "Issued" && (item.requestedById === bootstrap.user.id || bootstrap.user.role === "Admin") ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Receipt" })}><Icon name="checkCircle" /><LocalizedText text={"Confirm receipt"} /></button> : null}</div></td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="upload" title="No material issue request found" message="Release a BOM and create the first material issue request" />}

@@ -248,7 +248,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
         subtitle="Fair, evidence-based reviews connected to the work each role delivers."
         actions={
           <>
-            <Select label="Review cycle" value={cycle} onChange={changeCycle} options={cycles.map((entry) => entry.code)} width={130} />
+            <Select link="cycle" label="Review cycle" value={cycle} onChange={changeCycle} options={cycles.map((entry) => entry.code)} width={130} />
           </>
         }
       />
@@ -303,9 +303,9 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
           <div className="performance-team-layout">
             <section className="panel performance-roster">
               <div className="performance-filters">
-                <SearchInput value={query} onChange={setQuery} placeholder="Search team member or department…" />
-                <Select label="Department" value={department} onChange={setDepartment} options={["All departments", ...departments]} />
-                <Select label="Status" value={status} onChange={setStatus} options={["All statuses", ...STATUS_ORDER]} />
+                <SearchInput link="q" value={query} onChange={setQuery} placeholder="Search team member or department…" />
+                <Select link="dept" label="Department" value={department} onChange={setDepartment} options={["All departments", ...departments]} />
+                <Select link="status" label="Status" value={status} onChange={setStatus} options={["All statuses", ...STATUS_ORDER]} />
               </div>
               <div className="table-wrap">
                 <table>

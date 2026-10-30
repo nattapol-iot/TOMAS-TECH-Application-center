@@ -53,12 +53,13 @@ export function screenTail(path: readonly (string | number)[], params: Record<st
  * "#/estimates/42" with its record first in the path). fromLink: the address named a place or filters, so it
  * opens exactly that rather than the filters the person used last.
  */
-export function screenPlace(hash: string, view: string, base: string): { view: string; path: string[]; params: Record<string, string>; fromLink: boolean } {
+export function screenPlace(hash: string, view: string, base: string): { view: string; path: string[]; params: Record<string, string>; opened: Record<string, string>; fromLink: boolean } {
   const address = parseScreenHash(hash);
   const own = address?.view === view ? address : null;
   const path = own ? own.path.slice(base === `#/${view}` ? 0 : 1) : [];
   const params = own?.params ?? {};
-  return { view, path, params, fromLink: path.length > 0 || Object.keys(params).length > 0 };
+  // `opened` keeps the filters the screen opened on, so a part that opens later (another tab) reads only those, not another part's.
+  return { view, path, params, opened: { ...params }, fromLink: path.length > 0 || Object.keys(params).length > 0 };
 }
 
 /** The part of an address the app shell owns: the screen, and for an Estimate or Inquiry its record. A screen's own place and filters follow it. */

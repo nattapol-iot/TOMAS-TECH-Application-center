@@ -128,7 +128,7 @@ export function ProductionModuleTemplates({ bootstrap, notify }: Props) {
     <Panel className="module-template-library" title="Template library" subtitle="ค้นหาและจัดการชุดอุปกรณ์สำหรับใบเสนอราคา" actions={<span className="pill blue">{loading ? "…" : total.toLocaleString()} {hasFilters ? <LocalizedText text={"รายการที่พบ"} /> : <LocalizedText text={"Template"} />}</span>} flush>
       <div className="module-template-filters">
         <div className="module-template-search"><span className="module-template-filter-label"><LocalizedText text={"ค้นหาเทมเพลต"} /></span>
-        <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="ค้นหา code, ชื่อ, item, brand" />
+        <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="ค้นหา code, ชื่อ, item, brand" />
         </div>
         <label className="module-template-filter"><span className="module-template-filter-label"><LocalizedText text={"Discipline"} /></span><span className="select-field">
         <select value={discipline} onChange={(event) => { setDiscipline(event.target.value); setPage(1); }}>

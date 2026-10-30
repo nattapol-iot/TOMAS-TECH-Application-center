@@ -1,5 +1,6 @@
 "use client";
 
+import { idLink, useLinkedState } from "../screen-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   acknowledgeMonitorIncident, createMonitorAgent, createMonitorSite, getMonitorCommand, getMonitorLogs, getMonitorSite,
@@ -118,7 +119,7 @@ export function SiteMonitorScreen({ bootstrap, notify }: { bootstrap: BootstrapD
   const canManage = bootstrap.permissions.includes("monitor.manage");
   const canDeploy = bootstrap.permissions.includes("monitor.deploy");
   const canApprove = bootstrap.permissions.includes("monitor.approve");
-  const [siteId, setSiteId] = useState<number | null>(null);
+  const [siteId, setSiteId] = useLinkedState("site", null, idLink, { remember: false });
   const [editing, setEditing] = useState<MonitorSite | "new" | null>(null);
   const [revision, setRevision] = useState(0);
 
@@ -191,8 +192,8 @@ function SiteOverview({ canManage, revision, onOpen, onCreate }: {
       </>} />
 
       <Toolbar>
-        <FilterChips items={chips} active={filter} onPick={setFilter} label="Monitor.filterByHealth" />
-        <SearchInput value={query} onChange={setQuery} placeholder="Monitor.searchSites" />
+        <FilterChips link="health" items={chips} active={filter} onPick={setFilter} label="Monitor.filterByHealth" />
+        <SearchInput link="q" value={query} onChange={setQuery} placeholder="Monitor.searchSites" />
       </Toolbar>
 
       {error && sites === null ? (
@@ -752,7 +753,7 @@ function LogsPanel({ siteId, agents, refreshKey }: { siteId: number; agents: Mon
             <Icon name="chevronDown" />
           </label>
         ) : null}
-        <SearchInput value={query} onChange={setQuery} placeholder="Monitor.searchLogs" />
+        <SearchInput link="logq" value={query} onChange={setQuery} placeholder="Monitor.searchLogs" />
       </div>
       {error && logs === null ? <EmptyState icon="alertTriangle" title="Could not load" message={error} />
         : logs === null ? <EmptyState icon="clock" title="Loading…" message="Monitor.loadingLogs" />

@@ -16,7 +16,7 @@ import { listProjectOverview, type ProjectOverviewItem } from "../project-overvi
 import { draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
 import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
-import { CopyLinkButton, choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
+import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
 import "./my-work.css";
 import {
@@ -58,6 +58,7 @@ import {
   type SupplierPriceHistoryRecord,
 } from "../api-client";
 import {
+  CopyLinkButton,
   Badge,
   Drawer,
   EmptyState,
@@ -1353,7 +1354,7 @@ export function ProductionMyWork({
       >
         {activeEstimateError ? <LoadError message={activeEstimateError} retry={estimateQueue.reload} /> : null}
         <div className="my-work-toolbar">
-          <SearchInput value={taskSearch} onChange={setTaskSearch} placeholder="Search project, WBS or task…" />
+          <SearchInput link="q" value={taskSearch} onChange={setTaskSearch} placeholder="Search project, WBS or task…" />
           {sourceFilter !== "estimate" ? <label className="select-field my-work-project-filter">
             <span className="sr-only"><LocalizedText text={"Project"} /></span>
             <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label={localizeCopy("Project")}>
@@ -2739,10 +2740,10 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
     </>} />
     <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
     <Toolbar>
-      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
-      <Select label="Price source" value={source} onChange={(value) => { setSource(value); setPage(1); }} options={sources} />
-      <Select label="Supplier" value={supplier} onChange={(value) => { setSupplier(value); setPage(1); }} options={suppliers} />
-      <Select label="Price age" value={age} onChange={(value) => { setAge(value); setPage(1); }} options={["All ages", "Fresh 0–90 days", "Aging 91–180 days", "Stale / undated"]} />
+      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
+      <Select link="source" label="Price source" value={source} onChange={(value) => { setSource(value); setPage(1); }} options={sources} />
+      <Select link="supplier" label="Supplier" value={supplier} onChange={(value) => { setSupplier(value); setPage(1); }} options={suppliers} />
+      <Select link="age" label="Price age" value={age} onChange={(value) => { setAge(value); setPage(1); }} options={["All ages", "Fresh 0–90 days", "Aging 91–180 days", "Stale / undated"]} />
     </Toolbar>
     <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
@@ -3835,7 +3836,7 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
       <KpiCard label="Expired on this page" value={countStatus("Expired")} note="validity ended" tone={countStatus("Expired") ? "red" : "green"} icon="alertTriangle" />
     </div>
     <Toolbar>
-      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search quotation no., supplier, inquiry, project or file…" />
+      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search quotation no., supplier, inquiry, project or file…" />
       <label className="select-field">
         <span className="sr-only"><LocalizedText text={"Supplier"} /></span>
         <select value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setPage(1); }}>
@@ -3844,7 +3845,7 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
         </select>
         <Icon name="chevronDown" />
       </label>
-      <Select label="Quotation status" value={status} options={["All statuses", "Valid", "Expiring", "Expired", "Superseded"]} onChange={(value) => { setStatus(value); setPage(1); }} />
+      <Select link="status" label="Quotation status" value={status} options={["All statuses", "Valid", "Expiring", "Expired", "Superseded"]} onChange={(value) => { setStatus(value); setPage(1); }} />
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={result.total + " supplier quotations"} subtitle="เอกสารทุกแถวจัดเก็บใน secure document storage และ metadata อยู่ใน SQL Server" flush>
@@ -3951,7 +3952,7 @@ export function ProductionWaitingSupplierPrice({ bootstrap }: ProductionPlanning
   return <>
     <PageHeader eyebrow="PRICE FOLLOW-UP" title={uiText("Waiting Supplier Price")} subtitle="Derivation: Cost item ต้องมี Supplier และราคาเป็นศูนย์/ไม่มี Price date/เก่ากว่า 180 วัน โดยคำนวณจากวันที่ปัจจุบัน" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <div className="kpi-grid four"><KpiCard label="Needs follow-up" value={waiting.length} note={`from ${estimateCount} estimates`} tone="amber" icon="clock" /><KpiCard label="Missing / zero" value={missing} note="no usable unit price" tone={missing ? "red" : "green"} icon="alertTriangle" /><KpiCard label="Missing date" value={undated} note="cannot validate price age" tone={undated ? "amber" : "green"} icon="calendar" /><KpiCard label="Older than 180" value={stale} note="request reconfirmation" tone={stale ? "red" : "green"} icon="refresh" /></div>
-    <Toolbar><SearchInput value={search} onChange={setSearch} placeholder="Search supplier, item, estimate or project…" /></Toolbar>
+    <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search supplier, item, estimate or project…" /></Toolbar>
     <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${rows.length} supplier price follow-ups`} subtitle="รายการนี้เป็นมุมมองคำนวณจากข้อมูลจริง ไม่ได้เปลี่ยนสถานะ Cost item อัตโนมัติ" flush>

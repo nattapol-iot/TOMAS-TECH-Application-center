@@ -1,4 +1,5 @@
 "use client";
+import { idLink, useLinkedState } from "../screen-link";
 import { useT as useStaticCopy } from "../i18n";
 
 /* ==========================================================================
@@ -336,11 +337,11 @@ function IntakeList({ bootstrap, inquiry, onCreate, onOpen }: Props & { onCreate
           {search ? <button type="button" onClick={() => setSearch("")} aria-label={t("Clear search")}><Icon name="x" /></button> : null}
         </label>
       </div>
-      <Select label={t("Status")} value={status} onChange={(value) => { setStatus(value); resetPage(); }}
+      <Select link="status" label={t("Status")} value={status} onChange={(value) => { setStatus(value); resetPage(); }}
         options={["All status", ...INTAKE_STATUSES]} />
-      <Select label={t("Customer")} value={customer} onChange={(value) => { setCustomer(value); resetPage(); }}
+      <Select link="customer" label={t("Customer")} value={customer} onChange={(value) => { setCustomer(value); resetPage(); }}
         options={["All customers", ...bootstrap.customers.map((item) => item.code)]} />
-      <Select label={t("Priority")} value={priority} onChange={(value) => { setPriority(value); resetPage(); }}
+      <Select link="priority" label={t("Priority")} value={priority} onChange={(value) => { setPriority(value); resetPage(); }}
         options={["All priorities", ...PRIORITIES]} />
       <button className={mine ? "btn primary" : "btn ghost"} type="button" onClick={() => { setMine((value) => !value); resetPage(); }}>
         <Icon name="user" />{t("Mine only")}
@@ -1487,7 +1488,7 @@ const EMPTY_VISIT_PAGE: PagedResult<SiteVisitSummary> = { items: [], page: 1, pa
 export function ProductionSiteVisits(props: Props & { initialVisitId?: number | null }) {
   const t = useT();
   const [tab, setTab] = useState<"requests" | "calendar" | "dashboard" | "preparation">("requests");
-  const [openId, setOpenId] = useState<number | null>(props.initialVisitId ?? null);
+  const [openId, setOpenId] = useLinkedState("open", props.initialVisitId ?? null, idLink, { remember: false });
   const canRead = props.bootstrap.permissions.includes("visit.read");
 
   if (!canRead) return <NoPermission what="'visit.read'" />;
@@ -1560,10 +1561,10 @@ function VisitList({ bootstrap, onOpen }: Props & { onOpen: (id: number) => void
           {search ? <button type="button" onClick={() => setSearch("")} aria-label={t("Clear search")}><Icon name="x" /></button> : null}
         </label>
       </div>
-      <Select label={t("Status")} value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", ...VISIT_STATUSES]} />
-      <Select label={t("Customer")} value={customer} onChange={(value) => { setCustomer(value); resetPage(); }}
+      <Select link="status" label={t("Status")} value={status} onChange={(value) => { setStatus(value); resetPage(); }} options={["All status", ...VISIT_STATUSES]} />
+      <Select link="customer" label={t("Customer")} value={customer} onChange={(value) => { setCustomer(value); resetPage(); }}
         options={["All customers", ...bootstrap.customers.map((item) => item.code)]} />
-      <Select label={t("Engineer")} value={engineer} onChange={(value) => { setEngineer(value); resetPage(); }}
+      <Select link="engineer" label={t("Engineer")} value={engineer} onChange={(value) => { setEngineer(value); resetPage(); }}
         options={["All engineers", ...bootstrap.team.map((item) => item.name)]} />
       <button className={unassigned ? "btn primary" : "btn ghost"} type="button" onClick={() => { setUnassigned((value) => !value); resetPage(); }}>
         <Icon name="users" />{t("Unassigned")}
@@ -1699,7 +1700,7 @@ function VisitCalendar({ bootstrap, onOpen }: Props & { onOpen: (id: number) => 
       <label className="btn ghost"><Icon name="calendar" /><input aria-label={t("Anchor date")} type="date" value={anchor} onChange={(event) => setAnchor(event.target.value)} /></label>
       <button className="btn ghost" type="button" onClick={() => shift(1)} aria-label={t("Next")}><Icon name="chevronRight" /></button>
       <button className="btn ghost" type="button" onClick={() => setAnchor(today())}>{t("Today")}</button>
-      <Select label={t("Engineer")} value={engineer} onChange={setEngineer} options={["All engineers", ...bootstrap.team.map((item) => item.name)]} />
+      <Select link="calengineer" label={t("Engineer")} value={engineer} onChange={setEngineer} options={["All engineers", ...bootstrap.team.map((item) => item.name)]} />
     </Toolbar>
     <StatusLegend items={[
       { label: "Tentative" }, { label: "Pending Engineer Confirmation" }, { label: "Pending Customer Confirmation" },
@@ -3413,7 +3414,7 @@ function ActionItemDrawer({ visit, bootstrap, onClose, onDone }: {
 export function ProductionMyAssignments(props: Props) {
   const t = useT();
   const [rows, setRows] = useState<MyAssignmentRecord[]>([]);
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useLinkedState("open", null, idLink, { remember: false });
   const [visit, setVisit] = useState<SiteVisitDetail | null>(null);
   const [includeClosed, setIncludeClosed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -3433,7 +3434,10 @@ export function ProductionMyAssignments(props: Props) {
     setVisit(null);
     try { setVisit(await loadSiteVisit(visitId)); }
     catch (requestError) { setError(toError(requestError)); }
-  }, []);
+  }, [setOpenId]);
+  // A link that names an assignment opens it: read it once, as a click on it would.
+  const [linkedVisit] = useState(openId);
+  useEffect(() => { if (!linkedVisit) return; const timer = window.setTimeout(() => { void openVisit(linkedVisit); }, 0); return () => window.clearTimeout(timer); }, [linkedVisit, openVisit]);
 
   if (!props.bootstrap.permissions.includes("visit.read")) return <NoPermission what="'visit.read'" />;
 

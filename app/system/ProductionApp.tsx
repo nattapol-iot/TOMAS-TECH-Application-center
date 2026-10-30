@@ -6,7 +6,7 @@ import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-mode
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { useActivityPresence } from "./use-activity-presence";
 import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, screenPlace, screenTail, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
-import { CopyLinkButton, ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
+import { ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
@@ -20,7 +20,7 @@ import { PRODUCTION_LOGIN_COPY } from "./production/production-login-copy";
 import type { ProductionLoginProps } from "./production/ProductionLogin.types";
 import type { TmtIdUser } from "./tmt-id.types";
 import { PRODUCT } from "./product";
-import { Icon, Tabs, Toast, type IconName } from "./ui";
+import { CopyLinkButton, Icon, Tabs, Toast, type IconName } from "./ui";
 import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
 import {
   ProductionDashboard,
@@ -320,7 +320,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view, recordId);
   // What the open screen has put after its address (its tab, record and filters; screen-link.tsx), and a counter that
   // remounts the screen when Back, Forward or a pasted link changes that place under it.
-  const screenLink = useRef<ScreenLinkState>({ view: "", path: [], params: {}, fromLink: false });
+  const screenLink = useRef<ScreenLinkState>({ view: "", path: [], params: {}, opened: {}, fromLink: false });
   const [linkRevision, setLinkRevision] = useState(0);
   const screenLinkValue = useMemo(() => ({ view, base: address, userId: bootstrap?.user.id ?? 0, state: screenLink }), [view, address, bootstrap?.user.id]);
   const linkStateFor = useCallback((open: string, base: string) => {
@@ -702,7 +702,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setProjectTab("schedule");
     if (!setView("projects")) return;
     // The plan writes its own place once it opens; until then the address already names the project.
-    screenLink.current = { view: "projects", path: ["plan", String(projectId), ...(taskId ? ["task", String(taskId)] : [])], params: {}, fromLink: true };
+    screenLink.current = { view: "projects", path: ["plan", String(projectId), ...(taskId ? ["task", String(taskId)] : [])], params: {}, opened: {}, fromLink: true };
     if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
     window.scrollTo({ top: 0 });
   }, [setView, view]);
@@ -878,12 +878,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             else { setView(destination); window.scrollTo({ top: 0 }); }
           }} /> : personalDashboard : null}
           {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
-          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
+          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} key={view} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /> : null}
           {view === "projects" ? <>
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
-            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={changeProjectTab} /> : null}
+            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={changeProjectTab} link={null} /> : null}
             <div style={{ marginTop: 14 }}>
               {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues linked openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
             </div>

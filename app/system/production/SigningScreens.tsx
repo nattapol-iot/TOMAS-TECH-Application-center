@@ -1,4 +1,5 @@
 "use client";
+import { idLink, useLinkedState } from "../screen-link";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useT as useUiText } from "../i18n";
@@ -237,8 +238,8 @@ export function ProductionSignInbox({ bootstrap, notify }: SigningScreenProps) {
   const canRead = hasPermission(bootstrap, "signing.read");
   const canSign = hasPermission(bootstrap, "signing.sign");
   const inbox = useEndpoint<SignInbox | null>(canRead ? loadSignInbox : null, null);
-  const [openDocumentId, setOpenDocumentId] = useState<number | null>(null);
-  const [openStepId, setOpenStepId] = useState<number | null>(null);
+  const [openDocumentId, setOpenDocumentId] = useLinkedState("open", null, idLink, { remember: false });
+  const [openStepId, setOpenStepId] = useLinkedState("step", null, idLink, { remember: false });
   const [specimenOpen, setSpecimenOpen] = useState(false);
 
   const data = inbox.data;
@@ -961,7 +962,7 @@ export function ProductionSignedDocuments({
   const [state, setState] = useState("");
   const [docClass, setDocClass] = useState("");
   const [search, setSearch] = useState("");
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useLinkedState("open", null, idLink, { remember: false });
   const [createOpen, setCreateOpen] = useState(false);
   // A visitor who followed the link or QR on a certificate arrives with the
   // code in hand; opening the panel closed would make them type it again.
@@ -991,7 +992,7 @@ export function ProductionSignedDocuments({
         </>} />
 
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="ค้นหาเลขเอกสารหรือชื่อเรื่อง" />
+        <SearchInput link="q" value={search} onChange={setSearch} placeholder="ค้นหาเลขเอกสารหรือชื่อเรื่อง" />
         <label className="select-field">
           <span className="sr-only"><LocalizedText text={"State"} /></span>
           <select value={state} aria-label={uiText("State")} onChange={(event) => setState(event.target.value)}>

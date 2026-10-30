@@ -5,13 +5,11 @@
    follows it through these hooks. A screen reads its place when it mounts: the shell remounts it when Back,
    Forward or a pasted link changes the place of the screen already open. */
 
-import { createContext, useCallback, useContext, useEffect, useState, type MutableRefObject, type ReactNode } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { baseHash, screenPlace, screenTail } from "../../lib/remembered-view";
-import { useT } from "./i18n";
-import { Icon } from "./ui";
 
 /** What the screen on show has put in the address. `fromLink`: it opened on a link that named a place or filters. */
-export type ScreenLinkState = { view: string; path: string[]; params: Record<string, string>; fromLink: boolean };
+export type ScreenLinkState = { view: string; path: string[]; params: Record<string, string>; opened: Record<string, string>; fromLink: boolean };
 export type ScreenLinkValue = {
   view: string;
   /** The shell's part of the address for this screen, e.g. "#/projects" or "#/estimates/42". */
@@ -23,7 +21,7 @@ export type ScreenLinkValue = {
 const ScreenLinkContext = createContext<ScreenLinkValue | null>(null);
 
 export function ScreenLinkProvider({ value, children }: { value: ScreenLinkValue; children: ReactNode }) {
-  return <ScreenLinkContext.Provider value={value}>{children}</ScreenLinkContext.Provider>;
+  return createElement(ScreenLinkContext.Provider, { value }, children);
 }
 
 /** The screen's place and filters, read from the address the first time one of its hooks asks. */
@@ -99,7 +97,7 @@ export function useLinkedState<T>(name: string | null, fallback: T, codec: LinkC
   const [value, setValueState] = useState<T>(() => {
     if (!link || name === null) return fallback;
     const state = current(link);
-    const linked = state.params[name];
+    const linked = state.opened[name];
     if (state.fromLink) return linked === undefined ? fallback : codec.parse(linked) ?? fallback;
     let remembered: T | null = null;
     if (remember) {
@@ -140,20 +138,48 @@ export function useLinkedState<T>(name: string | null, fallback: T, codec: LinkC
   return [value, setValue];
 }
 
-/** Copies the address of what is on screen, ready to paste to a teammate. */
-export function CopyLinkButton({ notify, label = true, className = "btn default sm" }: { notify: (message: string) => void; label?: boolean; className?: string }) {
-  const t = useT();
-  const copy = async () => {
-    const href = window.location.href;
-    try {
-      await navigator.clipboard.writeText(href);
-      notify(t("Link.copied"));
-    } catch {
-      // No clipboard (an old browser or a blocked permission): show the link to copy by hand.
-      window.prompt(t("Link.copyPrompt"), href);
+/**
+ * Links a field whose owner keeps its state (the shared Tabs, Select, SearchInput, FilterChips and SegmentBar take
+ * a `link` name): its value goes on the screen's link, and with `remember` it is remembered for this person. When
+ * the screen opens, a value from its link (or the remembered one) is handed to onChange once; `valid` drops one the
+ * field cannot show. A value equal to `empty` is left out of the link.
+ */
+export function useLinkedControl(name: string | null | undefined, value: string, onChange: (value: string) => void,
+  options: { remember?: boolean; empty?: string; valid?: (value: string) => boolean } = {}) {
+  const context = useContext(ScreenLinkContext);
+  const link = name ? context : null;
+  const remember = Boolean(options.remember), empty = options.empty ?? "";
+  const [initial] = useState<string | null>(() => {
+    if (!link || !name) return null;
+    const state = current(link);
+    if (state.fromLink) return state.opened[name] ?? null;
+    if (!remember) return null;
+    try { return window.localStorage.getItem(rememberKey(link, name)); } catch { return null; }
+  });
+  const handed = useRef(false);
+  const valid = options.valid;
+  useEffect(() => {
+    if (handed.current) return;
+    handed.current = true;
+    if (initial !== null && initial !== value && (!valid || valid(initial))) onChange(initial);
+  }, [initial, value, valid, onChange]);
+  useEffect(() => {
+    if (!link || !name) return;
+    const state = current(link);
+    const params = { ...state.params };
+    if (value === empty) delete params[name]; else params[name] = value;
+    state.params = params;
+    // The first pass still shows the field's starting value while a linked or remembered one is being handed over.
+    if (remember && (handed.current || initial === null)) {
+      try { if (value === empty) window.localStorage.removeItem(rememberKey(link, name)); else window.localStorage.setItem(rememberKey(link, name), value); }
+      catch { /* Remembered filters are a convenience when storage is blocked. */ }
     }
-  };
-  return <button className={className} type="button" onClick={() => { void copy(); }} title={t("Link.copyHint")} aria-label={t("Link.copy")}>
-    <Icon name="link" />{label ? t("Link.copy") : null}
-  </button>;
+    write(link, "replace");
+    return () => {
+      if (link.state.current !== state || state.params[name] === undefined) return;
+      const rest = { ...state.params };
+      delete rest[name];
+      state.params = rest;
+    };
+  }, [link, name, value, empty, remember, initial]);
 }

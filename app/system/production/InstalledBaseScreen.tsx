@@ -1,5 +1,6 @@
 "use client";
 
+import { idLink, useLinkedState } from "../screen-link";
 import { useEffect, useMemo, useState } from "react";
 import {
   addAssetEvent, createAsset, createAssetCabinet, deleteAsset, deleteAssetCabinet, getAsset, getAssetOptions, listAssets, listProjects,
@@ -110,7 +111,7 @@ export function InstalledBaseScreen({ canManage, canSeeCredentials, notify }: { 
   const [result, setResult] = useState<Awaited<ReturnType<typeof listAssets>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<AssetOptions | null>(null);
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useLinkedState("open", null, idLink, { remember: false });
   const [editing, setEditing] = useState<AssetTarget | null>(null);
   const [cabinetEditing, setCabinetEditing] = useState<CabinetTarget | null>(null);
   const pageSize = layout === "grouped" ? GROUPED_PAGE_SIZE : PAGE_SIZE;
@@ -172,7 +173,7 @@ export function InstalledBaseScreen({ canManage, canSeeCredentials, notify }: { 
             <LocalizedText text={"Assets.layoutTable"} />
           </button>
         </div>
-        <SearchInput value={search} onChange={(value) => reset(() => setSearch(value))} placeholder="Assets.search" />
+        <SearchInput link="q" value={search} onChange={(value) => reset(() => setSearch(value))} placeholder="Assets.search" />
         <label className="select-field">
           <span className="sr-only">{t("Assets.customer")}</span>
           <select value={customerId} onChange={(event) => reset(() => setCustomerId(event.target.value))}>
@@ -189,8 +190,8 @@ export function InstalledBaseScreen({ canManage, canSeeCredentials, notify }: { 
         </label>
       </Toolbar>
       <div className="installed-base-filters">
-        <FilterChips items={statusChips} active={status} onPick={(key) => reset(() => setStatus(key))} label="Assets.status" />
-        {categoryChips.length > 0 ? <FilterChips items={categoryChips} active={category} onPick={(key) => reset(() => setCategory(key))} label="Assets.category" /> : null}
+        <FilterChips link="status" items={statusChips} active={status} onPick={(key) => reset(() => setStatus(key))} label="Assets.status" />
+        {categoryChips.length > 0 ? <FilterChips link="category" items={categoryChips} active={category} onPick={(key) => reset(() => setCategory(key))} label="Assets.category" /> : null}
       </div>
 
       {error ? (

@@ -67,7 +67,7 @@ export function SkillHub({ notify }: { notify: Notify }) {
   }
   return <div className="stack">
     <div className="download-center-note" role="note"><span><LocalizedText text="Skills.intro" /> <code>%USERPROFILE%\.claude\skills</code> / <code>%USERPROFILE%\.codex\skills</code></span></div>
-    <Toolbar><SearchInput value={query} onChange={setQuery} placeholder="Skills.search" /></Toolbar>
+    <Toolbar><SearchInput link="sq" value={query} onChange={setQuery} placeholder="Skills.search" /></Toolbar>
     {error ? <Panel><EmptyState icon="alertTriangle" title="Skills.error" message={error} action={<button className="btn default" type="button" onClick={() => { setSkills(null); setError(null); setRevision((value) => value + 1); }}><LocalizedText text="Skills.retry" /></button>} /></Panel>
       : skills === null ? <Panel><EmptyState icon="clock" title="Skills.loading" message="Skills.loadingMessage" /></Panel>
       : groups.size === 0 ? <Panel><EmptyState icon="book" title={skills.length ? "Skills.noMatch" : "Skills.empty"} message={skills.length ? "Skills.noMatchMessage" : "Skills.emptyMessage"} /></Panel>
