@@ -107,6 +107,16 @@ export function weekTotals(load: DayLoad[], from: string, to: string) {
   return { manDays, available, utilisation: available > 0 ? (manDays / available) * 100 : manDays > 0 ? Infinity : null };
 }
 
+/**
+ * A person's load over any span of days, such as a plan row's dates: their planned man-days (and `extra` ones, e.g.
+ * Outlook) against what the span's working days offer. The day grid's arithmetic, summed over the span like a week.
+ */
+export function spanLoad(items: Commitment[], from: string, to: string, capacity: number, holidays: readonly string[] = [], extra: (date: string) => number = () => 0) {
+  // The grid starts on the Monday of `from`, so a span can need one more week than its own length.
+  const weeks = Math.max(1, Math.ceil((dayNumber(to) - dayNumber(from) + 7) / 7));
+  return weekTotals(withOutlook(dailyLoad(items, boardDays(from, weeks, holidays, ""), capacity, holidays), extra), from, to);
+}
+
 /** Whether a dated span covers a day. */
 export const covers = (start: string | null, end: string | null, date: string) => Boolean(start) && start! <= date && (end ?? start)! >= date;
 

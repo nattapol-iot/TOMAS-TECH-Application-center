@@ -235,18 +235,38 @@ export async function readManagedTaskIds(transaction: TransactionType, projectId
 export function managedProgressReady(managed: ManagedTask, actorId: number): boolean {
   return managed.state === "Approved" && managed.acknowledged && managed.assigneeId === actorId;
 }
+/**
+ * Whether the plan's dates would go round in a circle when worked out (schedule-calculator.ts): a row with children
+ * takes its dates from them, and a linked row without children from its predecessor. A task linked to its own phase,
+ * or to a phase whose tasks wait on it, passes the parent and predecessor check but could never be drawn.
+ */
+export function datesWouldLoop(rows: ReadonlyMap<number, { parent: number | null; predecessor: number | null; startMode?: string | undefined }>): boolean {
+  const children = new Map<number, number[]>();
+  for (const [id, row] of rows) if (row.parent !== null) children.set(row.parent, [...(children.get(row.parent) ?? []), id]);
+  const waitsOn = (id: number): number[] => {
+    const own = children.get(id); if (own?.length) return own;
+    const row = rows.get(id); return row && row.startMode === "linked" && row.predecessor !== null && rows.has(row.predecessor) ? [row.predecessor] : [];
+  };
+  const visiting = new Set<number>(), done = new Set<number>();
+  const loops = (id: number): boolean => {
+    if (done.has(id)) return false; if (visiting.has(id)) return true;
+    visiting.add(id); if (waitsOn(id).some(loops)) return true;
+    visiting.delete(id); done.add(id); return false;
+  };
+  return [...rows.keys()].some(loops);
+}
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
   if (taskId && (input.parentId === taskId || input.predecessorId === taskId)) throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const rows = (await request.query<{ id: number | string; parent_id: number | string | null; predecessor_id: number | string | null; kind: string }>(`SELECT id,parent_id,predecessor_id,kind FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
-  const byId = new Map(rows.map((row) => [Number(row.id), { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind }]));
+  const rows = (await request.query<{ id: number | string; parent_id: number | string | null; predecessor_id: number | string | null; kind: string; start_mode?: string }>(`SELECT id,parent_id,predecessor_id,kind,start_mode FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
+  const byId = new Map(rows.map((row) => [Number(row.id), { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind, startMode: row.start_mode }]));
   for (const reference of [input.parentId, input.predecessorId].filter((id): id is number => id !== null)) if (!byId.has(reference)) throw new ApiError(422, "schedule_reference_invalid", "Parent and predecessor tasks must be active rows in the same project.");
   if (input.kind === "phase" && input.parentId) throw new ApiError(400, "validation_failed", "A phase must be a top-level schedule row.");
   if (input.parentId) { const parentKind = byId.get(input.parentId)?.kind; if (!((input.kind === "task" && parentKind === "phase") || (input.kind === "detail" && parentKind === "task"))) throw new ApiError(422, "schedule_parent_kind_invalid", "Tasks may be top-level or belong to a phase, and detail rows must belong to a task."); }
-  const key = taskId ?? -1; byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind });
+  const key = taskId ?? -1; byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode });
   const visiting = new Set<number>(), visited = new Set<number>();
   const cycle = (id: number): boolean => { if (visited.has(id)) return false; if (visiting.has(id)) return true; visiting.add(id); const edge = byId.get(id); if (edge && ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) || (edge.predecessor !== null && byId.has(edge.predecessor) && cycle(edge.predecessor)))) return true; visiting.delete(id); visited.add(id); return false; };
-  if ([...byId.keys()].some(cycle)) throw new ApiError(409, "schedule_cycle", "The change would create a circular schedule relationship.");
+  if ([...byId.keys()].some(cycle) || datesWouldLoop(byId)) throw new ApiError(409, "schedule_cycle", "The change would create a circular schedule relationship.");
   if (taskId) { const childKinds = rows.filter((row) => Number(row.parent_id) === taskId).map((row) => row.kind); if (childKinds.some((kind) => (input.kind === "phase" && kind !== "task") || (input.kind === "task" && kind !== "detail") || input.kind === "detail")) throw new ApiError(422, "schedule_child_kind_invalid", "The row kind is incompatible with its existing child rows."); }
 }
 export function scheduleCalculation(tasks: TaskRow[]) {

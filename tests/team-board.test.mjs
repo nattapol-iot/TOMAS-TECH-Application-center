@@ -9,7 +9,7 @@ const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
   ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook } =
+const { boardDays, dailyLoad, loadBand, weekTotals, spanLoad, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook } =
   await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
@@ -111,7 +111,7 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   const boardCss = await read("app/system/production/team-board.css");
   assert.match(boardCss, /\.board-gantt\.is-fullscreen \.gantt \{ flex: 1; min-height: 0; max-height: none; \}/);
   const chart = await read("app/system/production/GanttChart.tsx");
-  assert.match(chart, /const bar = row\.milestone \|\| segments \? null : ganttSpan\(row\.start, row\.finish, range\);/);
+  assert.match(chart, /const bar = row\.milestone \|\| segments \? null : ganttSpan\(start, finish, range\);/);
   assert.match(chart, /top: segments\.count > 1 \? 8 \+ lane \* 10 : 15/);
   // More than one team at once (2026-10-22); none ticked is everyone, and the choice is remembered per person.
   assert.match(board, /<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>/);
@@ -190,4 +190,19 @@ test("only Admins, Leaders and managers add work on other people's rows; new wor
   assert.match(board, /add\(event\.userId, date, \{ kind: "outlook", key: `outlook-\$\{event\.id\}`, event, late: false \}\);/);
   assert.match(board, /const load = withOutlook\(dailyLoad\(items, days, capacity, data\.holidays\), \(date\) => outlookMd\.get/);
   assert.match(board, /const result = await syncOutlookCalendars\(\);/);
+});
+
+test("a plan row's span is loaded like the grid: effort spread over working days, Outlook added, holidays offering nothing", () => {
+  // 4 MD over Mon 19 – Fri 23 Oct, so 0.8 a day; the span Wed 21 – Tue 27 holds three of those days.
+  const items = [work({ ownerId: 7 })];
+  const span = spanLoad(items, "2026-10-21", "2026-10-27", 5, ["2026-10-26"]);
+  // Working days in the span: 21, 22, 23 and 27 (26 is a holiday, 24–25 the weekend).
+  assert.equal(span.available, 4);
+  assert.ok(Math.abs(span.manDays - 2.4) < 1e-9);
+  assert.ok(Math.abs(span.utilisation - 60) < 1e-9);
+  const withMeeting = spanLoad(items, "2026-10-21", "2026-10-27", 5, ["2026-10-26"], (date) => (date === "2026-10-27" ? 0.5 : 0));
+  assert.ok(Math.abs(withMeeting.manDays - 2.9) < 1e-9);
+  // A span longer than a week from a Sunday still reaches its last day.
+  assert.equal(spanLoad([], "2026-10-25", "2026-11-09", 5).available, 11);
+  assert.equal(spanLoad([], "2026-10-24", "2026-10-25", 5).utilisation, null, "a weekend offers nothing");
 });

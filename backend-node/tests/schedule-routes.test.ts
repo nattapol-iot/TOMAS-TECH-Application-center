@@ -8,7 +8,7 @@ import type { Database } from "../src/db.js";
 import { ApiError, dayRequestAnswerError, registerErrorHandler } from "../src/errors.js";
 import { registerResourceTaskRoutes } from "../src/routes/resource-tasks.js";
 import { registerScheduleRoutes } from "../src/routes/schedule.js";
-import { canAnswerDayRequests, canPostProgress, managedProgressReady } from "../src/schedule-service.js";
+import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady } from "../src/schedule-service.js";
 import type { CurrentUserService } from "../src/users.js";
 
 const PROJECT_ID = 7;
@@ -119,6 +119,19 @@ test("canPostProgress: a project member may post on a leaf that has no PIC, neve
   assert.equal(canPostProgress({ ...leaf, isMember: false }), false, "not on the project");
   assert.equal(canPostProgress({ ...leaf, isLeaf: false }), false, "phase or roll-up row");
   assert.equal(canPostProgress({ ...leaf, managed: true }), false, "a Resource Plan row stays with its assignee");
+});
+
+test("datesWouldLoop: a task linked to its own phase, or to a phase that waits on it, never resolves", () => {
+  const row = (parent: number | null, predecessor: number | null = null, startMode = predecessor ? "linked" : "manual") => ({ parent, predecessor, startMode });
+  // Phase 1 holds tasks 11 and 12; phase 2 holds task 21.
+  const plan = (changes: Record<number, ReturnType<typeof row>>) => new Map(Object.entries({ 1: row(null), 11: row(1), 12: row(1), 2: row(null), 21: row(2), ...changes }).map(([id, value]) => [Number(id), value]));
+  assert.equal(datesWouldLoop(plan({})), false);
+  assert.equal(datesWouldLoop(plan({ 12: row(1, 11) })), false, "a task after its sibling");
+  assert.equal(datesWouldLoop(plan({ 21: row(2, 1) })), false, "a task after another phase");
+  assert.equal(datesWouldLoop(plan({ 11: row(1, 1) })), true, "a task after its own phase");
+  assert.equal(datesWouldLoop(plan({ 21: row(2, 1), 11: row(1, 2) })), true, "two phases waiting on each other through their tasks");
+  assert.equal(datesWouldLoop(plan({ 11: row(1, 1, "manual") })), false, "a stored predecessor on a manual row is not followed");
+  assert.equal(datesWouldLoop(plan({ 1: row(null, 21, "linked") })), false, "a row with children takes its dates from them, not its predecessor");
 });
 
 test("businessToday reads the date in the business time zone, not UTC", () => {
@@ -335,6 +348,18 @@ test("GET schedule: summary uses the shared work-day weighted rule without the M
     // The plan period still spans the whole timeline, Master Plan included.
     assert.equal(summary.planStart, "2026-09-07"); assert.equal(summary.planFinish, "2027-06-01");
     assert.equal(statements.filter((entry) => entry.statement.includes("FROM dbo.resource_tasks")).length, 1, "one Resource Plan query per request");
+  } finally { await app.close(); }
+});
+
+test("GET schedule: the company holidays come along in date order, so the plan screen places a linked row's start as the API does", async (t) => {
+  const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  const base = scheduleAnswers([{ task: 5, user: 30 }]);
+  installSqlMock(t, (statement) => statement.includes("SELECT holiday_date FROM dbo.holidays")
+    ? { recordset: [{ holiday_date: new Date("2028-12-31T00:00:00Z") }, { holiday_date: new Date("2028-12-05T00:00:00Z") }] } : base(statement));
+  try {
+    const response = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json().holidays, ["2028-12-05", "2028-12-31"]);
   } finally { await app.close(); }
 });
 
@@ -793,6 +818,30 @@ test("PUT task: the personal-task check runs only when the row gains a second PI
         assert.notEqual(response.json().code, "schedule_detail_shared_task", response.body);
         assert.equal(statements.some((entry) => entry.statement.includes("kind=N'detail'")), checked);
         assert.ok(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")), "the edit itself goes ahead");
+      } finally { await app.close(); }
+    });
+  }
+});
+
+test("PUT task: a link to the row's own phase is refused before the write; a link to a sibling goes ahead", async (t) => {
+  // Phase 1 holds tasks 11 and 12.
+  const rows = [
+    { id: 1, parent_id: null, predecessor_id: null, kind: "phase", start_mode: "manual" },
+    { id: 11, parent_id: 1, predecessor_id: null, kind: "task", start_mode: "manual" },
+    { id: 12, parent_id: 1, predecessor_id: null, kind: "task", start_mode: "manual" },
+  ];
+  for (const [predecessorId, refused] of [[1, true], [12, false]] as const) {
+    await t.test(`after ${predecessorId}`, async (sub) => {
+      const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+      const base = planEditAnswers(0, [30]);
+      const statements = installSqlMock(sub, (statement) =>
+        statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode FROM dbo.schedule_tasks") ? { recordset: rows } : base(statement));
+      try {
+        const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11",
+          payload: { ...planEditPayload([30]), parentId: 1, startMode: "linked", predecessorId, lagDays: 0, planStart: null } });
+        if (refused) { assert.equal(response.statusCode, 409, response.body); assert.equal(response.json().code, "schedule_cycle"); }
+        else assert.notEqual(response.json().code, "schedule_cycle", response.body);
+        assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")), !refused);
       } finally { await app.close(); }
     });
   }

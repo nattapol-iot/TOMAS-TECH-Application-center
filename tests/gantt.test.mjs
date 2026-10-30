@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GANTT_ZOOMS, ganttFitWindow, ganttLanes, ganttPoint, ganttSlip, ganttSpan, ganttWindow, shiftGanttAnchor } from "../lib/gantt.ts";
+import { GANTT_ZOOMS, draggedPlan, ganttDragDays, ganttFitWindow, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, ganttWindow, linkedStart, nextWorkDay, planDatesLoop, shiftGanttAnchor } from "../lib/gantt.ts";
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message ?? ""} ${actual} ≠ ${expected}`);
 
@@ -92,4 +92,53 @@ test("overlapping spans stack in lanes; the first free lane is reused, and past 
   assert.deepEqual(ganttLanes([]), { lanes: [], count: 1 });
   const crowded = ["2026-10-01", "2026-10-02", "2026-10-03"].map((start, index) => ({ start, finish: `2026-10-1${index}` }));
   assert.deepEqual(ganttLanes(crowded, 2), { lanes: [0, 1, 0], count: 2 });
+});
+
+test("a drag moves by whole days of the window; less than half a day is no move", () => {
+  // 42 days across 840px: 20px a day.
+  assert.equal(ganttDragDays(0, 840, 42), 0);
+  assert.equal(ganttDragDays(9, 840, 42), 0);
+  assert.equal(ganttDragDays(11, 840, 42), 1);
+  assert.equal(ganttDragDays(-61, 840, 42), -3);
+  assert.equal(ganttDragDays(-9, 840, 42), 0, "never -0");
+  assert.equal(ganttDragDays(100, 0, 42), 0, "a track not laid out yet");
+  assert.equal(ganttShift("2026-10-30", 3), "2026-11-02");
+});
+
+test("a linked row starts on the first working day after its predecessor and lag, as the API places it", () => {
+  const holidays = new Set(["2026-11-02"]);
+  // Friday 30 Oct: the next day is Saturday, so Monday; Monday 2 Nov is a holiday, so Tuesday.
+  assert.equal(nextWorkDay("2026-10-31", holidays), "2026-11-03");
+  assert.equal(linkedStart("2026-10-30", 0, holidays), "2026-11-03");
+  assert.equal(linkedStart("2026-10-27", 2, holidays), "2026-10-30", "two calendar days of lag");
+  assert.equal(linkedStart("2026-10-30", -2, holidays), "2026-10-29", "a negative lag overlaps");
+  assert.equal(linkedStart(null, 0, holidays), null);
+});
+
+test("a dragged bar asks for calendar plan days; a linked row turns a move into lag and keeps its lag on a stretch", () => {
+  const manual = { startMode: "manual", isMilestone: false, storedPlanStart: "2026-11-02", planStart: "2026-11-02", lagDays: 0 };
+  assert.deepEqual(draggedPlan(manual, "2026-11-04", "2026-11-10", null), { planStart: "2026-11-04", planDays: 7, lagDays: 0 });
+  assert.deepEqual(draggedPlan({ ...manual, isMilestone: true }, "2026-11-04", "2026-11-04", null), { planStart: "2026-11-04", planDays: 1, lagDays: 0 });
+  const linked = { startMode: "linked", isMilestone: false, storedPlanStart: null, planStart: "2026-11-02", lagDays: 0 };
+  // Predecessor finishes Friday 30 Oct; moved to Wednesday 4 Nov = four calendar days after Saturday.
+  assert.deepEqual(draggedPlan(linked, "2026-11-04", "2026-11-06", "2026-10-30"), { planStart: null, planDays: 3, lagDays: 4 });
+  assert.deepEqual(draggedPlan(linked, "2026-11-02", "2026-11-09", "2026-10-30"), { planStart: null, planDays: 8, lagDays: 0 }, "stretched only");
+  assert.equal(linkedStart("2026-10-30", 4, new Set()), "2026-11-04", "the API puts it back where it was dropped");
+});
+
+test("a predecessor that would make the dates go round in a circle is found", () => {
+  const row = (id, parentId, predecessorId = null) => ({ id, parentId, predecessorId, startMode: predecessorId ? "linked" : "manual" });
+  const plan = [row(1, null), row(11, 1), row(12, 1), row(2, null), row(21, 2)];
+  assert.equal(planDatesLoop(plan), false);
+  const linkTo = (id, predecessorId) => plan.map((entry) => (entry.id === id ? { ...entry, predecessorId, startMode: "linked" } : entry));
+  assert.equal(planDatesLoop(linkTo(12, 11)), false);
+  assert.equal(planDatesLoop(linkTo(21, 1)), false);
+  assert.equal(planDatesLoop(linkTo(11, 1)), true, "its own phase");
+  assert.equal(planDatesLoop(linkTo(11, 12).map((entry) => (entry.id === 12 ? { ...entry, predecessorId: 11, startMode: "linked" } : entry))), true, "two tasks waiting on each other");
+});
+
+test("a link runs out of the predecessor's end into the successor's start, stepping back along the row edge when they are close", () => {
+  assert.equal(ganttLinkPath({ x: 100, y: 19 }, { x: 160, y: 57 }, 19), "M100 19H106V57H160");
+  assert.equal(ganttLinkPath({ x: 100, y: 19 }, { x: 104, y: 57 }, 19), "M100 19H106V38H98V57H104");
+  assert.equal(ganttLinkPath({ x: 100, y: 95 }, { x: 90, y: 57 }, 19), "M100 95H106V76H84V57H90", "a successor drawn above");
 });
