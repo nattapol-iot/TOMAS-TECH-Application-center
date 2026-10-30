@@ -43,6 +43,16 @@
 .gantt-resizer:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; border-radius: var(--r-xs); }
 .gantt.resizing, .gantt.resizing * { cursor: col-resize; user-select: none; }
 .gantt-toggle, .gantt-toggle-spacer { flex: none; width: 22px; height: 22px; }
+/* A movable row's grip (GanttRowSpec.movable): drag it up or down, or move it with the arrow keys. */
+.gantt-grip { flex: none; display: grid; place-items: center; width: 16px; height: 22px; margin-left: -6px; padding: 0; border: 0; border-radius: var(--r-xs); background: none; color: var(--n-400); cursor: grab; touch-action: none; opacity: 0.45; }
+.gantt-grip .icon { width: 14px; height: 14px; }
+.gantt-row:hover .gantt-grip, .gantt-grip:focus-visible { opacity: 1; }
+.gantt-grip:hover { background: var(--n-150); color: var(--ink); }
+.gantt-grip:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.gantt-row.row-moving { opacity: 0.55; }
+.gantt-row.row-moving .gantt-grip, .gantt.moving-row, .gantt.moving-row * { cursor: grabbing; user-select: none; }
+.gantt-row.drop-before { box-shadow: inset 0 2px 0 var(--blue); }
+.gantt-row.drop-after { box-shadow: inset 0 -2px 0 var(--blue); }
 .gantt-toggle { display: grid; place-items: center; border: 0; border-radius: var(--r-xs); background: none; color: var(--muted); cursor: pointer; padding: 0; }
 .gantt-toggle:hover { background: var(--n-150); color: var(--ink); }
 .gantt-toggle .icon { width: 14px; height: 14px; }

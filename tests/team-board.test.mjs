@@ -117,7 +117,8 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>/);
   assert.match(board, /const inDepartment = \(userId: number\) => !teams\.length \|\| teams\.includes\(/);
   assert.match(board, /const teams = chosenTeams\.filter\(\(team\) => departments\.includes\(team\)\);/);
-  assert.match(board, /try \{ window\.localStorage\.setItem\(teamsKey\(me\), JSON\.stringify\(next\)\); \} catch/);
+  // Now on the link and remembered by useLinkedState; a choice saved under the old key still counts.
+  assert.match(board, /useLinkedState\("teams", \[\], listLink, \{ legacy: \(\) => \{ const teams = readTeams\(bootstrap\.user\.id\); return teams\.length \? teams : null; \} \}\)/);
   assert.doesNotMatch(board, /setDepartment\(/);
   // A time range (2026-10-22): a fourth choice beside the whole day, the morning and the afternoon, with from and until.
   assert.match(board, /\{ slot: "Time", label: "TeamBoard\.slotTime" \}/);

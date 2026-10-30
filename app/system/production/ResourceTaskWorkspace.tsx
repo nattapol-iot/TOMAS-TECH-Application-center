@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { apiRequest, type BootstrapData, type PagedResult } from '../api-client';
 import { Badge, EmptyState, Field, Icon, Modal, Pagination, Panel, SearchInput, TablePageSize, Toolbar } from '../ui';
 import { useActivitySubView } from '../use-activity-presence';
+import { idLink, textLink, useLinkedState } from '../screen-link';
 import './resource-tasks.css';
 
 type Plan={assigneeId:number;start:string;workDays:number;manDays:number;note:string;scheduleVersion?:string|null};
@@ -12,7 +13,9 @@ type Source={id:number;kind:'Inquiry'|'Project';reference:string;title:string;as
 export type ResourceTask={id:number;sourceKind:'Inquiry'|'Project';sourceId:number;reference:string;sourceTitle:string;scheduleTaskId:number|null;title:string;description:string;isIssue:boolean;reporter:string;priority:string;state:string;assigneeId:number;assigneeName:string;start:string|null;end:string|null;manDays:number|null;workDays:number;percentComplete:number;status:string;pendingPlan:Plan|null;acknowledgedAt:string|null;approvedAt:string|null;createdAt:string;updatedAt:string;decisionNote:string;rowVersion:string;scheduleVersion:string|null;actualStart:string|null;actualFinish:string|null;canPlan:boolean;canPropose:boolean;canRespond:boolean;canClose:boolean};
 type Impact={start:string;end:string;capacity:number|null;unknown:number;overloaded:boolean;needsReason:boolean;replacesInquiryAggregate:boolean;weeks:{start:string;before:number;removed:number;added:number;after:number;available:number|null;beforePercent:number|null;afterPercent:number|null;overloaded:boolean}[]};
 type WorkSourceFilter='all'|'estimate'|'project'|'service'|'personal';
-type Props={bootstrap:BootstrapData;notify:(message:string)=>void;mine?:boolean;issues?:boolean;onChanged?:()=>void;openProjectSchedule?:(id:number)=>void;initialFilter?:string;variant?:'default'|'new-assignments';onViewActive?:()=>void;sourceFilter?:WorkSourceFilter;isGroupExpanded?:(key:string,urgent:boolean)=>boolean;onToggleGroup?:(key:string,current:boolean)=>void};
+type Props={bootstrap:BootstrapData;notify:(message:string)=>void;mine?:boolean;issues?:boolean;onChanged?:()=>void;openProjectSchedule?:(id:number)=>void;initialFilter?:string;variant?:'default'|'new-assignments';onViewActive?:()=>void;sourceFilter?:WorkSourceFilter;isGroupExpanded?:(key:string,urgent:boolean)=>boolean;onToggleGroup?:(key:string,current:boolean)=>void;
+  /** The one list on its screen (Projects Punchlist, Team overview Tasks): its filters and open task go on the screen's link. */
+  linked?:boolean};
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const errorText=(e:unknown)=>e instanceof Error?e.message:String(e);
 const number=(n:number)=>n.toLocaleString(undefined,{maximumFractionDigits:1});
@@ -20,14 +23,19 @@ const percent=(n:number|null)=>n===null?'—':`${number(n)}%`;
 function TaskSelect({value,onChange,options}:{value:string;onChange:(value:string)=>void;options:{value:string;label:string}[]}) {const t=useT();return <select className="select" aria-label={t(options[0]?.label??'')} value={value} onChange={event=>onChange(event.target.value)}>{options.map(option=><option key={option.value} value={option.value}>{t(option.label)}</option>)}</select>;}
 const taskLabel=(task:ResourceTask,t:Translator)=>t(task.state==='Closed'?'ปิดงานแล้ว':task.pendingPlan?task.state==='Approved'?'รออนุมัติแผนใหม่':'รออนุมัติงาน':task.state==='Rejected'?'ส่งกลับแก้ไข':task.status==='Done'?'เสร็จ · รอตรวจรับ':!task.acknowledgedAt?'รอตอบรับ':task.status==='In Progress'?'กำลังทำ':task.status==='Blocked'?'ติดปัญหา':'ตอบรับแล้ว');
 
-export function ResourceTaskWorkspace({bootstrap,notify,mine=false,issues=false,onChanged,openProjectSchedule,initialFilter='All',variant='default',onViewActive,sourceFilter='all',isGroupExpanded,onToggleGroup}:Props) {
+export function ResourceTaskWorkspace({bootstrap,notify,mine=false,issues=false,onChanged,openProjectSchedule,initialFilter='All',variant='default',onViewActive,sourceFilter='all',isGroupExpanded,onToggleGroup,linked=false}:Props) {
   const t=useT();
   const {lang}=useLanguage();
   // Only the Projects punchlist is a sub-view of its own; My Work and Resource Plan report their parent screen.
   useActivitySubView(issues?'projects-punchlist':null);
   const [result,setResult]=useState<PagedResult<ResourceTask>>({items:[],page:1,pageSize:50,total:0});
-  const [sources,setSources]=useState<Source[]>([]),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(variant==='new-assignments'?100:50),[search,setSearch]=useState(''),[filter,setFilter]=useState(initialFilter),[project,setProject]=useState('');
-  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<ResourceTask|'new'|null>(null);
+  const [sources,setSources]=useState<Source[]>([]),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(variant==='new-assignments'?100:50);
+  const [search,setSearch]=useLinkedState(linked?'find':null,'',textLink,{remember:false}),[filter,setFilter]=useLinkedState(linked?'state':null,initialFilter,textLink),[project,setProject]=useLinkedState(linked?'for':null,'',textLink);
+  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[picked,setPicked]=useState<ResourceTask|'new'|null>(null);
+  // The open task is on the link by its id; a linked task shows once the list holding it has loaded.
+  const [openId,setOpenId]=useLinkedState(linked?'open':null,null,idLink,{remember:false});
+  const selected=picked??(openId?result.items.find(task=>task.id===openId)??null:null);
+  const setSelected=(task:ResourceTask|'new'|null)=>{setPicked(task);setOpenId(task&&task!=='new'?task.id:null);};
   const canRead=bootstrap.permissions.includes('schedule.read');
   const requestId=useRef(0);
   const invalidate=useCallback(()=>{requestId.current++;},[]);

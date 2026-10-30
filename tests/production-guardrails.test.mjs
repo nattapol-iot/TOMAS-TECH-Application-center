@@ -250,7 +250,7 @@ test("production Projects table defaults to 10 rows and supports page-size selec
     screen.indexOf("function ProjectDocumentsModal"),
   );
 
-  assert.match(projects, /const \[pageSize, setPageSize\] = useState\(10\)/);
+  assert.match(projects, /const \[pageSize, setPageSize\] = useLinkedState\("rows", 10, numberLink\)/);
   // The portfolio loads every project in scope once and pages in memory.
   assert.match(projects, /listProjectOverview\(\{ includeClosed \}\)/);
   assert.match(projects, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);

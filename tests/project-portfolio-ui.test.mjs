@@ -58,7 +58,7 @@ test("rows open worst health first and page on the client with the 10-row defaul
   assert.match(lib, /PORTFOLIO_HEALTH_ORDER: readonly PortfolioHealth\[\] = \["Delayed", "At Risk", "No plan", "On Track", "On Hold", "Completed"\]/);
   assert.match(lib, /DEFAULT_PORTFOLIO_SORT: PortfolioSort = \{ key: "health", direction: "asc" \}/);
   assert.match(portfolio, /sortPortfolio\(view\.rows, sort\)/);
-  assert.match(portfolio, /const \[pageSize, setPageSize\] = useState\(10\)/);
+  assert.match(portfolio, /const \[pageSize, setPageSize\] = useLinkedState\("rows", 10, numberLink\)/);
   assert.match(portfolio, /<TablePageSize value=\{pageSize\}/);
   assert.match(portfolio, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
 });
@@ -178,7 +178,8 @@ test("the project name opens the schedule only for users who can read it", () =>
 
 test("Overview has a List | Timeline toggle on the shared Gantt, remembered per user", () => {
   const shell = read("app/system/ProductionApp.tsx");
-  assert.match(portfolio, /tomas-tech-project-portfolio-mode:\$\{userId\}/);
+  // The mode is on the link and remembered per person (screen-link.tsx useLinkedState).
+  assert.match(portfolio, /const \[mode, changeMode\] = useLinkedState<PortfolioMode>\("view", initialMode \?\? "list", PORTFOLIO_MODE_LINK\)/);
   assert.match(portfolio, /aria-pressed=\{mode === value\} onClick=\{\(\) => changeMode\(value\)\}/);
   // Timeline draws the same filtered, sorted rows as the list.
   assert.match(portfolio, /<ProjectPortfolioGantt key=\{overview\?\.loadedAt \?\? 0\} rows=\{sorted\}/);

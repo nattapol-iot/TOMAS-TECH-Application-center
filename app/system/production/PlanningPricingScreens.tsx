@@ -14,8 +14,9 @@ import { useActivitySubView } from "../use-activity-presence";
 import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
 import { draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
-import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttLink, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
+import { CopyLinkButton, choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
 import "./my-work.css";
 import {
@@ -2218,6 +2219,9 @@ const PLAN_FILTERS: { key: PlanFilter; label: string; tone: "red" | "amber" | "b
   { key: "mine", label: "Plan.filterMine", tone: "blue" },
 ];
 const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${userId}`;
+// The plan's link: "#/projects/plan/<project>/task/<task>?only=late&zoom=quarter" (screen-link.tsx).
+const PLAN_FILTER_LINK = optionalChoiceLink(PLAN_FILTERS.map((item) => item.key));
+const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
 /** Project numbers in natural order: PJ26009 before PJ26010. */
 const byProjectNumber = (a: { number: string }, b: { number: string }) => a.number.localeCompare(b.number, "en", { numeric: true, sensitivity: "base" });
 const isLeafTask = (task: ScheduleTask) => task.kind !== "phase" && task.children.length === 0;
@@ -2256,11 +2260,15 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [loadingProjects, setLoadingProjects] = useState(allowed);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [error, setError] = useState("");
-  const [zoom, setZoom] = useState<GanttZoomChoice>("fit");
+  // A link names the project and the task open in the drawer; a plan opened from elsewhere names them in the props.
+  const [opened, place] = useScreenPlace();
+  const linkedProjectId = opened[0] === "plan" ? placeId(opened, 1) : null;
+  const linkedTaskId = opened[0] === "plan" && opened[2] === "task" ? placeId(opened, 3) : null;
+  const [zoom, setZoom] = useLinkedState<GanttZoomChoice>("zoom", "fit", PLAN_ZOOM_LINK);
   const [anchor, setAnchor] = useState(today);
-  const [filter, setFilter] = useState<PlanFilter | null>(null);
+  const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
-  const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? null);
+  const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
   const [createOpen, setCreateOpen] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
   // Dialogs keep the row they opened on, so a background reload never swaps in a newer version unseen.
@@ -2283,9 +2291,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       // The current pick wins, so Refresh never snaps back; a deep link only seeds the first pick.
       setSelectedId((current) => {
         if (current && loaded.some((project) => project.id === current)) return current;
-        if (preferredProjectId && loaded.some((project) => project.id === preferredProjectId)) {
-          try { window.localStorage.setItem(storageKey, String(preferredProjectId)); } catch { /* Remembering the project is a convenience. */ }
-          return preferredProjectId;
+        const linked = preferredProjectId ?? linkedProjectId;
+        if (linked && loaded.some((project) => project.id === linked)) {
+          try { window.localStorage.setItem(storageKey, String(linked)); } catch { /* Remembering the project is a convenience. */ }
+          return linked;
         }
         let remembered: number | null = null;
         try { remembered = Number(window.localStorage.getItem(storageKey)) || null; } catch { remembered = null; }
@@ -2296,7 +2305,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       if (preferredProjectId || preferredTaskId) onPreferredConsumed?.();
     } catch (requestError) { setError(toError(requestError)); }
     finally { setLoadingProjects(false); }
-  }, [allowed, preferredProjectId, preferredTaskId, onPreferredConsumed, storageKey]);
+  }, [allowed, preferredProjectId, preferredTaskId, linkedProjectId, onPreferredConsumed, storageKey]);
   // A reload keeps the current plan on screen; only switching projects clears it.
   const loadSchedule = useCallback(async () => {
     const requestId = ++scheduleRequestId.current;
@@ -2324,6 +2333,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       scheduleRequestId.current += 1;
     };
   }, [loadSchedule]);
+  // The address names the open project and task, so it is a link to them.
+  useEffect(() => {
+    if (selectedId) place(["plan", selectedId, ...(drawerTaskId ? ["task", drawerTaskId] : [])], "replace");
+  }, [selectedId, drawerTaskId, place]);
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
     setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
@@ -2364,6 +2377,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
     const dropped = movePending?.taskId === task.id ? movePending : null;
+    const movable = canPlan && !filter && !movePending && !saving;
     const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : null;
     return {
       key: `task:${task.id}`, depth: task.depth, kind: summaryRow ? "phase" : "task",
@@ -2372,6 +2386,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       ...(lock ? { status: lock } : {}),
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
+      ...(movable ? { movable: true } : {}),
       ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
       start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
@@ -2446,6 +2461,49 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     } catch (failure) { await moveFailed(task, failure); }
     finally { await loadSchedule(); setSaving(false); }
   };
+  /**
+   * Where a row dropped beside another lands: its parent and the sibling it goes before (null: last). Just after a
+   * row whose children are showing, a row that may sit under it becomes its first child. Null when the row may not
+   * go there (a phase only at the top, a task at the top or in a phase, a detail under a task; never under itself;
+   * a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
+   */
+  const placeFor = (drop: GanttRowDrop): { task: ScheduleTask; parentId: number | null; beforeId: number | null } | null => {
+    const task = taskById.get(Number(drop.key.replace("task:", ""))), target = taskById.get(Number(drop.target.replace("task:", "")));
+    if (!activeSchedule || !task || !target || task.id === target.id) return null;
+    const childrenOf = (parentId: number | null) => (parentId === null ? activeSchedule.tasks : taskById.get(parentId)?.children ?? []);
+    const fits = (parent: ScheduleTask | null) => (task.kind === "phase" ? parent === null : task.kind === "task" ? parent === null || parent.kind === "phase" : parent?.kind === "task");
+    let parentId: number | null, beforeId: number | null;
+    if (drop.place === "after" && target.children.length > 0 && !collapsed.has(target.id) && fits(target)) {
+      parentId = target.id; beforeId = target.children[0]!.id;
+    } else {
+      parentId = target.parentId;
+      const siblings = childrenOf(parentId);
+      beforeId = drop.place === "before" ? target.id : siblings[siblings.findIndex((row) => row.id === target.id) + 1]?.id ?? null;
+    }
+    const parent = parentId === null ? null : taskById.get(parentId) ?? null;
+    if (!fits(parent)) return null;
+    for (let up: ScheduleTask | null = parent; up; up = up.parentId === null ? null : taskById.get(up.parentId) ?? null) if (up.id === task.id) return null;
+    if (parentId !== task.parentId && (task.managedByResourcePlan || pendingTaskIds.has(task.id) || (parentId !== null && pendingTaskIds.has(parentId)))) return null;
+    // Before itself is just after its previous sibling: where it already is.
+    if (beforeId === task.id) beforeId = childrenOf(parentId)[childrenOf(parentId).findIndex((row) => row.id === task.id) + 1]?.id ?? null;
+    if (parentId === task.parentId) {
+      const siblings = childrenOf(parentId), at = siblings.findIndex((row) => row.id === task.id);
+      if ((siblings[at + 1]?.id ?? null) === beforeId) return null;
+    }
+    return { task, parentId, beforeId };
+  };
+  const moveRow = async (drop: GanttRowDrop) => {
+    const placed = placeFor(drop);
+    if (!placed || !activeSchedule) return;
+    setSaving(true); setError("");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${placed.task.id}/move`, { method: "POST", body: JSON.stringify({
+        scheduleVersion: activeSchedule.scheduleVersion, rowVersion: placed.task.rowVersion, parentId: placed.parentId, beforeId: placed.beforeId,
+      }) });
+      notify(`${activeSchedule.projectNo} · ${placed.task.wbs} ${placed.task.name} ${uiText("Plan.rowMoved")}`);
+    } catch (failure) { await moveFailed(placed.task, failure); }
+    finally { await loadSchedule(); setSaving(false); }
+  };
   const summary = activeSchedule?.summary;
   const planned = summary?.plannedProgress === null || summary?.plannedProgress === undefined ? null : Math.round(summary.plannedProgress);
   const slip = summary?.slipDays ?? selectedProject?.slipDays ?? null;
@@ -2496,7 +2554,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
             <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
           </div> : null}
-          {visible.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" links={links} />
+          {visible.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" links={links}
+            onMoveRow={(drop) => { void moveRow(drop); }} canMoveRow={(drop) => placeFor(drop) !== null} />
             : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
         </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
       </Panel>
@@ -2606,6 +2665,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
       {leaf && canProgress ? <button className="btn sm default" type="button" disabled={saving} onClick={onDetails}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
       {canPlan && activeSchedule.projectStatus !== "Closed" && !managed ? <button className="btn sm ghost" type="button" disabled={saving} aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={onEditPlan}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
       {canImportDrawing ? <button className="btn sm default" type="button" disabled={saving} onClick={onImportDrawing}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
+      <CopyLinkButton notify={notify} />
     </div>
     <section className="plan-drawer-section"><h3>{uiText("Plan.history")}</h3>
       {history.length ? <ul className="plan-history">{history.map((update) => {
