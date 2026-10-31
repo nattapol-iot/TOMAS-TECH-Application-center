@@ -695,7 +695,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
       subtitle={t("Save a draft at any time. Submitting for technical review needs the mandatory information below.")}
       actions={<>
         <button className="btn default" type="button" disabled={busy} onClick={onBack}>{t("Cancel")}</button>
-        <button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.subject.trim()}>
+        <button className="btn primary" type="submit" data-guide="intake.save" disabled={busy || !form.customerId || !form.subject.trim()}>
           <Icon name="check" />{busy ? t("Saving…") : t("Save draft")}
         </button>
       </>}
@@ -715,7 +715,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
 
     <div className="intake-layout">
       <div className="intake-main">
-        <Panel title={t("Customer and site")} subtitle={t("Where the engineer is going and who will meet them")}>
+        <Panel title={t("Customer and site")} subtitle={t("Where the engineer is going and who will meet them")} guide="intake.customer">
           <div className="form-grid">
             <Field label={t("Customer")}>
               <select disabled={Boolean(inquiry || form.relatedInquiryId)} value={form.customerId} onChange={(event) => set("customerId", Number(event.target.value))}>
@@ -778,7 +778,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
         </Panel>
 
         <div style={{ height: 14 }} />
-        <Panel title={t("What the customer wants")} subtitle={t("In their words. Engineering adds its own assessment separately and never edits this.")}>
+        <Panel guide="intake.want" title={t("What the customer wants")} subtitle={t("In their words. Engineering adds its own assessment separately and never edits this.")}>
           <div className="form-grid">
             <Field label={t("Current problem or situation")} span={4} hint={t("At least a couple of sentences — this is the mandatory one")}>
               <textarea rows={3} maxLength={20000} value={form.requirement.problemStatement} onChange={(event) => setRequirement("problemStatement", event.target.value)} />
@@ -804,7 +804,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
 
         <div style={{ height: 14 }} />
         <details><summary><LocalizedText text={"รายละเอียดเครื่องจักรและความปลอดภัยหน้างาน"} /></summary>
-        <Panel title={t("Machine and site conditions")} subtitle={t("Everything that decides whether an engineer can actually do the work on the day")}>
+        <Panel guide="intake.machine" title={t("Machine and site conditions")} subtitle={t("Everything that decides whether an engineer can actually do the work on the day")}>
           <div className="form-grid">
             <Field label={t("Machine name")}><input maxLength={300} value={form.machine.machineName} onChange={(event) => setMachine("machineName", event.target.value)} /></Field>
             <Field label={t("Machine model")}><input maxLength={200} value={form.machine.machineModel} onChange={(event) => setMachine("machineModel", event.target.value)} /></Field>
@@ -835,7 +835,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
         </details>
 
         <div style={{ height: 14 }} />
-        <Panel title={t("Visit purpose and expected skills")} subtitle={t("Sales' best guess. The coordinator may correct the skills, and both are kept.")}>
+        <Panel guide="intake.purpose" title={t("Visit purpose and expected skills")} subtitle={t("Sales' best guess. The coordinator may correct the skills, and both are kept.")}>
           <div className="form-section-title">{t("Visit purpose")}</div>
           <div className="check-grid">
             {/* The label text sits as a direct child so it is reachable at the
@@ -906,7 +906,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
         </Panel>
 
         <div style={{ height: 14 }} />
-        <Panel title={t("Attachments")} subtitle={t("Photos, drawings, specifications and the email the request arrived in")}>
+        <Panel title={t("Attachments")} subtitle={t("Photos, drawings, specifications and the email the request arrived in")} guide="intake.attach">
           <input ref={fileRef} type="file" multiple hidden
             onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
           <button className="attachment-drop" type="button" onClick={() => fileRef.current?.click()}
@@ -939,7 +939,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
       </div>
 
       <aside className="intake-side">
-        <Panel title={t("Readiness")} subtitle={t("What is still needed before this can go to technical review")}>
+        <Panel title={t("Readiness")} subtitle={t("What is still needed before this can go to technical review")} guide="intake.readiness">
           <ReadinessMeter readiness={liveReadiness} />
         </Panel>
       </aside>
@@ -1022,7 +1022,7 @@ function IntakeDetailScreen({ bootstrap, notify, id, onBack, onEdit, openVisit, 
         {canEdit ? <button className="btn default" type="button" onClick={() => onEdit(detail.id)}><Icon name="edit" />{t("Edit")}</button> : null}
         {canReview ? <button className="btn default" type="button" onClick={() => setReviewOpen(true)}><Icon name="shield" />{t("Technical review")}</button> : null}
         {canSchedule ? <button className="btn primary" type="button" onClick={() => setScheduleOpen(true)}><Icon name="calendar" />{t("Request site visit")}</button> : null}
-        {detail.allowedTransitions.map((target) => <button key={target} className="btn ghost" type="button"
+        {detail.allowedTransitions.map((target) => <button key={target} className="btn ghost" type="button" data-guide={`intake.to.${target}`}
           onClick={() => { setStatusTarget(target); setStatusReason(""); }}>{t(target)}</button>)}
       </>}
     />

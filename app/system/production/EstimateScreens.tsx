@@ -908,7 +908,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
           <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
           <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
         </div></details>
-        {capabilities.canSubmit ? <button className="btn primary" type="button" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
+        {capabilities.canSubmit ? <button className="btn primary" type="button" data-guide="estimate.submit" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
         {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
         {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
         {approved ? <button className="btn primary" type="button" disabled={busy || !erpExport} title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")} onClick={() => erpExport?.run()}><Icon name="download" />{copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}</button> : null}
@@ -1468,7 +1468,7 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     {setSelection.length ? <button type="button" className="btn default sm" disabled={busy || setBusy} onClick={() => setSetEditor({ members: workspace.costItems.filter(line => setSelection.includes(line.id) && !line.priceSetKey) })}>{estimateUxCopy(currentLocale(), "รวมเป็นเซ็ต", "Set price", "セット化")} ({setSelection.length})</button> : null}
     <button className="btn default sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการ", "Add item", "明細を追加")}</button>
     <button className="btn default sm" type="button" disabled={busy} onClick={() => openAddItems(null)}><Icon name="upload" />{estimateUxCopy(currentLocale(), "นำเข้า / คัดลอก", "Import / copy", "インポート / コピー")}</button>
-    <button className="btn primary sm" type="button" disabled={busy} onClick={() => setTool("module")}><Icon name="layers" />{estimateUxCopy(currentLocale(), "เพิ่มโมดูล", "Add module", "モジュールを追加")}</button>
+    <button className="btn primary sm" type="button" data-guide="estimate.addModule" disabled={busy} onClick={() => setTool("module")}><Icon name="layers" />{estimateUxCopy(currentLocale(), "เพิ่มโมดูล", "Add module", "モジュールを追加")}</button>
       </> : null}
     </div>
     {groups.length || showPending ? <div className="table-wrap cost-sheet-wrap"><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>

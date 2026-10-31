@@ -790,4 +790,8 @@ GO
 -- database/migrations/090_pegasus_erp_purchase_requests.sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.user_oidc_tokens TO [iot_team_app_role];
 GO
+
+-- database/migrations/091_user_guide_progress.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.user_guide_progress TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

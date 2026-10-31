@@ -227,7 +227,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   };
 
   return <>
-    <PageHeader eyebrow="SALES TO ENGINEERING" title="CRM.rfqTitle" subtitle="CRM.rfqSubtitle" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text="CRM.receiveRfq" /></button> : null}</>} />
+    <PageHeader eyebrow="SALES TO ENGINEERING" title="CRM.rfqTitle" subtitle="CRM.rfqSubtitle" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" data-guide="inquiry.receive" onClick={onCreate}><Icon name="plus" /><LocalizedText text="CRM.receiveRfq" /></button> : null}</>} />
     <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
       <Icon name="users" />
       <div className="seg-control" role="group" aria-label={queueCopy.team}>
@@ -261,7 +261,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
       { label: "Cancelled" },
     ]} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${result.total} ${uiText("inquiries")}`} flush>
+    <Panel title={`${result.total} ${uiText("inquiries")}`} flush guide="inquiry.list">
       <GridControls hideSearch pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
       {result.items.length ? <div className="table-wrap"><table>
         <thead><tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"CRM.inquiryStatus"} /></th><th aria-label={uiText("Action")} /></tr></thead>
@@ -332,23 +332,23 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
 
   return <form onSubmit={(event) => { void submit(event); }}>
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button>
-    <PageHeader eyebrow="INQUIRY" title="CRM.receiveRfq" subtitle="CRM.receiveRfqHint" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{t(busy ? "CRM.savingInquiry" : "CRM.saveInquiry")}</button></>} />
+    <PageHeader eyebrow="INQUIRY" title="CRM.receiveRfq" subtitle="CRM.receiveRfqHint" actions={<><button className="btn default" type="button" disabled={busy} onClick={onBack}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" data-guide="inquiry.save" disabled={busy || !form.customerId || !form.estimateOwnerId || !form.projectName.trim()}><Icon name="check" />{t(busy ? "CRM.savingInquiry" : "CRM.saveInquiry")}</button></>} />
     {error ? <LoadError message={error} retry={() => undefined} /> : null}
     <Panel title="CRM.intakeBasics"><div className="form-grid">
       <InquiryCustomerFields customers={bootstrap.customers} permissions={bootstrap.permissions} customerId={form.customerId} contact={form.contact} disabled={busy||Boolean(selectedSource)} onChange={(customerId, contact) => setForm((current) => ({ ...current, customerId, contact }))} refreshBootstrap={refreshBootstrap} notify={notify} />
       <EndUserCompanyField bootstrap={bootstrap} customerId={form.customerId} value={form.endUserCustomerId ?? null} disabled={busy||Boolean(selectedSource)} onChange={(endUserCustomerId) => setForm((current) => ({ ...current, endUserCustomerId }))} refreshBootstrap={refreshBootstrap} notify={notify} />
-      <Field label="Project Name" span={2}><input required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
+      <Field label="Project Name" span={2} guide="inquiry.projectName"><input required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
       <Field label="CRM.customerRfq" hint="CRM.customerRfqHint" span={2}><input maxLength={100} value={form.rfqNo} onChange={(event) => set("rfqNo", event.target.value)} /></Field>
       <Field label="Sales Owner"><select value={form.salesOwner} disabled={Boolean(selectedSource)} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
-      <Field label="กำหนดตอบกลับ / Estimate due"><input required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
-      <Field label="Customer Requirement" span={2}><textarea maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
+      <Field label="กำหนดตอบกลับ / Estimate due" guide="inquiry.due"><input required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
+      <Field label="Customer Requirement" span={2} guide="inquiry.requirement"><textarea maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
     </div></Panel>
-    <div className="alert info" role="status">
+    <div className="alert info" role="status" data-guide="inquiry.crm">
       <strong>{t(selectedSource ? "CRM.pendingOpportunity" : "CRM.noOpportunitySelected")}</strong>
       {selectedSource ? <><p>{String(selectedSource.opportunityNo)} · {String(selectedSource.name)}</p><p>{t("CRM.linkedIntakeHint")}</p><button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button></> : <p>{t("CRM.directSaveHint")}</p>}
     </div>
     {!selectedSource ? <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/> : null}
-    <details className="panel" style={{ marginTop: 14, padding: 18 }}><summary><LocalizedText text={"รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค"} /></summary>
+    <details className="panel" style={{ marginTop: 14, padding: 18 }} data-guide="inquiry.more"><summary><LocalizedText text={"รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค"} /></summary>
       <p className="muted"><LocalizedText text={"ผู้ประเมินเริ่มต้น:"} /> {engineers.find((member) => member.id === form.estimateOwnerId)?.name ?? "กรุณาเลือกผู้ประเมิน"} <LocalizedText text={"· เปลี่ยนได้ในส่วนนี้"} /></p>
       <div className="form-grid">
       <Field label="Project Type"><select value={form.projectType} onChange={(event) => set("projectType", event.target.value)}>{PROJECT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
@@ -367,7 +367,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
       <Field label="Remark" span={4}><textarea value={form.remark} onChange={(event) => set("remark", event.target.value)} /></Field></div>
     </details>
     <div style={{ height: 14 }} />
-    <Panel title="Inquiry Attachments" subtitle="Files are stored in the configured company document storage and linked to the inquiry">
+    <Panel title="Inquiry Attachments" subtitle="Files are stored in the configured company document storage and linked to the inquiry" guide="inquiry.attach">
       <input ref={fileRef} type="file" multiple hidden onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
       <button className="attachment-drop" type="button" onClick={() => fileRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}><Icon name="upload" /><strong><LocalizedText text={"Drag and drop files here or click to browse"} /></strong><span><LocalizedText text={"PDF, Excel, Word, DWG or image — maximum 50 MB per file"} /></span></button>
       {files.length ? <div style={{ marginTop: 12 }}>{files.map((queued, index) => <div className="file-row" key={`${queued.file.name}-${index}`}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{queued.file.name}</strong><small>{formatFileSize(queued.file.size)} <LocalizedText text={"· queued for upload"} /></small></div><select value={queued.category} onChange={(event) => setFiles((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}>{FILE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><button type="button" className="row-action" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${queued.file.name}`}><Icon name="trash" /></button></div>)}</div> : null}
@@ -477,7 +477,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
   return <>
     <button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text="CRM.rfqTitle" /></button>
     <PageHeader eyebrow={detail.number} title={`${detail.customerCode} — ${detail.projectName}`} subtitle={detail.customerName} meta={<><div><span><LocalizedText text="CRM.customerRfq" /></span><strong>{detail.rfqNo || "—"}</strong></div><div><span><LocalizedText text={"Inquiry status"} /></span><strong><Badge tone={toneOf(detail.status)}>{detail.status}</Badge></strong></div><div><span><LocalizedText text={"Project probability"} /></span><strong><Badge tone={probabilityTone(detail.projectProbability)}>{`${detail.projectProbability}%`}</Badge></strong></div><div><span><LocalizedText text={"Customer interest"} /></span><strong><Badge tone={interestTone(detail.customerInterestGrade)}>{interestLabel(detail.customerInterestGrade)}</Badge></strong></div><div><span><LocalizedText text={"Estimate due"} /></span><strong>{formatDate(detail.dueDate)}</strong></div><div><span><LocalizedText text={"Estimate owner"} /></span><strong>{detail.estimateOwnerName}</strong></div><div><span><LocalizedText text={"Priority"} /></span><strong><Badge tone={priorityTone(detail.priority)}>{detail.priority}</Badge></strong></div><div><span><LocalizedText text={"Project type"} /></span><strong>{detail.projectType}</strong></div></>} actions={<>
-      {!closed && bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
+      {!closed && bootstrap.permissions.includes("intake.write") && bootstrap.permissions.includes("intake.read") ? <button className="btn default" type="button" data-guide="inquiry.requestVisit" onClick={() => { setRequestVisit((value) => value + 1); setTab("visits"); }}><Icon name="truck" /><LocalizedText text={"Request a site visit"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setAssignOpen(true)}><Icon name="user" /><LocalizedText text={"Assign owner"} /></button> : null}
       {canWrite && canEditEndUser(detail.status) ? <button className="btn default" type="button" onClick={() => setEndUserOpen(true)}><LocalizedText text={"End user / บริษัทผู้ใช้งานปลายทาง"} /></button> : null}
       {canWrite ? <button className="btn default" type="button" onClick={() => setQualificationOpen(true)}><Icon name="trendingUp" /><LocalizedText text={"Update qualification"} /></button> : null}
@@ -492,9 +492,9 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
       <Icon name={estimateIsReadOnly ? "lock" : detail.estimate ? "checkCircle" : "arrowRight"} />
       <span style={{ flex: "1 1 360px" }}><strong>{flowCopy.title}</strong>{flowCopy.description}</span>
       {detail.estimate
-        ? <button className="btn primary sm" type="button" onClick={() => openEstimate?.(detail.estimate!.id)}>{flowCopy.action}<Icon name="arrowRight" /></button>
+        ? <button className="btn primary sm" type="button" data-guide="inquiry.openEstimate" onClick={() => openEstimate?.(detail.estimate!.id)}>{flowCopy.action}<Icon name="arrowRight" /></button>
         : canCreateEstimate
-          ? <button className="btn primary sm" type="button" onClick={() => setCreateEstimateOpen(true)}><Icon name="plus" />{flowCopy.action}</button>
+          ? <button className="btn primary sm" type="button" data-guide="inquiry.createEstimate" onClick={() => setCreateEstimateOpen(true)}><Icon name="plus" />{flowCopy.action}</button>
           : null}
     </div> : null}
     {!closed && detail.estimate?.status === "Cancelled" ? <div className="info-strip amber"><LocalizedText text="The estimate was cancelled. Review this inquiry and use Manage document to close the work if appropriate." /></div> : null}

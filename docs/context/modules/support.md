@@ -1,14 +1,15 @@
-# Support / Employee Manual
+# Support / Employee Manual / Guides
 
 [Context index](../../../AGENTS.md) · [Architecture](../ARCHITECTURE.md) · [Change guide](../WORKFLOW.md)
 
-แจ้งปัญหา ticket การตอบรับ และคู่มือ
+แจ้งปัญหา ticket การตอบรับ คู่มือ และบทสอนแบบคลิกตามบนหน้าจอจริงพร้อมความคืบหน้าของทีม
 
-Evidence: snapshot `cbe55e4b`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `4a0666d4`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
 - [support API and function map](../api/support.md) — registered in Node app
+- [user-guides API and function map](../api/user-guides.md) — registered in Node app
 
 ## UI function locator
 
@@ -29,6 +30,20 @@ Shared screens contain other modules: use the symbol and line range instead of r
 | `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 121–124 |
 | `employeeManualLabel` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 55–55 |
 | `EmployeeManualScreen` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 57–101 |
+| `RUN_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 85–85 |
+| `ANSWERED_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 86–86 |
+| `readSession` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 88–90 |
+| `writeSession` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 91–93 |
+| `readRun` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 94–100 |
+| `shortDate` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 102–102 |
+| `findVisible` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 105–114 |
+| `clamp` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 116–116 |
+| `place` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 119–147 |
+| `GuideLayer` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 149–262 |
+| `GuideStatus` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 264–268 |
+| `GuidePanel` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 270–301 |
+| `GuideTeamModal` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 303–335 |
+| `GuideRunner` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 337–427 |
 
 ## Domain helpers / direct dependencies
 
@@ -36,6 +51,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/support-rules.ts](<../../../backend-node/src/support-rules.ts>)
 - [backend-node/src/support-service.ts](<../../../backend-node/src/support-service.ts>)
+- [backend-node/src/activity-service.ts](<../../../backend-node/src/activity-service.ts>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/ui.tsx](<../../../app/system/ui.tsx>)
@@ -43,11 +59,15 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/support-client.ts](<../../../app/system/support-client.ts>)
 - [app/system/production/support-center.css](<../../../app/system/production/support-center.css>)
 - [app/system/production/employee-manual.css](<../../../app/system/production/employee-manual.css>)
+- [app/system/production/guide-catalog.ts](<../../../app/system/production/guide-catalog.ts>)
+- [app/system/production/guide.css](<../../../app/system/production/guide.css>)
 
 ## Candidate regression tests
 
 - [tests/employee-manual.test.mjs](<../../../tests/employee-manual.test.mjs>)
+- [tests/guides.test.mjs](<../../../tests/guides.test.mjs>)
 - [backend-node/tests/support-rules.test.ts](<../../../backend-node/tests/support-rules.test.ts>)
+- [backend-node/tests/user-guides.test.ts](<../../../backend-node/tests/user-guides.test.ts>)
 
 ## Client contract lookup
 

@@ -152,11 +152,12 @@ GO
 :r database/migrations/088_monitor_agent_tmtdesk_id.sql
 :r database/migrations/089_outlook_calendar_events.sql
 :r database/migrations/090_pegasus_erp_purchase_requests.sql
+:r database/migrations/091_user_guide_progress.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 90) <> 90
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 91) <> 91
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

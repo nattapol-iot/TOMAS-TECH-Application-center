@@ -1550,7 +1550,7 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra, taskN
     if (patch) onPatch({ ...patch, remark: reason }, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy("Blocked")}`);
   };
   return <div className="quick-controls">
-    <div className="pct-strip" role="group" aria-label={uiText("Percent done")}>
+    <div className="pct-strip" role="group" aria-label={uiText("Percent done")} data-guide="work.percent">
       {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && (value === 100 || !taskNotes))} className={percent === value ? "on" : undefined} onClick={() => {
         const patch = percentChangePatch(target, value, today);
         if (!patch) return;
@@ -1559,7 +1559,7 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra, taskN
         onPatch(patch, `${target.wbs} ${localizeCopy("progress updated to")} ${value}%`);
       }}>{value}</button>)}
     </div>
-    <select disabled={!editable} value={target.status} aria-label={uiText("Status")} onChange={(event) => {
+    <select disabled={!editable} value={target.status} aria-label={uiText("Status")} data-guide="work.status" onChange={(event) => {
       const status = event.target.value;
       if (status === "Done" && !canFinishWork(target.status)) return;
       if (needsZeroProgressFinishConfirmation(percent, status)
@@ -1650,7 +1650,7 @@ function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify
     ?? group.items.find(workNeedsUpdate)
     ?? group.items[0]!;
   const urgent = group.urgency <= 2;
-  return <article className={`schedule-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`}>
+  return <article className={`schedule-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`} data-guide="work.group">
     <header className="schedule-work-group-head">
       <div className="schedule-work-group-title">
         <div className="estimate-work-reference">
@@ -1751,7 +1751,7 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
     {item.canUpdate ? <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} /> : null}
 
     <div className="my-task-actions">
-      {item.canUpdate ? <button className="btn default sm" type="button" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
+      {item.canUpdate ? <button className="btn default sm" type="button" data-guide="work.details" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
       <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId, item.taskId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
       <span className="spacer" />
       {offersDayRequest(item) || offersPersonalTask(item) || item.canDeleteDetail ? <details className="my-task-more-actions">

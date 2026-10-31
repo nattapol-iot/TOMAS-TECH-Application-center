@@ -128,9 +128,9 @@ export function CreateEstimateFromInquiryDialog({ inquiry, onClose, onCreated }:
     finally { setBusy(false); }
   };
   return <Modal title={copy("สร้าง Estimate", "Create estimate", "見積を作成")} subtitle={inquiry.number} size="lg" onClose={() => { if (!busy) onClose(); }}
-    footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !ready} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Creating…"} /> : startFrom === "copy" ? copy("สร้างจาก Estimate ที่เลือก", "Create from the chosen estimate", "選択した見積から作成") : copy("สร้าง Estimate ว่าง", "Create an empty estimate", "空の見積を作成")}</button></>}>
+    footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" data-guide="estimate.create" disabled={busy || !ready} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Creating…"} /> : startFrom === "copy" ? copy("สร้างจาก Estimate ที่เลือก", "Create from the chosen estimate", "選択した見積から作成") : copy("สร้าง Estimate ว่าง", "Create an empty estimate", "空の見積を作成")}</button></>}>
     {error ? <div className="info-strip red" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    <div className="form-grid two">
+    <div className="form-grid two" data-guide="estimate.startFrom">
       <StartFromChoice idPrefix="inquiry-estimate" startFrom={startFrom} onStartFrom={setStartFrom} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
     </div>
   </Modal>;

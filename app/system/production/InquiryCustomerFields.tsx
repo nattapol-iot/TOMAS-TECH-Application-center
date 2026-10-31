@@ -55,7 +55,7 @@ export function InquiryCustomerFields({ customers, permissions, customerId, cont
   const reloadContacts = () => { setLoading(!!customerId); setLoadError(""); setRevision((value) => value + 1); };
   const refreshAfterSave = () => { void refreshBootstrap().catch(() => notify("บันทึกแล้ว แต่รีเฟรชรายการไม่สำเร็จ ข้อมูลใหม่ยังเลือกใช้ได้ในฟอร์มนี้")); };
   return <>
-    <Field label="บริษัทที่รับงานด้วย / Contracting customer *" span={2}>
+    <Field label="บริษัทที่รับงานด้วย / Contracting customer *" span={2} guide="inquiry.customer">
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 240px", minWidth: 0 }}>
           <SearchSelect value={customerId ? String(customerId) : ""} required disabled={disabled}

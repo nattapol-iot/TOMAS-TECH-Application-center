@@ -64,6 +64,7 @@ import {
   ProductionInventoryOperations,
   ProductionKnowledgeHub,
   DownloadCenterScreen,
+  GuideLayer,
   SiteMonitorScreen,
   InstalledBaseScreen,
   ProductionMaterialIssues,
@@ -297,6 +298,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const onSupportDirtyChange = useCallback((dirty: boolean) => { supportDirty.current = dirty; }, []);
   const [supportTicketId, setSupportTicketId] = useState<number | null>(null);
   const [supportCreate, setSupportCreate] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [supportRevision, setSupportRevision] = useState(0);
   const onReportDirtyChange = useCallback((dirty: boolean) => { reportDirty.current = dirty; }, []);
   const [languageReady, setLanguageReady] = useState(false);
@@ -817,7 +819,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <a key={item.view} href={viewHash(item.view)} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={(event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount))}</em> : null}</a>;
+                    return <a key={item.view} href={viewHash(item.view)} data-guide={`nav.${item.view}`} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={(event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount))}</em> : null}</a>;
                   })}
                 </div>
               </div>
@@ -840,8 +842,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           </button>
           <div className="production-indicator"><span className="status-dot online" /><strong>{t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</strong><small>{t("SQL Server API")}</small></div>
           <div className="topbar-right">
+            <button className="btn default sm topbar-guide" type="button" aria-haspopup="dialog" title={t("Guide.openHint")} aria-label={t("Guide.open")} onClick={() => setGuideOpen(true)}><Icon name="play" /><span className="label">{t("Guide.open")}</span></button>
             <CopyLinkButton notify={setToast} />
-            <button className="btn default sm" type="button" onClick={() => setSupportCreate(true)}><Icon name="inbox" />{supportLabel("Report a problem", language)}</button>
+            <button className="btn default sm" type="button" data-guide="topbar.report" onClick={() => setSupportCreate(true)}><Icon name="inbox" />{supportLabel("Report a problem", language)}</button>
             <div className="lang-switch" role="group" aria-label={t("Language")}>
               {LANGUAGES.map((code) => (
                 <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => setLanguage(code)}>{code}</button>
@@ -938,6 +941,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
+      <GuideLayer view={view} permissions={bootstrap.permissions} userId={bootstrap.user.id} open={guideOpen} onOpen={() => setGuideOpen(true)} onClose={() => setGuideOpen(false)} goTo={(next) => setView(next as View)} />
       {supportCreate ? <SupportCreateDialog context={{ module: view === "manual" ? employeeManualLabel(language) : NAV.flatMap(group => group.items).find(item => item.view === navView(view))?.label ?? view }} onClose={() => setSupportCreate(false)} onCreated={() => { setSupportRevision(value => value + 1); void refreshNotifications(); }} onOpen={openSupport} /> : null}
     </div>
     </LanguageContext.Provider>
