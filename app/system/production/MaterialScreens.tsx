@@ -724,7 +724,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
 
   return (
     <>
-      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
+      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" data-guide="pr.new" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
       <HistoricalPrPanel canImport={canRequest} notify={notify} />
       <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}

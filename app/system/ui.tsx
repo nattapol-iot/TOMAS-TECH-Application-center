@@ -199,13 +199,15 @@ export function PageHeader({ eyebrow, title, subtitle, actions, meta }: {
   );
 }
 
-export function Panel({ title, subtitle, actions, children, flush, className }: {
+export function Panel({ title, subtitle, actions, children, flush, className, guide }: {
   title?: string; subtitle?: string; actions?: React.ReactNode;
   children: React.ReactNode; flush?: boolean; className?: string;
+  /** The panel's name for a click-through guide (production/GuideLayer.tsx). */
+  guide?: string;
 }) {
   const t = useT();
   return (
-    <section className={`panel${className ? ` ${className}` : ""}`}>
+    <section className={`panel${className ? ` ${className}` : ""}`} data-guide={guide}>
       {title ? (
         <div className="panel-head">
           <div>
@@ -279,7 +281,7 @@ export function Tabs<T extends string>({ tabs, active, onChange, link }: {
   return (
     <div className="tabs" role="tablist">
       {tabs.map((tab) => (
-        <button key={tab.id} role="tab" type="button" aria-selected={active === tab.id}
+        <button key={tab.id} role="tab" type="button" aria-selected={active === tab.id} data-tab={tab.id}
           className={active === tab.id ? "tab active" : "tab"} onClick={() => onChange(tab.id)}>
           {tab.raw ? tab.label : t(tab.label)}
           {tab.count !== undefined ? <em>{tab.count}</em> : null}
@@ -398,10 +400,14 @@ export function Select({ label, value, options, onChange, width, link }: {
   );
 }
 
-export function Field({ label, children, hint, span }: { label: string; children: React.ReactNode; hint?: string; span?: 2 | 3 | 4 }) {
+export function Field({ label, children, hint, span, guide }: {
+  label: string; children: React.ReactNode; hint?: string; span?: 2 | 3 | 4;
+  /** The field's name for a click-through guide (production/GuideLayer.tsx). */
+  guide?: string;
+}) {
   const t = useT();
   return (
-    <div className={`field${span ? ` span-${span}` : ""}`}>
+    <div className={`field${span ? ` span-${span}` : ""}`} data-guide={guide}>
       <label>{t(label)}</label>
       {children}
       {hint ? <small>{t(hint)}</small> : null}

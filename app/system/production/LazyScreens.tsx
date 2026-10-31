@@ -79,5 +79,7 @@ export const DownloadCenterScreen = dynamic(() => import("./DownloadCenterScreen
 export const SiteMonitorScreen = dynamic(() => import("./SiteMonitorScreen").then((m) => m.SiteMonitorScreen), screen);
 export const InstalledBaseScreen = dynamic(() => import("./InstalledBaseScreen").then((m) => m.InstalledBaseScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);
+// The click-through guides: loaded after the shell, and quiet while loading or if the chunk fails, since no screen depends on them.
+export const GuideLayer = dynamic(() => import("./GuideLayer").then((m) => m.GuideLayer), { loading: () => null });
 // My Work's "My work order" tab: the work queue and its projection load when the tab is first opened.
 export const MyWorkQueue = dynamic(() => import("./WorkQueue").then((m) => m.MyWorkQueue), screen);

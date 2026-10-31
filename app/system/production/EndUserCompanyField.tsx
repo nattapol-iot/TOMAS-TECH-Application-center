@@ -28,7 +28,7 @@ export function EndUserCompanyField({ bootstrap, customerId, value, disabled, on
   const companies = useMemo(() => [...bootstrap.customers, ...created.filter((company) => !bootstrap.customers.some((item) => item.id === company.id))].sort((a, b) => a.name.localeCompare(b.name)), [bootstrap.customers, created]);
   const canCreate = bootstrap.permissions.includes("intake.write") || bootstrap.permissions.includes("master.write");
   return <>
-    <Field label="End user / บริษัทผู้ใช้งานปลายทาง" span={2} hint="บริษัทที่ใช้งานจริง อาจต่างจากบริษัทที่เรารับงานด้วย · Optional; leave blank when unknown">
+    <Field label="End user / บริษัทผู้ใช้งานปลายทาง" span={2} guide="inquiry.endUser" hint="บริษัทที่ใช้งานจริง อาจต่างจากบริษัทที่เรารับงานด้วย · Optional; leave blank when unknown">
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <select aria-label={localizeCopy("End user / บริษัทผู้ใช้งานปลายทาง")} style={{ flex: "1 1 240px", minWidth: 0 }} disabled={disabled} value={value ?? ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}>
           <option value=""><LocalizedText text={"ยังไม่ระบุ / Not specified"} /></option>

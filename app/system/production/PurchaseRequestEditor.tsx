@@ -119,10 +119,10 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
     <Panel title="ขอซื้อ (PR)" subtitle="เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ"
       actions={<button className="btn ghost" type="button" onClick={onClose} disabled={busy}><Icon name="arrowLeft" /><LocalizedText text={"กลับไปรายการ PR"} /></button>}>
       <div className="form-grid two">
-        <Field label="Released BOM"><select value={effectiveBomId} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
+        <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
           <option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</select></Field>
         <Field label="Priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
-        <Field label="Required date"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
+        <Field label="Required date" guide="pr.required"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
         <Field label="Purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
         {erpOptions.data?.enabled && erpOptions.data.departments.length ? <Field label="แผนกใน ERP"><select value={department} onChange={(event) => setErpDepartment(event.target.value)}>
           <option value="">{t("Select…")}</option>{erpOptions.data.departments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field> : null}
@@ -147,7 +147,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
           <tbody>{statuses.filter((status) => status.thisRequest > 0).map((status) => <tr key={status.module}><td><strong>{status.module}</strong></td><td className="num">{money(status.budget)}</td>
             <td className="num">{money(status.requested)}</td><td className="num">{money(status.thisRequest)}</td><td className="num">{money(status.budget - status.requested - status.thisRequest)}</td>
             <td><Badge tone={LEVEL_TONE[status.level]}>{t(budgetNote(status))}{status.level !== "ok" && Number.isFinite(status.percent) ? ` (${status.percent.toFixed(1)}%)` : ""}</Badge></td></tr>)}</tbody></table></div> : null}
-        {rows.length ? <div className="table-wrap tall"><table className="pr-plan-table"><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"ประเภท"} /></th>
+        {rows.length ? <div className="table-wrap tall" data-guide="pr.lines"><table className="pr-plan-table"><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"ประเภท"} /></th>
           <th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part No."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th>
           <th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"Unit price"} /></th>
           <th className="num"><LocalizedText text={"มูลค่า"} /></th><th><LocalizedText text={"Remark"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead>
@@ -181,7 +181,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
             </tr>;
           })}</tbody></table></div> : <EmptyState icon="layers" title="BOM นี้ขอซื้อครบแล้ว" message="ใช้ 'เพิ่มรายการนอกแผน' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม" />}
         {visible.length > pageSize ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, visible.length)} total={visible.length} onPage={setPage} /> : null}
-        <div className="pr-plan-summary" aria-label={t("Purchase plan summary")}>
+        <div className="pr-plan-summary" aria-label={t("Purchase plan summary")} data-guide="pr.summary">
           <div><span><LocalizedText text={"รายการที่ซื้อ"} /></span><strong>{selected.length}</strong><small>{t(KIND_LABEL.Planned)} {kinds("Planned")} · {t(KIND_LABEL.Substitute)} {kinds("Substitute")} · {t(KIND_LABEL.Unplanned)} {kinds("Unplanned")}</small></div>
           <div><span><LocalizedText text={"ต้องแก้ก่อนส่ง"} /></span><strong>{issues.size}</strong><small><LocalizedText text={"แถวที่มีข้อความสีแดง"} /></small></div>
           <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong>{needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วส่งเข้า ERP อัตโนมัติ"} /></small></div>
@@ -190,7 +190,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
         <Toolbar>
           <span className="spacer" />
           <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-          <button className="btn primary" type="button" disabled={busy || !selected.length || issues.size > 0} onClick={() => { void submit(); }}>
+          <button className="btn primary" type="button" data-guide="pr.submit" disabled={busy || !selected.length || issues.size > 0} onClick={() => { void submit(); }}>
             <Icon name="check" />{busy ? <LocalizedText text={"กำลังสร้าง PR…"} /> : <>{t("สร้าง PR")} ({selected.length})</>}</button>
         </Toolbar>
       </> : <EmptyState icon="layers" title="No released BOM" message="Release a BOM before creating a requisition" />}

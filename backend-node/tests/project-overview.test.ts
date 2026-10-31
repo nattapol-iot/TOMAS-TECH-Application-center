@@ -197,7 +197,9 @@ test("an elevated caller is bound as elevated", async () => {
   } finally { await server.close(); }
 });
 
-test("each overview item carries the list fields plus its schedule summary and stage rights", async () => {
+test("each overview item carries the list fields plus its schedule summary and stage rights", async (t) => {
+  // The route reads today's date; hold it before the fixture's 30 October milestone so the milestone is still ahead.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-30T03:00:00Z") });
   const { server, calls } = overviewServer({ id: 5, roles: ["Engineer"] });
   try {
     const items = (await server.inject({ method: "GET", url: "/api/v1/projects/overview?includeClosed=1" })).json().items;

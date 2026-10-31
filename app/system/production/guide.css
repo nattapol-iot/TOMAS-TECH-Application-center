@@ -1,0 +1,115 @@
+/* Click-through guides (GuideLayer.tsx). Above the shared overlays (z-index 100) and the toast (200). */
+
+.guide-spot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  pointer-events: none;
+  border-radius: var(--r-md);
+  /* The page stays clickable: the dim is a shadow around the lit element, not a layer over the page. */
+  box-shadow: 0 0 0 3px var(--blue), 0 0 0 9999px rgb(15 23 42 / 0.38);
+  transition: transform 160ms ease, width 160ms ease, height 160ms ease;
+}
+.guide-spot[hidden] { display: none; }
+.guide-spot.click::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid var(--blue);
+  animation: guide-pulse 1.6s ease-out infinite;
+}
+@keyframes guide-pulse {
+  from { opacity: 0.9; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.06); }
+}
+
+.guide-pop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1001;
+  display: grid;
+  gap: 8px;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  padding: 12px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xl);
+  font-size: var(--fs-sm);
+  text-align: left;
+  /* Off screen until the first placement, so the card never flashes in the corner. */
+  transform: translate(-200vw, 0);
+}
+.guide-pop-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--fs-xs); }
+.guide-pop-head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-pop-bar { height: 3px; border-radius: var(--r-pill); background: var(--n-100); overflow: hidden; }
+.guide-pop-bar i { display: block; height: 100%; background: var(--blue); }
+.guide-pop > strong { font-size: var(--fs-md); font-weight: 640; }
+.guide-pop > p { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+.guide-pop-hint, .guide-pop-missing { display: flex; align-items: flex-start; gap: 6px; font-size: var(--fs-xs); }
+.guide-pop-hint { color: var(--blue-text); }
+.guide-pop-missing { color: var(--amber-text); background: var(--amber-soft); border: 1px solid var(--amber-line); border-radius: var(--r-sm); padding: 6px 8px; }
+.guide-pop-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.guide-pop-actions .spacer { flex: 1; }
+
+.guide-card {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 990;
+  display: flex;
+  gap: 10px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm);
+  animation: fade 160ms ease;
+}
+.guide-card > .icon { flex: none; margin-top: 2px; color: var(--blue); }
+.guide-card.done { border-color: var(--green-line); }
+.guide-card.done > .icon { color: var(--green); }
+.guide-card p { margin: 4px 0; color: var(--ink-soft); line-height: 1.5; }
+.guide-card small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.guide-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+
+.guide-panel { display: grid; gap: 16px; }
+.guide-intro { margin: 0; color: var(--ink-soft); font-size: var(--fs-sm); line-height: 1.55; }
+.guide-panel h3 { margin: 0 0 8px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.guide-panel ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.guide-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.guide-item > div { flex: 1; min-width: 0; }
+.guide-item strong { font-size: var(--fs-sm); }
+.guide-item p { margin: 4px 0 6px; color: var(--ink-soft); font-size: var(--fs-xs); line-height: 1.5; }
+.guide-item-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: var(--fs-2xs); }
+.guide-item > .btn { flex: none; }
+
+.guide-status { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; }
+.guide-status .icon { width: 12px; height: 12px; }
+.guide-status.done { color: var(--green-text); }
+.guide-status.partial { color: var(--amber-text); }
+
+.guide-team table { min-width: 860px; }
+.guide-team thead th, .guide-team tfoot th { white-space: normal; vertical-align: bottom; min-width: 110px; }
+.guide-team thead th:first-child, .guide-team tfoot th:first-child { min-width: 180px; }
+
+.topbar-guide .label { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .topbar-guide .label { display: none; }
+  .guide-card { right: 16px; left: 16px; bottom: 16px; width: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-spot { transition: none; }
+  .guide-spot.click::after, .guide-card { animation: none; }
+}

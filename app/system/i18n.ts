@@ -2451,6 +2451,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Link.copy": { en: "Copy link", th: "คัดลอกลิงก์", jp: "リンクをコピー" },
   "Link.copied": { en: "Link copied: paste it to your team", th: "คัดลอกลิงก์แล้ว วางส่งให้ทีมได้เลย", jp: "リンクをコピーしました。チームに貼り付けて共有できます" },
   "Link.copyHint": { en: "Copy the link to what is on screen, with its tab, open record and filters", th: "คัดลอกลิงก์ของสิ่งที่เปิดอยู่ รวมแท็บ รายการที่เปิด และตัวกรอง", jp: "表示中の画面（タブ・開いている項目・フィルター）へのリンクをコピー" },
+  "Guide.open": { en: "How-to guides", th: "สอนการใช้งาน", jp: "使い方ガイド" },
+  "Guide.openHint": { en: "Learn a task by clicking through it on the real screen", th: "เรียนวิธีทำงานแบบคลิกตามบนหน้าจอจริง", jp: "実際の画面をクリックしながら操作を学ぶ" },
   "Link.copyPrompt": { en: "Copy this link:", th: "คัดลอกลิงก์นี้:", jp: "このリンクをコピーしてください：" },
   "Gantt.moveRow": { en: "Move row", th: "ย้ายแถว", jp: "行を移動" },
   "Gantt.moveRowHint": { en: "Drag up or down to move this row, or press the up and down arrow keys", th: "ลากขึ้นลงเพื่อย้ายแถว หรือกดปุ่มลูกศรขึ้น/ลง", jp: "上下にドラッグして行を移動、または上下矢印キー" },
