@@ -6,7 +6,8 @@
  *
  * Owner decisions 2026-10-30: six guides for the daily work, the person decides at the end whether to save, progress
  * is kept on the server so a head can see who has finished which guide (migration 091), and a screen invites a
- * newcomer the first time it is opened.
+ * newcomer the first time it is opened. On 2026-11-01 the owner added four CRM guides: creating a deal, logging an
+ * activity with its follow-up, sending a deal for estimating, and recording the quotation and the order.
  *
  * Keep the words on buttons the same as the screen's own Thai, English and Japanese labels. tests/guides.test.mjs
  * checks that every step's target is still marked somewhere in the source.
@@ -69,7 +70,390 @@ const openInquiry = (body: GuideCopy): GuideStep => ({
   },
 });
 
+const dealsMenu = menu("crm-opportunities",
+  { th: "เปิดเมนูโอกาสขาย / ติดตามงานขาย", en: "Open Opportunities / sales follow-up", jp: "「商談・営業フォロー」を開く" },
+  { th: "ดีลทุกเรื่องของลูกค้าอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every customer deal lives here. Click the highlighted menu entry.", jp: "顧客の商談はすべてここにあります。強調表示のメニューをクリックします。" });
+
+const openDeal = (body: GuideCopy): GuideStep => ({
+  target: "crm.deals", action: "click", clickOn: ".crm-deal-name, .crm-opportunity-card", view: "crm-opportunities",
+  title: { th: "เปิดดีล", en: "Open the deal", jp: "商談を開く" },
+  body,
+  missing: {
+    th: "รอให้รายการโหลดสักครู่ ถ้ายังเปิดดีลเรื่องอื่นอยู่ ให้กด 'กลับ' ด้านบนของหน้า",
+    en: "Wait a moment for the list to load. If another deal is open, press Back at the top of the page.",
+    jp: "一覧の読み込みを少し待ちます。別の商談を開いている場合は、ページ上部の「戻る」を押します。",
+  },
+});
+
+/* The CRM guides follow a deal from first contact to the order. GUIDES puts them around the delivery guides in the
+   order the work happens, so the list and the team table read as one lifecycle. */
+const CRM_DEAL_CREATE: Guide = {
+  id: "crm-deal-create",
+  title: { th: "สร้างดีลใหม่ใน CRM", en: "Create a deal in CRM", jp: "CRMで商談を作成" },
+  summary: {
+    th: "บันทึกโอกาสขายใหม่: ลูกค้า ชื่อดีล ผู้ติดต่อ ผู้รับผิดชอบ วันที่คาดว่าจะปิด และสิ่งที่ต้องทำถัดไป",
+    en: "Record a new opportunity: the customer, the deal's name, the contact, the owners, the expected close and the next action.",
+    jp: "新しい商談を登録します:顧客、商談名、担当者、責任者、受注予定日、次のアクション。",
+  },
+  minutes: 3,
+  permissions: ["crm.read", "crm.write"],
+  views: ["crm-dashboard", "crm-opportunities", "crm-pipeline"],
+  invite: "crm-opportunities",
+  steps: [
+    dealsMenu,
+    {
+      target: "crm.new", action: "click", view: "crm-opportunities",
+      title: { th: "กด 'เพิ่มโอกาสทางการขาย'", en: "Press New opportunity", jp: "「商談を作成」を押す" },
+      body: { th: "ปุ่มอยู่มุมขวาบน เปิดฟอร์มดีลใหม่", en: "It is at the top right and opens the new deal form.", jp: "右上にあり、新しい商談のフォームが開きます。" },
+      missing: {
+        th: "ถ้ากำลังเปิดดีลอยู่ ให้กด 'กลับ' ด้านบนก่อน ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้างดีล",
+        en: "If a deal is open, press Back at the top first. If the button never appears, this account cannot create deals.",
+        jp: "商談を開いている場合は、先に上部の「戻る」を押します。ボタンが表示されない場合、このアカウントには作成権限がありません。",
+      },
+    },
+    {
+      target: "crm.deal.customer", action: "next", view: "crm-opportunities",
+      title: { th: "เลือกลูกค้า", en: "Choose the customer", jp: "顧客を選ぶ" },
+      body: {
+        th: "พิมพ์ชื่อหรือรหัสบริษัทแล้วเลือกจากรายการ ถ้าบริษัทที่ใช้งานจริงเป็นบริษัทอื่น เลือกในช่อง End user ข้างๆ",
+        en: "Type the company's name or code and pick it from the list. If another company will use the system, choose it under End user beside it.",
+        jp: "会社名またはコードを入力して一覧から選びます。実際に使う会社が別なら、隣のエンドユーザー欄で選びます。",
+      },
+    },
+    {
+      target: "crm.deal.name", action: "next", view: "crm-opportunities",
+      title: { th: "ตั้งชื่อดีล", en: "Name the deal", jp: "商談名を付ける" },
+      body: {
+        th: "ใช้ชื่อที่บอกว่าลูกค้าต้องการอะไร เช่น 'ระบบ OEE ไลน์ประกอบ 3' ถ้าลูกค้ามีดีลชื่อคล้ายกันที่ยังเปิดอยู่ จะขึ้นรายการเตือนใต้ช่องนี้ระหว่างพิมพ์",
+        en: "Say what the customer wants, e.g. 'OEE system for assembly line 3'. If the customer has an open deal with a similar name, it is listed under the field as you type.",
+        jp: "顧客の要望が分かる名前にします(例:「組立ライン3 OEEシステム」)。似た名前の進行中の商談があると、入力中に下に表示されます。",
+      },
+    },
+    {
+      target: "crm.deal.contact", action: "next", view: "crm-opportunities",
+      title: { th: "ผู้ติดต่อ", en: "The contact", jp: "担当者" },
+      body: {
+        th: "ค้นหาด้วยชื่อ ตำแหน่ง หรือแผนก ถ้ายังไม่มีในระบบ พิมพ์ชื่อแล้วเลือกแถวสุดท้าย 'เพิ่มผู้ติดต่อใหม่' เพิ่มได้ทันทีโดยไม่ต้องออกจากฟอร์ม",
+        en: "Search by name, position or department. Not listed yet? Type the name and pick the last row, Add a new contact, without leaving the form.",
+        jp: "氏名・役職・部署で検索します。未登録なら名前を入力し、最後の行「新しい担当者を追加」でフォームのまま追加できます。",
+      },
+    },
+    {
+      target: "crm.deal.owner", action: "next", view: "crm-opportunities",
+      title: { th: "ผู้รับผิดชอบ", en: "The owners", jp: "責任者" },
+      body: {
+        th: "ผู้รับผิดชอบงานขายคือคนที่ติดตามลูกค้า ผู้รับผิดชอบเทคนิคคือวิศวกรที่ดูแลเนื้องาน ตอนส่งประเมินราคา ระบบตั้งเขาเป็นผู้ประเมินให้",
+        en: "The sales owner follows up the customer; the technical owner is the engineer for the work, and becomes the estimator when the deal is sent for estimating.",
+        jp: "営業担当者が顧客をフォローし、技術担当者が技術面を担当します。見積依頼時には技術担当者が見積担当になります。",
+      },
+    },
+    {
+      target: "crm.deal.close", action: "next", view: "crm-opportunities",
+      title: { th: "วันที่คาดว่าจะปิดงาน", en: "Expected close", jp: "受注予定日" },
+      body: {
+        th: "วันที่คาดว่าลูกค้าจะตัดสินใจ ใช้เรียงดีลและดูภาพรวมงานขายรายเดือน แก้ได้ทุกเมื่อ",
+        en: "When you expect the customer to decide. It orders the deals and the monthly sales view, and can change at any time.",
+        jp: "顧客が決定する見込みの日です。商談の並び順や月次の営業状況に使われ、いつでも変更できます。",
+      },
+    },
+    {
+      target: "crm.deal.nextAction", action: "next", view: "crm-opportunities",
+      title: { th: "สิ่งที่ต้องทำถัดไป", en: "The next action", jp: "次のアクション" },
+      body: {
+        th: "ใส่สิ่งที่จะทำต่อและกำหนดเสร็จ เช่น 'นัดเข้าพบลูกค้า' ดีลที่ไม่มีสิ่งที่ต้องทำจะขึ้นเตือนในรายการ",
+        en: "Enter what happens next and when, e.g. 'Meet the customer'. A deal with no next action is flagged in the list.",
+        jp: "次に行うことと期限を入力します(例:「顧客訪問」)。次のアクションがない商談は一覧で警告されます。",
+      },
+    },
+    {
+      target: "crm.deal.more", action: "next", view: "crm-opportunities",
+      title: { th: "รายละเอียดเพิ่มเติม", en: "Additional details", jp: "詳細情報" },
+      body: {
+        th: "กดเพื่อเปิด: ที่มาของดีล ความสำคัญ โอกาสได้งาน คู่แข่ง ความต้องการ และขอบเขตงาน ไม่บังคับ ใส่ทีหลังได้",
+        en: "Open it for the source, priority, probability, competitor, need and scope. All optional; fill them in later if you like.",
+        jp: "開くと商談の出所、優先度、受注確度、競合、要望、範囲を入力できます。任意で、後からでも構いません。",
+      },
+    },
+    {
+      target: "crm.save", action: "click", view: "crm-opportunities",
+      title: { th: "บันทึกดีล", en: "Save the deal", jp: "商談を保存" },
+      body: {
+        th: "กด 'บันทึก' ระบบออกเลขดีลแล้วเปิดหน้าดีลให้ ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน' จะไม่มีข้อมูลถูกบันทึก",
+        en: "Press Save: the deal gets its number and opens. Only practising? Press Cancel beside it, then Finish; nothing is saved.",
+        jp: "「保存」を押すと商談番号が付き、商談画面が開きます。練習だけなら横の「キャンセル」を押してから「完了」を押します。何も保存されません。",
+      },
+    },
+  ],
+};
+
+const CRM_ACTIVITY: Guide = {
+  id: "crm-activity-followup",
+  title: { th: "บันทึกกิจกรรมกับลูกค้าและนัดติดตาม", en: "Log a customer activity and a follow-up", jp: "顧客との活動とフォローアップを記録" },
+  summary: {
+    th: "หลังประชุม โทร หรือส่งอีเมลถึงลูกค้า บันทึกสิ่งที่คุยไว้ในดีล และตั้งสิ่งที่ต้องทำต่อพร้อมกำหนดเสร็จ",
+    en: "After a meeting, call or email with the customer, record what was said on the deal and set the next action with a due date.",
+    jp: "顧客との打合せ・電話・メールの後、内容を商談に記録し、次のアクションと期限を設定します。",
+  },
+  minutes: 3,
+  permissions: ["crm.read", "crm.activity.write"],
+  views: ["crm-opportunities", "crm-pipeline", "crm-activities", "crm-dashboard"],
+  invite: "crm-activities",
+  steps: [
+    dealsMenu,
+    openDeal({
+      th: "คลิกชื่อดีลที่เพิ่งคุยกับลูกค้า ใช้ช่องค้นหาด้านบนช่วยหาได้",
+      en: "Click the name of the deal you have just discussed with the customer. The search above helps you find it.",
+      jp: "顧客と話したばかりの商談名をクリックします。上の検索で探せます。",
+    }),
+    {
+      target: "crm.followups", action: "next", view: "crm-opportunities",
+      title: { th: "สิ่งที่ต้องทำ / ติดตาม", en: "Next actions / Follow-up", jp: "次のアクション・フォローアップ" },
+      body: {
+        th: "งานติดตามของดีลนี้อยู่ที่นี่ พร้อมผู้รับผิดชอบและกำหนดเสร็จ กด 'แก้ไข' เพื่อปิดงานที่ทำแล้ว ถ้าดีลไม่มีงานค้าง จะขึ้นเตือนสีเหลือง",
+        en: "The deal's follow-ups are here with their owners and due dates. Press Edit to close one that is done. A deal with nothing open shows an amber warning.",
+        jp: "この商談のフォローアップが担当者・期限とともに表示されます。完了したものは「編集」で閉じます。未完了がない場合は黄色の警告が出ます。",
+      },
+    },
+    {
+      target: "crm.tab.activities", action: "click", view: "crm-opportunities",
+      title: { th: "แท็บกิจกรรม", en: "The Activities tab", jp: "「活動」タブ" },
+      body: {
+        th: "รวมทุกครั้งที่คุยกับลูกค้าของดีลนี้ เรียงจากล่าสุด คลิกแท็บนี้",
+        en: "Every contact with the customer on this deal, latest first. Click this tab.",
+        jp: "この商談での顧客とのやり取りが新しい順に並びます。このタブをクリックします。",
+      },
+    },
+    {
+      target: "crm.addActivity", action: "click", view: "crm-opportunities",
+      title: { th: "กด 'บันทึกกิจกรรม'", en: "Press Log activity", jp: "「活動を記録」を押す" },
+      body: {
+        th: "เปิดฟอร์มบันทึก ลูกค้าและดีลถูกใส่ไว้ให้แล้ว",
+        en: "It opens the form with the customer and the deal already filled in.",
+        jp: "顧客と商談が入力済みのフォームが開きます。",
+      },
+      missing: {
+        th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์บันทึกกิจกรรม",
+        en: "If the button never appears, this account cannot log activities.",
+        jp: "ボタンが表示されない場合、このアカウントには記録権限がありません。",
+      },
+    },
+    {
+      target: "crm.activity.type", action: "next", view: "crm-opportunities",
+      title: { th: "ประเภทและเวลา", en: "Type and time", jp: "種別と日時" },
+      body: {
+        th: "เลือกว่าเป็นการประชุม โทร อีเมล เข้าหน้างาน หรืออื่นๆ และแก้วันที่ / เวลาให้ตรงกับที่เกิดขึ้นจริง",
+        en: "Choose meeting, call, email, site visit or another type, and set the date and time it really happened.",
+        jp: "打合せ・電話・メール・現地訪問などの種別を選び、実際の日時に合わせます。",
+      },
+    },
+    {
+      target: "crm.activity.summary", action: "next", view: "crm-opportunities",
+      title: { th: "สรุปสิ่งที่คุย", en: "What was discussed", jp: "話した内容" },
+      body: {
+        th: "สรุปสั้นๆ ว่าคุยอะไร ช่องด้านล่างใส่ข้อสรุปสำคัญและรายการที่ต้องทำ คนอื่นในทีมจะเห็นต่อจากคุณได้ทันที",
+        en: "A short summary of the conversation; the fields below take the key decision and the action items. The team picks up from it at once.",
+        jp: "話した内容を短くまとめます。下の欄に主な決定と対応事項を書きます。チームはすぐに内容を引き継げます。",
+      },
+    },
+    {
+      target: "crm.activity.next", action: "next", view: "crm-opportunities",
+      title: { th: "เพิ่มสิ่งที่ต้องทำ", en: "Add the next action", jp: "次のアクションを追加" },
+      body: {
+        th: "กดเพื่อเปิด แล้วใส่สิ่งที่ต้องทำต่อ ผู้รับผิดชอบ และกำหนดเสร็จ จะไปขึ้นในส่วน 'สิ่งที่ต้องทำ / ติดตาม' ของดีลและแจ้งเตือนเมื่อใกล้ครบกำหนด",
+        en: "Open it and enter what happens next, who does it and by when. It joins the deal's follow-ups and is flagged as it falls due.",
+        jp: "開いて次に行うこと、担当者、期限を入力します。商談のフォローアップに追加され、期限が近づくと警告されます。",
+      },
+    },
+    {
+      target: "crm.save", action: "click", view: "crm-opportunities",
+      title: { th: "บันทึกกิจกรรม", en: "Save the activity", jp: "活動を保存" },
+      body: {
+        th: "กด 'บันทึก' กิจกรรมจะขึ้นในแท็บนี้และในเมนูกิจกรรมลูกค้า ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน'",
+        en: "Press Save; the activity shows on this tab and under Activities. Only practising? Press Cancel beside it, then Finish.",
+        jp: "「保存」を押すと、このタブと「顧客活動」に表示されます。練習だけなら横の「キャンセル」を押してから「完了」を押します。",
+      },
+    },
+  ],
+};
+
+const CRM_SEND_ESTIMATE: Guide = {
+  id: "crm-send-estimate",
+  title: { th: "ส่งดีลไปประเมินราคา (สร้าง Inquiry)", en: "Send a deal for estimating (create the inquiry)", jp: "商談を見積依頼する(引合を作成)" },
+  summary: {
+    th: "เมื่อได้ RFQ หรือความต้องการจากลูกค้าแล้ว สร้าง Inquiry จากดีล เลือกวิศวกรผู้ประเมินและกำหนดส่ง ข้อมูลและไฟล์ของดีลจะตามไปเอง",
+    en: "Once the customer's RFQ or requirements are in, create the inquiry from the deal and choose the estimating engineer and due date; the deal's details and files carry across.",
+    jp: "顧客のRFQや要望が揃ったら商談から引合を作り、見積担当と期限を選びます。商談の情報とファイルは引き継がれます。",
+  },
+  minutes: 2,
+  permissions: ["crm.read", "crm.convert"],
+  views: ["crm-opportunities", "crm-pipeline", "crm-dashboard"],
+  steps: [
+    dealsMenu,
+    openDeal({
+      th: "คลิกชื่อดีลที่ลูกค้าส่ง RFQ มาแล้ว",
+      en: "Click the name of the deal whose RFQ has arrived.",
+      jp: "RFQが届いた商談名をクリックします。",
+    }),
+    {
+      target: "crm.convert", action: "click", view: "crm-opportunities",
+      title: { th: "กด 'ส่งประเมินราคา / สร้าง Inquiry'", en: "Press Send for estimating / create Inquiry", jp: "「見積依頼・Inquiry作成」を押す" },
+      body: {
+        th: "ปุ่มอยู่ด้านบนของดีล ถ้าเคยส่งไปแล้วและงานนั้นจบแล้ว ปุ่มจะเป็น 'สร้างงานประเมินเพิ่มเติม'",
+        en: "It is at the top of the deal. If an earlier estimate has finished, it reads Create additional estimating work.",
+        jp: "商談の上部にあります。以前の見積が終わっている場合は「追加の見積作業を作成」と表示されます。",
+      },
+      missing: {
+        th: "ถ้าดีลมี Inquiry ที่ยังเปิดอยู่ จะเห็น 'เปิดงานประเมิน (Inquiry)' แทน ดีลที่ชนะ แพ้ หรือพักไว้ส่งไม่ได้ กด 'ข้ามขั้นนี้' หรือเลือกดีลอื่น",
+        en: "A deal with an open inquiry shows Open estimating work instead, and a won, lost or on-hold deal cannot be sent. Skip this step or choose another deal.",
+        jp: "進行中の引合がある商談には「見積作業(Inquiry)を開く」が表示され、受注・失注・保留の商談は送れません。この手順を飛ばすか、別の商談を選びます。",
+      },
+    },
+    {
+      target: "crm.convert.owner", action: "next", view: "crm-opportunities",
+      title: { th: "วิศวกรผู้ประเมิน", en: "The estimating engineer", jp: "見積担当のエンジニア" },
+      body: {
+        th: "คนที่จะทำราคา ระบบใส่ผู้รับผิดชอบเทคนิคของดีลไว้ให้ เปลี่ยนได้ เขาจะได้รับอีเมลแจ้งงานและเห็นงานใน 'งานของฉัน'",
+        en: "Who will price it. The deal's technical owner is filled in and can be changed; they are emailed and see it in My Work.",
+        jp: "見積を行う人です。商談の技術担当者が入力済みで、変更できます。メールで通知され、マイワークに表示されます。",
+      },
+    },
+    {
+      target: "crm.convert.due", action: "next", view: "crm-opportunities",
+      title: { th: "กำหนดส่งราคา", en: "Estimate due date", jp: "見積期限" },
+      body: {
+        th: "วันที่ต้องได้ราคาเพื่อตอบลูกค้า ค่าเริ่มต้นคืออีก 14 วัน",
+        en: "When the price is needed to answer the customer. It starts 14 days ahead.",
+        jp: "顧客へ回答するために価格が必要な日です。初期値は14日後です。",
+      },
+    },
+    {
+      target: "crm.convert.type", action: "next", view: "crm-opportunities",
+      title: { th: "ประเภทโครงการ", en: "Project type", jp: "案件種別" },
+      body: {
+        th: "เลือกประเภทงาน เช่น IoT, Automation หรือ Robot ใช้จัดกลุ่มงานประเมินและรายงาน",
+        en: "Choose the kind of work, such as IoT, Automation or Robot. It groups the estimating work and the reports.",
+        jp: "IoT・Automation・Robotなど作業の種類を選びます。見積作業とレポートの分類に使われます。",
+      },
+    },
+    {
+      target: "crm.convert.carry", action: "next", view: "crm-opportunities",
+      title: { th: "ข้อมูลที่ตามไป", en: "What carries across", jp: "引き継がれる情報" },
+      body: {
+        th: "ลูกค้า ผู้ติดต่อ ความต้องการ ขอบเขตงาน และไฟล์ของดีลจะไปอยู่ใน Inquiry เอง ไม่ต้องกรอกซ้ำ",
+        en: "The customer, contact, need, scope and the deal's files go to the inquiry by themselves; nothing is typed twice.",
+        jp: "顧客、担当者、要望、範囲、商談のファイルは引合に自動で引き継がれます。二重入力は不要です。",
+      },
+    },
+    {
+      target: "crm.save", action: "click", view: "crm-opportunities",
+      title: { th: "สร้าง Inquiry", en: "Create the inquiry", jp: "引合を作成" },
+      body: {
+        th: "กด 'บันทึก' ระบบสร้าง Inquiry แจ้งวิศวกรทางอีเมล แล้วเปิด Inquiry ให้ ติดตามราคาได้ที่แท็บ Inquiry / Estimate / Project ของดีล ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Press Save: the inquiry is created, the engineer is emailed and the inquiry opens. Follow the price on the deal's Inquiry / Estimate / Project tab. Only practising? Press Cancel, then Finish.",
+        jp: "「保存」を押すと引合が作成され、エンジニアにメールが届き、引合が開きます。見積の進捗は商談の「引合・見積・案件」タブで確認できます。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
+    },
+  ],
+};
+
+const CRM_PROPOSAL_WON: Guide = {
+  id: "crm-proposal-won",
+  title: { th: "บันทึกส่งใบเสนอราคาและลูกค้ายืนยันสั่งซื้อ", en: "Record the quotation and the order", jp: "見積送付と受注を記録" },
+  summary: {
+    th: "เมื่อส่งใบเสนอราคาแล้ว บันทึกวันที่และเลขเอกสาร และเมื่อลูกค้าส่ง PO บันทึกการได้งาน ดีลจะเลื่อนขั้นให้เอง",
+    en: "Once the quotation is sent, record its date and number; when the customer's PO arrives, record the order. The deal moves on by itself.",
+    jp: "見積を送ったら日付と番号を、顧客の注文書が届いたら受注を記録します。商談のステージは自動で進みます。",
+  },
+  minutes: 3,
+  permissions: ["crm.read", "crm.write"],
+  views: ["crm-opportunities", "crm-pipeline", "crm-dashboard"],
+  steps: [
+    dealsMenu,
+    openDeal({
+      th: "คลิกชื่อดีลที่ส่งใบเสนอราคาไปแล้ว",
+      en: "Click the name of the deal you have sent a quotation for.",
+      jp: "見積を送った商談名をクリックします。",
+    }),
+    {
+      target: "crm.stagebar", action: "next", view: "crm-opportunities",
+      title: { th: "ดีลอยู่ขั้นไหน", en: "Where the deal stands", jp: "商談のステージ" },
+      body: {
+        th: "แถบนี้บอกขั้นของดีล ตั้งแต่ใหม่จนชนะ การบันทึกในขั้นถัดไปจะเลื่อนดีลไปขั้นเสนอราคาและขั้นชนะให้เอง",
+        en: "This bar shows the deal's stage from new to won. The next two records move it to the quotation stage and to won for you.",
+        jp: "このバーは新規から受注までの商談ステージを示します。次の2つの記録で、見積と受注のステージへ自動で進みます。",
+      },
+    },
+    {
+      target: "crm.recordProposal", action: "click", view: "crm-opportunities",
+      title: { th: "กด 'บันทึกส่งใบเสนอราคา'", en: "Press Record quotation dispatch", jp: "「見積送付を記録」を押す" },
+      body: {
+        th: "ทำเมื่อส่งใบเสนอราคาให้ลูกค้าแล้วจริง การอนุมัติต้นทุนใน Estimate ไม่ได้นับว่าส่งใบเสนอราคา",
+        en: "Do this once the quotation has really gone to the customer. Approving the estimate's cost does not count as sending it.",
+        jp: "見積を実際に顧客へ送った後に行います。見積の原価承認は送付とはみなされません。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นเมื่อดีลยังไม่ปิด (ไม่ใช่ชนะ แพ้ หรือพักไว้) และบัญชีนี้แก้ดีลได้",
+        en: "The button shows while the deal is still open (not won, lost or on hold) and this account may edit deals.",
+        jp: "商談が進行中(受注・失注・保留以外)で、このアカウントに編集権限がある場合に表示されます。",
+      },
+    },
+    {
+      target: "crm.evidence", action: "next", view: "crm-opportunities",
+      title: { th: "วันที่และเลขใบเสนอราคา", en: "Quotation date and number", jp: "見積の日付と番号" },
+      body: {
+        th: "ใส่วันที่ส่งจริงและเลขใบเสนอราคาหรือหลักฐานการส่ง ต้องมีทั้งสองช่อง ทีมใช้ข้อมูลนี้นับยอดเสนอราคา",
+        en: "Enter the real sending date and the quotation number or dispatch reference. Both are required; the team counts quotations from them.",
+        jp: "実際の送付日と見積番号または送付記録を入力します。両方必須で、見積実績の集計に使われます。",
+      },
+    },
+    {
+      target: "crm.save", action: "click", view: "crm-opportunities",
+      title: { th: "บันทึกการส่งใบเสนอราคา", en: "Save the quotation", jp: "見積送付を保存" },
+      body: {
+        th: "กด 'บันทึก' ดีลจะเลื่อนไปขั้นเสนอราคา ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วไปขั้นถัดไป",
+        en: "Press Save and the deal moves to the quotation stage. Only practising? Press Cancel and carry on.",
+        jp: "「保存」を押すと商談が見積ステージへ進みます。練習だけなら「キャンセル」を押して次へ進みます。",
+      },
+    },
+    {
+      target: "crm.recordWon", action: "click", view: "crm-opportunities",
+      title: { th: "กด 'บันทึกลูกค้ายืนยันสั่งซื้อ'", en: "Press Record order confirmation", jp: "「受注確認を記録」を押す" },
+      body: {
+        th: "ทำเมื่อลูกค้าส่ง PO หรือยืนยันสั่งซื้อเป็นลายลักษณ์อักษร ถ้าสร้างโครงการจาก Inquiry พร้อมเลข PO ไปแล้ว ระบบบันทึกส่วนนี้ให้เอง",
+        en: "Do this when the customer's PO or written confirmation arrives. If the project was already created from the inquiry with its PO number, this is recorded for you.",
+        jp: "顧客の注文書または書面の確認が届いたら行います。引合から注文書番号付きで案件を作成済みなら、自動で記録されています。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นเมื่อดีลยังไม่ปิด ถ้าดีลชนะแล้ว วันที่และเลข PO จะแสดงอยู่ด้านบนของดีล",
+        en: "The button shows while the deal is open. Once it is won, the date and PO number show at the top of the deal.",
+        jp: "商談が進行中の場合に表示されます。受注済みなら、日付と注文書番号が商談上部に表示されます。",
+      },
+    },
+    {
+      target: "crm.evidence", action: "next", view: "crm-opportunities",
+      title: { th: "วันที่และเลข PO", en: "Order date and PO number", jp: "受注日と注文書番号" },
+      body: {
+        th: "ใส่วันที่ลูกค้ายืนยันสั่งซื้อ และเลข PO หรือหลักฐานที่ลูกค้ายืนยัน",
+        en: "Enter the date the customer confirmed the order and the PO number or confirmation reference.",
+        jp: "顧客が注文を確定した日と、注文書番号または確認記録を入力します。",
+      },
+    },
+    {
+      target: "crm.save", action: "click", view: "crm-opportunities",
+      title: { th: "บันทึกการได้งาน", en: "Save the order", jp: "受注を保存" },
+      body: {
+        th: "กด 'บันทึก' ดีลจะเป็นชนะ ขั้นต่อไปคือส่งมอบงานให้ทีมโครงการจาก Inquiry ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Press Save and the deal is won; the next step is handing the work to the project team from the inquiry. Only practising? Press Cancel, then Finish.",
+        jp: "「保存」を押すと商談が受注になります。次は引合から案件チームへ引き渡します。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
+    },
+  ],
+};
+
 export const GUIDES: readonly Guide[] = [
+  CRM_DEAL_CREATE,
+  CRM_ACTIVITY,
+  CRM_SEND_ESTIMATE,
   {
     id: "inquiry-create",
     title: { th: "รับ RFQ และสร้าง Inquiry ใหม่", en: "Receive an RFQ and create an inquiry", jp: "RFQを受け付けて引合を作成" },
@@ -414,6 +798,7 @@ export const GUIDES: readonly Guide[] = [
       },
     ],
   },
+  CRM_PROPOSAL_WON,
   {
     id: "purchase-request",
     title: { th: "ขอซื้อ (PR) จาก BOM", en: "Raise a purchase requisition from a BOM", jp: "BOMから購買申請を作成" },

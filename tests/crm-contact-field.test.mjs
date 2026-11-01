@@ -31,7 +31,7 @@ test("the deal's contact is searched by name, position, department or email, fro
   assert.match(screen, /filter\(r=>r\.isActive!==false&&\(!value\.siteId\|\|String\(r\.siteId\)===String\(value\.siteId\)\)\)/);
   assert.match(screen, /label:text\(r\.name\),detail:\[text\(r\.position\),text\(r\.department\),sites\.length>1\?text\(r\.siteName\):""\]\.filter\(Boolean\)\.join\(" · "\),searchText:text\(r\.email\)/);
   // People and customers in every CRM form are searchable too.
-  assert.match(screen, /\{key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:people\}/);
+  assert.match(screen, /\{key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:people(?:,guide:"[a-z.]+")?\}/);
   assert.equal((screen.match(/\{key:"customerId",required:true,searchable:true,placeholder:"CRM\.searchCustomer",options:customerOptions\(bootstrap\)\}/g) ?? []).length, 2);
   assert.equal((screen.match(/\{key:"ownerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:teamOptions\(bootstrap\)\}/g) ?? []).length, 2);
 });
@@ -55,9 +55,9 @@ test("a contact that is not found is added from the list's last row with the typ
 test("the new-deal form asks for what matters first and folds the rest", () => {
   // Customer beside its end user (never folded away: it carries forward to the Inquiry), then the name,
   // then site and contact side by side, then the owner and the close date.
-  assert.match(screen, /<Fields fields=\{\[\{key:"customerId",required:true,searchable:true,disabled:Boolean\(value\.id\),placeholder:"CRM\.searchCustomer",options:companies\},\s*\{key:"endUserCustomerId",searchable:true,placeholder:"CRM\.searchEndUser",options:endUsers,/);
+  assert.match(screen, /<Fields fields=\{\[\{key:"customerId",required:true,searchable:true,disabled:Boolean\(value\.id\),placeholder:"CRM\.searchCustomer",options:companies(?:,guide:"[a-z.]+")?\},\s*\{key:"endUserCustomerId",searchable:true,placeholder:"CRM\.searchEndUser",options:endUsers,/);
   assert.match(screen, /link:\{label:"CRM\.useCustomerAsEndUser",onClick:\(\)=>set\(\{\.\.\.value,endUserCustomerId:Number\(value\.customerId\)\}\)\}/);
-  assert.match(screen, /\{key:"name",required:true,wide:true\}\]\} value=\{value\} set=\{update\}\/>/);
+  assert.match(screen, /\{key:"name",required:true,wide:true(?:,guide:"[a-z.]+")?\}\]\} value=\{value\} set=\{update\}\/>/);
   assert.match(screen, /\{key:"siteId",options:sites\.map[^\n]*\n\s*\{key:"contactId",searchable:true/);
   // A new deal starts at New: the stage is asked only when editing or from another board column.
   assert.match(screen, /const create=!initial,showStage=!create\|\|Boolean\(defaultStage&&defaultStage!=="NEW"\);/);
@@ -69,7 +69,7 @@ test("the new-deal form asks for what matters first and folds the rest", () => {
   assert.doesNotMatch(screen, /window\.confirm\(`\$\{t\("CRM\.duplicateWarning"\)\}/);
   assert.match(screen, /useCrmData<CrmRecord\[\]>\(typedName\.length>=3\?`\/api\/v1\/crm\/opportunity-duplicates\?customerId=/);
   // Both owners side by side, then the close date and (for commercial readers) the deal value; the rest is folded.
-  assert.match(screen, /\{key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:people\},\s*\{key:"technicalOwnerId",searchable:true,placeholder:"CRM\.searchPerson",options:people\},\s*\{key:"expectedClose",type:"date"\},\s*\.\.\.\(bootstrap\.permissions\.includes\("crm\.commercial\.read"\)\?\[\{key:"expectedValue",type:"number"\}\]:\[\]\),/);
+  assert.match(screen, /\{key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:people(?:,guide:"[a-z.]+")?\},\s*\{key:"technicalOwnerId",searchable:true,placeholder:"CRM\.searchPerson",options:people\},\s*\{key:"expectedClose",type:"date"(?:,guide:"[a-z.]+")?\},\s*\.\.\.\(bootstrap\.permissions\.includes\("crm\.commercial\.read"\)\?\[\{key:"expectedValue",type:"number"\}\]:\[\]\),/);
   assert.match(screen, /<summary>\{t\("CRM\.optionalDetails"\)\}<\/summary>\s*\{more\}/);
   assert.match(screen, /const endUsers=own\?\[\{\.\.\.own,detail:`\$\{own\.detail\} · \$\{t\("CRM\.sameAsCustomer"\)\}`\}/);
   assert.doesNotMatch(screen, /crm-end-user-actions|CRM\.waitingHint/);

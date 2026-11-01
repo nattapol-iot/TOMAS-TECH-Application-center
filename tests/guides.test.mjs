@@ -10,7 +10,11 @@ const screens = ["app/system/ProductionApp.tsx", ...readdirSync(new URL("app/sys
   .map((path) => ({ path, text: read(path) }));
 const shell = read("app/system/ProductionApp.tsx");
 const views = new Set([...shell.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]));
-const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-guide|guide)="([^"]+)"/g)].map((match) => match[1])));
+// data-guide="x" on an element, guide="x" on Panel/Field/Fields, guide:"x" on a CRM form field.
+const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-guide|guide)[=:]"([^"]+)"/g)].map((match) => match[1])));
+const crm = read("app/system/production/CrmScreens.tsx");
+// Screens a guide may name that are not menu entries of their own.
+const subViews = new Set(["sales-intake", "crm-pipeline"]);
 
 test("every guide step points at something a screen still marks", () => {
   const missing = [];
@@ -28,25 +32,36 @@ test("every guide step points at something a screen still marks", () => {
       if (!views.has(step.target.slice(4))) missing.push(`${where}: no menu entry ${step.target}`);
     } else if (step.target.startsWith("intake.to.")) {
       if (!read("app/system/production/SiteVisitScreens.tsx").includes(`"${step.target.slice(10)}"`)) missing.push(`${where}: no intake status ${step.target}`);
+    } else if (step.target.startsWith("crm.tab.")) {
+      const dealTabs = /\{\[((?:"[a-z]+",?)+)\]\.map\(k=><button key=\{k\} type="button" role="tab" aria-selected=\{tab===k\} data-guide=\{`crm\.tab\.\$\{k\}`\}/.exec(crm);
+      if (!dealTabs?.[1].includes(`"${step.target.slice(8)}"`)) missing.push(`${where}: no deal tab ${step.target}`);
     } else if (!marked.has(step.target)) missing.push(`${where}: nothing marked ${step.target}`);
   }
   assert.deepEqual(missing, []);
   assert.match(shell, /data-guide=\{`nav\.\$\{item\.view\}`\}/);
   assert.match(read("app/system/production/SiteVisitScreens.tsx"), /data-guide=\{`intake\.to\.\$\{target\}`\}/);
+  // CRM forms mark a field through Field.guide and a group of fields through Fields' guide.
+  assert.match(crm, /<div className="crm-form-grid" data-guide=\{guide\}>/);
+  assert.match(crm, /:<label key=\{f\.key\} className=\{f\.wide\?"crm-full":""\} data-guide=\{f\.guide\}>/);
+  assert.match(crm, /<button className="btn primary" disabled=\{busy\} data-guide="crm\.save">\{t\("Save"\)\}<\/button>/);
   assert.match(read("app/system/ui.tsx"), /role="tab" type="button" aria-selected=\{active === tab\.id\} data-tab=\{tab\.id\}/);
   assert.match(read("app/system/ui.tsx"), /<div className=\{`field\$\{span \? ` span-\$\{span\}` : ""\}`\} data-guide=\{guide\}>/);
   assert.match(read("app/system/ui.tsx"), /<section className=\{`panel\$\{className \? ` \$\{className\}` : ""\}`\} data-guide=\{guide\}>/);
 });
 
-test("the catalog holds the six guides the owner chose, each with all three languages and a known screen", () => {
-  assert.deepEqual(GUIDES.map((guide) => guide.id), ["inquiry-create", "site-visit-request", "estimate-create", "purchase-request", "my-work-progress", "support-ticket"]);
+test("the catalog holds the guides the owner chose, in the order the work happens, each with all three languages and a known screen", () => {
+  // Six daily-work guides (2026-10-30) and four CRM guides (2026-11-01), from the first deal to the order.
+  assert.deepEqual(GUIDES.map((guide) => guide.id), [
+    "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "site-visit-request", "estimate-create",
+    "crm-proposal-won", "purchase-request", "my-work-progress", "support-ticket",
+  ]);
   const copies = [];
   for (const guide of GUIDES) {
     // The API accepts this shape only (backend-node/src/routes/user-guides.ts).
     assert.match(guide.id, /^[a-z][a-z0-9-]{1,59}$/);
     assert.ok(guide.steps.length >= 3 && guide.steps.length <= 100, guide.id);
     copies.push(guide.title, guide.summary, ...guide.steps.flatMap((step) => [step.title, step.body, ...(step.missing ? [step.missing] : [])]));
-    for (const view of [...guide.views, ...(guide.invite ? [guide.invite] : []), ...guide.steps.map((step) => step.view)]) assert.ok(views.has(view) || view === "sales-intake", `${guide.id}: unknown screen ${view}`);
+    for (const view of [...guide.views, ...(guide.invite ? [guide.invite] : []), ...guide.steps.map((step) => step.view)]) assert.ok(views.has(view) || subViews.has(view), `${guide.id}: unknown screen ${view}`);
     // The last step is where the person decides to save; it always has a way out for practice.
     assert.equal(guide.steps.at(-1).action, "click", guide.id);
   }
@@ -60,6 +75,10 @@ test("a guide is offered only to people who can do the task", () => {
   assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["support-ticket"]);
   assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "support-ticket"]);
   assert.ok(guidesFor(["inquiry.write", "inquiry.read", "intake.read", "intake.write"]).some((guide) => guide.id === "site-visit-request"));
+  // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
+  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "support-ticket"]);
+  assert.deepEqual(guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
+    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "support-ticket"]);
   assert.equal(guideSelector("inquiry.save"), '[data-guide="inquiry.save"]');
   assert.equal(guideSelector('[data-tab="cost"]'), '[data-tab="cost"]');
   assert.equal(guideSelector("intake.to.Pending Technical Review"), '[data-guide="intake.to.Pending Technical Review"]');

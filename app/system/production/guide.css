@@ -99,7 +99,8 @@
 .guide-status.partial { color: var(--amber-text); }
 
 .guide-team table { min-width: 860px; }
-.guide-team thead th, .guide-team tfoot th { white-space: normal; vertical-align: bottom; min-width: 110px; }
+/* Ten guides plus the name fit the xl dialog (1240) without a sideways scroll. */
+.guide-team thead th, .guide-team tfoot th { white-space: normal; vertical-align: bottom; min-width: 96px; }
 .guide-team thead th:first-child, .guide-team tfoot th:first-child { min-width: 180px; }
 
 .topbar-guide .label { white-space: nowrap; }
