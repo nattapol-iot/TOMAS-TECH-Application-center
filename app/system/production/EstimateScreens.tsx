@@ -8,6 +8,7 @@ import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
+import { EstimateQuotationSource, type QuotationApplyInput } from "./EstimateQuotationSource";
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
@@ -44,6 +45,7 @@ import {
   listInquiries,
   listSupplierPriceHistory,
   applyModuleTemplate,
+  applySupplierQuotation,
   createModuleTemplateFromEstimate,
   listModuleTemplates,
   leaveRecord,
@@ -1006,6 +1008,15 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
         return true;
       } catch (requestError) { await mutationError(requestError); return false; }
       finally { setBusy(false); }
+    }} onApplyQuotation={async (input) => {
+      if (!workspace) return false;
+      setBusy(true); setError("");
+      try {
+        const result = await applySupplierQuotation(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion });
+        await afterMutation(estimateCopy(`เพิ่ม ${result.lines} รายการจาก ${result.reference}`, `${result.lines} line(s) added from ${result.reference}`, `${result.reference} から ${result.lines} 件追加`));
+        return true;
+      } catch (requestError) { await mutationError(requestError); return false; }
+      finally { setBusy(false); }
     }} onSaveTemplate={async (input) => {
       setBusy(true); setError("");
       try {
@@ -1215,7 +1226,7 @@ function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace })
   </>;
 }
 
-function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onSaveTemplate, onEdit, onRemove }: { onCopyModule: (group: CostModuleGroup, name: string) => Promise<void>; onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
+function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onApplyQuotation, onSaveTemplate, onEdit, onRemove }: { onCopyModule: (group: CostModuleGroup, name: string) => Promise<void>; onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onApplyQuotation: (input: QuotationApplyInput) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
   const [setSelection,setSetSelection]=useState<number[]>([]);
   const [setEditor,setSetEditor]=useState<{members:EstimateCostItem[];header?:EstimateCostItem}|null>(null);
   const [setError,setSetError]=useState("");
@@ -1232,7 +1243,7 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [category, setCategory] = useState("all");
-  const [tool, setTool] = useState<"price" | "import" | "import-flat" | "copy" | "module" | "template" | null>(null);
+  const [tool, setTool] = useState<"price" | "import" | "import-flat" | "copy" | "module" | "template" | "quotation" | null>(null);
   const [addSource, setAddSource] = useState<AddItemsSource>("price");
   const [addTarget, setAddTarget] = useState<AddItemsTarget | null>(null);
   const [addSwitched, setAddSwitched] = useState(false);
@@ -1548,6 +1559,11 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     if (applied) setTool(null);
     return applied;
   }} /> : null}
+  {tool === "quotation" ? <EstimateQuotationSource workspace={workspace} bootstrap={bootstrap} busy={busy} target={addTarget} sources={sourceTabs("quotation")} onClose={closeTool} onApply={async (input) => {
+    const applied = await onApplyQuotation(input);
+    if (applied) setTool(null);
+    return applied;
+  }} /> : null}
   {copyTarget ? <CopyCostModuleModal group={copyTarget} groups={groups} busy={busy} onClose={() => setCopyTarget(null)} onCopy={onCopyModule} /> : null}
   {saveTarget ? <SaveModuleTemplateModal group={saveTarget} busy={busy} onClose={() => setSaveTarget(null)} onSave={async (input) => {
     const saved = await onSaveTemplate(input);
@@ -1578,10 +1594,11 @@ function costSeedFromLine(line: EstimateCostItem, ownerId: number, priceSource: 
 /* Price Library, Template, Excel and Copy used to be four entries of a menu, each with its own dialog.
    They are now the tabs of one dialog. Each tab is still its own component, so switching remounts the
    dialog; estimate-flow.css skips the opening animation once a switch has happened. */
-type AddItemsSource = "price" | "template" | "import" | "copy";
+type AddItemsSource = "price" | "quotation" | "template" | "import" | "copy";
 type AddItemsTarget = { categoryCode: string; category: string; module: string };
 const ADD_ITEM_SOURCES = [
   ["price", "search", "คลังราคา", "Price library", "価格ライブラリ"],
+  ["quotation", "quote", "ใบเสนอราคา", "Supplier quotation", "仕入先見積"],
   ["template", "package", "Template โมดูล", "Module template", "モジュールテンプレート"],
   ["import", "upload", "นำเข้า Excel", "Import Excel", "Excel取込"],
   ["copy", "copy", "คัดลอกจาก Estimate", "Copy from an estimate", "既存見積からコピー"],

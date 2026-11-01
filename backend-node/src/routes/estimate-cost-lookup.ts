@@ -82,15 +82,17 @@ WITH candidates AS (
   SELECT CASE WHEN q.source_kind=N'WebReference' THEN N'Web Reference' ELSE N'Supplier Quotation' END,
     l.id, q.quotation_no, COALESCE(NULLIF(q.supplier_reference,N''),q.quotation_no),
     N'', N'', N'', N'', l.item_code, l.description, l.brand, l.model,
-    NULL, q.supplier_id, s.name, l.unit, l.unit_price,
+    NULL, q.supplier_id, s.name, l.unit,
+    CASE WHEN l.currency=N'THB' THEN l.unit_price ELSE CONVERT(decimal(19,4), l.unit_price*q.thb_rate) END,
     CASE WHEN q.source_kind=N'WebReference' THEN N'Web Reference' ELSE N'Supplier Quotation' END,
     q.quotation_no, N'', q.received_date, q.uploaded_at
   FROM dbo.supplier_quotation_lines l
   INNER JOIN dbo.supplier_quotations q ON q.id=l.quotation_id
   INNER JOIN dbo.suppliers s ON s.id=q.supplier_id
   WHERE (q.status IS NULL OR q.status<>N'Superseded')
-    -- A cost line carries no currency, so a foreign-currency price would land as THB.
-    AND l.currency=N'THB'
+    -- A cost line carries no currency: a foreign price is offered only in baht, converted at the
+    -- THB rate stated on its quotation, and only when the line is in the quotation's currency.
+    AND (l.currency=N'THB' OR (l.currency=q.currency AND q.thb_rate IS NOT NULL))
     AND (l.item_code LIKE @pattern ESCAPE '\\' OR l.description LIKE @pattern ESCAPE '\\'
       OR l.brand LIKE @pattern ESCAPE '\\' OR l.model LIKE @pattern ESCAPE '\\' OR s.name LIKE @pattern ESCAPE '\\')
 ), ranked AS (

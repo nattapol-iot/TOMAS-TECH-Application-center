@@ -8,7 +8,7 @@ import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
-import { bodyObject, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { bodyObject, dateOnly, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -151,6 +151,20 @@ function bindCost(request: InstanceType<typeof sql.Request>, estimateId: number,
   request.input("reference_no", sql.NVarChar(200), input.referenceNumber); request.input("reference_project", sql.NVarChar(200), input.referenceProject);
   request.input("price_date", sql.Date, input.priceDate); request.input("remark", sql.NVarChar(sql.MAX), input.remark);
   request.input("owner_id", sql.BigInt, input.ownerId); request.input("actor", sql.BigInt, actorId);
+}
+
+/** The quotation lines picked to become cost lines, each with the whole-unit quantity the estimate takes. */
+export function parseQuotationPicks(value: unknown): Array<{ lineId: number; quantity: number }> {
+  if (!Array.isArray(value) || !value.length) throw new ApiError(400, "validation_failed", "Choose at least one quotation line.");
+  if (value.length > 200) throw new ApiError(400, "validation_failed", "A quotation has at most 200 lines.");
+  const seen = new Set<number>();
+  return value.map((item, index) => {
+    const pick = bodyObject(item);
+    const lineId = requiredInteger(pick.lineId, `Line ${index + 1} id`, 1);
+    if (seen.has(lineId)) throw new ApiError(400, "validation_failed", "A quotation line was picked twice.");
+    seen.add(lineId);
+    return { lineId, quantity: requiredInteger(pick.quantity, `Line ${index + 1} quantity`, 1, 1_000_000_000) };
+  });
 }
 
 export async function touchEstimate(transaction: TransactionType, id: number, actorId: number): Promise<Buffer> {
@@ -569,6 +583,98 @@ export function registerEstimateCostWriteRoutes(app: FastifyInstance, database: 
         template: reference, templateName: template.name, module: moduleName, modules, lines: created, keepReferencePrices: keepPrices, renamedItemCodes,
       });
       return { lines: created, module: moduleName, reference, estimateRowVersion: estimateVersion.toString("base64") };
+    });
+    return reply.status(201).send(applied);
+  });
+
+  /* Lines from a supplier quotation are a bulk cost-line create too, under the same locks and
+     section checks, in one transaction. Prices are read from the stored quotation, never taken
+     from the client. A cost line has no currency, so a JPY, USD or EUR price lands in baht at
+     the THB rate filed on the quotation, and a foreign line without one is refused. */
+  app.post("/api/v1/estimates/:id/apply-quotation", async (request, reply) => {
+    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const estimateRowVersion = parseRowVersion(body.estimateRowVersion);
+    const quotationId = requiredInteger(body.quotationId, "Quotation id", 1);
+    const categoryCode = requiredText(body.categoryCode, 2, "Category code").toUpperCase();
+    if (!categoryNames[categoryCode]) throw new ApiError(400, "validation_failed", "Category code is not allowed.");
+    const moduleName = optionalBodyText(body.module, 200, "Module") ?? "";
+    const ownerId = requiredInteger(body.ownerId, "Owner", 1);
+    const picks = parseQuotationPicks(body.lines);
+    const applied = await database.transaction(async (transaction) => {
+      const estimate = await lockEditableEstimate(transaction, id, estimateRowVersion);
+      if (!elevated(actor, estimate)) {
+        const assignees = await estimateAssignees(transaction, id, estimate.revision);
+        if (!assigned(actor, assignees)) throw new ApiError(403, "estimate_section_forbidden", "You may add cost lines only to an estimate that has a section assigned to you.");
+        if (!assignees.has(ownerId)) throw new ApiError(403, "cost_owner_forbidden", "You cannot assign a cost line to a user who is not assigned to this estimate.");
+      }
+      const read = new sql.Request(transaction); read.input("quotation_id", sql.BigInt, quotationId);
+      // HOLDLOCK keeps the rate from changing between reading it and writing the lines.
+      const quotation = (await read.query<{
+        quotation_no: string; supplier_reference: string; supplier_id: number | string; received_date: Date | string;
+        currency: string; thb_rate: number | string | null; status: string; source_kind: string | null;
+      }>(`SELECT quotation_no,supplier_reference,supplier_id,received_date,currency,thb_rate,status,source_kind
+        FROM dbo.supplier_quotations WITH (HOLDLOCK) WHERE id=@quotation_id;`)).recordset[0];
+      if (!quotation) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
+      if (quotation.status === "Superseded") {
+        throw new ApiError(409, "quotation_superseded", `${quotation.quotation_no} has been superseded. Add lines from the quotation that replaced it.`);
+      }
+      const lines = new Map((await read.query<{
+        id: number | string; line_no: number; item_code: string; description: string; brand: string; model: string;
+        unit: string; unit_price: number | string; currency: string; remark: string | null;
+      }>(`SELECT id,line_no,item_code,description,brand,model,unit,unit_price,currency,remark
+        FROM dbo.supplier_quotation_lines WHERE quotation_id=@quotation_id;`)).recordset.map((line) => [Number(line.id), line]));
+      const supplierId = Number(quotation.supplier_id);
+      await validateReferences(transaction, ownerId, supplierId);
+      const rate = quotation.thb_rate === null ? null : Number(quotation.thb_rate);
+      const priceSource = quotation.source_kind === "WebReference" ? "Web Reference" : "Supplier Quotation";
+      const supplierReference = String(quotation.supplier_reference ?? "").trim();
+      let created = 0;
+      for (const pick of picks) {
+        const line = lines.get(pick.lineId);
+        if (!line) throw new ApiError(409, "quotation_changed", `A line of ${quotation.quotation_no} was changed or removed. Reload the quotation and try again.`);
+        const foreign = line.currency !== "THB";
+        if (foreign && line.currency !== quotation.currency) {
+          throw new ApiError(409, "quotation_line_currency", `Line ${line.line_no} of ${quotation.quotation_no} is in ${line.currency} but the quotation is in ${quotation.currency}. Correct the line first.`);
+        }
+        if (foreign && rate === null) {
+          throw new ApiError(409, "quotation_rate_missing", `Enter the THB rate for ${quotation.currency} on ${quotation.quotation_no} before adding its lines.`);
+        }
+        const unitPrice = Number(line.unit_price);
+        const unitCost = Math.round(unitPrice * (foreign ? rate! : 1) * 10_000) / 10_000;
+        if (unitCost > 1_000_000_000 || pick.quantity * unitCost > 999_999_999_999_999) {
+          throw new ApiError(400, "validation_failed", `Line ${line.line_no} of ${quotation.quotation_no} exceeds the supported monetary range.`);
+        }
+        const remark = [
+          foreign ? `${line.currency} ${unitPrice.toLocaleString("en-US", { maximumFractionDigits: 4 })} × ${rate} = ${unitCost.toLocaleString("en-US", { maximumFractionDigits: 4 })} THB` : "",
+          supplierReference ? `Supplier ref ${supplierReference}` : "",
+          String(line.remark ?? "").trim(),
+        ].filter(Boolean).join(" · ");
+        const insert = new sql.Request(transaction);
+        bindCost(insert, id, estimate.revision, {
+          estimateRowVersion, lineRowVersion: null, categoryCode, subcategory: "", module: moduleName,
+          // Product codes may repeat; with none on the quotation the line is named after its source.
+          itemCode: (line.item_code.trim() || line.model.trim() || `${quotation.quotation_no}-${line.line_no}`).slice(0, 100),
+          description: line.description.slice(0, 500), brand: line.brand.slice(0, 100), model: line.model.slice(0, 200),
+          specification: null, supplierId, quantity: pick.quantity, unit: line.unit.trim().slice(0, 50) || "EA", unitCost,
+          priceSource, referenceNumber: quotation.quotation_no, referenceProject: null,
+          priceDate: dateOnly(quotation.received_date), remark: remark || null, ownerId,
+        }, actor.id);
+        await insert.query(`INSERT INTO dbo.cost_items(estimate_id,revision,category_code,category,subcategory,module,item_code,
+          description,brand,model,specification,supplier_id,qty,unit,unit_cost,price_source,reference_no,reference_project,
+          price_date,remark,owner_id,status,created_by,updated_by)
+          VALUES(@estimate_id,@revision,@category_code,@category,@subcategory,@module,@item_code,@description,@brand,@model,
+          @specification,@supplier_id,@qty,@unit,@unit_cost,@price_source,@reference_no,@reference_project,@price_date,@remark,
+          @owner_id,N'Active',@actor,@actor);`);
+        created += 1;
+      }
+      const estimateVersion = await touchEstimate(transaction, id, actor.id);
+      await insertAudit(transaction, actor.id, "Estimate", id, estimate.estimate_no, "Supplier quotation applied", null, {
+        quotation: quotation.quotation_no, quotationId, categoryCode, module: moduleName, lines: created,
+        currency: quotation.currency, thbRate: rate,
+      });
+      return { lines: created, module: moduleName, reference: quotation.quotation_no, estimateRowVersion: estimateVersion.toString("base64") };
     });
     return reply.status(201).send(applied);
   });

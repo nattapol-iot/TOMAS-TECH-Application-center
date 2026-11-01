@@ -2,13 +2,13 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4a0666d4`; generated, do not edit. [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `8c5e34f3`; generated, do not edit. [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/cost-item-lookup` | 164–179 |
+| GET | `/api/v1/estimates/cost-item-lookup` | 166–181 |
 
 ## Named functions
 
@@ -16,9 +16,9 @@ Evidence: source snapshot `4a0666d4`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `escapeLikePattern` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 26–28 |
 | `parseLookupField` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 30–34 |
-| `lookupSourceKind` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 129–133 |
-| `mapLookupRow` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 135–161 |
-| `registerEstimateCostLookupRoutes` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 163–180 |
+| `lookupSourceKind` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 131–135 |
+| `mapLookupRow` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 137–163 |
+| `registerEstimateCostLookupRoutes` | [backend-node/src/routes/estimate-cost-lookup.ts](<../../../backend-node/src/routes/estimate-cost-lookup.ts>) | 165–182 |
 
 ## Direct local dependencies
 

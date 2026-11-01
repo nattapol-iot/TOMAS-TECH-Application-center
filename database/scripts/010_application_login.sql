@@ -794,4 +794,8 @@ GO
 -- database/migrations/091_user_guide_progress.sql
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.user_guide_progress TO [iot_team_app_role];
 GO
+
+-- database/migrations/092_supplier_quotation_thb_rate.sql
+GRANT UPDATE (thb_rate) ON OBJECT::dbo.supplier_quotations TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

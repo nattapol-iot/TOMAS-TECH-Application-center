@@ -2,20 +2,21 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4a0666d4`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `8c5e34f3`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/module-details` | 166–174 |
-| PUT | `/api/v1/estimates/:id/module-details` | 175–294 |
-| POST | `/api/v1/estimates/:id/cost-items` | 296–322 |
-| PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 324–350 |
-| POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 352–377 |
-| POST | `/api/v1/estimates/:id/cost-modules/copy` | 379–456 |
-| POST | `/api/v1/estimates/:id/cost-modules/remove` | 458–493 |
-| POST | `/api/v1/estimates/:id/apply-template` | 498–574 |
+| GET | `/api/v1/estimates/:id/module-details` | 180–188 |
+| PUT | `/api/v1/estimates/:id/module-details` | 189–308 |
+| POST | `/api/v1/estimates/:id/cost-items` | 310–336 |
+| PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 338–364 |
+| POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 366–391 |
+| POST | `/api/v1/estimates/:id/cost-modules/copy` | 393–470 |
+| POST | `/api/v1/estimates/:id/cost-modules/remove` | 472–507 |
+| POST | `/api/v1/estimates/:id/apply-template` | 512–588 |
+| POST | `/api/v1/estimates/:id/apply-quotation` | 594–680 |
 
 ## Named functions
 
@@ -30,8 +31,9 @@ Evidence: source snapshot `4a0666d4`; generated, do not edit. [backend-node/src/
 | `assigned` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 124–126 |
 | `costSnapshot` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 128–140 |
 | `bindCost` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 142–154 |
-| `touchEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 156–163 |
-| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 165–575 |
+| `parseQuotationPicks` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 157–168 |
+| `touchEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 170–177 |
+| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 179–681 |
 
 ## Direct local dependencies
 
@@ -47,7 +49,7 @@ Evidence: source snapshot `4a0666d4`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.cost_items`, `dbo.estimate_assignments`, `dbo.estimate_erp_mappings`, `dbo.estimate_module_details`, `dbo.estimates`, `dbo.expense_lines`, `dbo.manhour_lines`, `dbo.module_template_lines`, `dbo.module_templates`, `dbo.roles`, `dbo.suppliers`, `dbo.users`
+`dbo.cost_items`, `dbo.estimate_assignments`, `dbo.estimate_erp_mappings`, `dbo.estimate_module_details`, `dbo.estimates`, `dbo.expense_lines`, `dbo.manhour_lines`, `dbo.module_template_lines`, `dbo.module_templates`, `dbo.roles`, `dbo.supplier_quotation_lines`, `dbo.supplier_quotations`, `dbo.suppliers`, `dbo.users`
 
 ## Change boundary
 
