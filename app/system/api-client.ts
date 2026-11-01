@@ -276,6 +276,8 @@ export type SupplierQuotationRecord = {
   projectName: string | null;
   currency: "THB" | "JPY" | "USD" | "EUR";
   amount: number;
+  /** Baht per one unit of a foreign quotation's currency; null on THB, and on a foreign one nobody has rated yet. */
+  thbRate: number | null;
   status: "Valid" | "Expiring" | "Expired" | "Superseded";
   fileName: string;
   contentType: string;
@@ -1343,7 +1345,7 @@ export const lookupCostItems = (values: { q: string; field?: CostItemLookupField
 export const listSupplierPriceHistory = (values: { page?: number; pageSize?: number; search?: string; supplierId?: number } = {}) =>
   apiRequest<PagedResult<SupplierPriceHistoryRecord>>(`/api/v1/pricing/history${queryString(values)}`);
 
-export const listSupplierQuotations = (values: { page?: number; pageSize?: number; search?: string; supplierId?: number; status?: string } = {}) =>
+export const listSupplierQuotations = (values: { page?: number; pageSize?: number; search?: string; supplierId?: number; inquiryId?: number; status?: string } = {}) =>
   apiRequest<PagedResult<SupplierQuotationRecord>>(`/api/v1/supplier-quotations/${queryString(values)}`);
 
 export async function createSupplierQuotation(input: {
@@ -1355,6 +1357,7 @@ export async function createSupplierQuotation(input: {
   inquiryId?: number;
   currency: SupplierQuotationRecord["currency"];
   amount: number;
+  thbRate?: number | null;
   /** Sent with the document so the quotation and its price lines commit together. */
   lines?: QuotationLineItem[];
 }) {
@@ -1367,6 +1370,7 @@ export async function createSupplierQuotation(input: {
   if (input.inquiryId) body.set("inquiryId", String(input.inquiryId));
   body.set("currency", input.currency);
   body.set("amount", String(input.amount));
+  if (input.thbRate) body.set("thbRate", String(input.thbRate));
   if (input.lines?.length) body.set("lines", JSON.stringify(input.lines));
   const response = await authorizedFetch("/api/v1/supplier-quotations/", { method: "POST", body }, 120_000);
   return response.json() as Promise<{ id: number; quotationNumber: string; rowVersion: string; lineCount: number }>;
@@ -1408,6 +1412,7 @@ export const createReferencePrice = (input: {
   validUntil: string;
   currency: SupplierQuotationRecord["currency"];
   amount: number;
+  thbRate?: number | null;
   inquiryId?: number | null;
   lines?: QuotationLineItem[];
 }) => apiRequest<{ id: number; quotationNumber: string; rowVersion: string; lineCount: number }>(
@@ -1432,6 +1437,8 @@ export const updateSupplierQuotation = (
     validUntil?: string;
     currency?: SupplierQuotationRecord["currency"];
     amount?: number;
+    /** Left out, the rate stays while the currency does; null clears it. */
+    thbRate?: number | null;
     inquiryId?: number | null;
     /** Accepted only on a `WebReference` row; a document-backed one keeps its file. */
     sourceUrl?: string;
@@ -3985,6 +3992,20 @@ export const applyModuleTemplate = (estimateId: number, input: {
   estimateRowVersion: string;
 }) =>
   apiRequest<{ lines: number; module: string; reference: string; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/apply-template`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+/** Picked lines of a supplier quotation become cost lines; the server reads the prices and converts a foreign one to THB. */
+export const applySupplierQuotation = (estimateId: number, input: {
+  quotationId: number;
+  categoryCode: string;
+  module: string;
+  ownerId: number;
+  lines: { lineId: number; quantity: number }[];
+  estimateRowVersion: string;
+}) =>
+  apiRequest<{ lines: number; module: string; reference: string; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/apply-quotation`, {
     method: "POST",
     body: JSON.stringify(input),
   });

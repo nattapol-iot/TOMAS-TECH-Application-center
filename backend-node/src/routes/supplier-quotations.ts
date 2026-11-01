@@ -54,6 +54,20 @@ function parseSourceUrl(value: unknown): string {
   return text;
 }
 
+/*
+ * What one unit of a JPY, USD or EUR quotation is in baht. A cost line carries no currency,
+ * so this rate is the only way a foreign price reaches an estimate. A THB quotation never
+ * holds one; a foreign one filed without it stays out of estimates until somebody adds it.
+ */
+export function parseThbRate(value: unknown, currency: string): number | null {
+  if (currency === "THB" || value === undefined || value === null || value === "") return null;
+  const rate = Math.round(Number(typeof value === "string" ? value.trim() : value) * 1_000_000) / 1_000_000;
+  if (!Number.isFinite(rate) || rate <= 0 || rate > 100_000) {
+    throw new ApiError(400, "validation_failed", "THB rate must be greater than zero and at most 100000.");
+  }
+  return rate;
+}
+
 function quotation(row: Record<string, unknown> & { row_version: Buffer }) {
   return {
     id: Number(row.id), quotationNumber: row.quotation_no, supplierReference: row.supplier_reference,
@@ -61,6 +75,7 @@ function quotation(row: Record<string, unknown> & { row_version: Buffer }) {
     receivedDate: dateOnly(row.received_date as Date | string), validUntil: dateOnly(row.valid_until as Date | string),
     inquiryId: row.inquiry_id === null ? null : Number(row.inquiry_id), inquiryNumber: row.inquiry_no,
     projectName: row.project_name, currency: row.currency, amount: Number(row.amount), status: row.display_status,
+    thbRate: row.thb_rate === null || row.thb_rate === undefined ? null : Number(row.thb_rate),
     /* A web reference stores no file, so the file fields read as empty rather than
        as a document of zero bytes, and the URL it cites stands in their place. */
     sourceKind: row.source_kind === "WebReference" ? "WebReference" : "Document",
@@ -85,6 +100,8 @@ export function registerSupplierQuotationRoutes(
     const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER);
     const pageSize = clampedInteger(query.pageSize, 50, 1, 100);
     const supplierId = optionalPositiveLong(query.supplierId, "Supplier id");
+    /* The quotations filed against one RFQ: what Estimate Cost lists for its own estimate. */
+    const inquiryId = optionalPositiveLong(query.inquiryId, "Inquiry id");
     const status = optionalText(query.status, 30, "Quotation status") ?? "";
     if (status && !["Valid", "Expiring", "Expired", "Superseded"].includes(status)) {
       throw new ApiError(400, "validation_failed", "Quotation status is invalid.");
@@ -92,7 +109,7 @@ export function registerSupplierQuotationRoutes(
     const result = await database.query<(Record<string, unknown> & { row_version: Buffer; total_count: number | string })>(`
       WITH quotation_rows AS (
         SELECT q.id,q.quotation_no,q.supplier_reference,q.supplier_id,s.name supplier_name,
-               q.received_date,q.valid_until,q.inquiry_id,i.inquiry_no,i.project_name,q.currency,q.amount,
+               q.received_date,q.valid_until,q.inquiry_id,i.inquiry_no,i.project_name,q.currency,q.amount,q.thb_rate,
                CASE WHEN q.status=N'Superseded' THEN N'Superseded'
                     WHEN q.valid_until<@today THEN N'Expired'
                     WHEN q.valid_until<=DATEADD(day,30,@today) THEN N'Expiring' ELSE N'Valid' END display_status,
@@ -105,7 +122,8 @@ export function registerSupplierQuotationRoutes(
         LEFT JOIN dbo.inquiries i ON i.id=q.inquiry_id
       )
       SELECT *,COUNT_BIG(*) OVER() total_count FROM quotation_rows
-      WHERE (@supplier IS NULL OR supplier_id=@supplier) AND (@status=N'' OR display_status=@status)
+      WHERE (@supplier IS NULL OR supplier_id=@supplier) AND (@inquiry IS NULL OR inquiry_id=@inquiry)
+        AND (@status=N'' OR display_status=@status)
         AND (@search=N'' OR quotation_no LIKE N'%'+@search+N'%' OR supplier_reference LIKE N'%'+@search+N'%'
           OR supplier_name LIKE N'%'+@search+N'%' OR COALESCE(inquiry_no,N'') LIKE N'%'+@search+N'%'
           OR COALESCE(project_name,N'') LIKE N'%'+@search+N'%' OR COALESCE(file_name,N'') LIKE N'%'+@search+N'%'
@@ -113,7 +131,7 @@ export function registerSupplierQuotationRoutes(
       ORDER BY received_date DESC,id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
     `, (bind) => {
       bind.input("today", sql.Date, todayIn(config.businessTimeZone)); bind.input("supplier", sql.BigInt, supplierId);
-      bind.input("status", sql.NVarChar(30), status); bind.input("search", sql.NVarChar(200), search);
+      bind.input("inquiry", sql.BigInt, inquiryId); bind.input("status", sql.NVarChar(30), status); bind.input("search", sql.NVarChar(200), search);
       bind.input("offset", sql.Int, (page - 1) * pageSize); bind.input("page_size", sql.Int, pageSize);
     });
     return { items: result.recordset.map(quotation), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0) };
@@ -136,6 +154,7 @@ export function registerSupplierQuotationRoutes(
       throw new ApiError(400, "validation_failed", "Amount must be greater than zero with at most four decimal places.");
     }
     const amount = Number(amountValue);
+    const thbRate = parseThbRate(multipartText(values, "thbRate", 30), currency);
     const inquiryId = multipartPositiveId(values, "inquiryId", true);
     const fileName = uploadedFileName(upload.file.filename);
     const extension = validateFileExtension(fileName, new Set([...SUPPLIER_QUOTATION_EXTENSIONS].filter((value) => DOCUMENT_EXTENSIONS.has(value))));
@@ -174,17 +193,17 @@ export function registerSupplierQuotationRoutes(
         insert.input("number", sql.NVarChar(30), number); insert.input("reference", sql.NVarChar(200), supplierReference);
         insert.input("supplier", sql.BigInt, supplierId); insert.input("received", sql.Date, receivedDate); insert.input("valid", sql.Date, validUntil);
         insert.input("inquiry", sql.BigInt, inquiryId); insert.input("currency", sql.Char(3), currency); insert.input("amount", sql.Decimal(19, 4), amount);
-        insert.input("file", sql.NVarChar(500), fileName); insert.input("content_type", sql.NVarChar(200), contentType);
+        insert.input("thb_rate", sql.Decimal(19, 6), thbRate); insert.input("file", sql.NVarChar(500), fileName); insert.input("content_type", sql.NVarChar(200), contentType);
         insert.input("size", sql.BigInt, write.sizeBytes); insert.input("key", sql.NVarChar(1000), key); insert.input("sha", sql.Char(64), write.sha256);
         insert.input("actor", sql.BigInt, actor.id);
         const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
-          INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,file_name,content_type,size_bytes,storage_key,sha256,uploaded_by)
-          OUTPUT inserted.id,inserted.row_version VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,@file,@content_type,@size,@key,@sha,@actor);
+          INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,thb_rate,file_name,content_type,size_bytes,storage_key,sha256,uploaded_by)
+          OUTPUT inserted.id,inserted.row_version VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,@thb_rate,@file,@content_type,@size,@key,@sha,@actor);
         `)).recordset[0]!;
         await writeQuotationLines(transaction, Number(row.id), lines, actor.id);
         const audit = new sql.Request(transaction);
         audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, Number(row.id)); audit.input("number", sql.NVarChar(50), number);
-        audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, fileName, lineCount: lines.length }));
+        audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, thbRate, fileName, lineCount: lines.length }));
         await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,after_json,reason)
           VALUES(@actor,N'SupplierQuotation',@id,@number,N'Uploaded',@after,N'Supplier quotation document uploaded');`);
         return { id: Number(row.id), quotationNumber: number, rowVersion: row.row_version.toString("base64"), lineCount: lines.length };
@@ -221,6 +240,7 @@ export function registerSupplierQuotationRoutes(
     if (!Number.isFinite(amount) || amount <= 0 || amount > 999_999_999_999_999) {
       throw new ApiError(400, "validation_failed", "Amount must be greater than zero.");
     }
+    const thbRate = parseThbRate(body.thbRate, currency);
     const inquiryId = body.inquiryId === null || body.inquiryId === undefined
       ? null : bodyId(body.inquiryId, "Inquiry id");
     const lines = parseLineArray(body.lines ?? []);
@@ -240,16 +260,17 @@ export function registerSupplierQuotationRoutes(
       insert.input("supplier", sql.BigInt, supplierId); insert.input("received", sql.Date, receivedDate);
       insert.input("valid", sql.Date, validUntil); insert.input("inquiry", sql.BigInt, inquiryId);
       insert.input("currency", sql.Char(3), currency); insert.input("amount", sql.Decimal(19, 4), amount);
+      insert.input("thb_rate", sql.Decimal(19, 6), thbRate);
       insert.input("url", sql.NVarChar(1000), sourceUrl); insert.input("actor", sql.BigInt, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
-        INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,source_kind,source_url,uploaded_by)
+        INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,thb_rate,source_kind,source_url,uploaded_by)
         OUTPUT inserted.id,inserted.row_version
-        VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,N'WebReference',@url,@actor);
+        VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,@thb_rate,N'WebReference',@url,@actor);
       `)).recordset[0]!;
       await writeQuotationLines(transaction, Number(row.id), lines, actor.id);
       const audit = new sql.Request(transaction);
       audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, Number(row.id)); audit.input("number", sql.NVarChar(50), number);
-      audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, sourceUrl, lineCount: lines.length }));
+      audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, thbRate, sourceUrl, lineCount: lines.length }));
       await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,after_json,reason)
         VALUES(@actor,N'SupplierQuotation',@id,@number,N'Referenced',@after,N'Public price reference recorded without a stored document');`);
       return { id: Number(row.id), quotationNumber: number, rowVersion: row.row_version.toString("base64"), lineCount: lines.length };
@@ -451,7 +472,7 @@ export function registerSupplierQuotationRoutes(
       const req = new sql.Request(transaction);
       req.input("id", sql.BigInt, id);
       const current = (await req.query<Record<string, unknown> & { row_version: Buffer }>(`
-        SELECT supplier_id, supplier_reference, received_date, valid_until, currency, amount, inquiry_id,
+        SELECT supplier_id, supplier_reference, received_date, valid_until, currency, amount, thb_rate, inquiry_id,
                source_kind, source_url, row_version
         FROM dbo.supplier_quotations WITH (UPDLOCK, HOLDLOCK) WHERE id=@id;
       `)).recordset[0];
@@ -465,6 +486,9 @@ export function registerSupplierQuotationRoutes(
       const newCurrency = currency ?? String(current.currency);
       const newAmount = amountValue ?? Number(current.amount);
       const newInquiryId = inquiryId === undefined ? (current.inquiry_id === null ? null : Number(current.inquiry_id)) : (inquiryId ?? null);
+      /* A rate belongs to one currency: a new currency without a new rate drops the old one. */
+      const newThbRate = body.thbRate !== undefined ? parseThbRate(body.thbRate, newCurrency)
+        : newCurrency === String(current.currency) && current.thb_rate !== null && current.thb_rate !== undefined ? Number(current.thb_rate) : null;
 
       if (newValid < newReceived) throw new ApiError(400, "validation_failed", "Valid until cannot be before received date.");
 
@@ -495,6 +519,7 @@ export function registerSupplierQuotationRoutes(
       upd.input("valid", sql.Date, newValid);
       upd.input("currency", sql.Char(3), newCurrency);
       upd.input("amount", sql.Decimal(19, 4), newAmount);
+      upd.input("thb_rate", sql.Decimal(19, 6), newThbRate);
       upd.input("inquiry", sql.BigInt, newInquiryId);
       upd.input("source_url", sql.NVarChar(1000), newSourceUrl);
       /* Who changed it is recorded in audit_log below; supplier_quotations has never
@@ -502,14 +527,14 @@ export function registerSupplierQuotationRoutes(
       const row = (await upd.query<{ row_version: Buffer }>(`
         UPDATE dbo.supplier_quotations SET
           supplier_id=@supplier, supplier_reference=@reference, received_date=@received,
-          valid_until=@valid, currency=@currency, amount=@amount, inquiry_id=@inquiry,
+          valid_until=@valid, currency=@currency, amount=@amount, thb_rate=@thb_rate, inquiry_id=@inquiry,
           source_url=@source_url
         OUTPUT inserted.row_version WHERE id=@id;
       `)).recordset[0]!;
 
       const audit = new sql.Request(transaction);
       audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, id);
-      audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId: newSupplierId, supplierName: ref.supplier_name, amount: newAmount, currency: newCurrency }));
+      audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId: newSupplierId, supplierName: ref.supplier_name, amount: newAmount, currency: newCurrency, thbRate: newThbRate }));
       await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,action,after_json,reason)
         VALUES(@actor,N'SupplierQuotation',@id,N'Updated',@after,N'Header fields updated');`);
 

@@ -123,8 +123,10 @@ test("quotation lines are one of the sources the type-ahead searches", () => {
   assert.match(COST_ITEM_LOOKUP_SQL, /INNER JOIN dbo\.supplier_quotations q ON q\.id=l\.quotation_id/);
   // A superseded quotation is not a current price, exactly as the Price Library reads it.
   assert.match(COST_ITEM_LOOKUP_SQL, /q\.status IS NULL OR q\.status<>N'Superseded'/);
-  // A cost line has no currency column, so only THB may be offered as a unit cost.
-  assert.match(COST_ITEM_LOOKUP_SQL, /AND l\.currency=N'THB'/);
+  // A cost line has no currency column, so a unit cost is always offered in baht: a foreign
+  // line only with its quotation's THB rate, and only when it is in the quotation's currency.
+  assert.match(COST_ITEM_LOOKUP_SQL, /AND \(l\.currency=N'THB' OR \(l\.currency=q\.currency AND q\.thb_rate IS NOT NULL\)\)/);
+  assert.match(COST_ITEM_LOOKUP_SQL, /CASE WHEN l\.currency=N'THB' THEN l\.unit_price ELSE CONVERT\(decimal\(19,4\), l\.unit_price\*q\.thb_rate\) END/);
   // Every branch of the union must select the same 22 columns.
   const branches = COST_ITEM_LOOKUP_SQL.slice(
     COST_ITEM_LOOKUP_SQL.indexOf("WITH candidates AS ("),

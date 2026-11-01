@@ -597,7 +597,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(deployment, /026_performance_reviews\.sql/);
   // Migration 017 extended the list. The assertion still pins an exact count,
   // so a migration added to the runner but never applied still fails the build.
-  assert.match(deployment, /version BETWEEN 1 AND 91\) <> 91/);
+  assert.match(deployment, /version BETWEEN 1 AND 92\) <> 92/);
   assert.match(seed, /schema_versions WHERE version = 15/);
 
   // SQL Server rejects OUTPUT without INTO on any table with an enabled DML
@@ -820,11 +820,13 @@ test("the quotation route writes only columns supplier_quotations actually has",
    * `updated_by` did on every save the edit dialog ever attempted. This reads the
    * table's own DDL instead and holds the route's writes to it.
    */
-  const [route, base, extension] = await Promise.all([
+  const [route, base, referenceSources, thbRate] = await Promise.all([
     readFile(new URL("backend-node/src/routes/supplier-quotations.ts", root), "utf8"),
     readFile(new URL("database/migrations/013_supplier_quotations.sql", root), "utf8"),
     readFile(new URL("database/migrations/060_price_reference_sources.sql", root), "utf8"),
+    readFile(new URL("database/migrations/092_supplier_quotation_thb_rate.sql", root), "utf8"),
   ]);
+  const extension = referenceSources + "\n" + thbRate;
 
   const createStart = base.indexOf("CREATE TABLE dbo.supplier_quotations (");
   assert.ok(createStart > 0, "the supplier_quotations table declaration moved");
@@ -1017,7 +1019,7 @@ test("Knowledge Hub is permission-filtered, revision-safe, and included in produ
   assert.match(client, /listKnowledgeDocuments/);
   assert.match(deployment, /014_knowledge_hub\.sql/);
   assert.match(deployment, /015_knowledge_hub_workflow_hardening\.sql/);
-  assert.match(deployment, /version BETWEEN 1 AND 91\) <> 91/);
+  assert.match(deployment, /version BETWEEN 1 AND 92\) <> 92/);
   assert.match(grants, /GRANT INSERT ON OBJECT::dbo\.knowledge_audit_events/);
   assert.match(grants, /GRANT INSERT, UPDATE, DELETE ON OBJECT::dbo\.knowledge_document_approvals/);
   assert.doesNotMatch(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.knowledge_audit_events/);

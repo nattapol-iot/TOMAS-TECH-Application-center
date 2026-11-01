@@ -9,7 +9,7 @@ import { ResourceTaskWorkspace, type ResourceTask } from "./ResourceTaskWorkspac
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
-import { estimateBusinessDate } from "../../../lib/estimate-ux";
+import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
 import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
@@ -2818,6 +2818,28 @@ const blankQuotationLine = (lineNo: number, currency: string): QuotationLineItem
 const quotationLinesTotal = (lines: QuotationLineItem[]) =>
   lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 0);
 
+/* A cost line has no currency, so a JPY, USD or EUR quotation needs its baht rate before any of
+   its lines can reach an estimate. It is asked for here, from whoever holds the document. */
+const thbRateInvalid = (currency: SupplierQuotationRecord["currency"], value: string) => {
+  if (currency === "THB") return false;
+  const rate = Number(value);
+  return !value.trim() || !Number.isFinite(rate) || rate <= 0 || rate > 100_000;
+};
+
+const thbRateOf = (currency: SupplierQuotationRecord["currency"], value: string) => currency === "THB" ? null : Number(value);
+
+function ThbRateField({ currency, value, onChange }: { currency: SupplierQuotationRecord["currency"]; value: string; onChange: (value: string) => void }) {
+  if (currency === "THB") return null;
+  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  return <Field label={copy(`1 ${currency} = กี่บาท *`, `THB per 1 ${currency} *`, `1 ${currency} = THB *`)}
+    hint={copy("ใช้แปลงราคาเป็นบาทเมื่อนำรายการเข้า Estimate", "Converts the prices to baht when lines are added to an estimate", "見積へ明細を追加する際にバーツへ換算します")}>
+    <input type="number" min="0.000001" max="100000" step="0.0001" inputMode="decimal" value={value}
+      placeholder={currency === "JPY" ? "0.24" : "35.5"} onChange={(event) => onChange(event.target.value)} />
+  </Field>;
+}
+
+export type QuotationInquiry = { id: number; number: string; projectName: string; customerName: string };
+
 /*
  * What the company already knows about the parts on a quotation.
  *
@@ -3056,21 +3078,25 @@ function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = fals
   </div>;
 }
 
-function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
+export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClose, onCreated }: {
   bootstrap: BootstrapData;
+  /** Estimate Cost files the quotation against its own RFQ, which may be older than the RFQs the list loads. */
+  defaultInquiry?: QuotationInquiry;
   onClose: () => void;
-  onCreated: (quotationNumber: string, lineCount: number) => Promise<void>;
+  onCreated: (quotationNumber: string, lineCount: number, quotationId: number) => Promise<void>;
 }) {
   const [supplierId, setSupplierId] = useState("");
   const [supplierReference, setSupplierReference] = useState("");
   const [receivedDate, setReceivedDate] = useState(isoToday());
   const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
   const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>("THB");
+  const [thbRate, setThbRate] = useState("");
   const [amount, setAmount] = useState("");
   /* True once the total has been stated rather than derived — by the PDF or by hand. */
   const [amountPinned, setAmountPinned] = useState(false);
-  const [inquiryId, setInquiryId] = useState("");
-  const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
+  const [inquiryId, setInquiryId] = useState(defaultInquiry ? String(defaultInquiry.id) : "");
+  const [inquiries, setInquiries] = useState<QuotationInquiry[]>([]);
+  const inquiryOptions = defaultInquiry && !inquiries.some((inquiry) => inquiry.id === defaultInquiry.id) ? [defaultInquiry, ...inquiries] : inquiries;
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -3212,7 +3238,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
   const parsedAmount = Number(amount);
   const hasSupplier = !!supplierId || !!newSupplierName.trim();
   const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
-    || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file;
+    || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file || thbRateInvalid(currency, thbRate);
 
   // Warn when manual line items total doesn't match declared amount (>1% diff)
   const linesTotal = quotationLinesTotal(lines);
@@ -3244,9 +3270,9 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
         file, supplierId: resolvedSupplierId,
         supplierReference: supplierReference.trim(), receivedDate, validUntil,
         inquiryId: inquiryId ? Number(inquiryId) : undefined, currency, amount: parsedAmount,
-        lines,
+        thbRate: thbRateOf(currency, thbRate), lines,
       });
-      await onCreated(created.quotationNumber, created.lineCount);
+      await onCreated(created.quotationNumber, created.lineCount, created.id);
     } catch (requestError) {
       setError(toError(requestError));
     } finally {
@@ -3394,7 +3420,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
           <Field label="Related inquiry">
             <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
               <option value="">Not linked</option>
-              {inquiries.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
+              {inquiryOptions.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
             </select>
           </Field>
           <div style={confWrap("receivedDate")}>
@@ -3415,6 +3441,7 @@ function SupplierQuotationUploadModal({ bootstrap, onClose, onCreated }: {
               <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
             </select>
           </Field>
+          <ThbRateField currency={currency} value={thbRate} onChange={setThbRate} />
           <div style={confWrap("totalAmount")}>
             <Field label="Quotation amount *" hint={confHint("totalAmount") ?? (amountPinned ? undefined : "คิดจากผลรวมรายการให้อัตโนมัติ แก้เองได้")}>
               <input type="number" min="0.0001" step="0.01" value={amount} placeholder="0.00"
@@ -3483,6 +3510,7 @@ function EditQuotationModal({
   const [receivedDate, setReceivedDate] = useState(record.receivedDate);
   const [validUntil, setValidUntil] = useState(record.validUntil);
   const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>(record.currency);
+  const [thbRate, setThbRate] = useState(record.thbRate ? String(record.thbRate) : "");
   const [amount, setAmount] = useState(String(record.amount));
   const [inquiryId, setInquiryId] = useState(record.inquiryId ? String(record.inquiryId) : "");
   const [inquiries, setInquiries] = useState<{ id: number; number: string; projectName: string; customerName: string }[]>([]);
@@ -3513,7 +3541,7 @@ function EditQuotationModal({
   const parsedAmount = Number(amount);
   const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
     || !Number.isFinite(parsedAmount) || parsedAmount <= 0
-    || (isReference && !urlLooksOpenable);
+    || (isReference && !urlLooksOpenable) || thbRateInvalid(currency, thbRate);
   const linesTotal = quotationLinesTotal(lines);
   const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
     && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
@@ -3529,6 +3557,7 @@ function EditQuotationModal({
         validUntil,
         currency,
         amount: parsedAmount,
+        thbRate: thbRateOf(currency, thbRate),
         inquiryId: inquiryId ? Number(inquiryId) : null,
         ...(isReference ? { sourceUrl: sourceUrl.trim() } : {}),
         rowVersion: record.rowVersion,
@@ -3590,6 +3619,7 @@ function EditQuotationModal({
         <Field label="Amount *">
           <input type="number" min="0.0001" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
         </Field>
+        <ThbRateField currency={currency} value={thbRate} onChange={setThbRate} />
         {/* A reference price is only checkable through its link, so the link is editable
             here; a document-backed row keeps its stored file and the server refuses one. */}
         {isReference ? (
@@ -3632,6 +3662,7 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
   const [capturedDate, setCapturedDate] = useState(isoToday());
   const [validUntil, setValidUntil] = useState(addIsoDays(isoToday(), 30));
   const [currency, setCurrency] = useState<SupplierQuotationRecord["currency"]>("THB");
+  const [thbRate, setThbRate] = useState("");
   /* One empty row, so the first thing on screen is a box to type a price into. */
   const [lines, setLines] = useState<QuotationLineItem[]>([blankQuotationLine(1, "THB")]);
   const [busy, setBusy] = useState(false);
@@ -3644,7 +3675,7 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
   /* The lines are the whole price here: a web page has no separate stated total. */
   const linesTotal = quotationLinesTotal(lines);
   const invalid = !hasSupplier || !urlLooksOpenable || !capturedDate || !validUntil
-    || validUntil < capturedDate || !priced || linesTotal <= 0;
+    || validUntil < capturedDate || !priced || linesTotal <= 0 || thbRateInvalid(currency, thbRate);
 
   const submit = async () => {
     if (invalid) return;
@@ -3659,7 +3690,7 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
       const created = await createReferencePrice({
         supplierId: resolvedSupplierId, sourceUrl: trimmedUrl,
         supplierReference: supplierReference.trim(), receivedDate: capturedDate, validUntil,
-        currency, amount: linesTotal, lines: lines.filter((line) => line.description.trim()),
+        currency, amount: linesTotal, thbRate: thbRateOf(currency, thbRate), lines: lines.filter((line) => line.description.trim()),
       });
       await onCreated(created.quotationNumber, created.lineCount);
     } catch (requestError) {
@@ -3719,6 +3750,7 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
           <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
         </select>
       </Field>
+      <ThbRateField currency={currency} value={thbRate} onChange={setThbRate} />
       <Field label="Page or catalogue reference" hint="เช่น รหัสหน้า, ชื่อแคตตาล็อก (ไม่บังคับ)">
         <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="—" />
       </Field>
@@ -3860,7 +3892,10 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
             <td>{date(record.receivedDate)}</td>
             <td>{date(record.validUntil)}</td>
             <td><div className="cell-primary"><strong className="mono">{record.inquiryNumber || "Not linked"}</strong><span>{record.projectName || "—"}</span></div></td>
-            <td><Badge>{record.currency}</Badge></td>
+            {/* Without a rate a foreign quotation's prices cannot reach an estimate, so say so here. */}
+            <td><Badge>{record.currency}</Badge>{record.currency === "THB" ? null : record.thbRate
+              ? <div className="muted">1 = {number(record.thbRate, 6)} THB</div>
+              : <div><Badge tone="amber">{estimateUxCopy(currentLocale(), "ยังไม่มีอัตราบาท", "No THB rate", "THBレート未設定")}</Badge></div>}</td>
             <td className="num"><strong>{supplierQuotationCurrency(record.amount, record.currency)}</strong></td>
             {/* Zero here is the failure this column exists to expose: a stored document
                 that put no price into the Price Library. */}
