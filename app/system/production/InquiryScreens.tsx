@@ -93,6 +93,8 @@ const PROBABILITY_RANGES = [
   { label: "Low · 0–24%", from: 0, to: 24 },
 ] as const;
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
+// The file types backend-node/src/document-storage.ts DOCUMENT_EXTENSIONS accepts, in words.
+const ATTACHMENT_TYPES_HINT = "PDF, Office, DWG/DXF, STEP/IGES, Outlook email, ZIP/RAR/7z or image — maximum 50 MB per file";
 const BUSINESS_TIME_ZONE = process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok";
 
 const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
@@ -307,7 +309,13 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const set = <K extends keyof CreateInquiryInput>(key: K, value: CreateInquiryInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const addFiles = (selected: FileList | File[]) => setFiles((current) => [...current, ...Array.from(selected).filter((file) => file.size > 0 && file.size <= MAX_FILE_BYTES).map((file) => ({ file, category: "Customer RFQ" }))]);
+  const addFiles = (selected: FileList | File[]) => {
+    const all = Array.from(selected);
+    const accepted = all.filter((file) => file.size > 0 && file.size <= MAX_FILE_BYTES);
+    const skipped = all.filter((file) => !accepted.includes(file));
+    if (skipped.length) notify(`Not added (empty or over 50 MB): ${skipped.map((file) => file.name).join(", ")}`);
+    setFiles((current) => [...current, ...accepted.map((file) => ({ file, category: "Customer RFQ" }))]);
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError("");
@@ -316,14 +324,21 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
       const similar=await apiRequest<Array<{referenceNo:string;projectName:string;status:string;source:string}>>(`/api/v1/inquiry-duplicates?customerId=${form.customerId}&projectName=${encodeURIComponent(form.projectName.trim())}`);
       if(similar.length&&!window.confirm(`พบ Inquiry ที่กำลังดำเนินการและมีชื่องานคล้ายกัน ต้องการสร้างรายการใหม่ต่อหรือไม่\n\n${similar.map(item=>`${item.referenceNo} · ${item.projectName} · ${item.source}`).join("\n")}`)){setBusy(false);return;}
       createdInquiry = await createInquiry({ ...form, targetDelivery: form.targetDelivery || undefined, ...(selectedSource?{opportunityId:Number(selectedSource.id),opportunityRowVersion:String(selectedSource.rowVersion)}:{}) });
-      for (const queued of files) await uploadInquiryAttachment(createdInquiry.id, queued);
+      // One file the server refuses must not stop the others; the person sees which ones and why.
+      const failed: string[] = [];
+      for (const queued of files) {
+        try { await uploadInquiryAttachment(createdInquiry.id, queued); }
+        catch (uploadError) { failed.push(`${queued.file.name} (${toError(uploadError)})`); }
+      }
       await refreshBootstrap();
-      notify(`${createdInquiry.number} registered${files.length ? ` · uploaded ${files.length} file(s)` : ""}${assignmentDeliveryNote(createdInquiry.notification)}`);
+      notify(failed.length
+        ? `${createdInquiry.number} registered · uploaded ${files.length - failed.length} of ${files.length} file(s). Attach the rest from the Attachments tab: ${failed.join("; ")}`
+        : `${createdInquiry.number} registered${files.length ? ` · uploaded ${files.length} file(s)` : ""}${assignmentDeliveryNote(createdInquiry.notification)}`);
       onCreated(createdInquiry.id);
     } catch (requestError) {
       if (createdInquiry) {
         await refreshBootstrap().catch(() => undefined);
-        notify(`${createdInquiry.number} was registered, but an attachment upload failed`);
+        notify(`${createdInquiry.number} was registered · ${toError(requestError)}`);
         onCreated(createdInquiry.id);
       } else setError(toError(requestError));
     }
@@ -369,7 +384,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     <div style={{ height: 14 }} />
     <Panel title="Inquiry Attachments" subtitle="Files are stored in the configured company document storage and linked to the inquiry" guide="inquiry.attach">
       <input ref={fileRef} type="file" multiple hidden onChange={(event) => { if (event.target.files) addFiles(event.target.files); event.target.value = ""; }} />
-      <button className="attachment-drop" type="button" onClick={() => fileRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}><Icon name="upload" /><strong><LocalizedText text={"Drag and drop files here or click to browse"} /></strong><span><LocalizedText text={"PDF, Excel, Word, DWG or image — maximum 50 MB per file"} /></span></button>
+      <button className="attachment-drop" type="button" onClick={() => fileRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}><Icon name="upload" /><strong><LocalizedText text={"Drag and drop files here or click to browse"} /></strong><span><LocalizedText text={ATTACHMENT_TYPES_HINT} /></span></button>
       {files.length ? <div style={{ marginTop: 12 }}>{files.map((queued, index) => <div className="file-row" key={`${queued.file.name}-${index}`}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{queued.file.name}</strong><small>{formatFileSize(queued.file.size)} <LocalizedText text={"· queued for upload"} /></small></div><select value={queued.category} onChange={(event) => setFiles((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}>{FILE_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><button type="button" className="row-action" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${queued.file.name}`}><Icon name="trash" /></button></div>)}</div> : null}
     </Panel>
   </form>;
@@ -556,7 +571,7 @@ function InquiryAttachments({ detail, canWrite, onUpload, notify }: { detail: In
     try { const result = await downloadInquiryAttachment(detail.id, attachment.id); const url = URL.createObjectURL(result.blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = result.fileName || attachment.fileName; anchor.click(); URL.revokeObjectURL(url); }
     catch (error) { notify(toError(error)); }
   };
-  return <Panel title={uiText("Attachments")} subtitle={handoverCopy} actions={canWrite ? <button className="btn default sm" type="button" onClick={onUpload}><Icon name="upload" /><LocalizedText text={"Upload"} /></button> : undefined}>{canWrite ? <button className="attachment-drop" type="button" onClick={onUpload}><Icon name="upload" /><strong><LocalizedText text={"Upload an inquiry document"} /></strong><span><LocalizedText text={"Each file is tagged with a document category and linked to this inquiry"} /></span></button> : null}<div style={{ marginTop: 12 }}>{detail.attachments.length ? detail.attachments.map((file) => <div className="file-row" key={file.id}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{file.fileName}</strong><small>{file.category} <LocalizedText text={"·"} /> {formatFileSize(file.sizeBytes)} <LocalizedText text={"·"} /> {file.uploadedByName} <LocalizedText text={"·"} /> {formatDateTime(file.uploadedAt)}</small></div><Badge tone="slate">{file.category}</Badge><button className="row-action" type="button" onClick={() => { void download(file); }} aria-label={`Download ${file.fileName}`}><Icon name="download" /></button></div>) : <EmptyState icon="file" title="No attachment yet" message="Upload the customer RFQ, drawing or specification for this inquiry." />}</div></Panel>;
+  return <Panel title={uiText("Attachments")} subtitle={handoverCopy} actions={canWrite ? <button className="btn default sm" type="button" data-guide="inquiry.upload" onClick={onUpload}><Icon name="upload" /><LocalizedText text={"Upload"} /></button> : undefined}>{canWrite ? <button className="attachment-drop" type="button" onClick={onUpload}><Icon name="upload" /><strong><LocalizedText text={"Upload an inquiry document"} /></strong><span><LocalizedText text={"Each file is tagged with a document category and linked to this inquiry"} /></span></button> : null}<div style={{ marginTop: 12 }}>{detail.attachments.length ? detail.attachments.map((file) => <div className="file-row" key={file.id}><span className="file-icon"><Icon name="file" /></span><div style={{ flex: 1 }}><strong>{file.fileName}</strong><small>{file.category} <LocalizedText text={"·"} /> {formatFileSize(file.sizeBytes)} <LocalizedText text={"·"} /> {file.uploadedByName} <LocalizedText text={"·"} /> {formatDateTime(file.uploadedAt)}</small></div><Badge tone="slate">{file.category}</Badge><button className="row-action" type="button" onClick={() => { void download(file); }} aria-label={`Download ${file.fileName}`}><Icon name="download" /></button></div>) : <EmptyState icon="file" title="No attachment yet" message="Upload the customer RFQ, drawing or specification for this inquiry." />}</div></Panel>;
 }
 
 function InquiryActivityTab({ detail }: { detail: InquiryDetail }) {
@@ -625,5 +640,5 @@ function AttachmentDrawer({ detail, onClose, onSaved }: { detail: InquiryDetail;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const save = async () => { if (!file) return; setBusy(true); setError(""); try { await uploadInquiryAttachment(detail.id, { file, category }); await onSaved(); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
-  return <Drawer title="Upload inquiry attachment" subtitle={`${detail.number} · Stored with integrity verification`} onClose={onClose} footer={<><span className="spacer" /><button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !file || file.size > MAX_FILE_BYTES} onClick={() => { void save(); }}><Icon name="upload" />{busy ? "Uploading…" : <LocalizedText text={"Upload"} />}</button></>}>{error ? <LoadError message={error} retry={() => { void save(); }} /> : null}<div className="form-grid"><Field label="Document category"><select value={category} onChange={(event) => setCategory(event.target.value)}>{FILE_CATEGORIES.map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="File"><input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>{file ? <div className="file-row"><span className="file-icon"><Icon name="file" /></span><div><strong>{file.name}</strong><small>{formatFileSize(file.size)}{file.size > MAX_FILE_BYTES ? " · exceeds 50 MB limit" : ""}</small></div></div> : null}</div></Drawer>;
+  return <Drawer title="Upload inquiry attachment" subtitle={`${detail.number} · Stored with integrity verification`} onClose={onClose} footer={<><span className="spacer" /><button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" data-guide="inquiry.attachUpload" disabled={busy || !file || file.size > MAX_FILE_BYTES} onClick={() => { void save(); }}><Icon name="upload" />{busy ? "Uploading…" : <LocalizedText text={"Upload"} />}</button></>}>{error ? <LoadError message={error} retry={() => { void save(); }} /> : null}<div className="form-grid"><Field label="Document category" guide="inquiry.attachCategory"><select value={category} onChange={(event) => setCategory(event.target.value)}>{FILE_CATEGORIES.map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="File" hint={ATTACHMENT_TYPES_HINT} guide="inquiry.attachFile"><input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>{file ? <div className="file-row"><span className="file-icon"><Icon name="file" /></span><div><strong>{file.name}</strong><small>{formatFileSize(file.size)}{file.size > MAX_FILE_BYTES ? " · exceeds 50 MB limit" : ""}</small></div></div> : null}</div></Drawer>;
 }

@@ -155,11 +155,12 @@ GO
 :r database/migrations/091_user_guide_progress.sql
 :r database/migrations/092_supplier_quotation_thb_rate.sql
 :r database/migrations/093_estimate_erp_cost_sheets.sql
+:r database/migrations/094_engineer_inquiry_write.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 93) <> 93
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 94) <> 94
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

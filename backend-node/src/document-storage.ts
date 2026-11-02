@@ -7,9 +7,11 @@ import type { MultipartFields, SavedMultipartFile } from "@fastify/multipart";
 import type { AppConfig } from "./config.js";
 import { ApiError } from "./errors.js";
 
+// The owner added customer e-mails, 3D models and other archives on 2026-11-02 (.msg .eml .step .stp .igs .rar .7z).
 export const DOCUMENT_EXTENSIONS = new Set([
   ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".csv", ".txt",
-  ".dwg", ".dxf", ".zip", ".jpg", ".jpeg", ".png", ".mp4",
+  ".dwg", ".dxf", ".step", ".stp", ".igs", ".msg", ".eml",
+  ".zip", ".rar", ".7z", ".jpg", ".jpeg", ".png", ".mp4",
 ]);
 
 export const SUPPLIER_QUOTATION_EXTENSIONS = new Set([".pdf", ".xls", ".xlsx", ".csv", ".jpg", ".jpeg", ".png"]);
@@ -40,7 +42,14 @@ const MIME_TYPES: Record<string, string> = {
   ".txt": "text/plain",
   ".dwg": "application/acad",
   ".dxf": "application/dxf",
+  ".step": "model/step",
+  ".stp": "model/step",
+  ".igs": "model/iges",
+  ".msg": "application/vnd.ms-outlook",
+  ".eml": "message/rfc822",
   ".zip": "application/zip",
+  ".rar": "application/vnd.rar",
+  ".7z": "application/x-7z-compressed",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",

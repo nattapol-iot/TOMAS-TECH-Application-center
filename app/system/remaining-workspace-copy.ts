@@ -119,9 +119,9 @@ export const REMAINING_WORKSPACE_COPY: Record<string, {th: string; jp: string; e
     "th": "ลากไฟล์มาวางที่นี่หรือคลิกเพื่อเลือก",
     "jp": "ここにファイルをドラッグするか、クリックして選択してください"
   },
-  "PDF, Excel, Word, DWG or image — maximum 50 MB per file": {
-    "th": "PDF, Excel, Word, DWG หรือรูปภาพ — ไม่เกิน 50 MB ต่อไฟล์",
-    "jp": "PDF、Excel、Word、DWG、画像・1ファイル最大50 MB"
+  "PDF, Office, DWG/DXF, STEP/IGES, Outlook email, ZIP/RAR/7z or image — maximum 50 MB per file": {
+    "th": "PDF, Office, DWG/DXF, STEP/IGES, อีเมล Outlook, ZIP/RAR/7z หรือรูปภาพ — ไม่เกิน 50 MB ต่อไฟล์",
+    "jp": "PDF、Office、DWG/DXF、STEP/IGES、Outlookメール、ZIP/RAR/7z、画像・1ファイル最大50 MB"
   },
   "· queued for upload": {
     "th": "· รออัปโหลด",

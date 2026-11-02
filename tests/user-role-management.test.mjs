@@ -41,7 +41,7 @@ test("role management migration grants Admin permission and only column-scoped u
   assert.match(login, /GRANT UPDATE \(role_id, updated_at\) ON OBJECT::dbo\.users/);
   assert.match(login, /REVOKE INSERT, UPDATE, DELETE ON OBJECT::dbo\.users/);
   assert.match(deploy, /:r database\/migrations\/041_user_role_management\.sql/);
-  assert.match(deploy, /version BETWEEN 1 AND 93\) <> 93/);
+  assert.match(deploy, /version BETWEEN 1 AND 94\) <> 94/);
   assert.match(verifier, /\(37, N'Archive generated report PDF\/PPTX exports on NAS storage'\)/);
   assert.match(verifier, /\(41, N'Admin-managed primary user roles with audited least-privilege writes'\)/);
   assert.match(verifier, /minor_id NOT IN/);
@@ -63,4 +63,22 @@ test("role update endpoint is concurrency-safe, audited and protects the last Ad
   assert.match(route, /WHERE id=@id AND is_active=1 AND deleted_at IS NULL AND row_version=@row_version/);
   assert.match(route, /insertAudit\(transaction, actor\.id, "UserAccount"/);
   assert.match(route, /"Primary role changed"/);
+});
+
+test("Engineer holds inquiry.write so the team can attach files to an Inquiry (owner 2026-11-02)", async () => {
+  const [migration, deploy, validation, attachments, screen] = await Promise.all([
+    readFile(new URL("database/migrations/094_engineer_inquiry_write.sql", root), "utf8"),
+    readFile(new URL("database/scripts/020_deploy_fresh_database.sql", root), "utf8"),
+    readFile(new URL("backend-node/src/migration-validation.ts", root), "utf8"),
+    readFile(new URL("backend-node/src/routes/inquiry-attachments.ts", root), "utf8"),
+    readFile(new URL("app/system/production/InquiryScreens.tsx", root), "utf8"),
+  ]);
+  assert.match(migration, /WHERE r\.code = N'Engineer'\s+AND p\.code = N'inquiry\.write'/);
+  assert.match(migration, /NOT EXISTS \(SELECT 1 FROM dbo\.role_permissions rp WHERE rp\.role_id = r\.id AND rp\.permission_id = p\.id\)/);
+  assert.match(migration, /VALUES \(94, N'Engineer inquiry write'\)/);
+  assert.match(deploy, /:r database\/migrations\/094_engineer_inquiry_write\.sql/);
+  assert.match(validation, /\{ version: 94, fileName: "094_engineer_inquiry_write\.sql", name: "Engineer inquiry write" \}/);
+  // The permission the role now holds is the one the upload checks, on the server and on the screen.
+  assert.match(attachments, /demandPermission\(request, "inquiry\.write"\)/);
+  assert.match(screen, /const canWrite = !closed && bootstrap\.permissions\.includes\("inquiry\.write"\);/);
 });
