@@ -74,6 +74,7 @@ import {
   type EstimateCopyResult,
   type EstimateCostItem,
   type EstimateCostWorkspace,
+  type EstimateErpSheetRow,
   type EstimateExpenseInput,
   type EstimateExpenseLine,
   type EstimateManhourInput,
@@ -461,7 +462,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
       <button className="btn ghost sm" type="button" onClick={clearFilters}>{copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}</button>
     </div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <section className="panel est-list-panel">
+    <section className="panel est-list-panel" data-guide="estimate.list">
       <div className="tabs est-status-tabs" role="tablist" aria-label={copy("สถานะ", "Status", "ステータス")}>
         {ESTIMATE_STATUS_TABS.map(([value, th, en, ja]) => <button key={value} type="button" role="tab" aria-selected={status === value} className={status === value ? "tab active" : "tab"} onClick={() => { setStatus(value); resetPage(); }}>{copy(th, en, ja)}</button>)}
       </div>
@@ -630,6 +631,9 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
   const [erpUnclassified, setErpUnclassified] = useState<number | null>(null);
   const [erpExport, setErpExport] = useState<{ run: () => void } | null>(null);
   const onErpExportChange = useCallback((run: (() => void) | null) => setErpExport(run ? { run } : null), []);
+  /* Approval sends the ERP sheet's rows to the Pegasus ERP; the sheet below (mounted even when hidden) hands them over. */
+  const erpSheetRows = useRef<(() => EstimateErpSheetRow[]) | null>(null);
+  const onErpSheetRowsChange = useCallback((rows: (() => EstimateErpSheetRow[]) | null) => { erpSheetRows.current = rows; }, []);
   const [costFocus, setCostFocus] = useState<string | null>(null);
   const clearCostFocus = useCallback(() => setCostFocus(null), []);
   const [loading, setLoading] = useState(true);
@@ -914,7 +918,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
         {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
         {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
         {approved ? <button className="btn primary" type="button" disabled={busy || !erpExport} title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")} onClick={() => erpExport?.run()}><Icon name="download" />{copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}</button> : null}
-        {capabilities.canApprove ? <button className="btn success" type="button" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
+        {capabilities.canApprove ? <button className="btn success" type="button" data-guide="estimate.approve" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
       </div>
     </header>
     {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
@@ -975,7 +979,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
 
     {onSummary && inReview ? <EstimateReviewSummary workspace={workspace} erpUnclassified={erpUnclassified} sheetOpen={sheetOpen} onOpenTab={setTab} onOpenSheet={() => { setSheetOpen(true); window.setTimeout(() => sheetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} /> : null}
     {onSummary && header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
-    <div ref={sheetRef} hidden={!onSummary || (inReview && !sheetOpen)}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} onOpenTab={setTab} onUnclassifiedChange={setErpUnclassified} onExportChange={onErpExportChange} hideReadiness={inReview} />
+    <div ref={sheetRef} hidden={!onSummary || (inReview && !sheetOpen)}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} onOpenTab={setTab} onUnclassifiedChange={setErpUnclassified} onExportChange={onErpExportChange} onSheetRowsChange={onErpSheetRowsChange} hideReadiness={inReview} />
     </div>
     {onSummary ? <>
       {ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}
@@ -1120,7 +1124,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     }} /> : null}
     {workflowAction ? <WorkflowModal action={workflowAction} workspace={workspace} busy={busy} onShowValidation={() => { setWorkflowAction(null); setTab("validation"); }} onClose={() => setWorkflowAction(null)} onConfirm={async (comment) => {
       setBusy(true); setError("");
-      try { const result = await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment); const label = workflowAction === "approve" ? "approved and locked" : workflowAction === "submit" ? "submitted for engineering review" : workflowAction === "create-revision" ? "opened a new revision" : "returned for revision";
+      try { const result = await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment, workflowAction === "approve" ? erpSheetRows.current?.() ?? null : null); const label = workflowAction === "approve" ? "approved and locked" : workflowAction === "submit" ? "submitted for engineering review" : workflowAction === "create-revision" ? "opened a new revision" : "returned for revision";
         /* Approval sends the estimate to the Pegasus ERP; a failed send is said here and kept on the ERP tab with a button to send again. */
         const erp = !result.erp ? "" : result.erp.sent
           ? estimateCopy(` · ส่งเข้า ERP แล้ว${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`, ` · sent to the ERP${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`, ` · ERPへ送信済み${result.erp.costSheetNo ? `（${result.erp.costSheetNo}）` : ""}`)

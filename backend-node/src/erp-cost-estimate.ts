@@ -2,8 +2,9 @@
 // TMT ID access token. The ERP team's answer to docs/PEGASUS_ERP_ESTIMATE_COST_TH.md: the field names are the ones proposed
 // there, the ERP keeps only the latest revision on one Cost Sheet, and a sheet arrives already approved. Everything here is pure.
 import { randomUUID } from "node:crypto";
+import { ApiError } from "./errors.js";
 import { isPlaceholder, type ErpGateway } from "./erp-purchasing.js";
-import { ERP_CATEGORIES } from "./estimate-erp.js";
+import { ERP_CATEGORIES, ERP_SOURCE_TYPES } from "./estimate-erp.js";
 
 export const ERP_ESTIMATE_REF_PREFIX = "ENGAPP-EST-";
 /** The most cost lines the ERP takes in one call. */
@@ -19,7 +20,7 @@ export type CostEstimateHeader = {
   approvedAt: Date | string | null; appBaseUrl: string;
 };
 
-/** A line of the ERP summary (estimate-erp.ts buildErpSummary), the same rows the _ERP_ workbook is built from. */
+/** A row of the ERP summary sheet (parseErpSheetRows): what one line of the Cost Sheet says. */
 export type CostEstimateLine = {
   sourceType: string; internalCategory: string; erpCategory: string; module?: string | null; description: string;
   item?: string | number | null; modelPartNumber?: string | null; supplier?: string | null; brand?: string | null;
@@ -36,6 +37,52 @@ const optional = (key: string, value: unknown, max: number) => {
 };
 const optionalNumber = (key: string, value: number | null | undefined) =>
   value === null || value === undefined || !Number.isFinite(value) ? {} : { [key]: value };
+
+/*
+ * The rows of the ERP summary sheet, as the page draws them and the _ERP_ workbook writes them: one per module, standalone
+ * item or merged line, plus the contingency, never the cost lines behind them (owner, 2026-11-02, after CS-202611-0001
+ * arrived with every line). The page builds them with the frontend's sheet code; the server checks each row here and,
+ * with sheetRowsMismatch, that every category still adds up to the estimate's own summary.
+ */
+export function parseErpSheetRows(value: unknown): CostEstimateLine[] {
+  if (!Array.isArray(value) || !value.length) throw new ApiError(400, "validation_failed", "The ERP sheet rows are required.");
+  if (value.length > ERP_MAX_COST_LINES) throw new ApiError(400, "validation_failed", `The ERP takes at most ${ERP_MAX_COST_LINES} rows.`);
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object") throw new ApiError(400, "validation_failed", `ERP sheet row ${index + 1} is invalid.`);
+    const row = item as Record<string, unknown>;
+    const text = (key: string, max: number) => typeof row[key] === "string" && (row[key] as string).trim() ? (row[key] as string).trim().slice(0, max) : null;
+    const number = (key: string) => {
+      if (row[key] === null || row[key] === undefined) return null;
+      const parsed = Number(row[key]);
+      if (!Number.isFinite(parsed)) throw new ApiError(400, "validation_failed", `ERP sheet row ${index + 1}: ${key} is not a number.`);
+      return parsed;
+    };
+    const erpCategory = String(row.erpCategory ?? "");
+    if (!(ERP_CATEGORIES as readonly string[]).includes(erpCategory)) throw new ApiError(400, "validation_failed", `ERP sheet row ${index + 1} has no ERP category.`);
+    const description = text("description", 2000);
+    if (!description) throw new ApiError(400, "validation_failed", `ERP sheet row ${index + 1} has no description.`);
+    const amount = number("amount");
+    if (amount === null) throw new ApiError(400, "validation_failed", `ERP sheet row ${index + 1} has no amount.`);
+    return {
+      sourceType: (ERP_SOURCE_TYPES as readonly string[]).includes(String(row.sourceType)) ? String(row.sourceType) : "CostItem",
+      erpCategory, description, amount, internalCategory: text("internalCategory", 100) ?? "",
+      supplier: text("supplier", 200), brand: text("brand", 100), leadTime: text("leadTime", 100), quoteRevision: text("quoteRevision", 100),
+      unit: text("unit", 50), unitPrice: number("unitPrice"), quantity: number("quantity"),
+    };
+  });
+}
+
+/** Why the sheet's rows do not add up to the estimate's own ERP summary, or null. Rows are rounded to the satang, so a category may drift by half a satang per row. */
+export function sheetRowsMismatch(rows: CostEstimateLine[], categories: ReadonlyArray<{ category: string; amount: number }>): string | null {
+  for (const { category, amount } of categories) {
+    const own = rows.filter((row) => row.erpCategory === category);
+    const sum = own.reduce((total, row) => total + money(row.amount), 0);
+    if (Math.abs(sum - amount) > 0.01 + 0.005 * own.length) {
+      return `The ERP sheet's ${category} rows add up to ${sum.toFixed(2)}, but the estimate's ${category} is ${amount.toFixed(2)}. Reload the estimate and send again.`;
+    }
+  }
+  return null;
+}
 
 /** Why these lines cannot go to the ERP as they stand, or null. */
 export function costEstimateBlocker(lines: CostEstimateLine[]): string | null {

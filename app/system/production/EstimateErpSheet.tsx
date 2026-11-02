@@ -14,7 +14,7 @@ import {
   createEstimateErpGroup, deleteEstimateErpGroup, loadEstimateErpSummary, loadEstimateModuleDetails,
   recordEstimateErpExport, refreshEstimateErp, sendEstimateToErp, updateEstimateErpGroup, updateEstimateErpMappings, updateEstimateModuleDetails,
   type EstimateCostWorkspace, type EstimateErpCategory, type EstimateErpSourceType,
-  type EstimateErpSummary, type EstimateModuleDetail,
+  type EstimateErpSheetRow, type EstimateErpSummary, type EstimateModuleDetail,
 } from "../api-client";
 import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
@@ -98,8 +98,10 @@ function SheetLineName({ value, onSave }: { value: string; onSave: (next: string
   </div>;
 }
 
-export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyChange, onOpenTab, onUnclassifiedChange, onExportChange, hideReadiness = false }: {
+export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyChange, onOpenTab, onUnclassifiedChange, onExportChange, onSheetRowsChange, hideReadiness = false }: {
   onDirtyChange?: (dirty: boolean) => void;
+  /** The rows the ERP gets, when the sheet can give them now — approval sends them with the approver's sign-in. */
+  onSheetRowsChange?: (rows: (() => EstimateErpSheetRow[]) | null) => void;
   /** How many lines (contingency included) still have no ERP category, once the sheet has loaded. */
   onUnclassifiedChange?: (count: number) => void;
   /** The export, when it may run now — the workspace header offers it too. */
@@ -595,6 +597,12 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const latestExport = useRef(exportWorkbook);
   useEffect(() => { latestExport.current = exportWorkbook; });
   useEffect(() => { onExportChange?.(exportReady ? () => { void latestExport.current(); } : null); }, [exportReady, onExportChange]);
+  /* The ERP gets what the file gets: these rows. Approval happens away from this tab, so the workspace asks for them here;
+     with a classification still unsaved there are no rows to give, and the ERP tab offers the send afterwards. */
+  const sheetRowsReady = Boolean(summary?.erp?.enabled) && !unsaved.length && !loading;
+  const latestRows = useRef(exportRows);
+  useEffect(() => { latestRows.current = exportRows; });
+  useEffect(() => { onSheetRowsChange?.(sheetRowsReady ? () => latestRows.current() : null); }, [sheetRowsReady, onSheetRowsChange]);
   /* Everything that stands between this sheet and an approved, exportable estimate, on one line. */
   const readiness = <section className="panel est-erp-ready" aria-label={copy("ความพร้อม", "Readiness", "準備状況")}>
     <strong>{workspace.header.status === "Approved" ? copy("พร้อมส่งออก ERP", "Ready for the ERP file", "ERP出力の準備") : copy("ความพร้อมก่อนส่งตรวจ", "Before you submit", "提出前の確認")}</strong>
@@ -623,13 +631,19 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const erpStatusLabel = (status: string | null) => status === "CONFIRMED" ? copy("อนุมัติแล้วใน ERP", "Confirmed in the ERP", "ERPで確定済み")
     : status === "LINKED" ? copy("ผูกกับใบเสนอราคาแล้ว", "Linked to a sales quotation", "見積書に紐付け済み") : status ?? "";
   const revisionLabel = (revision: number) => `R${String(revision).padStart(2, "0")}`;
-  const runErp = async (action: "send" | "refresh") => {
-    setErpBusy(action); setErpError("");
+  const runErp = async (action: "send" | "resend" | "refresh") => {
+    /* The ERP keeps one revision per Cost Sheet and answers "unchanged" to the same one again, so replacing its lines means
+       deleting the sheet there first; the server then gives the estimate a new reference and writes a new sheet. */
+    if (action === "resend" && !window.confirm(copy(
+      `ERP มี ${revisionLabel(workspace.header.revision)} อยู่แล้วใน Cost Sheet ${erpLink?.costSheetNo ?? ""} ถ้าต้องการแทนที่รายการ ให้ลบ Cost Sheet นี้ใน ERP ก่อน แล้วกดตกลงเพื่อส่งใหม่`,
+      `The ERP already holds ${revisionLabel(workspace.header.revision)} in Cost Sheet ${erpLink?.costSheetNo ?? ""}. To replace its lines, delete that Cost Sheet in the ERP first, then press OK to send again.`,
+      `ERPのCost Sheet ${erpLink?.costSheetNo ?? ""} に ${revisionLabel(workspace.header.revision)} が既にあります。明細を置き換えるにはERPでそのCost Sheetを削除してから、OKで再送信してください。`))) return;
+    setErpBusy(action === "refresh" ? "refresh" : "send"); setErpError("");
     try {
-      const outcome = action === "send" ? await sendEstimateToErp(workspace.header.id) : await refreshEstimateErp(workspace.header.id);
-      notify(action === "send"
-        ? copy(`ส่งเข้า ERP แล้ว${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`, `Sent to the ERP${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`, `ERPへ送信しました${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`)
-        : copy("อ่านสถานะจาก ERP แล้ว", "Status read from the ERP", "ERPから状態を取得しました"));
+      const outcome = action === "refresh" ? await refreshEstimateErp(workspace.header.id) : await sendEstimateToErp(workspace.header.id, exportRows(), action === "resend");
+      notify(action === "refresh" ? copy("อ่านสถานะจาก ERP แล้ว", "Status read from the ERP", "ERPから状態を取得しました")
+        : outcome.result === "unchanged" ? copy("ERP มี revision นี้อยู่แล้ว รายการไม่เปลี่ยน ลบ Cost Sheet ใน ERP ก่อนแล้วส่งใหม่", "The ERP already holds this revision; its lines did not change. Delete the Cost Sheet in the ERP, then send again.", "ERPにこの版が既にあり、明細は変わりません。ERPでCost Sheetを削除してから再送信してください。")
+          : copy(`ส่งเข้า ERP แล้ว${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`, `Sent to the ERP${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`, `ERPへ送信しました${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`));
     } catch (requestError) {
       setErpError(requestError instanceof Error ? requestError.message : String(requestError));
     } finally {
@@ -637,7 +651,8 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
       await load();
     }
   };
-  const erpStrip = summary?.erp?.enabled ? <section className="panel est-erp-ready" aria-label="Pegasus ERP">
+  const unsavedTitle = unsaved.length ? copy("บันทึกการจัดหมวดก่อนส่ง", "Save the classification before sending", "送信前に分類を保存してください") : undefined;
+  const erpStrip = summary?.erp?.enabled ? <section className="panel est-erp-ready" aria-label="Pegasus ERP" data-guide="estimate.erp">
     <strong>Pegasus ERP</strong>
     {erpLink && erpSentRevision !== null ? <span className="est-ready-item ok"><span className="est-ready-icon"><Icon name="check" /></span>
       Cost Sheet <strong className="mono">{erpLink.costSheetNo ?? "—"}</strong> · {revisionLabel(erpSentRevision)}{erpLink.status ? ` · ${erpStatusLabel(erpLink.status)}` : ""}
@@ -653,7 +668,9 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     <span className="spacer" />
     {erpLink && erpSentRevision !== null ? <button className="btn ghost sm" type="button" disabled={Boolean(erpBusy)} onClick={() => { void runErp("refresh"); }}>
       <Icon name="refresh" />{erpBusy === "refresh" ? copy("กำลังอ่าน…", "Reading…", "取得中…") : copy("ตรวจสถานะใน ERP", "Check the ERP", "ERPの状態を確認")}</button> : null}
-    {erpNeedsSend ? <button className="btn primary sm" type="button" disabled={Boolean(erpBusy) || busy} onClick={() => { void runErp("send"); }}>
+    {approved && !erpNeedsSend ? <button className="btn ghost sm" type="button" title={unsavedTitle} disabled={Boolean(erpBusy) || busy || unsaved.length > 0} onClick={() => { void runErp("resend"); }}>
+      <Icon name="upload" />{copy("ส่งใหม่", "Send again", "再送信")}</button> : null}
+    {erpNeedsSend ? <button className="btn primary sm" type="button" title={unsavedTitle} disabled={Boolean(erpBusy) || busy || unsaved.length > 0} onClick={() => { void runErp("send"); }}>
       <Icon name="upload" />{erpBusy === "send" ? copy("กำลังส่ง…", "Sending…", "送信中…") : copy("ส่งเข้า ERP", "Send to the ERP", "ERPへ送信")}</button> : null}
   </section> : null;
 

@@ -17,7 +17,8 @@ import {
 } from "../estimate-erp.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { describeErpFailure, type ErpFailure } from "../erp-purchasing.js";
-import { costEstimateArguments, costEstimateBlocker, newEstimateErpRef, readCostSheet, type CostSheet, type EstimateErpLink } from "../erp-cost-estimate.js";
+import { costEstimateArguments, costEstimateBlocker, newEstimateErpRef, parseErpSheetRows, readCostSheet, sheetRowsMismatch, type CostEstimateLine,
+  type CostSheet, type EstimateErpLink } from "../erp-cost-estimate.js";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../feature-flags.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -282,8 +283,9 @@ export type EstimateErpOutcome = {
 
 /*
  * Sends an approved estimate to the Pegasus ERP as a Cost Sheet with the caller's own TMT ID token: on approval that is the
- * approver, who is signed in at that moment; afterwards whoever presses "send". The figures are the ERP summary the _ERP_
- * workbook is built from. A failure is kept on the link for the next person to see and never undoes the approval.
+ * approver, who is signed in at that moment; afterwards whoever presses "send". The lines are the rows of the ERP summary
+ * sheet, which the page builds (parseErpSheetRows), checked against the server's own summary category by category. A
+ * failure is kept on the link for the next person to see and never undoes the approval.
  */
 export function createEstimateErpSender(database: Database, erp: EstimateErpLink | null) {
   const notConfigured: EstimateErpOutcome = { sent: false, kind: "not_configured", message: "The ERP connection is not configured on this server." };
@@ -303,7 +305,7 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
   return {
     enabled: Boolean(erp),
 
-    async send(estimateId: number, actor: CurrentUser): Promise<EstimateErpOutcome> {
+    async send(estimateId: number, actor: CurrentUser, rows: CostEstimateLine[] | null, options: { resend?: boolean } = {}): Promise<EstimateErpOutcome> {
       if (!erp) return notConfigured;
       const header = (await database.query<{
         estimate_no: string; revision: number; status: string; project_name: string; locked_at: Date | string | null; customer_name: string;
@@ -322,26 +324,43 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       if (!["approved", "locked"].includes(header.status.toLowerCase())) {
         return { sent: false, kind: "not_ready", message: "Only an approved estimate is sent to the ERP." };
       }
-      // The ERP keeps this revision already; asking again would only answer "unchanged".
-      if (header.erp_revision === header.revision && header.cost_sheet_no) return { sent: true, result: "unchanged", costSheetNo: header.cost_sheet_no };
+      // The ERP keeps this revision already; asking again would only answer "unchanged". A resend asks anyway, for a
+      // Cost Sheet someone deleted in the ERP so that it can be written again.
+      if (!options.resend && header.erp_revision === header.revision && header.cost_sheet_no) return { sent: true, result: "unchanged", costSheetNo: header.cost_sheet_no };
+      if (!rows) return { sent: false, kind: "not_ready", message: "Open the estimate's ERP tab and press Send to the ERP." };
       const summary = await loadSummary(database, estimateId, actor, true);
       const blocker = !summary.reconciled ? "The ERP categories do not add up to the estimate total."
         : ESTIMATE_OVERHEAD_ENABLED && summary.overhead.state === "Missing" ? "The estimate has no approved overhead."
-          : costEstimateBlocker(summary.lines);
+          : costEstimateBlocker(rows) ?? sheetRowsMismatch(rows, summary.categories);
       if (blocker) { await recordError(estimateId, blocker); return { sent: false, kind: "not_ready", message: blocker }; }
-      const externalRef = await database.transaction(async (transaction) => {
+      let externalRef = await database.transaction(async (transaction) => {
         const issue = new sql.Request(transaction); issue.input("id", sql.BigInt, estimateId); issue.input("ref", sql.NVarChar(100), newEstimateErpRef());
         return (await issue.query<{ external_ref: string }>(`
           IF NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_links WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id)
             INSERT dbo.estimate_erp_links(estimate_id,external_ref) VALUES(@id,@ref);
           SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id;`)).recordset[0]!.external_ref;
       });
-      const args = costEstimateArguments({
-        estimateId, externalRef, revision: header.revision, estimateNo: header.estimate_no, projectNo: header.project_no,
+      const argumentsFor = (ref: string) => costEstimateArguments({
+        estimateId, externalRef: ref, revision: header.revision, estimateNo: header.estimate_no, projectNo: header.project_no,
         projectName: header.project_name, customer: header.customer_name, shortName: header.short_name,
         revisionDescription: header.revision_reason, preparedByEmail: header.owner_email, approvedAt: header.locked_at, appBaseUrl: erp.appBaseUrl,
-      }, summary.lines, summary.overhead.amount);
-      const submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
+      }, rows, summary.overhead.amount);
+      let args = argumentsFor(externalRef);
+      let submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
+      /* The ERP refuses the reference of a Cost Sheet deleted there. Once a sheet has existed, that is the only reason for it,
+         so the estimate takes a new reference and the sheet is written again as a new one. */
+      if (!submitted.ok && submitted.kind === "validation" && submitted.errors?.external_ref && (header.erp_revision !== null || header.cost_sheet_no)) {
+        const replaced = externalRef; externalRef = newEstimateErpRef();
+        await database.transaction(async (transaction) => {
+          const reissue = new sql.Request(transaction); reissue.input("id", sql.BigInt, estimateId); reissue.input("ref", sql.NVarChar(100), externalRef);
+          await reissue.query(`UPDATE dbo.estimate_erp_links SET external_ref=@ref,cost_sheet_no=NULL,erp_status=NULL,erp_revision=NULL,erp_total=NULL,
+            erp_url=NULL,updated_at=SYSUTCDATETIME() WHERE estimate_id=@id;`);
+          await insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "ERP reference re-issued",
+            { externalRef: replaced, costSheetNo: header.cost_sheet_no }, { externalRef, reason: describeErpFailure(submitted as ErpFailure) });
+        });
+        args = argumentsFor(externalRef);
+        submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
+      }
       if (!submitted.ok) {
         const message = describeErpFailure(submitted);
         await recordError(estimateId, message);
@@ -351,7 +370,7 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       await recordSheet(estimateId, sheet, header.revision, actor.id);
       await database.transaction((transaction) => insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "Sent to ERP", null, {
         revision: header.revision, externalRef, result: sheet.result, costSheetNo: sheet.costSheetNo, erpStatus: sheet.status,
-        total: args.total, lines: summary.lines.length, response: JSON.stringify(submitted.data).slice(0, 2000),
+        total: args.total, lines: rows.length, response: JSON.stringify(submitted.data).slice(0, 2000),
       }));
       return { sent: true, result: sheet.result, costSheetNo: sheet.costSheetNo, status: sheet.status };
     },
@@ -393,7 +412,8 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       (r) => r.input("id", sql.BigInt, id))).recordset[0];
     if (!owner) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
     if (Number(owner.owner_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) await users.demandPermission(request, "estimate.approve");
-    const outcome = await sender.send(id, actor);
+    const body = bodyObject(request.body);
+    const outcome = await sender.send(id, actor, parseErpSheetRows(body.lines), { resend: body.resend === true });
     if (!outcome.sent) throw new ApiError(outcome.kind === "not_ready" ? 409 : 422, "erp_send_failed", outcome.message ?? "The ERP refused the estimate.");
     return outcome;
   });
