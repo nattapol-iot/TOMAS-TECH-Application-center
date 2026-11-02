@@ -20,7 +20,7 @@ import { ESTIMATE_SECTION_CODES } from "../estimate-copy-plan.js";
 import { lockEditableEstimate } from "./estimate-cost-write.js";
 import { copyEstimateLines, copyLedgersFrom } from "./estimate-copy.js";
 import { createEstimateErpSender, type EstimateErpOutcome } from "./estimate-erp.js";
-import type { EstimateErpLink } from "../erp-cost-estimate.js";
+import { parseErpSheetRows, type EstimateErpLink } from "../erp-cost-estimate.js";
 
 type EstimateRow = Record<string, unknown> & {
   id: number | string; estimate_no: string; inquiry_no: string; customer_id: number | string; customer_name: string;
@@ -495,10 +495,12 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
     const approved = await transition(request, id, "estimate.approve", "Approved", 100, "Approved", 100, ["Engineering Review"], "Approved", false, true, database, users);
     if (!erpSender.enabled) return approved;
-    /* The approver is signed in right now, so their own token sends the Cost Sheet. A failure leaves the estimate approved;
-       the ERP tab shows why and offers the send again. */
-    const erpOutcome: EstimateErpOutcome = await erpSender.send(id, await users.required(request))
-      .catch((error: unknown) => ({ sent: false, message: error instanceof Error ? error.message : String(error) }));
+    /* The approver is signed in right now, so their own token sends the Cost Sheet, written from the ERP sheet rows the page
+       sent with the approval. A failure leaves the estimate approved; the ERP tab shows why and offers the send again. */
+    const erpOutcome: EstimateErpOutcome = await (async () => {
+      const rows = bodyObject(request.body).erpLines;
+      return erpSender.send(id, await users.required(request), rows === undefined || rows === null ? null : parseErpSheetRows(rows));
+    })().catch((error: unknown) => ({ sent: false, message: error instanceof Error ? error.message : String(error) }));
     return { ...approved, erp: erpOutcome };
   });
 

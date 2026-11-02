@@ -463,6 +463,82 @@ const CRM_PROPOSAL_WON: Guide = {
   ],
 };
 
+/* Approving an estimate sends it to Pegasus ERP as a Cost Sheet, written from the rows of the ERP summary sheet
+   (2026-11-02). The approver learns where to check the sheet first and where the Cost Sheet number appears afterwards. */
+const ESTIMATE_APPROVE: Guide = {
+  id: "estimate-approve",
+  area: "estimate",
+  title: { th: "อนุมัติ Estimate และส่งเข้า ERP", en: "Approve an estimate and send it to the ERP", jp: "見積を承認してERPへ送る" },
+  summary: {
+    th: "เปิด Estimate ที่รอตรวจ ดูหน้าสรุป ERP แล้วกดอนุมัติ ระบบส่งแถวในหน้าสรุปเข้า Pegasus ERP เป็น Cost Sheet ให้เอง",
+    en: "Open an estimate waiting for review, check its ERP summary and approve it; the summary rows go to Pegasus ERP as a Cost Sheet by themselves.",
+    jp: "レビュー待ちの見積を開き、ERPサマリーを確認して承認します。サマリーの行がCost SheetとしてPegasus ERPへ自動送信されます。",
+  },
+  minutes: 3,
+  permissions: ["estimate.read", "estimate.approve"],
+  views: ["estimates"],
+  steps: [
+    menu("estimates",
+      { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
+      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" }),
+    {
+      target: "estimate.list", action: "click", clickOn: "tbody tr", view: "estimates",
+      title: { th: "เปิด Estimate ที่รอตรวจ", en: "Open an estimate waiting for review", jp: "レビュー待ちの見積を開く" },
+      body: {
+        th: "เลือกแถบสถานะรอตรวจ แล้วคลิก Estimate ที่จะอนุมัติ",
+        en: "Pick the status tab for estimates in review, then click the one to approve.",
+        jp: "レビュー中のステータスタブを選び、承認する見積をクリックします。",
+      },
+      missing: {
+        th: "รอให้รายการโหลดสักครู่ ถ้ายังเปิด Estimate อื่นอยู่ ให้กดย้อนกลับด้านบนของหน้า",
+        en: "Wait a moment for the list to load. If another estimate is open, go back at the top of the page.",
+        jp: "一覧の読み込みを少し待ちます。別の見積を開いている場合は、ページ上部から戻ります。",
+      },
+    },
+    {
+      target: "[data-tab=\"summary\"]", action: "click", view: "estimates",
+      title: { th: "ดูหน้าสรุป", en: "Open the cost summary", jp: "原価サマリーを開く" },
+      body: {
+        th: "หน้าสรุป ERP คือสิ่งที่ส่งเข้า ERP หนึ่งแถวต่อหนึ่งโมดูลหรือบรรทัดที่รวมไว้ ตรวจหมวดและยอดก่อนอนุมัติ",
+        en: "The ERP summary is what goes to the ERP: one row per module or merged line. Check the headings and amounts before approving.",
+        jp: "ERPサマリーがERPへ送られる内容です(モジュールまたはまとめた行ごとに1行)。承認前に分類と金額を確認します。",
+      },
+    },
+    {
+      target: "estimate.approve", action: "click", view: "estimates",
+      title: { th: "อนุมัติ", en: "Approve", jp: "承認" },
+      body: {
+        th: "กด 'อนุมัติ' แล้วยืนยัน Estimate จะถูกล็อก และส่งเข้า Pegasus ERP ด้วยบัญชี TMT ID ของคุณทันที ถ้าแค่ฝึก ให้กดยกเลิกในหน้ายืนยัน แล้วกด 'เสร็จ'",
+        en: "Press Approve and confirm: the estimate is locked and sent to Pegasus ERP with your TMT ID sign-in. Only practising? Press Cancel in the confirmation, then Finish.",
+        jp: "「承認」を押して確定すると見積がロックされ、あなたのTMT IDでPegasus ERPへ送られます。練習だけなら確認画面で「キャンセル」を押し、「完了」を押します。",
+      },
+      missing: {
+        th: "ปุ่มอนุมัติจะขึ้นเมื่อ Estimate รอตรวจ และคุณไม่ใช่เจ้าของ Estimate นั้น",
+        en: "The Approve button appears while the estimate is in review, for someone other than its owner.",
+        jp: "承認ボタンは見積がレビュー中で、担当者以外の方に表示されます。",
+      },
+    },
+    {
+      target: "estimate.erp", action: "next", view: "estimates",
+      title: { th: "Cost Sheet ใน ERP", en: "The Cost Sheet in the ERP", jp: "ERPのCost Sheet" },
+      body: {
+        th: "แถบ Pegasus ERP แสดงเลข Cost Sheet ถ้าส่งไม่สำเร็จจะบอกเหตุผล และมีปุ่ม 'ส่งเข้า ERP' 'ส่งใหม่' ใช้หลังลบ Cost Sheet ใน ERP แล้วเท่านั้น",
+        en: "The Pegasus ERP strip shows the Cost Sheet number. When a send fails it says why and offers Send to the ERP; Send again is only for after the Cost Sheet was deleted in the ERP.",
+        jp: "Pegasus ERPの帯にCost Sheet番号が表示されます。送信に失敗すると理由と「ERPへ送信」が出ます。「再送信」はERPでCost Sheetを削除した後だけ使います。",
+      },
+    },
+    {
+      target: "[data-tab=\"summary\"]", action: "click", view: "estimates",
+      title: { th: "เสร็จแล้ว", en: "Done", jp: "完了" },
+      body: {
+        th: "คลิกแท็บสรุปเพื่อจบคู่มือ เปิดดูสถานะใน ERP ได้ทุกเมื่อที่แถบนี้",
+        en: "Click the summary tab to finish. The strip shows the ERP status whenever you come back.",
+        jp: "サマリータブをクリックして終了します。この帯でいつでもERPの状態を確認できます。",
+      },
+    },
+  ],
+};
+
 /* Guides for the rest of the app (owner request 2026-11-02): estimating sources, projects and plans, work on site,
    reports and signing, BOM and approvals, and the knowledge and tool screens. */
 const SUPPLIER_QUOTATION: Guide = {
@@ -1670,6 +1746,7 @@ export const GUIDES: readonly Guide[] = [
   PROJECT_PLAN,
   TEAM_TASK,
   BOM_RELEASE,
+  ESTIMATE_APPROVE,
   {
     id: "purchase-request",
     area: "purchase",

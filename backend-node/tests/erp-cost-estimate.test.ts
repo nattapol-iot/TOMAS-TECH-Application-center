@@ -6,7 +6,7 @@ import type { Database } from "../src/db.js";
 import type { ErpGateway, ErpResult } from "../src/erp-purchasing.js";
 import type { CurrentUserService } from "../src/users.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { costEstimateArguments, costEstimateBlocker, readCostSheet, type CostEstimateHeader, type CostEstimateLine } from "../src/erp-cost-estimate.js";
+import { costEstimateArguments, costEstimateBlocker, parseErpSheetRows, readCostSheet, sheetRowsMismatch, type CostEstimateHeader, type CostEstimateLine } from "../src/erp-cost-estimate.js";
 import { registerEstimateErpRoutes } from "../src/routes/estimate-erp.js";
 
 /*
@@ -84,10 +84,42 @@ test("the ERP's answer is read from a nested sheet or the top level", () => {
 
 const version = Buffer.from("0000000000000001", "hex");
 
-function harness(t: { mock: { method: typeof import("node:test").mock.method } }, options: { status?: string; erpRevision?: number | null; answer?: ErpResult<Record<string, unknown>>; actorId?: number } = {}) {
-  const seen = { calls: [] as Array<{ subject: string; tool: string; args: Record<string, unknown> }>, recordedError: null as unknown, recordedSheet: null as Record<string, unknown> | null, audits: 0, issued: 0 };
+test("the sheet's rows are checked before anything is sent", () => {
+  const row = { sourceType: "CostItem", description: " PLC System ", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 1000, quantity: 1, unit: "Set", unitPrice: 1000 };
+  assert.deepEqual(parseErpSheetRows([row])[0], {
+    sourceType: "CostItem", erpCategory: "Hardware", description: "PLC System", amount: 1000, internalCategory: "01 Hardware",
+    supplier: null, brand: null, leadTime: null, quoteRevision: null, unit: "Set", unitPrice: 1000, quantity: 1,
+  });
+  assert.throws(() => parseErpSheetRows([]), /rows are required/);
+  assert.throws(() => parseErpSheetRows([{ ...row, erpCategory: "Unmapped" }]), /row 1 has no ERP category/);
+  assert.throws(() => parseErpSheetRows([{ ...row, description: "  " }]), /row 1 has no description/);
+  assert.throws(() => parseErpSheetRows([{ ...row, amount: "lots" }]), /row 1: amount is not a number/);
+  assert.throws(() => parseErpSheetRows(Array.from({ length: 2001 }, () => row)), /at most 2000 rows/);
+});
+
+test("the rows must add up to the estimate's own summary, category by category", () => {
+  const rows = parseErpSheetRows([
+    { sourceType: "CostItem", description: "PLC System", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 333.333 },
+    { sourceType: "CostItem", description: "Vision", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 666.667 },
+  ]);
+  assert.equal(sheetRowsMismatch(rows, [{ category: "Hardware", amount: 1000 }, { category: "Service", amount: 0 }]), null);
+  assert.match(sheetRowsMismatch(rows, [{ category: "Hardware", amount: 900 }])!, /Hardware rows add up to 1000.00, but the estimate's Hardware is 900.00/);
+  assert.match(sheetRowsMismatch(rows, [{ category: "Hardware", amount: 1000 }, { category: "Service", amount: 500 }])!, /Service rows add up to 0.00/);
+});
+
+/* The summary holds three cost lines; the sheet writes them as two rows, and only the rows reach the ERP. */
+const sheetRows = [
+  { sourceType: "CostItem", description: "PLC System KV-8000", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 1000, quantity: 1, unit: "Set", unitPrice: 1000, supplier: "Keyence" },
+  { sourceType: "ManhourLine", description: "Specification Design / Software Development", internalCategory: "Engineering", erpCategory: "Service", amount: 500, quantity: 1, unit: "Set", unitPrice: 500 },
+];
+
+function harness(t: { mock: { method: typeof import("node:test").mock.method } }, options: {
+  status?: string; erpRevision?: number | null; answer?: ErpResult<Record<string, unknown>>; answers?: Array<ErpResult<Record<string, unknown>>>; actorId?: number;
+} = {}) {
+  const seen = { calls: [] as Array<{ subject: string; tool: string; args: Record<string, unknown> }>, recordedError: null as unknown, recordedSheet: null as Record<string, unknown> | null, audits: 0, issued: 0, reissued: 0 };
   t.mock.method(sql.Request.prototype, "query", async function (this: sql.Request, statement: string) {
     if (statement.includes("INSERT dbo.estimate_erp_links")) { seen.issued += 1; return { recordset: [{ external_ref: "ENGAPP-EST-test" }] }; }
+    if (statement.includes("UPDATE dbo.estimate_erp_links SET external_ref")) { seen.reissued += 1; return { recordset: [] }; }
     if (statement.includes("audit_log")) { seen.audits += 1; return { recordset: [] }; }
     if (statement.includes("activity_events")) return { recordset: [] };
     throw Error("Unexpected transaction query: " + statement);
@@ -104,11 +136,13 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
           erp_revision: options.erpRevision ?? null, cost_sheet_no: options.erpRevision === undefined || options.erpRevision === null ? null : "CS-1" }] };
       }
       if (statement.includes("v_estimate_totals t ON t.estimate_id=e.id")) {
+        const line = { mapping_row_version: null, copied_from_revision: null, manual_override: false, lead_time: null, remark: null };
         return { recordsets: [
           [{ id: 41, revision: 2, status: "Approved", owner_id: 7, row_version: version, canonical_total: 1500, overhead_total: 0, overhead_state: "Zero", can_write: true, can_export: true }],
           [
-            { source_type: "CostItem", source_id: 5, description: "PLC CPU", internal_category: "01 Hardware", amount: 1000, erp_category: "Hardware", mapping_row_version: null, copied_from_revision: null, manual_override: false, item: "KV-8000", model_part_number: "KV-8000", supplier: "Keyence", brand: "Keyence", lead_time: null, quote_revision: "SQ-2611-0001", unit_price: 500, quantity: 2, unit: "Pcs", remark: null, module: "Control panel" },
-            { source_type: "ManhourLine", source_id: 9, description: "Programming", internal_category: "Engineering / Internal", amount: 500, erp_category: "Service", mapping_row_version: null, copied_from_revision: null, manual_override: false, item: "Programming", model_part_number: "Senior", supplier: "Internal", brand: null, lead_time: null, quote_revision: null, unit_price: 500, quantity: 1, unit: "man-day", remark: null, module: "Software" },
+            { ...line, source_type: "CostItem", source_id: 5, description: "PLC CPU", internal_category: "01 Hardware", amount: 600, erp_category: "Hardware", item: "KV-8000", model_part_number: "KV-8000", supplier: "Keyence", brand: "Keyence", quote_revision: "SQ-2611-0001", unit_price: 600, quantity: 1, unit: "Pcs", module: "PLC System KV-8000" },
+            { ...line, source_type: "CostItem", source_id: 6, description: "EtherNet unit", internal_category: "01 Hardware", amount: 400, erp_category: "Hardware", item: "KV-XLE02", model_part_number: "KV-XLE02", supplier: "Keyence", brand: "Keyence", quote_revision: null, unit_price: 400, quantity: 1, unit: "Pcs", module: "PLC System KV-8000" },
+            { ...line, source_type: "ManhourLine", source_id: 9, description: "Programming", internal_category: "Engineering / Internal", amount: 500, erp_category: "Service", item: "Programming", model_part_number: "Senior", supplier: "Internal", brand: null, quote_revision: null, unit_price: 500, quantity: 1, unit: "man-day", module: "Software" },
           ],
           [],
         ] };
@@ -122,7 +156,7 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
   const gateway: ErpGateway = {
     async call<T>(subject: string, tool: string, args: Record<string, unknown>) {
       seen.calls.push({ subject, tool, args });
-      return (options.answer ?? { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: 1500 } } }) as ErpResult<T>;
+      return (options.answers?.shift() ?? options.answer ?? { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: 1500 } } }) as ErpResult<T>;
     },
   };
   const users = {
@@ -134,10 +168,13 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
   return { app, seen };
 }
 
-test("pressing send submits the ERP summary with the presser's token and keeps the Cost Sheet", async (t) => {
+const send = (app: ReturnType<typeof Fastify>, payload: Record<string, unknown> = { lines: sheetRows }) =>
+  app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload });
+
+test("pressing send writes the ERP sheet's rows, not the cost lines behind them, with the presser's token", async (t) => {
   const { app, seen } = harness(t);
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload: {} });
+    const response = await send(app);
     assert.equal(response.statusCode, 200, response.body);
     assert.deepEqual(response.json(), { sent: true, result: "created", costSheetNo: "CS-2611-0007", status: "CONFIRMED" });
     assert.equal(seen.calls.length, 1);
@@ -146,7 +183,10 @@ test("pressing send submits the ERP summary with the presser's token and keeps t
     const args = seen.calls[0]!.args;
     assert.equal(args.external_ref, "ENGAPP-EST-test");
     assert.equal(args.total, 1500);
-    assert.equal((args.lines as unknown[]).length, 2);
+    const lines = args.lines as Array<Record<string, unknown>>;
+    assert.deepEqual(lines.map((line) => line.description), ["PLC System KV-8000", "Specification Design / Software Development"]);
+    assert.deepEqual(lines.map((line) => [line.category, line.amount, line.quantity, line.unit]), [["Hardware", 1000, 1, "Set"], ["Service", 500, 1, "Set"]]);
+    assert.equal(lines[0]!.supplier, "Keyence");
     assert.equal(seen.issued, 1);
     assert.equal(seen.recordedSheet?.no, "CS-2611-0007");
     assert.equal(seen.recordedSheet?.revision, 2);
@@ -155,10 +195,30 @@ test("pressing send submits the ERP summary with the presser's token and keeps t
   } finally { await app.close(); }
 });
 
+test("a send without the sheet's rows is refused", async (t) => {
+  const { app, seen } = harness(t);
+  try {
+    const response = await send(app, {});
+    assert.equal(response.statusCode, 400, response.body);
+    assert.equal(seen.calls.length, 0);
+  } finally { await app.close(); }
+});
+
+test("rows that do not add up to the estimate are not sent", async (t) => {
+  const { app, seen } = harness(t);
+  try {
+    const response = await send(app, { lines: [{ ...sheetRows[0], amount: 900 }, sheetRows[1]] });
+    assert.equal(response.statusCode, 409, response.body);
+    assert.match(response.body, /Hardware rows add up to 900.00/);
+    assert.match(String(seen.recordedError), /Hardware/);
+    assert.equal(seen.calls.length, 0);
+  } finally { await app.close(); }
+});
+
 test("a refused send is kept on the link and reported, and the estimate stays as it is", async (t) => {
   const { app, seen } = harness(t, { answer: { ok: false, kind: "validation", message: "The given data was invalid.", errors: { total: ["The total does not match."] } } });
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload: {} });
+    const response = await send(app);
     assert.equal(response.statusCode, 422, response.body);
     assert.match(response.body, /total: The total does not match/);
     assert.match(String(seen.recordedError), /total: The total does not match/);
@@ -169,7 +229,7 @@ test("a refused send is kept on the link and reported, and the estimate stays as
 test("an estimate that is not approved is not sent", async (t) => {
   const { app, seen } = harness(t, { status: "Engineering Review" });
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload: {} });
+    const response = await send(app);
     assert.equal(response.statusCode, 409, response.body);
     assert.equal(seen.calls.length, 0);
   } finally { await app.close(); }
@@ -178,17 +238,57 @@ test("an estimate that is not approved is not sent", async (t) => {
 test("a revision the ERP already holds is not sent again", async (t) => {
   const { app, seen } = harness(t, { erpRevision: 2 });
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload: {} });
+    const response = await send(app);
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(response.json().result, "unchanged");
     assert.equal(seen.calls.length, 0);
   } finally { await app.close(); }
 });
 
+test("sending again asks the ERP, which answers unchanged while it still holds the sheet", async (t) => {
+  const { app, seen } = harness(t, { erpRevision: 2, answer: { ok: true, data: { result: "unchanged", cost_sheet: { cost_sheet_no: "CS-1", status: "CONFIRMED", revision: 2 } } } });
+  try {
+    const response = await send(app, { lines: sheetRows, resend: true });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().result, "unchanged");
+    assert.equal(seen.calls.length, 1);
+    assert.equal(seen.reissued, 0);
+  } finally { await app.close(); }
+});
+
+test("a Cost Sheet deleted in the ERP is written again under a new reference", async (t) => {
+  const { app, seen } = harness(t, { erpRevision: 2, answers: [
+    { ok: false, kind: "validation", message: "The given data was invalid.", errors: { external_ref: ["The cost sheet was deleted."] } },
+    { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0009", status: "CONFIRMED", revision: 2 } } },
+  ] });
+  try {
+    const response = await send(app, { lines: sheetRows, resend: true });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().costSheetNo, "CS-2611-0009");
+    assert.equal(seen.calls.length, 2);
+    assert.equal(seen.reissued, 1);
+    const [first, second] = seen.calls.map((call) => String(call.args.external_ref));
+    assert.equal(first, "ENGAPP-EST-test");
+    assert.match(second!, /^ENGAPP-EST-[0-9a-f-]{36}$/);
+    assert.notEqual(second, first);
+    assert.equal(seen.recordedSheet?.no, "CS-2611-0009");
+  } finally { await app.close(); }
+});
+
+test("a reference refused before any sheet existed is reported, not re-issued", async (t) => {
+  const { app, seen } = harness(t, { answer: { ok: false, kind: "validation", message: "The given data was invalid.", errors: { external_ref: ["Invalid."] } } });
+  try {
+    const response = await send(app);
+    assert.equal(response.statusCode, 422, response.body);
+    assert.equal(seen.calls.length, 1);
+    assert.equal(seen.reissued, 0);
+  } finally { await app.close(); }
+});
+
 test("someone who is not the owner needs the approve permission to send", async (t) => {
   const { app, seen } = harness(t, { actorId: 8 });
   try {
-    const response = await app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload: {} });
+    const response = await send(app);
     assert.equal(response.statusCode, 403, response.body);
     assert.equal(seen.calls.length, 0);
   } finally { await app.close(); }

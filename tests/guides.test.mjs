@@ -67,6 +67,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
   assert.deepEqual(GUIDES.map((guide) => guide.id), [
     "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "site-visit-request", "crm-proposal-won",
     "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan", "team-overview-task", "bom-release",
+    // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
+    "estimate-approve",
     "purchase-request", "pr-approve", "my-work-progress", "site-visit-work", "report-create", "sign-document",
     "knowledge-find", "downloads-skill", "site-monitor-check", "asset-register", "support-ticket",
   ]);

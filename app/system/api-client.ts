@@ -951,8 +951,15 @@ export type EstimateErpLink = {
 
 export type EstimateErpOutcome = { sent: boolean; result?: string | null; costSheetNo?: string | null; status?: string | null; message?: string };
 
-export const sendEstimateToErp = (id: number) =>
-  apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-send`, { method: "POST", body: "{}" });
+/** A row of the ERP summary sheet as the _ERP_ workbook writes it: what the ERP gets as one Cost Sheet line. */
+export type EstimateErpSheetRow = {
+  sourceType: string; description: string; internalCategory: string; erpCategory: string; amount: number;
+  supplier?: string; brand?: string; leadTime?: string; quoteRevision?: string; unitPrice?: number; quantity?: number; unit?: string;
+};
+
+/** Sends the sheet's rows; `resend` writes the revision again, for a Cost Sheet deleted in the ERP. */
+export const sendEstimateToErp = (id: number, lines: EstimateErpSheetRow[], resend = false) =>
+  apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-send`, { method: "POST", body: JSON.stringify({ lines, resend }) });
 
 export const refreshEstimateErp = (id: number) =>
   apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-refresh`, { method: "POST", body: "{}" });
@@ -1520,11 +1527,12 @@ export async function parsePdfViaBackend(file: File): Promise<ParsedQuotationRes
 export const createEstimate = (input: CreateEstimateInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
 
-export const estimateWorkflow = (id: number, action: "submit" | "approve" | "request-revision" | "create-revision", rowVersion: string, comment = "") =>
-  /* Approving also sends the estimate to the Pegasus ERP when the server is connected; `erp` says how that went. */
+export const estimateWorkflow = (id: number, action: "submit" | "approve" | "request-revision" | "create-revision", rowVersion: string, comment = "",
+  erpLines: EstimateErpSheetRow[] | null = null) =>
+  /* Approving also sends the ERP sheet's rows to the Pegasus ERP when the server is connected; `erp` says how that went. */
   apiRequest<{ id: number; status: string; rowVersion: string; erp?: EstimateErpOutcome }>(`/api/v1/estimates/${id}/${action}`, {
     method: "POST",
-    body: JSON.stringify({ comment, rowVersion }),
+    body: JSON.stringify({ comment, rowVersion, ...(erpLines ? { erpLines } : {}) }),
   });
 
 export const loadEstimateCostWorkspace = (id: number) =>
