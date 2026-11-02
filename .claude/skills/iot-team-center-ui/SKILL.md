@@ -176,6 +176,23 @@ statically from an eager one (CoreScreens, PlanningPricingScreens, CrmScreens, S
 AdminAnalyticsScreens): that puts its whole module back on the first load. `tests/lazy-screens.test.mjs`
 checks this.
 
+## How-to guides — update them with every feature
+
+Owner rule (2026-11-02): a new screen, button, field or changed flow ships with its click-through
+guide in the same PR.
+
+- **Where the guides live:** `app/system/production/guide-catalog.ts` (Thai, English and Japanese).
+- **How a step finds its element:**
+  - `data-guide="area.thing"` on the element;
+  - or the `guide` prop of `Field`, `Panel` or `SearchInput`, which renders `data-guide`;
+  - CRM form fields take `guide:"crm.x"` in their field object;
+  - tabs are reached as `[data-tab="id"]`.
+- **A redesign keeps the marks.** Move each mark onto the new element rather than deleting the step.
+- **A new menu screen** needs a guide, or a one-line reason in `NO_GUIDE`.
+- **A guide that only shows where things are** sets `browse: true`. Every other guide ends on the
+  click that saves, and its last step says how to cancel when only practising.
+- **The check:** `tests/guides.test.mjs` fails when a target, a language or a menu screen is missing.
+
 ## Finishing
 
 Run once, at the end, one at a time — this machine has 15 GB RAM:

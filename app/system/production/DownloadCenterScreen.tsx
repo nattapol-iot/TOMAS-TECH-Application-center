@@ -84,7 +84,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
       ) : null}
 
       <Toolbar>
-        <SearchInput link="q" value={query} onChange={setQuery} placeholder="Downloads.search" />
+        <SearchInput guide="dl.search" link="q" value={query} onChange={setQuery} placeholder="Downloads.search" />
         {categories ? <span className="download-center-count">{total} <LocalizedText text={"Downloads.files"} /></span> : null}
       </Toolbar>
 
@@ -135,7 +135,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
                         <td>{dateFormat.format(new Date(file.modifiedAt))}</td>
                         <td className="num" title={t("Downloads.countTitle").replace("{n}", String(file.downloaderCount))}>{file.downloadCount}</td>
                         <td>
-                          <button className="btn primary sm" type="button" disabled={downloading !== null} onClick={() => void download(category, file)}>
+                          <button className="btn primary sm" type="button" data-guide="dl.file" disabled={downloading !== null} onClick={() => void download(category, file)}>
                             <Icon name="download" /><LocalizedText text={downloading === key ? "Downloads.downloading" : "Downloads.download"} />
                           </button>
                         </td>

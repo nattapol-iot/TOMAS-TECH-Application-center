@@ -34,7 +34,7 @@ function SkillCard({ skill, notify }: { skill: SkillHubSkill; notify: Notify }) 
     <div className="panel-body stack" style={{ height: "100%" }}>
       <div style={{ flex: 1 }}><strong>{skill.title}</strong><p className="muted" style={{ marginTop: 4 }}>{skill.description}</p></div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {skill.targets.map((target) => <button key={target} className="btn primary sm" type="button" disabled={downloading !== null} onClick={() => void install(target)}>
+        {skill.targets.map((target) => <button key={target} className="btn primary sm" type="button" data-guide="skill.install" disabled={downloading !== null} onClick={() => void install(target)}>
           <LocalizedText text={downloading === target ? "Skills.downloading" : target === "claude" ? "Skills.installClaude" : "Skills.installCodex"} />
         </button>)}
         <button className="btn default sm" type="button" aria-expanded={open} disabled={loading} onClick={() => void view()}><LocalizedText text={open ? "Skills.hide" : "Skills.view"} /></button>
@@ -67,7 +67,7 @@ export function SkillHub({ notify }: { notify: Notify }) {
   }
   return <div className="stack">
     <div className="download-center-note" role="note"><span><LocalizedText text="Skills.intro" /> <code>%USERPROFILE%\.claude\skills</code> / <code>%USERPROFILE%\.codex\skills</code></span></div>
-    <Toolbar><SearchInput link="sq" value={query} onChange={setQuery} placeholder="Skills.search" /></Toolbar>
+    <Toolbar><SearchInput guide="skill.search" link="sq" value={query} onChange={setQuery} placeholder="Skills.search" /></Toolbar>
     {error ? <Panel><EmptyState icon="alertTriangle" title="Skills.error" message={error} action={<button className="btn default" type="button" onClick={() => { setSkills(null); setError(null); setRevision((value) => value + 1); }}><LocalizedText text="Skills.retry" /></button>} /></Panel>
       : skills === null ? <Panel><EmptyState icon="clock" title="Skills.loading" message="Skills.loadingMessage" /></Panel>
       : groups.size === 0 ? <Panel><EmptyState icon="book" title={skills.length ? "Skills.noMatch" : "Skills.empty"} message={skills.length ? "Skills.noMatchMessage" : "Skills.emptyMessage"} /></Panel>

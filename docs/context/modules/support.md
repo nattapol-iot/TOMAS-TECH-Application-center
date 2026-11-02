@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ คู่มือ และบทสอนแบบคลิกตามบนหน้าจอจริงพร้อมความคืบหน้าของทีม
 
-Evidence: snapshot `fb213996`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `a159985a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -30,19 +30,19 @@ Shared screens contain other modules: use the symbol and line range instead of r
 | `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 121–124 |
 | `employeeManualLabel` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 55–55 |
 | `EmployeeManualScreen` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 57–101 |
-| `RUN_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 86–86 |
-| `ANSWERED_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 87–87 |
-| `readSession` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 89–91 |
-| `writeSession` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 92–94 |
-| `readRun` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 95–101 |
-| `shortDate` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 103–103 |
-| `findVisible` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 106–115 |
-| `place` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 118–132 |
-| `GuideLayer` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 134–247 |
-| `GuideStatus` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 249–253 |
-| `GuidePanel` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 255–286 |
-| `GuideTeamModal` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 288–320 |
-| `GuideRunner` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 322–412 |
+| `RUN_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 92–92 |
+| `ANSWERED_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 93–93 |
+| `readSession` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 95–97 |
+| `writeSession` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 98–100 |
+| `readRun` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 101–107 |
+| `shortDate` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 109–109 |
+| `findVisible` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 112–121 |
+| `place` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 124–138 |
+| `GuideLayer` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 140–253 |
+| `GuideStatus` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 255–259 |
+| `GuidePanel` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 261–293 |
+| `GuideTeamModal` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 295–342 |
+| `GuideRunner` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 344–434 |
 
 ## Domain helpers / direct dependencies
 

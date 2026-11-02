@@ -273,12 +273,13 @@ export function ProductionSignInbox({ bootstrap, notify }: SigningScreenProps) {
           <Icon name="alertTriangle" />
           <span>
             <strong><LocalizedText text={"ยังไม่มีลายเซ็นของคุณ"} /></strong><LocalizedText text={"ต้องสร้างลายเซ็นก่อนจึงจะลงนามได้ ลายเซ็นนี้ใช้เฉพาะเวลาคุณเซ็นเท่านั้น ไม่ถูกส่งให้ผู้ใช้อื่นและดาวน์โหลดไม่ได้"} /> </span>
-          <button className="btn primary" type="button" onClick={() => setSpecimenOpen(true)}>
+          <button className="btn primary" type="button" data-guide="sign.specimen" onClick={() => setSpecimenOpen(true)}>
             <Icon name="edit" /><LocalizedText text={"สร้างลายเซ็น"} /> </button>
         </div>
       ) : null}
 
       <Panel
+        guide="sign.waiting"
         title={`Waiting my signature · ${waiting.length}`}
         subtitle="เรียงตามกำหนดส่ง เก่าที่สุดขึ้นก่อน · แต่ละแถวบอก block และ mark ที่ต้องใช้ก่อนเปิดไฟล์"
         flush>
@@ -366,7 +367,7 @@ function SignTaskRow({ task, canSign, onOpen }: { task: SignTask; canSign: boole
       <td>{overdue ? <Badge tone="red">{date(task.dueDate)}</Badge> : date(task.dueDate)}</td>
       <td>
         <div className="table-actions">
-          <button className="btn primary sm" type="button" disabled={!canSign} onClick={onOpen}>
+          <button className="btn primary sm" type="button" data-guide="sign.open" disabled={!canSign} onClick={onOpen}>
             <Icon name="edit" /><LocalizedText text={"Open & sign"} /> </button>
         </div>
       </td>
@@ -508,7 +509,7 @@ function SignDocumentDrawer({
           </div>
 
           {currentRevision ? (
-            <Panel title="The file being signed" subtitle="ไฟล์นี้เปลี่ยนไม่ได้ · การแก้ไขต้นฉบับคือ revision ใหม่ และจะยกเลิกทุก step ที่ยังไม่ได้เซ็น">
+            <Panel guide="sign.file" title="The file being signed" subtitle="ไฟล์นี้เปลี่ยนไม่ได้ · การแก้ไขต้นฉบับคือ revision ใหม่ และจะยกเลิกทุก step ที่ยังไม่ได้เซ็น">
               <div className="detail-grid">
                 <div><span><LocalizedText text={"File"} /></span><strong>{currentRevision.fileName}</strong></div>
                 <div><span><LocalizedText text={"Revision"} /></span><strong className="mono">{currentRevision.revisionLabel}</strong></div>
@@ -859,7 +860,7 @@ function SignPanel({
   };
 
   return (
-    <Panel title={`Sign this document · step ${step.stepNo}`}
+    <Panel guide="sign.panel" title={`Sign this document · step ${step.stepNo}`}
       subtitle={`${blockLabel(step.blockCode)} · ${markLabel(step.requiredMark)}`}>
       <ActionError message={error} />
       {canPosition?<div className="callout"><button className="btn primary" disabled={busy || !fileId} onClick={()=>setPositioning(true)}><Icon name="eye"/><LocalizedText text={"Preview, move & resize signature"} /></button><span>{positions?`Position confirmed: page ${positions.placement.page}`:"เลือกตำแหน่งและขนาดก่อนลงนาม"}</span></div>:<p className="muted"><LocalizedText text={"This file format uses the signature certificate; convert to PDF for positioned signing."} /></p>}
@@ -897,7 +898,7 @@ function SignPanel({
       </div>
 
       <div className="table-actions">
-        <button className="btn primary" type="button" disabled={busy || !specimenUrl || (canPosition && !positions)} onClick={() => { void sign(); }}>
+        <button className="btn primary" type="button" data-guide="sign.submit" disabled={busy || !specimenUrl || (canPosition && !positions)} onClick={() => { void sign(); }}>
           <Icon name="edit" />
           {stage === "reauth" ? "ยืนยันตัวตน…" : stage === "signing" ? "กำลังลงนาม…" : "SIGN DOCUMENT"}
         </button>

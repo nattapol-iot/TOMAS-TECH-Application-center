@@ -528,7 +528,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
             <Icon name="calendar" />{syncing || data.outlookSync.state === "running" ? t("TeamBoard.outlookSyncing") : t("TeamBoard.outlookSync")}
           </button>
         ) : null}
-        <button type="button" className="btn primary" onClick={() => setAdding({ assigneeId: canAssignOthers ? null : me, date: today })}><Icon name="plus" />{t("TeamBoard.add")}</button>
+        <button type="button" className="btn primary" data-guide="team.add" onClick={() => setAdding({ assigneeId: canAssignOthers ? null : me, date: today })}><Icon name="plus" />{t("TeamBoard.add")}</button>
       </div>
 
       <div className="board-filters" role="group" aria-label={t("TeamBoard.chips")}>
@@ -788,12 +788,12 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
   ];
   return (
     <div className="board-form">
-      <div className="chip-select" role="group" aria-label={t("TeamBoard.kind")}>
+      <div className="chip-select" role="group" aria-label={t("TeamBoard.kind")} data-guide="team.kind">
         {kinds.map(({ kind, label }) => (
           <button key={kind} type="button" disabled={disabled} className={draft.kind === kind ? "chip on" : "chip"} aria-pressed={draft.kind === kind} onClick={() => set({ ...draft, kind })}>{t(label)}</button>
         ))}
       </div>
-      <label className="field">
+      <label className="field" data-guide="team.subject">
         <span>{t("TeamBoard.subject")} <b className="board-req">*</b></span>
         <input ref={subject} required maxLength={300} disabled={disabled} value={draft.title} placeholder={t("TeamBoard.subjectPlaceholder")} onChange={(event) => set({ ...draft, title: event.target.value })} />
       </label>
@@ -826,7 +826,7 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
         <SearchSelect value={draft.customerId} options={customers} onChange={(value) => set({ ...draft, customerId: value })} label={t("TeamBoard.customer")}
           placeholder={t("CRM.searchCustomer")} disabled={disabled} {...copy} />
       </div>
-      <div className="field board-people">
+      <div className="field board-people" data-guide="team.people">
         <span>{t("TeamBoard.people")}{draft.kind === "Away" ? <b className="board-req"> *</b> : null}</span>
         {disabled ? (
           <span className="board-people-names">{loads.map((load) => load.person.user.name).join(", ") || t("TeamBoard.unassigned")}</span>
@@ -836,7 +836,7 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
         )}
       </div>
       <div className="board-form-row">
-        <label className="field">
+        <label className="field" data-guide="team.date">
           <span>{t("TeamBoard.startDate")} <b className="board-req">*</b></span>
           <input type="date" required disabled={disabled} value={draft.startDate}
             onChange={(event) => set({ ...draft, startDate: event.target.value, endDate: !draft.endDate || draft.endDate < event.target.value ? event.target.value : draft.endDate })} />
@@ -962,7 +962,7 @@ function AddTaskModal({ preset, copyFrom = null, initial = null, onClose, onSave
   return (
     <Modal title={copyFrom ? "TeamBoard.copyTask" : "TeamBoard.addTitle"} subtitle={copyFrom ? "TeamBoard.copyHint" : "TeamBoard.addHint"} onClose={onClose} size="md" footer={<>
       <button type="button" className="btn default" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
-      <button type="submit" form={formId} className="btn primary" disabled={busy || !draftReady(draft)}><Icon name="plus" />{t("TeamBoard.addButton")}</button>
+      <button type="submit" form={formId} className="btn primary" data-guide="team.save" disabled={busy || !draftReady(draft)}><Icon name="plus" />{t("TeamBoard.addButton")}</button>
     </>}>
       <form id={formId} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         {error ? <div className="callout danger" role="alert">{error}</div> : null}

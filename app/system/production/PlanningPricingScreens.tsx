@@ -1856,7 +1856,7 @@ async function ensureScheduleMembers(projectId: number, managerId: number, userI
 }
 function PicPicker({ options, value, onChange }: { options: { id: number; label: string; detail?: string }[]; value: number[]; onChange: (value: number[]) => void }) {
   const t = useUiText();
-  return <div className="field span-2"><span>{t("Schedule.pics")}</span>
+  return <div className="field span-2" data-guide="plan.pic"><span>{t("Schedule.pics")}</span>
     <SearchMultiPicker options={options} value={value} onChange={onChange} label={t("Schedule.pics")} placeholder={t("Schedule.searchPeople")}
       removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
     <small>{t("Schedule.picsHint")}</small></div>;
@@ -2025,17 +2025,17 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   };
   return <Modal title="Add schedule row" subtitle={`${schedule.projectNo} · บันทึกแผนลงฐานข้อมูลจริง`} size="lg" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || !name.trim() || (kind === "task" && (!startReady(start) || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create row"}</button>
+    <button className="btn primary" type="button" data-guide="plan.save" disabled={busy || !name.trim() || (kind === "task" && (!startReady(start) || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create row"}</button>
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
       <label className="field"><span><LocalizedText text={"Row kind *"} /></span><select value={kind} onChange={(event) => { const value = event.target.value as "phase" | "task"; setKind(value); if (value === "phase") setParentId(""); }}><option value="task"><LocalizedText text={"Task"} /></option><option value="phase"><LocalizedText text={"Phase (roll-up)"} /></option></select></label>
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
-      <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       {kind === "task" ? <>
         <label className="field"><span><LocalizedText text={"Parent phase"} /></span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value=""><LocalizedText text={"Top-level task"} /></option>{phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.wbs} <LocalizedText text={"·"} /> {phase.name}</option>)}</select></label>
         <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
-        <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
+        <label className="field" data-guide="plan.rowDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
         <PicFieldsWithLoad bootstrap={bootstrap} span={draftSpan(schedule, start, planDays, milestone)} taskId={null} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
         <label className="field"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
@@ -2512,7 +2512,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     <PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <Toolbar>
       <SearchInput value={projectQuery} onChange={setProjectQuery} placeholder="Plan.findProject" />
-      <label className="select-field plan-project-picker"><select value={selectedId ?? ""} onChange={(event) => selectProject(event.target.value ? Number(event.target.value) : null)} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{filteredProjects.map((project) => <option key={project.id} value={project.id}>{project.number} · {project.name}{project.status === "Closed" ? ` (${uiText("Closed")})` : ""}</option>)}</select><Icon name="chevronDown" /></label>
+      <label className="select-field plan-project-picker" data-guide="plan.project"><select value={selectedId ?? ""} onChange={(event) => selectProject(event.target.value ? Number(event.target.value) : null)} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{filteredProjects.map((project) => <option key={project.id} value={project.id}>{project.number} · {project.name}{project.status === "Closed" ? ` (${uiText("Closed")})` : ""}</option>)}</select><Icon name="chevronDown" /></label>
       <span className="spacer" />
       {activeSchedule ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => {
         const exportedOn = isoToday();
@@ -2530,7 +2530,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
       }}><Icon name="download" />{uiText("Schedule.exportExcel")}</button> : null}
       {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
-      {canPlan ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
+      {canPlan ? <button className="btn primary" type="button" data-guide="plan.add" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
     {activeSchedule && summary ? <>
@@ -2545,7 +2545,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         {loadingSchedule ? <span className="plan-summary-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
       </section>
       <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
-        {rows.length ? <div className="plan-gantt">
+        {rows.length ? <div className="plan-gantt" data-guide="plan.gantt">
           <div className="plan-gantt-controls">
             <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />
             <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
@@ -2736,18 +2736,18 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
     <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<>
       <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       {canAdd ? <button className="btn default" type="button" onClick={() => setShowAdd(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
-      {canAdd ? <button className="btn primary" type="button" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
+      {canAdd ? <button className="btn primary" type="button" data-guide="price.add" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
     </>} />
     <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
     <Toolbar>
-      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
+      <SearchInput guide="price.search" link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
       <Select link="source" label="Price source" value={source} onChange={(value) => { setSource(value); setPage(1); }} options={sources} />
       <Select link="supplier" label="Supplier" value={supplier} onChange={(value) => { setSupplier(value); setPage(1); }} options={suppliers} />
       <Select link="age" label="Price age" value={age} onChange={(value) => { setAge(value); setPage(1); }} options={["All ages", "Fresh 0–90 days", "Aging 91–180 days", "Stale / undated"]} />
     </Toolbar>
     <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={rows.length + " live price records"} subtitle="แต่ละแถวสืบย้อนกลับไปยัง Estimate หรือ PR/PO ที่ซื้อจริงได้" flush>
+    <Panel guide="price.list" title={rows.length + " live price records"} subtitle="แต่ละแถวสืบย้อนกลับไปยัง Estimate หรือ PR/PO ที่ซื้อจริงได้" flush>
       <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
       {pageRows.length ? <div className="table-wrap">
         <table style={{ minWidth: 1580 }}>
@@ -3010,7 +3010,7 @@ function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = fals
   const incomplete = lines.filter((line) => !line.description.trim() || !(line.unitPrice > 0)).length;
   const matches = useCatalogueMatches(lines);
 
-  return <div className="quotation-lines">
+  return <div className="quotation-lines" data-guide="quote.lines">
     <div className="quotation-lines-head">
       <div>
         <strong><LocalizedText text={"Price lines"} /></strong>
@@ -3295,7 +3295,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
     onClose={onClose}
     footer={<>
       <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
+      <button className="btn primary" type="button" data-guide="quote.save" disabled={busy || invalid} onClick={() => { void submit(); }}>
         <Icon name="upload" /><LocalizedText text={busy ? "Uploading…" : "Upload quotation"} />
       </button>
     </>}
@@ -3353,7 +3353,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
 
         {/* File selector — auto-parses PDF on select */}
         <div className="form-grid two" style={{ marginBottom: 16 }}>
-          <Field label="Quotation file *" hint="PDF → อ่านอัตโนมัติ · Excel, CSV, JPG, PNG · maximum 50 MB" span={2}>
+          <Field guide="quote.file" label="Quotation file *" hint="PDF → อ่านอัตโนมัติ · Excel, CSV, JPG, PNG · maximum 50 MB" span={2}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
                 onChange={(event) => {
@@ -3386,7 +3386,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
             <input value="SQ-YYMM-XXXX" readOnly />
           </Field>
           <div>
-            <Field label="Supplier *">
+            <Field guide="quote.supplier" label="Supplier *">
               <select value={supplierId} onChange={(event) => {
                 setSupplierId(event.target.value);
                 setNewSupplierName("");
@@ -3417,7 +3417,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
               <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
             </Field>
           </div>
-          <Field label="Related inquiry">
+          <Field guide="quote.inquiry" label="Related inquiry">
             <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
               <option value="">Not linked</option>
               {inquiryOptions.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
@@ -3858,7 +3858,7 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
       actions={<>
         <button className="btn ghost" type="button" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
         {canUpload ? <button className="btn default" type="button" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
-        {canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
+        {canUpload ? <button className="btn primary" type="button" data-guide="quote.upload" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
       </>}
     />
     <div className="kpi-grid four">

@@ -159,7 +159,7 @@ export function InstalledBaseScreen({ canManage, canSeeCredentials, notify }: { 
             onClick={() => setCabinetEditing({ preset: { customerId: Number(customerId) || options?.customers[0]?.id || 0 } })}>
             <Icon name="grid" /><LocalizedText text={"Assets.newCabinet"} />
           </button>
-          <button className="btn primary" type="button" onClick={() => setEditing({ preset: customerId ? { customerId: Number(customerId) } : {} })}>
+          <button className="btn primary" type="button" data-guide="asset.new" onClick={() => setEditing({ preset: customerId ? { customerId: Number(customerId) } : {} })}>
             <Icon name="plus" /><LocalizedText text={"Assets.new"} />
           </button>
         </> : undefined} />
@@ -651,10 +651,10 @@ function AssetEditor({ asset, preset, options, notify, onClose, onSaved }: {
     <Modal title={asset ? "Assets.edit" : "Assets.new"} subtitle={asset ? asset.assetNo : "Assets.newHint"} size="lg" onClose={onClose}
       footer={<>
         <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={!valid || busy} onClick={() => void save()}><Icon name="check" /><LocalizedText text={"Save"} /></button>
+        <button className="btn primary" type="button" data-guide="asset.save" disabled={!valid || busy} onClick={() => void save()}><Icon name="check" /><LocalizedText text={"Save"} /></button>
       </>}>
       <div className="form-grid">
-        <Field label="Assets.name" span={2}>
+        <Field label="Assets.name" span={2} guide="asset.name">
           <input value={value.name} maxLength={200} onChange={(event) => set("name", event.target.value)} placeholder="Edge Gateway — Line 3" />
         </Field>
         <Field label="Assets.category">
@@ -668,7 +668,7 @@ function AssetEditor({ asset, preset, options, notify, onClose, onSaved }: {
           </select>
         </Field>
 
-        <Field label="Assets.customer" span={2}>
+        <Field label="Assets.customer" span={2} guide="asset.customer">
           <select value={value.customerId || ""} onChange={(event) => setValue((current) => ({ ...current, customerId: Number(event.target.value), customerSiteId: null, cabinetId: null }))}>
             {options.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
           </select>
@@ -688,7 +688,7 @@ function AssetEditor({ asset, preset, options, notify, onClose, onSaved }: {
         <Field label="Assets.location" hint="Assets.locationHint" span={2}>
           <input value={value.locationDetail} maxLength={300} onChange={(event) => set("locationDetail", event.target.value)} />
         </Field>
-        <Field label="Assets.project" span={2}>
+        <Field label="Assets.project" span={2} guide="asset.project">
           <div className="asset-project-picker">
             {project ? (
               <div className="asset-project-chosen"><span>{project.label}</span>
@@ -715,16 +715,16 @@ function AssetEditor({ asset, preset, options, notify, onClose, onSaved }: {
 
         <Field label="Assets.manufacturer"><input value={value.manufacturer} maxLength={150} onChange={(event) => set("manufacturer", event.target.value)} /></Field>
         <Field label="Assets.model"><input value={value.model} maxLength={150} onChange={(event) => set("model", event.target.value)} /></Field>
-        <Field label="Assets.serial"><input value={value.serialNo} maxLength={150} onChange={(event) => set("serialNo", event.target.value)} /></Field>
+        <Field label="Assets.serial" guide="asset.serial"><input value={value.serialNo} maxLength={150} onChange={(event) => set("serialNo", event.target.value)} /></Field>
         <Field label="Assets.ip"><input value={value.ipAddress} maxLength={100} onChange={(event) => set("ipAddress", event.target.value)} placeholder="192.168.1.10" /></Field>
         <Field label="Assets.version"><input value={value.firmwareVersion} maxLength={100} onChange={(event) => set("firmwareVersion", event.target.value)} /></Field>
         <Field label="Assets.repository" hint="Assets.repositoryHint">
           <input value={value.repository} maxLength={100} onChange={(event) => set("repository", event.target.value.trim())} placeholder="fts-plc-collect-data" />
         </Field>
         <Field label="Assets.installedOn"><input type="date" value={value.installedOn ?? ""} onChange={(event) => set("installedOn", event.target.value || null)} /></Field>
-        <Field label="Assets.warrantyUntil"><input type="date" value={value.warrantyUntil ?? ""} min={value.installedOn ?? undefined} onChange={(event) => set("warrantyUntil", event.target.value || null)} /></Field>
+        <Field label="Assets.warrantyUntil" guide="asset.warranty"><input type="date" value={value.warrantyUntil ?? ""} min={value.installedOn ?? undefined} onChange={(event) => set("warrantyUntil", event.target.value || null)} /></Field>
 
-        <Field label="Assets.monitorSite" span={2}>
+        <Field label="Assets.monitorSite" span={2} guide="asset.monitor">
           <select value={value.monitorSiteId ?? ""} onChange={(event) => setValue((current) => ({ ...current, monitorSiteId: event.target.value ? Number(event.target.value) : null, monitorProgramId: null }))}>
             <option value="">{t("Assets.notMonitored")}</option>
             {options.monitorSites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}

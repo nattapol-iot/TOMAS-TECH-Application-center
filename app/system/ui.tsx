@@ -367,14 +367,16 @@ export function Toolbar({ children }: { children: React.ReactNode }) {
   return <div className="toolbar">{children}</div>;
 }
 
-export function SearchInput({ value, onChange, placeholder, link }: { value: string; onChange: (v: string) => void; placeholder: string;
+export function SearchInput({ value, onChange, placeholder, link, guide }: { value: string; onChange: (v: string) => void; placeholder: string;
+  /** Marks the search for a click-through guide step (guide-catalog.ts). */
+  guide?: string;
   /** The search's name on the screen's link (screen-link.tsx); not remembered. */
   link?: string;
 }) {
   const t = useT();
   useLinkedControl(link, value, onChange);
   return (
-    <label className="search-field">
+    <label className="search-field" data-guide={guide}>
       <Icon name="search" />
       <input value={value} maxLength={200} onChange={(e) => onChange(e.target.value)} placeholder={t(placeholder)} />
       {value ? <button type="button" onClick={() => onChange("")} aria-label={t("Clear search")}><Icon name="x" /></button> : null}

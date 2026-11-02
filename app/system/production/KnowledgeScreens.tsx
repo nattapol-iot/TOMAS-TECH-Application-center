@@ -221,7 +221,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
               <Icon name="refresh" />{t("Refresh")}
             </button>
             {canUpload ? (
-              <button className="btn primary" type="button" onClick={() => setCreating(true)}>
+              <button className="btn primary" type="button" data-guide="kh.new" onClick={() => setCreating(true)}>
                 <Icon name="plus" />{t("New Document")}
               </button>
             ) : null}
@@ -261,7 +261,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         {tab === "register" ? (
           <>
             <Toolbar>
-              <SearchInput link="q"
+              <SearchInput guide="kh.search" link="q"
                 value={search}
                 onChange={(value) => { setSearch(value); setPage(1); }}
                 placeholder="Search document number, title, tag, owner or category…"
@@ -291,7 +291,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
               </div>
             ) : null}
 
-            <Panel title={t("Standards register")} subtitle={t("One row per document; the revision shown is the current one")} flush>
+            <Panel guide="kh.register" title={t("Standards register")} subtitle={t("One row per document; the revision shown is the current one")} flush>
               {rows.length === 0 && !loading ? (
                 <EmptyState
                   icon="book"

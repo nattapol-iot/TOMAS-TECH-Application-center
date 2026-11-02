@@ -204,7 +204,7 @@ function SiteOverview({ canManage, revision, onOpen, onCreate }: {
       ) : sites.length === 0 ? (
         <Panel><EmptyState icon="cpu" title="Monitor.emptyTitle" message={canManage ? "Monitor.emptyManage" : "Monitor.emptyRead"} /></Panel>
       ) : (
-        <Panel flush>
+        <Panel flush guide="mon.sites">
           {error ? <p className="site-monitor-stale" role="status"><Icon name="alertTriangle" /><LocalizedText text={"Monitor.staleData"} /></p> : null}
           <div className="table-wrap">
             <table className="grid site-monitor-table">
@@ -401,7 +401,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
       {error ? <p className="site-monitor-stale" role="status"><Icon name="alertTriangle" /><LocalizedText text={"Monitor.staleData"} /></p> : null}
 
       {openIncidents.length > 0 ? (
-        <Panel title="Monitor.openProblems" className="site-monitor-problems">
+        <Panel guide="mon.problems" title="Monitor.openProblems" className="site-monitor-problems">
           <ul className="site-monitor-incidents">
             {openIncidents.map((incident) => (
               <li key={incident.id}>
@@ -429,7 +429,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
 
       <div className="site-monitor-layout">
         <div className="stack">
-          <Panel title="Monitor.programs" subtitle="Monitor.programsHint" flush>
+          <Panel guide="mon.programs" title="Monitor.programs" subtitle="Monitor.programsHint" flush>
             {programs.length === 0 ? (
               <EmptyState icon="package" title="Monitor.noProgramsTitle" message={agents.length === 0 ? "Monitor.noMachinesMessage" : "Monitor.noProgramsMessage"} />
             ) : (
@@ -598,7 +598,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
         </div>
 
         <div className="stack">
-          <Panel title="Monitor.responsible" subtitle={site.escalationMinutes === 0 ? "Monitor.escalation.allAtOnce" : "Monitor.escalation.stepwise"}
+          <Panel guide="mon.responsible" title="Monitor.responsible" subtitle={site.escalationMinutes === 0 ? "Monitor.escalation.allAtOnce" : "Monitor.escalation.stepwise"}
             actions={canManage ? <button className="btn ghost sm" type="button" onClick={() => onEdit(site)}><Icon name="edit" /><LocalizedText text={"Edit"} /></button> : undefined}>
             {site.escalationMinutes > 0 ? <p className="site-monitor-footnote">{t("Monitor.escalation.every")} {minutesText(lang, site.escalationMinutes)}</p> : null}
             <ol className="site-monitor-contacts">
@@ -734,7 +734,7 @@ function LogsPanel({ siteId, agents, refreshKey }: { siteId: number; agents: Mon
   };
 
   return (
-    <Panel title="Monitor.logs" subtitle="Monitor.logsHint" flush>
+    <Panel guide="mon.logs" title="Monitor.logs" subtitle="Monitor.logsHint" flush>
       <div className="site-monitor-log-filters">
         <div className="site-monitor-segments" role="group" aria-label={t("Monitor.logLevel")}>
           {LOG_LEVELS.map((item) => (

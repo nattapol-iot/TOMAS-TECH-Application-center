@@ -98,9 +98,10 @@
 .guide-status.done { color: var(--green-text); }
 .guide-status.partial { color: var(--amber-text); }
 
-.guide-team table { min-width: 860px; }
-/* Ten guides plus the name fit the xl dialog (1240) without a sideways scroll. */
-.guide-team thead th, .guide-team tfoot th { white-space: normal; vertical-align: bottom; min-width: 96px; }
+/* The table shows one area (at most six guides) or the six areas, so the columns fit the xl dialog. */
+.guide-team-areas { flex-wrap: wrap; margin-bottom: 12px; }
+.guide-team table { min-width: 760px; }
+.guide-team thead th, .guide-team tfoot th { white-space: normal; vertical-align: bottom; min-width: 110px; }
 .guide-team thead th:first-child, .guide-team tfoot th:first-child { min-width: 180px; }
 
 .topbar-guide .label { white-space: nowrap; }

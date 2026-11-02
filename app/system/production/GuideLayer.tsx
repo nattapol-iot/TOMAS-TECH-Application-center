@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { apiRequest } from "../api-client";
 import { useLanguage, type Lang } from "../i18n";
 import { Drawer, Icon, Modal } from "../ui";
-import { GUIDES, guideSelector, guideText, guidesFor, type Guide } from "./guide-catalog";
+import { GUIDE_AREAS, GUIDES, guideSelector, guideText, guidesFor, type Guide, type GuideArea } from "./guide-catalog";
 import { GUIDE_PAD, guideCardPosition } from "./guide-geometry";
 import "./guide.css";
 
@@ -28,7 +28,9 @@ const UI = {
   TH: {
     title: "สอนการใช้งานแบบคลิกตาม",
     intro: "เลือกเรื่องที่อยากเรียน ระบบจะพาคลิกบนหน้าจอจริงทีละขั้น หยุดได้ทุกเมื่อ สิ่งที่ทำระหว่างเรียนเป็นงานจริง ถ้าแค่ฝึกให้กดยกเลิกก่อนบันทึก",
-    here: "สำหรับหน้านี้", other: "บทสอนอื่น",
+    here: "สำหรับหน้านี้",
+    areas: { sales: "งานขายและ Inquiry", estimate: "ประมาณราคา", project: "โปรเจกต์และแผนงาน", field: "งานหน้างานและเอกสาร", purchase: "BOM และจัดซื้อ", tools: "ความรู้และเครื่องมือ" },
+    allAreas: "ภาพรวมทุกหมวด", areaFilter: "หมวดบทสอน",
     size: (steps: number, minutes: number) => `${steps} ขั้น · ประมาณ ${minutes} นาที`,
     done: (date: string) => `เรียนจบแล้ว ${date}`, partial: (step: number, count: number) => `ทำถึงขั้น ${step}/${count}`, fresh: "ยังไม่เคยเรียน",
     start: "เริ่มเรียน", again: "เรียนอีกครั้ง", restart: "เริ่มใหม่",
@@ -46,7 +48,9 @@ const UI = {
   EN: {
     title: "Click-through guides",
     intro: "Pick a task to learn. The guide walks you through it on the real screen, one click at a time, and you can stop whenever you like. What you do is real work; when you are only practising, cancel before saving.",
-    here: "For this screen", other: "Other guides",
+    here: "For this screen",
+    areas: { sales: "Sales & inquiries", estimate: "Estimating", project: "Projects & plans", field: "On site & documents", purchase: "BOM & purchasing", tools: "Knowledge & tools" },
+    allAreas: "All areas", areaFilter: "Guide area",
     size: (steps: number, minutes: number) => `${steps} steps · about ${minutes} min`,
     done: (date: string) => `Finished ${date}`, partial: (step: number, count: number) => `Reached step ${step}/${count}`, fresh: "Not started",
     start: "Start", again: "Go through again", restart: "Start again",
@@ -64,7 +68,9 @@ const UI = {
   JP: {
     title: "クリックで学ぶガイド",
     intro: "学びたい作業を選ぶと、実際の画面で1ステップずつクリックしながら案内します。いつでも中断できます。操作は実際の業務になるため、練習だけの場合は保存前にキャンセルしてください。",
-    here: "この画面", other: "その他のガイド",
+    here: "この画面",
+    areas: { sales: "営業・引合", estimate: "見積", project: "案件・計画", field: "現地作業・文書", purchase: "BOM・購買", tools: "ナレッジ・ツール" },
+    allAreas: "全分野の概要", areaFilter: "ガイドの分野",
     size: (steps: number, minutes: number) => `${steps}ステップ・約${minutes}分`,
     done: (date: string) => `${date} 完了`, partial: (step: number, count: number) => `ステップ ${step}/${count} まで`, fresh: "未受講",
     start: "開始", again: "もう一度", restart: "最初から",
@@ -280,7 +286,8 @@ function GuidePanel({ copy, lang, view, guides, progress, canSeeTeam, onStart, o
       <p className="guide-intro">{copy.intro}</p>
       {!guides.length ? <p className="muted">{copy.none}</p> : null}
       {here.length ? <section><h3>{copy.here}</h3><ul>{here.map(item)}</ul></section> : null}
-      {other.length ? <section><h3>{here.length ? copy.other : copy.title}</h3><ul>{other.map(item)}</ul></section> : null}
+      {/* With two dozen guides, the rest are grouped by the part of the work they teach. */}
+      {GUIDE_AREAS.map((area) => { const list = other.filter((guide) => guide.area === area); return list.length ? <section key={area}><h3>{copy.areas[area]}</h3><ul>{list.map(item)}</ul></section> : null; })}
     </div>
   </Drawer>;
 }
@@ -288,6 +295,8 @@ function GuidePanel({ copy, lang, view, guides, progress, canSeeTeam, onStart, o
 function GuideTeamModal({ copy, lang, onClose }: { copy: Copy; lang: Lang; onClose: () => void }) {
   const [state, setState] = useState<{ data: TeamProgress | null; error: boolean }>({ data: null, error: false });
   const [attempt, setAttempt] = useState(0);
+  // One column per guide does not fit two dozen guides: the table shows a summary per area, or one area's guides.
+  const [area, setArea] = useState<GuideArea | "all">("all");
   useEffect(() => {
     let cancelled = false;
     void apiRequest<TeamProgress>("/api/v1/guides/team")
@@ -297,16 +306,27 @@ function GuideTeamModal({ copy, lang, onClose }: { copy: Copy; lang: Lang; onClo
   }, [attempt]);
   const records = useMemo(() => new Map((state.data?.progress ?? []).map((row) => [`${row.userId}:${row.guideId}`, row])), [state.data]);
   const members = state.data?.members ?? [];
+  const done = (memberId: number, guide: Guide) => Boolean(records.get(`${memberId}:${guide.id}`)?.completedAt);
+  const inArea = (key: GuideArea) => GUIDES.filter((guide) => guide.area === key);
+  const shown = area === "all" ? [] : inArea(area);
   return <Modal title={copy.teamTitle} subtitle={copy.teamSubtitle} size="xl" onClose={onClose}>
     {state.error ? <div className="info-strip red" role="alert"><Icon name="alertTriangle" /><span>{copy.failed}</span>
       <button className="btn default sm" type="button" onClick={() => { setState({ data: null, error: false }); setAttempt((value) => value + 1); }}>{copy.retry}</button></div>
       : !state.data ? <p className="muted" role="status">{copy.loading}</p>
         : !members.length ? <p className="muted">{copy.teamEmpty}</p>
-          : <div className="table-wrap guide-team"><table>
-            <thead><tr><th>{copy.person}</th>{GUIDES.map((guide) => <th key={guide.id} className="wrap">{guideText(guide.title, lang)}</th>)}</tr></thead>
+          : <><div className="seg-control guide-team-areas" role="group" aria-label={copy.areaFilter}>
+            {(["all", ...GUIDE_AREAS] as const).map((key) => <button key={key} type="button" className={area === key ? "on" : ""} aria-pressed={area === key} onClick={() => setArea(key)}>{key === "all" ? copy.allAreas : copy.areas[key]}</button>)}
+          </div>
+          <div className="table-wrap guide-team"><table>
+            <thead><tr><th>{copy.person}</th>{area === "all"
+              ? GUIDE_AREAS.map((key) => <th key={key} className="wrap">{copy.areas[key]}</th>)
+              : shown.map((guide) => <th key={guide.id} className="wrap">{guideText(guide.title, lang)}</th>)}</tr></thead>
             <tbody>{members.map((member) => <tr key={member.id}>
               <td><div className="cell-primary"><strong>{member.name}</strong><span>{member.department} · {member.role}</span></div></td>
-              {GUIDES.map((guide) => {
+              {area === "all" ? GUIDE_AREAS.map((key) => {
+                const guides = inArea(key), finished = guides.filter((guide) => done(member.id, guide)).length;
+                return <td key={key}><span className={`guide-status${finished === guides.length ? " done" : finished ? " partial" : ""}`}>{finished === guides.length ? <Icon name="checkCircle" /> : null}{finished}/{guides.length}</span></td>;
+              }) : shown.map((guide) => {
                 const record = records.get(`${member.id}:${guide.id}`);
                 return <td key={guide.id}>{record?.completedAt
                   ? <span className="guide-status done"><Icon name="checkCircle" />{shortDate(record.completedAt, lang)}</span>
@@ -314,8 +334,10 @@ function GuideTeamModal({ copy, lang, onClose }: { copy: Copy; lang: Lang; onClo
                     : <span className="guide-status">—</span>}</td>;
               })}
             </tr>)}</tbody>
-            <tfoot><tr><th>{copy.person}</th>{GUIDES.map((guide) => <th key={guide.id}>{copy.finished(members.filter((member) => records.get(`${member.id}:${guide.id}`)?.completedAt).length, members.length)}</th>)}</tr></tfoot>
-          </table></div>}
+            <tfoot><tr><th>{copy.person}</th>{area === "all"
+              ? GUIDE_AREAS.map((key) => <th key={key}>{copy.finished(members.filter((member) => inArea(key).every((guide) => done(member.id, guide))).length, members.length)}</th>)
+              : shown.map((guide) => <th key={guide.id}>{copy.finished(members.filter((member) => done(member.id, guide)).length, members.length)}</th>)}</tr></tfoot>
+          </table></div></>}
   </Modal>;
 }
 

@@ -19,6 +19,16 @@ Do not auto-import every module into AGENTS.md or CLAUDE.md. Avoid reading COORD
 - Keep permission, record scope, rowVersion, monetary guard, revision, audit and file identity behavior intact unless the task explicitly changes them.
 - Treat requests, design proposals, implemented code and deployment evidence as different states.
 
+## How-to guide — part of every user-facing change
+
+The owner's rule (2026-11-02): a new feature or function ships with its How-to guide, in the same PR.
+
+1. Open `app/system/production/guide-catalog.ts`. Find the guide for the flow you changed, or add a new guide with an `area`, its `permissions`, its `views` and steps in Thai, English and Japanese.
+2. Mark every element a step points at: `data-guide="area.thing"` on the element, or the `guide` prop on `Field`, `Panel` or `SearchInput`. Tabs are reached as `[data-tab="id"]`.
+3. A redesign keeps the marks, or moves them to the new element. Do not delete a step because its button moved.
+4. A new menu screen needs a guide, or a one-line reason in `NO_GUIDE`.
+5. Run `node --test tests/guides.test.mjs`. It checks every target, every language, and every menu screen.
+
 ## Focused verification
 
 Read current package.json scripts first. Root `npm test` currently runs lint, typecheck and root tests; it does **not** build. The command definition is the evidence for what actually runs.
