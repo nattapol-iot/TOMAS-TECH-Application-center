@@ -36,7 +36,7 @@ export class PegasusMcp {
     } catch { return { ok: false, kind: "unavailable", message: "The ERP could not be reached. Try again shortly." }; }
     finally { clearTimeout(timer); }
     if (response.status === 401) return { ok: false, kind: "unauthorized", message: "The ERP did not accept your TMT ID sign-in. Sign in again, or ask the ERP team to check your employee record." };
-    if (response.status === 413) return { ok: false, kind: "error", message: "The requisition is too large for the ERP." };
+    if (response.status === 413) return { ok: false, kind: "error", message: "The data is too large for the ERP." };
     if (response.status !== 200) return { ok: false, kind: "unavailable", message: `The ERP is not available right now (HTTP ${response.status}). Try again shortly.` };
     let body: { error?: { message?: string }; result?: { isError?: boolean; structuredContent?: Record<string, unknown>; content?: Array<{ text?: string }> } };
     try { body = await response.json() as typeof body; } catch { return { ok: false, kind: "unavailable", message: "The ERP answered with something that is not JSON." }; }
@@ -73,7 +73,8 @@ export type ErpHeader = { pr_no: string; erp_ref: string; erp_department: string
 export type ErpLine = { line_type: string; item_code: string; part_no: string; description: string; brand: string; qty: number; unit: string; unit_price: number;
   remark: string | null; budget_module: string; original_code: string | null };
 
-const isPlaceholder = (number: string) => number.includes("0") && !/[1-9]/.test(number);
+/** PJ000000 and the like: a project that has no real number yet, which the ERP must not be sent. */
+export const isPlaceholder = (number: string) => number.includes("0") && !/[1-9]/.test(number);
 const dateOnly = (value: Date | string) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 
 /**

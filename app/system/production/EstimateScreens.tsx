@@ -1120,7 +1120,12 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     }} /> : null}
     {workflowAction ? <WorkflowModal action={workflowAction} workspace={workspace} busy={busy} onShowValidation={() => { setWorkflowAction(null); setTab("validation"); }} onClose={() => setWorkflowAction(null)} onConfirm={async (comment) => {
       setBusy(true); setError("");
-      try { await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment); const label = workflowAction === "approve" ? "approved and locked" : workflowAction === "submit" ? "submitted for engineering review" : workflowAction === "create-revision" ? "opened a new revision" : "returned for revision"; setWorkflowAction(null); await afterMutation(`${header.number} ${label}`); }
+      try { const result = await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment); const label = workflowAction === "approve" ? "approved and locked" : workflowAction === "submit" ? "submitted for engineering review" : workflowAction === "create-revision" ? "opened a new revision" : "returned for revision";
+        /* Approval sends the estimate to the Pegasus ERP; a failed send is said here and kept on the ERP tab with a button to send again. */
+        const erp = !result.erp ? "" : result.erp.sent
+          ? estimateCopy(` · ส่งเข้า ERP แล้ว${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`, ` · sent to the ERP${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`, ` · ERPへ送信済み${result.erp.costSheetNo ? `（${result.erp.costSheetNo}）` : ""}`)
+          : estimateCopy(` · ส่งเข้า ERP ไม่สำเร็จ: ${result.erp.message ?? ""} — ส่งใหม่ได้ที่แท็บ ERP`, ` · not sent to the ERP: ${result.erp.message ?? ""} — send it again from the ERP tab`, ` · ERP送信失敗: ${result.erp.message ?? ""} — ERPタブから再送できます`);
+        setWorkflowAction(null); await afterMutation(`${header.number} ${label}${erp}`); }
       catch (requestError) { await mutationError(requestError); }
       finally { setBusy(false); }
     }} /> : null}

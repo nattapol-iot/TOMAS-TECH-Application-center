@@ -930,7 +930,32 @@ export type EstimateErpSummary = {
   }>;
   /** Cost lines that are written as one row on the ERP sheet; the lines themselves are untouched. */
   groups: ErpGroup[];
+  /** The Cost Sheet in the Pegasus ERP; `enabled` is false when this server has no ERP connection. */
+  erp?: { enabled: boolean; link: EstimateErpLink | null };
 };
+
+export type EstimateErpLink = {
+  ref: string;
+  costSheetNo: string | null;
+  /** CONFIRMED, or LINKED once a sales quotation in the ERP uses the sheet. */
+  status: string | null;
+  /** The latest revision the ERP holds; a later approved revision is still to be sent. */
+  revision: number | null;
+  total: number | null;
+  url: string | null;
+  sentAt: string | null;
+  syncedAt: string | null;
+  /** Why the last send failed; cleared once one succeeds. */
+  error: string | null;
+};
+
+export type EstimateErpOutcome = { sent: boolean; result?: string | null; costSheetNo?: string | null; status?: string | null; message?: string };
+
+export const sendEstimateToErp = (id: number) =>
+  apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-send`, { method: "POST", body: "{}" });
+
+export const refreshEstimateErp = (id: number) =>
+  apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-refresh`, { method: "POST", body: "{}" });
 
 export type EstimateErpMappingInput = {
   sourceType: EstimateErpSourceType;
@@ -1496,7 +1521,8 @@ export const createEstimate = (input: CreateEstimateInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
 
 export const estimateWorkflow = (id: number, action: "submit" | "approve" | "request-revision" | "create-revision", rowVersion: string, comment = "") =>
-  apiRequest<{ id: number; status: string; rowVersion: string }>(`/api/v1/estimates/${id}/${action}`, {
+  /* Approving also sends the estimate to the Pegasus ERP when the server is connected; `erp` says how that went. */
+  apiRequest<{ id: number; status: string; rowVersion: string; erp?: EstimateErpOutcome }>(`/api/v1/estimates/${id}/${action}`, {
     method: "POST",
     body: JSON.stringify({ comment, rowVersion }),
   });

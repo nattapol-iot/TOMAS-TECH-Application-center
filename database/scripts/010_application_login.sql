@@ -798,4 +798,8 @@ GO
 -- database/migrations/092_supplier_quotation_thb_rate.sql
 GRANT UPDATE (thb_rate) ON OBJECT::dbo.supplier_quotations TO [iot_team_app_role];
 GO
+
+-- database/migrations/093_estimate_erp_cost_sheets.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.estimate_erp_links TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
