@@ -63,9 +63,10 @@ test("every menu screen has a guide, or a stated reason in NO_GUIDE (owner rule 
 });
 
 test("the catalog holds the guides the owner chose, in the order the work happens, each with all three languages and a known screen", () => {
-  // Six daily-work guides (2026-10-30), four CRM guides (2026-11-01) and fourteen for the rest of the app (2026-11-02).
+  // Six daily-work guides (2026-10-30), four CRM guides (2026-11-01), fourteen for the rest of the app (2026-11-02) and
+  // attaching a file to an existing inquiry (2026-11-02, when engineers got inquiry.write in migration 094).
   assert.deepEqual(GUIDES.map((guide) => guide.id), [
-    "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "site-visit-request", "crm-proposal-won",
+    "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "inquiry-attach", "site-visit-request", "crm-proposal-won",
     "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan", "team-overview-task", "bom-release",
     // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
     "estimate-approve",
@@ -97,6 +98,8 @@ test("a guide is offered only to people who can do the task", () => {
   assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["downloads-skill", "support-ticket"]);
   assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "downloads-skill", "support-ticket"]);
   assert.ok(guidesFor(["inquiry.write", "inquiry.read", "intake.read", "intake.write"]).some((guide) => guide.id === "site-visit-request"));
+  // Engineers hold inquiry.write since 094_engineer_inquiry_write.sql: they receive RFQs and attach files.
+  assert.deepEqual(guidesFor(["inquiry.write"]).map((guide) => guide.id), ["inquiry-create", "inquiry-attach", "downloads-skill", "support-ticket"]);
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
   assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "support-ticket"]);
   assert.deepEqual(guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),

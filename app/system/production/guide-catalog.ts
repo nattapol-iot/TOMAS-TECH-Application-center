@@ -1484,9 +1484,9 @@ export const GUIDES: readonly Guide[] = [
         target: "inquiry.attach", action: "next", view: "inquiries",
         title: { th: "แนบไฟล์ RFQ", en: "Attach the RFQ files", jp: "RFQファイルを添付" },
         body: {
-          th: "ลากไฟล์มาวางหรือคลิกเพื่อเลือก (PDF, Excel, Word, DWG หรือรูป ไม่เกิน 50 MB ต่อไฟล์) ไฟล์จะอัปโหลดตอนกดบันทึก",
-          en: "Drag files here or click to browse (PDF, Excel, Word, DWG or images, up to 50 MB each). They upload when you save.",
-          jp: "ファイルをドラッグするかクリックして選択します(PDF・Excel・Word・DWG・画像、1ファイル50MBまで)。保存時にアップロードされます。",
+          th: "ลากไฟล์มาวางหรือคลิกเพื่อเลือก (PDF, Office, DWG, STEP, อีเมล Outlook, ZIP/RAR/7z หรือรูป ไม่เกิน 50 MB ต่อไฟล์) ไฟล์จะอัปโหลดตอนกดบันทึก ถ้าไฟล์ไหนอัปโหลดไม่ผ่าน ระบบจะบอกชื่อไฟล์และเหตุผล ให้แนบใหม่ที่แท็บไฟล์แนบ",
+          en: "Drag files here or click to browse (PDF, Office, DWG, STEP, Outlook email, ZIP/RAR/7z or images, up to 50 MB each). They upload when you save. A file that does not upload is named with the reason; attach it again from the Attachments tab.",
+          jp: "ファイルをドラッグするかクリックして選択します(PDF・Office・DWG・STEP・Outlookメール・ZIP/RAR/7z・画像、1ファイル50MBまで)。保存時にアップロードされます。アップロードできなかったファイルは名前と理由が表示されるので、添付ファイルタブから添付し直します。",
         },
       },
       {
@@ -1496,6 +1496,78 @@ export const GUIDES: readonly Guide[] = [
           th: "ตรวจข้อมูลแล้วกด 'บันทึก Inquiry' ระบบจะออกเลข Inquiry และแจ้งผู้ประเมินทางอีเมล ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน' จะไม่มีข้อมูลถูกบันทึก",
           en: "Check the form and press Save inquiry: it gets its number and the estimator is emailed. Only practising? Press Cancel beside it, then Finish; nothing is saved.",
           jp: "内容を確認して「Inquiryを保存」を押すと番号が付き、見積担当にメールが届きます。練習だけなら横の「キャンセル」を押してから「完了」を押します。何も保存されません。",
+        },
+      },
+    ],
+  },
+  {
+    // Engineers hold inquiry.write from migration 094 (owner 2026-11-02), so the estimator attaches files too.
+    id: "inquiry-attach",
+    area: "sales",
+    title: { th: "แนบไฟล์เข้า Inquiry ที่มีอยู่", en: "Attach a file to an inquiry", jp: "既存の引合にファイルを添付" },
+    summary: {
+      th: "เพิ่มไฟล์ที่ลูกค้าส่งมาทีหลัง เช่น แบบ สเปก หรืออีเมล เข้า Inquiry เดิม ไฟล์จะตามไปที่ Project เมื่อสร้าง Project",
+      en: "Add a file the customer sent later, such as a drawing, a specification or an email, to an existing inquiry. It is carried into the Project when the Project is created.",
+      jp: "後から届いた図面・仕様書・メールなどを既存の引合に追加します。プロジェクト作成時に引き継がれます。",
+    },
+    minutes: 2,
+    permissions: ["inquiry.write"],
+    views: ["inquiries"],
+    steps: [
+      inquiryMenu,
+      openInquiry({
+        th: "คลิกที่แถวของ Inquiry ที่จะแนบไฟล์",
+        en: "Click the row of the inquiry the file belongs to.",
+        jp: "ファイルを添付する引合の行をクリックします。",
+      }),
+      {
+        target: "[data-tab=\"attachments\"]", action: "click", view: "inquiries",
+        title: { th: "เปิดแท็บไฟล์แนบ", en: "Open the Attachments tab", jp: "添付ファイルタブを開く" },
+        body: {
+          th: "แท็บนี้แสดงไฟล์ทั้งหมดของ Inquiry พร้อมหมวด ขนาด และผู้อัปโหลด",
+          en: "It lists every file on the inquiry with its category, size and who uploaded it.",
+          jp: "引合のすべてのファイルが、分類・サイズ・アップロード者とともに表示されます。",
+        },
+      },
+      {
+        target: "inquiry.upload", action: "click", view: "inquiries",
+        title: { th: "กด 'อัปโหลด'", en: "Press Upload", jp: "「アップロード」を押す" },
+        body: {
+          th: "ปุ่มอยู่มุมขวาบนของกล่องไฟล์แนบ",
+          en: "It is at the top right of the Attachments panel.",
+          jp: "添付ファイル欄の右上にあります。",
+        },
+        missing: {
+          th: "ถ้าไม่มีปุ่มนี้ แปลว่า Inquiry นี้ถูกยกเลิกหรือเก็บเข้าคลังแล้ว หรือบัญชีนี้ยังไม่มีสิทธิ์แก้ Inquiry",
+          en: "No button means the inquiry is cancelled or archived, or this account cannot change inquiries.",
+          jp: "ボタンがない場合、引合が取消またはアーカイブ済みか、このアカウントに引合の変更権限がありません。",
+        },
+      },
+      {
+        target: "inquiry.attachCategory", action: "next", view: "inquiries",
+        title: { th: "เลือกหมวดเอกสาร", en: "Choose the document category", jp: "文書分類を選ぶ" },
+        body: {
+          th: "เช่น Customer RFQ, Drawing หรือ Specification หมวดนี้ใช้จัดไฟล์เมื่อส่งต่อไปที่ Project",
+          en: "For example Customer RFQ, Drawing or Specification. The category files it when it moves to the Project.",
+          jp: "Customer RFQ、Drawing、Specification などを選びます。プロジェクトへ引き継ぐときの分類に使われます。",
+        },
+      },
+      {
+        target: "inquiry.attachFile", action: "next", view: "inquiries",
+        title: { th: "เลือกไฟล์", en: "Choose the file", jp: "ファイルを選ぶ" },
+        body: {
+          th: "รับ PDF, Office, DWG/DXF, STEP/IGES, อีเมล Outlook (.msg, .eml), ZIP/RAR/7z และรูป ไม่เกิน 50 MB ต่อไฟล์ แนบได้ครั้งละหนึ่งไฟล์",
+          en: "PDF, Office, DWG/DXF, STEP/IGES, Outlook email (.msg, .eml), ZIP/RAR/7z and images are accepted, up to 50 MB each, one file at a time.",
+          jp: "PDF・Office・DWG/DXF・STEP/IGES・Outlookメール(.msg、.eml)・ZIP/RAR/7z・画像を受け付けます。1ファイル50MBまで、1回に1ファイルです。",
+        },
+      },
+      {
+        target: "inquiry.attachUpload", action: "click", view: "inquiries",
+        title: { th: "อัปโหลด", en: "Upload it", jp: "アップロード" },
+        body: {
+          th: "กด 'อัปโหลด' ไฟล์จะขึ้นในรายการทันที ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน' จะไม่มีไฟล์ถูกบันทึก",
+          en: "Press Upload and the file appears in the list. Only practising? Press Cancel beside it, then Finish; nothing is saved.",
+          jp: "「アップロード」を押すと一覧に表示されます。練習だけなら横の「キャンセル」を押してから「完了」を押します。何も保存されません。",
         },
       },
     ],

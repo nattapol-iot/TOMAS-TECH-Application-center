@@ -28,7 +28,7 @@ function harness() {
     },
     useRef: () => ({ current: null }), useUiText: () => key => key,
     OWNER_ROLES: ["Engineer"], futureDate: () => "2026-11-01", today: () => "2026-10-18",
-    PROJECT_TYPES: ["IoT"], INTEREST_GRADES: [], FILE_CATEGORIES: [], MAX_FILE_BYTES: 50_000_000,
+    PROJECT_TYPES: ["IoT"], INTEREST_GRADES: [], FILE_CATEGORIES: [], MAX_FILE_BYTES: 50_000_000, ATTACHMENT_TYPES_HINT: "accepted file types",
     apiRequest: async () => [],
     createInquiry: async body => { writes.push(body); return { id: 91, number: "INQ-91" }; },
     uploadInquiryAttachment: async () => {}, assignmentDeliveryNote: () => "", toError: String,
