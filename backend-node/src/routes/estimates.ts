@@ -19,6 +19,8 @@ import { snapshotOverheadPolicy } from "../overhead.js";
 import { ESTIMATE_SECTION_CODES } from "../estimate-copy-plan.js";
 import { lockEditableEstimate } from "./estimate-cost-write.js";
 import { copyEstimateLines, copyLedgersFrom } from "./estimate-copy.js";
+import { createEstimateErpSender, type EstimateErpOutcome } from "./estimate-erp.js";
+import type { EstimateErpLink } from "../erp-cost-estimate.js";
 
 type EstimateRow = Record<string, unknown> & {
   id: number | string; estimate_no: string; inquiry_no: string; customer_id: number | string; customer_name: string;
@@ -387,7 +389,8 @@ async function transition(
   });
 }
 
-export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
+export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, erp: EstimateErpLink | null = null): void {
+  const erpSender = createEstimateErpSender(database, erp);
   app.get("/api/v1/estimates", async (request) => {
     await users.demandPermission(request, "estimate.read"); const query = request.query as Record<string, unknown>;
     const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER); const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
@@ -488,8 +491,16 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
 
   app.post("/api/v1/estimates/:id/submit", async (request) => transition(request, positiveLong((request.params as { id?: string }).id, "Estimate id"),
     "estimate.write", "Engineering Review", 90, "Engineering Review", 90, ["Draft", "Engineering Input", "Revision Required"], "Submitted", true, false, database, users));
-  app.post("/api/v1/estimates/:id/approve", async (request) => transition(request, positiveLong((request.params as { id?: string }).id, "Estimate id"),
-    "estimate.approve", "Approved", 100, "Approved", 100, ["Engineering Review"], "Approved", false, true, database, users));
+  app.post("/api/v1/estimates/:id/approve", async (request) => {
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const approved = await transition(request, id, "estimate.approve", "Approved", 100, "Approved", 100, ["Engineering Review"], "Approved", false, true, database, users);
+    if (!erpSender.enabled) return approved;
+    /* The approver is signed in right now, so their own token sends the Cost Sheet. A failure leaves the estimate approved;
+       the ERP tab shows why and offers the send again. */
+    const erpOutcome: EstimateErpOutcome = await erpSender.send(id, await users.required(request))
+      .catch((error: unknown) => ({ sent: false, message: error instanceof Error ? error.message : String(error) }));
+    return { ...approved, erp: erpOutcome };
+  });
 
   app.post("/api/v1/estimates/:id/create-revision", async (request) => {
     await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);

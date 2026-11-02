@@ -12,7 +12,7 @@ import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import {
   createEstimateErpGroup, deleteEstimateErpGroup, loadEstimateErpSummary, loadEstimateModuleDetails,
-  recordEstimateErpExport, updateEstimateErpGroup, updateEstimateErpMappings, updateEstimateModuleDetails,
+  recordEstimateErpExport, refreshEstimateErp, sendEstimateToErp, updateEstimateErpGroup, updateEstimateErpMappings, updateEstimateModuleDetails,
   type EstimateCostWorkspace, type EstimateErpCategory, type EstimateErpSourceType,
   type EstimateErpSummary, type EstimateModuleDetail,
 } from "../api-client";
@@ -142,6 +142,8 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [erpBusy, setErpBusy] = useState<"" | "send" | "refresh">("");
+  const [erpError, setErpError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -611,7 +613,51 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
     </> : null}
   </section>;
 
-  return <>{hideReadiness ? null : readiness}<Panel className="est-erp-panel" title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")}
+  /* The Cost Sheet in the Pegasus ERP. Approval sends it with the approver's sign-in; this strip says where it stands and
+     offers the send again when that failed, or when a later revision has been approved. */
+  const erpLink = summary?.erp?.link ?? null;
+  const approved = workspace.header.status === "Approved" || workspace.header.status === "Locked";
+  const erpSentRevision = erpLink?.revision ?? null;
+  const erpNeedsSend = approved && (erpSentRevision === null || erpSentRevision < workspace.header.revision);
+  const erpProblem = erpError || (erpNeedsSend ? erpLink?.error ?? "" : "");
+  const erpStatusLabel = (status: string | null) => status === "CONFIRMED" ? copy("อนุมัติแล้วใน ERP", "Confirmed in the ERP", "ERPで確定済み")
+    : status === "LINKED" ? copy("ผูกกับใบเสนอราคาแล้ว", "Linked to a sales quotation", "見積書に紐付け済み") : status ?? "";
+  const revisionLabel = (revision: number) => `R${String(revision).padStart(2, "0")}`;
+  const runErp = async (action: "send" | "refresh") => {
+    setErpBusy(action); setErpError("");
+    try {
+      const outcome = action === "send" ? await sendEstimateToErp(workspace.header.id) : await refreshEstimateErp(workspace.header.id);
+      notify(action === "send"
+        ? copy(`ส่งเข้า ERP แล้ว${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`, `Sent to the ERP${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`, `ERPへ送信しました${outcome.costSheetNo ? ` · ${outcome.costSheetNo}` : ""}`)
+        : copy("อ่านสถานะจาก ERP แล้ว", "Status read from the ERP", "ERPから状態を取得しました"));
+    } catch (requestError) {
+      setErpError(requestError instanceof Error ? requestError.message : String(requestError));
+    } finally {
+      setErpBusy("");
+      await load();
+    }
+  };
+  const erpStrip = summary?.erp?.enabled ? <section className="panel est-erp-ready" aria-label="Pegasus ERP">
+    <strong>Pegasus ERP</strong>
+    {erpLink && erpSentRevision !== null ? <span className="est-ready-item ok"><span className="est-ready-icon"><Icon name="check" /></span>
+      Cost Sheet <strong className="mono">{erpLink.costSheetNo ?? "—"}</strong> · {revisionLabel(erpSentRevision)}{erpLink.status ? ` · ${erpStatusLabel(erpLink.status)}` : ""}
+      {erpLink.url ? <a className="link-btn" href={erpLink.url} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" />{copy("เปิดใน ERP", "Open in the ERP", "ERPで開く")}</a> : null}
+    </span> : null}
+    {erpNeedsSend ? <span className={erpProblem ? "est-ready-item err" : "est-ready-item warn"}><span className="est-ready-icon"><Icon name={erpProblem ? "x" : "clock"} /></span>
+      {copy(`${revisionLabel(workspace.header.revision)} ยังไม่ได้ส่งเข้า ERP`, `${revisionLabel(workspace.header.revision)} is not in the ERP yet`, `${revisionLabel(workspace.header.revision)} はERP未送信`)}</span>
+      : !approved ? <span className="est-ready-item"><span className="est-ready-icon"><Icon name="clock" /></span>
+        {erpSentRevision !== null && erpSentRevision < workspace.header.revision
+          ? copy(`ส่ง ${revisionLabel(workspace.header.revision)} เข้า ERP เมื่ออนุมัติ`, `${revisionLabel(workspace.header.revision)} goes to the ERP when it is approved`, `${revisionLabel(workspace.header.revision)} は承認時にERPへ送信`)
+          : copy("ส่งเข้า ERP อัตโนมัติเมื่อ Estimate อนุมัติ", "Sent to the ERP when the estimate is approved", "見積承認時にERPへ自動送信")}</span> : null}
+    {erpProblem ? <span className="est-ready-item err" title={erpProblem}>{erpProblem}</span> : null}
+    <span className="spacer" />
+    {erpLink && erpSentRevision !== null ? <button className="btn ghost sm" type="button" disabled={Boolean(erpBusy)} onClick={() => { void runErp("refresh"); }}>
+      <Icon name="refresh" />{erpBusy === "refresh" ? copy("กำลังอ่าน…", "Reading…", "取得中…") : copy("ตรวจสถานะใน ERP", "Check the ERP", "ERPの状態を確認")}</button> : null}
+    {erpNeedsSend ? <button className="btn primary sm" type="button" disabled={Boolean(erpBusy) || busy} onClick={() => { void runErp("send"); }}>
+      <Icon name="upload" />{erpBusy === "send" ? copy("กำลังส่ง…", "Sending…", "送信中…") : copy("ส่งเข้า ERP", "Send to the ERP", "ERPへ送信")}</button> : null}
+  </section> : null;
+
+  return <>{hideReadiness ? null : readiness}{erpStrip}<Panel className="est-erp-panel" title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")}
     subtitle={copy(
       `ใช้สร้างไฟล์ ERP หลังอนุมัติ · ${headings.length} หมวด · ${rowCount} รายการ`,
       `Builds the ERP file after approval · ${headings.length} categories · ${rowCount} lines`,

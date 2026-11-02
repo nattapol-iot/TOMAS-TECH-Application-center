@@ -16,6 +16,9 @@ import {
   type ErpSourceType,
 } from "../estimate-erp.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { describeErpFailure, type ErpFailure } from "../erp-purchasing.js";
+import { costEstimateArguments, costEstimateBlocker, newEstimateErpRef, readCostSheet, type CostSheet, type EstimateErpLink } from "../erp-cost-estimate.js";
+import { ESTIMATE_OVERHEAD_ENABLED } from "../feature-flags.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -35,13 +38,16 @@ const ERP_SUMMARY_SQL = `
     ) THEN 1 ELSE 0 END) can_write,
     CONVERT(bit,CASE WHEN EXISTS(
       SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor_user AND code=N'report.read'
-    ) THEN 1 ELSE 0 END) can_export
+    ) THEN 1 ELSE 0 END) can_export,
+    link.external_ref erp_ref,link.cost_sheet_no erp_cost_sheet_no,link.erp_status,link.erp_revision,link.erp_total,link.erp_url,
+    link.sent_at erp_sent_at,link.synced_at erp_synced_at,link.error erp_error
   FROM dbo.estimates e
   INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
+  LEFT JOIN dbo.estimate_erp_links link ON link.estimate_id=e.id
   WHERE e.id=@estimate_id AND e.deleted_at IS NULL;
 
   SELECT source_type,source_id,description,internal_category,amount,erp_category,mapping_row_version,copied_from_revision,manual_override,
-    item,model_part_number,supplier,brand,lead_time,quote_revision,unit_price,quantity,unit,remark
+    item,model_part_number,supplier,brand,lead_time,quote_revision,unit_price,quantity,unit,remark,group_name module
   FROM (
     SELECT CAST(N'CostItem' AS nvarchar(30)) source_type,ci.id source_id,
       ci.description,CONCAT(ci.category_code,N' ',ci.category) internal_category,amounts.amount amount,
@@ -106,9 +112,23 @@ const ERP_SUMMARY_SQL = `
 type ErpGroupRow = { id: number | string; title: string; quantity: number | string; unit: string; members: string; row_version: Buffer };
 type ErpGroupMember = { sourceType: ErpSourceType; sourceId: number };
 
-type SummaryHeader = ErpHeaderRow & { can_write: boolean; can_export: boolean };
+type SummaryHeader = ErpHeaderRow & {
+  can_write: boolean; can_export: boolean; erp_ref?: string | null; erp_cost_sheet_no?: string | null; erp_status?: string | null;
+  erp_revision?: number | null; erp_total?: number | string | null; erp_url?: string | null; erp_sent_at?: Date | string | null;
+  erp_synced_at?: Date | string | null; erp_error?: string | null;
+};
 
-async function loadSummary(database: Database, estimateId: number, actor: CurrentUser) {
+/** The Cost Sheet this estimate became in the Pegasus ERP, as last sent or read; null before the first send. */
+function erpLinkView(header: SummaryHeader) {
+  return header.erp_ref ? {
+    ref: header.erp_ref, costSheetNo: header.erp_cost_sheet_no ?? null, status: header.erp_status ?? null,
+    revision: header.erp_revision === null || header.erp_revision === undefined ? null : Number(header.erp_revision),
+    total: header.erp_total === null || header.erp_total === undefined ? null : Number(header.erp_total), url: header.erp_url ?? null,
+    sentAt: header.erp_sent_at ?? null, syncedAt: header.erp_synced_at ?? null, error: header.erp_error ?? null,
+  } : null;
+}
+
+async function loadSummary(database: Database, estimateId: number, actor: CurrentUser, erpEnabled = false) {
   const result = await database.query<SummaryHeader>(ERP_SUMMARY_SQL, (request) => {
     request.input("estimate_id", sql.BigInt, estimateId);
     request.input("actor_user", sql.BigInt, actor.id);
@@ -125,7 +145,7 @@ async function loadSummary(database: Database, estimateId: number, actor: Curren
     members: JSON.parse(row.members) as ErpGroupMember[],
     rowVersion: row.row_version.toString("base64"),
   }));
-  return { ...summary, groups };
+  return { ...summary, groups, erp: { enabled: erpEnabled, link: erpLinkView(header) } };
 }
 
 /** One lock and one permission rule for every ERP write. */
@@ -255,12 +275,137 @@ function parseExportEvent(value: unknown) {
   return { estimateRowVersion: parseRowVersion(body.estimateRowVersion), templateVersion, sha256, filename };
 }
 
-export function registerEstimateErpRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
+export type EstimateErpOutcome = {
+  sent: boolean; result?: string | null; costSheetNo?: string | null; status?: string | null; message?: string;
+  kind?: ErpFailure["kind"] | "not_ready" | "not_configured";
+};
+
+/*
+ * Sends an approved estimate to the Pegasus ERP as a Cost Sheet with the caller's own TMT ID token: on approval that is the
+ * approver, who is signed in at that moment; afterwards whoever presses "send". The figures are the ERP summary the _ERP_
+ * workbook is built from. A failure is kept on the link for the next person to see and never undoes the approval.
+ */
+export function createEstimateErpSender(database: Database, erp: EstimateErpLink | null) {
+  const notConfigured: EstimateErpOutcome = { sent: false, kind: "not_configured", message: "The ERP connection is not configured on this server." };
+  const recordError = (estimateId: number, message: string) => database.query(`UPDATE dbo.estimate_erp_links SET error=@error,updated_at=SYSUTCDATETIME()
+    WHERE estimate_id=@id;`, (r) => { r.input("error", sql.NVarChar(500), message.slice(0, 500)); r.input("id", sql.BigInt, estimateId); });
+  const recordSheet = (estimateId: number, sheet: CostSheet, revision: number | null, sentBy: number | null) => database.query(`
+    UPDATE dbo.estimate_erp_links SET cost_sheet_no=COALESCE(@no,cost_sheet_no),erp_status=COALESCE(@status,erp_status),
+      erp_revision=COALESCE(@revision,erp_revision),erp_total=COALESCE(@total,erp_total),erp_url=COALESCE(@url,erp_url),
+      sent_at=CASE WHEN @sent_by IS NULL THEN sent_at ELSE SYSUTCDATETIME() END,sent_by=COALESCE(@sent_by,sent_by),
+      synced_at=SYSUTCDATETIME(),error=CASE WHEN @sent_by IS NULL THEN error END,updated_at=SYSUTCDATETIME()
+    WHERE estimate_id=@id;`, (r) => {
+    r.input("no", sql.NVarChar(50), sheet.costSheetNo?.slice(0, 50) ?? null); r.input("status", sql.NVarChar(30), sheet.status?.slice(0, 30) ?? null);
+    r.input("revision", sql.Int, sheet.revision ?? revision); r.input("total", sql.Decimal(19, 4), sheet.total);
+    r.input("url", sql.NVarChar(500), sheet.url?.slice(0, 500) ?? null); r.input("sent_by", sql.BigInt, sentBy); r.input("id", sql.BigInt, estimateId);
+  });
+
+  return {
+    enabled: Boolean(erp),
+
+    async send(estimateId: number, actor: CurrentUser): Promise<EstimateErpOutcome> {
+      if (!erp) return notConfigured;
+      const header = (await database.query<{
+        estimate_no: string; revision: number; status: string; project_name: string; locked_at: Date | string | null; customer_name: string;
+        short_name: string | null; owner_email: string | null; project_no: string | null; revision_reason: string | null;
+        erp_revision: number | null; cost_sheet_no: string | null;
+      }>(`SELECT e.estimate_no,e.revision,e.status,e.project_name,e.locked_at,c.name customer_name,c.short_name,u.email owner_email,
+          (SELECT TOP(1) p.project_no FROM dbo.projects p WHERE p.estimate_id=e.id AND p.deleted_at IS NULL) project_no,
+          (SELECT TOP(1) JSON_VALUE(a.after_json,'$.reason') FROM dbo.audit_log a WHERE a.entity_type=N'Estimate' AND a.entity_id=e.id
+            AND a.action IN(N'Revision created',N'Revision requested') AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
+            ORDER BY a.id DESC) revision_reason,
+          link.erp_revision,link.cost_sheet_no
+        FROM dbo.estimates e INNER JOIN dbo.customers c ON c.id=e.customer_id INNER JOIN dbo.users u ON u.id=e.owner_id
+        LEFT JOIN dbo.estimate_erp_links link ON link.estimate_id=e.id
+        WHERE e.id=@id AND e.deleted_at IS NULL;`, (r) => r.input("id", sql.BigInt, estimateId))).recordset[0];
+      if (!header) return { sent: false, kind: "not_ready", message: "Estimate not found." };
+      if (!["approved", "locked"].includes(header.status.toLowerCase())) {
+        return { sent: false, kind: "not_ready", message: "Only an approved estimate is sent to the ERP." };
+      }
+      // The ERP keeps this revision already; asking again would only answer "unchanged".
+      if (header.erp_revision === header.revision && header.cost_sheet_no) return { sent: true, result: "unchanged", costSheetNo: header.cost_sheet_no };
+      const summary = await loadSummary(database, estimateId, actor, true);
+      const blocker = !summary.reconciled ? "The ERP categories do not add up to the estimate total."
+        : ESTIMATE_OVERHEAD_ENABLED && summary.overhead.state === "Missing" ? "The estimate has no approved overhead."
+          : costEstimateBlocker(summary.lines);
+      if (blocker) { await recordError(estimateId, blocker); return { sent: false, kind: "not_ready", message: blocker }; }
+      const externalRef = await database.transaction(async (transaction) => {
+        const issue = new sql.Request(transaction); issue.input("id", sql.BigInt, estimateId); issue.input("ref", sql.NVarChar(100), newEstimateErpRef());
+        return (await issue.query<{ external_ref: string }>(`
+          IF NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_links WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id)
+            INSERT dbo.estimate_erp_links(estimate_id,external_ref) VALUES(@id,@ref);
+          SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id;`)).recordset[0]!.external_ref;
+      });
+      const args = costEstimateArguments({
+        estimateId, externalRef, revision: header.revision, estimateNo: header.estimate_no, projectNo: header.project_no,
+        projectName: header.project_name, customer: header.customer_name, shortName: header.short_name,
+        revisionDescription: header.revision_reason, preparedByEmail: header.owner_email, approvedAt: header.locked_at, appBaseUrl: erp.appBaseUrl,
+      }, summary.lines, summary.overhead.amount);
+      const submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
+      if (!submitted.ok) {
+        const message = describeErpFailure(submitted);
+        await recordError(estimateId, message);
+        return { sent: false, kind: submitted.kind, message };
+      }
+      const sheet = readCostSheet(submitted.data);
+      await recordSheet(estimateId, sheet, header.revision, actor.id);
+      await database.transaction((transaction) => insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "Sent to ERP", null, {
+        revision: header.revision, externalRef, result: sheet.result, costSheetNo: sheet.costSheetNo, erpStatus: sheet.status,
+        total: args.total, lines: summary.lines.length, response: JSON.stringify(submitted.data).slice(0, 2000),
+      }));
+      return { sent: true, result: sheet.result, costSheetNo: sheet.costSheetNo, status: sheet.status };
+    },
+
+    /** Reads the Cost Sheet back: CONFIRMED, LINKED once a sales quotation uses it, and the revision the ERP holds. */
+    async refresh(estimateId: number, actor: CurrentUser): Promise<EstimateErpOutcome> {
+      if (!erp) return notConfigured;
+      const link = (await database.query<{ external_ref: string }>(`SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id;`,
+        (r) => r.input("id", sql.BigInt, estimateId))).recordset[0];
+      if (!link) return { sent: false, kind: "not_ready", message: "This estimate has not been sent to the ERP yet." };
+      const read = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_get", { external_ref: link.external_ref });
+      if (!read.ok) return { sent: false, kind: read.kind, message: describeErpFailure(read) };
+      const sheet = readCostSheet(read.data);
+      await recordSheet(estimateId, sheet, null, null);
+      return { sent: true, costSheetNo: sheet.costSheetNo, status: sheet.status };
+    },
+  };
+}
+
+export function registerEstimateErpRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, erp: EstimateErpLink | null = null): void {
+  const sender = createEstimateErpSender(database, erp);
+  const erpEnabled = sender.enabled;
+
   app.get("/api/v1/estimates/:id/erp-summary", async (request) => {
     await users.demandPermission(request, "estimate.read");
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
-    return loadSummary(database, id, actor);
+    return loadSummary(database, id, actor, erpEnabled);
+  });
+
+  /* Approval sends the estimate; this is the second chance when that failed (the approver had no ERP right, their sign-in
+     had ended, the ERP was down). The estimate owner, an engineering manager, an administrator or an approver may press it. */
+  app.post("/api/v1/estimates/:id/erp-send", async (request) => {
+    await users.demandPermission(request, "estimate.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    if (!sender.enabled) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
+    const owner = (await database.query<{ owner_id: number | string }>(`SELECT owner_id FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL;`,
+      (r) => r.input("id", sql.BigInt, id))).recordset[0];
+    if (!owner) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
+    if (Number(owner.owner_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) await users.demandPermission(request, "estimate.approve");
+    const outcome = await sender.send(id, actor);
+    if (!outcome.sent) throw new ApiError(outcome.kind === "not_ready" ? 409 : 422, "erp_send_failed", outcome.message ?? "The ERP refused the estimate.");
+    return outcome;
+  });
+
+  app.post("/api/v1/estimates/:id/erp-refresh", async (request) => {
+    await users.demandPermission(request, "estimate.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    if (!sender.enabled) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
+    const outcome = await sender.refresh(id, actor);
+    if (!outcome.sent) throw new ApiError(outcome.kind === "not_ready" ? 409 : 422, "erp_refresh_failed", outcome.message ?? "The ERP could not be read.");
+    return outcome;
   });
 
   app.put("/api/v1/estimates/:id/erp-mappings", async (request) => {
@@ -340,7 +485,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       });
     });
 
-    const erpSummary = await loadSummary(database, id, actor);
+    const erpSummary = await loadSummary(database, id, actor, erpEnabled);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
   });
 
@@ -373,7 +518,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         { revision: estimate.revision, title, quantity, unit, members });
     });
     reply.code(201);
-    const erpSummary = await loadSummary(database, id, actor);
+    const erpSummary = await loadSummary(database, id, actor, erpEnabled);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
   });
 
@@ -403,7 +548,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line updated", null,
         { revision: estimate.revision, groupId, title, quantity, unit });
     });
-    const erpSummary = await loadSummary(database, id, actor);
+    const erpSummary = await loadSummary(database, id, actor, erpEnabled);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
   });
 
@@ -428,7 +573,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line split",
         { revision: estimate.revision, groupId, title: removed.title, members: JSON.parse(removed.members) as ErpGroupMember[] }, null);
     });
-    const erpSummary = await loadSummary(database, id, actor);
+    const erpSummary = await loadSummary(database, id, actor, erpEnabled);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
   });
 
@@ -438,7 +583,7 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
     const event = parseExportEvent(request.body);
-    const summary = await loadSummary(database, id, actor);
+    const summary = await loadSummary(database, id, actor, erpEnabled);
     if (!summary.capabilities.canExport) throw new ApiError(409, "estimate_erp_export_blocked", "Approve the estimate and resolve ERP mapping, overhead and reconciliation issues before export.");
     if (summary.estimateRowVersion !== event.estimateRowVersion.toString("base64")) {
       throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and export again.");
