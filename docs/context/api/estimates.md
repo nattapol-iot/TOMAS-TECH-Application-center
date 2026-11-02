@@ -2,7 +2,7 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `53d024e1`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d5fb3d61`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -12,9 +12,9 @@ Evidence: source snapshot `53d024e1`; generated, do not edit. [backend-node/src/
 | POST | `/api/v1/estimates` | 433–482 |
 | GET | `/api/v1/estimates/:id/validation` | 484–490 |
 | POST | `/api/v1/estimates/:id/submit` | 492–493 |
-| POST | `/api/v1/estimates/:id/approve` | 494–503 |
-| POST | `/api/v1/estimates/:id/create-revision` | 505–540 |
-| POST | `/api/v1/estimates/:id/request-revision` | 542–576 |
+| POST | `/api/v1/estimates/:id/approve` | 494–505 |
+| POST | `/api/v1/estimates/:id/create-revision` | 507–542 |
+| POST | `/api/v1/estimates/:id/request-revision` | 544–578 |
 
 ## Named functions
 
@@ -36,7 +36,7 @@ Evidence: source snapshot `53d024e1`; generated, do not edit. [backend-node/src/
 | `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 253–314 |
 | `withdrawEstimateReview` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 317–326 |
 | `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 328–390 |
-| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 392–577 |
+| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 392–579 |
 
 ## Direct local dependencies
 

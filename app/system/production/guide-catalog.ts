@@ -1501,7 +1501,8 @@ export const GUIDES: readonly Guide[] = [
     ],
   },
   {
-    // Engineers hold inquiry.write from migration 094 (owner 2026-11-02), so the estimator attaches files too.
+    // Engineers hold inquiry.write from migration 094, and Project Manager, Engineering Manager and Leader from 095
+    // (owner 2026-11-02), so the estimator and the heads attach files too.
     id: "inquiry-attach",
     area: "sales",
     title: { th: "แนบไฟล์เข้า Inquiry ที่มีอยู่", en: "Attach a file to an inquiry", jp: "既存の引合にファイルを添付" },

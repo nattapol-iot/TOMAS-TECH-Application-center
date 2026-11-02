@@ -80,6 +80,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 92, fileName: "092_supplier_quotation_thb_rate.sql", name: "THB rate on a supplier quotation" },
   { version: 93, fileName: "093_estimate_erp_cost_sheets.sql", name: "Estimate Cost Sheets in the Pegasus ERP" },
   { version: 94, fileName: "094_engineer_inquiry_write.sql", name: "Engineer inquiry write" },
+  { version: 95, fileName: "095_managers_inquiry_write.sql", name: "Managers inquiry write" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;
