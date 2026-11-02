@@ -2806,10 +2806,10 @@ function ExecutionTab({ visit, notify, reload, handheld }: {
           {saving === "saving" ? t("Saving…") : saving === "error" ? "บันทึกไม่สำเร็จ · กดบันทึกอีกครั้ง" : dirty ? t("Unsaved changes") : saving === "saved" ? t("Saved") : t("All changes saved")}
         </span>}
         {editable && dirty ? <button type="button" className="btn default" disabled={saving === "saving"} onClick={() => { void persist().catch(() => undefined); }}><LocalizedText text={"บันทึกตอนนี้"} /></button> : null}
-        {editable && !visit.checkedInAt ? <button className="btn primary big" type="button" onClick={() => setCheckInOpen(true)}>
+        {editable && !visit.checkedInAt ? <button className="btn primary big" type="button" data-guide="visit.checkin" onClick={() => setCheckInOpen(true)}>
           <Icon name="play" />{t("Check in")}
         </button> : null}
-        {editable && visit.checkedInAt && !visit.checkedOutAt ? <button className="btn primary big" type="button" disabled={dirty || saving === "saving"} onClick={() => setCheckOutOpen(true)}>
+        {editable && visit.checkedInAt && !visit.checkedOutAt ? <button className="btn primary big" type="button" data-guide="visit.checkout" disabled={dirty || saving === "saving"} onClick={() => setCheckOutOpen(true)}>
           <Icon name="checkCircle" />{t("Check out")}
         </button> : null}
       </div>
@@ -2822,7 +2822,7 @@ function ExecutionTab({ visit, notify, reload, handheld }: {
 
     <div className="visit-survey-layout">
       <div>
-        <Panel title={t("Checklist")} subtitle={visit.checklistTemplateName ?? t("No template selected")}>
+        <Panel guide="visit.checklist" title={t("Checklist")} subtitle={visit.checklistTemplateName ?? t("No template selected")}>
           <div className="visit-check-progress"><strong>{visit.checklist.length - visit.checklist.filter((item) => !surveyAnswerComplete(answers[item.itemId])).length} <LocalizedText text={"of"} /> {visit.checklist.length} <LocalizedText text={"ข้อบันทึกแล้ว"} /></strong>
             <button className={onlyOutstanding ? "btn primary" : "btn default"} type="button" aria-pressed={onlyOutstanding} onClick={() => { setOnlyOutstanding(!onlyOutstanding); if (!onlyOutstanding && requiredOutstanding[0]) setOpenSection(requiredOutstanding[0].section); }}><LocalizedText text={"เฉพาะข้อบังคับที่ยังไม่ครบ ("} />{requiredOutstanding.length}<LocalizedText text={")"} /></button>
           </div>
@@ -2878,7 +2878,7 @@ function ExecutionTab({ visit, notify, reload, handheld }: {
         </Panel>
       </div>
       <div>
-        <Panel title={t("Photos, videos and documents")}
+        <Panel guide="visit.files" title={t("Photos, videos and documents")}
           actions={editable ? <>
             <Select label={t("Category")} value={uploadCategory} onChange={setUploadCategory} options={[...SITE_FILE_CATEGORIES]} />
             <button className="btn primary" type="button" disabled={busy} onClick={() => fileRef.current?.click()}>
@@ -2912,7 +2912,7 @@ function ExecutionTab({ visit, notify, reload, handheld }: {
             message={t("A photograph of what you are describing is worth more than the description.")} />}
         </Panel>
         <div style={{ height: 14 }} />
-        <Panel title={t("Findings, measurements and risks")}
+        <Panel guide="visit.findings" title={t("Findings, measurements and risks")}
           subtitle={t("Recorded separately from the sales requirement and carried into the report")}
           actions={editable ? <button className="btn primary" type="button" onClick={() => setFindingOpen(true)}>
             <Icon name="plus" />{t("Add finding")}
@@ -3174,6 +3174,7 @@ function ReportTab({ visit, bootstrap, notify, reload }: {
       <span>{editable ? "บันทึกหน้างานและไฟล์อยู่ด้านล่าง เติมข้อสรุปวิศวกรก่อนส่งตรวจ ไม่ต้องคัดลอก Checklist ใหม่" : "แสดงรายงานสำหรับอ่าน — การแก้ไขใช้ขั้นตอนขอแก้ไขและตรวจอนุมัติเดิม"}</span>
     </div></div>
     <Panel
+      guide="visit.report"
       title={`${t("Site visit report")} ${report.number}`}
       subtitle={`${t("Revision")} R${String(report.currentRevision).padStart(2, "0")} · ${report.authorName} · ${t("due")} ${formatDateTime(report.dueAt)}`}
       actions={<>
@@ -3181,7 +3182,7 @@ function ReportTab({ visit, bootstrap, notify, reload }: {
         <Badge tone={slaTone(report.slaState)}>{t(slaLabel(report.slaState))}</Badge>
         {editable ? <button className="btn default" type="button" disabled={busy} onClick={() => { void save(); }}>
           <Icon name="check" />{t("Save draft")}</button> : null}
-        {editable ? <button className="btn primary" type="button" disabled={busy || missingSummary || missingConclusion} onClick={() => { void submit(); }}>
+        {editable ? <button className="btn primary" type="button" data-guide="visit.submit" disabled={busy || missingSummary || missingConclusion} onClick={() => { void submit(); }}>
           <Icon name="send" />{t("Submit for review")}</button> : null}
         {canApprove && (report.status === "Submitted" || report.status === "Under Review")
           ? <button className="btn primary" type="button" onClick={() => setReviewOpen(true)}><Icon name="shield" />{t("Review")}</button> : null}
@@ -3516,12 +3517,12 @@ export function ProductionMyAssignments(props: Props) {
               </div>
               <div className="assignment-card-foot">
                 {row.assignmentStatus === "Proposed"
-                  ? <button className="btn primary big" type="button" onClick={() => setRespondTo(row)}>
+                  ? <button className="btn primary big" type="button" data-guide="visit.respond" onClick={() => setRespondTo(row)}>
                     <Icon name="check" />{t("Accept or decline")}</button>
                   : null}
                 {row.contactPhone ? <a className="btn default big" href={`tel:${row.contactPhone}`}><Icon name="user" />{t("Call site")}</a> : null}
-                <button className="btn primary big" type="button" onClick={() => { void openVisit(row.visitId); }}>
-                  <Icon name="arrowRight" />{row.checkedInAt && !row.checkedOutAt ? t("Continue on site") : t("Open")}
+                <button className="btn primary big" type="button" data-guide="visit.open" onClick={() => { void openVisit(row.visitId); }}>
+                  <Icon name="arrowRight" />{row.checkedInAt && !row.checkedOutAt ? t("Continue on site") : t("Open visit")}
                 </button>
               </div>
             </div>)}

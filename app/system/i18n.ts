@@ -1070,6 +1070,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Check out": { th: "เช็คเอาต์", jp: "チェックアウト" },
   "Check in now": { th: "เช็คอินตอนนี้", jp: "今すぐチェックイン" },
   "Continue on site": { th: "ทำงานหน้างานต่อ", jp: "現地作業を続ける" },
+  "Open visit": { th: "เปิดงาน", jp: "訪問を開く" },
   "Our attendees": { th: "ผู้เข้าร่วมฝ่ายเรา", jp: "当社出席者" },
   "Customer attendees": { th: "ผู้เข้าร่วมฝ่ายลูกค้า", jp: "顧客出席者" },
   "Record my location with this check-in": { th: "บันทึกตำแหน่งพร้อมการเช็คอิน", jp: "チェックイン時に位置情報を記録" },

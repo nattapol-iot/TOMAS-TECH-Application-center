@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { GUIDES, guideSelector, guidesFor } from "../app/system/production/guide-catalog.ts";
+import { GUIDE_AREAS, GUIDES, NO_GUIDE, guideSelector, guidesFor } from "../app/system/production/guide-catalog.ts";
 import { guideCardPosition } from "../app/system/production/guide-geometry.ts";
 
 const root = new URL("../", import.meta.url);
@@ -47,24 +47,43 @@ test("every guide step points at something a screen still marks", () => {
   assert.match(read("app/system/ui.tsx"), /role="tab" type="button" aria-selected=\{active === tab\.id\} data-tab=\{tab\.id\}/);
   assert.match(read("app/system/ui.tsx"), /<div className=\{`field\$\{span \? ` span-\$\{span\}` : ""\}`\} data-guide=\{guide\}>/);
   assert.match(read("app/system/ui.tsx"), /<section className=\{`panel\$\{className \? ` \$\{className\}` : ""\}`\} data-guide=\{guide\}>/);
+  assert.match(read("app/system/ui.tsx"), /<label className="search-field" data-guide=\{guide\}>/);
+});
+
+test("every menu screen has a guide, or a stated reason in NO_GUIDE (owner rule 2026-11-02)", () => {
+  // A new feature or screen ships with its How-to guide. When a screen truly needs none, NO_GUIDE says why.
+  const covered = new Set(GUIDES.flatMap((guide) => [...guide.views, ...guide.steps.map((step) => step.view), ...(guide.invite ? [guide.invite] : [])]));
+  const unguided = [...views].filter((view) => !covered.has(view) && !NO_GUIDE[view]);
+  assert.deepEqual(unguided, [], "add a guide to guide-catalog.ts for these screens, or a NO_GUIDE reason");
+  for (const [view, reason] of Object.entries(NO_GUIDE)) {
+    assert.ok(views.has(view), `NO_GUIDE names ${view}, which is not a menu screen`);
+    assert.ok(!covered.has(view), `NO_GUIDE excuses ${view}, but a guide covers it: drop the entry`);
+    assert.ok(reason.trim().length >= 10, `NO_GUIDE ${view} needs a real reason`);
+  }
 });
 
 test("the catalog holds the guides the owner chose, in the order the work happens, each with all three languages and a known screen", () => {
-  // Six daily-work guides (2026-10-30) and four CRM guides (2026-11-01), from the first deal to the order.
+  // Six daily-work guides (2026-10-30), four CRM guides (2026-11-01) and fourteen for the rest of the app (2026-11-02).
   assert.deepEqual(GUIDES.map((guide) => guide.id), [
-    "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "site-visit-request", "estimate-create",
-    "crm-proposal-won", "purchase-request", "my-work-progress", "support-ticket",
+    "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "site-visit-request", "crm-proposal-won",
+    "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan", "team-overview-task", "bom-release",
+    "purchase-request", "pr-approve", "my-work-progress", "site-visit-work", "report-create", "sign-document",
+    "knowledge-find", "downloads-skill", "site-monitor-check", "asset-register", "support-ticket",
   ]);
   const copies = [];
   for (const guide of GUIDES) {
     // The API accepts this shape only (backend-node/src/routes/user-guides.ts).
     assert.match(guide.id, /^[a-z][a-z0-9-]{1,59}$/);
+    assert.ok(GUIDE_AREAS.includes(guide.area), `${guide.id}: unknown area ${guide.area}`);
     assert.ok(guide.steps.length >= 3 && guide.steps.length <= 100, guide.id);
     copies.push(guide.title, guide.summary, ...guide.steps.flatMap((step) => [step.title, step.body, ...(step.missing ? [step.missing] : [])]));
     for (const view of [...guide.views, ...(guide.invite ? [guide.invite] : []), ...guide.steps.map((step) => step.view)]) assert.ok(views.has(view) || subViews.has(view), `${guide.id}: unknown screen ${view}`);
-    // The last step is where the person decides to save; it always has a way out for practice.
-    assert.equal(guide.steps.at(-1).action, "click", guide.id);
+    // The last step is where the person decides to save; it always has a way out for practice. A browse-only guide
+    // saves nothing, so it may end on a note.
+    if (!guide.browse) assert.equal(guide.steps.at(-1).action, "click", guide.id);
   }
+  // Every area has guides, so the team table never shows an empty area.
+  for (const area of GUIDE_AREAS) assert.ok(GUIDES.some((guide) => guide.area === area), area);
   for (const copy of copies) for (const lang of ["th", "en", "jp"]) assert.ok(copy[lang]?.trim(), JSON.stringify(copy));
   // Only one guide invites per screen, so a screen never asks twice.
   const invites = GUIDES.filter((guide) => guide.invite).map((guide) => guide.invite);
@@ -72,13 +91,17 @@ test("the catalog holds the guides the owner chose, in the order the work happen
 });
 
 test("a guide is offered only to people who can do the task", () => {
-  assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["support-ticket"]);
-  assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "support-ticket"]);
+  // Everyone can download files and report a problem.
+  assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["downloads-skill", "support-ticket"]);
+  assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "downloads-skill", "support-ticket"]);
   assert.ok(guidesFor(["inquiry.write", "inquiry.read", "intake.read", "intake.write"]).some((guide) => guide.id === "site-visit-request"));
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
-  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "support-ticket"]);
+  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "support-ticket"]);
   assert.deepEqual(guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
-    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "support-ticket"]);
+    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "downloads-skill", "support-ticket"]);
+  // A planner sees the plan guide; a head who approves PRs sees the approval guide.
+  assert.ok(guidesFor(["schedule.read", "schedule.plan"]).some((guide) => guide.id === "project-plan"));
+  assert.ok(guidesFor(["procurement.approve"]).some((guide) => guide.id === "pr-approve"));
   assert.equal(guideSelector("inquiry.save"), '[data-guide="inquiry.save"]');
   assert.equal(guideSelector('[data-tab="cost"]'), '[data-tab="cost"]');
   assert.equal(guideSelector("intake.to.Pending Technical Review"), '[data-guide="intake.to.Pending Technical Review"]');
@@ -111,6 +134,9 @@ test("a running guide lights the target without blocking the page and follows a 
   assert.match(layer, /apiRequest<\{ items: GuideProgress\[\] \}>\("\/api\/v1\/guides\/progress"\)/);
   assert.match(layer, /report\(invited, "invite-closed"\)/);
   assert.match(layer, /permissions\.includes\("performance\.manage"\)/);
+  // Two dozen guides: the list groups them by area, and the team table shows one area or a summary per area.
+  assert.match(layer, /GUIDE_AREAS\.map\(\(area\) => \{ const list = other\.filter\(\(guide\) => guide\.area === area\)/);
+  assert.match(layer, /const \[area, setArea\] = useState<GuideArea \| "all">\("all"\)/);
 });
 
 test("the card sits below the lit spot, else above, else beside, and never leaves the screen", () => {

@@ -63,7 +63,7 @@ export function MasterPlanSection({ rows, onChange, templates = [] }: { rows: Ma
   const [templateStart, setTemplateStart] = useState(() => estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"));
   const chosen = templates.find(item => item.id === templateId);
   const update = (key: string, change: Partial<MasterPlanDraft>) => onChange(current => current.map(row => row.key === key ? { ...row, ...change } : row));
-  return <section className="project-plan" aria-labelledby="project-master-plan-title">
+  return <section className="project-plan" aria-labelledby="project-master-plan-title" data-guide="project.plan">
     <div className="project-plan-head"><h3 id="project-master-plan-title">{t("CRM.masterPlan")}</h3><div className="row-actions">
       <button className="btn sm" type="button" onClick={() => onChange(current => [...current, { key: crypto.randomUUID(), name: "", start: current.at(-1)?.finish ?? "", finish: "" }])}><Icon name="plus" />{t("CRM.addMilestone")}</button>
     </div></div>
@@ -86,7 +86,7 @@ export function MasterPlanSection({ rows, onChange, templates = [] }: { rows: Ma
 export function TeamPlanSection({ rows, onChange, people }: { rows: TeamPlanDraft[]; onChange: (update: (rows: TeamPlanDraft[]) => TeamPlanDraft[]) => void; people: BootstrapData["team"] }) {
   const t = useT();
   const update = (key: string, change: Partial<TeamPlanDraft>) => onChange(current => current.map(row => row.key === key ? { ...row, ...change } : row));
-  return <section className="project-plan" aria-labelledby="project-team-plan-title">
+  return <section className="project-plan" aria-labelledby="project-team-plan-title" data-guide="project.team">
     <div className="project-plan-head"><div><h3 id="project-team-plan-title">{t("CRM.teamPlan")}</h3><p className="muted">{t("CRM.teamPlanHint")}</p></div><div className="row-actions">
       <button className="btn sm" type="button" onClick={() => onChange(current => [...current, { key: crypto.randomUUID(), userId: 0, task: "", start: "", finish: "", planManDays: "" }])}><Icon name="plus" />{t("CRM.addMember")}</button>
     </div></div>

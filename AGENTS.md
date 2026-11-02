@@ -13,6 +13,11 @@ Shared by Claude Code (via `CLAUDE.md` → `@AGENTS.md`) and Codex. This is the 
 - Use the available tools directly for routine work; do not ask the user to run commands that the agent can run. If a tool is unavailable or an approval is denied, explain the actual limitation and use an authorized alternative; do not bypass tool permissions.
 - Keep progress updates short and in Thai. Finish with what changed, verification results, remaining limitations and whether changes are local, committed or pushed. Do not claim deployment or business acceptance without checking it.
 - For unfinished work, maintain a concise HANDOFF.md with the task, relevant files, completed checks, remaining steps and blockers. A new session must verify the handoff against current Git/source state before continuing.
+- **Every new feature or function updates the How-to guide in the same change (owner rule 2026-11-02).** The in-app click-through guides live in `app/system/production/guide-catalog.ts`. When a change adds a screen, a button, a field or a step people must learn, or changes how a flow works:
+  - add or edit the guide steps in Thai, English and Japanese;
+  - put `data-guide` marks on the new elements (`Field`, `Panel` and `SearchInput` take a `guide` prop; `Tabs` mark each tab `data-tab`);
+  - keep the marks the existing steps use.
+  `tests/guides.test.mjs` fails when a step points at nothing, or when a menu screen has neither a guide nor a reason in `NO_GUIDE`. The final report names the guide that changed, or says why none was needed (for example, backend only with no new user action).
 
 These project rules guide both agents; they do not override host/system policies or grant tools that a session does not have. Claude permission dialogs are controlled separately by Claude's runtime settings.
 
