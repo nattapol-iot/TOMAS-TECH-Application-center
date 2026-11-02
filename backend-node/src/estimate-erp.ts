@@ -33,6 +33,8 @@ export type ErpLineRow = {
   quantity: number | string | null;
   unit: string | null;
   remark: string | null;
+  /** The cost item's module, or the work package / category a labour, expense or other line sits under. */
+  module?: string | null;
 };
 
 export type ErpHeaderRow = {
@@ -91,6 +93,7 @@ export function buildErpSummary(
     quantity: row.quantity === null ? null : Number(row.quantity),
     unit: row.unit,
     remark: row.remark,
+    module: row.module || null,
   }));
   const categories = ERP_CATEGORIES.map((category) => {
     const matching = lines.filter((line) => line.erpCategory === category);
