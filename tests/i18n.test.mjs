@@ -142,16 +142,20 @@ test("every literal tab label has complete TH, EN and JP behavior", () => {
       ts.forEachChild(node, index);
     }
     index(source);
-    function collect(node, seen = new Set()) {
+    // Each declaration is followed once per file: the labels found do not depend on the path, and following
+    // every path re-walks shared names (rows, kind, parentId…) exponentially.
+    const followed = new Set();
+    function collect(node) {
       if (ts.isPropertyAssignment(node) && node.name.getText().replaceAll('"', "") === "label" && (ts.isStringLiteral(node.initializer) || ts.isNoSubstitutionTemplateLiteral(node.initializer))) {
         labels.add(node.initializer.text);
       }
-      if (ts.isIdentifier(node) && declarations.has(node.text) && !seen.has(node.text)) {
-        const next = new Set(seen).add(node.text);
-        for (const initializer of declarations.get(node.text)) collect(initializer, next);
+      if (ts.isIdentifier(node) && declarations.has(node.text)) {
+        if (followed.has(node.text)) return;
+        followed.add(node.text);
+        for (const initializer of declarations.get(node.text)) collect(initializer);
         return;
       }
-      ts.forEachChild(node, (child) => collect(child, seen));
+      ts.forEachChild(node, collect);
     }
     function visit(node) {
       if ((ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText() === "Tabs") {
