@@ -62,8 +62,9 @@ export function planInput(value: unknown, requireRowVersion: boolean): PlanInput
   if (startMode === "linked" && !predecessorId) throw new ApiError(400, "validation_failed", "A linked task requires a predecessor.");
   if (kind !== "phase" && !planStart && startMode !== "linked") throw new ApiError(400, "validation_failed", "A manually scheduled task requires a plan start date.");
   if (isMilestone && planDays !== 1) throw new ApiError(400, "validation_failed", "A milestone must have a one-day duration.");
-  if (kind === "phase" && (parentId || planStart || planDays !== 1 || startMode !== "manual" || predecessorId || lagDays !== 0 || picUserIds.length || picExternal || planManDays !== 0 || isMilestone)) {
-    throw new ApiError(400, "validation_failed", "A phase is a top-level roll-up row and cannot contain task dates, dependencies, PICs, effort, or milestone values.");
+  // A main heading's own dates are the customer's (the Master Plan); its bar follows the rows under it.
+  if (kind === "phase" && (parentId || (!planStart && planDays !== 1) || startMode !== "manual" || predecessorId || lagDays !== 0 || picUserIds.length || picExternal || planManDays !== 0 || isMilestone)) {
+    throw new ApiError(400, "validation_failed", "A main heading is a top-level row with the customer's dates only: no dependencies, PICs, effort or milestone values.");
   }
   if (kind === "detail" && !parentId) throw new ApiError(400, "validation_failed", "A detail row must belong to a task.");
   return {
@@ -289,6 +290,8 @@ export async function validateGraphAndHierarchy(transaction: TransactionType, pr
   const byId = new Map(rows.map((row) => [Number(row.id), { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind, startMode: row.start_mode }]));
   for (const reference of [input.parentId, input.predecessorId].filter((id): id is number => id !== null)) if (!byId.has(reference)) throw new ApiError(422, "schedule_reference_invalid", "Parent and predecessor tasks must be active rows in the same project.");
   if (input.kind === "phase" && input.parentId) throw new ApiError(400, "validation_failed", "A phase must be a top-level schedule row.");
+  // The top of the plan is the Master Plan: main headings only (owner, 2026-11-03).
+  if (input.kind === "task" && input.parentId === null) throw new ApiError(422, "schedule_parent_kind_invalid", "A task goes under a main heading.");
   const key = taskId ?? -1; byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode });
   const visiting = new Set<number>(), visited = new Set<number>();
   const cycle = (id: number): boolean => { if (visited.has(id)) return false; if (visiting.has(id)) return true; visiting.add(id); const edge = byId.get(id); if (edge && ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) || (edge.predecessor !== null && byId.has(edge.predecessor) && cycle(edge.predecessor)))) return true; visiting.delete(id); visited.add(id); return false; };

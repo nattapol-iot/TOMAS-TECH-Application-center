@@ -21,7 +21,15 @@ import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import type { EmailService } from "../email.js";
 import { deliverProjectNotices, queueTaskAssignmentNotices } from "../project-notices.js";
-import { MASTER_PLAN_PHASE, TEAM_PLAN_PHASE, readScheduleRows } from "../project-initial-plan.js";
+import { readScheduleRows } from "../project-initial-plan.js";
+
+/** A task under a main heading needs a member (owner, 2026-11-03); a function under a task has its task's people unless others are named. */
+async function membersFor(transaction: TransactionType, projectId: number, input: PlanInput): Promise<number[]> {
+  if (input.kind !== "task" || input.parentId === null || input.picUserIds.length) return input.picUserIds;
+  const parent = await readTask(transaction, input.parentId);
+  if (parent.kind === "phase") throw new ApiError(400, "schedule_member_required", "A task under a main heading needs a member.");
+  return ((await readPics(transaction, projectId)).get(parent.id) ?? []).filter((pic) => pic.active).map((pic) => pic.id);
+}
 
 function bindPlan(request: InstanceType<typeof sql.Request>, projectId: number, input: PlanInput, actorId: number): void {
   request.input("project", sql.BigInt, projectId); request.input("parent", sql.BigInt, input.parentId);
@@ -99,7 +107,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
     tasks: calculation.roots.map((item) => taskResponse(item, new Map(tasks.map((task) => [task.id, task])), pics, {
       actorId: actor.id, managed, projectCanProgress: canProgressPermission && project.status !== "Closed", isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"),
       isMember,
-      frameIds: new Set(leaves.filter((leaf) => !counted.has(leaf.id)).map((leaf) => leaf.id)) })) };
+      frameIds: new Set(leaves.filter((leaf) => !counted.has(leaf.id) && !leaf.rollup).map((leaf) => leaf.id)) })) };
 }
 
 /** timeZone: the business time zone (config.businessTimeZone); without it, the same Business__TimeZoneId setting loadConfig reads. */
@@ -121,7 +129,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
     const created = await database.transaction(async (transaction) => {
       const project = await demandPlanOwner(transaction, projectId, actor); await validateScheduleVersion(transaction, projectId, input.scheduleVersion);
       await validateGraphAndHierarchy(transaction, projectId, null, input); if (input.parentId && await hasPendingRequest(transaction, input.parentId)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's child rows.");
-      await validatePics(transaction, project, input.picUserIds);
+      const picUserIds = await membersFor(transaction, projectId, input);
+      await validatePics(transaction, project, picUserIds);
       let sortOrder = input.sortOrder;
       if (beforeId !== undefined) {
         const read = new sql.Request(transaction); read.input("project", sql.BigInt, projectId); read.input("parent", sql.BigInt, input.parentId);
@@ -137,8 +146,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       const insert = new sql.Request(transaction); bindPlan(insert, projectId, { ...input, sortOrder }, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @changed TABLE(id bigint,row_version binary(8)); INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,updated_by)
         OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,N'PM',@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,@pic_external,@man_days,@actor); SELECT id,row_version FROM @changed;`)).recordset[0]!;
-      const id = Number(row.id); const added = await replacePics(transaction, id, input.picUserIds); await appendUpdate(transaction, projectId, id, actor.id, "created", null, input.name, "Schedule task created");
-      await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Created", null, planAudit(input));
+      const id = Number(row.id); const added = await replacePics(transaction, id, picUserIds); await appendUpdate(transaction, projectId, id, actor.id, "created", null, input.name, "Schedule task created");
+      await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Created", null, planAudit({ ...input, picUserIds }));
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, [{ taskId: id, userIds: added }]);
       return { id, rowVersion: row.row_version.toString("base64"), scheduleVersion: row.row_version.toString("base64"), notices };
     });
@@ -159,7 +168,9 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       // The details route refuses a personal task under a shared row; this is the same rule from the other side:
       // a second PIC on a row that already holds a member's personal task would never see that row in My Work.
       if (input.picUserIds.length > 1 && oldPics.length <= 1) { const details = new sql.Request(transaction); details.input("id", sql.BigInt, id); if ((await details.query<{ found: number }>(`SELECT COUNT_BIG(*) found FROM dbo.schedule_tasks WHERE parent_id=@id AND kind=N'detail' AND deleted_at IS NULL;`)).recordset[0]?.found) throw new ApiError(409, "schedule_detail_shared_task", "This task holds a member's personal task. Remove it before giving the task a second PIC."); }
-      if (await hasChildren(transaction, id) && (existing.planStart !== input.planStart || existing.planDays !== input.planDays || existing.startMode !== input.startMode || existing.predecessorId !== input.predecessorId || existing.lagDays !== input.lagDays)) throw new ApiError(400, "schedule_rollup_plan_derived", "A roll-up row's dates and dependency are calculated from its children and cannot be changed directly.");
+      if (existing.kind === "task" && existing.parentId !== null && !input.picUserIds.length && oldPics.length && (await readTask(transaction, existing.parentId)).kind === "phase") throw new ApiError(400, "schedule_member_required", "A task under a main heading keeps at least one member.");
+      // A heading's own dates are the customer's, so they change whatever rows sit under it.
+      if (existing.kind !== "phase" && await hasChildren(transaction, id) && (existing.planStart !== input.planStart || existing.planDays !== input.planDays || existing.startMode !== input.startMode || existing.predecessorId !== input.predecessorId || existing.lagDays !== input.lagDays)) throw new ApiError(400, "schedule_rollup_plan_derived", "A roll-up row's dates and dependency are calculated from its children and cannot be changed directly.");
       const update = new sql.Request(transaction); bindPlan(update, existing.projectId, input, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), input.rowVersion);
       const row = (await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,pic_external=@pic_external,plan_man_days=@man_days,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`)).recordset[0];
       if (!row) throw concurrency(); const added = await replacePics(transaction, id, input.picUserIds); const before = existingPlan(existing, oldPics), after = planAudit(input);
@@ -189,9 +200,6 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       };
       visit(id);
       const removing = (await readScheduleRows(transaction, existing.projectId, removed)).filter((row) => seen.has(row.id));
-      if (removing.some((row) => row.kind === "phase" && [MASTER_PLAN_PHASE, TEAM_PLAN_PHASE].includes(row.name))) {
-        throw new ApiError(400, "validation_failed", "Change it in Edit Master Plan.");
-      }
       const inUse = removing.find((row) => row.started || row.kind === "detail" || row.pending || row.referenced);
       if (inUse) throw new ApiError(409, "schedule_row_in_use", `Cannot delete "${inUse.name}": the row has progress, member details, a pending day request, or linked work.`);
       for (const taskId of removed) {
@@ -218,8 +226,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       const existing = await readTask(transaction, id); const project = await demandPlanOwner(transaction, existing.projectId, actor);
       await validateScheduleVersion(transaction, existing.projectId, scheduleVersion); if (!existing.rowVersion.equals(expected)) throw concurrency();
       if (parentId !== existing.parentId) {
-        // Into another part of the plan: the parent rules of a plan edit, and a Resource Plan row stays where it is.
-        if ((await readManagedTaskIds(transaction, existing.projectId)).has(id)) throw new ApiError(409, "managed_resource_task", "A Resource Plan task keeps its place; it can only move up or down where it is.");
+        // Into another part of the plan, on the parent rules of a plan edit. A Resource Plan row may go under a heading
+        // too: it arrives under "ยังไม่จัดหัวข้อ" for the project manager to file (UNSORTED_HEADING).
         if (await hasPendingRequest(transaction, id)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before moving this row.");
         const pics = (await readPics(transaction, existing.projectId)).get(id) ?? [];
         await validateGraphAndHierarchy(transaction, existing.projectId, id, { scheduleVersion, rowVersion: expected, parentId, sortOrder: existing.sortOrder, kind: existing.kind, name: existing.name,

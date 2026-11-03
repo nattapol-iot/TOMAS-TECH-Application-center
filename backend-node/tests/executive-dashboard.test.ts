@@ -5,7 +5,6 @@ import {registerExecutiveDashboardRoutes} from '../src/routes/executive-dashboar
 import type {Database} from '../src/db.js';
 import type {CurrentUserService} from '../src/users.js';
 import {overdueTask,projectHealth,type ExecutiveData} from '../src/executive-dashboard-model.js';
-import {MASTER_PLAN_PHASE} from '../src/schedule-phases.js';
 
 test('non-management roles are rejected before any business query',async()=>{
   const app=Fastify();let calls=0;
@@ -46,9 +45,8 @@ test('project progress, plan %, health and late / blocked counts come from the s
     // Weighted by work days that is 30%; by man-days it would be under 1%.
     taskRowOf({id:11,project_id:1,plan_start:'2099-01-05',plan_days:1,plan_man_days:100}),
     taskRowOf({id:12,project_id:1,sort_order:2,plan_start:'2099-01-06',plan_days:3,plan_man_days:1,percent_done:40,status:'In Progress',actual_start:'2099-01-06'}),
-    // Project 1's Master Plan frame: a row whose plan finish passed in 2020 and that nobody marks Done.
-    taskRowOf({id:15,project_id:1,kind:'phase',name:MASTER_PLAN_PHASE,plan_start:null,sort_order:3}),
-    taskRowOf({id:16,project_id:1,parent_id:15,name:'FAT',plan_start:'2020-01-06',plan_days:1}),
+    // Project 1's Master Plan: a heading whose customer date passed in 2020, with nothing planned under it.
+    taskRowOf({id:16,project_id:1,kind:'phase',name:'FAT',plan_start:'2020-01-06',plan_days:1,sort_order:3}),
     // Project 2: a task that should have finished in 2020, and a blocked one.
     taskRowOf({id:21,project_id:2,plan_start:'2020-01-06',plan_days:5,percent_done:20,status:'In Progress',actual_start:'2020-01-06'}),
     taskRowOf({id:22,project_id:2,sort_order:2,plan_start:'2099-01-05',plan_days:5,status:'Blocked',blocked_reason:'Waiting'}),
@@ -69,7 +67,7 @@ test('project progress, plan %, health and late / blocked counts come from the s
     const [first,second,broken,closed]=data.projects;
     assert.equal(first!.progress,30);assert.equal(first!.plannedProgress,0);assert.equal(first!.health,'On Track');assert.equal(projectHealth(first!),'healthy');
     assert.equal(first!.taskCount,2);assert.equal(first!.forecast,'2099-01-08');assert.equal(first!.overdue,0);
-    // The Master Plan frame row stays listed for milestones and drill-down, flagged as a frame, so the
+    // The heading's frame row stays listed for milestones and drill-down, flagged as a frame, so the
     // Overdue tasks KPI and the risk list still agree with Late = 0.
     assert.equal(data.tasks.find(t=>t.id===16)?.frame,true);
     assert.equal(overdueTask(data.tasks.find(t=>t.id===16)!,data.today),false);

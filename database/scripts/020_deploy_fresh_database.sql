@@ -159,6 +159,7 @@ GO
 :r database/migrations/095_managers_inquiry_write.sql
 :r database/migrations/096_draft_pr_line_edit.sql
 :r database/migrations/097_pr_approval_route.sql
+:r database/migrations/098_master_plan_headings.sql
 
 USE [$(DatabaseName)];
 GO

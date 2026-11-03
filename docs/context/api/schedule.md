@@ -2,39 +2,40 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3d6ad051`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `fb38d1ee`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/:projectId/schedule` | 108–114 |
-| POST | `/api/v1/projects/:projectId/schedule/tasks` | 116–147 |
-| PUT | `/api/v1/schedule/tasks/:id` | 149–172 |
-| DELETE | `/api/v1/schedule/tasks/:id` | 174–206 |
-| POST | `/api/v1/schedule/tasks/:id/move` | 210–247 |
-| POST | `/api/v1/schedule/tasks/:id/updates` | 249–265 |
-| POST | `/api/v1/schedule/tasks/:id/day-requests` | 267–276 |
-| POST | `/api/v1/schedule/day-requests/:id/answer` | 278–288 |
-| POST | `/api/v1/schedule/tasks/:id/details` | 290–294 |
-| DELETE | `/api/v1/schedule/tasks/:id/details` | 296–299 |
-| POST | `/api/v1/projects/:projectId/schedule/baseline` | 301–305 |
-| GET | `/api/v1/schedule/day-requests/pending` | 309–331 |
-| GET | `/api/v1/schedule/search` | 336–355 |
-| GET | `/api/v1/me/work` | 357–365 |
-| GET | `/api/v1/me/work/updates` | 367–370 |
+| GET | `/api/v1/projects/:projectId/schedule` | 116–122 |
+| POST | `/api/v1/projects/:projectId/schedule/tasks` | 124–156 |
+| PUT | `/api/v1/schedule/tasks/:id` | 158–183 |
+| DELETE | `/api/v1/schedule/tasks/:id` | 185–214 |
+| POST | `/api/v1/schedule/tasks/:id/move` | 218–255 |
+| POST | `/api/v1/schedule/tasks/:id/updates` | 257–273 |
+| POST | `/api/v1/schedule/tasks/:id/day-requests` | 275–284 |
+| POST | `/api/v1/schedule/day-requests/:id/answer` | 286–296 |
+| POST | `/api/v1/schedule/tasks/:id/details` | 298–302 |
+| DELETE | `/api/v1/schedule/tasks/:id/details` | 304–307 |
+| POST | `/api/v1/projects/:projectId/schedule/baseline` | 309–313 |
+| GET | `/api/v1/schedule/day-requests/pending` | 317–339 |
+| GET | `/api/v1/schedule/search` | 344–363 |
+| GET | `/api/v1/me/work` | 365–373 |
+| GET | `/api/v1/me/work/updates` | 375–378 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `bindPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 26–35 |
-| `planAudit` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 37–42 |
-| `existingPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 44–48 |
-| `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 52–58 |
-| `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 60–71 |
-| `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 73–103 |
-| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 106–371 |
+| `membersFor` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 27–32 |
+| `bindPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 34–43 |
+| `planAudit` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 45–50 |
+| `existingPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 52–56 |
+| `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 60–66 |
+| `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 68–79 |
+| `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 81–111 |
+| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 114–379 |
 
 ## Direct local dependencies
 

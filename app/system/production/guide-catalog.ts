@@ -661,9 +661,9 @@ const PROJECT_CREATE: Guide = {
   area: "project",
   title: { th: "สร้างโปรเจกต์เมื่อได้ PO", en: "Create a project once the PO arrives", jp: "注文書受領後に案件を作成" },
   summary: {
-    th: "เปิดโปรเจกต์จาก Estimate ที่อนุมัติแล้ว ใส่เลข ERP ผู้จัดการ เลข PO แผนงานและทีม",
-    en: "Open the project from the approved estimate with its ERP number, manager, PO, plan and team.",
-    jp: "承認済み見積から案件を作成し、ERP番号・PM・注文書・計画・チームを入力します。",
+    th: "เปิดโปรเจกต์จาก Estimate ที่อนุมัติแล้ว ใส่เลข ERP ผู้จัดการ เลข PO หัวข้อหลัก (Master Plan) และงานของทีมใต้หัวข้อ (Team Plan)",
+    en: "Open the project from the approved estimate with its ERP number, manager, PO, its main headings (Master Plan) and the team's tasks under them (Team Plan).",
+    jp: "承認済み見積から案件を作成し、ERP番号・PM・注文書・大見出し（マスタープラン）とその下のチームのタスク（チームプラン）を入力します。",
   },
   minutes: 5,
   permissions: ["project.read", "project.write"],
@@ -719,26 +719,27 @@ const PROJECT_CREATE: Guide = {
     },
     {
       target: "project.plan", action: "next", view: "projects",
-      title: { th: "วันที่และไมล์สโตน", en: "Dates and milestones", jp: "日程とマイルストーン" },
+      title: { th: "Master Plan: หัวข้อหลัก", en: "Master Plan: the main headings", jp: "マスタープラン：大見出し" },
       body: {
-        th: "ใส่วันสำคัญ หรือเลือก Master Schedule เป็นต้นแบบ วันเริ่มและวันส่งมอบของโปรเจกต์คิดจากแผนนี้ แก้ต่อได้ในแท็บแผนงาน",
-        en: "Enter the key dates or start from a Master Schedule; the project's start and delivery come from this plan. You refine it later on the Plan tab.",
-        jp: "主要な日付を入力するか、マスタースケジュールを使います。案件の開始日と納期はこの計画から決まり、後で「計画」タブで調整できます。",
-      },
-    },
-    {
-      target: "project.schedule", action: "next", view: "projects",
-      title: { th: "งานหลักและงานย่อย", en: "Main rows and sub rows", jp: "メイン工程とサブ工程" },
-      body: {
-        th: "กด 'เพิ่มงานหลัก' เช่น Software schedule แล้วกด + ที่แถวนั้นเพื่อเพิ่มงานย่อย งานหลักที่มีงานย่อยคิดวันและความคืบหน้าจากงานย่อย ใส่วันทีหลังได้ ใน Project Schedule จะเห็นเป็น 1, 1.1, 1.2",
-        en: "Press Add main row, for example Software schedule, then + on that row for its sub rows. A main row with sub rows takes its dates and progress from them, and dates can wait. Project Schedule shows them as 1, 1.1, 1.2.",
-        jp: "「メイン工程を追加」（例：Software schedule）を押し、その行の + でサブ工程を追加します。サブ工程のあるメイン工程は日程と進捗をサブ工程から算出し、日程は後から入力できます。プロジェクトスケジュールでは 1, 1.1, 1.2 と表示されます。",
+        th: "ใส่หัวข้อหลักของแผนพร้อมวันที่ตกลงกับลูกค้า เช่น 1 Kick-off, 2 Software development หรือเลือก Master Schedule เป็นต้นแบบ ลูกค้าเห็นเฉพาะส่วนนี้ วันเริ่มและวันส่งมอบของโปรเจกต์คิดจากแผน",
+        en: "Enter the plan's main headings with the dates agreed with the customer, such as 1 Kick-off and 2 Software development, or start from a Master Schedule. The customer sees only this part; the project's start and delivery come from the plan.",
+        jp: "計画の大見出しを顧客と合意した日程とともに入力します（例：1 Kick-off、2 Software development）。マスタースケジュールから始めることもできます。顧客にはこの部分だけが表示され、案件の開始日と納期は計画から決まります。",
       },
     },
     {
       target: "project.team", action: "next", view: "projects",
-      title: { th: "สมาชิกในทีม", en: "The team", jp: "メンバー" },
-      body: { th: "ใครทำอะไร ช่วงไหน ใส่ตอนนี้หรือเพิ่มทีหลังก็ได้", en: "Who does what, and when. Add them now or later.", jp: "誰が何をいつ行うか。今でも後からでも追加できます。" },
+      title: { th: "Team Plan: แตกหัวข้อเป็นงานและฟังก์ชัน", en: "Team Plan: tasks and functions under each heading", jp: "チームプラン：見出しをタスクと機能に分ける" },
+      body: {
+        th: "ใต้แต่ละหัวข้อหลัก กด 'เพิ่มงาน' แล้วใส่ชื่องาน ผู้รับผิดชอบ (ต้องมี) วันที่ และ man-days เช่น 2.1 Web App WMS จากนั้นกด + ที่แถวงานเพื่อเพิ่มฟังก์ชันที่ต้องทำ เช่น 2.1.1 Inbound ฟังก์ชันที่ไม่ใส่วันหรือผู้รับผิดชอบจะใช้ของงาน หัวข้อที่ยังไม่แตกงานขึ้นว่า 'ยังไม่แตกแผน' บันทึกได้และแตกทีหลังได้",
+        en: "Under each heading press Add task and give it a name, a member (required), dates and man-days, such as 2.1 Web App WMS. Then press + on the task for the functions to build, such as 2.1.1 Inbound; a function without its own dates or member has its task's. A heading not broken down yet shows Not broken down; you can save and do it later.",
+        jp: "各見出しで「タスクを追加」を押し、タスク名・担当者（必須）・日程・人日を入力します（例：2.1 Web App WMS）。タスク行の + で作る機能を追加します（例：2.1.1 Inbound）。日程や担当者のない機能はタスクのものを使います。まだ分けていない見出しには「未展開」と表示され、保存して後から分けられます。",
+      },
+    },
+    {
+      target: "project.teamAdd", action: "next", view: "projects",
+      title: { th: "เพิ่มงานใต้หัวข้อ", en: "Add a task under a heading", jp: "見出しにタスクを追加" },
+      body: { th: "ปุ่ม 'เพิ่มงาน' อยู่ที่แต่ละหัวข้อหลัก งานใหม่ใช้วันที่ของหัวข้อเป็นค่าเริ่มต้น", en: "Each heading has its own Add task button; a new task starts with the heading's dates.", jp: "各大見出しに「タスクを追加」があります。新しいタスクは見出しの日程から始まります。" },
+      missing: { th: "เพิ่มหัวข้อหลักใน Master Plan ก่อน ปุ่มนี้จึงจะขึ้น กด 'ถัดไป'", en: "Add a Master Plan heading first and the button appears. Press Next.", jp: "先にマスタープランの見出しを追加するとボタンが表示されます。「次へ」を押します。" },
     },
     {
       target: "project.save", action: "click", view: "projects",
@@ -757,9 +758,9 @@ const PROJECT_MASTER_PLAN: Guide = {
   area: "project",
   title: { th: "แก้ไข Master Plan ของโปรเจกต์ที่สร้างแล้ว", en: "Edit the Master Plan of an existing project", jp: "作成済み案件のマスタープランを編集" },
   summary: {
-    th: "เพิ่ม แก้ หรือลบไมล์สโตน แผนทีม และงานหลัก/งานย่อยของโปรเจกต์ที่มีอยู่ เลือก Master Schedule ได้ถ้ายังไม่มีแผน และปรับวันเริ่ม/วันส่งมอบตามแผน",
-    en: "Add, change or remove the milestones, team plan and main rows and sub rows of a project that exists, start from a Master Schedule when it has none, and move its dates to the plan.",
-    jp: "既存案件のマイルストーン、チーム計画、メイン工程・サブ工程を追加・変更・削除します。計画がなければマスタースケジュールから始め、日程を計画に合わせます。",
+    th: "แก้หัวข้อหลัก (Master Plan) และงานกับฟังก์ชันใต้หัวข้อ (Team Plan) ของโปรเจกต์ที่มีอยู่ เลือก Master Schedule ได้ถ้ายังไม่มีแผน และปรับวันเริ่ม/วันส่งมอบตามแผน",
+    en: "Change the main headings (Master Plan) and the tasks and functions under them (Team Plan) of a project that exists, start from a Master Schedule when it has none, and move its dates to the plan.",
+    jp: "既存案件の大見出し（マスタープラン）とその下のタスク・機能（チームプラン）を変更します。計画がなければマスタースケジュールから始め、日程を計画に合わせます。",
   },
   minutes: 2,
   permissions: ["project.write", "schedule.plan"],
@@ -786,26 +787,21 @@ const PROJECT_MASTER_PLAN: Guide = {
     },
     {
       target: "project.plan", action: "next", view: "projects",
-      title: { th: "แก้ไมล์สโตน", en: "Change the milestones", jp: "マイルストーンを変更" },
+      title: { th: "หัวข้อหลัก (Master Plan)", en: "The main headings (Master Plan)", jp: "大見出し（マスタープラン）" },
       body: {
-        th: "แก้ชื่อหรือวันได้ทุกแถว กด 'เพิ่มแผน' เพื่อเพิ่ม หรือกด ✕ เพื่อลบ แถวที่มีความคืบหน้าแล้วลบไม่ได้ ถ้ายังไม่มีแผน เลือก Master Schedule เป็นต้นแบบได้",
-        en: "Change any row's name or dates, add a row, or remove one with ✕. A row with progress cannot be removed. With no plan yet, start from a Master Schedule.",
-        jp: "各行の名前や日程を変更し、行を追加、または ✕ で削除します。進捗のある行は削除できません。計画がなければマスタースケジュールから始められます。",
+        th: "แก้ชื่อหรือวันที่ตกลงกับลูกค้าได้ทุกหัวข้อ กด 'เพิ่มหัวข้อหลัก' เพื่อเพิ่ม หรือกด ✕ เพื่อลบหัวข้อพร้อมงานข้างใต้ หัวข้อที่มีงานคืบหน้าแล้วลบไม่ได้ ถ้ายังไม่มีแผน เลือก Master Schedule เป็นต้นแบบได้",
+        en: "Change any heading's name or the dates agreed with the customer, add one, or remove one with ✕ together with the rows under it. A heading with work in progress under it cannot be removed. With no plan yet, start from a Master Schedule.",
+        jp: "各見出しの名前や顧客と合意した日程を変更し、追加、または ✕ で配下の行とともに削除します。進行中の作業がある見出しは削除できません。計画がなければマスタースケジュールから始められます。",
       },
       missing: { th: "บัญชีนี้แก้แผนของโปรเจกต์นี้ไม่ได้ กด 'จบบทสอน'", en: "This account cannot change this project's plan. Press Finish.", jp: "このアカウントはこの案件の計画を変更できません。「完了」を押します。" },
     },
     {
       target: "project.team", action: "next", view: "projects",
-      title: { th: "แผนของทีม", en: "The team plan", jp: "チーム計画" },
-      body: { th: "ใครทำอะไร ช่วงไหน แก้หรือเพิ่มได้ในที่เดียวกัน คนที่ถูกเพิ่มจะได้รับแจ้ง", en: "Who does what, and when. Change or add rows here; anyone newly assigned is told.", jp: "誰が何をいつ行うか。ここで変更・追加でき、新しく割り当てられた人に通知されます。" },
-    },
-    {
-      target: "project.planExisting", action: "next", view: "projects",
-      title: { th: "งานหลักและงานย่อย", en: "Main rows and sub rows", jp: "メイン工程とサブ工程" },
+      title: { th: "งานและฟังก์ชัน (Team Plan)", en: "Tasks and functions (Team Plan)", jp: "タスクと機能（チームプラン）" },
       body: {
-        th: "แถวที่สร้างไว้ใน Project Schedule แสดงตรงนี้ พิมพ์ชื่อใหม่ แก้วัน หรือกด ✕ เพื่อลบ (ลบงานหลักจะลบงานย่อยด้วย กด ↻ เพื่อเอากลับ) กด 'เพิ่มงานหลัก' หรือกด + ที่แถวงานหลักเพื่อเพิ่มงานย่อย แถวที่มีความคืบหน้าลบไม่ได้",
-        en: "Rows made in Project Schedule are here. Type a new name, change the dates, or press ✕ to remove one (removing a main row removes its sub rows; ↻ brings it back). Press Add main row, or + on a main row for a sub row. A row with progress cannot be removed.",
-        jp: "プロジェクトスケジュールで作成した行がここにあります。名前や日程を変更し、✕ で削除します（メイン工程を削除するとサブ工程も削除、↻ で元に戻す）。「メイン工程を追加」、またはメイン工程の + でサブ工程を追加します。進捗のある行は削除できません。",
+        th: "แต่ละหัวข้อแสดงงานของทีม กด 'เพิ่มงาน' เลือกผู้รับผิดชอบ (ต้องมี) และกด + ที่งานเพื่อเพิ่มฟังก์ชัน งานที่มีฟังก์ชันคิดวันจากฟังก์ชัน แถวที่มีความคืบหน้าแก้ชื่อได้แต่ลบไม่ได้ คนที่ถูกเพิ่มจะได้รับแจ้ง งานที่รอจัดหัวข้ออยู่ใต้ 'ยังไม่จัดหัวข้อ' ลากเข้าหัวข้อที่ถูกใน Project Schedule",
+        en: "Each heading lists the team's tasks. Press Add task, pick its member (required), and press + on a task for its functions. A task with functions takes its dates from them. Rows with progress can be renamed but not removed; anyone newly assigned is told. Rows waiting under ยังไม่จัดหัวข้อ are dragged to the right heading in Project Schedule.",
+        jp: "各見出しにチームのタスクが並びます。「タスクを追加」で担当者（必須）を選び、タスクの + で機能を追加します。機能のあるタスクは日程を機能から算出します。進捗のある行は名前を変更できますが削除できません。新しく割り当てられた人に通知されます。「ยังไม่จัดหัวข้อ」の下で待つ行は、プロジェクトスケジュールで正しい見出しへドラッグします。",
       },
     },
     {
@@ -825,9 +821,9 @@ const PROJECT_PLAN: Guide = {
   area: "project",
   title: { th: "วางแผนงานโปรเจกต์บน Gantt", en: "Plan a project on the Gantt", jp: "ガントで案件を計画" },
   summary: {
-    th: "เพิ่มงานในแผน แทรกงานย่อยด้วย + กำหนดวันและผู้รับผิดชอบโดยเห็นภาระงานของแต่ละคน และลากแถบบน Gantt เพื่อเลื่อนวัน",
-    en: "Add tasks to the plan, add sub rows in place with +, set dates and owners while seeing each person's load, and drag bars on the Gantt to move dates.",
-    jp: "計画に作業を追加し、+ でその場にサブ工程を追加し、各自の負荷を見ながら日付と担当者を決め、ガントのバーをドラッグして日程を動かします。",
+    th: "ดูแผนแบบ Master Plan (หัวข้อหลักตามวันที่ลูกค้า) หรือ Team Plan (งานทั้งหมด) เพิ่มงานด้วย + กำหนดวันและผู้รับผิดชอบโดยเห็นภาระงานของแต่ละคน และลากแถบบน Gantt เพื่อเลื่อนวัน",
+    en: "See the plan as the Master Plan (headings on the customer's dates) or the Team Plan (every row), add rows in place with +, set dates and owners while seeing each person's load, and drag bars on the Gantt to move dates.",
+    jp: "計画をマスタープラン（顧客の日程の見出し）またはチームプラン（全行）で表示し、+ でその場に行を追加し、各自の負荷を見ながら日付と担当者を決め、ガントのバーをドラッグして日程を動かします。",
   },
   minutes: 5,
   permissions: ["schedule.read", "schedule.plan"],
@@ -857,6 +853,16 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน เพิ่มแถวแรกในขั้นถัดไป", en: "This project has no plan yet; add the first row in the next step.", jp: "この案件にはまだ計画がありません。次の手順で最初の行を追加します。" },
     },
     {
+      target: "plan.level", action: "next", view: "projects",
+      title: { th: "Master Plan หรือ Team Plan", en: "Master Plan or Team Plan", jp: "マスタープランかチームプランか" },
+      body: {
+        th: "Master Plan แสดงเฉพาะหัวข้อหลักตามวันที่ตกลงกับลูกค้า Team Plan แสดงงานและฟังก์ชันทั้งหมด หัวข้อที่ยังไม่มีงานขึ้น 'ยังไม่แตกแผน' และหัวข้อที่งานเลยวันลูกค้าขึ้น 'เลยวัน Master Plan'",
+        en: "Master Plan shows only the headings on the dates agreed with the customer; Team Plan shows every task and function. A heading with no task yet says Not broken down, and one whose tasks run past the customer's dates says Past the Master Plan dates.",
+        jp: "マスタープランは顧客と合意した日程の見出しだけを、チームプランはすべてのタスクと機能を表示します。タスクのない見出しには「未展開」、タスクが顧客の日程を超える見出しには「マスタープランの日程を超過」と表示されます。",
+      },
+      missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
+    },
+    {
       target: "plan.insert", action: "next", view: "projects",
       title: { th: "แทรกงานตรงที่ต้องการด้วย +", en: "Add a row in place with +", jp: "+ でその場に行を追加" },
       body: {
@@ -870,9 +876,9 @@ const PROJECT_PLAN: Guide = {
       target: "plan.delete", action: "next", view: "projects",
       title: { th: "ลบแถวที่พิมพ์ผิด", en: "Delete a row added by mistake", jp: "誤って追加した行を削除" },
       body: {
-        th: "คลิกแถว แล้วกดแก้ไข จากนั้นกด 'ลบแถว' และยืนยันชื่อกับจำนวนแถวลูกที่จะลบ แถวที่มีความคืบหน้าหรืองานอ้างอิงลบไม่ได้ หัวข้อ Master Plan และ Team plan ต้องแก้ใน Edit Master Plan",
-        en: "Click a row, then Edit, and press Delete row. Confirm its name and the number of descendant rows to remove. Rows with progress or linked work cannot be deleted. Change the Master Plan and Team plan headings in Edit Master Plan.",
-        jp: "行をクリックして編集を開き、「行を削除」を押します。名前と配下の削除行数を確認してください。進捗や参照先のある行は削除できません。Master PlanとTeam planの見出しはEdit Master Planで変更します。",
+        th: "คลิกแถว แล้วกดแก้ไข จากนั้นกด 'ลบแถว' และยืนยันชื่อกับจำนวนแถวลูกที่จะลบ แถวที่มีความคืบหน้าหรืองานอ้างอิงลบไม่ได้",
+        en: "Click a row, then Edit, and press Delete row. Confirm its name and the number of descendant rows to remove. Rows with progress or linked work cannot be deleted.",
+        jp: "行をクリックして編集を開き、「行を削除」を押します。名前と配下の削除行数を確認してください。進捗や参照先のある行は削除できません。",
       },
       missing: { th: "คลิกแถวแล้วกดแก้ไขเพื่อดูปุ่มลบ หากแค่เรียนรู้ให้กดถัดไป", en: "Click a row, then Edit to see Delete row. Press Next if only browsing.", jp: "行をクリックして編集を開くと削除ボタンが表示されます。閲覧だけなら「次へ」を押してください。" },
     },
@@ -886,9 +892,9 @@ const PROJECT_PLAN: Guide = {
       target: "plan.rowName", action: "next", view: "projects",
       title: { th: "ชื่องาน", en: "Name the task", jp: "作業名" },
       body: {
-        th: "ตั้งชื่อ แล้วเลือกหัวข้อหลัก / งาน / งานย่อยด้านบน หัวข้อหลักสรุปวันที่จากงานใต้หัวข้อ ส่วนงานย่อยต้องเลือกงานแม่ที่ชื่อ WBS",
-        en: "Name it and choose Main heading / Task / Sub task above. Headings roll up dates from their tasks; sub tasks need a parent task under WBS name.",
-        jp: "名前を入力し、上でメイン見出し / タスク / サブタスクを選びます。見出しは配下の日程を集計します。サブタスクはWBS名で親タスクを選びます。",
+        th: "ตั้งชื่อ แล้วเลือกระดับด้านบน แถวบนสุดเป็นหัวข้อหลักเท่านั้น และใส่วันที่ตกลงกับลูกค้าได้ งานใต้หัวข้อหลักต้องมีผู้รับผิดชอบ ฟังก์ชันใต้งานใช้ผู้รับผิดชอบของงานถ้าไม่เลือก เลือกแถวแม่ที่ชื่อ WBS",
+        en: "Name it and choose the level above. The top of the plan holds main headings only, which may carry the dates agreed with the customer. A task under a heading needs a member; a function under a task has the task's member unless you pick another. Choose the parent under WBS name.",
+        jp: "名前を入力し、上で階層を選びます。最上位は大見出しのみで、顧客と合意した日程を持てます。見出しの下のタスクには担当者が必要で、タスクの下の機能は別の人を選ばなければタスクの担当者になります。WBS名で親を選びます。",
       },
     },
     {

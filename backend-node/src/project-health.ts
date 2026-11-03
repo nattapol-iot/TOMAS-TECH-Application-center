@@ -7,7 +7,6 @@
  * summarizeProjectSchedule() below works on resolved leaves instead, so linked rows count there.
  */
 
-import { MASTER_PLAN_PHASE } from "./schedule-phases.js";
 import type { resolveTasks, TaskRow } from "./schedule-service.js";
 
 export type ProjectHealth = "On Track" | "At Risk" | "Delayed" | "No plan" | "On Hold" | "Completed";
@@ -50,15 +49,21 @@ export function projectHealth(project: { status: string; targetDelivery: string 
 /*
  * One schedule summary for every screen that shows a project's progress or health (Project Schedule,
  * Projects portfolio, Executive). Progress is weighted by work days, max(1, workDays) per leaf, the same
- * weight the schedule roll-ups use. Rows under the Master Plan phase are the customer timeline frame,
- * so they are left out of progress, health and the counts unless the project has nothing else.
+ * weight the schedule roll-ups use. A main heading's own dates are the customer's (the Master Plan): a
+ * frame, left out of progress, health and the counts unless the project has nothing planned under its
+ * headings yet, and the next milestone either way.
  */
 
-/** A schedule row with no active children, with the dates the calculation resolved for it. */
+/**
+ * A schedule row with no active children, with the dates the calculation resolved for it; or a main
+ * heading with the customer's dates (inMasterPlan), which is a roll-up once rows sit under it.
+ */
 export type ScheduleLeaf = {
   id: number; name: string; planStart: string | null; planFinish: string | null; workDays: number;
   status: string; percentComplete: number; forecastFinish: string | null; actualFinish: string | null;
   baselineFinish: string | null; isMilestone: boolean; inMasterPlan: boolean;
+  /** A heading with rows under it: only a milestone, never counted (its rows are). */
+  rollup: boolean;
 };
 
 export type ProjectScheduleSummary = {
@@ -77,32 +82,33 @@ const endOf = (leaf: ScheduleLeaf) => leaf.actualFinish ?? leaf.forecastFinish ?
 const earliest = (values: Array<string | null>) => values.filter((value): value is string => value !== null).sort()[0] ?? null;
 const latest = (values: Array<string | null>) => values.filter((value): value is string => value !== null).sort().at(-1) ?? null;
 
-/** Leaves that count: every non-Master-Plan leaf; Master Plan leaves only when nothing else exists. */
+/** Leaves that count: every row under the headings; the headings' own dates only when nothing is planned under them. */
 export function countedLeaves(leaves: ScheduleLeaf[]): ScheduleLeaf[] {
-  const work = leaves.filter((leaf) => !leaf.inMasterPlan);
-  return work.length ? work : leaves;
+  const own = leaves.filter((leaf) => !leaf.rollup);
+  const work = own.filter((leaf) => !leaf.inMasterPlan);
+  return work.length ? work : own;
 }
 
-/** Build leaves from a resolveTasks() result + the TaskRow list (phase rows excluded, roll-ups excluded). */
+/** Build leaves from a resolveTasks() result + the TaskRow list: rows without children, and the headings' own dates. */
 export function scheduleLeaves(tasks: TaskRow[], calculation: ReturnType<typeof resolveTasks>): ScheduleLeaf[] {
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  const topOf = (task: TaskRow): TaskRow => {
-    const seen = new Set<number>([task.id]); let current = task;
-    while (current.parentId !== null) {
-      const parent = byId.get(current.parentId);
-      if (!parent || seen.has(parent.id)) break;
-      seen.add(parent.id); current = parent;
-    }
-    return current;
-  };
   const leaves: ScheduleLeaf[] = [];
   for (const task of tasks) {
     const resolved = calculation.byId.get(task.id);
-    if (!resolved || task.kind === "phase" || resolved.children.length) continue;
-    const top = topOf(task);
+    if (!resolved) continue;
+    if (task.kind === "phase") {
+      // A heading carries the customer's dates in its own plan columns; a phase below the top has none.
+      if (task.parentId !== null || !task.planStart) continue;
+      const rollup = resolved.children.length > 0;
+      leaves.push({ id: task.id, name: task.name, planStart: task.planStart, planFinish: addDays(task.planStart, Math.max(1, task.planDays) - 1),
+        workDays: resolved.workDays, status: resolved.status, percentComplete: resolved.percentComplete,
+        forecastFinish: rollup ? resolved.forecastFinish : null, actualFinish: resolved.actualFinish, baselineFinish: task.baselineFinish,
+        isMilestone: false, inMasterPlan: true, rollup });
+      continue;
+    }
+    if (resolved.children.length) continue;
     leaves.push({ id: task.id, name: task.name, planStart: resolved.planStart, planFinish: resolved.planFinish, workDays: resolved.workDays,
       status: resolved.status, percentComplete: resolved.percentComplete, forecastFinish: resolved.forecastFinish, actualFinish: resolved.actualFinish,
-      baselineFinish: task.baselineFinish, isMilestone: task.isMilestone, inMasterPlan: top.kind === "phase" && top.name === MASTER_PLAN_PHASE });
+      baselineFinish: task.baselineFinish, isMilestone: task.isMilestone, inMasterPlan: false, rollup: false });
   }
   return leaves;
 }

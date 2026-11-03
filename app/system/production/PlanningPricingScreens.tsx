@@ -1953,6 +1953,24 @@ const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind 
 type QuickPlanKind = "phase" | "task" | "sub";
 type ScheduleRowInitial = { kind: QuickPlanKind; parentId: number | null; beforeId: number | null; start?: string };
 
+/** A main heading's own dates are the customer's (the Master Plan); its bar follows the rows under it. */
+const customerPeriod = (task: ScheduleTask) => task.kind === "phase" && task.parentId === null && task.storedPlanStart
+  ? { start: task.storedPlanStart, finish: ganttShift(task.storedPlanStart, Math.max(1, task.planDays) - 1) } : null;
+const periodDays = (start: string, finish: string) => Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+/** A heading's customer dates come as a pair or not at all. */
+const customerPeriodReady = (period: { start: string; finish: string }) => (!period.start && !period.finish) || Boolean(period.start && period.finish && period.finish >= period.start);
+/** A function starts with its task's people (the API does the same when none are named). */
+const picsOf = (rows: ScheduleTask[], id: number | null) => (rows.find((row) => row.id === id && row.kind === "task")?.pics ?? []).filter((pic) => pic.active !== false).map((pic) => pic.id);
+
+function CustomerPeriodFields({ value, onChange }: { value: { start: string; finish: string }; onChange: (value: { start: string; finish: string }) => void }) {
+  const t = useUiText();
+  return <>
+    <label className="field" data-guide="plan.customerDates"><span>{t("Plan.customerStart")}</span><input type="date" value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label>
+    <label className="field"><span>{t("Plan.customerFinish")}</span><input type="date" min={value.start || undefined} value={value.finish} onChange={(event) => onChange({ ...value, finish: event.target.value })} /></label>
+    <div className="info-strip span-2" role="note"><Icon name="calendar" /><span>{t("Plan.headingHint")}</span></div>
+  </>;
+}
+
 function scheduleRowPosition(schedule: ProjectSchedule, task: ScheduleTask, kind: QuickPlanKind): ScheduleRowInitial {
   const rows = flattenTasks(schedule.tasks), byId = new Map(rows.map((row) => [row.id, row]));
   let anchor = task;
@@ -1976,7 +1994,9 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
 }) {
   const t = useUiText();
   const [kind, setKind] = useState<QuickPlanKind>(initial?.kind ?? "task");
-  const [parentId, setParentId] = useState(initial?.parentId == null ? "" : String(initial.parentId));
+  // The top of the plan holds headings only, so a task starts under the row it was added from, or the first heading.
+  const [parentId, setParentId] = useState(() => initial?.parentId != null ? String(initial.parentId)
+    : initial?.kind === "phase" ? "" : String(schedule.tasks.find((row) => row.kind === "phase")?.id ?? ""));
   const [beforeId, setBeforeId] = useState<number | null>(initial?.beforeId ?? null);
   const [insertionAnchorId, setInsertionAnchorId] = useState(anchor?.id);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -1985,10 +2005,11 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
   const [start, setStart] = useState<StartDraft>(() => ({ ...startDraftOf(null), ...(initial?.start ? { planStart: initial.start } : {}) }));
   const [planDays, setPlanDays] = useState(1);
   const [visibility, setVisibility] = useState(anchor?.visibility ?? "Internal");
-  const [picUserIds, setPicUserIds] = useState<number[]>([]);
+  const [picUserIds, setPicUserIds] = useState<number[]>(() => picsOf(flattenTasks(schedule.tasks), initial?.parentId ?? null));
   const [picExternal, setPicExternal] = useState("");
   const [planManDays, setPlanManDays] = useState(0);
   const [milestone, setMilestone] = useState(false);
+  const [customer, setCustomer] = useState({ start: "", finish: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const allRows = flattenTasks(schedule.tasks);
@@ -2003,15 +2024,23 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
         : !subParents.includes(insertionAnchor) ? "Plan.subInUse" : null
     : !subParents.length ? "Plan.noSubParent" : null;
   const selectedParent = kind === "phase" ? null : parentId ? Number(parentId) : null;
+  const parentRow = allRows.find((row) => row.id === selectedParent);
+  // A task under a heading needs a member (owner, 2026-11-03); a function has its task's unless others are named.
+  const needsMember = kind !== "phase" && parentRow?.kind === "phase" && !picUserIds.length;
   const sortOrder = Math.max(0, ...allRows.filter((task) => task.parentId === selectedParent).map((task) => task.sortOrder)) + 10;
-  const invalid = !name.trim() || (kind !== "phase" && (!startReady(start) || planDays < 1 || planManDays < 0))
+  const invalid = !name.trim() || (kind !== "phase" && (!parentRow || !startReady(start) || planDays < 1 || planManDays < 0)) || needsMember
+    || (kind === "phase" && !customerPeriodReady(customer))
     || (kind === "sub" && !subParents.some((row) => row.id === selectedParent));
+  const pickParent = (next: number | null) => {
+    setParentId(next == null ? "" : String(next));
+    if (!picUserIds.length) setPicUserIds(picsOf(allRows, next));
+  };
   const chooseKind = (value: QuickPlanKind) => {
     const position = insertionAnchor ? scheduleRowPosition(schedule, insertionAnchor, value) : null;
     const choices = value === "sub" ? subParents : taskParents;
     const preferred = position ? position.parentId : null;
-    const nextParent = value === "phase" ? null : choices.some((row) => row.id === preferred) ? preferred : value === "sub" ? choices[0]?.id ?? null : null;
-    setKind(value); setParentId(nextParent == null ? "" : String(nextParent));
+    const nextParent = value === "phase" ? null : choices.some((row) => row.id === preferred) ? preferred : choices[0]?.id ?? null;
+    setKind(value); pickParent(nextParent);
     setBeforeId(position?.parentId === nextParent ? position.beforeId : null);
   };
   const submit = async (addNext = false) => {
@@ -2031,8 +2060,8 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
           name: name.trim(),
           isMilestone: false,
           visibility,
-          planStart: null,
-          planDays: 1,
+          planStart: customer.start || null,
+          planDays: customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1,
           startMode: "manual",
           predecessorId: null,
           lagDays: 0,
@@ -2058,7 +2087,7 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
       notify(`${schedule.projectNo} · ${name.trim()} ${t("Plan.quickAdded")}`);
       if (addNext) {
         setName(""); setInsertionAnchorId(created.id);
-        if (kind === "phase") { setKind("task"); setParentId(String(created.id)); setBeforeId(null); }
+        if (kind === "phase") { setKind("task"); setParentId(String(created.id)); setBeforeId(null); setCustomer({ start: "", finish: "" }); }
         else setStart({ mode: "manual", planStart: linkedStart(finish, 0, new Set(schedule.holidays ?? [])) ?? start.planStart, predecessorId: "", lagDays: 0 });
       }
       await onCreated(selectedParent);
@@ -2092,14 +2121,15 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
       <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input ref={nameInput} data-guide="plan.quickName" maxLength={500} value={name} readOnly={busy} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(true); } }} /></label>
       {kind !== "phase" ? <>
-        <label className="field"><span><LocalizedText text={"Plan.wbsName"} /></span><select value={parentId} disabled={busy} onChange={(event) => { setParentId(event.target.value); setBeforeId(null); }}>{kind === "task" ? <option value="">{t("Plan.topLevel")}</option> : null}{parents.map((parent) => <option key={parent.id} value={parent.id}>{"　".repeat(parent.depth)}{parent.wbs} {parent.name}</option>)}</select></label>
+        <label className="field"><span><LocalizedText text={"Plan.wbsName"} /></span><select value={parentId} disabled={busy} onChange={(event) => { pickParent(event.target.value ? Number(event.target.value) : null); setBeforeId(null); }}>{parentRow ? null : <option value="">{t("Plan.pickParent")}</option>}{parents.map((parent) => <option key={parent.id} value={parent.id}>{"　".repeat(parent.depth)}{parent.wbs} {parent.name}</option>)}</select></label>
         <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
         <label className="field" data-guide="plan.rowDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
         <PicFieldsWithLoad bootstrap={bootstrap} span={draftSpan(schedule, start, planDays, milestone)} taskId={null} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
+        {needsMember ? <p className="muted span-2" role="status" data-guide="plan.memberRequired">{t("Plan.memberRequired")}</p> : null}
         <label className="field"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
         <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>
-      </> : <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div>}
+      </> : <CustomerPeriodFields value={customer} onChange={setCustomer} />}
     </div>
   </Modal>;
 }
@@ -2129,12 +2159,14 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const [planManDays, setPlanManDays] = useState(task.planManDays);
   const [picUserIds, setPicUserIds] = useState<number[]>(task.pics.map((pic) => pic.id));
   const [picExternal, setPicExternal] = useState(task.picExternal);
+  const [customer, setCustomer] = useState(() => customerPeriod(task) ?? { start: "", finish: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [failedAction, setFailedAction] = useState<"save" | "delete">("save");
+  const parentIsHeading = task.parentId !== null && flattenTasks(schedule.tasks).find((row) => row.id === task.parentId)?.kind === "phase";
+  const keepsMember = task.kind === "task" && parentIsHeading && task.pics.length > 0 && !picUserIds.length;
   const removing = flattenTasks([task]);
-  const deleteReason = removing.some((row) => row.kind === "phase" && ["Master Plan", "Team plan"].includes(row.name)) ? "Plan.deleteMaster"
-    : removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0) ? "Plan.deleteProgress"
+  const deleteReason = removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0) ? "Plan.deleteProgress"
       : removing.some((row) => row.kind === "detail") ? "Plan.deleteDetail" : "";
   const remove = async () => {
     if (busy || deleteReason) return;
@@ -2161,8 +2193,8 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
         scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion,
         parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: name.trim(),
         isMilestone: isPhase ? false : milestone, visibility,
-        ...(isPhase ? { ...lockedStart, planStart: null } : datesLocked ? lockedStart : startBody(start, task.storedPlanStart ?? null)),
-        planDays: isPhase ? 1 : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : planDays,
+        ...(isPhase ? { ...lockedStart, planStart: customer.start || null } : datesLocked ? lockedStart : startBody(start, task.storedPlanStart ?? null)),
+        planDays: isPhase ? (customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1) : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : planDays,
         picUserIds: isPhase ? [] : picUserIds, picExternal: isPhase ? "" : picExternal.trim(), planManDays: isPhase ? 0 : planManDays,
       }) });
       await onSaved();
@@ -2180,19 +2212,20 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   return <Modal title="Schedule.editRow" subtitle={`${schedule.projectNo} · ${task.wbs} · ${task.name}`} size="lg" onClose={onClose} footer={<>
     <span style={{ marginRight: "auto" }} title={deleteReason ? t(deleteReason) : undefined}><button className="btn danger ghost" type="button" data-guide="plan.delete" disabled={busy || Boolean(deleteReason)} title={deleteReason ? t(deleteReason) : undefined} onClick={() => { void remove(); }}>{t("Plan.deleteRow")}</button></span>
     <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
+    <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0 || keepsMember || (isPhase && !customerPeriodReady(customer))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
   </>}>
     {error ? <LoadError message={t(error)} retry={() => { void (failedAction === "delete" ? remove() : submit()); }} /> : null}
     <div className="form-grid two">
       <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
-      {isPhase ? <div className="callout warning span-2"><Icon name="alertCircle" /><span><strong><LocalizedText text={"Phase เป็นแถวสรุป"} /></strong><small><LocalizedText text={"วันที่ ระยะเวลา และความคืบหน้าจะคำนวณจาก Task ใต้ Phase"} /></small></span></div> : <>
+      {isPhase ? <CustomerPeriodFields value={customer} onChange={setCustomer} /> : <>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
         {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={task.planStart ?? ""} disabled /></label>
           : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>}
         <PicFieldsWithLoad bootstrap={bootstrap} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
+        {keepsMember ? <p className="muted span-2" role="status">{t("Plan.memberRequired")}</p> : null}
         <label className="field span-2"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
       </>}
     </div>
@@ -2304,6 +2337,9 @@ const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${use
 // The plan's link: "#/projects/plan/<project>/task/<task>?only=late&zoom=quarter" (screen-link.tsx).
 const PLAN_FILTER_LINK = optionalChoiceLink(PLAN_FILTERS.map((item) => item.key));
 const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
+/** The whole plan (Team Plan), or only the headings on the customer's dates (Master Plan). */
+type PlanLevel = "team" | "master";
+const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master"]);
 /** Project numbers in natural order: PJ26009 before PJ26010. */
 const byProjectNumber = (a: { number: string }, b: { number: string }) => a.number.localeCompare(b.number, "en", { numeric: true, sensitivity: "base" });
 const isLeafTask = (task: ScheduleTask) => task.kind !== "phase" && task.children.length === 0;
@@ -2349,6 +2385,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [zoom, setZoom] = useLinkedState<GanttZoomChoice>("zoom", "fit", PLAN_ZOOM_LINK);
   const [anchor, setAnchor] = useState(today);
   const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
+  const [level, setLevel] = useLinkedState<PlanLevel>("level", "team", PLAN_LEVEL_LINK);
+  const masterView = level === "master";
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
   const [createOpen, setCreateOpen] = useState(false);
@@ -2446,7 +2484,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     mine: (task) => isLeafTask(task) && task.pics.some((pic) => pic.id === bootstrap.user.id),
   };
   const filterItems = PLAN_FILTERS.map((item) => ({ ...item, value: rows.filter(filterRules[item.key]).length }));
-  const visible = activeSchedule ? planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null) : [];
+  const visible = !activeSchedule ? [] : masterView ? activeSchedule.tasks.filter((task) => task.kind === "phase")
+    : planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null);
   const target = selectedProject?.targetDelivery ?? null;
   const range = zoom === "fit"
     ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today)
@@ -2471,7 +2510,19 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     const summaryRow = task.kind === "phase" || task.children.length > 0;
     const dropped = movePending?.taskId === task.id ? movePending : null;
     const movable = canPlan && !filter && !movePending && !saving;
-    const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : null;
+    // A heading with nothing under it yet, or whose rows run past the customer's dates, says so.
+    const committed = customerPeriod(task);
+    const headingMark = task.kind !== "phase" || task.parentId !== null ? null : !task.children.length ? <Badge tone="amber">{uiText("Plan.notBrokenDown")}</Badge>
+      : committed && task.planFinish && task.planFinish > committed.finish ? <Badge tone="red">{uiText("Plan.pastMasterPlan")}</Badge> : null;
+    const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : headingMark;
+    if (masterView) return {
+      key: `task:${task.id}`, depth: 0, kind: "phase", label: <><span className="mono">{task.wbs}</span> {task.name}</>,
+      meta: [uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "), ...(lock ? { status: lock } : {}),
+      onOpen: () => setDrawerTaskId(task.id), start: committed?.start ?? task.planStart, finish: committed?.finish ?? task.planFinish,
+      progress: Number(task.percentComplete), tone: scheduleTone(task, today), baselineStart: task.baselineStart, baselineFinish: task.baselineFinish,
+      forecastFinish: task.planFinish, milestone: false, target, selected: drawerTaskId === task.id,
+      title: `${task.wbs} ${task.name} · ${committed?.start ?? task.planStart ?? "—"} → ${committed?.finish ?? task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
+    };
     return {
       key: `task:${task.id}`, depth: task.depth, kind: summaryRow ? "phase" : "task",
       label: <><span className="mono">{task.wbs}</span> {task.name}</>,
@@ -2643,7 +2694,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
         {rows.length ? <div className="plan-gantt" data-guide="plan.gantt">
           <div className="plan-gantt-controls">
-            <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />
+            <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
+              {(["team", "master"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(value === "master" ? "Plan.levelMaster" : "Plan.levelTeam")}</button>)}
+            </div>
+            {masterView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
             <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
           </div>
           <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={links.length > 0} draggable={canPlan} />

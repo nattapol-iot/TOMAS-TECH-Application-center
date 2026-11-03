@@ -178,9 +178,9 @@ try {
  assert.equal((await call("GET",`/projects/handover/${direct.id}`,"Admin")).reason,"recordPo");
  await call("POST","/projects","Admin",{...projectBody,purchaseOrderNumber:""},400);
  const project=await call("POST","/projects","Admin",{...projectBody,managerId:sales.id,
-   masterPlan:[{name:"Kick-off meeting",start:tomorrow,finish:tomorrow},{name:"Go Live",start:tomorrow,finish:dayAfter(30)}],
-   team:[{userId:engineer.id,task:"Controls design",start:yesterday,finish:dayAfter(10),planManDays:12.5},{userId:admin.id,task:"Commissioning",start:tomorrow,finish:dayAfter(20)}]},201);
- // The ERP number is kept as typed (upper-cased), the dates come from the plan, and the plan is two phases of ordinary schedule rows.
+   masterPlan:[{name:"Kick-off meeting",start:tomorrow,finish:tomorrow},{name:"Go Live",start:tomorrow,finish:dayAfter(30),tasks:[
+     {userId:engineer.id,name:"Controls design",start:yesterday,finish:dayAfter(10),planManDays:12.5},{userId:admin.id,name:"Commissioning",start:tomorrow,finish:dayAfter(20)}]}]},201);
+ // The ERP number is kept as typed (upper-cased), the dates come from the plan, and the plan is its headings with the team's tasks under them.
  assert.equal(project.number,"PJ-CRM-DIRECT");
  const projectHeader=(await run(`SELECT CONVERT(char(10),start_date,23) start_date,CONVERT(char(10),target_delivery,23) target_delivery FROM dbo.projects WHERE id=${project.id}`)).recordset[0]!;
  assert.deepEqual([projectHeader.start_date,projectHeader.target_delivery],[yesterday,dayAfter(30)]);
@@ -189,9 +189,8 @@ try {
    FROM dbo.schedule_tasks t LEFT JOIN dbo.schedule_tasks p ON p.id=t.parent_id WHERE t.project_id=${project.id} AND t.deleted_at IS NULL ORDER BY t.parent_id,t.sort_order`)).recordset
    .map(r=>[r.name,r.kind,r.visibility,r.parent??null,r.plan_start??null,Number(r.plan_days),Number(r.plan_man_days),r.pics??null]);
  assert.deepEqual(planRows,[
-   ["Master Plan","phase","Customer",null,null,1,0,null],["Team plan","phase","Internal",null,null,1,0,null],
-   ["Kick-off meeting","task","Customer","Master Plan",tomorrow,1,0,null],["Go Live","task","Customer","Master Plan",tomorrow,30,0,null],
-   ["Controls design","task","Internal","Team plan",yesterday,12,12.5,String(engineer.id)],["Commissioning","task","Internal","Team plan",tomorrow,20,0,String(admin.id)],
+   ["Kick-off meeting","phase","Customer",null,tomorrow,1,0,null],["Go Live","phase","Customer",null,tomorrow,30,0,null],
+   ["Controls design","task","Internal","Go Live",yesterday,12,12.5,String(engineer.id)],["Commissioning","task","Internal","Go Live",tomorrow,20,0,String(admin.id)],
  ]);
  const projectMembers=(await run(`SELECT user_id,role_on_project FROM dbo.project_members WHERE project_id=${project.id} ORDER BY user_id`)).recordset.map(r=>[Number(r.user_id),r.role_on_project]);
  assert.deepEqual(projectMembers,[[sales.id,"Project Manager"],[engineer.id,"Lead Engineer"],[admin.id,"Member"]].sort((a,b)=>Number(a[0])-Number(b[0])));
@@ -238,7 +237,7 @@ try {
 
  const listed=async(id:number)=>(await call("GET","/projects?pageSize=100","Sales")).items.find((r:{id:number})=>r.id===id);
  const scheduleVersion=async(id:number)=>Buffer.from((await run(`SELECT TOP(1) row_version FROM dbo.schedule_tasks WHERE project_id=${id} ORDER BY row_version DESC`)).recordset[0]!.row_version as Buffer).toString("base64");
- const taskIds=async(id:number)=>Object.fromEntries((await run(`SELECT id,name FROM dbo.schedule_tasks WHERE project_id=${id} AND deleted_at IS NULL AND kind=N'task'`)).recordset.map(r=>[String(r.name),Number(r.id)]));
+ const taskIds=async(id:number)=>Object.fromEntries((await run(`SELECT id,name FROM dbo.schedule_tasks WHERE project_id=${id} AND deleted_at IS NULL`)).recordset.map(r=>[String(r.name),Number(r.id)]));
  let editing=await listed(project.id);
  const ids=await taskIds(project.id);
  // Details: team, payment stages received, and the customer's own contacts only.
@@ -249,26 +248,27 @@ try {
  assert.deepEqual((await run(`SELECT milestone,received_at FROM dbo.project_payment_milestones WHERE project_id=${project.id}`)).recordset,[{milestone:"GO_LIVE",received_at:goLiveAt}]);
  editing=await listed(project.id);
  assert.deepEqual([editing.team,editing.paymentsReceived,editing.contactIds,editing.rowVersion],["Engineering",["GO_LIVE"],[Number(contact.id)],saved.rowVersion]);
- // The plan: rename and move one row, add one, drop two untouched rows, keep the started one as it is.
- const planEdit={masterPlan:[{id:ids["Kick-off meeting"],name:"Kick-off (moved)",start:dayAfter(2),finish:dayAfter(2)},{name:"FAT",start:dayAfter(10),finish:dayAfter(12)}],
-   team:[{id:ids["Controls design"],userId:engineer.id,task:"Controls design",start:yesterday,finish:dayAfter(10),planManDays:12.5}]};
+ // The plan: rename and move a heading, add one, drop an untouched task, keep the started one as it is.
+ const planEdit={masterPlan:[{id:ids["Kick-off meeting"],name:"Kick-off (moved)",start:dayAfter(2),finish:dayAfter(2)},{name:"FAT",start:dayAfter(10),finish:dayAfter(12)},
+   {id:ids["Go Live"],name:"Go Live",start:tomorrow,finish:dayAfter(30),tasks:[{id:ids["Controls design"],userId:engineer.id,name:"Controls design",start:yesterday,finish:dayAfter(10),planManDays:12.5}]}]};
  await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,...planEdit,scheduleVersion:Buffer.alloc(8).toString("base64")},409);
- await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,masterPlan:planEdit.masterPlan,scheduleVersion:await scheduleVersion(project.id)},400);
+ // A page still sending the team plan as its own list is told to reload.
+ await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,masterPlan:planEdit.masterPlan,team:[],scheduleVersion:await scheduleVersion(project.id)},400);
  await call("PUT",`/projects/${project.id}`,"Engineer",{rowVersion:editing.rowVersion,...planEdit,scheduleVersion:await scheduleVersion(project.id)},403);
  saved=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,...planEdit,scheduleVersion:await scheduleVersion(project.id)});
  assert.equal(saved.scheduleVersion,await scheduleVersion(project.id));
  const afterEdit=(await run(`SELECT t.name,p.name parent,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.sort_order,t.status,
-   CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END removed FROM dbo.schedule_tasks t JOIN dbo.schedule_tasks p ON p.id=t.parent_id
+   CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END removed FROM dbo.schedule_tasks t LEFT JOIN dbo.schedule_tasks p ON p.id=t.parent_id
    WHERE t.project_id=${project.id} ORDER BY p.name,CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END,t.sort_order`)).recordset
-   .map(r=>[r.parent,r.name,r.removed,r.removed?null:r.plan_start,r.removed?null:Number(r.plan_days),r.removed?null:Number(r.sort_order),r.status]);
+   .map(r=>[r.parent??null,r.name,r.removed,r.removed?null:r.plan_start,r.removed?null:Number(r.plan_days),r.removed?null:Number(r.sort_order),r.status]);
  assert.deepEqual(afterEdit,[
-   ["Master Plan","Kick-off (moved)",0,dayAfter(2),1,1,"Not Started"],["Master Plan","FAT",0,dayAfter(10),3,2,"Not Started"],["Master Plan","Go Live",1,null,null,null,"Not Started"],
-   ["Team plan","Controls design",0,yesterday,12,1,"In Progress"],["Team plan","Commissioning",1,null,null,null,"Not Started"],
+   [null,"Kick-off (moved)",0,dayAfter(2),1,1,"Not Started"],[null,"FAT",0,dayAfter(10),3,2,"Not Started"],[null,"Go Live",0,tomorrow,30,3,"Not Started"],
+   ["Go Live","Controls design",0,yesterday,12,1,"In Progress"],["Go Live","Commissioning",1,null,null,null,"Not Started"],
  ]);
  // A row with progress stays: removing it is refused and nothing changes.
  editing=await listed(project.id);
  const fatId=(await taskIds(project.id))["FAT"];
- const inUse=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,masterPlan:planEdit.masterPlan.map((row,index)=>index===0?row:{...row,id:fatId}),team:[],scheduleVersion:await scheduleVersion(project.id)},409);
+ const inUse=await call("PUT",`/projects/${project.id}`,"Sales",{rowVersion:editing.rowVersion,masterPlan:[planEdit.masterPlan[0],{...planEdit.masterPlan[1],id:fatId},{...planEdit.masterPlan[2],tasks:[]}],scheduleVersion:await scheduleVersion(project.id)},409);
  assert.equal(inUse.code,"schedule_row_in_use");
  assert.equal((await run(`SELECT COUNT(*) n FROM dbo.schedule_tasks WHERE project_id=${project.id} AND deleted_at IS NULL AND name=N'Controls design'`)).recordset[0]!.n,1);
  // Its plan health is read from the schedule: the moved kick-off is due within a week and not started.

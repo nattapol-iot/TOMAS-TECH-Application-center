@@ -9,6 +9,7 @@ import { planDates, workloadImpact, workDates, type TaskPlan, type Allocation } 
 import type { Database } from './db.js';
 import type { NewPics } from './project-notices.js';
 import { DEFAULT_WEEKLY_CAPACITY } from './resource-workload.js';
+import { unsortedHeadingId } from './project-initial-plan.js';
 
 export type WorkRow = {
  id: number; inquiry_id: number|null; project_id: number|null; schedule_task_id: number|null;
@@ -113,7 +114,9 @@ export async function saveApprovedProjectPlan(tx:Transaction,r:WorkRow,plan:Task
     const updated=await q.query(`UPDATE dbo.schedule_tasks SET plan_start=@start,plan_days=@days,plan_man_days=@effort,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@task AND deleted_at IS NULL;`);
     if(updated.rowsAffected[0]!==1) throw new ApiError(409,'concurrency_conflict','The schedule changed. Reload it and try again.');
   } else {
-    id=Number((await q.query<{id:number}>(`DECLARE @ids TABLE(id bigint); INSERT dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,lag_days,pic_external,plan_man_days,updated_by) OUTPUT inserted.id INTO @ids VALUES(@project,NULL,1000,N'task',@title,0,N'PM',@actor,N'Internal',@start,@days,N'manual',0,N'',@effort,@actor);SELECT id FROM @ids;`)).recordset[0]!.id);
+    // The top of a plan holds main headings only: the row waits under "ยังไม่จัดหัวข้อ" until the project manager files it.
+    q.input('parent',sql.BigInt,await unsortedHeadingId(tx,Number(r.project_id),actor.id));
+    id=Number((await q.query<{id:number}>(`DECLARE @ids TABLE(id bigint); INSERT dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,lag_days,pic_external,plan_man_days,updated_by) OUTPUT inserted.id INTO @ids VALUES(@project,@parent,1000,N'task',@title,0,N'PM',@actor,N'Internal',@start,@days,N'manual',0,N'',@effort,@actor);SELECT id FROM @ids;`)).recordset[0]!.id);
   }
   const pic=new sql.Request(tx);pic.input('id',sql.BigInt,id).input('user',sql.BigInt,plan.assigneeId);
   const before=(await pic.query<{user_id:number|string}>('SELECT user_id FROM dbo.schedule_task_pics WHERE task_id=@id;')).recordset;

@@ -11,7 +11,7 @@ import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
-import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseNewScheduleRows, parseOtherPlanRows, parseProjectDetails, parseProjectNumber, planSpan, syncOtherPlanRows, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
+import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseProjectDetails, parseProjectNumber, planAssignments, planSpan, rejectOutdatedPlan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
@@ -260,10 +260,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const actor = await users.required(request);
     const body = bodyObject(request.body);
     const requestedEndUserId = endUserCustomerId(body.endUserCustomerId);
+    // The Master Plan headings, each with its team's tasks and their functions.
     const plan = parseInitialPlan(body);
-    // The project's own main rows and sub rows; a new project has no row for them to sit under yet.
-    const added = parseNewScheduleRows(body.newRows) ?? [];
-    if (added.some((row) => row.parentId !== null)) throw new ApiError(400, "validation_failed", "A new project's main schedule rows cannot name an existing row.");
     const details = parseProjectDetails(body);
     // Without an estimate the form names the customer, project name and type itself. Owner decision
     // 2026-10-14: for the Application team, who do not make an Estimate Cost, and for PMs and Admins.
@@ -277,7 +275,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       throw new ApiError(403, "project_without_estimate_forbidden", "Only the Application team, a Project Manager or an Admin can create a project without an estimate.");
     }
     // With a plan, the project runs from its first row to its last; without one, the dates are typed.
-    const span = planSpan(plan, added);
+    const span = planSpan(plan);
     const input = {
       projectNumber: parseProjectNumber(body.projectNumber),
       estimateId: standalone ? null : requiredInteger(body.estimateId, "Approved estimate", 1),
@@ -290,7 +288,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       site: requiredText(body.site, 300, "Project site"),
       remark: optionalBodyText(body.remark, 20_000, "Remark"),
     };
-    if ((span || added.length) && !(await permissionFor(database, actor.id, "schedule.plan"))) {
+    if (plan.headings.length && !(await permissionFor(database, actor.id, "schedule.plan"))) {
       throw new ApiError(403, "schedule_plan_required", "Creating a project with a master plan or team plan requires schedule planning permission.");
     }
     const today = businessToday(config.businessTimeZone);
@@ -387,7 +385,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@manager_id,N'Project Manager',@actor);
         IF @lead_id<>@manager_id INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@lead_id,N'Lead Engineer',@actor);
       `);
-      await insertInitialPlan(transaction, projectId, plan, actor.id, added);
+      await insertInitialPlan(transaction, projectId, plan, actor.id);
       await writeProjectDetails(transaction, projectId, details, actor.id);
       const folders = new sql.Request(transaction); folders.input("project_id", sql.BigInt, projectId); folders.input("actor", sql.BigInt, actor.id);
       const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
@@ -398,13 +396,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         : await transferProjectDocuments(transaction, config.documentStorage, projectId, source.inquiryId, input.estimateId, actor.id, writtenKeys);
       await insertAudit(transaction, actor.id, "Project", projectId, number, source.estimateNo ? "Created from approved estimate" : "Created without estimate", source.estimateNo,
         { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred,
-          masterPlan: plan.milestones, teamPlan: plan.team, ...(added.length ? { newRows: added } : {}), ...details });
+          masterPlan: plan.headings, ...details });
       if (source.inquiryId !== null) await confirmOpportunityOrder(transaction,source.inquiryId,actor.id,input.purchaseOrderDate>today?today:input.purchaseOrderDate,input.purchaseOrderNumber);
       const customerName = (await new sql.Request(transaction).input("id", sql.BigInt, source.customerId)
         .query<{ name: string }>(`SELECT name FROM dbo.customers WHERE id=@id;`)).recordset[0]?.name ?? "";
       const notices = await queueProjectCreatedNotices(transaction, { id: actor.id, name: actor.name }, {
         projectId, projectNumber: number, projectName: source.projectName, customerName, managerId: input.managerId, leadEngineerId: input.leadEngineerId,
-        startDate: input.startDate, targetDelivery: input.targetDelivery, team: plan.team.map(({ userId, task, start, finish }) => ({ userId, task, start, finish })),
+        startDate: input.startDate, targetDelivery: input.targetDelivery, team: planAssignments(plan),
       });
       return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred, notices };
     });
@@ -567,17 +565,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     await demandProjectScope(database, actor, id);
     const given = <T>(key: string, read: () => T, fallback: T): T => (body[key] === undefined ? fallback : read());
     const details = parseProjectDetails(body);
-    // The plan is sent whole: both lists, or neither.
-    const editsPlan = body.masterPlan !== undefined || body.team !== undefined;
-    if (editsPlan && (body.masterPlan === undefined || body.team === undefined)) {
-      throw new ApiError(400, "validation_failed", "Send both the master plan and the team plan, or neither.");
-    }
-    const plan = editsPlan ? parseInitialPlan(body) : null;
-    // Rows made in Project Schedule, renamed or removed from Edit Master Plan.
-    const otherRows = parseOtherPlanRows(body.otherRows);
-    // Main rows and sub rows added there.
-    const addedRows = parseNewScheduleRows(body.newRows);
-    const canPlan = (editsPlan || otherRows !== null || addedRows !== null) && await permissionFor(database, actor.id, "schedule.plan");
+    // The plan is sent whole, headings with their tasks and functions, or not at all.
+    rejectOutdatedPlan(body);
+    const plan = body.masterPlan === undefined ? null : parseInitialPlan(body);
+    const canPlan = plan !== null && await permissionFor(database, actor.id, "schedule.plan");
     const saved = await database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction);
       lookup.input("id", sql.BigInt, id);
@@ -661,21 +652,20 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
 
       let scheduleVersion: string | null = null;
       let assigned: NewPics[] = [];
-      if (plan || otherRows || addedRows) {
+      if (plan) {
         // The same people who may change the plan in Project Schedule.
         if (!canPlan || (Number(before.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin"))) {
           throw new ApiError(403, "schedule_plan_owner_required", "Only this project's manager, an Engineering Manager, or an Admin can change its plan.");
         }
         if (currentStatus === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
         await validateScheduleVersion(transaction, id, body.scheduleVersion === undefined || body.scheduleVersion === null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"));
-        if (otherRows || addedRows) await syncOtherPlanRows(transaction, id, otherRows ?? [], actor.id, addedRows ?? []);
-        if (plan) assigned = await syncProjectPlan(transaction, id, plan, actor.id);
+        assigned = await syncProjectPlan(transaction, id, plan, actor.id);
         scheduleVersion = (await currentScheduleVersion(transaction, id))?.toString("base64") ?? null;
       }
       await writeProjectDetails(transaction, id, details, actor.id);
       // Writing the team moves the row version again; hand back the one the client must send next.
       const latest = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=@id;`)).recordset[0]!;
-      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.milestones, teamPlan: plan.team } : {}), ...(otherRows ? { otherRows } : {}), ...(addedRows ? { newRows: addedRows } : {}) };
+      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.headings } : {}) };
       await insertAudit(transaction, actor.id, "Project", id, String(before.project_no), transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, assigned);
       return {
