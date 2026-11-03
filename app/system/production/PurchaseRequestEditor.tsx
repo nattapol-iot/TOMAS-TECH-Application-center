@@ -7,13 +7,16 @@ import { Badge, EmptyState, Field, FilterChips, Icon, Pagination, Panel, SearchI
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
-import { asPlanned, asSubstitute, draftFromBom, draftFromSheet, draftIssues, moduleStatus, payloadLines, sheetRows, templateRows,
-  type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind } from "../../../lib/pr-spreadsheet";
+import { asPlanned, asSubstitute, draftFromBom, draftFromPr, draftFromSheet, draftIssues, moduleStatus, payloadLines, sheetRows, templateRows,
+  type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
 
 type ReleasedBom = { id: number; number: string; status: string; projectNumber: string; projectName: string };
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
 type Workspace = { bom: { id: number; number: string; projectNumber: string; projectName: string }; lines: Array<PrBomLine & { purchaseRequired: number }>; modules: PrModuleBudget[] };
+/** A draft PR reopened in the sheet: its header, its saved lines and the row version the save must still match. */
+export type PrEditing = { id: number; number: string; rowVersion: string; bomId: number; priority: string; requiredDate: string; purpose: string;
+  erpDepartment: string | null; lines: PrSavedLine[] };
 
 const EMPTY: never[] = [];
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(Number(value));
@@ -33,26 +36,28 @@ function budgetNote(status: PrModuleStatus): string {
  * A full-page PR sheet for many lines. The engineer starts from everything the BOM still needs, changes what differs (another make, an item the
  * estimate missed), or round-trips the sheet through Excel; each module's budget decides whether an overrun needs more than the PM's approval.
  * No supplier here: once approved, the PR goes to the ERP, where Purchasing chooses it and raises the PO.
+ * With `editing`, the same sheet reopens a draft (one taken back from the ERP, say) on its own BOM and saves over it.
  */
-export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootstrap: BootstrapData; released: ReleasedBom[]; onClose: () => void; onCreated: (number: string) => void }) {
+export function PurchaseRequestEditor({ released, editing, onClose, onCreated }: { bootstrap: BootstrapData; released: ReleasedBom[]; editing?: PrEditing; onClose: () => void; onCreated: (number: string) => void }) {
   const t = useT();
   const [bomId, setBomId] = useState(0);
-  const effectiveBomId = bomId || released[0]?.id || 0;
-  const workspace = useEndpoint<Workspace | null>(effectiveBomId ? `/api/v1/boms/${effectiveBomId}` : null, null);
+  const effectiveBomId = editing?.bomId ?? (bomId || released[0]?.id || 0);
+  // An edited draft's own lines are left out of what the BOM has requested, so they show as still open to it.
+  const workspace = useEndpoint<Workspace | null>(effectiveBomId ? `/api/v1/boms/${effectiveBomId}${editing ? `?exceptPr=${editing.id}` : ""}` : null, null);
   const lines = useMemo(() => new Map((workspace.data?.lines ?? EMPTY).map((line) => [line.id, { ...line, remaining: Number(line.purchaseRequired) }])), [workspace.data]);
   const modules = useMemo(() => (workspace.data?.modules ?? EMPTY).map((module) => module.module), [workspace.data]);
-  const startingRows = useMemo(() => draftFromBom([...lines.values()]), [lines]);
+  const startingRows = useMemo(() => editing ? draftFromPr(editing.lines, [...lines.values()]) : draftFromBom([...lines.values()]), [editing, lines]);
   // The rows the engineer has touched, for this BOM only; until then the sheet is what the BOM still needs.
   const [draft, setDraft] = useState<{ bomId: number; rows: PrDraftRow[] } | null>(null);
   const rows = draft && draft.bomId === effectiveBomId ? draft.rows : startingRows;
   const setRows = (next: PrDraftRow[]) => setDraft({ bomId: effectiveBomId, rows: next });
   const update = (key: string, patch: Partial<PrDraftRow>) => setRows(rows.map((row) => row.key === key ? { ...row, ...patch } : row));
-  const [priority, setPriority] = useState("Normal");
-  const [requiredDate, setRequiredDate] = useState(inDays(14));
-  const [purpose, setPurpose] = useState("");
+  const [priority, setPriority] = useState(editing?.priority ?? "Normal");
+  const [requiredDate, setRequiredDate] = useState(editing ? editing.requiredDate.slice(0, 10) : inDays(14));
+  const [purpose, setPurpose] = useState(editing?.purpose ?? "");
   // The ERP files the PR under one of its departments; the person's own is preselected when it matches.
   const erpOptions = useEndpoint<ErpOptions | null>("/api/v1/erp/purchasing/options", null);
-  const [erpDepartment, setErpDepartment] = useState<string | null>(null);
+  const [erpDepartment, setErpDepartment] = useState<string | null>(editing?.erpDepartment ?? null);
   const department = erpDepartment ?? erpOptions.data?.suggestedDepartment ?? "";
   const [module, setModule] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -103,8 +108,11 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
   const submit = async () => {
     setBusy(true); setError(""); setServerIssue(null);
     try {
-      const created = await apiRequest<{ number: string }>("/api/v1/purchase-requisitions/", { method: "POST", body: JSON.stringify({ bomId: effectiveBomId, priority, requiredDate, purpose: purpose || undefined, erpDepartment: department || undefined, lines: payloadLines(rows) }) });
-      onCreated(created.number);
+      const fields = { priority, requiredDate, purpose: purpose || undefined, erpDepartment: department || undefined, lines: payloadLines(rows) };
+      const saved = editing
+        ? await apiRequest<{ number: string }>(`/api/v1/purchase-requisitions/${editing.id}`, { method: "PUT", body: JSON.stringify({ ...fields, rowVersion: editing.rowVersion }) })
+        : await apiRequest<{ number: string }>("/api/v1/purchase-requisitions/", { method: "POST", body: JSON.stringify({ bomId: effectiveBomId, ...fields }) });
+      onCreated(saved.number);
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : String(submitError);
       // "Line n" counts the ticked rows in screen order; point at that row.
@@ -116,11 +124,12 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
   };
 
   return (
-    <Panel title="ขอซื้อ (PR)" subtitle="เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ"
+    <Panel title={editing ? editing.number : "ขอซื้อ (PR)"} subtitle={editing ? "แก้ไข PR ฉบับร่าง กด 'บันทึก PR' แล้วกด 'ส่ง' ที่รายการ PR เพื่อขออนุมัติใหม่" : "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ"}
       actions={<button className="btn ghost" type="button" onClick={onClose} disabled={busy}><Icon name="arrowLeft" /><LocalizedText text={"กลับไปรายการ PR"} /></button>}>
       <div className="form-grid two">
-        <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
-          <option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</select></Field>
+        <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} disabled={Boolean(editing)} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
+          {editing ? <option value={editing.bomId}>{workspace.data ? `${workspace.data.bom.number} · ${workspace.data.bom.projectNumber} · ${workspace.data.bom.projectName}` : "…"}</option>
+            : <><option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</>}</select></Field>
         <Field label="Priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
         <Field label="Required date" guide="pr.required"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
         <Field label="Purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
@@ -191,7 +200,7 @@ export function PurchaseRequestEditor({ released, onClose, onCreated }: { bootst
           <span className="spacer" />
           <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
           <button className="btn primary" type="button" data-guide="pr.submit" disabled={busy || !selected.length || issues.size > 0} onClick={() => { void submit(); }}>
-            <Icon name="check" />{busy ? <LocalizedText text={"กำลังสร้าง PR…"} /> : <>{t("สร้าง PR")} ({selected.length})</>}</button>
+            <Icon name="check" />{busy ? <LocalizedText text={editing ? "กำลังบันทึก…" : "กำลังสร้าง PR…"} /> : <>{t(editing ? "บันทึก PR" : "สร้าง PR")} ({selected.length})</>}</button>
         </Toolbar>
       </> : <EmptyState icon="layers" title="No released BOM" message="Release a BOM before creating a requisition" />}
     </Panel>

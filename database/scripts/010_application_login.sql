@@ -802,4 +802,8 @@ GO
 -- database/migrations/093_estimate_erp_cost_sheets.sql
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.estimate_erp_links TO [iot_team_app_role];
 GO
+
+-- database/migrations/096_draft_pr_line_edit.sql
+GRANT DELETE ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

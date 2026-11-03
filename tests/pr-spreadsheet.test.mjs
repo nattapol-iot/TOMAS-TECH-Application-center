@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { asPlanned, asSubstitute, draftFromBom, draftFromSheet, draftIssues, moduleStatus, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { asPlanned, asSubstitute, draftFromBom, draftFromPr, draftFromSheet, draftIssues, moduleStatus, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -29,6 +29,19 @@ test("the editor flags what the server would refuse, row by row, and ignores row
   assert.match(issues.get("new-1"), /module/);
   // Two rows on one BOM line share what it still needs.
   assert.equal(draftIssues([{ ...plc, quantity: 1 }, { ...plc, key: "bom-1b", quantity: 2 }], lines, modules).get("bom-1b"), "Only 1 pcs is still to request");
+});
+
+test("a reopened draft shows its saved lines ticked, then the BOM lines it does not request yet, unticked", () => {
+  const saved = [
+    { id: 11, lineType: "Planned", bomLineId: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", quantity: 1, coveredQuantity: 1, unitPrice: 9500, remark: "urgent" },
+    { id: 12, lineType: "Substitute", bomLineId: 2, module: "Panel", itemCode: "", partNumber: "CBL-ALT", description: "Cable, other make", brand: "", unit: "roll", quantity: 1, coveredQuantity: 100, unitPrice: 4500, remark: null },
+  ];
+  const rows = draftFromPr(saved, bom);
+  assert.deepEqual(rows.map((row) => [row.key, row.lineType, row.selected, row.quantity, row.coveredQuantity, row.remark]),
+    [["pr-11", "Planned", true, 1, null, "urgent"], ["pr-12", "Substitute", true, 1, 100, ""], ["bom-2", "Planned", false, 100, null, ""], ["bom-3", "Planned", false, 1, null, ""]]);
+  assert.deepEqual(draftIssues(rows, lines, modules), new Map());
+  // The ERP takes at most 1,000,000 on one line; the sheet says so before the server does.
+  assert.match(draftIssues([{ ...rows[1], quantity: 1_000_001 }], lines, modules).get("pr-12"), /at most 1,000,000/);
 });
 
 test("module budgets: within, up to 10% over (PM), beyond 10% (Engineering Manager), earlier PRs counted", () => {

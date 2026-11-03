@@ -58,6 +58,22 @@ test("a draft PR can be cancelled and nothing offers Request Changes", () => {
   assert.doesNotMatch(requisitions, /"Request Changes"\]/);
 });
 
+test("an approved PR the ERP does not hold is taken back to Draft or cancelled, and a draft is edited (review 2026-10-28)", () => {
+  assert.match(requisitions, /app\.post\("\/api\/v1\/purchase-requisitions\/:id\/withdraw"/);
+  assert.match(requisitions, /app\.put\("\/api\/v1\/purchase-requisitions\/:id"/);
+  // The ERP is asked first; anything but "not found" or "deleted" leaves the PR where it is.
+  assert.match(requisitions, /if \(result\.kind === "not_found" \|\| result\.kind === "ref_deleted"\) return;/);
+  assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/\$\{takeBack\}`/);
+  assert.match(editor, /method: "PUT"/);
+  assert.match(editor, /\?exceptPr=\$\{editing\.id\}/);
+  // A slow ERP does not hold the approver's request; a quantity is never cut, a remark is.
+  assert.match(requisitions, /const ERP_APPROVE_WAIT_MS = 20_000;/);
+  assert.doesNotMatch(read("backend-node/src/erp-purchasing.ts"), /Math\.min\(line\.qty/);
+  assert.match(read("backend-node/src/erp-purchasing.ts"), /remark: cut\(describe\(line\), ERP_MAX_REMARK\)/);
+  // After any refusal the requester can choose another ERP department.
+  assert.match(material, /askDepartment \|\| !erp\?\.department \|\| Boolean\(erp\?\.error\)/);
+});
+
 test("approvals ask for a comment only when rejecting, and show the server's answer inside the dialog", () => {
   assert.doesNotMatch(material, /requireComment busy=/);
   assert.equal((material.match(/requireComment=\{[a-z.]+ === "Reject"\}/g) ?? []).length, 4);

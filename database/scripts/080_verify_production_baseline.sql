@@ -287,7 +287,7 @@ VALUES
     (N'bom_lines', N'SELECT'), (N'bom_lines', N'INSERT'),
     (N'reservations', N'SELECT'), (N'reservations', N'INSERT'), (N'reservations', N'UPDATE'),
     (N'mat_prs', N'SELECT'), (N'mat_prs', N'INSERT'), (N'mat_prs', N'UPDATE'),
-    (N'mat_pr_lines', N'SELECT'), (N'mat_pr_lines', N'INSERT'),
+    (N'mat_pr_lines', N'SELECT'), (N'mat_pr_lines', N'INSERT'), (N'mat_pr_lines', N'DELETE'),
     (N'mat_pr_approval_steps', N'SELECT'), (N'mat_pr_approval_steps', N'INSERT'),
     (N'mat_pr_approval_steps', N'UPDATE'), (N'mat_pr_approval_steps', N'DELETE'),
     (N'mat_pos', N'SELECT'), (N'mat_pos', N'INSERT'), (N'mat_pos', N'UPDATE'),

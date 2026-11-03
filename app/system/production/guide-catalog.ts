@@ -968,6 +968,63 @@ const PR_APPROVE: Guide = {
   ],
 };
 
+// An approved PR the ERP refused or deleted goes back to Draft (or is cancelled) and is corrected in the PR sheet (2026-11-02).
+const PR_FIX: Guide = {
+  id: "pr-fix",
+  area: "purchase",
+  title: { th: "แก้ PR ที่ ERP ไม่รับ", en: "Fix a PR the ERP did not take", jp: "ERPが受け付けなかったPRを直す" },
+  summary: {
+    th: "PR ที่อนุมัติแล้วแต่ส่ง ERP ไม่สำเร็จหรือถูกลบใน ERP ดึงกลับเป็นฉบับร่างเพื่อแก้แล้วส่งอนุมัติใหม่ หรือยกเลิกเพื่อคืนรายการ BOM",
+    en: "An approved PR the ERP refused or deleted can go back to Draft to be corrected and approved again, or be cancelled to free its BOM lines.",
+    jp: "承認済みでもERPが拒否・削除したPRは、下書きに戻して修正・再承認するか、取り消してBOM明細を戻します。",
+  },
+  minutes: 3,
+  permissions: ["procurement.request"],
+  views: ["purchase"],
+  steps: [
+    menu("purchase",
+      { th: "เปิดเมนูใบขอซื้อ", en: "Open Purchase Requisition", jp: "「購買申請」を開く" },
+      { th: "PR ทุกใบและสถานะใน ERP อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every PR and its ERP status is here. Click the highlighted menu entry.", jp: "すべてのPRとERPでの状態がここにあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "pr.erp", action: "next", view: "purchase",
+      title: { th: "ดูคอลัมน์ ERP", en: "Look at the ERP column", jp: "ERP列を見る" },
+      body: {
+        th: "ใบที่ขึ้น 'ส่ง ERP ไม่สำเร็จ' หรือ 'ถูกลบใน ERP' คือใบที่ ERP ไม่ได้รับไว้ กด 'View' ที่ใบนั้นเพื่อดูข้อความจาก ERP",
+        en: "A PR marked as a failed ERP send, or as deleted in the ERP, is one the ERP does not hold. Press View on it to read the ERP's message.",
+        jp: "「ERP送信失敗」または「ERPで削除済み」のPRはERPに登録されていません。そのPRの「表示」を押してERPのメッセージを確認します。",
+      },
+    },
+    {
+      target: "pr.takeback", action: "next", view: "purchase",
+      title: { th: "ดึงกลับไปแก้ หรือยกเลิก", en: "Take it back, or cancel it", jp: "差し戻すか取り消す" },
+      body: {
+        th: "ถ้าต้องแก้ข้อมูล กด 'ดึงกลับไปแก้' PR จะกลับเป็นฉบับร่างและเปิดหน้าแก้รายการให้ ถ้าไม่ซื้อแล้ว กด 'ยกเลิก PR' ระบบถาม ERP ก่อนทุกครั้ง ถ้า ERP ยังมี PR ใบนั้นอยู่ ให้ฝ่ายจัดซื้อยกเลิกใน ERP แทน",
+        en: "To correct it, press Take back to edit: the PR returns to Draft and opens in the PR sheet. If it is no longer needed, press Cancel PR. The app always asks the ERP first; if the ERP still holds the PR, ask Purchasing to cancel it there.",
+        jp: "修正するなら「差し戻して修正」を押すと下書きに戻り編集画面が開きます。不要なら「購買申請を取消」を押します。毎回先にERPへ確認し、ERPにPRが残っている場合は購買部にERP側で取り消してもらいます。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นเฉพาะใน PR ที่อนุมัติแล้วแต่ ERP ไม่ได้รับไว้ และคุณเป็นผู้ขอ",
+        en: "These buttons appear only on an approved PR the ERP does not hold, for its requester.",
+        jp: "このボタンは、ERPに登録されていない承認済みPRで、依頼者にだけ表示されます。",
+      },
+    },
+    {
+      target: "pr.submit", action: "click", view: "purchase",
+      title: { th: "แก้รายการแล้วบันทึก", en: "Correct the lines and save", jp: "明細を直して保存" },
+      body: {
+        th: "แก้จำนวน ราคา หรือรายการตามข้อความจาก ERP แล้วกด 'บันทึก PR' จากนั้นกด 'ส่ง' ที่รายการ PR เพื่อส่งอนุมัติใหม่ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Correct the quantities, prices or items the ERP named, press Save PR, then press Submit in the PR list to send it for approval again. Only practising? Press Cancel, then Finish.",
+        jp: "ERPの指摘に合わせて数量・単価・明細を直し「PRを保存」を押し、PR一覧で「提出」を押して再承認に回します。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
+      missing: {
+        th: "หน้าแก้รายการเปิดหลังกด 'ดึงกลับไปแก้' หรือกด 'แก้ไข' ที่ PR ฉบับร่างของคุณ",
+        en: "The PR sheet opens after Take back to edit, or from Edit on one of your draft PRs.",
+        jp: "編集画面は「差し戻して修正」の後、または自分の下書きPRの「編集」から開きます。",
+      },
+    },
+  ],
+};
+
 const SITE_VISIT_WORK: Guide = {
   id: "site-visit-work",
   area: "field",
@@ -1905,6 +1962,7 @@ export const GUIDES: readonly Guide[] = [
     ],
   },
   PR_APPROVE,
+  PR_FIX,
   {
     id: "my-work-progress",
     area: "project",

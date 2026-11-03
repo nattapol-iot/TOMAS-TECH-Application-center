@@ -20,6 +20,7 @@ $seed = Join-Path $repoRoot 'database/tests/procurement-074-seed.sql'
 $fixture = Join-Path $repoRoot 'database/tests/procurement-074.sql'
 $migration = Join-Path $repoRoot 'database/migrations/074_flexible_purchase_requisition_lines.sql'
 $erpMigration = Join-Path $repoRoot 'database/migrations/090_pegasus_erp_purchase_requests.sql'
+$draftEditMigration = Join-Path $repoRoot 'database/migrations/096_draft_pr_line_edit.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -52,13 +53,15 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $migration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $fixture)
 
-    Write-Output 'Applying 075 through 090 (090 twice) to the upgraded database.'
+    Write-Output 'Applying 075 through the latest migration (090 and 096 twice) to the upgraded database.'
     $laterMigrations = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'database/migrations') -File |
-        Where-Object { $_.Name -match '^\d{3}_[A-Za-z0-9_]+\.sql$' -and [int]$_.Name.Substring(0, 3) -ge 75 -and [int]$_.Name.Substring(0, 3) -le 90 } |
+        Where-Object { $_.Name -match '^\d{3}_[A-Za-z0-9_]+\.sql$' -and [int]$_.Name.Substring(0, 3) -ge 75 } |
         Sort-Object Name
     foreach ($laterMigration in $laterMigrations) { Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $laterMigration.FullName) }
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $erpMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.user_oidc_tokens',N'U') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'erp_ref') IS NULL OR OBJECT_ID(N'dbo.CK_mat_prs_erp_status',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=90) THROW 51999, 'Migration 090 is missing its table, columns, check or version.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $draftEditMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.trg_mat_pr_lines_draft_delete',N'TR') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=96) THROW 51999, 'Migration 096 is missing its trigger or version.', 1;")
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

@@ -70,7 +70,10 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan", "team-overview-task", "bom-release",
     // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
     "estimate-approve",
-    "purchase-request", "pr-approve", "my-work-progress", "site-visit-work", "report-create", "sign-document",
+    "purchase-request", "pr-approve",
+    // An approved PR the ERP refused or deleted is taken back to Draft or cancelled (2026-11-02).
+    "pr-fix",
+    "my-work-progress", "site-visit-work", "report-create", "sign-document",
     "knowledge-find", "downloads-skill", "site-monitor-check", "asset-register", "support-ticket",
   ]);
   const copies = [];

@@ -15,6 +15,11 @@ export type ErpRequest = { pr_id: number; pr_no: string; external_ref: string; s
 export type ErpDepartment = { value: string; label: string; keywords?: string };
 export type ErpGateway = { call: <T>(subject: string, tool: string, args: Record<string, unknown>) => Promise<ErpResult<T>> };
 
+/** The most purchase_request_create takes on one line; a larger quantity is refused before the send, never cut. */
+export const ERP_MAX_QUANTITY = 1_000_000;
+/** A line's remark carries its module, what it replaces and the engineer's note; the ERP has not said how long it may be. */
+export const ERP_MAX_REMARK = 1000;
+
 export const newErpRef = () => `${ERP_REF_PREFIX}${randomUUID()}`;
 
 const text = (value: unknown) => typeof value === "string" ? value : "";
@@ -25,21 +30,28 @@ export class PegasusMcp {
 
   /** One tools/call. HTTP and JSON-RPC failures become an ErpFailure; nothing here retries. */
   async call<T>(accessToken: string, tool: string, args: Record<string, unknown>): Promise<ErpResult<T>> {
+    // The timeout runs until the answer is read: an ERP that sends its headers and then stalls must not hold the request open.
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try { return await this.exchange<T>(controller.signal, accessToken, tool, args); }
+    finally { clearTimeout(timer); }
+  }
+
+  private async exchange<T>(signal: AbortSignal, accessToken: string, tool: string, args: Record<string, unknown>): Promise<ErpResult<T>> {
     let response: Response;
     try {
-      response = await this.fetchImpl(this.url, { method: "POST", signal: controller.signal, headers: {
+      response = await this.fetchImpl(this.url, { method: "POST", signal, headers: {
         Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", Accept: "application/json",
         // Cloudflare in front of the ERP blocks default HTTP-library agents.
         "User-Agent": "TOMAS-Engineering-Center/1.0" },
         body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: tool, arguments: args } }) });
     } catch { return { ok: false, kind: "unavailable", message: "The ERP could not be reached. Try again shortly." }; }
-    finally { clearTimeout(timer); }
     if (response.status === 401) return { ok: false, kind: "unauthorized", message: "The ERP did not accept your TMT ID sign-in. Sign in again, or ask the ERP team to check your employee record." };
     if (response.status === 413) return { ok: false, kind: "error", message: "The data is too large for the ERP." };
     if (response.status !== 200) return { ok: false, kind: "unavailable", message: `The ERP is not available right now (HTTP ${response.status}). Try again shortly.` };
     let body: { error?: { message?: string }; result?: { isError?: boolean; structuredContent?: Record<string, unknown>; content?: Array<{ text?: string }> } };
-    try { body = await response.json() as typeof body; } catch { return { ok: false, kind: "unavailable", message: "The ERP answered with something that is not JSON." }; }
+    try { body = await response.json() as typeof body; } catch {
+      return { ok: false, kind: "unavailable", message: signal.aborted ? "The ERP did not finish answering in time. Try again shortly." : "The ERP answered with something that is not JSON." };
+    }
     if (body.error) return { ok: false, kind: "error", message: text(body.error.message) || "The ERP refused the call." };
     const result = body.result ?? {};
     const content = result.structuredContent ?? {};
@@ -94,14 +106,20 @@ export function erpRequestArguments(header: ErpHeader, lines: ErpLine[], appBase
     notes: `Engineering Center ${header.pr_no} · BOM ${header.bom_no}`,
     lines: lines.map((line) => ({
       item_description: cut(line.description || line.part_no || line.item_code || "Item", 2000),
-      quantity: Math.min(line.qty, 1_000_000),
+      quantity: line.qty,
       est_unit_price: line.unit_price,
       unit: cut(line.unit || "PCS", 20),
       ...(line.part_no || line.item_code ? { part_number: cut(line.part_no || line.item_code, 100) } : {}),
       ...(line.brand ? { brand: cut(line.brand, 100) } : {}),
-      remark: describe(line),
+      remark: cut(describe(line), ERP_MAX_REMARK),
     })),
   };
+}
+
+/** Why the ERP would refuse these lines before it is asked: a quantity beyond its limit, named by line so the requester can find it. */
+export function erpLineProblem(lines: Pick<ErpLine, "qty">[]): string | null {
+  const index = lines.findIndex((line) => line.qty > ERP_MAX_QUANTITY);
+  return index < 0 ? null : `Line ${index + 1}: the ERP takes at most ${ERP_MAX_QUANTITY.toLocaleString("en-US")} on one line. Take the PR back to Draft and correct the quantity.`;
 }
 
 /** Our requisition status once the ERP has spoken: ordered when it has a PO, closed when the ERP rejected or cancelled it. */
