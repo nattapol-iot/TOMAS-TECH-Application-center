@@ -208,14 +208,15 @@ export type ScheduleRow = {
   pending: boolean; referenced: boolean; pic: number | null; picCount: number;
 };
 
-async function readScheduleRows(transaction: TransactionType, projectId: number): Promise<ScheduleRow[]> {
+export async function readScheduleRows(transaction: TransactionType, projectId: number, removing: number[] = []): Promise<ScheduleRow[]> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  request.input("removing", sql.NVarChar(sql.MAX), JSON.stringify(removing));
   const rows = (await request.query<Record<string, unknown>>(`
     SELECT t.id,t.parent_id,t.kind,t.name,t.sort_order,t.start_mode,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.plan_man_days,
       CASE WHEN t.status<>N'Not Started' OR t.percent_done>0 OR t.actual_start IS NOT NULL OR t.actual_end IS NOT NULL OR t.actual_man_days>0 THEN 1 ELSE 0 END started,
       (SELECT COUNT(*) FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.deleted_at IS NULL) children,
       CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_updates u WHERE u.task_id=t.id AND u.field=N'request' AND u.request_days>0 AND u.answer IS NULL) THEN 1 ELSE 0 END pending,
-      CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks d WHERE d.predecessor_id=t.id AND d.deleted_at IS NULL)
+      CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks d WHERE d.predecessor_id=t.id AND d.deleted_at IS NULL AND d.id NOT IN (SELECT id FROM OPENJSON(@removing) WITH (id bigint '$')))
         OR EXISTS(SELECT 1 FROM dbo.resource_tasks r WHERE r.schedule_task_id=t.id)
         OR EXISTS(SELECT 1 FROM dbo.signable_documents sd WHERE sd.schedule_task_id=t.id)
         OR EXISTS(SELECT 1 FROM dbo.unified_reports ur WHERE ur.schedule_task_id=t.id) THEN 1 ELSE 0 END referenced,

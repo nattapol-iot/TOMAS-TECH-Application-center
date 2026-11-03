@@ -1951,20 +1951,41 @@ const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind 
   && !task.children.some((child) => child.kind === "detail")
   && (task.children.length > 0 || (task.status === "Not Started" && Number(task.percentComplete) === 0 && !task.actualStart && !task.managedByResourcePlan));
 type QuickPlanKind = "phase" | "task" | "sub";
+type ScheduleRowInitial = { kind: QuickPlanKind; parentId: number | null; beforeId: number | null; start?: string };
 
-function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onConflict }: {
+function scheduleRowPosition(schedule: ProjectSchedule, task: ScheduleTask, kind: QuickPlanKind): ScheduleRowInitial {
+  const rows = flattenTasks(schedule.tasks), byId = new Map(rows.map((row) => [row.id, row]));
+  const sub = task.kind === "task" && task.parentId !== null && byId.get(task.parentId)?.kind === "task";
+  let anchor = kind === "task" && sub ? byId.get(task.parentId!)! : task;
+  if (kind === "phase") while (anchor.parentId !== null) anchor = byId.get(anchor.parentId)!;
+  const child = kind === "task" && task.kind === "phase" || kind === "sub" && !sub;
+  const parentId = child ? task.id : anchor.parentId;
+  const siblings = parentId === null ? schedule.tasks : byId.get(parentId)?.children ?? [];
+  return { kind, parentId, beforeId: child ? kind === "sub" ? null : task.children[0]?.id ?? null
+    : siblings[siblings.findIndex((row) => row.id === anchor.id) + 1]?.id ?? null };
+}
+
+function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify, onClose, onCreated, onConflict }: {
   bootstrap: BootstrapData;
   schedule: ProjectSchedule;
+  initial?: ScheduleRowInitial;
+  anchor?: ScheduleTask;
+  notify: (message: string) => void;
   onClose: () => void;
-  onCreated: () => Promise<void>;
+  onCreated: (parentId: number | null) => Promise<void>;
   onConflict?: () => Promise<void>;
 }) {
-  const [kind, setKind] = useState<"phase" | "task">("task");
-  const [parentId, setParentId] = useState("");
+  const t = useUiText();
+  const [kind, setKind] = useState<QuickPlanKind>(initial?.kind ?? "task");
+  const [parentId, setParentId] = useState(initial?.parentId == null ? "" : String(initial.parentId));
+  const [beforeId, setBeforeId] = useState<number | null>(initial?.beforeId ?? null);
+  const [insertionAnchorId, setInsertionAnchorId] = useState(anchor?.id);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { const frame = window.requestAnimationFrame(() => nameInput.current?.focus()); return () => window.cancelAnimationFrame(frame); }, []);
   const [name, setName] = useState("");
-  const [start, setStart] = useState<StartDraft>(() => startDraftOf(null));
+  const [start, setStart] = useState<StartDraft>(() => ({ ...startDraftOf(null), ...(initial?.start ? { planStart: initial.start } : {}) }));
   const [planDays, setPlanDays] = useState(1);
-  const [visibility, setVisibility] = useState("Internal");
+  const [visibility, setVisibility] = useState(anchor?.visibility ?? "Internal");
   const [picUserIds, setPicUserIds] = useState<number[]>([]);
   const [picExternal, setPicExternal] = useState("");
   const [planManDays, setPlanManDays] = useState(0);
@@ -1972,19 +1993,34 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const allRows = flattenTasks(schedule.tasks);
-  const parents = allRows.filter((task) => task.kind === "phase" || canTakeSubTasks(task, allRows));
-  const selectedParent = parentId ? Number(parentId) : null;
+  const subParents = allRows.filter((task) => canTakeSubTasks(task, allRows));
+  const parents = kind === "sub" ? subParents : allRows.filter((task) => task.kind === "phase");
+  const selectedParent = kind === "phase" ? null : parentId ? Number(parentId) : null;
   const sortOrder = Math.max(0, ...allRows.filter((task) => task.parentId === selectedParent).map((task) => task.sortOrder)) + 10;
-  const submit = async () => {
+  const invalid = !name.trim() || (kind !== "phase" && (!startReady(start) || planDays < 1 || planManDays < 0))
+    || (kind === "sub" && !subParents.some((row) => row.id === selectedParent));
+  const chooseKind = (value: QuickPlanKind) => {
+    const insertionAnchor = allRows.find((row) => row.id === insertionAnchorId);
+    const position = insertionAnchor ? scheduleRowPosition(schedule, insertionAnchor, value) : null;
+    const choices = value === "sub" ? subParents : allRows.filter((row) => row.kind === "phase");
+    const preferred = position?.parentId ?? selectedParent;
+    const nextParent = value === "phase" ? null : choices.some((row) => row.id === preferred) ? preferred : value === "sub" ? choices[0]?.id ?? null : null;
+    setKind(value); setParentId(nextParent == null ? "" : String(nextParent));
+    setBeforeId(position?.parentId === nextParent ? position.beforeId : null);
+  };
+  const submit = async (addNext = false) => {
+    if (busy || invalid) return;
     setBusy(true); setError("");
     try {
-      if (kind === "task") await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
-      await apiRequest(`/api/v1/projects/${schedule.projectId}/schedule/tasks`, {
+      if (kind !== "phase") await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
+      const finish = draftSpan(schedule, start, planDays, milestone).to;
+      const created = await apiRequest<{ id: number }>(`/api/v1/projects/${schedule.projectId}/schedule/tasks`, {
         method: "POST",
         body: JSON.stringify(kind === "phase" ? {
           scheduleVersion: schedule.scheduleVersion,
           parentId: null,
           sortOrder,
+          ...(beforeId === null ? {} : { beforeId }),
           kind: "phase",
           name: name.trim(),
           isMilestone: false,
@@ -2001,6 +2037,7 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
           scheduleVersion: schedule.scheduleVersion,
           parentId: selectedParent,
           sortOrder,
+          ...(beforeId === null ? {} : { beforeId }),
           kind: "task",
           name: name.trim(),
           isMilestone: milestone,
@@ -2012,8 +2049,15 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
           planManDays,
         }),
       });
-      await onCreated();
-      onClose();
+      notify(`${schedule.projectNo} · ${name.trim()} ${t("Plan.quickAdded")}`);
+      if (addNext) {
+        setName(""); setInsertionAnchorId(created.id);
+        if (kind === "phase") { setKind("task"); setParentId(String(created.id)); setBeforeId(null); }
+        else setStart({ mode: "manual", planStart: linkedStart(finish, 0, new Set(schedule.holidays ?? [])) ?? start.planStart, predecessorId: "", lagDays: 0 });
+      }
+      await onCreated(selectedParent);
+      if (addNext) window.requestAnimationFrame(() => nameInput.current?.focus());
+      else onClose();
     } catch (requestError) {
       if (isConcurrencyConflict(requestError) && onConflict) {
         try {
@@ -2031,15 +2075,18 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   };
   return <Modal title="Add schedule row" subtitle={`${schedule.projectNo} · บันทึกแผนลงฐานข้อมูลจริง`} size="lg" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" data-guide="plan.save" disabled={busy || !name.trim() || (kind === "task" && (!startReady(start) || planDays < 1))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create row"}</button>
+    <button className="btn ghost" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}><LocalizedText text={"Save"} /></button>
+    <button className="btn primary" type="button" data-guide="plan.save" disabled={busy || invalid} onClick={() => { void submit(true); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Plan.saveNext")}</button>
   </>}>
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Row kind *"} /></span><select value={kind} onChange={(event) => { const value = event.target.value as "phase" | "task"; setKind(value); if (value === "phase") setParentId(""); }}><option value="task"><LocalizedText text={"Task"} /></option><option value="phase"><LocalizedText text={"Phase (roll-up)"} /></option></select></label>
+      <div className="field span-2" data-guide="plan.quickKind"><span>{t("Plan.rowLevel")}</span><div className="seg-control">
+        {(["phase", "task", "sub"] as const).map((value) => <button key={value} type="button" className={kind === value ? "on" : ""} aria-pressed={kind === value} disabled={busy || value === "sub" && !subParents.length} title={value === "sub" && !subParents.length ? t("Plan.noSubParent") : undefined} onClick={() => chooseKind(value)}>{t(value === "phase" ? "Plan.quickKindHeading" : value === "sub" ? "Plan.quickKindSub" : "Plan.quickKindTask")}</button>)}
+      </div>{!subParents.length ? <small className="muted">{t("Plan.noSubParent")}</small> : null}</div>
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
-      <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
-      {kind === "task" ? <>
-        <label className="field"><span><LocalizedText text={"Plan.parentRow"} /></span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value=""><LocalizedText text={"Top-level task"} /></option>{parents.map((parent) => <option key={parent.id} value={parent.id}>{"- ".repeat(parent.depth)}{parent.wbs} {parent.name}</option>)}</select></label>
+      <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input ref={nameInput} data-guide="plan.quickName" maxLength={500} value={name} readOnly={busy} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(true); } }} /></label>
+      {kind !== "phase" ? <>
+        <label className="field"><span><LocalizedText text={"Plan.wbsName"} /></span><select value={parentId} disabled={busy} onChange={(event) => { setParentId(event.target.value); setBeforeId(null); }}>{kind === "task" ? <option value="">{t("Plan.topLevel")}</option> : null}{parents.map((parent) => <option key={parent.id} value={parent.id}>{parent.wbs} {parent.name}</option>)}</select></label>
         <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
         <label className="field" data-guide="plan.rowDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
@@ -2056,12 +2103,13 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
  * duration, effort and who is responsible. Progress stays where it is. A row whose dates come
  * from its detail rows keeps them; they are shown but not editable here.
  */
-function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, onConflict }: {
+function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, onDeleted, onConflict }: {
   bootstrap: BootstrapData;
   schedule: ProjectSchedule;
   task: ScheduleTask;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  onDeleted: () => Promise<void>;
   onConflict: () => Promise<void>;
 }) {
   const t = useUiText();
@@ -2077,10 +2125,30 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const [picExternal, setPicExternal] = useState(task.picExternal);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [failedAction, setFailedAction] = useState<"save" | "delete">("save");
+  const removing = flattenTasks([task]);
+  const deleteReason = removing.some((row) => row.kind === "phase" && ["Master Plan", "Team plan"].includes(row.name)) ? "Plan.deleteMaster"
+    : removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0) ? "Plan.deleteProgress"
+      : removing.some((row) => row.kind === "detail") ? "Plan.deleteDetail" : "";
+  const remove = async () => {
+    if (busy || deleteReason) return;
+    const confirmation = t("Plan.deleteConfirm").replace("{name}", task.name)
+      + (removing.length > 1 ? `\n${t("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
+    if (!window.confirm(confirmation)) return;
+    setBusy(true); setError(""); setFailedAction("delete");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion }) });
+      await onDeleted(); onClose();
+    } catch (requestError) {
+      if (isConcurrencyConflict(requestError)) {
+        try { await onConflict(); onClose(); } catch (reloadError) { setError(toError(reloadError)); }
+      } else setError(toError(requestError));
+    } finally { setBusy(false); }
+  };
   // Locked dates go back exactly as stored, so the API sees them unchanged.
   const lockedStart = { startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, planStart: task.storedPlanStart ?? null };
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setFailedAction("save");
     try {
       if (!isPhase) await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "PUT", body: JSON.stringify({
@@ -2104,10 +2172,11 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
     }
   };
   return <Modal title="Schedule.editRow" subtitle={`${schedule.projectNo} · ${task.wbs} · ${task.name}`} size="lg" onClose={onClose} footer={<>
+    <span style={{ marginRight: "auto" }} title={deleteReason ? t(deleteReason) : undefined}><button className="btn danger ghost" type="button" data-guide="plan.delete" disabled={busy || Boolean(deleteReason)} title={deleteReason ? t(deleteReason) : undefined} onClick={() => { void remove(); }}>{t("Plan.deleteRow")}</button></span>
     <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
     <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
   </>}>
-    {error ? <LoadError message={t(error)} retry={() => { void submit(); }} /> : null}
+    {error ? <LoadError message={t(error)} retry={() => { void (failedAction === "delete" ? remove() : submit()); }} /> : null}
     <div className="form-grid two">
       <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
@@ -2277,6 +2346,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createInitial, setCreateInitial] = useState<ScheduleRowInitial>();
+  const [createAnchor, setCreateAnchor] = useState<ScheduleTask>();
   const [baselineOpen, setBaselineOpen] = useState(false);
   // Dialogs keep the row they opened on, so a background reload never swaps in a newer version unseen.
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
@@ -2288,11 +2359,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   // A bar dropped on new dates: drawn there while it saves, then offered for undo until the next move.
   const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
   const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
-  // The + on a row: a name typed in place becomes a row just below it, then the next one goes below that.
-  const [quickAdd, setQuickAdd] = useState<{ afterId: number; start: string; visibility: string; name: string; kind: QuickPlanKind } | null>(null);
-  const [quickBusy, setQuickBusy] = useState(false);
-  // Focused each time the box appears, including after the plan reloads around it.
-  const quickInput = useCallback((node: HTMLInputElement | null) => { node?.focus(); }, []);
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
@@ -2352,7 +2418,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
     setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
-    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null); setQuickAdd(null);
+    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null); setCreateInitial(undefined); setCreateAnchor(undefined);
     setLoadingSchedule(Boolean(nextId));
     setSelectedId(nextId);
     try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
@@ -2390,38 +2456,13 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
     && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
   const isSubTask = (task: ScheduleTask) => task.kind === "task" && task.parentId !== null && taskById.get(task.parentId)?.kind === "task";
-  const topLevelRow = (taskId: number) => {
-    let task = taskById.get(taskId);
-    while (task?.parentId != null) task = taskById.get(task.parentId);
-    return task;
-  };
-  const quickSubAllowed = (task: ScheduleTask) => isSubTask(task) || (canTakeSubTasks(task, rows) && !pendingTaskIds.has(task.id));
-  const quickPosition = (task: ScheduleTask, kind: QuickPlanKind) => {
-    const anchor = kind === "phase" ? topLevelRow(task.id)! : kind === "task" && isSubTask(task) ? taskById.get(task.parentId!)! : task;
-    const child = kind === "task" && task.kind === "phase" || kind === "sub" && !isSubTask(task);
-    const parentId = child ? task.id : anchor.parentId;
-    const siblings = parentId === null ? activeSchedule?.tasks ?? [] : taskById.get(parentId)?.children ?? [];
-    return { anchorId: anchor.id, parentId, depth: child ? task.depth + 1 : anchor.depth,
-      beforeId: child ? kind === "sub" ? null : task.children[0]?.id ?? null : siblings[siblings.findIndex((row) => row.id === anchor.id) + 1]?.id ?? null };
-  };
-  const startQuickAdd = (task: ScheduleTask) => {
+  const openAddRow = (task: ScheduleTask) => {
     if (!activeSchedule) return;
-    if (task.kind === "phase") setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
+    const kind = isSubTask(task) ? "sub" : "task";
     const start = task.kind === "phase" ? task.planStart ?? today
       : (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
-    setQuickAdd({ afterId: task.id, start, visibility: task.visibility, name: "", kind: isSubTask(task) ? "sub" : "task" });
+    setCreateInitial({ ...scheduleRowPosition(activeSchedule, task, kind), start }); setCreateAnchor(task); setCreateOpen(true);
   };
-  const setQuickKind = (kind: QuickPlanKind, element: HTMLElement) => {
-    if (quickBusy) return;
-    const row = quickAdd ? taskById.get(quickAdd.afterId) : null;
-    if (!row || kind === "sub" && !quickSubAllowed(row)) return;
-    if (kind === "sub" || row.kind === "phase") setCollapsed((current) => { const next = new Set(current); next.delete(row.id); return next; });
-    setQuickAdd((current) => current && { ...current, kind });
-    element.closest(".gantt-quick-row")?.querySelector("input")?.focus();
-  };
-  const quickRow = quickAdd ? taskById.get(quickAdd.afterId) : null;
-  const quickPlace = quickRow && quickAdd ? quickPosition(quickRow, quickAdd.kind) : null;
-  const quickKinds: QuickPlanKind[] = quickRow && quickSubAllowed(quickRow) ? ["phase", "task", "sub"] : ["phase", "task"];
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
     const dropped = movePending?.taskId === task.id ? movePending : null;
@@ -2435,7 +2476,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
       ...(movable ? { movable: true } : {}),
-      ...(canQuickAdd(task) ? { insert: { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.insertRow"), onInsert: () => startQuickAdd(task) } } : {}),
+      ...(canQuickAdd(task) ? { insert: { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.insertRow"), onInsert: () => openAddRow(task) } } : {}),
       ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
       start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
@@ -2497,51 +2538,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       setMovePending(null); setSaving(false);
     }
   };
-  const saveQuickAdd = async () => {
-    // Read-only rather than disabled while it saves, so the box keeps focus for the next row.
-    const draft = quickAdd, name = quickAdd?.name.trim() ?? "";
-    if (!draft || !name || !activeSchedule || !quickPlace || quickBusy) return;
-    setQuickBusy(true); setError("");
-    try {
-      const created = await apiRequest<{ id: number }>(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
-        scheduleVersion: activeSchedule.scheduleVersion, parentId: quickPlace.parentId, beforeId: quickPlace.beforeId,
-        sortOrder: 0, kind: draft.kind === "phase" ? "phase" : "task", name,
-        isMilestone: false, visibility: draft.visibility, planStart: draft.kind === "phase" ? null : draft.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0,
-        picUserIds: [], picExternal: "", planManDays: 0,
-      }) });
-      notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
-      setQuickAdd(draft.kind === "phase"
-        ? { ...draft, afterId: created.id, kind: "task", name: "" }
-        : { ...draft, afterId: created.id, start: linkedStart(draft.start, 0, new Set(activeSchedule.holidays ?? [])) ?? draft.start, name: "" });
-      await loadSchedule();
-    } catch (failure) {
-      // The typed name stays in the box; Enter tries again on the reloaded plan.
-      if (isConcurrencyConflict(failure)) notify(`${activeSchedule.projectNo} · ${uiText("Plan.changedReloaded")}`);
-      else setError(toError(failure));
-      await loadSchedule();
-    } finally { setQuickBusy(false); }
-  };
-  if (quickAdd && quickPlace && canPlan) {
-    const afterId = quickPlace.anchorId;
-    const at = visible.findIndex((task) => task.id === afterId);
-    if (at >= 0) {
-      // A phase opens its first task; a new sub task follows the existing children.
-      let end = at + 1;
-      if (quickAdd.kind !== "task" || visible[at]!.id !== quickPlace.parentId) while (end < visible.length && visible[end]!.depth > visible[at]!.depth) end++;
-      ganttRows.splice(end, 0, {
-        key: "quick-add", depth: quickPlace.depth, kind: quickAdd.kind === "phase" ? "phase" : "task", selected: true, start: null, finish: null, tone: "blue",
-        title: uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName"), placeholder: uiText("Plan.quickAddHint"),
-        label: <span className="gantt-quick-row" onBlur={(event) => { if (!quickAdd.name.trim() && !event.currentTarget.contains(event.relatedTarget)) setQuickAdd(null); }}>
-          <span className="gantt-quick-kind" data-guide="plan.quickKind">
-            {(["phase", "task", "sub"] as const).map((kind) => <button key={kind} type="button" aria-pressed={quickAdd.kind === kind} disabled={quickBusy || !quickKinds.includes(kind)} onMouseDown={(event) => event.preventDefault()} onClick={(event) => setQuickKind(kind, event.currentTarget)}>{uiText(kind === "phase" ? "Plan.quickKindHeading" : kind === "sub" ? "Plan.quickKindSub" : "Plan.quickKindTask")}</button>)}
-          </span>
-          <input ref={quickInput} className="gantt-quick-input" data-guide="plan.quickName" aria-label={uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName")} placeholder={uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName")} maxLength={500}
-          value={quickAdd.name} readOnly={quickBusy} onChange={(event) => { const name = event.target.value; setQuickAdd((current) => current && { ...current, name }); }}
-          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); void saveQuickAdd(); } else if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); } else if (event.key === "Tab" && !event.shiftKey) { event.preventDefault(); setQuickKind(quickKinds[(quickKinds.indexOf(quickAdd.kind) + 1) % quickKinds.length]!, event.currentTarget); } }} />
-        </span>,
-      });
-    }
-  }
   const undoMove = async () => {
     const move = lastMove, task = move ? taskById.get(move.taskId) : null;
     if (!move || !activeSchedule) return;
@@ -2625,7 +2621,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
       }}><Icon name="download" />{uiText("Schedule.exportExcel")}</button> : null}
       {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
-      {canPlan ? <button className="btn primary" type="button" data-guide="plan.add" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
+      {canPlan ? <button className="btn primary" type="button" data-guide="plan.add" onClick={() => { setCreateInitial(undefined); setCreateAnchor(undefined); setCreateOpen(true); }}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
     {activeSchedule && summary ? <>
@@ -2685,9 +2681,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       onImportDrawing={() => setDrawingTask({ projectId: activeSchedule.projectId, taskId: drawerTask.id })}
       onReview={setAnswerRequest}
     /> : null}
-    {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} onClose={() => setCreateOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} schedule row created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
+    {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} initial={createInitial} anchor={createAnchor} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (parentId) => { if (parentId !== null) setCollapsed((current) => { const next = new Set(current); next.delete(parentId); return next; }); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {editTask && activeSchedule ? <EditScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} task={editTask} onClose={() => setEditTask(null)}
       onSaved={async () => { notify(`${activeSchedule.projectNo} · ${editTask.wbs} ${uiText("Schedule.rowSaved")}`); await loadSchedule(); }}
+      onDeleted={async () => { notify(`${activeSchedule.projectNo} · ${editTask.name} ${uiText("Plan.rowDeleted")}`); setDrawerTaskId(null); await loadSchedule(); }}
       onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {drawingTask ? <CreateSignableDocumentModal initialProjectId={drawingTask.projectId} initialTaskId={drawingTask.taskId} onClose={() => setDrawingTask(null)} onCreated={message => {setDrawingTask(null);notify(`${message} · Open Signed Documents to request approval`);}} /> : null}
     {baselineOpen && activeSchedule ? <BaselineModal schedule={activeSchedule} onClose={() => setBaselineOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} baseline created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
