@@ -309,6 +309,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.otherPlanRows", "Already in the project plan", "แผนที่มีอยู่แล้วในโปรเจกต์", "案件計画にある既存の行"],
  ["CRM.otherPlanRowsHint", "Rows made in Project Schedule. Check them before adding a milestone; change them in Project Schedule.", "แถวที่สร้างไว้ใน Project Schedule · ตรวจก่อนเพิ่มไมล์สโตนใหม่ และแก้แถวเหล่านี้ได้ที่ Project Schedule", "プロジェクトスケジュールで作成した行です。追加前に確認し、変更はプロジェクトスケジュールで行います。"],
  ["CRM.openProjectSchedule", "Open Project Schedule", "เปิด Project Schedule", "プロジェクトスケジュールを開く"],
+ ["CRM.noDepartment", "No department", "ไม่ระบุแผนก", "部署なし"],
  ["CRM.savePlan", "Save plan", "บันทึกแผน", "計画を保存"],
  ["CRM.planSaved", "Plan saved", "บันทึกแผนแล้ว", "計画を保存しました"],
  ["CRM.followPlanDates", "Move the project's start and delivery to the plan", "ปรับวันเริ่มและวันส่งมอบของโปรเจกต์ตามแผน", "案件の開始日と納期を計画に合わせる"],

@@ -83,6 +83,28 @@ export function MasterPlanSection({ rows, onChange, templates = [] }: { rows: Ma
   </section>;
 }
 
+const memberCollator = new Intl.Collator(["th", "en"], { sensitivity: "base", numeric: true });
+
+/** People grouped by department, departments and names A–Z; people with no department come last. */
+export function membersByDepartment<P extends { name: string; department?: string | null }>(people: P[]): { department: string; members: P[] }[] {
+  const groups = new Map<string, P[]>();
+  for (const person of people) {
+    const department = person.department?.trim() ?? "";
+    groups.set(department, [...(groups.get(department) ?? []), person]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a ? 0 : 1) - (b ? 0 : 1) || memberCollator.compare(a, b))
+    .map(([department, members]) => ({ department, members: [...members].sort((a, b) => memberCollator.compare(a.name, b.name)) }));
+}
+
+/** The <option>s of a person picker, one <optgroup> per department so a long team is easy to scan. */
+export function MemberOptions<P extends { id: number; name: string; department?: string | null }>({ people }: { people: P[] }) {
+  const t = useT();
+  return <>{membersByDepartment(people).map(group => <optgroup key={group.department || "-"} label={group.department || t("CRM.noDepartment")}>
+    {group.members.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
+  </optgroup>)}</>;
+}
+
 export function TeamPlanSection({ rows, onChange, people }: { rows: TeamPlanDraft[]; onChange: (update: (rows: TeamPlanDraft[]) => TeamPlanDraft[]) => void; people: BootstrapData["team"] }) {
   const t = useT();
   const update = (key: string, change: Partial<TeamPlanDraft>) => onChange(current => current.map(row => row.key === key ? { ...row, ...change } : row));
@@ -92,7 +114,7 @@ export function TeamPlanSection({ rows, onChange, people }: { rows: TeamPlanDraf
     </div></div>
     {rows.length ? <ol className="project-plan-rows">{rows.map((row, index) => <li key={row.key} className="project-plan-row team">
       <span className="project-plan-index">{index + 1}.</span>
-      <select required aria-label={`${t("CRM.selectMember")} ${index + 1}`} value={row.userId || ""} onChange={(event) => update(row.key, { userId: Number(event.target.value) })}><option value="">{t("CRM.selectMember")}</option>{people.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select>
+      <select required aria-label={`${t("CRM.selectMember")} ${index + 1}`} value={row.userId || ""} onChange={(event) => update(row.key, { userId: Number(event.target.value) })}><option value="">{t("CRM.selectMember")}</option><MemberOptions people={people} /></select>
       <input type="date" required aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => update(row.key, { start: event.target.value })} />
       <span className="project-plan-dash" aria-hidden="true">–</span>
       <input type="date" required aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => update(row.key, { finish: event.target.value })} />

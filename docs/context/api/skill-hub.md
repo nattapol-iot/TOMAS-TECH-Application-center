@@ -2,7 +2,7 @@
 
 [Module](../modules/downloads.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4fcfe6c8`; generated, do not edit. [backend-node/src/routes/skill-hub.ts](<../../../backend-node/src/routes/skill-hub.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4724f441`; generated, do not edit. [backend-node/src/routes/skill-hub.ts](<../../../backend-node/src/routes/skill-hub.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
