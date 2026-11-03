@@ -2,7 +2,7 @@
 
 [Module](../modules/signing.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `757a58b3`; generated, do not edit. [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a1cc675e`; generated, do not edit. [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `757a58b3`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `a1cc675e`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|

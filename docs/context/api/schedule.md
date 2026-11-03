@@ -2,38 +2,39 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `757a58b3`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a1cc675e`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/:projectId/schedule` | 107–113 |
-| POST | `/api/v1/projects/:projectId/schedule/tasks` | 115–146 |
-| PUT | `/api/v1/schedule/tasks/:id` | 148–171 |
-| POST | `/api/v1/schedule/tasks/:id/move` | 175–212 |
-| POST | `/api/v1/schedule/tasks/:id/updates` | 214–230 |
-| POST | `/api/v1/schedule/tasks/:id/day-requests` | 232–241 |
-| POST | `/api/v1/schedule/day-requests/:id/answer` | 243–253 |
-| POST | `/api/v1/schedule/tasks/:id/details` | 255–259 |
-| DELETE | `/api/v1/schedule/tasks/:id/details` | 261–264 |
-| POST | `/api/v1/projects/:projectId/schedule/baseline` | 266–270 |
-| GET | `/api/v1/schedule/day-requests/pending` | 274–296 |
-| GET | `/api/v1/schedule/search` | 301–320 |
-| GET | `/api/v1/me/work` | 322–330 |
-| GET | `/api/v1/me/work/updates` | 332–335 |
+| GET | `/api/v1/projects/:projectId/schedule` | 108–114 |
+| POST | `/api/v1/projects/:projectId/schedule/tasks` | 116–147 |
+| PUT | `/api/v1/schedule/tasks/:id` | 149–172 |
+| DELETE | `/api/v1/schedule/tasks/:id` | 174–206 |
+| POST | `/api/v1/schedule/tasks/:id/move` | 210–247 |
+| POST | `/api/v1/schedule/tasks/:id/updates` | 249–265 |
+| POST | `/api/v1/schedule/tasks/:id/day-requests` | 267–276 |
+| POST | `/api/v1/schedule/day-requests/:id/answer` | 278–288 |
+| POST | `/api/v1/schedule/tasks/:id/details` | 290–294 |
+| DELETE | `/api/v1/schedule/tasks/:id/details` | 296–299 |
+| POST | `/api/v1/projects/:projectId/schedule/baseline` | 301–305 |
+| GET | `/api/v1/schedule/day-requests/pending` | 309–331 |
+| GET | `/api/v1/schedule/search` | 336–355 |
+| GET | `/api/v1/me/work` | 357–365 |
+| GET | `/api/v1/me/work/updates` | 367–370 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `bindPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 25–34 |
-| `planAudit` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 36–41 |
-| `existingPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 43–47 |
-| `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 51–57 |
-| `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 59–70 |
-| `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 72–102 |
-| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 105–336 |
+| `bindPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 26–35 |
+| `planAudit` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 37–42 |
+| `existingPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 44–48 |
+| `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 52–58 |
+| `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 60–71 |
+| `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 73–103 |
+| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 106–371 |
 
 ## Direct local dependencies
 
@@ -52,6 +53,7 @@ Evidence: source snapshot `757a58b3`; generated, do not edit. [backend-node/src/
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/project-notices.ts](<../../../backend-node/src/project-notices.ts>)
+- [backend-node/src/project-initial-plan.ts](<../../../backend-node/src/project-initial-plan.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
 

@@ -72,14 +72,6 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-insert:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 @media (hover: none) { .gantt-insert { opacity: 1; } }
 /* The row being typed in after a +: a plain input in place of the row name. */
-.gantt-quick-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.gantt-quick-kind { display: inline-flex; flex: none; }
-.gantt-quick-kind button { padding: 3px 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font: inherit; font-size: var(--fs-3xs); cursor: pointer; }
-.gantt-quick-kind button:first-child { border-radius: var(--r-xs) 0 0 var(--r-xs); }
-.gantt-quick-kind button:last-child { border-radius: 0 var(--r-xs) var(--r-xs) 0; }
-.gantt-quick-kind button[aria-pressed="true"] { background: var(--blue-soft); color: var(--blue-text); border-color: var(--blue-line); }
-.gantt-quick-kind button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
-.gantt-quick-input { width: 100%; min-width: 0; min-height: 26px; padding: 3px 8px; border: 1px solid var(--blue); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-xs); }
 
 .gantt-track { position: relative; min-width: 0; overflow: hidden; }
 .gantt-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }

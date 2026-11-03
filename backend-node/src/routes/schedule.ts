@@ -21,6 +21,7 @@ import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import type { EmailService } from "../email.js";
 import { deliverProjectNotices, queueTaskAssignmentNotices } from "../project-notices.js";
+import { MASTER_PLAN_PHASE, TEAM_PLAN_PHASE, readScheduleRows } from "../project-initial-plan.js";
 
 function bindPlan(request: InstanceType<typeof sql.Request>, projectId: number, input: PlanInput, actorId: number): void {
   request.input("project", sql.BigInt, projectId); request.input("parent", sql.BigInt, input.parentId);
@@ -168,6 +169,40 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
     });
     const { notices, ...task } = saved;
     return { ...task, notification: await deliverProjectNotices(email, notices) };
+  });
+
+  app.delete("/api/v1/schedule/tasks/:id", async (request) => {
+    await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Schedule task id"); const body = bodyObject(request.body);
+    const expected = parseRowVersion(body.rowVersion);
+    const scheduleVersion = body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
+    return database.transaction(async (transaction) => {
+      const existing = await readTask(transaction, id); await demandPlanOwner(transaction, existing.projectId, actor);
+      await validateScheduleVersion(transaction, existing.projectId, scheduleVersion); if (!existing.rowVersion.equals(expected)) throw concurrency();
+      const rows = await readTasks(transaction, existing.projectId);
+      const removed: number[] = [], seen = new Set<number>();
+      const visit = (taskId: number) => {
+        if (seen.has(taskId)) return;
+        seen.add(taskId);
+        for (const child of rows.filter((row) => row.parentId === taskId)) visit(child.id);
+        removed.push(taskId);
+      };
+      visit(id);
+      const removing = (await readScheduleRows(transaction, existing.projectId, removed)).filter((row) => seen.has(row.id));
+      if (removing.some((row) => row.kind === "phase" && [MASTER_PLAN_PHASE, TEAM_PLAN_PHASE].includes(row.name))) {
+        throw new ApiError(400, "validation_failed", "Change it in Edit Master Plan.");
+      }
+      const inUse = removing.find((row) => row.started || row.kind === "detail" || row.pending || row.referenced);
+      if (inUse) throw new ApiError(409, "schedule_row_in_use", `Cannot delete "${inUse.name}": the row has progress, member details, a pending day request, or linked work.`);
+      for (const taskId of removed) {
+        const row = removing.find((item) => item.id === taskId)!;
+        await appendUpdate(transaction, existing.projectId, row.id, actor.id, "deleted", row.name, null, "Removed in Project Schedule");
+        const remove = new sql.Request(transaction); remove.input("id", sql.BigInt, row.id).input("actor", sql.BigInt, actor.id);
+        await remove.query(`UPDATE dbo.schedule_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
+      }
+      await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Deleted schedule row", removing.map((row) => ({ id: row.id, name: row.name })), null);
+      return { removed, scheduleVersion: (await currentScheduleVersion(transaction, existing.projectId))!.toString("base64") };
+    });
   });
 
   // Moves a row up or down the plan, or into another phase: its parent and its place among the new siblings. Dates,

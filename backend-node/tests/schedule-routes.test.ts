@@ -53,7 +53,7 @@ function installSqlMock(t: TestContext, answer: (statement: string, params: Para
   return statements;
 }
 
-function harness(actor: Actor, options: { managedAssignee?: number | null; permissions?: string[]; withResourceTasks?: boolean } = {}) {
+function harness(actor: Actor, options: { managedAssignee?: number | null; permissions?: string[]; deniedPermissions?: string[]; withResourceTasks?: boolean } = {}) {
   const app = Fastify();
   registerErrorHandler(app);
   const transactions: Array<"committed" | "rolled-back"> = [];
@@ -74,7 +74,9 @@ function harness(actor: Actor, options: { managedAssignee?: number | null; permi
       return { recordset: [] };
     },
   } as unknown as Database;
-  const users = { demandPermission: async () => {}, required: async () => actor } as unknown as CurrentUserService;
+  const users = { demandPermission: async (_request: unknown, permission: string) => {
+    if (options.deniedPermissions?.includes(permission)) throw new ApiError(403, "permission_denied", "Permission required.");
+  }, required: async () => actor } as unknown as CurrentUserService;
   registerScheduleRoutes(app, database, users, "Asia/Bangkok");
   if (options.withResourceTasks) registerResourceTaskRoutes(app, database, users);
   return { app, transactions };
@@ -1051,4 +1053,106 @@ test("calculator rolls weighted sub task progress, dates and status through task
   }
   assert.equal(byId.get(2)!.planFinish, "2027-03-04");
   assert.equal(byId.get(1)!.planFinish, "2027-03-05");
+});
+
+
+function deletionAnswers(rows: Record<string, unknown>[], status = "Design") {
+  return (statement: string, params: Params): Answer | undefined => {
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: rows.filter((row) => row.id === params.id) };
+    if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw(status)] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: lockedScheduleVersion(statement) ? SCHEDULE_VERSION : NEXT_VERSION }] };
+    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: rows };
+    if (statement.includes("FROM dbo.schedule_tasks t WITH(UPDLOCK,HOLDLOCK)")) {
+      const removing = new Set<number>(JSON.parse(String(params.removing)));
+      assert.ok(statement.includes("d.id NOT IN (SELECT id FROM OPENJSON(@removing)"));
+      return { recordset: rows.map((row) => ({ ...row,
+        started: row.status !== "Not Started" || Number(row.percent_done) > 0 || row.actual_start != null || row.actual_end != null || Number(row.actual_man_days) > 0,
+        referenced: Boolean(row.referenced) || rows.some((other) => other.predecessor_id === row.id && !removing.has(Number(other.id))),
+      })) };
+    }
+    return undefined;
+  };
+}
+
+const deletionPayload = () => ({ scheduleVersion: SCHEDULE_VERSION.toString("base64"), rowVersion: TASK_VERSION.toString("base64") });
+
+test("delete schedule row removes untouched descendants deepest first, including internal dependencies", async (t) => {
+  const { app, transactions } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  const rows = [taskRaw({ id: 11, kind: "phase", name: "Installation" }), taskRaw({ id: 12, parent_id: 11 }),
+    taskRaw({ id: 13, parent_id: 12 }), taskRaw({ id: 14, parent_id: 12, predecessor_id: 13 }), taskRaw({ id: 15 })];
+  const statements = installSqlMock(t, deletionAnswers(rows));
+  try {
+    const response = await app.inject({ method: "DELETE", url: "/api/v1/schedule/tasks/11", payload: deletionPayload() });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json(), { removed: [13, 14, 12, 11], scheduleVersion: NEXT_VERSION.toString("base64") });
+    assert.deepEqual(transactions, ["committed"]);
+    const removals = statements.filter((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET deleted_at="));
+    assert.deepEqual(removals.map((entry) => entry.params.id), [13, 14, 12, 11]);
+    for (const removal of removals) {
+      const history = statements.findIndex((entry) => entry.params.task === removal.params.id && entry.params.field === "deleted");
+      assert.ok(history >= 0 && history < statements.indexOf(removal));
+      assert.equal(statements[history]!.params.comment, "Removed in Project Schedule");
+      assert.match(removal.statement, /deleted_at IS NULL/);
+    }
+    const audit = statements.find((entry) => entry.params.action === "Deleted schedule row")!;
+    assert.deepEqual(JSON.parse(String(audit.params.before)), rows.filter((row) => row.id !== 15).map((row) => ({ id: row.id, name: row.name })));
+  } finally { await app.close(); }
+});
+
+test("delete schedule row refuses any descendant with progress, details, a request or linked work", async (t) => {
+  const cases = [
+    { status: "In Progress" }, { percent_done: 1 }, { actual_start: "2026-11-03" }, { actual_end: "2026-11-03" },
+    { actual_man_days: 0.25 }, { kind: "detail" }, { pending: true }, { referenced: true },
+  ];
+  for (const overrides of cases) await t.test(JSON.stringify(overrides), async (sub) => {
+    const { app, transactions } = harness({ id: MANAGER_ID, role: "Project Manager" });
+    const statements = installSqlMock(sub, deletionAnswers([taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11, name: "Child in use", ...overrides })]));
+    try {
+      const response = await app.inject({ method: "DELETE", url: "/api/v1/schedule/tasks/11", payload: deletionPayload() });
+      assert.equal(response.statusCode, 409, response.body);
+      assert.equal(response.json().code, "schedule_row_in_use"); assert.match(response.body, /Child in use/);
+      assert.deepEqual(transactions, ["rolled-back"]);
+      assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks")), false);
+    } finally { await app.close(); }
+  });
+});
+
+test("delete schedule row refuses a predecessor reference from outside the removed subtree", async (t) => {
+  const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  installSqlMock(t, deletionAnswers([taskRaw({ id: 11 }), taskRaw({ id: 12, predecessor_id: 11 })]));
+  try {
+    const response = await app.inject({ method: "DELETE", url: "/api/v1/schedule/tasks/11", payload: deletionPayload() });
+    assert.equal(response.statusCode, 409, response.body); assert.equal(response.json().code, "schedule_row_in_use");
+  } finally { await app.close(); }
+});
+
+test("delete schedule row enforces permission, owner, closed project and both versions", async (t) => {
+  const cases = [
+    { label: "permission", actor: MANAGER_ID, deniedPermissions: ["schedule.plan"], code: "permission_denied", statusCode: 403 },
+    { label: "owner", actor: 99, code: "schedule_plan_owner_required", statusCode: 403 },
+    { label: "closed", actor: MANAGER_ID, status: "Closed", code: "project_closed", statusCode: 409 },
+    { label: "row version", actor: MANAGER_ID, payload: { rowVersion: NEXT_VERSION.toString("base64") }, code: "concurrency_conflict", statusCode: 409 },
+    { label: "schedule version", actor: MANAGER_ID, payload: { scheduleVersion: NEXT_VERSION.toString("base64") }, code: "concurrency_conflict", statusCode: 409 },
+  ];
+  for (const item of cases) await t.test(item.label, async (sub) => {
+    const { app } = harness({ id: item.actor, role: "Engineer" }, item.deniedPermissions ? { deniedPermissions: item.deniedPermissions } : {});
+    const statements = installSqlMock(sub, deletionAnswers([taskRaw({ id: 11 })], item.status));
+    try {
+      const response = await app.inject({ method: "DELETE", url: "/api/v1/schedule/tasks/11", payload: { ...deletionPayload(), ...item.payload } });
+      assert.equal(response.statusCode, item.statusCode, response.body); assert.equal(response.json().code, item.code);
+      assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks")), false);
+    } finally { await app.close(); }
+  });
+});
+
+test("delete schedule row preserves the Master Plan and Team plan headings", async (t) => {
+  for (const name of ["Master Plan", "Team plan"]) await t.test(name, async (sub) => {
+    const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+    installSqlMock(sub, deletionAnswers([taskRaw({ id: 11, kind: "phase", name })]));
+    try {
+      const response = await app.inject({ method: "DELETE", url: "/api/v1/schedule/tasks/11", payload: deletionPayload() });
+      assert.equal(response.statusCode, 400, response.body); assert.equal(response.json().code, "validation_failed");
+      assert.match(response.body, /Edit Master Plan/);
+    } finally { await app.close(); }
+  });
 });

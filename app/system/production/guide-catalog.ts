@@ -860,11 +860,21 @@ const PROJECT_PLAN: Guide = {
       target: "plan.insert", action: "next", view: "projects",
       title: { th: "แทรกงานตรงที่ต้องการด้วย +", en: "Add a row in place with +", jp: "+ でその場に行を追加" },
       body: {
-        th: "แผนมีสามระดับ: หัวข้อหลัก > งาน > งานย่อย กด + แล้วเลือกประเภท หรือกด Tab ในช่องชื่อเพื่อสลับประเภทที่ใช้ได้โดยไม่ลบชื่อ งานย่อยเพิ่มใต้งานที่รองรับได้ หากกด + บนงานย่อย การเลือกงานจะเพิ่มถัดจากงานแม่ หัวข้อหลักเพิ่มถัดจากกลุ่มระดับบนสุด พิมพ์ชื่อแล้วกด Enter เพื่อบันทึกและเปิดช่องถัดไป หัวข้อหลักที่บันทึกจะเปิดช่องงานแรก กด Esc เมื่อเสร็จ บันทึกความคืบหน้าที่แถวล่างสุดเท่านั้น เปอร์เซ็นต์ วันที่ และสถานะจะคำนวณรวมขึ้นสู่งานและหัวข้อหลัก",
-        en: "The plan has three levels: Main heading > Task > Sub task. Press + and choose a kind, or press Tab in the name input to cycle through available kinds without clearing the name. Sub tasks go under eligible tasks. On a sub task, choosing Task adds a sibling after its parent task. Headings go after the top-level group. Enter saves and opens the next box; saving a heading opens its first Task. Press Esc when done. Enter progress only on the lowest row; percentages, dates and status roll up to the task and main heading.",
-        jp: "計画はメイン見出し > タスク > サブタスクの3階層です。+ で種類を選ぶか、名前の入力欄で Tab を押すと、名前を残して利用可能な種類を切り替えられます。サブタスクは追加可能なタスクの下に入ります。サブタスク上でタスクを選ぶと、親タスクの次に同階層のタスクを追加します。見出しは最上位グループの後に追加します。Enter で保存すると次の入力欄が開き、見出しの保存後は最初のタスクを入力できます。終わったら Esc を押します。進捗は最下層の行だけに入力し、進捗率・日程・状態はタスクとメイン見出しへ集計されます。",
+        th: "กด + เพื่อเปิดหน้าต่างเพิ่มแถว เลือกหัวข้อหลัก / งาน / งานย่อย และเลือกแถวแม่ที่ชื่อ WBS งานย่อยเพิ่มใต้งานที่รองรับได้ หัวข้อหลักเพิ่มถัดจากกลุ่มระดับบนสุด กด 'บันทึกและเพิ่มถัดไป' หรือ Enter ในช่องชื่อเพื่อเพิ่มต่อโดยไม่ปิดหน้าต่าง หลังบันทึกหัวข้อหลักจะเริ่มเพิ่มงานใต้หัวข้อนั้น บันทึกความคืบหน้าที่แถวล่างสุดเท่านั้น เปอร์เซ็นต์ วันที่ และสถานะจะรวมขึ้นสู่งานและหัวข้อหลัก",
+        en: "Press + to open the add-row window. Choose Main heading / Task / Sub task and select the parent under WBS name. Sub tasks go under eligible tasks; headings go after the top-level group. Save & add next, or Enter in the name field, keeps the window open for another row. After saving a heading, add its first Task. Enter progress only on the lowest row; percentages, dates and status roll up to the task and heading.",
+        jp: "+ で行の追加画面を開き、メイン見出し / タスク / サブタスクを選んで、WBS名で親を指定します。サブタスクは追加可能なタスクの下に、見出しは最上位グループの後に入ります。「保存して次を追加」または名前欄の Enter で画面を開いたまま続けて追加できます。見出しの保存後は配下の最初のタスクを追加します。進捗は最下層の行に入力し、進捗率・日程・状態は上位に集計されます。",
       },
       missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้เมื่อแผนมีแถวแล้ว และไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for this project's planners once the plan has rows and no quick filter is on. Press Next.", jp: "+ はこの案件の計画担当者に、計画に行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
+    },
+    {
+      target: "plan.delete", action: "next", view: "projects",
+      title: { th: "ลบแถวที่พิมพ์ผิด", en: "Delete a row added by mistake", jp: "誤って追加した行を削除" },
+      body: {
+        th: "คลิกแถว แล้วกดแก้ไข จากนั้นกด 'ลบแถว' และยืนยันชื่อกับจำนวนแถวลูกที่จะลบ แถวที่มีความคืบหน้าหรืองานอ้างอิงลบไม่ได้ หัวข้อ Master Plan และ Team plan ต้องแก้ใน Edit Master Plan",
+        en: "Click a row, then Edit, and press Delete row. Confirm its name and the number of descendant rows to remove. Rows with progress or linked work cannot be deleted. Change the Master Plan and Team plan headings in Edit Master Plan.",
+        jp: "行をクリックして編集を開き、「行を削除」を押します。名前と配下の削除行数を確認してください。進捗や参照先のある行は削除できません。Master PlanとTeam planの見出しはEdit Master Planで変更します。",
+      },
+      missing: { th: "คลิกแถวแล้วกดแก้ไขเพื่อดูปุ่มลบ หากแค่เรียนรู้ให้กดถัดไป", en: "Click a row, then Edit to see Delete row. Press Next if only browsing.", jp: "行をクリックして編集を開くと削除ボタンが表示されます。閲覧だけなら「次へ」を押してください。" },
     },
     {
       target: "plan.add", action: "click", view: "projects",
@@ -876,9 +886,9 @@ const PROJECT_PLAN: Guide = {
       target: "plan.rowName", action: "next", view: "projects",
       title: { th: "ชื่องาน", en: "Name the task", jp: "作業名" },
       body: {
-        th: "ตั้งชื่องาน ด้านบนเลือกว่าเป็นงาน (Task) หรือกลุ่มงาน (Phase) ที่สรุปวันจากงานย่อย",
-        en: "Name it. Above, choose a Task or a Phase, which rolls up the dates of the tasks under it.",
-        jp: "作業名を入力します。上で作業(Task)か、配下の日程をまとめるフェーズ(Phase)かを選びます。",
+        th: "ตั้งชื่อ แล้วเลือกหัวข้อหลัก / งาน / งานย่อยด้านบน หัวข้อหลักสรุปวันที่จากงานใต้หัวข้อ ส่วนงานย่อยต้องเลือกงานแม่ที่ชื่อ WBS",
+        en: "Name it and choose Main heading / Task / Sub task above. Headings roll up dates from their tasks; sub tasks need a parent task under WBS name.",
+        jp: "名前を入力し、上でメイン見出し / タスク / サブタスクを選びます。見出しは配下の日程を集計します。サブタスクはWBS名で親タスクを選びます。",
       },
     },
     {
@@ -903,9 +913,9 @@ const PROJECT_PLAN: Guide = {
       target: "plan.save", action: "click", view: "projects",
       title: { th: "บันทึกงาน", en: "Save the row", jp: "行を保存" },
       body: {
-        th: "กด 'Create row' PIC ได้อีเมลแจ้งและเห็นงานใน 'งานของฉัน' ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
-        en: "Press Create row: the PIC is emailed and sees the task in My Work. Only practising? Press Cancel, then Finish.",
-        jp: "「Create row」を押すとPICにメールが届き、マイワークに表示されます。練習だけなら「キャンセル」を押してから「完了」を押します。",
+        th: "กด 'บันทึกและเพิ่มถัดไป' หรือ Enter ในช่องชื่อเพื่อบันทึกแล้วเพิ่มต่อ วันเริ่มถัดไปเป็นวันทำงานหลังแถวที่เพิ่งบันทึก กด 'บันทึก' หากต้องการปิดหน้าต่าง PIC ได้อีเมลและเห็นงานใน 'งานของฉัน' ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Press Save & add next, or Enter in the name field, to save and continue. The next start is the working day after the saved row finishes. Save closes the window. The PIC is emailed and sees the task in My Work. Only practising? Press Cancel, then Finish.",
+        jp: "「保存して次を追加」または名前欄の Enter で保存して続けます。次の開始日は保存した行の終了後の営業日です。「保存」は画面を閉じます。PICにメールが届き、マイワークに表示されます。練習だけなら「キャンセル」の後に「完了」を押します。",
       },
     },
   ],
