@@ -152,7 +152,7 @@ export async function insertInitialPlan(transaction: TransactionType, projectId:
   }
 }
 
-type ScheduleRow = {
+export type ScheduleRow = {
   id: number; parentId: number | null; kind: string; name: string; sortOrder: number; startMode: string;
   planStart: string | null; planDays: number; planManDays: number; started: boolean; children: number;
   pending: boolean; referenced: boolean; pic: number | null; picCount: number;
@@ -258,6 +258,90 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
     }
   }
   return assigned;
+}
+
+/* ── The rest of the schedule, from Edit Master Plan ──────────────────── */
+
+/** A row outside the two plan phases: renamed, given new dates, or removed. Dates come as a pair or not at all. */
+export type OtherRowEdit = { id: number; remove: true } | { id: number; remove?: false; name: string; start?: string; finish?: string };
+
+export function parseOtherPlanRows(value: unknown): OtherRowEdit[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw new ApiError(400, "validation_failed", "Other plan rows must be a list.");
+  if (value.length > 500) throw new ApiError(400, "validation_failed", "Other plan rows cannot have more than 500 rows.");
+  const seen = new Set<number>();
+  return value.map((entry, index) => {
+    const label = `Plan row ${index + 1}`;
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new ApiError(400, "validation_failed", `${label} must be an object.`);
+    const row = entry as Record<string, unknown>;
+    const id = requiredInteger(row.id, `${label} id`, 1);
+    if (seen.has(id)) throw new ApiError(400, "validation_failed", `${label} is listed twice.`);
+    seen.add(id);
+    if (row.remove === true) return { id, remove: true as const };
+    const name = requiredText(row.name, 500, `${label} name`);
+    if (row.start === undefined && row.finish === undefined) return { id, name };
+    return { id, name, ...period(row, label) };
+  });
+}
+
+type OtherRowAction = { kind: "remove"; row: ScheduleRow } | { kind: "update"; row: ScheduleRow; name: string; planStart: string | null; planDays: number };
+
+/**
+ * Checks every edit against the schedule as it is and orders the work: removals deepest first, so a
+ * phase goes after the rows under it. A row is removed on the same terms as a plan row in Edit
+ * project, and keeps its progress when renamed. Rows of the two plan phases, and members' own
+ * detail rows, are not touched here.
+ */
+export function planOtherRowEdits(rows: ScheduleRow[], edits: OtherRowEdit[]): OtherRowAction[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const top = (row: ScheduleRow): ScheduleRow => { let current = row; while (current.parentId !== null && byId.has(current.parentId)) current = byId.get(current.parentId)!; return current; };
+  const depth = (row: ScheduleRow): number => { let count = 0, current = row; while (current.parentId !== null && byId.has(current.parentId)) { current = byId.get(current.parentId)!; count++; } return count; };
+  const removing = new Set(edits.filter((edit) => edit.remove).map((edit) => edit.id));
+  const actions: OtherRowAction[] = [];
+  for (const edit of edits) {
+    const row = byId.get(edit.id);
+    if (!row) throw new ApiError(409, "schedule_row_missing", "A plan row was changed or removed elsewhere. Reload the project and try again.");
+    const root = top(row);
+    if (root.kind === "phase" && root.parentId === null && (root.name === MASTER_PLAN_PHASE || root.name === TEAM_PLAN_PHASE)) {
+      throw new ApiError(400, "validation_failed", `"${row.name}" belongs to the Master Plan or Team plan; change it there.`);
+    }
+    if (row.kind === "detail") throw new ApiError(409, "schedule_member_detail", `"${row.name}" is a member's own task; only that member changes it.`);
+    if (edit.remove) {
+      const children = rows.filter((child) => child.parentId === row.id && !removing.has(child.id)).length;
+      if (row.started || children > 0 || row.pending || row.referenced) {
+        throw new ApiError(409, "schedule_row_in_use", `"${row.name}" has progress or linked work, so it cannot be removed here. Keep it, or change it in Project Schedule.`);
+      }
+      actions.push({ kind: "remove", row });
+      continue;
+    }
+    const planStart = edit.start ?? row.planStart;
+    const planDays = edit.start && edit.finish ? calendarDays(edit.start, edit.finish) : row.planDays;
+    const datesChanged = planStart !== row.planStart || planDays !== row.planDays;
+    if (!datesChanged && edit.name === row.name) continue;
+    if (row.pending) throw new ApiError(409, "schedule_day_request_pending", `"${row.name}" has a pending request for more days. Answer it before changing the row.`);
+    if (datesChanged && (row.children > 0 || row.startMode !== "manual" || row.kind === "phase")) {
+      throw new ApiError(409, "schedule_rollup_plan_derived", `"${row.name}" takes its dates from its detail rows or a predecessor. Change them in Project Schedule.`);
+    }
+    actions.push({ kind: "update", row, name: edit.name, planStart, planDays });
+  }
+  return actions.sort((a, b) => (a.kind === "remove" ? 0 : 1) - (b.kind === "remove" ? 0 : 1) || (a.kind === "remove" ? depth(b.row) - depth(a.row) : 0));
+}
+
+/** Applies Edit Master Plan's changes to rows made in Project Schedule, with the same history entries. */
+export async function syncOtherPlanRows(transaction: TransactionType, projectId: number, edits: OtherRowEdit[], actorId: number): Promise<void> {
+  if (!edits.length) return;
+  for (const action of planOtherRowEdits(await readScheduleRows(transaction, projectId), edits)) {
+    if (action.kind === "remove") { await removeRow(transaction, projectId, action.row, actorId); continue; }
+    const { row, name, planStart, planDays } = action;
+    const update = new sql.Request(transaction);
+    update.input("id", sql.BigInt, row.id).input("name", sql.NVarChar(500), name).input("start", sql.Date, planStart)
+      .input("days", sql.Int, planDays).input("actor", sql.BigInt, actorId);
+    await update.query(`UPDATE dbo.schedule_tasks SET name=@name,plan_start=@start,plan_days=@days,
+      updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
+    await appendUpdate(transaction, projectId, row.id, actorId, "plan",
+      JSON.stringify({ name: row.name, planStart: row.planStart, planDays: row.planDays }),
+      JSON.stringify({ name, planStart, planDays }), "Changed in Edit Master Plan");
+  }
 }
 
 /* ── Team, customer payments and contacts ─────────────────────────────── */

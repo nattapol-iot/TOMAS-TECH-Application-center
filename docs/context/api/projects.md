@@ -2,7 +2,7 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4724f441`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `9be3baa2`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -20,14 +20,14 @@ Evidence: source snapshot `4724f441`; generated, do not edit. [backend-node/src/
 | DELETE | `/api/v1/projects/:id/members/:userId` | 481–502 |
 | GET | `/api/v1/projects/:id/deletion` | 522–529 |
 | DELETE | `/api/v1/projects/:id` | 531–554 |
-| PUT | `/api/v1/projects/:id` | 556–680 |
+| PUT | `/api/v1/projects/:id` | 556–683 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 42–47 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 49–681 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 49–684 |
 
 ## Direct local dependencies
 

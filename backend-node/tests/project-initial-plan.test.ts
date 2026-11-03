@@ -90,3 +90,37 @@ test("writing a plan with the project needs schedule planning permission, checke
   assert.equal(response.json().code, "schedule_plan_required");
   assert.equal(transactions, 0);
 });
+
+test("Edit Master Plan renames, re-dates and removes rows made in Project Schedule, on the plan-row terms", async () => {
+  const { parseOtherPlanRows, planOtherRowEdits } = await import("../src/project-initial-plan.js");
+  const row = (id: number, parentId: number | null, change: Partial<import("../src/project-initial-plan.js").ScheduleRow> = {}) => ({
+    id, parentId, kind: "task", name: `Row ${id}`, sortOrder: id, startMode: "manual", planStart: "2026-08-01", planDays: 5, planManDays: 0,
+    started: false, children: 0, pending: false, referenced: false, pic: null, picCount: 0, ...change,
+  });
+  const rows = [
+    row(1, null, { kind: "phase", name: "Design", children: 2, planStart: null }), row(2, 1), row(3, 1, { started: true }),
+    row(4, null, { kind: "phase", name: "Master Plan", children: 1 }), row(5, 4),
+    row(6, null, { startMode: "predecessor" }), row(7, 2, { kind: "detail" }),
+  ];
+  assert.equal(parseOtherPlanRows(undefined), null);
+  assert.deepEqual(parseOtherPlanRows([{ id: 2, name: " FAT " }, { id: 6, remove: true }]), [{ id: 2, name: "FAT" }, { id: 6, remove: true }]);
+  rejects(() => parseOtherPlanRows([{ id: 2, name: "A" }, { id: 2, remove: true }]), /listed twice/);
+  rejects(() => parseOtherPlanRows([{ id: 2, name: "A", start: "2026-08-05", finish: "2026-08-01" }]), /finishes before it starts/);
+
+  const renamed = planOtherRowEdits(rows, [{ id: 2, name: "FAT", start: "2026-08-03", finish: "2026-08-04" }]);
+  assert.deepEqual(renamed.map((action) => action.kind === "update" && [action.row.id, action.name, action.planStart, action.planDays]), [[2, "FAT", "2026-08-03", 2]]);
+  // Unchanged rows are skipped; a started row may be renamed but not removed.
+  assert.deepEqual(planOtherRowEdits(rows, [{ id: 2, name: "Row 2" }]), []);
+  assert.equal(planOtherRowEdits(rows, [{ id: 3, name: "Still running" }]).length, 1);
+  const conflict = (edits: Parameters<typeof planOtherRowEdits>[1], code: string) =>
+    assert.throws(() => planOtherRowEdits(rows, edits), (error: unknown) => error instanceof ApiError && error.code === code);
+  conflict([{ id: 3, remove: true }], "schedule_row_in_use");
+  // A phase goes only with every row under it, and after them.
+  conflict([{ id: 1, remove: true }, { id: 2, remove: true }], "schedule_row_in_use");
+  const parentRows = rows.map((item) => item.id === 3 ? { ...item, started: false } : item).filter((item) => item.id !== 7);
+  assert.deepEqual(planOtherRowEdits(parentRows, [{ id: 1, remove: true }, { id: 2, remove: true }, { id: 3, remove: true }]).map((action) => action.row.id), [2, 3, 1]);
+  conflict([{ id: 6, name: "Row 6", start: "2026-09-01", finish: "2026-09-02" }], "schedule_rollup_plan_derived");
+  conflict([{ id: 5, name: "Kick-off" }], "validation_failed");
+  conflict([{ id: 7, remove: true }], "schedule_member_detail");
+  conflict([{ id: 99, remove: true }], "schedule_row_missing");
+});
