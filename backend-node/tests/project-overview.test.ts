@@ -6,7 +6,6 @@ import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
 import { loadProjectScheduleSummaries, summarizeProjects } from "../src/project-overview.js";
 import { registerProjectRoutes } from "../src/routes/projects.js";
-import { MASTER_PLAN_PHASE } from "../src/schedule-phases.js";
 import { taskRow } from "../src/schedule-service.js";
 import type { CurrentUserService } from "../src/users.js";
 
@@ -22,16 +21,15 @@ const raw = (change: Record<string, unknown>) => ({
   updated_at: null, row_version: Buffer.alloc(8), ...change,
 });
 
-// Project 1: a Master Plan frame plus two work tasks. Project 2: only the Master Plan.
+// Project 1: three headings with the customer's dates, the team's two work rows under one of them. Project 2: only a heading.
 // Project 3: a task linked to a predecessor that is gone. Project 4: the same, but Closed.
 const rows = [
-  raw({ id: 10, project_id: 1, kind: "phase", name: MASTER_PLAN_PHASE, plan_start: null, plan_days: 1 }),
-  raw({ id: 11, project_id: 1, parent_id: 10, name: "Kick-off", is_milestone: true, plan_start: "2026-10-01", plan_days: 1, percent_done: 100, status: "Done", actual_start: "2026-10-01", actual_end: "2026-10-01" }),
-  raw({ id: 12, project_id: 1, parent_id: 10, sort_order: 2, name: "Site acceptance", is_milestone: true, plan_start: "2026-10-30", plan_days: 1 }),
-  raw({ id: 13, project_id: 1, sort_order: 2, name: "Wiring", plan_start: "2026-10-05", plan_days: 5, percent_done: 40, status: "In Progress", actual_start: "2026-10-05" }),
-  raw({ id: 14, project_id: 1, sort_order: 3, name: "Commissioning", plan_start: "2026-10-12", plan_days: 10 }),
-  raw({ id: 20, project_id: 2, kind: "phase", name: MASTER_PLAN_PHASE, plan_start: null, plan_days: 1 }),
-  raw({ id: 21, project_id: 2, parent_id: 20, name: "Design", plan_start: "2026-10-01", plan_days: 10, percent_done: 50, status: "In Progress", actual_start: "2026-10-01" }),
+  raw({ id: 11, project_id: 1, kind: "phase", name: "Kick-off", plan_start: "2026-10-01", plan_days: 1 }),
+  raw({ id: 15, project_id: 1, kind: "phase", sort_order: 2, name: "Installation", plan_start: "2026-10-05", plan_days: 40 }),
+  raw({ id: 13, project_id: 1, parent_id: 15, name: "Wiring", plan_start: "2026-10-05", plan_days: 5, percent_done: 40, status: "In Progress", actual_start: "2026-10-05" }),
+  raw({ id: 14, project_id: 1, parent_id: 15, sort_order: 2, name: "Commissioning", plan_start: "2026-10-12", plan_days: 10 }),
+  raw({ id: 12, project_id: 1, kind: "phase", sort_order: 3, name: "Site acceptance", plan_start: "2026-10-30", plan_days: 1 }),
+  raw({ id: 20, project_id: 2, kind: "phase", name: "Design", plan_start: "2026-10-01", plan_days: 10 }),
   raw({ id: 30, project_id: 3, name: "Orphan link", plan_start: null, start_mode: "linked", predecessor_id: 999 }),
   raw({ id: 40, project_id: 4, name: "Orphan link", plan_start: null, start_mode: "linked", predecessor_id: 999 }),
 ];
@@ -41,30 +39,30 @@ const projects = [
   { id: 5, status: "Planning", targetDelivery: null },
 ];
 
-test("summaries group task rows by project and weigh progress by work days, leaving the Master Plan frame out", () => {
+test("summaries group task rows by project and weigh progress by work days, leaving the headings' own dates out", () => {
   const outcomes = summarizeProjects(projects, rows.map(taskRow), new Set(), TODAY);
   const first = outcomes.get(1)!;
-  // Wiring: 5 work days at 40%; Commissioning: 12-21 Oct is 8 work days at 0%. The Done kick-off is not counted.
+  // Wiring: 5 work days at 40%; Commissioning: 12-21 Oct is 8 work days at 0%. The headings are not counted.
   assert.equal(first.summary.progress, Math.round((40 * 5 / 13) * 100) / 100);
   assert.equal(first.summary.taskCount, 2);
   assert.equal(first.summary.doneCount, 0);
   assert.equal(first.summary.scheduleError, false);
   assert.equal(first.summary.planStart, "2026-10-05");
   assert.equal(first.summary.planFinish, "2026-10-21");
-  // The Master Plan still provides the next milestone.
+  // The headings still provide the next milestone.
   assert.deepEqual(first.summary.nextMilestone, { name: "Site acceptance", date: "2026-10-30" });
-  // Every leaf travels with the summary, Master Plan rows included, for screens that list tasks.
-  assert.deepEqual(first.leaves.map((leaf) => leaf.id).sort(), [11, 12, 13, 14]);
+  // Every leaf travels with the summary, headings included, for screens that list tasks.
+  assert.deepEqual(first.leaves.map((leaf) => leaf.id).sort(), [11, 12, 13, 14, 15]);
   // A project with nothing scheduled has no plan and no measured progress.
   assert.equal(outcomes.get(5)!.summary.health, "No plan");
   assert.equal(outcomes.get(5)!.summary.progress, null);
   assert.equal(outcomes.get(5)!.summary.scheduleError, false);
 });
 
-test("a project whose only rows are the Master Plan is measured on them", () => {
+test("a project with only headings so far is measured on their dates", () => {
   const second = summarizeProjects(projects, rows.map(taskRow), new Set(), TODAY).get(2)!.summary;
   assert.equal(second.taskCount, 1);
-  assert.equal(second.progress, 50);
+  assert.equal(second.progress, 0);
   assert.notEqual(second.health, "No plan");
 });
 

@@ -48,7 +48,6 @@ import {
   type ProjectMember,
   type ProjectSummary,
   type ProjectDeletionCheck,
-  type ProjectScheduleRow,
   type ScheduleTemplate,
   type SignInbox,
   checkProjectDeletion,
@@ -66,8 +65,8 @@ import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFO
   projectTeamOf, shownProjectTeam, type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
-import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, planPeriodValid, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
-  type MasterPlanDraft, type TeamPlanDraft } from "./ProjectPlanFields";
+import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBrokenDownNote, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
+  type PlanHeadingDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -904,39 +903,56 @@ function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: 
   </Modal>;
 }
 
-// The part of GET /projects/:id/schedule the edit dialog reads: the two phases a project is
-// created with. Other schedule rows stay in Project Schedule.
-type PlanNode = { id: number; kind: string; name: string; planStart: string | null; planFinish: string | null; planManDays: number; actualManDays: number;
-  percentComplete: number; status: string; startMode: string; pics: { id: number }[]; children: PlanNode[] };
+// The part of GET /projects/:id/schedule the plan dialogs read: the headings at the top, the tasks under them
+// and the tasks' functions. Members' own tasks and rows below a function stay in Project Schedule.
+type PlanNode = { id: number; kind: string; name: string; planStart: string | null; planFinish: string | null; storedPlanStart: string | null; planDays: number;
+  planManDays: number; actualManDays: number; percentComplete: number; status: string; startMode: string; managedByResourcePlan?: boolean; pics: { id: number }[]; children: PlanNode[] };
 type PlanSnapshot = { scheduleVersion: string | null; canPlan: boolean; tasks: PlanNode[] };
-const planRowLocked = (node: PlanNode) => node.status !== "Not Started" || node.percentComplete > 0 || node.actualManDays > 0 || node.children.length > 0 || node.startMode !== "manual";
+const planRowStarted = (node: PlanNode) => node.status !== "Not Started" || node.percentComplete > 0 || node.actualManDays > 0;
+/** A row that must stay: it, or a row under it, has progress, or a member's own task sits under it. */
+const planRowLocked = (node: PlanNode): boolean => planRowStarted(node) || node.children.some((child) => child.kind === "detail" || planRowLocked(child));
+const datesDerived = (node: PlanNode) => node.children.length > 0 || node.startMode !== "manual";
+const shiftPlanDate = (iso: string, days: number) => { const date = new Date(`${iso}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 
-/** The project's Master Plan and Team plan as editable drafts, and whether they differ from what was loaded. */
+/** The plan as drafts. A heading's own dates are the customer's (its bar if it has none yet); a row that derives its dates shows what they resolve to. */
+function planDrafts(snapshot: PlanSnapshot): PlanHeadingDraft[] {
+  return snapshot.tasks.filter((node) => node.kind === "phase").map((heading) => ({
+    key: `task-${heading.id}`, id: heading.id, locked: planRowLocked(heading), name: heading.name,
+    start: heading.storedPlanStart ?? heading.planStart ?? "",
+    finish: heading.storedPlanStart ? shiftPlanDate(heading.storedPlanStart, Math.max(1, heading.planDays) - 1) : heading.planFinish ?? "",
+    tasks: heading.children.filter((task) => task.kind === "task").map((task) => ({
+      key: `task-${task.id}`, id: task.id, locked: planRowLocked(task), datesLocked: datesDerived(task), userId: task.pics[0]?.id ?? 0, name: task.name,
+      start: task.planStart ?? "", finish: task.planFinish ?? "", planManDays: task.planManDays ? String(task.planManDays) : "",
+      noFunctions: planRowStarted(task) || Boolean(task.managedByResourcePlan) || task.children.some((child) => child.kind === "detail"),
+      percent: task.percentComplete, actualManDays: task.actualManDays,
+      functions: task.children.filter((item) => item.kind === "task").map((item) => ({
+        key: `task-${item.id}`, id: item.id, locked: planRowLocked(item), datesLocked: datesDerived(item), name: item.name,
+        userId: item.pics[0]?.id ?? 0, start: item.planStart ?? "", finish: item.planFinish ?? "" })),
+    })),
+  }));
+}
+
+/** The project's plan as editable drafts, and whether it differs from what was loaded. */
 function useProjectPlan(projectId: number) {
   const t = useUiText();
   const [plan, setPlan] = useState<{ snapshot: PlanSnapshot; initial: string } | null>(null);
   const [planError, setPlanError] = useState("");
-  const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
-  const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
+  const [headings, setHeadings] = useState<PlanHeadingDraft[]>([]);
   useEffect(() => {
     let cancelled = false;
     void apiRequest<PlanSnapshot>(`/api/v1/projects/${projectId}/schedule`).then(snapshot => {
       if (cancelled) return;
-      const phase = (name: string) => snapshot.tasks.find(node => node.kind === "phase" && node.name === name)?.children ?? [];
-      const milestones: MasterPlanDraft[] = phase("Master Plan").map(node => ({ key: `task-${node.id}`, id: node.id, locked: planRowLocked(node), name: node.name, start: node.planStart ?? "", finish: node.planFinish ?? "" }));
-      const team: TeamPlanDraft[] = phase("Team plan").map(node => ({ key: `task-${node.id}`, id: node.id, locked: planRowLocked(node), userId: node.pics[0]?.id ?? 0, task: node.name,
-        start: node.planStart ?? "", finish: node.planFinish ?? "", planManDays: node.planManDays ? String(node.planManDays) : "",
-        percent: node.percentComplete, actualManDays: node.actualManDays }));
-      setMasterPlan(milestones); setTeamPlan(team);
-      setPlan({ snapshot, initial: JSON.stringify(planPayload(milestones, team)) });
+      const drafts = planDrafts(snapshot);
+      setHeadings(drafts);
+      setPlan({ snapshot, initial: JSON.stringify(planPayload(drafts)) });
     }).catch(failure => { if (!cancelled) setPlanError(toError(failure)); });
     return () => { cancelled = true; };
   }, [projectId]);
-  const planChanged = plan !== null && plan.snapshot.canPlan && JSON.stringify(planPayload(masterPlan, teamPlan)) !== plan.initial;
-  const planIssues = planChanged ? planIssuesOf(t, masterPlan, teamPlan) : [];
+  const planChanged = plan !== null && plan.snapshot.canPlan && JSON.stringify(planPayload(headings)) !== plan.initial;
+  const planIssues = planChanged ? planIssuesOf(t, headings) : [];
   // The plan goes only when it changed, so an untouched plan never collides with Project Schedule.
-  const planBody = () => planChanged ? { ...planPayload(masterPlan, teamPlan), scheduleVersion: plan!.snapshot.scheduleVersion } : {};
-  return { plan, planError, masterPlan, setMasterPlan, teamPlan, setTeamPlan, planChanged, planIssues, planBody, span: planSpanOf(masterPlan, teamPlan) };
+  const planBody = () => planChanged ? { ...planPayload(headings), scheduleVersion: plan!.snapshot.scheduleVersion } : {};
+  return { plan, planError, headings, setHeadings, planChanged, planIssues, planBody, span: planSpanOf(headings) };
 }
 
 function useScheduleTemplates() {
@@ -946,144 +962,9 @@ function useScheduleTemplates() {
 }
 
 /**
- * A schedule row outside the two plan phases as Edit Master Plan edits it: renamed, re-dated, or
- * marked for removal. A row added here has a negative id until it is saved; canHoldRows says
- * whether a main row may take sub rows (the API turns a bare task into a phase over them).
- */
-type OtherPlanDraft = { id: number; parentId: number | null; depth: number; kind: string; name: string; start: string; finish: string; removed: boolean;
-  initial: { name: string; start: string; finish: string }; nameEditable: boolean; datesEditable: boolean; removable: boolean; canHoldRows: boolean; status: string; percent: number };
-
-/** Every schedule row outside the two plan phases, in plan order, with its depth for indenting. */
-function otherPlanDrafts(tasks: PlanNode[]): OtherPlanDraft[] {
-  const out: OtherPlanDraft[] = [];
-  const walk = (nodes: PlanNode[], parentId: number | null, depth: number) => { for (const node of nodes) {
-    const start = node.planStart ?? "", finish = node.planFinish ?? "";
-    const untouched = node.status === "Not Started" && node.percentComplete === 0 && node.actualManDays === 0;
-    out.push({ id: node.id, parentId, depth, kind: node.kind, name: node.name, start, finish, removed: false, initial: { name: node.name, start, finish },
-      nameEditable: node.kind !== "detail", datesEditable: node.kind !== "phase" && node.kind !== "detail" && !node.children.length && node.startMode === "manual",
-      removable: node.kind !== "detail" && untouched,
-      canHoldRows: depth === 0 && (node.kind === "phase" || (node.kind === "task" && untouched && !node.children.length && node.startMode === "manual" && !node.pics.length)),
-      status: node.status, percent: node.percentComplete });
-    walk(node.children, node.id, depth + 1);
-  } };
-  walk(tasks.filter(node => !(node.kind === "phase" && (node.name === "Master Plan" || node.name === "Team plan"))), null, 0);
-  return out;
-}
-
-/** A main row (parentId null) or a sub row added on this screen. */
-const blankPlanRow = (rows: OtherPlanDraft[], parentId: number | null): OtherPlanDraft => ({
-  id: Math.min(0, ...rows.map(row => row.id)) - 1, parentId, depth: parentId === null ? 0 : 1, kind: "task", name: "", start: "", finish: "",
-  removed: false, initial: { name: "", start: "", finish: "" }, nameEditable: true, datesEditable: true, removable: true, canHoldRows: parentId === null, status: "Not Started", percent: 0,
-});
-const isNewPlanRow = (row: OtherPlanDraft) => row.id < 0;
-const hasPlanRows = (rows: OtherPlanDraft[], id: number) => rows.some(row => row.parentId === id && !row.removed);
-// A row with rows under it takes its dates from them.
-const planRowDatesOpen = (rows: OtherPlanDraft[], row: OtherPlanDraft) => row.datesEditable && !hasPlanRows(rows, row.id);
-const otherRowDatesChanged = (rows: OtherPlanDraft[], row: OtherPlanDraft) => planRowDatesOpen(rows, row) && (row.start !== row.initial.start || row.finish !== row.initial.finish);
-/** A new row may wait for both of its dates, never for one of them. */
-const otherRowInvalid = (rows: OtherPlanDraft[], row: OtherPlanDraft) => !row.removed && (!row.name.trim()
-  || (isNewPlanRow(row) ? planRowDatesOpen(rows, row) && Boolean(row.start || row.finish) && !planPeriodValid(row) : otherRowDatesChanged(rows, row) && !planPeriodValid(row)));
-
-/** What PUT /projects/:id takes as otherRows: removed rows, and kept rows whose name or dates changed. */
-type OtherPlanEdit = { id: number; remove: true } | { id: number; name: string; start?: string; finish?: string };
-function otherPlanEdits(rows: OtherPlanDraft[]): OtherPlanEdit[] {
-  return rows.filter(row => !isNewPlanRow(row)).flatMap((row): OtherPlanEdit[] => row.removed ? [{ id: row.id, remove: true as const }]
-    : row.name.trim() !== row.initial.name || otherRowDatesChanged(rows, row)
-      ? [{ id: row.id, name: row.name.trim(), ...(otherRowDatesChanged(rows, row) ? { start: row.start, finish: row.finish } : {}) }] : []);
-}
-
-/** What the API takes as newRows: each new main row with its sub rows, and new sub rows under main rows that exist. */
-function newPlanRows(rows: OtherPlanDraft[]): ProjectScheduleRow[] {
-  const fresh = rows.filter(row => isNewPlanRow(row) && !row.removed);
-  const dates = (row: OtherPlanDraft) => row.start || row.finish ? { start: row.start, finish: row.finish } : {};
-  const subsOf = (id: number) => fresh.filter(row => row.parentId === id).map(row => ({ name: row.name.trim(), ...dates(row) }));
-  return fresh.flatMap((row): ProjectScheduleRow[] => row.parentId === null
-    ? [{ name: row.name.trim(), ...(subsOf(row.id).length ? { rows: subsOf(row.id) } : dates(row)) }]
-    : row.parentId > 0 ? [{ parentId: row.parentId, name: row.name.trim(), ...dates(row) }] : []);
-}
-
-/** Dates of the rows that keep their own (no rows under them), for the project's span. */
-const datedPlanRows = (rows: OtherPlanDraft[]) => rows.filter(row => !row.removed && !hasPlanRows(rows, row.id) && planPeriodValid(row));
-
-/** The ids of a row and every row under it; rows come in plan order, so a child follows its parent. */
-function withDescendants(rows: OtherPlanDraft[], id: number): Set<number> {
-  const ids = new Set([id]);
-  for (const row of rows) if (row.parentId !== null && ids.has(row.parentId)) ids.add(row.id);
-  return ids;
-}
-
-/** 1, 1.1, 1.2, 2 … in the order the rows are listed. */
-function planRowNumbers(rows: OtherPlanDraft[]): Map<number, string> {
-  const numbers = new Map<number, string>(), counts = new Map<number | null, number>();
-  for (const row of rows) {
-    const count = (counts.get(row.parentId) ?? 0) + 1; counts.set(row.parentId, count);
-    const parent = row.parentId === null ? undefined : numbers.get(row.parentId);
-    numbers.set(row.id, parent ? `${parent}.${count}` : String(count));
-  }
-  return numbers;
-}
-
-/**
- * The project's main rows and sub rows, as Project Schedule builds them: a plan made there, or
- * before projects had a Master Plan phase, and rows added here. Names change here, and dates on
- * rows that keep their own; a main row with sub rows takes its dates from them. A row with progress
- * or a member's own task stays. Removing a main row removes the rows under it.
- */
-function OtherPlanRows({ rows, onChange, onOpenSchedule, guide, hint }: {
-  rows: OtherPlanDraft[]; onChange: (update: (rows: OtherPlanDraft[]) => OtherPlanDraft[]) => void; onOpenSchedule?: () => void; guide: string; hint: string;
-}) {
-  const t = useUiText();
-  const numbers = planRowNumbers(rows);
-  const update = (id: number, change: Partial<OtherPlanDraft>) => onChange(current => current.map(row => row.id === id ? { ...row, ...change } : row));
-  const addSubRow = (parent: OtherPlanDraft) => onChange(current => {
-    const after = Math.max(...[...withDescendants(current, parent.id)].map(id => current.findIndex(row => row.id === id)));
-    // The main row's own dates give way to its sub rows'.
-    const kept = current.map(row => row.id === parent.id ? { ...row, start: row.initial.start, finish: row.initial.finish } : row);
-    return [...kept.slice(0, after + 1), blankPlanRow(current, parent.id), ...kept.slice(after + 1)];
-  });
-  const toggleRemove = (row: OtherPlanDraft) => onChange(current => {
-    const ids = withDescendants(current, row.id);
-    if (isNewPlanRow(row)) return current.filter(item => !ids.has(item.id));
-    if (!row.removed) return current.map(item => ids.has(item.id) ? { ...item, removed: true } : item);
-    // Bringing a row back brings back the phases it sits in.
-    const ancestors = new Set<number>(); let parent = row.parentId;
-    while (parent !== null) { const id: number = parent; ancestors.add(id); parent = current.find(item => item.id === id)?.parentId ?? null; }
-    return current.map(item => ids.has(item.id) || ancestors.has(item.id) ? { ...item, removed: false } : item);
-  });
-  return <section className="project-plan" aria-labelledby={`${guide}-title`} data-guide={guide}>
-    <div className="project-plan-head"><div><h3 id={`${guide}-title`}>{t("CRM.mainSchedule")}{rows.length ? ` (${rows.length})` : ""}</h3><p className="muted">{t(hint)}</p></div>
-      <div className="row-actions">
-        <button className="btn sm" type="button" data-guide="project.scheduleAdd" onClick={() => onChange(current => [...current, blankPlanRow(current, null)])}><Icon name="plus" />{t("CRM.addMainRow")}</button>
-        {onOpenSchedule ? <button className="btn sm" type="button" onClick={onOpenSchedule}><Icon name="calendar" />{t("CRM.openProjectSchedule")}</button> : null}
-      </div></div>
-    {rows.length ? <ol className="project-plan-rows">{rows.map(row => {
-      const number = numbers.get(row.id) ?? "";
-      const canRemove = [...withDescendants(rows, row.id)].every(id => rows.find(item => item.id === id)?.removable);
-      const open = planRowDatesOpen(rows, row) && !row.removed;
-      // A row with rows under it shows the span of theirs.
-      const under = rows.filter(item => item.parentId === row.id && !item.removed && item.start && item.finish);
-      const start = hasPlanRows(rows, row.id) && under.length ? under.map(item => item.start).sort()[0]! : row.start;
-      const finish = hasPlanRows(rows, row.id) && under.length ? under.map(item => item.finish).sort().at(-1)! : row.finish;
-      const nameLabel = t(row.depth === 0 ? "CRM.mainRowName" : "CRM.subRowName");
-      return <li key={row.id} className={`project-plan-row schedule${row.depth === 0 ? " main" : row.depth === 1 ? " sub" : " deep"}${row.removed ? " removed" : ""}`}>
-        <span className="project-plan-index">{number}</span>
-        <input type="date" aria-label={`${t("CRM.planStart")} ${number}`} disabled={!open} value={open ? row.start : start} onChange={(event) => update(row.id, { start: event.target.value })} />
-        <span className="project-plan-dash" aria-hidden="true">–</span>
-        <input type="date" aria-label={`${t("CRM.planFinish")} ${number}`} disabled={!open} min={row.start || undefined} value={open ? row.finish : finish} onChange={(event) => update(row.id, { finish: event.target.value })} />
-        <input className="project-plan-name" aria-label={`${nameLabel} ${number}`} placeholder={isNewPlanRow(row) ? nameLabel : undefined} maxLength={500} disabled={!row.nameEditable || row.removed}
-          aria-invalid={otherRowInvalid(rows, row)} value={row.name} title={isNewPlanRow(row) ? undefined : `${t(row.status)} · ${Math.round(row.percent)}%`} onChange={(event) => update(row.id, { name: event.target.value })} />
-        {row.canHoldRows && !row.removed ? <button className="icon-btn add" type="button" aria-label={`${t("CRM.addSubRow")} ${number}`} title={t("CRM.addSubRow")} onClick={() => addSubRow(row)}><Icon name="plus" /></button> : <span aria-hidden="true" />}
-        <button className="icon-btn" type="button" disabled={!row.removed && !canRemove} aria-label={`${t(row.removed ? "CRM.keepRow" : "CRM.removeRow")} ${number}`}
-          title={t(row.removed ? "CRM.keepRow" : canRemove ? "CRM.removeRow" : "CRM.rowInUse")} onClick={() => toggleRemove(row)}><Icon name={row.removed ? "refresh" : "x"} /></button>
-      </li>;
-    })}</ol> : <p className="muted">{t("CRM.mainScheduleEmpty")}</p>}
-  </section>;
-}
-
-/**
- * The Master Plan and Team plan of a project that already exists, without the rest of Edit
- * project, and the rows made in Project Schedule. When the plan's span moves, the project's
- * start and delivery can follow it.
+ * The plan of a project that already exists, without the rest of Edit project: its Master Plan
+ * headings and the Team Plan under them. When the plan's span moves, the project's start and
+ * delivery can follow it.
  */
 function EditMasterPlanModal({ bootstrap, project, onClose, onSaved, onOpenSchedule }: {
   bootstrap: BootstrapData;
@@ -1094,25 +975,16 @@ function EditMasterPlanModal({ bootstrap, project, onClose, onSaved, onOpenSched
 }) {
   const t = useUiText();
   const templates = useScheduleTemplates();
-  const { plan, planError, masterPlan, setMasterPlan, teamPlan, setTeamPlan, planChanged, planIssues, planBody, span } = useProjectPlan(project.id);
+  const { plan, planError, headings, setHeadings, planChanged, planIssues, planBody, span } = useProjectPlan(project.id);
   const datesDiffer = Boolean(span && (span.start !== project.startDate || span.finish !== project.targetDelivery));
   const [followPlan, setFollowPlan] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Drafted from the loaded schedule until the first edit, then kept as edited.
-  const [edited, setEdited] = useState<OtherPlanDraft[] | null>(null);
-  const loadedOthers = useMemo(() => plan ? otherPlanDrafts(plan.snapshot.tasks) : [], [plan]);
-  const others = edited ?? loadedOthers;
-  const setOthers = (change: (rows: OtherPlanDraft[]) => OtherPlanDraft[]) => setEdited(current => change(current ?? loadedOthers));
-  const otherEdits = otherPlanEdits(others);
-  const added = newPlanRows(others);
-  const otherIssues = others.filter(row => otherRowInvalid(others, row)).length;
-  const issues = [...planIssues, ...(otherIssues ? [`${t("CRM.otherPlanIncomplete")}: ${otherIssues}`] : [])];
+  const change = (update: (rows: PlanHeadingDraft[]) => PlanHeadingDraft[]) => { setError(""); setHeadings(update); };
   const submit = async () => {
     setBusy(true); setError("");
     try {
       const saved = await updateProject(project.id, { rowVersion: project.rowVersion, ...planBody(),
-        ...(otherEdits.length || added.length ? { otherRows: otherEdits, newRows: added, scheduleVersion: plan!.snapshot.scheduleVersion } : {}),
         ...(followPlan && datesDiffer && span ? { startDate: span.start, targetDelivery: span.finish } : {}) });
       await onSaved(saved.number);
     } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); }
@@ -1120,20 +992,21 @@ function EditMasterPlanModal({ bootstrap, project, onClose, onSaved, onOpenSched
   return <Modal title={`${t("CRM.editMasterPlan")} · ${project.number}`} subtitle={project.name} size="xl" onClose={onClose} footer={<>
     {error ? <span className="project-create-error" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></span> : <span className="spacer" />}
     <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" data-guide="project.planSave" disabled={busy || (!planChanged && !otherEdits.length && !added.length) || issues.length > 0} onClick={() => { void submit(); }}>
+    <button className="btn primary" type="button" data-guide="project.planSave" disabled={busy || !planChanged || planIssues.length > 0} onClick={() => { void submit(); }}>
       <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("CRM.savePlan")}
     </button>
   </>}><div className="project-create">
-    {issues.length ? <p role="status">{t("CRM.missingProjectFields")}: {issues.join(", ")}</p> : null}
+    {planIssues.length ? <p role="status">{t("CRM.missingProjectFields")}: {planIssues.join(", ")}</p> : null}
     {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
       : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
       : plan.snapshot.canPlan ? <>
-        <MasterPlanSection rows={masterPlan} onChange={(change) => { setError(""); setMasterPlan(change); }} templates={templates} />
-        <TeamPlanSection rows={teamPlan} onChange={(change) => { setError(""); setTeamPlan(change); }} people={bootstrap.team} />
-        <OtherPlanRows rows={others} onChange={(change) => { setError(""); setOthers(change); }} {...(onOpenSchedule ? { onOpenSchedule } : {})} guide="project.planExisting" hint="CRM.otherPlanRowsHint" />
+        <MasterPlanSection rows={headings} onChange={change} templates={templates} />
+        <TeamPlanSection rows={headings} onChange={change} people={bootstrap.team} />
+        <NotBrokenDownNote headings={headings} />
         {datesDiffer && span ? <label className="info-strip" data-guide="project.planDates"><input type="checkbox" checked={followPlan} disabled={busy} onChange={(event) => setFollowPlan(event.target.checked)} />
           <span>{t("CRM.followPlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)} ({t("CRM.currentDates")} {formatDate(project.startDate)} – {formatDate(project.targetDelivery)})</span></label> : null}
         <p className="muted">{t("CRM.editPlanHint")}</p>
+        {onOpenSchedule ? <div><button className="btn ghost sm" type="button" onClick={onOpenSchedule}><Icon name="calendar" />{t("CRM.openProjectSchedule")}</button></div> : null}
       </> : <p className="muted">{t("CRM.planReadOnly")}</p>}
   </div></Modal>;
 }
@@ -1177,7 +1050,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     contactIds: project.contactIds ?? [],
   });
   const departments = projectTeamOptions(form.department);
-  const { plan, planError, masterPlan, setMasterPlan, teamPlan, setTeamPlan, planIssues, planBody, span } = useProjectPlan(project.id);
+  const { plan, planError, headings, setHeadings, planIssues, planBody, span } = useProjectPlan(project.id);
   const templates = useScheduleTemplates();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1255,8 +1128,9 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
       : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
       : plan.snapshot.canPlan ? <>
-        <MasterPlanSection rows={masterPlan} onChange={setMasterPlan} templates={templates} />
-        <TeamPlanSection rows={teamPlan} onChange={setTeamPlan} people={bootstrap.team} />
+        <MasterPlanSection rows={headings} onChange={setHeadings} templates={templates} />
+        <TeamPlanSection rows={headings} onChange={setHeadings} people={bootstrap.team} />
+        <NotBrokenDownNote headings={headings} />
         <p className="muted">{t("CRM.editPlanHint")}</p>
       </> : <p className="muted">{t("CRM.planReadOnly")}</p>}
     <PaymentChecklist value={form.paymentsReceived} onChange={(paymentsReceived) => set("paymentsReceived", paymentsReceived)} />
@@ -1434,9 +1308,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const t = useUiText();
   const [form, setForm] = useState<CreateProjectInput>({ projectNumber: "", estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "", department: "", paymentsReceived: [], contactIds: [], customerId: 0, projectName: "", projectType: "" });
   const [withoutEstimate, setWithoutEstimate] = useState(false);
-  const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
-  const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
-  const [scheduleRows, setScheduleRows] = useState<OtherPlanDraft[]>([]);
+  const [headings, setHeadings] = useState<PlanHeadingDraft[]>([]);
   const templates = useScheduleTemplates();
   const departments = projectTeamOptions(form.department);
   // The team defaults to the lead engineer's team (from their department) until someone picks one.
@@ -1472,13 +1344,10 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const customerId = standalone ? form.customerId ?? 0 : selectedEstimate?.customerId ?? 0;
   const customer = bootstrap.customers.find(item=>item.id===customerId);
   const canChooseSource = !initialEstimateId && Boolean(options.canCreateWithoutEstimate);
-  // With plan rows the project runs from the first row to the last, so its dates are not typed twice.
-  // Main rows may wait for their dates; only dated rows set the project's span.
-  const scheduleDates = datedPlanRows(scheduleRows);
-  const planned = masterPlan.length + teamPlan.length + scheduleDates.length > 0;
-  const span = planSpanOf([...masterPlan, ...scheduleDates], teamPlan);
-  const scheduleIssues = scheduleRows.filter(row => otherRowInvalid(scheduleRows, row)).length;
-  const planIssues = [...planIssuesOf(t, masterPlan, teamPlan), ...(scheduleIssues ? [`${t("CRM.otherPlanIncomplete")}: ${scheduleIssues}`] : [])];
+  // With a plan the project runs from its first row to its last, so its dates are not typed twice.
+  const planned = headings.length > 0;
+  const span = planSpanOf(headings);
+  const planIssues = planIssuesOf(t, headings);
   const missingFields = [
     ...(standalone ? [!form.customerId ? "Customer *" : "", !form.projectName?.trim() ? "Project name *" : "", !form.projectType ? "Project type *" : ""]
       : [!form.estimateId ? "Approved estimate *" : ""]),
@@ -1491,7 +1360,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const submit = async () => { setBusy(true); setSaveError(""); try {
     const { customerId: chosenCustomer, projectName, projectType, estimateId, ...shared } = form;
     const input: CreateProjectInput = { ...shared, projectNumber: form.projectNumber.trim(), startDate: span?.start ?? form.startDate, targetDelivery: span?.finish ?? form.targetDelivery,
-      department: form.department?.trim() || null, ...planPayload(masterPlan, teamPlan), ...(scheduleRows.length ? { newRows: newPlanRows(scheduleRows) } : {}),
+      department: form.department?.trim() || null, ...planPayload(headings),
       ...(standalone ? { withoutEstimate: true, customerId: chosenCustomer, projectName: projectName?.trim(), projectType } : { estimateId }) };
     if (standalone) input.endUserCustomerId = form.endUserCustomerId ?? null;
     else if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null;
@@ -1532,9 +1401,9 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       {standalone ? <EndUserCompanyField bootstrap={bootstrap} customerId={customerId} value={form.endUserCustomerId ?? null} disabled={busy || !customerId} onChange={(endUserCustomerId) => update({ endUserCustomerId })} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
     </div>
     <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
-    <MasterPlanSection rows={masterPlan} onChange={(change) => { setSaveError(""); setMasterPlan(change); }} templates={templates} />
-    <OtherPlanRows rows={scheduleRows} onChange={(change) => { setSaveError(""); setScheduleRows(change); }} guide="project.schedule" hint="CRM.mainScheduleHint" />
-    <TeamPlanSection rows={teamPlan} onChange={(change) => { setSaveError(""); setTeamPlan(change); }} people={bootstrap.team} />
+    <MasterPlanSection rows={headings} onChange={(change) => { setSaveError(""); setHeadings(change); }} templates={templates} />
+    <TeamPlanSection rows={headings} onChange={(change) => { setSaveError(""); setHeadings(change); }} people={bootstrap.team} />
+    <NotBrokenDownNote headings={headings} />
     {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
       <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
       <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>

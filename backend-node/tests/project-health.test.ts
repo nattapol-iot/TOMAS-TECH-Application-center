@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ApiError } from "../src/errors.js";
 import { countedLeaves, projectHealth, scheduleLeaves, summarizeProjectSchedule, type HealthTask, type ScheduleLeaf } from "../src/project-health.js";
-import { MASTER_PLAN_PHASE, parseProjectDetails } from "../src/project-initial-plan.js";
-import { MASTER_PLAN_PHASE as SHARED_MASTER_PLAN_PHASE } from "../src/schedule-phases.js";
+import { parseProjectDetails, UNSORTED_HEADING } from "../src/project-initial-plan.js";
+import { UNSORTED_HEADING as SHARED_UNSORTED_HEADING } from "../src/schedule-phases.js";
 import { resolveTasks, type TaskRow } from "../src/schedule-service.js";
 
 const today = "2026-10-10";
@@ -53,14 +53,15 @@ test("team, payments and contacts are each optional, and each is checked when se
 
 const leaf = (change: Partial<ScheduleLeaf>): ScheduleLeaf => ({
   id: 1, name: "Install", planStart: "2026-10-01", planFinish: "2026-10-30", workDays: 22, status: "In Progress", percentComplete: 40,
-  forecastFinish: null, actualFinish: null, baselineFinish: null, isMilestone: false, inMasterPlan: false, ...change,
+  forecastFinish: null, actualFinish: null, baselineFinish: null, isMilestone: false, inMasterPlan: false, rollup: false, ...change,
 });
 const summary = (leaves: ScheduleLeaf[], project: { status: string; targetDelivery: string | null } = open) => summarizeProjectSchedule(project, leaves, today);
 
-test("work counts; the Master Plan frame counts only when the project has nothing else", () => {
-  const work = leaf({ id: 1 }), frame = leaf({ id: 2, inMasterPlan: true });
-  assert.deepEqual(countedLeaves([frame, work]).map((item) => item.id), [1]);
+test("work counts; the headings' own dates count only while nothing is planned under them, and a heading with rows under it never does", () => {
+  const work = leaf({ id: 1 }), frame = leaf({ id: 2, inMasterPlan: true }), rollup = leaf({ id: 4, inMasterPlan: true, rollup: true });
+  assert.deepEqual(countedLeaves([frame, work, rollup]).map((item) => item.id), [1]);
   assert.deepEqual(countedLeaves([frame, leaf({ id: 3, inMasterPlan: true })]).map((item) => item.id), [2, 3]);
+  assert.deepEqual(countedLeaves([frame, rollup]).map((item) => item.id), [2]);
   assert.deepEqual(countedLeaves([]), []);
 });
 
@@ -197,46 +198,43 @@ const row = (change: Partial<TaskRow>): TaskRow => {
   };
 };
 
-test("the Master Plan phase name lives in a module with no imports and is re-exported unchanged", () => {
-  assert.equal(MASTER_PLAN_PHASE, "Master Plan");
-  assert.equal(SHARED_MASTER_PLAN_PHASE, MASTER_PLAN_PHASE);
+test("the unsorted heading's name lives in a module with no imports and is re-exported unchanged", () => {
+  assert.equal(UNSORTED_HEADING, "ยังไม่จัดหัวข้อ");
+  assert.equal(SHARED_UNSORTED_HEADING, UNSORTED_HEADING);
 });
 
-test("scheduleLeaves keeps leaves with resolved dates and marks rows under the Master Plan phase", () => {
-  const frame = row({ kind: "phase", name: MASTER_PLAN_PHASE, planStart: null });
-  const kickOff = row({ parentId: frame.id, name: "Kick-off", isMilestone: true, planStart: "2026-10-05", planDays: 1 });
-  const frameGroup = row({ parentId: frame.id, name: "Delivery", planStart: null });
-  const handover = row({ parentId: frameGroup.id, name: "Handover", planStart: "2026-12-01", planDays: 1 });
-  const team = row({ kind: "phase", name: "Team plan", planStart: null });
-  const design = row({ parentId: team.id, name: "Design", planStart: "2026-10-05", planDays: 5, percentComplete: 40, status: "In Progress", baselineFinish: "2026-10-08" });
-  const build = row({ parentId: team.id, name: "Build", planStart: null, startMode: "linked", predecessorId: design.id, planDays: 3 });
-  const emptyPhase = row({ kind: "phase", name: "Spare", planStart: null });
-  const loose = row({ name: "Loose", planStart: "2026-10-20", planDays: 2 });
-  const tasks = [frame, kickOff, frameGroup, handover, team, design, build, emptyPhase, loose];
+test("scheduleLeaves keeps rows without children, and each heading's own dates as the customer frame", () => {
+  const kickOff = row({ id: 1, kind: "phase", name: "Kick-off", planStart: "2026-10-05", planDays: 1 });
+  const build = row({ id: 2, kind: "phase", name: "Software development", planStart: "2026-10-05", planDays: 60 });
+  const web = row({ id: 3, parentId: build.id, name: "Web App WMS", planStart: null });
+  const inbound = row({ id: 4, parentId: web.id, name: "Inbound", planStart: "2026-10-05", planDays: 5, percentComplete: 40, status: "In Progress", baselineFinish: "2026-10-08" });
+  const outbound = row({ id: 5, parentId: web.id, name: "Outbound", planStart: null, startMode: "linked", predecessorId: inbound.id, planDays: 3 });
+  const spare = row({ id: 6, kind: "phase", name: "Spare", planStart: null });
+  const handover = row({ id: 7, kind: "phase", name: "Handover", planStart: "2026-12-01", planDays: 1 });
+  const tasks = [kickOff, build, web, inbound, outbound, spare, handover];
   const leaves = scheduleLeaves(tasks, resolveTasks(tasks, new Set()));
-  // Phases (even childless ones) and the roll-up group are left out.
-  assert.deepEqual(leaves.map((item) => item.name), ["Kick-off", "Handover", "Design", "Build", "Loose"]);
+  // The task with functions is a roll-up and a heading without dates is nothing yet; a heading with rows under it is a roll-up frame.
+  assert.deepEqual(leaves.map((item) => [item.name, item.inMasterPlan, item.rollup]),
+    [["Kick-off", true, false], ["Software development", true, true], ["Inbound", false, false], ["Outbound", false, false], ["Handover", true, false]]);
   const byName = new Map(leaves.map((item) => [item.name, item]));
-  assert.equal(byName.get("Kick-off")!.inMasterPlan, true); assert.equal(byName.get("Kick-off")!.isMilestone, true);
-  assert.equal(byName.get("Handover")!.inMasterPlan, true);
-  assert.equal(byName.get("Design")!.inMasterPlan, false); assert.equal(byName.get("Loose")!.inMasterPlan, false);
-  assert.deepEqual(byName.get("Design"), { id: design.id, name: "Design", planStart: "2026-10-05", planFinish: "2026-10-09", workDays: 5,
-    status: "In Progress", percentComplete: 40, forecastFinish: null, actualFinish: null, baselineFinish: "2026-10-08", isMilestone: false, inMasterPlan: false });
-  // A linked row carries the start the calculation resolved (next work day after Design), so it can be judged.
-  assert.equal(byName.get("Build")!.planStart, "2026-10-12"); assert.equal(byName.get("Build")!.planFinish, "2026-10-14");
-  assert.equal(byName.get("Build")!.workDays, 3);
-  // End to end: the frame is excluded from progress but still names the next milestone.
+  // A heading keeps the customer's dates whatever the rows under it say.
+  assert.deepEqual([byName.get("Software development")!.planStart, byName.get("Software development")!.planFinish], ["2026-10-05", "2026-12-03"]);
+  assert.deepEqual(byName.get("Inbound"), { id: inbound.id, name: "Inbound", planStart: "2026-10-05", planFinish: "2026-10-09", workDays: 5,
+    status: "In Progress", percentComplete: 40, forecastFinish: null, actualFinish: null, baselineFinish: "2026-10-08", isMilestone: false, inMasterPlan: false, rollup: false });
+  // A linked row carries the start the calculation resolved (next work day after Inbound), so it can be judged.
+  assert.equal(byName.get("Outbound")!.planStart, "2026-10-12"); assert.equal(byName.get("Outbound")!.planFinish, "2026-10-14");
+  // End to end: only the work counts, and the headings name the next milestone.
   const result = summarizeProjectSchedule(open, leaves, today);
-  assert.equal(result.taskCount, 3);
+  assert.equal(result.taskCount, 2);
   assert.deepEqual(result.nextMilestone, { name: "Handover", date: "2026-12-01" });
+  // Headings with nothing under them yet: their own dates are the plan.
+  const headingsOnly = [kickOff, handover];
+  assert.equal(summarizeProjectSchedule(open, scheduleLeaves(headingsOnly, resolveTasks(headingsOnly, new Set())), today).taskCount, 2);
 });
 
-test("scheduleLeaves stops walking up at a missing parent or a parent loop", () => {
+test("scheduleLeaves keeps a row whose parent is missing, and ignores a phase that is not at the top", () => {
   const orphan = row({ parentId: 99_999, name: "Orphan" });
   assert.deepEqual(scheduleLeaves([orphan], resolveTasks([orphan], new Set())).map((item) => [item.name, item.inMasterPlan]), [["Orphan", false]]);
-  // The calculation refuses a parent loop; the walk to the top row must still end if it is handed one.
-  const first = row({ id: 900, kind: "phase", name: MASTER_PLAN_PHASE, parentId: 901 }), second = row({ id: 901, kind: "task", name: "Loop", parentId: 900 });
-  const child = row({ id: 902, parentId: 900, name: "Inside loop" });
-  const calculation = resolveTasks([{ ...first, parentId: null }, second, child], new Set());
-  assert.deepEqual(scheduleLeaves([first, second, child], calculation).map((item) => item.name), ["Loop", "Inside loop"]);
+  const top = row({ id: 900, kind: "phase", name: "Top", planStart: null }), nested = row({ id: 901, kind: "phase", name: "Nested", parentId: 900, planStart: "2026-10-01", planDays: 3 });
+  assert.deepEqual(scheduleLeaves([top, nested], resolveTasks([top, nested], new Set())).map((item) => item.name), []);
 });

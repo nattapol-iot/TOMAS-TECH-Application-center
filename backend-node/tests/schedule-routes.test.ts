@@ -299,12 +299,11 @@ test("the managed check also holds inside the route: a manager who is not PIC ca
 });
 
 /*
- * Schedule fixture: Master Plan (1) > milestone 2; Execution (3) > done task 4, managed task 5, roll-up 6 > detail 7.
+ * Schedule fixture: heading 1 "Customer FAT" with only the customer's date; heading Execution (3) > done task 4, managed task 5, roll-up 6 > detail 7.
  * Work days: 4 = 5 (Mon-Fri), 5 = 5, 7 = 10 (12 calendar days over two weekends).
  */
 const scheduleRows = [
-  taskRaw({ id: 1, kind: "phase", name: "Master Plan", plan_start: null, plan_days: 1, sort_order: 1 }),
-  taskRaw({ id: 2, parent_id: 1, name: "Customer FAT", is_milestone: true, plan_start: "2027-06-01", plan_days: 1 }),
+  taskRaw({ id: 1, kind: "phase", name: "Customer FAT", plan_start: "2027-06-01", plan_days: 1, sort_order: 1 }),
   taskRaw({ id: 3, kind: "phase", name: "Execution", plan_start: null, plan_days: 1, sort_order: 2 }),
   taskRaw({ id: 4, parent_id: 3, name: "Design", plan_start: "2026-09-07", plan_days: 5, status: "Done", percent_done: 100, actual_start: "2026-09-07", actual_end: "2026-09-11" }),
   taskRaw({ id: 5, parent_id: 3, sort_order: 2, name: "Panel build", plan_start: "2027-03-01", plan_days: 5, status: "In Progress", percent_done: 40, actual_start: "2027-03-01" }),
@@ -333,14 +332,14 @@ type TaskNode = { id: number; managedByResourcePlan: boolean; canProgress: boole
 const flatten = (nodes: TaskNode[]): TaskNode[] => nodes.flatMap((node) => [node, ...flatten(node.children)]);
 const flagsById = (nodes: TaskNode[]) => Object.fromEntries(flatten(nodes).map((node) => [node.id, { managed: node.managedByResourcePlan, can: node.canProgress }]));
 
-test("GET schedule: summary uses the shared work-day weighted rule without the Master Plan frame", async (t) => {
+test("GET schedule: summary uses the shared work-day weighted rule without the headings' own dates", async (t) => {
   const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
   const statements = installSqlMock(t, scheduleAnswers([{ task: 5, user: 30 }]));
   try {
     const response = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
     assert.equal(response.statusCode, 200, response.body);
     const { summary } = response.json();
-    // (100 x 5 + 40 x 5 + 0 x 10) / 20; the old formula also counted the Master Plan milestone and gave 33.33.
+    // (100 x 5 + 40 x 5 + 0 x 10) / 20; counting heading 1's own date as well would give 33.33.
     assert.equal(summary.percentComplete, 35);
     assert.equal(summary.taskCount, 3); assert.equal(summary.doneCount, 1); assert.equal(summary.blockedCount, 0);
     assert.equal(summary.overdueCount, 0);
@@ -348,7 +347,7 @@ test("GET schedule: summary uses the shared work-day weighted rule without the M
     assert.equal(summary.health, "On Track");
     // Forecast finish 2027-03-19 against the 2027-12-31 target.
     assert.equal(summary.slipDays, -287);
-    // The plan period still spans the whole timeline, Master Plan included.
+    // The plan period still spans the whole timeline, the headings' own dates included.
     assert.equal(summary.planStart, "2026-09-07"); assert.equal(summary.planFinish, "2027-06-01");
     assert.equal(statements.filter((entry) => entry.statement.includes("FROM dbo.resource_tasks")).length, 1, "one Resource Plan query per request");
   } finally { await app.close(); }
@@ -366,13 +365,13 @@ test("GET schedule: the company holidays come along in date order, so the plan s
   } finally { await app.close(); }
 });
 
-test("GET schedule: the Master Plan frame leaf does not count toward health, every other row does", async (t) => {
+test("GET schedule: a heading with nothing under it yet does not count toward health, every other row does", async (t) => {
   const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
   installSqlMock(t, scheduleAnswers([{ task: 5, user: 30 }]));
   try {
     const tasks = flatten((await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json().tasks as TaskNode[]) as Array<TaskNode & { countsTowardHealth: boolean }>;
-    // Milestone 2 sits under the Master Plan phase and the project has other leaves, so the screens leave it out of Late and Blocked.
-    assert.deepEqual(Object.fromEntries(tasks.map((task) => [task.id, task.countsTowardHealth])), { 1: true, 2: false, 3: true, 4: true, 5: true, 6: true, 7: true });
+    // Heading 1 is only the customer's date while the project has work rows, so the screens leave it out of Late and Blocked.
+    assert.deepEqual(Object.fromEntries(tasks.map((task) => [task.id, task.countsTowardHealth])), { 1: false, 3: true, 4: true, 5: true, 6: true, 7: true });
   } finally { await app.close(); }
 });
 
@@ -383,7 +382,7 @@ test("GET schedule: canProgress and managedByResourcePlan per row", async (t) =>
     try {
       const flags = flagsById((await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json().tasks);
       assert.deepEqual(flags, {
-        1: { managed: false, can: false }, 2: { managed: false, can: true }, 3: { managed: false, can: false }, 4: { managed: false, can: true },
+        1: { managed: false, can: false }, 3: { managed: false, can: false }, 4: { managed: false, can: true },
         5: { managed: true, can: false }, 6: { managed: false, can: false }, 7: { managed: false, can: true },
       });
     } finally { await app.close(); }
@@ -406,7 +405,7 @@ test("GET schedule: canProgress and managedByResourcePlan per row", async (t) =>
       try {
         const flags = flagsById((await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json().tasks);
         assert.deepEqual(flags, {
-          1: { managed: false, can: false }, 2: { managed: false, can: isMember }, 3: { managed: false, can: false }, 4: { managed: false, can: false },
+          1: { managed: false, can: false }, 3: { managed: false, can: false }, 4: { managed: false, can: false },
           5: { managed: true, can: false }, 6: { managed: false, can: false }, 7: { managed: false, can: isMember },
         }, "only leaves without a PIC open to members; a colleague's, a managed or a roll-up row stays closed");
       } finally { await app.close(); }
@@ -430,7 +429,7 @@ test("GET schedule: canProgress and managedByResourcePlan per row", async (t) =>
     installSqlMock(sub, scheduleAnswers([{ task: 5, user: 30 }]));
     try {
       const flags = flagsById((await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` })).json().tasks);
-      assert.deepEqual([2, 4, 5, 7].map((id) => flags[id]!.can), [true, true, false, true]);
+      assert.deepEqual([4, 5, 7].map((id) => flags[id]!.can), [true, false, true]);
     } finally { await app.close(); }
   });
   await t.test("without schedule.progress", async (sub) => {
@@ -780,13 +779,17 @@ test("POST details: a task shared by several PICs refuses a personal task", asyn
 });
 
 /** Answers for PUT /schedule/tasks/11 by its manager; `details` = live personal tasks under it, `pics` = its PICs now. */
+/** Task 11 under heading 1, with a member's own task (40) under it when details is set. */
 function planEditAnswers(details: number, pics: number[]) {
+  const tree = [{ id: 1, parent_id: null, predecessor_id: null, kind: "phase", start_mode: "manual" }, { id: 11, parent_id: 1, predecessor_id: null, kind: "task", start_mode: "manual" },
+    ...(details ? [{ id: 40, parent_id: 11, predecessor_id: null, kind: "detail", start_mode: "manual" }] : [])];
   return (statement: string): Answer | undefined => {
-    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11 })] };
+    if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: tree };
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11, parent_id: 1 })] };
     if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
     if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
     if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: pics.map((id) => ({ task_id: 11, id, name: `User ${id}`, email: `${id}@example.test` })) };
-    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: [taskRaw({ id: 11 }), ...(details ? [taskRaw({ id: 40, parent_id: 11, kind: "detail", origin: "Member" })] : [])] };
+    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: [taskRaw({ id: 1, kind: "phase", plan_start: null }), taskRaw({ id: 11, parent_id: 1 }), ...(details ? [taskRaw({ id: 40, parent_id: 11, kind: "detail", origin: "Member" })] : [])] };
     if (statement.includes("FROM dbo.users u WHERE u.id=@user")) return { recordset: [{ allowed: true }] };
     if (statement.includes("kind=N'detail' AND deleted_at IS NULL")) return { recordset: [{ found: details }] };
     if (statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")) return { recordset: [{ row_version: NEXT_VERSION }] };
@@ -794,7 +797,7 @@ function planEditAnswers(details: number, pics: number[]) {
   };
 }
 const planEditPayload = (picUserIds: number[]) => ({
-  rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64"), parentId: null, sortOrder: 1, kind: "task",
+  rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64"), parentId: 1, sortOrder: 1, kind: "task",
   name: "Panel wiring", isMilestone: false, visibility: "Internal", planStart: "2027-03-01", planDays: 5, startMode: "manual", predecessorId: null,
   lagDays: 0, picUserIds, picExternal: "", planManDays: 0,
 });
@@ -935,15 +938,19 @@ test("POST move: a row moves between two siblings without touching the others, a
   } finally { await app.close(); }
 });
 
-test("POST move: a Resource Plan row moves up or down where it is, but not into another phase", async (t) => {
-  for (const [parentId, refused] of [[1, false], [2, true]] as const) {
+test("POST move: a Resource Plan row moves where it is or under another heading, but never to the top", async (t) => {
+  // Headings 1 and 2; the managed task 11 sits under heading 1, as rows from Resource Plan wait under "ยังไม่จัดหัวข้อ".
+  const tree = [{ id: 1, parent_id: null, predecessor_id: null, kind: "phase", start_mode: "manual" }, { id: 2, parent_id: null, predecessor_id: null, kind: "phase", start_mode: "manual" },
+    { id: 11, parent_id: 1, predecessor_id: null, kind: "task", start_mode: "manual" }];
+  for (const [parentId, refused] of [[1, false], [2, false], [null, true]] as const) {
     await t.test(`parent ${parentId}`, async (sub) => {
       const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
-      installSqlMock(sub, moveAnswers(true));
+      const base = moveAnswers(true);
+      installSqlMock(sub, (statement) => statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,") ? { recordset: tree } : base(statement));
       try {
         const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/move",
           payload: { rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64"), parentId, beforeId: null } });
-        if (refused) { assert.equal(response.statusCode, 409, response.body); assert.equal(response.json().code, "managed_resource_task"); }
+        if (refused) { assert.equal(response.statusCode, 422, response.body); assert.equal(response.json().code, "schedule_parent_kind_invalid"); }
         else assert.equal(response.statusCode, 200, response.body);
       } finally { await app.close(); }
     });
@@ -983,7 +990,8 @@ test("hierarchy validates existing descendants when moving or changing a row", a
     { name: "detail below deepest task", rows: hierarchyRows(6), parentId: 6, taskId: null, kind: "detail", code: null },
     { name: "moving a branch to the limit with a detail", rows: [...hierarchyRows(4), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12, kind: "detail" })], parentId: 4, taskId: 11, kind: "task", code: null },
     { name: "moving a branch too deep", rows: [...hierarchyRows(5), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 5, taskId: 11, kind: "task", code: "schedule_parent_kind_invalid" },
-    { name: "changing phase with grandchildren to task", rows: [taskRaw({ id: 11, kind: "phase" }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12 })], parentId: null, taskId: 11, kind: "task", code: null },
+    // The top of the plan holds main headings only.
+    { name: "changing a heading into a task at the top", rows: [taskRaw({ id: 11, kind: "phase" }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12 })], parentId: null, taskId: 11, kind: "task", code: "schedule_parent_kind_invalid" },
     { name: "moving under a descendant", rows: [taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 12, taskId: 11, kind: "task", code: "schedule_cycle" },
   ];
   for (const item of cases) await t.test(item.name, async (sub) => {
@@ -1024,6 +1032,8 @@ test("create, PUT and move reject the first sub task when its parent is in use",
       const base = planEditAnswers(0, []);
       const statements = installSqlMock(sub, (statement, params) => {
         if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: [...ancestors, parent, taskRaw({ id: 11 })] };
+        // Row 11 starts outside row 1, so a move into it is a change of parent.
+        if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11 })] };
         if (statement.includes("WHERE schedule_task_id=@parent")) return { recordset: [{ value: reason === "managed" }] };
         if (statement.includes("field=N'request' AND request_days>0")) return { recordset: [{ value: reason === "pending" && params.task === 1 }] };
         return base(statement);
@@ -1176,14 +1186,74 @@ test("delete schedule row enforces permission, owner, closed project and both ve
   });
 });
 
-test("delete schedule row preserves the Master Plan and Team plan headings", async (t) => {
-  for (const name of ["Master Plan", "Team plan"]) await t.test(name, async (sub) => {
+test("delete schedule row removes a heading with nothing on it, as any other row", async (t) => {
+  for (const name of ["Master Plan", "ยังไม่จัดหัวข้อ"]) await t.test(name, async (sub) => {
     const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
-    installSqlMock(sub, deletionAnswers([taskRaw({ id: 11, kind: "phase", name })]));
+    const statements = installSqlMock(sub, deletionAnswers([taskRaw({ id: 11, kind: "phase", name })]));
     try {
       const response = await app.inject({ method: "DELETE", url: "/api/v1/schedule/tasks/11", payload: deletionPayload() });
-      assert.equal(response.statusCode, 400, response.body); assert.equal(response.json().code, "validation_failed");
-      assert.match(response.body, /Edit Master Plan/);
+      assert.equal(response.statusCode, 200, response.body);
+      assert.ok(statements.some((entry) => entry.statement.includes("SET deleted_at=SYSUTCDATETIME()")));
+    } finally { await app.close(); }
+  });
+});
+
+/* Master Plan headings and the Team Plan under them (owner, 2026-11-03): heading 1 > task 11 (PICs 30 and 31). */
+const headingTree = [{ id: 1, parent_id: null, predecessor_id: null, kind: "phase", start_mode: "manual", name: "Software development", status: "Not Started", percent_done: 0, actual_start: null },
+  { id: 11, parent_id: 1, predecessor_id: null, kind: "task", start_mode: "manual", name: "Web App WMS", status: "Not Started", percent_done: 0, actual_start: null }];
+
+test("POST task: a task under a heading needs a member; a function under a task has its task's unless others are named", async (t) => {
+  const cases: Array<[number, number[], number, number[] | null]> = [[1, [], 400, null], [1, [32], 201, [32]], [11, [], 201, [30, 31]], [11, [32], 201, [32]]];
+  for (const [parentId, named, status, saved] of cases) await t.test(`under ${parentId === 1 ? "heading" : "task"}, ${named.length ? "member named" : "no member named"}`, async (sub) => {
+    const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+    const base = planEditAnswers(0, []);
+    const statements = installSqlMock(sub, (statement) => {
+      if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: headingTree };
+      if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL"))
+        return { recordset: [parentId === 1 ? taskRaw({ id: 1, kind: "phase", plan_start: null }) : taskRaw({ id: 11, parent_id: 1 })] };
+      if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [30, 31].map((id) => ({ task_id: 11, id, name: `User ${id}`, email: `${id}@example.test`, active: true })) };
+      if (statement.includes("INSERT INTO dbo.schedule_tasks")) return { recordset: [{ id: 50, row_version: NEXT_VERSION }] };
+      return base(statement);
+    });
+    try {
+      const response = await app.inject({ method: "POST", url: `/api/v1/projects/${PROJECT_ID}/schedule/tasks`, payload: { ...planEditPayload(named), parentId } });
+      assert.equal(response.statusCode, status, response.body);
+      if (!saved) { assert.equal(response.json().code, "schedule_member_required"); return; }
+      const written = statements.filter((entry) => entry.statement.includes("INSERT INTO dbo.schedule_task_pics")).map((entry) => entry.params.user);
+      assert.deepEqual(written, saved);
+    } finally { await app.close(); }
+  });
+});
+
+test("PUT: a heading's own dates change with rows under it; a task under a heading keeps at least one member", async (t) => {
+  await t.test("heading dates", async (sub) => {
+    const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+    const base = planEditAnswers(0, []);
+    installSqlMock(sub, (statement) => {
+      if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: headingTree };
+      if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 1, kind: "phase", plan_start: "2027-03-01", plan_days: 5 })] };
+      // Task 11 sits under the heading, so its dates are a roll-up of the rows under it.
+      if (statement.includes("WHERE parent_id=@task")) return { recordset: [{ value: true }] };
+      return base(statement);
+    });
+    try {
+      const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/1", payload: { ...planEditPayload([]), parentId: null, kind: "phase", name: "Software development", planStart: "2027-04-01", planDays: 30 } });
+      assert.equal(response.statusCode, 200, response.body);
+    } finally { await app.close(); }
+  });
+  await t.test("last member", async (sub) => {
+    const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+    const base = planEditAnswers(0, [30]);
+    const statements = installSqlMock(sub, (statement, params) => {
+      if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL"))
+        return { recordset: [params.id === 1 ? taskRaw({ id: 1, kind: "phase", plan_start: null }) : taskRaw({ id: 11, parent_id: 1 })] };
+      return base(statement);
+    });
+    try {
+      const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11", payload: planEditPayload([]) });
+      assert.equal(response.statusCode, 400, response.body);
+      assert.equal(response.json().code, "schedule_member_required");
+      assert.equal(statements.some((entry) => entry.statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")), false);
     } finally { await app.close(); }
   });
 });

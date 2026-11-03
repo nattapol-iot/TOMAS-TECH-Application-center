@@ -3,36 +3,37 @@ import type { Transaction as TransactionType } from "mssql";
 import { ApiError } from "./errors.js";
 import { parseDateOnly, requiredInteger, requiredText } from "./http.js";
 import type { NewPics } from "./project-notices.js";
-import { appendUpdate, calendarDays, readHolidays, readTasks, replacePics, resolveTasks } from "./schedule-service.js";
-import { MASTER_PLAN_PHASE } from "./schedule-phases.js";
+import { appendUpdate, calendarDays, readHolidays, readPics, readTasks, replacePics, resolveTasks } from "./schedule-service.js";
+import { UNSORTED_HEADING } from "./schedule-phases.js";
 
 /*
- * The plan a project is created with: the customer-facing milestones (Master Plan) and who
- * does what, when (Team plan). Both are ordinary schedule rows, so the Project Schedule,
- * the timeline and My Work read them the same way as rows added later. Each set sits
- * under its own phase because only a phase may hold task rows and a phase takes its dates
- * from them. Beside them a project may start with main rows and sub rows of its own, as
- * Project Schedule builds them: a main row with sub rows is a phase over them, one without
- * is a task with its own dates.
+ * A project's plan as Create project and Edit project write it (owner, 2026-11-03). The Master Plan
+ * lists the main headings with the dates promised to the customer; the Team Plan breaks each heading
+ * into tasks, each with a member, and each task into the functions to build:
+ *
+ *   2 Software development    heading: a top-level phase; its own plan dates are the customer's
+ *     2.1 Web App WMS         task: a member is required
+ *       2.1.1 Inbound         function: the task's member unless another is named
+ *
+ * Both are one schedule tree, so Project Schedule, the timeline and My Work read them like any other
+ * rows. A heading's bar follows the rows under it once it has any; its own dates stay as the
+ * customer's, for the Master Plan and to show when the team's plan runs past them.
  */
 
-export { MASTER_PLAN_PHASE };
-export const TEAM_PLAN_PHASE = "Team plan";
+export { UNSORTED_HEADING };
 export const PROJECT_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9._/-]{1,29}$/;
 /** PJ000000 and the like: the ERP has not issued the number yet, so several projects may share it (migration 084). */
 export const isPlaceholderProjectNumber = (number: string): boolean => number.includes("0") && !/[1-9]/.test(number);
-const MAX_ROWS = 50;
-const MAX_SCHEDULE_ROWS = 300;
+const MAX_HEADINGS = 50;
+const MAX_PLAN_ROWS = 500;
 const MAX_PLAN_DAYS = 3650;
 
 // id names an existing schedule row when the plan is edited; a row without one is new.
-export type MilestoneRow = { id?: number; name: string; start: string; finish: string };
-export type TeamRow = { id?: number; userId: number; task: string; start: string; finish: string; planManDays: number };
-export type InitialPlan = { milestones: MilestoneRow[]; team: TeamRow[] };
-/** A row may wait for its dates: both are null until both are known. */
-export type NewScheduleSubRow = { name: string; start: string | null; finish: string | null };
-/** A row added outside the two plan phases: a main row (parentId null) with sub rows of its own, or a sub row under an existing main row. */
-export type NewScheduleRow = NewScheduleSubRow & { parentId: number | null; rows: NewScheduleSubRow[] };
+/** A function may leave out its dates and its member: it then has its task's. */
+export type PlanFunction = { id?: number; name: string; userId: number | null; start: string | null; finish: string | null };
+export type PlanTask = { id?: number; name: string; userId: number; start: string; finish: string; planManDays: number; functions: PlanFunction[] };
+export type PlanHeading = { id?: number; name: string; start: string; finish: string; tasks: PlanTask[] };
+export type InitialPlan = { headings: PlanHeading[] };
 
 /** The ERP project number, as typed from the ERP, in one canonical spelling. */
 export function parseProjectNumber(value: unknown): string {
@@ -43,7 +44,7 @@ export function parseProjectNumber(value: unknown): string {
   return number;
 }
 
-function rows(value: unknown, label: string, max = MAX_ROWS): Record<string, unknown>[] {
+function rows(value: unknown, label: string, max: number): Record<string, unknown>[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new ApiError(400, "validation_failed", `${label} must be a list.`);
   if (value.length > max) throw new ApiError(400, "validation_failed", `${label} cannot have more than ${max} rows.`);
@@ -77,62 +78,60 @@ function manDays(value: unknown, label: string): number {
 
 const rowId = (row: Record<string, unknown>, label: string) => row.id === undefined || row.id === null ? {} : { id: requiredInteger(row.id, `${label} id`, 1) };
 
+/** The plan before 2026-11-03 sent its team rows, and rows outside its two phases, as lists of their own. */
+export function rejectOutdatedPlan(body: Record<string, unknown>): void {
+  if (body.team !== undefined || body.newRows !== undefined || body.otherRows !== undefined) {
+    throw new ApiError(400, "plan_shape_outdated", "The plan form has changed: the team plan now sits under the Master Plan headings. Reload the page and try again.");
+  }
+}
+
+/** masterPlan: the headings, each with its tasks and each task with its functions. None is a project without a plan yet. */
 export function parseInitialPlan(body: Record<string, unknown>): InitialPlan {
-  const milestones = rows(body.masterPlan, "Master plan").map((row, index) => {
-    const label = `Master plan row ${index + 1}`;
-    return { ...rowId(row, label), name: requiredText(row.name, 500, `${label} name`), ...period(row, label) };
-  });
-  const team = rows(body.team, "Team plan").map((row, index) => {
-    const label = `Team plan row ${index + 1}`;
-    return {
-      ...rowId(row, label),
-      userId: requiredInteger(row.userId, `${label} member`, 1),
-      task: requiredText(row.task, 500, `${label} task`),
-      ...period(row, label),
-      planManDays: manDays(row.planManDays, `${label} plan`),
-    };
-  });
-  return { milestones, team };
-}
-
-/**
- * Main rows and sub rows to add (newRows), or null when none were sent. A new main row carries
- * its sub rows, and its own dates only when it has none: a main row with sub rows takes its
- * dates from them. A sub row added under a main row that already exists names it in parentId.
- */
-export function parseNewScheduleRows(value: unknown): NewScheduleRow[] | null {
-  if (value === undefined || value === null) return null;
+  rejectOutdatedPlan(body);
   let count = 0;
-  const parsed = rows(value, "Main schedule", MAX_SCHEDULE_ROWS).map((row, index) => {
-    const label = `Main schedule row ${index + 1}`;
-    const parentId = row.parentId === undefined || row.parentId === null ? null : requiredInteger(row.parentId, `${label} main row`, 1);
-    const subs = rows(row.rows, `${label} sub rows`, MAX_SCHEDULE_ROWS).map((sub, subIndex) => {
-      const subLabel = `Main schedule row ${index + 1}.${subIndex + 1}`;
-      return { name: requiredText(sub.name, 500, `${subLabel} name`), ...optionalPeriod(sub, subLabel) };
+  const headings = rows(body.masterPlan, "Master plan", MAX_HEADINGS).map((heading, index) => {
+    const label = `Master plan heading ${index + 1}`;
+    const tasks = rows(heading.tasks, `${label} tasks`, MAX_PLAN_ROWS).map((task, taskIndex) => {
+      const taskLabel = `Team plan task ${index + 1}.${taskIndex + 1}`;
+      const functions = rows(task.functions, `${taskLabel} functions`, MAX_PLAN_ROWS).map((item, itemIndex) => {
+        const itemLabel = `Team plan function ${index + 1}.${taskIndex + 1}.${itemIndex + 1}`;
+        const userId = item.userId === undefined || item.userId === null || item.userId === 0 ? null : requiredInteger(item.userId, `${itemLabel} member`, 1);
+        return { ...rowId(item, itemLabel), name: requiredText(item.name, 500, `${itemLabel} name`), userId, ...optionalPeriod(item, itemLabel) };
+      });
+      count += 1 + functions.length;
+      return {
+        ...rowId(task, taskLabel), name: requiredText(task.name, 500, `${taskLabel} name`), userId: requiredInteger(task.userId, `${taskLabel} member`, 1),
+        ...period(task, taskLabel), planManDays: manDays(task.planManDays, `${taskLabel} plan`), functions,
+      };
     });
-    if (parentId !== null && subs.length) throw new ApiError(400, "validation_failed", `${label} is a sub row, so it cannot hold rows of its own.`);
-    count += 1 + subs.length;
-    return { parentId, name: requiredText(row.name, 500, `${label} name`), ...(subs.length ? { start: null, finish: null } : optionalPeriod(row, label)), rows: subs };
+    count += 1;
+    return { ...rowId(heading, label), name: requiredText(heading.name, 500, `${label} name`), ...period(heading, label), tasks };
   });
-  if (count > MAX_SCHEDULE_ROWS) throw new ApiError(400, "validation_failed", `Main schedule cannot have more than ${MAX_SCHEDULE_ROWS} rows.`);
-  return parsed;
+  if (count > MAX_PLAN_ROWS) throw new ApiError(400, "validation_failed", `A plan cannot have more than ${MAX_PLAN_ROWS} rows.`);
+  return { headings };
 }
 
-/** First start and last finish over every dated row, or null when no row has dates. */
-export function planSpan(plan: InitialPlan, added: NewScheduleRow[] = []): { start: string; finish: string } | null {
-  const all = [...plan.milestones, ...plan.team, ...added.flatMap((row): NewScheduleSubRow[] => [row, ...row.rows])]
-    .filter((row): row is typeof row & { start: string; finish: string } => row.start !== null && row.finish !== null);
-  if (!all.length) return null;
-  return {
-    start: all.map((row) => row.start).sort()[0]!,
-    finish: all.map((row) => row.finish).sort().at(-1)!,
-  };
+/** First start and last finish over every dated row, or null when the plan has none. */
+export function planSpan(plan: InitialPlan): { start: string; finish: string } | null {
+  const dated = plan.headings.flatMap((heading): { start: string | null; finish: string | null }[] => [heading, ...heading.tasks.flatMap((task) => [task, ...task.functions])])
+    .filter((row): row is { start: string; finish: string } => row.start !== null && row.finish !== null);
+  if (!dated.length) return null;
+  return { start: dated.map((row) => row.start).sort()[0]!, finish: dated.map((row) => row.finish).sort().at(-1)! };
 }
 
-async function insertRow(transaction: TransactionType, projectId: number, actorId: number, row: {
-  parentId: number | null; sortOrder: number; kind: "phase" | "task"; name: string; visibility: "Customer" | "Internal";
-  planStart: string | null; planDays: number; planManDays: number;
-}, note = "Created with the project"): Promise<number> {
+/** Who does what, for the mail a new project sends: each task's member, and each function's. */
+export function planAssignments(plan: InitialPlan): { userId: number; task: string; start: string; finish: string }[] {
+  return plan.headings.flatMap((heading) => heading.tasks.flatMap((task) => [
+    { userId: task.userId, task: task.name, start: task.start, finish: task.finish },
+    ...task.functions.map((item) => ({ userId: item.userId ?? task.userId, task: `${task.name} · ${item.name}`, start: item.start ?? task.start, finish: item.finish ?? task.finish })),
+  ]));
+}
+
+const planMembers = (plan: InitialPlan) => plan.headings.flatMap((heading) => heading.tasks.flatMap((task) => [task.userId, ...task.functions.map((item) => item.userId ?? task.userId)]));
+
+type NewRow = { parentId: number | null; sortOrder: number; kind: "phase" | "task"; name: string; visibility: "Customer" | "Internal"; planStart: string | null; planDays: number; planManDays: number };
+
+async function insertRow(transaction: TransactionType, projectId: number, actorId: number, row: NewRow, note: string): Promise<number> {
   const insert = new sql.Request(transaction);
   insert.input("project", sql.BigInt, projectId).input("parent", sql.BigInt, row.parentId).input("sort", sql.Int, row.sortOrder)
     .input("kind", sql.NVarChar(20), row.kind).input("name", sql.NVarChar(500), row.name).input("visibility", sql.NVarChar(20), row.visibility)
@@ -147,16 +146,28 @@ async function insertRow(transaction: TransactionType, projectId: number, actorI
   return id;
 }
 
-/** An undated row keeps the one-day placeholder a row added in Project Schedule has. */
-const planDatesOf = (row: NewScheduleSubRow) => ({ planStart: row.start, planDays: row.start && row.finish ? calendarDays(row.start, row.finish) : 1 });
+const CREATED = "Created with the project", ADDED = "Added in Edit project";
 
-/** A main row is a phase over its sub rows when it has any, otherwise a task with its own dates. */
-async function insertMainRow(transaction: TransactionType, projectId: number, actorId: number, sortOrder: number, row: NewScheduleRow, note?: string): Promise<void> {
-  const id = await insertRow(transaction, projectId, actorId, { parentId: null, sortOrder, kind: row.rows.length ? "phase" : "task", name: row.name,
-    visibility: "Internal", ...(row.rows.length ? { planStart: null, planDays: 1 } : planDatesOf(row)), planManDays: 0 }, note);
-  for (const [index, sub] of row.rows.entries()) {
-    await insertRow(transaction, projectId, actorId, { parentId: id, sortOrder: index + 1, kind: "task", name: sub.name, visibility: "Internal", ...planDatesOf(sub), planManDays: 0 }, note);
-  }
+/** A heading is shown to the customer: it is the Master Plan. */
+const insertHeading = (transaction: TransactionType, projectId: number, actorId: number, sortOrder: number, heading: { name: string; start: string; finish: string }, note: string) =>
+  insertRow(transaction, projectId, actorId, { parentId: null, sortOrder, kind: "phase", name: heading.name, visibility: "Customer",
+    planStart: heading.start, planDays: calendarDays(heading.start, heading.finish), planManDays: 0 }, note);
+
+async function insertFunction(transaction: TransactionType, projectId: number, actorId: number, taskId: number, sortOrder: number, item: PlanFunction,
+  task: { userId: number; start: string; finish: string }, note: string): Promise<NewPics> {
+  const start = item.start ?? task.start, finish = item.finish ?? task.finish;
+  const id = await insertRow(transaction, projectId, actorId, { parentId: taskId, sortOrder, kind: "task", name: item.name, visibility: "Internal",
+    planStart: start, planDays: calendarDays(start, finish), planManDays: 0 }, note);
+  return { taskId: id, userIds: await replacePics(transaction, id, [item.userId ?? task.userId]) };
+}
+
+/** A task with its functions; returns who was given which row. */
+async function insertTask(transaction: TransactionType, projectId: number, actorId: number, headingId: number, sortOrder: number, task: PlanTask, note: string): Promise<NewPics[]> {
+  const id = await insertRow(transaction, projectId, actorId, { parentId: headingId, sortOrder, kind: "task", name: task.name, visibility: "Internal",
+    planStart: task.start, planDays: calendarDays(task.start, task.finish), planManDays: task.planManDays }, note);
+  const assigned: NewPics[] = [{ taskId: id, userIds: await replacePics(transaction, id, [task.userId]) }];
+  for (const [index, item] of task.functions.entries()) assigned.push(await insertFunction(transaction, projectId, actorId, id, index + 1, item, task, note));
+  return assigned;
 }
 
 /** A schedule PIC must be a project member, so everyone on the team plan joins the project. */
@@ -174,38 +185,39 @@ async function ensureMembers(transaction: TransactionType, projectId: number, us
 }
 
 /**
- * Team members join the project first -- a schedule PIC must be a member -- then the
- * Master Plan, the project's own main rows and the Team plan are written in that order.
- * Runs inside the project's own creation transaction, so a project never exists with half
- * of its plan.
+ * Team members join the project first -- a schedule PIC must be a member -- then each heading is
+ * written with its tasks and their functions. Runs inside the project's own creation transaction,
+ * so a project never exists with half of its plan.
  */
-export async function insertInitialPlan(transaction: TransactionType, projectId: number, plan: InitialPlan, actorId: number, added: NewScheduleRow[] = []): Promise<void> {
-  await ensureMembers(transaction, projectId, plan.team.map((row) => row.userId), actorId);
-  let phaseOrder = 0;
-  if (plan.milestones.length) {
-    const phase = await insertRow(transaction, projectId, actorId, { parentId: null, sortOrder: ++phaseOrder, kind: "phase", name: MASTER_PLAN_PHASE,
-      visibility: "Customer", planStart: null, planDays: 1, planManDays: 0 });
-    for (const [index, row] of plan.milestones.entries()) {
-      await insertRow(transaction, projectId, actorId, { parentId: phase, sortOrder: index + 1, kind: "task", name: row.name,
-        visibility: "Customer", planStart: row.start, planDays: calendarDays(row.start, row.finish), planManDays: 0 });
-    }
+export async function insertInitialPlan(transaction: TransactionType, projectId: number, plan: InitialPlan, actorId: number): Promise<void> {
+  await ensureMembers(transaction, projectId, planMembers(plan), actorId);
+  for (const [index, heading] of plan.headings.entries()) {
+    const headingId = await insertHeading(transaction, projectId, actorId, index + 1, heading, CREATED);
+    for (const [taskIndex, task] of heading.tasks.entries()) await insertTask(transaction, projectId, actorId, headingId, taskIndex + 1, task, CREATED);
   }
-  for (const row of added) await insertMainRow(transaction, projectId, actorId, ++phaseOrder, row);
-  if (plan.team.length) {
-    const phase = await insertRow(transaction, projectId, actorId, { parentId: null, sortOrder: ++phaseOrder, kind: "phase", name: TEAM_PLAN_PHASE,
-      visibility: "Internal", planStart: null, planDays: 1, planManDays: 0 });
-    for (const [index, row] of plan.team.entries()) {
-      const id = await insertRow(transaction, projectId, actorId, { parentId: phase, sortOrder: index + 1, kind: "task", name: row.task,
-        visibility: "Internal", planStart: row.start, planDays: calendarDays(row.start, row.finish), planManDays: row.planManDays });
-      await replacePics(transaction, id, [row.userId]);
-    }
-  }
+}
+
+/**
+ * The heading rows wait under until the project manager files them under a real one: the Team plan
+ * rows of a project planned before headings (migration 098), and rows Resource Plan adds.
+ */
+export async function unsortedHeadingId(transaction: TransactionType, projectId: number, actorId: number): Promise<number> {
+  const find = new sql.Request(transaction); find.input("project", sql.BigInt, projectId).input("name", sql.NVarChar(500), UNSORTED_HEADING);
+  const found = (await find.query<{ id: number | string }>(`SELECT TOP (1) id FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK)
+    WHERE project_id=@project AND parent_id IS NULL AND kind=N'phase' AND name=@name AND deleted_at IS NULL ORDER BY id;`)).recordset[0];
+  if (found) return Number(found.id);
+  const last = (await find.query<{ value: number }>(`SELECT COALESCE(MAX(sort_order),0)+1 value FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK)
+    WHERE project_id=@project AND parent_id IS NULL AND deleted_at IS NULL;`)).recordset[0]!.value;
+  return insertRow(transaction, projectId, actorId, { parentId: null, sortOrder: Number(last), kind: "phase", name: UNSORTED_HEADING, visibility: "Internal",
+    planStart: null, planDays: 1, planManDays: 0 }, "Waits for the project manager to file its rows under a heading");
 }
 
 export type ScheduleRow = {
   id: number; parentId: number | null; kind: string; name: string; sortOrder: number; startMode: string;
   planStart: string | null; planDays: number; planManDays: number; started: boolean; children: number;
   pending: boolean; referenced: boolean; pic: number | null; picCount: number;
+  /** Members' own tasks under the row, and whether Resource Plan manages it. */
+  details: number; managed: boolean;
 };
 
 export async function readScheduleRows(transaction: TransactionType, projectId: number, removing: number[] = []): Promise<ScheduleRow[]> {
@@ -215,6 +227,8 @@ export async function readScheduleRows(transaction: TransactionType, projectId: 
     SELECT t.id,t.parent_id,t.kind,t.name,t.sort_order,t.start_mode,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.plan_man_days,
       CASE WHEN t.status<>N'Not Started' OR t.percent_done>0 OR t.actual_start IS NOT NULL OR t.actual_end IS NOT NULL OR t.actual_man_days>0 THEN 1 ELSE 0 END started,
       (SELECT COUNT(*) FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.deleted_at IS NULL) children,
+      (SELECT COUNT(*) FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.kind=N'detail' AND c.deleted_at IS NULL) details,
+      CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks r WHERE r.schedule_task_id=t.id) THEN 1 ELSE 0 END managed,
       CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_updates u WHERE u.task_id=t.id AND u.field=N'request' AND u.request_days>0 AND u.answer IS NULL) THEN 1 ELSE 0 END pending,
       CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks d WHERE d.predecessor_id=t.id AND d.deleted_at IS NULL AND d.id NOT IN (SELECT id FROM OPENJSON(@removing) WITH (id bigint '$')))
         OR EXISTS(SELECT 1 FROM dbo.resource_tasks r WHERE r.schedule_task_id=t.id)
@@ -228,6 +242,7 @@ export async function readScheduleRows(transaction: TransactionType, projectId: 
     sortOrder: Number(row.sort_order), startMode: String(row.start_mode), planStart: row.plan_start === null ? null : String(row.plan_start),
     planDays: Number(row.plan_days), planManDays: Number(row.plan_man_days), started: Boolean(row.started), children: Number(row.children),
     pending: Boolean(row.pending), referenced: Boolean(row.referenced), pic: row.pic === null ? null : Number(row.pic), picCount: Number(row.pic_count),
+    details: Number(row.details), managed: Boolean(row.managed),
   }));
 }
 
@@ -238,14 +253,19 @@ async function removeRow(transaction: TransactionType, projectId: number, row: S
   await remove.query(`UPDATE dbo.schedule_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
 }
 
-/**
- * Edit project changes the two plan phases the project was created with, and nothing else
- * in its schedule. A row keeps its progress when its name or dates change. A row is
- * removed only when nothing depends on it: no progress, no children, no pending request
- * for more days, and nothing linked to it (a predecessor, a resource task, a signing
- * document, a report). Such a row stops the save and is named, rather than being dropped
- * or silently kept. Returns who became a row's person in charge, so they can be told.
- */
+type RowChange = { name: string; planStart: string | null; planDays: number; planManDays: number; sortOrder: number };
+
+async function updateRow(transaction: TransactionType, projectId: number, actorId: number, row: ScheduleRow, next: RowChange): Promise<void> {
+  const update = new sql.Request(transaction);
+  update.input("id", sql.BigInt, row.id).input("name", sql.NVarChar(500), next.name).input("start", sql.Date, next.planStart)
+    .input("days", sql.Int, next.planDays).input("man_days", sql.Decimal(9, 2), next.planManDays).input("sort", sql.Int, next.sortOrder).input("actor", sql.BigInt, actorId);
+  await update.query(`UPDATE dbo.schedule_tasks SET name=@name,plan_start=@start,plan_days=@days,plan_man_days=@man_days,sort_order=@sort,
+    updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
+  await appendUpdate(transaction, projectId, row.id, actorId, "plan",
+    JSON.stringify({ name: row.name, planStart: row.planStart, planDays: row.planDays, planManDays: row.planManDays }),
+    JSON.stringify({ name: next.name, planStart: next.planStart, planDays: next.planDays, planManDays: next.planManDays }), "Changed in Edit project");
+}
+
 /**
  * The dates a kept plan row is saved with. A row with rows under it, or one that follows a
  * predecessor, is shown with its resolved dates and the form sends those back: that is no change,
@@ -260,230 +280,117 @@ export function keptPlanRowDates(current: Pick<ScheduleRow, "planStart" | "planD
   return { planStart: input.start, planDays, changed: current.planStart !== input.start || current.planDays !== planDays };
 }
 
+/** What the form edits: headings (top-level phases), their tasks, and those tasks' functions. Members' own tasks are not among them. */
+export function planRowsOf(rows: ScheduleRow[]): Set<number> {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const level = (row: ScheduleRow): number => {
+    if (row.parentId === null) return row.kind === "phase" ? 1 : 0;
+    const parent = byId.get(row.parentId);
+    if (!parent || row.kind !== "task") return 0;
+    const above = level(parent);
+    return above === 1 || above === 2 ? above + 1 : 0;
+  };
+  return new Set(rows.filter((row) => level(row) > 0).map((row) => row.id));
+}
+
+/**
+ * Rows the form no longer lists, with every row under them, deepest first so a heading or a task goes
+ * after the rows under it. Each must be free to go: no progress, no pending request for more days,
+ * nothing linked to it and no member's own task, or the save stops and names it.
+ */
+export function plannedRemovals(rows: ScheduleRow[], listed: Set<number>): ScheduleRow[] {
+  const managed = planRowsOf(rows), byParent = new Map<number, ScheduleRow[]>();
+  for (const row of rows) if (row.parentId !== null) byParent.set(row.parentId, [...(byParent.get(row.parentId) ?? []), row]);
+  const removing: { row: ScheduleRow; depth: number }[] = [], seen = new Set<number>();
+  const take = (row: ScheduleRow, depth: number) => {
+    if (seen.has(row.id)) return;
+    seen.add(row.id); removing.push({ row, depth });
+    for (const child of byParent.get(row.id) ?? []) take(child, depth + 1);
+  };
+  for (const row of rows) if (managed.has(row.id) && !listed.has(row.id) && (row.parentId === null || listed.has(row.parentId))) take(row, 0);
+  for (const { row } of removing) {
+    if (row.started || row.pending || row.referenced || row.kind === "detail") {
+      throw new ApiError(409, "schedule_row_in_use", `"${row.name}" has progress, a member's own task or linked work, so it cannot be removed here. Keep it, or change it in Project Schedule.`);
+    }
+  }
+  return removing.sort((a, b) => b.depth - a.depth).map((item) => item.row);
+}
+
+/**
+ * Edit project rewrites the plan to match the form: headings, their tasks and the tasks' functions,
+ * matched by id and saved in the order given. A row keeps its progress when renamed or re-dated, and
+ * a row the form no longer lists goes only when nothing hangs on it (plannedRemovals). A task takes
+ * its first function only while nothing has started on it, as in Project Schedule. Returns who became
+ * a row's person in charge, so they can be told.
+ */
 export async function syncProjectPlan(transaction: TransactionType, projectId: number, plan: InitialPlan, actorId: number): Promise<NewPics[]> {
   const assigned: NewPics[] = [];
-  await ensureMembers(transaction, projectId, plan.team.map((row) => row.userId), actorId);
+  await ensureMembers(transaction, projectId, planMembers(plan), actorId);
   const rows = await readScheduleRows(transaction, projectId);
-  // Only rows whose dates are derived need the resolved plan; most plans have none.
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const pics = await readPics(transaction, projectId);
+  const picsOf = (id: number) => (pics.get(id) ?? []).map((pic) => pic.id);
+  // Only rows whose dates are derived need the resolved plan; a plan with no such row skips it.
   const shown = rows.some((row) => row.children > 0 || row.startMode !== "manual")
     ? resolveTasks(await readTasks(transaction, projectId), await readHolidays(transaction)).byId : null;
-  const phases = [
-    { name: MASTER_PLAN_PHASE, visibility: "Customer" as const, inputs: plan.milestones.map((row) => ({ id: row.id, name: row.name, start: row.start, finish: row.finish, planManDays: 0, userId: null as number | null })) },
-    { name: TEAM_PLAN_PHASE, visibility: "Internal" as const, inputs: plan.team.map((row) => ({ id: row.id, name: row.task, start: row.start, finish: row.finish, planManDays: row.planManDays, userId: row.userId as number | null })) },
-  ];
-  let nextPhaseOrder = Math.max(0, ...rows.filter((row) => row.parentId === null).map((row) => row.sortOrder));
-  for (const phaseSpec of phases) {
-    const phase = rows.find((row) => row.kind === "phase" && row.parentId === null && row.name === phaseSpec.name);
-    const existing = phase ? rows.filter((row) => row.parentId === phase.id) : [];
-    for (const input of phaseSpec.inputs) {
-      if (input.id !== undefined && !existing.some((row) => row.id === input.id)) {
-        throw new ApiError(409, "schedule_row_missing", "A plan row was changed or removed elsewhere. Reload the project and try again.");
-      }
+  const existing = (id: number | undefined, parentId: number | null, kind: string): ScheduleRow | undefined => {
+    if (id === undefined) return undefined;
+    const row = byId.get(id);
+    if (!row || row.parentId !== parentId || row.kind !== kind) throw new ApiError(409, "schedule_row_missing", "A plan row was changed or removed elsewhere. Reload the project and try again.");
+    return row;
+  };
+  /** Name, dates, effort and place, when any of them changed; dates the row derives are only compared, and a function left undated keeps its own. */
+  const keep = async (row: ScheduleRow, name: string, period: { start: string; finish: string } | null, planManDays: number, sortOrder: number) => {
+    const dates = period ? keptPlanRowDates(row, period, shown?.get(row.id)) : { planStart: row.planStart, planDays: row.planDays, changed: false };
+    if (dates.changed && (row.children > 0 || row.startMode !== "manual")) {
+      throw new ApiError(409, "schedule_rollup_plan_derived", `"${row.name}" takes its dates from the rows under it or a predecessor. Change them in Project Schedule.`);
     }
-    const kept = new Set(phaseSpec.inputs.map((input) => input.id).filter((id): id is number => id !== undefined));
-    for (const row of existing.filter((candidate) => !kept.has(candidate.id))) {
-      if (row.started || row.children > 0 || row.pending || row.referenced) {
-        throw new ApiError(409, "schedule_row_in_use", `"${row.name}" has progress or linked work, so it cannot be removed here. Keep it, or change it in Project Schedule.`);
+    const changed = dates.changed || row.name !== name || row.planManDays !== planManDays || row.sortOrder !== sortOrder;
+    if (changed && row.pending) throw new ApiError(409, "schedule_day_request_pending", `"${row.name}" has a pending request for more days. Answer it before changing the row.`);
+    if (changed) await updateRow(transaction, projectId, actorId, row, { name, planStart: dates.planStart, planDays: dates.planDays, planManDays, sortOrder });
+  };
+  /** A row whose member the form changed; a row shared by several PICs keeps them while one of them is still named. */
+  const assign = async (row: ScheduleRow, userId: number | null) => {
+    if (userId !== null && !picsOf(row.id).includes(userId)) assigned.push({ taskId: row.id, userIds: await replacePics(transaction, row.id, [userId]) });
+  };
+
+  const listed = new Set(plan.headings.flatMap((heading) => [heading.id, ...heading.tasks.flatMap((task) => [task.id, ...task.functions.map((item) => item.id)])])
+    .filter((id): id is number => id !== undefined));
+  for (const row of plannedRemovals(rows, listed)) await removeRow(transaction, projectId, row, actorId);
+
+  for (const [index, heading] of plan.headings.entries()) {
+    const current = existing(heading.id, null, "phase");
+    let headingId: number;
+    if (current) {
+      headingId = current.id;
+      const planDays = calendarDays(heading.start, heading.finish);
+      // A heading's own dates are the customer's, whatever the rows under it say.
+      if (current.name !== heading.name || current.planStart !== heading.start || current.planDays !== planDays || current.sortOrder !== index + 1) {
+        await updateRow(transaction, projectId, actorId, current, { name: heading.name, planStart: heading.start, planDays, planManDays: 0, sortOrder: index + 1 });
       }
-      await removeRow(transaction, projectId, row, actorId);
-    }
-    if (!phaseSpec.inputs.length) {
-      // An emptied phase would only roll up nothing.
-      if (phase && existing.every((row) => !kept.has(row.id))) await removeRow(transaction, projectId, phase, actorId);
-      continue;
-    }
-    const phaseId = phase?.id ?? await insertRow(transaction, projectId, actorId, { parentId: null, sortOrder: ++nextPhaseOrder, kind: "phase",
-      name: phaseSpec.name, visibility: phaseSpec.visibility, planStart: null, planDays: 1, planManDays: 0 });
-    for (const [index, input] of phaseSpec.inputs.entries()) {
-      const planDays = calendarDays(input.start, input.finish);
-      const current = input.id === undefined ? undefined : existing.find((row) => row.id === input.id);
-      if (!current) {
-        const id = await insertRow(transaction, projectId, actorId, { parentId: phaseId, sortOrder: index + 1, kind: "task", name: input.name,
-          visibility: phaseSpec.visibility, planStart: input.start, planDays, planManDays: input.planManDays });
-        if (input.userId !== null) assigned.push({ taskId: id, userIds: await replacePics(transaction, id, [input.userId]) });
-        continue;
+    } else headingId = await insertHeading(transaction, projectId, actorId, index + 1, heading, ADDED);
+    for (const [taskIndex, task] of heading.tasks.entries()) {
+      const row = existing(task.id, headingId, "task");
+      if (!row) { assigned.push(...await insertTask(transaction, projectId, actorId, headingId, taskIndex + 1, task, ADDED)); continue; }
+      await keep(row, task.name, task, task.planManDays, taskIndex + 1);
+      await assign(row, task.userId);
+      const hasFunctions = rows.some((child) => child.parentId === row.id && child.kind === "task");
+      if (task.functions.length && row.details) {
+        throw new ApiError(409, "schedule_row_in_use", `"${row.name}" holds a member's own task, so it cannot be broken into functions.`);
       }
-      const dates = keptPlanRowDates(current, input, shown?.get(current.id));
-      const changed = dates.changed || current.name !== input.name || current.planManDays !== input.planManDays || current.sortOrder !== index + 1;
-      if (changed && current.pending) {
-        throw new ApiError(409, "schedule_day_request_pending", `"${current.name}" has a pending request for more days. Answer it before changing the row.`);
+      if (task.functions.some((item) => item.id === undefined) && !hasFunctions && (row.started || row.pending || row.managed)) {
+        throw new ApiError(409, "schedule_row_in_use", `"${row.name}" already has progress or linked work, so it cannot take functions. Add them under another task.`);
       }
-      if (dates.changed && (current.children > 0 || current.startMode !== "manual")) {
-        throw new ApiError(409, "schedule_rollup_plan_derived", `"${current.name}" takes its dates from the rows under it or a predecessor. Change them in Project Schedule.`);
+      for (const [itemIndex, item] of task.functions.entries()) {
+        const functionRow = existing(item.id, row.id, "task");
+        if (!functionRow) { assigned.push(await insertFunction(transaction, projectId, actorId, row.id, itemIndex + 1, item, task, ADDED)); continue; }
+        await keep(functionRow, item.name, item.start !== null && item.finish !== null ? { start: item.start, finish: item.finish } : null, functionRow.planManDays, itemIndex + 1);
+        // No member named: the function keeps whoever it has, or takes its task's.
+        await assign(functionRow, item.userId ?? (picsOf(functionRow.id).length ? null : task.userId));
       }
-      if (changed) {
-        const update = new sql.Request(transaction);
-        update.input("id", sql.BigInt, current.id).input("name", sql.NVarChar(500), input.name).input("start", sql.Date, dates.planStart)
-          .input("days", sql.Int, dates.planDays).input("man_days", sql.Decimal(9, 2), input.planManDays).input("sort", sql.Int, index + 1).input("actor", sql.BigInt, actorId);
-        await update.query(`UPDATE dbo.schedule_tasks SET name=@name,plan_start=@start,plan_days=@days,plan_man_days=@man_days,sort_order=@sort,
-          updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
-        await appendUpdate(transaction, projectId, current.id, actorId, "plan",
-          JSON.stringify({ name: current.name, planStart: current.planStart, planDays: current.planDays, planManDays: current.planManDays }),
-          JSON.stringify({ name: input.name, planStart: dates.planStart, planDays: dates.planDays, planManDays: input.planManDays }), "Changed in Edit project");
-      }
-      // A row with several PICs from Project Schedule keeps them unless its person is changed here.
-      if (input.userId !== null && current.pic !== input.userId) assigned.push({ taskId: current.id, userIds: await replacePics(transaction, current.id, [input.userId]) });
     }
   }
   return assigned;
-}
-
-/* ── The rest of the schedule, from Edit Master Plan ──────────────────── */
-
-/** A row outside the two plan phases: renamed, given new dates, or removed. Dates come as a pair or not at all. */
-export type OtherRowEdit = { id: number; remove: true } | { id: number; remove?: false; name: string; start?: string; finish?: string };
-
-export function parseOtherPlanRows(value: unknown): OtherRowEdit[] | null {
-  if (value === undefined || value === null) return null;
-  if (!Array.isArray(value)) throw new ApiError(400, "validation_failed", "Other plan rows must be a list.");
-  if (value.length > 500) throw new ApiError(400, "validation_failed", "Other plan rows cannot have more than 500 rows.");
-  const seen = new Set<number>();
-  return value.map((entry, index) => {
-    const label = `Plan row ${index + 1}`;
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new ApiError(400, "validation_failed", `${label} must be an object.`);
-    const row = entry as Record<string, unknown>;
-    const id = requiredInteger(row.id, `${label} id`, 1);
-    if (seen.has(id)) throw new ApiError(400, "validation_failed", `${label} is listed twice.`);
-    seen.add(id);
-    if (row.remove === true) return { id, remove: true as const };
-    const name = requiredText(row.name, 500, `${label} name`);
-    if (row.start === undefined && row.finish === undefined) return { id, name };
-    return { id, name, ...period(row, label) };
-  });
-}
-
-type OtherRowAction = { kind: "remove"; row: ScheduleRow } | { kind: "update"; row: ScheduleRow; name: string; planStart: string | null; planDays: number };
-
-/**
- * Checks every edit against the schedule as it is and orders the work: removals deepest first, so a
- * phase goes after the rows under it. A row is removed on the same terms as a plan row in Edit
- * project, and keeps its progress when renamed. Rows of the two plan phases, and members' own
- * detail rows, are not touched here.
- */
-export function planOtherRowEdits(rows: ScheduleRow[], edits: OtherRowEdit[]): OtherRowAction[] {
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const top = (row: ScheduleRow): ScheduleRow => { let current = row; while (current.parentId !== null && byId.has(current.parentId)) current = byId.get(current.parentId)!; return current; };
-  const depth = (row: ScheduleRow): number => { let count = 0, current = row; while (current.parentId !== null && byId.has(current.parentId)) { current = byId.get(current.parentId)!; count++; } return count; };
-  const removing = new Set(edits.filter((edit) => edit.remove).map((edit) => edit.id));
-  const actions: OtherRowAction[] = [];
-  for (const edit of edits) {
-    const row = byId.get(edit.id);
-    if (!row) throw new ApiError(409, "schedule_row_missing", "A plan row was changed or removed elsewhere. Reload the project and try again.");
-    const root = top(row);
-    if (root.kind === "phase" && root.parentId === null && (root.name === MASTER_PLAN_PHASE || root.name === TEAM_PLAN_PHASE)) {
-      throw new ApiError(400, "validation_failed", `"${row.name}" belongs to the Master Plan or Team plan; change it there.`);
-    }
-    if (row.kind === "detail") throw new ApiError(409, "schedule_member_detail", `"${row.name}" is a member's own task; only that member changes it.`);
-    if (edit.remove) {
-      const children = rows.filter((child) => child.parentId === row.id && !removing.has(child.id)).length;
-      if (row.started || children > 0 || row.pending || row.referenced) {
-        throw new ApiError(409, "schedule_row_in_use", `"${row.name}" has progress or linked work, so it cannot be removed here. Keep it, or change it in Project Schedule.`);
-      }
-      actions.push({ kind: "remove", row });
-      continue;
-    }
-    const planStart = edit.start ?? row.planStart;
-    const planDays = edit.start && edit.finish ? calendarDays(edit.start, edit.finish) : row.planDays;
-    const datesChanged = planStart !== row.planStart || planDays !== row.planDays;
-    if (!datesChanged && edit.name === row.name) continue;
-    if (row.pending) throw new ApiError(409, "schedule_day_request_pending", `"${row.name}" has a pending request for more days. Answer it before changing the row.`);
-    if (datesChanged && (row.children > 0 || row.startMode !== "manual" || row.kind === "phase")) {
-      throw new ApiError(409, "schedule_rollup_plan_derived", `"${row.name}" takes its dates from its detail rows or a predecessor. Change them in Project Schedule.`);
-    }
-    actions.push({ kind: "update", row, name: edit.name, planStart, planDays });
-  }
-  return actions.sort((a, b) => (a.kind === "remove" ? 0 : 1) - (b.kind === "remove" ? 0 : 1) || (a.kind === "remove" ? depth(b.row) - depth(a.row) : 0));
-}
-
-/** Where added rows go: main rows after the last top-level row, sub rows after their main row's last row. */
-export type ScheduleAdditions = {
-  /** Main rows that had no sub rows yet and become a phase over the new ones. */
-  convert: ScheduleRow[];
-  mains: { sortOrder: number; row: NewScheduleRow }[];
-  subs: { parent: ScheduleRow; sortOrder: number; row: NewScheduleSubRow }[];
-  /** The Team plan phase moves back to the end when main rows are added, as a new project has it. */
-  teamPlan: { row: ScheduleRow; sortOrder: number } | null;
-};
-
-/**
- * Checks added rows against the schedule as it is. A sub row goes under a main row outside the
- * two plan phases. A main row that is still a task takes sub rows only while nothing hangs on
- * it -- no progress, no person in charge, no predecessor and nothing linked -- because it becomes
- * a phase whose dates and progress come from the rows under it.
- */
-export function planScheduleAdditions(rows: ScheduleRow[], added: NewScheduleRow[]): ScheduleAdditions {
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const convert = new Map<number, ScheduleRow>();
-  const lastChild = new Map<number, number>();
-  let top = Math.max(0, ...rows.filter((row) => row.parentId === null).map((row) => row.sortOrder));
-  const additions: ScheduleAdditions = { convert: [], mains: [], subs: [], teamPlan: null };
-  for (const row of added) {
-    if (row.parentId === null) { additions.mains.push({ sortOrder: ++top, row }); continue; }
-    const parent = byId.get(row.parentId);
-    if (!parent) throw new ApiError(409, "schedule_row_missing", "A plan row was changed or removed elsewhere. Reload the project and try again.");
-    if (parent.parentId !== null || (parent.kind !== "phase" && parent.kind !== "task")) {
-      throw new ApiError(400, "validation_failed", `"${parent.name}" is a sub row; sub rows go under a main row.`);
-    }
-    if (parent.kind === "phase" && (parent.name === MASTER_PLAN_PHASE || parent.name === TEAM_PLAN_PHASE)) {
-      throw new ApiError(400, "validation_failed", `"${parent.name}" belongs to the Master Plan or Team plan; change it there.`);
-    }
-    if (parent.pending) throw new ApiError(409, "schedule_day_request_pending", `"${parent.name}" has a pending request for more days. Answer it before adding rows under it.`);
-    if (parent.kind === "task" && !convert.has(parent.id)) {
-      if (parent.started || parent.children > 0 || parent.referenced || parent.picCount > 0 || parent.startMode !== "manual") {
-        throw new ApiError(409, "schedule_row_in_use", `"${parent.name}" has progress, a person in charge or linked work, so it cannot take sub rows. Add them under another main row, or in Project Schedule.`);
-      }
-      convert.set(parent.id, parent);
-    }
-    const sortOrder = (lastChild.get(parent.id) ?? Math.max(0, ...rows.filter((child) => child.parentId === parent.id).map((child) => child.sortOrder))) + 1;
-    lastChild.set(parent.id, sortOrder);
-    additions.subs.push({ parent, sortOrder, row });
-  }
-  const team = rows.find((row) => row.parentId === null && row.kind === "phase" && row.name === TEAM_PLAN_PHASE);
-  if (additions.mains.length && team) additions.teamPlan = { row: team, sortOrder: ++top };
-  additions.convert = [...convert.values()];
-  return additions;
-}
-
-const ADDED_NOTE = "Added in Edit Master Plan";
-
-async function addScheduleRows(transaction: TransactionType, projectId: number, added: NewScheduleRow[], actorId: number): Promise<void> {
-  const { convert, mains, subs, teamPlan } = planScheduleAdditions(await readScheduleRows(transaction, projectId), added);
-  for (const row of convert) {
-    const update = new sql.Request(transaction); update.input("id", sql.BigInt, row.id).input("actor", sql.BigInt, actorId);
-    await update.query(`UPDATE dbo.schedule_tasks SET kind=N'phase',is_milestone=0,plan_start=NULL,plan_days=1,plan_man_days=0,start_mode=N'manual',
-      predecessor_id=NULL,lag_days=0,pic_external=N'',updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
-    await appendUpdate(transaction, projectId, row.id, actorId, "plan", JSON.stringify({ kind: "task", planStart: row.planStart, planDays: row.planDays }),
-      JSON.stringify({ kind: "phase" }), "Became a main row with sub rows in Edit Master Plan");
-  }
-  for (const { sortOrder, row } of mains) await insertMainRow(transaction, projectId, actorId, sortOrder, row, ADDED_NOTE);
-  for (const { parent, sortOrder, row } of subs) {
-    await insertRow(transaction, projectId, actorId, { parentId: parent.id, sortOrder, kind: "task", name: row.name, visibility: "Internal", ...planDatesOf(row), planManDays: 0 }, ADDED_NOTE);
-  }
-  if (teamPlan) {
-    const move = new sql.Request(transaction); move.input("id", sql.BigInt, teamPlan.row.id).input("sort", sql.Int, teamPlan.sortOrder);
-    await move.query(`UPDATE dbo.schedule_tasks SET sort_order=@sort WHERE id=@id AND deleted_at IS NULL;`);
-  }
-}
-
-/** Applies Edit Master Plan's changes to rows made in Project Schedule, with the same history entries, then adds the new main rows and sub rows. */
-export async function syncOtherPlanRows(transaction: TransactionType, projectId: number, edits: OtherRowEdit[], actorId: number, added: NewScheduleRow[] = []): Promise<void> {
-  if (edits.length) await applyOtherRowEdits(transaction, projectId, edits, actorId);
-  if (added.length) await addScheduleRows(transaction, projectId, added, actorId);
-}
-
-async function applyOtherRowEdits(transaction: TransactionType, projectId: number, edits: OtherRowEdit[], actorId: number): Promise<void> {
-  for (const action of planOtherRowEdits(await readScheduleRows(transaction, projectId), edits)) {
-    if (action.kind === "remove") { await removeRow(transaction, projectId, action.row, actorId); continue; }
-    const { row, name, planStart, planDays } = action;
-    const update = new sql.Request(transaction);
-    update.input("id", sql.BigInt, row.id).input("name", sql.NVarChar(500), name).input("start", sql.Date, planStart)
-      .input("days", sql.Int, planDays).input("actor", sql.BigInt, actorId);
-    await update.query(`UPDATE dbo.schedule_tasks SET name=@name,plan_start=@start,plan_days=@days,
-      updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
-    await appendUpdate(transaction, projectId, row.id, actorId, "plan",
-      JSON.stringify({ name: row.name, planStart: row.planStart, planDays: row.planDays }),
-      JSON.stringify({ name, planStart, planDays }), "Changed in Edit Master Plan");
-  }
 }
 
 /* ── Team, customer payments and contacts ─────────────────────────────── */
