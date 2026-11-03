@@ -2283,7 +2283,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
   const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
   // The + on a row: a name typed in place becomes a row just below it, then the next one goes below that.
-  const [quickAdd, setQuickAdd] = useState<{ afterId: number; parentId: number | null; beforeId: number | null; depth: number; start: string; visibility: string; name: string } | null>(null);
+  const [quickAdd, setQuickAdd] = useState<{ afterId: number; parentId: number | null; beforeId: number | null; depth: number; start: string; visibility: string; name: string; kind: "task" | "phase" } | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
   // Focused each time the box appears, including after the plan reloads around it.
   const quickInput = useCallback((node: HTMLInputElement | null) => { node?.focus(); }, []);
@@ -2387,14 +2387,24 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     if (!activeSchedule) return;
     if (task.kind === "phase") {
       setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
-      setQuickAdd({ afterId: task.id, parentId: task.id, beforeId: task.children[0]?.id ?? null, depth: task.depth + 1, start: task.planStart ?? today, visibility: task.visibility, name: "" });
+      setQuickAdd({ afterId: task.id, parentId: task.id, beforeId: task.children[0]?.id ?? null, depth: task.depth + 1, start: task.planStart ?? today, visibility: task.visibility, name: "", kind: "task" });
       return;
     }
     const siblings = task.parentId === null ? activeSchedule.tasks : taskById.get(task.parentId)?.children ?? [];
     const next = siblings[siblings.findIndex((row) => row.id === task.id) + 1] ?? null;
     // One day, starting the working day after the row above finishes; dragging the bar sets the real dates.
     const start = (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
-    setQuickAdd({ afterId: task.id, parentId: task.parentId, beforeId: next?.id ?? null, depth: task.depth, start, visibility: task.visibility, name: "" });
+    setQuickAdd({ afterId: task.id, parentId: task.parentId, beforeId: next?.id ?? null, depth: task.depth, start, visibility: task.visibility, name: "", kind: "task" });
+  };
+  const topLevelRow = (taskId: number) => {
+    let task = taskById.get(taskId);
+    while (task?.parentId != null) task = taskById.get(task.parentId);
+    return task;
+  };
+  const setQuickKind = (kind: "task" | "phase", element: HTMLElement) => {
+    if (quickBusy) return;
+    setQuickAdd((current) => current && { ...current, kind });
+    element.closest(".gantt-quick-row")?.querySelector("input")?.focus();
   };
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
@@ -2478,12 +2488,16 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     setQuickBusy(true); setError("");
     try {
       const created = await apiRequest<{ id: number }>(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
-        scheduleVersion: activeSchedule.scheduleVersion, parentId: draft.parentId, beforeId: draft.beforeId, sortOrder: 0, kind: "task", name,
-        isMilestone: false, visibility: draft.visibility, planStart: draft.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0,
+        scheduleVersion: activeSchedule.scheduleVersion, parentId: draft.kind === "phase" ? null : draft.parentId,
+        beforeId: draft.kind === "phase" ? activeSchedule.tasks[activeSchedule.tasks.findIndex((task) => task.id === topLevelRow(draft.afterId)?.id) + 1]?.id ?? null : draft.beforeId,
+        sortOrder: 0, kind: draft.kind, name,
+        isMilestone: false, visibility: draft.visibility, planStart: draft.kind === "phase" ? null : draft.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0,
         picUserIds: [], picExternal: "", planManDays: 0,
       }) });
       notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
-      setQuickAdd({ ...draft, afterId: created.id, start: linkedStart(draft.start, 0, new Set(activeSchedule.holidays ?? [])) ?? draft.start, name: "" });
+      setQuickAdd(draft.kind === "phase"
+        ? { ...draft, afterId: created.id, parentId: created.id, beforeId: null, depth: 1, kind: "task", name: "" }
+        : { ...draft, afterId: created.id, start: linkedStart(draft.start, 0, new Set(activeSchedule.holidays ?? [])) ?? draft.start, name: "" });
       await loadSchedule();
     } catch (failure) {
       // The typed name stays in the box; Enter tries again on the reloaded plan.
@@ -2493,18 +2507,24 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     } finally { setQuickBusy(false); }
   };
   if (quickAdd && canPlan) {
-    const at = visible.findIndex((task) => task.id === quickAdd.afterId);
+    const afterId = quickAdd.kind === "phase" ? topLevelRow(quickAdd.afterId)?.id : quickAdd.afterId;
+    const at = visible.findIndex((task) => task.id === afterId);
     if (at >= 0) {
       // Under a main row the box is its first sub row; under any other row it follows that row and the rows under it.
       let end = at + 1;
-      if (visible[at]!.id !== quickAdd.parentId) while (end < visible.length && visible[end]!.depth > visible[at]!.depth) end++;
+      if (quickAdd.kind === "phase" || visible[at]!.id !== quickAdd.parentId) while (end < visible.length && visible[end]!.depth > visible[at]!.depth) end++;
       ganttRows.splice(end, 0, {
-        key: "quick-add", depth: quickAdd.depth, kind: "task", selected: true, start: null, finish: null, tone: "blue",
-        title: uiText("Plan.quickAddName"), placeholder: uiText("Plan.quickAddHint"),
-        label: <input ref={quickInput} className="gantt-quick-input" data-guide="plan.quickName" aria-label={uiText("Plan.quickAddName")} placeholder={uiText("Plan.quickAddName")} maxLength={500}
+        key: "quick-add", depth: quickAdd.kind === "phase" ? 0 : quickAdd.depth, kind: quickAdd.kind, selected: true, start: null, finish: null, tone: "blue",
+        title: uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName"), placeholder: uiText("Plan.quickAddHint"),
+        label: <span className="gantt-quick-row" onBlur={(event) => { if (!quickAdd.name.trim() && !event.currentTarget.contains(event.relatedTarget)) setQuickAdd(null); }}>
+          <span className="gantt-quick-kind" data-guide="plan.quickKind">
+            <button type="button" aria-pressed={quickAdd.kind === "task"} disabled={quickBusy} onMouseDown={(event) => event.preventDefault()} onClick={(event) => setQuickKind("task", event.currentTarget)}>{uiText("Plan.quickKindTask")}</button>
+            <button type="button" aria-pressed={quickAdd.kind === "phase"} disabled={quickBusy} onMouseDown={(event) => event.preventDefault()} onClick={(event) => setQuickKind("phase", event.currentTarget)}>{uiText("Plan.quickKindHeading")}</button>
+          </span>
+          <input ref={quickInput} className="gantt-quick-input" data-guide="plan.quickName" aria-label={uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName")} placeholder={uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName")} maxLength={500}
           value={quickAdd.name} readOnly={quickBusy} onChange={(event) => { const name = event.target.value; setQuickAdd((current) => current && { ...current, name }); }}
-          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); void saveQuickAdd(); } else if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); } }}
-          onBlur={() => { if (!quickAdd.name.trim()) setQuickAdd(null); }} />,
+          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); void saveQuickAdd(); } else if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); } else if (event.key === "Tab" && !event.shiftKey) { event.preventDefault(); setQuickKind(quickAdd.kind === "task" ? "phase" : "task", event.currentTarget); } }} />
+        </span>,
       });
     }
   }
