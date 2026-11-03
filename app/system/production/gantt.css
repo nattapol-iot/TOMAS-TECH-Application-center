@@ -64,6 +64,15 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-row.project .gantt-label-main, .gantt-row.phase .gantt-label-main { font-weight: 650; }
 .gantt-label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-3xs); }
 .gantt-status { flex: none; }
+/* The + that adds a row just below (GanttRowSpec.insert): faint like the grip, full on hover or focus and on touch screens. */
+.gantt-insert { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid var(--blue-line); border-radius: var(--r-pill); background: var(--surface); color: var(--blue-text); cursor: pointer; opacity: 0.4; }
+.gantt-insert .icon { width: 12px; height: 12px; }
+.gantt-row:hover .gantt-insert, .gantt-insert:focus-visible { opacity: 1; }
+.gantt-insert:hover { background: var(--blue-soft); }
+.gantt-insert:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+@media (hover: none) { .gantt-insert { opacity: 1; } }
+/* The row being typed in after a +: a plain input in place of the row name. */
+.gantt-quick-input { width: 100%; min-width: 0; min-height: 26px; padding: 3px 8px; border: 1px solid var(--blue); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-xs); }
 
 .gantt-track { position: relative; min-width: 0; overflow: hidden; }
 .gantt-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }

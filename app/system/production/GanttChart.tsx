@@ -46,6 +46,8 @@ export type GanttRowSpec = {
   reschedule?: { resize: boolean; onChange: (start: string, finish: string) => void };
   /** The row has a grip to drag it up or down the chart (GanttChart onMoveRow). */
   movable?: boolean;
+  /** A + on the row that adds a row just below it; label is already translated. */
+  insert?: { label: string; onInsert: () => void };
 };
 /** Where a dragged row is dropped: just before or just after the row `target`. */
 export type GanttRowDrop = { key: string; target: string; place: "before" | "after" };
@@ -355,6 +357,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
             ? <button type="button" className="gantt-label" title={row.title} onClick={row.onOpen}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</button>
             : <span className="gantt-label" title={row.title}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</span>}
           {row.status ? <span className="gantt-status">{row.status}</span> : null}
+          {row.insert ? <button type="button" className="gantt-insert" data-guide="plan.insert" aria-label={`${row.insert.label} · ${row.title}`} title={row.insert.label} onClick={row.insert.onInsert}><Icon name="plus" /></button> : null}
         </div>
         <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: 14 + segments.count * 10 } : undefined}>
           {range.columns.map((column) => {
