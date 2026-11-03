@@ -8,7 +8,7 @@ import type { Database } from "../src/db.js";
 import { ApiError, dayRequestAnswerError, registerErrorHandler } from "../src/errors.js";
 import { registerResourceTaskRoutes } from "../src/routes/resource-tasks.js";
 import { registerScheduleRoutes } from "../src/routes/schedule.js";
-import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
+import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, MAX_PLAN_DEPTH, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
 import { resolveSchedule, type ScheduleCalculationTask } from "../src/schedule-calculator.js";
 import type { CurrentUserService } from "../src/users.js";
 
@@ -951,23 +951,25 @@ test("POST move: a Resource Plan row moves up or down where it is, but not into 
 });
 
 
-test("scheduleParentAllowed: three planning levels and exclusive member details", () => {
+test("scheduleParentAllowed: six planning levels and exclusive member details", () => {
   const phase = { kind: "phase", parent: null }, task = { kind: "task", parent: null };
-  assert.equal(scheduleParentAllowed("phase", null), true);
-  assert.equal(scheduleParentAllowed("phase", phase), false);
-  assert.equal(scheduleParentAllowed("task", null), true);
-  assert.equal(scheduleParentAllowed("task", phase), true);
-  assert.equal(scheduleParentAllowed("task", task), true);
-  assert.equal(scheduleParentAllowed("task", { ...task, parent: 1 }, "phase"), true);
-  assert.equal(scheduleParentAllowed("task", { ...task, parent: 2 }, "task"), false);
-  assert.equal(scheduleParentAllowed("task", { kind: "detail", parent: 2 }, "task"), false);
-  assert.equal(scheduleParentAllowed("task", task, undefined, ["detail"]), false);
-  assert.equal(scheduleParentAllowed("task", task, undefined, ["task"]), true);
-  assert.equal(scheduleParentAllowed("detail", null), false);
-  assert.equal(scheduleParentAllowed("detail", phase), false);
-  assert.equal(scheduleParentAllowed("detail", task, undefined, ["task"]), false);
-  assert.equal(scheduleParentAllowed("detail", { ...task, parent: 2 }, "task", ["detail"]), true);
+  assert.equal(MAX_PLAN_DEPTH, 5);
+  assert.equal(scheduleParentAllowed("phase", null, 0), true);
+  assert.equal(scheduleParentAllowed("phase", phase, 1), false);
+  assert.equal(scheduleParentAllowed("task", null, 0), true);
+  assert.equal(scheduleParentAllowed("task", phase, 1), true);
+  for (let depth = 1; depth <= MAX_PLAN_DEPTH; depth++) assert.equal(scheduleParentAllowed("task", task, depth), true);
+  assert.equal(scheduleParentAllowed("task", task, 6), false);
+  assert.equal(scheduleParentAllowed("task", { kind: "detail" }, 3), false);
+  assert.equal(scheduleParentAllowed("task", task, 3, ["detail"]), false);
+  assert.equal(scheduleParentAllowed("task", task, 3, ["task"]), true);
+  assert.equal(scheduleParentAllowed("detail", null, 0), false);
+  assert.equal(scheduleParentAllowed("detail", phase, 1), false);
+  assert.equal(scheduleParentAllowed("detail", task, 6, ["task"]), false);
+  assert.equal(scheduleParentAllowed("detail", task, 6, ["detail"]), true);
 });
+
+const hierarchyRows = (levels: number) => Array.from({ length: levels }, (_, depth) => taskRaw({ id: depth + 1, parent_id: depth ? depth : null, kind: depth ? "task" : "phase" }));
 
 test("hierarchy validates existing descendants when moving or changing a row", async (t) => {
   const cases = [
@@ -975,8 +977,13 @@ test("hierarchy validates existing descendants when moving or changing a row", a
     { name: "detail under sub task", rows: [taskRaw({ id: 1 }), taskRaw({ id: 2, parent_id: 1 })], parentId: 2, taskId: null, kind: "detail", code: null },
     { name: "task beside detail", rows: [taskRaw({ id: 1 }), taskRaw({ id: 2, parent_id: 1, kind: "detail" })], parentId: 1, taskId: null, kind: "task", code: "schedule_child_kind_invalid" },
     { name: "detail beside task", rows: [taskRaw({ id: 1 }), taskRaw({ id: 2, parent_id: 1 })], parentId: 1, taskId: null, kind: "detail", code: "schedule_child_kind_invalid" },
-    { name: "moving a branch too deep", rows: [taskRaw({ id: 1 }), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 1, taskId: 11, kind: "task", code: "schedule_child_kind_invalid" },
-    { name: "changing phase with grandchildren to task", rows: [taskRaw({ id: 11, kind: "phase" }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12 })], parentId: null, taskId: 11, kind: "task", code: "schedule_child_kind_invalid" },
+    { name: "four planning levels", rows: hierarchyRows(3), parentId: 3, taskId: null, kind: "task", code: null },
+    { name: "six planning levels", rows: hierarchyRows(5), parentId: 5, taskId: null, kind: "task", code: null },
+    { name: "depth six refused", rows: hierarchyRows(6), parentId: 6, taskId: null, kind: "task", code: "schedule_parent_kind_invalid" },
+    { name: "detail below deepest task", rows: hierarchyRows(6), parentId: 6, taskId: null, kind: "detail", code: null },
+    { name: "moving a branch to the limit with a detail", rows: [...hierarchyRows(4), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12, kind: "detail" })], parentId: 4, taskId: 11, kind: "task", code: null },
+    { name: "moving a branch too deep", rows: [...hierarchyRows(5), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 5, taskId: 11, kind: "task", code: "schedule_parent_kind_invalid" },
+    { name: "changing phase with grandchildren to task", rows: [taskRaw({ id: 11, kind: "phase" }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12 })], parentId: null, taskId: 11, kind: "task", code: null },
     { name: "moving under a descendant", rows: [taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 12, taskId: 11, kind: "task", code: "schedule_cycle" },
   ];
   for (const item of cases) await t.test(item.name, async (sub) => {
@@ -987,14 +994,36 @@ test("hierarchy validates existing descendants when moving or changing a row", a
   });
 });
 
+test("create, PUT and move refuse excessive depth including task descendants", async (t) => {
+  for (const route of ["create", "PUT", "move"] as const) await t.test(route, async (sub) => {
+    const { app, transactions } = harness({ id: MANAGER_ID, role: "Project Manager" });
+    const base = planEditAnswers(0, []);
+    const parentId = route === "create" ? 6 : 5;
+    const statements = installSqlMock(sub, (statement) => {
+      if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: [...hierarchyRows(parentId), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })] };
+      return base(statement);
+    });
+    try {
+      const response = await app.inject({ method: route === "PUT" ? "PUT" : "POST", url: route === "create" ? `/api/v1/projects/${PROJECT_ID}/schedule/tasks` : `/api/v1/schedule/tasks/11${route === "move" ? "/move" : ""}`,
+        payload: { ...planEditPayload([]), parentId, beforeId: null } });
+      assert.equal(response.statusCode, 422, response.body);
+      assert.equal(response.json().code, "schedule_parent_kind_invalid");
+      assert.match(response.json().message, /Plans go at most 6 levels deep/);
+      assert.deepEqual(transactions, ["rolled-back"]);
+      assert.equal(statements.some((entry) => /INSERT INTO dbo.schedule_tasks|UPDATE dbo.schedule_tasks SET parent_id/.test(entry.statement)), false);
+    } finally { await app.close(); }
+  });
+});
+
 test("create, PUT and move reject the first sub task when its parent is in use", async (t) => {
-  for (const route of ["create", "PUT", "move"] as const) for (const reason of ["status", "percent_done", "actual_start", "managed", "pending"] as const) {
-    await t.test(`${route}: ${reason}`, async (sub) => {
+  for (const depth of [0, 3]) for (const route of ["create", "PUT", "move"] as const) for (const reason of ["status", "percent_done", "actual_start", "managed", "pending"] as const) {
+    await t.test(`depth ${depth}, ${route}: ${reason}`, async (sub) => {
       const { app, transactions } = harness({ id: MANAGER_ID, role: "Project Manager" });
-      const parent = taskRaw({ id: 1, name: "Installation", ...(reason === "status" ? { status: "In Progress" } : reason === "percent_done" ? { percent_done: 10 } : reason === "actual_start" ? { actual_start: "2027-03-01" } : {}) });
+      const ancestors = depth ? [taskRaw({ id: 101, kind: "phase" }), taskRaw({ id: 102, parent_id: 101 }), taskRaw({ id: 103, parent_id: 102 })] : [];
+      const parent = taskRaw({ id: 1, parent_id: depth ? 103 : null, name: "Installation", ...(reason === "status" ? { status: "In Progress" } : reason === "percent_done" ? { percent_done: 10 } : reason === "actual_start" ? { actual_start: "2027-03-01" } : {}) });
       const base = planEditAnswers(0, []);
       const statements = installSqlMock(sub, (statement, params) => {
-        if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: [parent, taskRaw({ id: 11 })] };
+        if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: [...ancestors, parent, taskRaw({ id: 11 })] };
         if (statement.includes("WHERE schedule_task_id=@parent")) return { recordset: [{ value: reason === "managed" }] };
         if (statement.includes("field=N'request' AND request_days>0")) return { recordset: [{ value: reason === "pending" && params.task === 1 }] };
         return base(statement);
@@ -1033,24 +1062,26 @@ test("an existing sub task permits another even after progress; a detail endpoin
   });
 });
 
-test("calculator rolls weighted sub task progress, dates and status through task and phase", () => {
+test("calculator rolls weighted progress, dates and status through all four levels", () => {
   const row = (id: number, parentId: number | null, changes: Partial<ScheduleCalculationTask> = {}): ScheduleCalculationTask => ({ id, parentId, sortOrder: id, planStart: "2027-03-01", planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, actualStart: null, actualFinish: null, forecastFinish: null, percentComplete: 0, status: "Not Started", ...changes });
   const { byId } = resolveSchedule([
-    row(1, null), row(2, 1),
-    row(3, 2, { percentComplete: 100, status: "Done", actualStart: "2027-03-01", actualFinish: "2027-03-01" }),
-    row(4, 2, { planStart: "2027-03-02", planDays: 3, status: "Blocked", forecastFinish: "2027-03-05" }),
+    row(1, null), row(2, 1), row(6, 2),
+    row(3, 6, { percentComplete: 100, status: "Done", actualStart: "2027-03-01", actualFinish: "2027-03-01" }),
+    row(4, 6, { planStart: "2027-03-02", planDays: 3, status: "Blocked", forecastFinish: "2027-03-05" }),
     row(5, 1, { planStart: "2027-03-05", percentComplete: 50, status: "In Progress" }),
   ], new Set());
+  assert.equal(byId.get(6)!.percentComplete, 25);
   assert.equal(byId.get(2)!.percentComplete, 25);
   assert.equal(byId.get(1)!.percentComplete, 30);
-  assert.equal(byId.get(3)!.wbs, "1.1.1");
-  for (const id of [1, 2]) {
+  assert.equal(byId.get(3)!.wbs, "1.1.1.1");
+  for (const id of [1, 2, 6]) {
     assert.equal(byId.get(id)!.status, "Blocked");
     assert.equal(byId.get(id)!.planStart, "2027-03-01");
     assert.equal(byId.get(id)!.actualStart, "2027-03-01");
     assert.equal(byId.get(id)!.actualFinish, null);
     assert.equal(byId.get(id)!.forecastFinish, "2027-03-05");
   }
+  assert.equal(byId.get(6)!.planFinish, "2027-03-04");
   assert.equal(byId.get(2)!.planFinish, "2027-03-04");
   assert.equal(byId.get(1)!.planFinish, "2027-03-05");
 });

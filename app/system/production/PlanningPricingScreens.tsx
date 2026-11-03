@@ -1946,19 +1946,18 @@ function PicFieldsWithLoad({ bootstrap, span, taskId, value, onChange, manDays }
   </>;
 }
 
-const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind === "task"
-  && (task.parentId === null || rows.find((row) => row.id === task.parentId)?.kind === "phase")
-  && !task.children.some((child) => child.kind === "detail")
+const MAX_PLAN_DEPTH = 5;
+const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind === "task" && task.depth < MAX_PLAN_DEPTH
+  && !rows.some((child) => child.parentId === task.id && child.kind === "detail")
   && (task.children.length > 0 || (task.status === "Not Started" && Number(task.percentComplete) === 0 && !task.actualStart && !task.managedByResourcePlan));
 type QuickPlanKind = "phase" | "task" | "sub";
 type ScheduleRowInitial = { kind: QuickPlanKind; parentId: number | null; beforeId: number | null; start?: string };
 
 function scheduleRowPosition(schedule: ProjectSchedule, task: ScheduleTask, kind: QuickPlanKind): ScheduleRowInitial {
   const rows = flattenTasks(schedule.tasks), byId = new Map(rows.map((row) => [row.id, row]));
-  const sub = task.kind === "task" && task.parentId !== null && byId.get(task.parentId)?.kind === "task";
-  let anchor = kind === "task" && sub ? byId.get(task.parentId!)! : task;
+  let anchor = task;
   if (kind === "phase") while (anchor.parentId !== null) anchor = byId.get(anchor.parentId)!;
-  const child = kind === "task" && task.kind === "phase" || kind === "sub" && !sub;
+  const child = kind === "task" && task.kind === "phase" || kind === "sub";
   const parentId = child ? task.id : anchor.parentId;
   const siblings = parentId === null ? schedule.tasks : byId.get(parentId)?.children ?? [];
   return { kind, parentId, beforeId: child ? kind === "sub" ? null : task.children[0]?.id ?? null
@@ -1993,17 +1992,24 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const allRows = flattenTasks(schedule.tasks);
-  const subParents = allRows.filter((task) => canTakeSubTasks(task, allRows));
-  const parents = kind === "sub" ? subParents : allRows.filter((task) => task.kind === "phase");
+  const pendingTaskIds = new Set(schedule.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer).map((update) => update.taskId));
+  const subParents = allRows.filter((task) => canTakeSubTasks(task, allRows) && !pendingTaskIds.has(task.id));
+  const taskParents = allRows.filter((task) => task.kind === "phase" || subParents.includes(task));
+  const parents = kind === "sub" ? subParents : taskParents;
+  const insertionAnchor = allRows.find((row) => row.id === insertionAnchorId);
+  const subReason = insertionAnchor ? insertionAnchor.kind === "phase" ? "Plan.subUseTask"
+    : insertionAnchor.depth >= MAX_PLAN_DEPTH ? "Plan.maxDepth"
+      : insertionAnchor.children.some((child) => child.kind === "detail") ? "Plan.subHasDetails"
+        : !subParents.includes(insertionAnchor) ? "Plan.subInUse" : null
+    : !subParents.length ? "Plan.noSubParent" : null;
   const selectedParent = kind === "phase" ? null : parentId ? Number(parentId) : null;
   const sortOrder = Math.max(0, ...allRows.filter((task) => task.parentId === selectedParent).map((task) => task.sortOrder)) + 10;
   const invalid = !name.trim() || (kind !== "phase" && (!startReady(start) || planDays < 1 || planManDays < 0))
     || (kind === "sub" && !subParents.some((row) => row.id === selectedParent));
   const chooseKind = (value: QuickPlanKind) => {
-    const insertionAnchor = allRows.find((row) => row.id === insertionAnchorId);
     const position = insertionAnchor ? scheduleRowPosition(schedule, insertionAnchor, value) : null;
-    const choices = value === "sub" ? subParents : allRows.filter((row) => row.kind === "phase");
-    const preferred = position?.parentId ?? selectedParent;
+    const choices = value === "sub" ? subParents : taskParents;
+    const preferred = position ? position.parentId : null;
     const nextParent = value === "phase" ? null : choices.some((row) => row.id === preferred) ? preferred : value === "sub" ? choices[0]?.id ?? null : null;
     setKind(value); setParentId(nextParent == null ? "" : String(nextParent));
     setBeforeId(position?.parentId === nextParent ? position.beforeId : null);
@@ -2081,12 +2087,12 @@ function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify,
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
       <div className="field span-2" data-guide="plan.quickKind"><span>{t("Plan.rowLevel")}</span><div className="seg-control">
-        {(["phase", "task", "sub"] as const).map((value) => <button key={value} type="button" className={kind === value ? "on" : ""} aria-pressed={kind === value} disabled={busy || value === "sub" && !subParents.length} title={value === "sub" && !subParents.length ? t("Plan.noSubParent") : undefined} onClick={() => chooseKind(value)}>{t(value === "phase" ? "Plan.quickKindHeading" : value === "sub" ? "Plan.quickKindSub" : "Plan.quickKindTask")}</button>)}
-      </div>{!subParents.length ? <small className="muted">{t("Plan.noSubParent")}</small> : null}</div>
+        {(["phase", "task", "sub"] as const).map((value) => <button key={value} type="button" className={kind === value ? "on" : ""} aria-pressed={kind === value} disabled={busy || value === "sub" && Boolean(subReason)} title={value === "sub" && subReason ? t(subReason) : undefined} onClick={() => chooseKind(value)}>{t(value === "phase" ? "Plan.quickKindHeading" : value === "sub" ? insertionAnchor ? "Plan.quickKindSub" : "Plan.quickKindSubStandalone" : insertionAnchor?.kind === "task" ? "Plan.quickKindTask" : "Plan.quickKindTaskStandalone")}</button>)}
+      </div>{subReason ? <small className="muted">{t(subReason)}</small> : null}</div>
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
       <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input ref={nameInput} data-guide="plan.quickName" maxLength={500} value={name} readOnly={busy} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(true); } }} /></label>
       {kind !== "phase" ? <>
-        <label className="field"><span><LocalizedText text={"Plan.wbsName"} /></span><select value={parentId} disabled={busy} onChange={(event) => { setParentId(event.target.value); setBeforeId(null); }}>{kind === "task" ? <option value="">{t("Plan.topLevel")}</option> : null}{parents.map((parent) => <option key={parent.id} value={parent.id}>{parent.wbs} {parent.name}</option>)}</select></label>
+        <label className="field"><span><LocalizedText text={"Plan.wbsName"} /></span><select value={parentId} disabled={busy} onChange={(event) => { setParentId(event.target.value); setBeforeId(null); }}>{kind === "task" ? <option value="">{t("Plan.topLevel")}</option> : null}{parents.map((parent) => <option key={parent.id} value={parent.id}>{"　".repeat(parent.depth)}{parent.wbs} {parent.name}</option>)}</select></label>
         <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
         <label className="field" data-guide="plan.rowDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
@@ -2455,13 +2461,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   /** A + is offered on every row but a member's own detail row, while nothing else is saving and no quick filter hides rows. */
   const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
     && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
-  const isSubTask = (task: ScheduleTask) => task.kind === "task" && task.parentId !== null && taskById.get(task.parentId)?.kind === "task";
   const openAddRow = (task: ScheduleTask) => {
     if (!activeSchedule) return;
-    const kind = isSubTask(task) ? "sub" : "task";
     const start = task.kind === "phase" ? task.planStart ?? today
       : (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
-    setCreateInitial({ ...scheduleRowPosition(activeSchedule, task, kind), start }); setCreateAnchor(task); setCreateOpen(true);
+    setCreateInitial({ ...scheduleRowPosition(activeSchedule, task, "task"), start }); setCreateAnchor(task); setCreateOpen(true);
   };
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
@@ -2554,15 +2558,16 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   /**
    * Where a row dropped beside another lands: its parent and the sibling it goes before (null: last). Just after a
    * row whose children are showing, a row that may sit under it becomes its first child. Null when the row may not
-   * go there (a phase only at the top, at most two task levels, details under a task without sub tasks; never under itself;
+   * go there (a phase only at the top, at most six planning levels, details under a task without sub tasks; never under itself;
    * a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
    */
   const placeFor = (drop: GanttRowDrop): { task: ScheduleTask; parentId: number | null; beforeId: number | null } | null => {
     const task = taskById.get(Number(drop.key.replace("task:", ""))), target = taskById.get(Number(drop.target.replace("task:", "")));
     if (!activeSchedule || !task || !target || task.id === target.id) return null;
     const childrenOf = (parentId: number | null) => (parentId === null ? activeSchedule.tasks : taskById.get(parentId)?.children ?? []);
+    const taskHeight = Math.max(0, ...flattenTasks(task.children).filter((row) => row.kind === "task").map((row) => row.depth - task.depth));
     const fits = (parent: ScheduleTask | null) => task.kind === "phase" ? parent === null : task.kind === "task"
-      ? parent === null || parent.kind === "phase" || (canTakeSubTasks(parent, rows) && !task.children.some((child) => child.kind === "task"))
+      ? (parent === null || parent.kind === "phase" || canTakeSubTasks(parent, rows)) && (parent ? parent.depth + 1 : 0) + taskHeight <= MAX_PLAN_DEPTH
       : parent?.kind === "task" && !parent.children.some((child) => child.kind === "task");
     let parentId: number | null, beforeId: number | null;
     if (drop.place === "after" && target.children.length > 0 && !collapsed.has(target.id) && fits(target)) {
