@@ -743,6 +743,65 @@ const PROJECT_CREATE: Guide = {
   ],
 };
 
+const PROJECT_MASTER_PLAN: Guide = {
+  id: "project-master-plan",
+  area: "project",
+  title: { th: "แก้ไข Master Plan ของโปรเจกต์ที่สร้างแล้ว", en: "Edit the Master Plan of an existing project", jp: "作成済み案件のマスタープランを編集" },
+  summary: {
+    th: "เพิ่ม แก้ หรือลบไมล์สโตนและแผนทีมของโปรเจกต์ที่มีอยู่ เลือก Master Schedule ได้ถ้ายังไม่มีแผน และปรับวันเริ่ม/วันส่งมอบตามแผน",
+    en: "Add, change or remove the milestones and team plan of a project that exists, start from a Master Schedule when it has none, and move its dates to the plan.",
+    jp: "既存案件のマイルストーンとチーム計画を追加・変更・削除します。計画がなければマスタースケジュールから始め、日程を計画に合わせます。",
+  },
+  minutes: 2,
+  permissions: ["project.write", "schedule.plan"],
+  views: ["projects"],
+  steps: [
+    menu("projects",
+      { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
+      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "project.rowMenu", action: "click", view: "projects",
+      title: { th: "เปิดเมนูของโปรเจกต์", en: "Open the project's menu", jp: "案件のメニューを開く" },
+      body: { th: "กดปุ่ม ⋯ ท้ายแถวของโปรเจกต์ที่ต้องการแก้", en: "Press the ⋯ button at the end of the project's row.", jp: "対象案件の行末にある ⋯ ボタンを押します。" },
+      missing: { th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'", en: "No project is listed. Clear the filters, or press Finish.", jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。" },
+    },
+    {
+      target: "project.editPlan", action: "click", view: "projects",
+      title: { th: "กด 'แก้ไข Master Plan'", en: "Press Edit Master Plan", jp: "「マスタープランを編集」を押す" },
+      body: { th: "เปิดหน้าต่างที่มีแค่แผนของโปรเจกต์นี้", en: "It opens a window with only this project's plan.", jp: "この案件の計画だけを編集する画面が開きます。" },
+      missing: {
+        th: "เมนูนี้ขึ้นสำหรับ PM ของโปรเจกต์นี้ Engineering Manager หรือ Admin และโปรเจกต์ต้องยังไม่ปิด",
+        en: "It shows for this project's manager, an Engineering Manager or an Admin, while the project is open.",
+        jp: "この案件のPM、エンジニアリングマネージャー、管理者に、案件が未完了の間だけ表示されます。",
+      },
+    },
+    {
+      target: "project.plan", action: "next", view: "projects",
+      title: { th: "แก้ไมล์สโตน", en: "Change the milestones", jp: "マイルストーンを変更" },
+      body: {
+        th: "แก้ชื่อหรือวันได้ทุกแถว กด 'เพิ่มแผน' เพื่อเพิ่ม หรือกด ✕ เพื่อลบ แถวที่มีความคืบหน้าแล้วลบไม่ได้ ถ้ายังไม่มีแผน เลือก Master Schedule เป็นต้นแบบได้",
+        en: "Change any row's name or dates, add a row, or remove one with ✕. A row with progress cannot be removed. With no plan yet, start from a Master Schedule.",
+        jp: "各行の名前や日程を変更し、行を追加、または ✕ で削除します。進捗のある行は削除できません。計画がなければマスタースケジュールから始められます。",
+      },
+      missing: { th: "บัญชีนี้แก้แผนของโปรเจกต์นี้ไม่ได้ กด 'จบบทสอน'", en: "This account cannot change this project's plan. Press Finish.", jp: "このアカウントはこの案件の計画を変更できません。「完了」を押します。" },
+    },
+    {
+      target: "project.team", action: "next", view: "projects",
+      title: { th: "แผนของทีม", en: "The team plan", jp: "チーム計画" },
+      body: { th: "ใครทำอะไร ช่วงไหน แก้หรือเพิ่มได้ในที่เดียวกัน คนที่ถูกเพิ่มจะได้รับแจ้ง", en: "Who does what, and when. Change or add rows here; anyone newly assigned is told.", jp: "誰が何をいつ行うか。ここで変更・追加でき、新しく割り当てられた人に通知されます。" },
+    },
+    {
+      target: "project.planSave", action: "click", view: "projects",
+      title: { th: "บันทึกแผน", en: "Save the plan", jp: "計画を保存" },
+      body: {
+        th: "ถ้าแผนเลยวันเดิม ติ๊ก 'ปรับวันเริ่มและวันส่งมอบตามแผน' แล้วกด 'บันทึกแผน' ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "If the plan moved past the old dates, tick Move the project's start and delivery, then press Save plan. Only practising? Press Cancel, then Finish.",
+        jp: "計画が元の日程を超えたら「案件の開始日と納期を計画に合わせる」にチェックし、「計画を保存」を押します。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
+    },
+  ],
+};
+
 const PROJECT_PLAN: Guide = {
   id: "project-plan",
   area: "project",
@@ -1874,6 +1933,7 @@ export const GUIDES: readonly Guide[] = [
   PRICE_LIBRARY,
   PROJECT_CREATE,
   PROJECT_PLAN,
+  PROJECT_MASTER_PLAN,
   TEAM_TASK,
   BOM_RELEASE,
   ESTIMATE_APPROVE,

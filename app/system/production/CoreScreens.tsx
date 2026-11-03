@@ -513,13 +513,13 @@ function PortfolioProgress({ item }: { item: ProjectOverviewItem }) {
   </div>;
 }
 
-type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; onSelect: () => void };
+type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; guide?: string; onSelect: () => void };
 // A row's choices (the overflow actions, the next stages) open as a disclosure: a button with
 // aria-expanded and a group of plain buttons that Tab walks through, so arrow keys never commit
 // anything. The group is position: fixed from the trigger's box, which keeps the table's scroll
 // area and the panel from clipping it; it flips above the trigger when the room below is short and
 // closes on scroll or resize instead of drifting away from its row.
-function RowDisclosure({ label, trigger, triggerClassName, disabled = false, actions }: { label: string; trigger: ReactNode; triggerClassName: string; disabled?: boolean; actions: PortfolioAction[] }) {
+function RowDisclosure({ label, trigger, triggerClassName, disabled = false, actions, guide }: { label: string; trigger: ReactNode; triggerClassName: string; disabled?: boolean; actions: PortfolioAction[]; guide?: string }) {
   const t = useUiText();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -564,8 +564,8 @@ function RowDisclosure({ label, trigger, triggerClassName, disabled = false, act
     const next = event.relatedTarget;
     if (open && next instanceof Node && !event.currentTarget.contains(next)) setOpen(false);
   }}>
-    <button ref={button} type="button" className={triggerClassName} disabled={disabled} aria-expanded={open} aria-controls={open ? panelId : undefined} aria-label={label} title={label} onClick={() => setOpen((value) => !value)}>{trigger}</button>
-    {open ? <div ref={panel} id={panelId} className="menu portfolio-menu" role="group" aria-label={label}>{actions.map((action) => <button key={action.key} type="button" className={action.danger ? "danger" : undefined} onClick={() => { setOpen(false); button.current?.focus(); action.onSelect(); }}>{action.icon ? <Icon name={action.icon} /> : null}{t(action.label)}</button>)}</div> : null}
+    <button ref={button} type="button" className={triggerClassName} data-guide={guide} disabled={disabled} aria-expanded={open} aria-controls={open ? panelId : undefined} aria-label={label} title={label} onClick={() => setOpen((value) => !value)}>{trigger}</button>
+    {open ? <div ref={panel} id={panelId} className="menu portfolio-menu" role="group" aria-label={label}>{actions.map((action) => <button key={action.key} type="button" className={action.danger ? "danger" : undefined} data-guide={action.guide} onClick={() => { setOpen(false); button.current?.focus(); action.onSelect(); }}>{action.icon ? <Icon name={action.icon} /> : null}{t(action.label)}</button>)}</div> : null}
   </div>;
 }
 
@@ -631,6 +631,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const [endUserProject, setEndUserProject] = useState<ProjectSummary | null>(null);
   const [membersProject, setMembersProject] = useState<ProjectSummary | null>(null);
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null);
+  const [planningProject, setPlanningProject] = useState<ProjectSummary | null>(null);
   const [deletingProject, setDeletingProject] = useState<ProjectSummary | null>(null);
   // Only the newest request may land: toggling "Show closed" twice must not show the older answer.
   const latestRequest = useRef(0);
@@ -655,6 +656,9 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const canWrite = bootstrap.permissions.includes("project.write");
   // The API has the final say (work recorded, role); this only hides a button that could never work.
   const canDelete = (project: ProjectSummary) => canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
+  // The same people the API lets change a plan: this project's manager, an Engineering Manager or an Admin, while it is open.
+  const canPlan = (project: ProjectSummary) => canWrite && bootstrap.permissions.includes("schedule.plan") && project.status !== "Closed"
+    && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
   const items = useMemo(() => overview?.items ?? [], [overview]);
   const managers = useMemo(() => [...new Map(items.map((item) => [item.managerId, item.managerName] as const)).entries()].sort((a, b) => a[1].localeCompare(b[1])), [items]);
   const teams = useMemo(() => [...new Set(items.map((item) => shownProjectTeam(item.team)).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
@@ -703,6 +707,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   };
   const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
     ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
+    ...(canPlan(item) ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide:"project.editPlan", onSelect: () => setPlanningProject(item) }] : []),
     ...(item.canChangeStatus && item.allowedStatuses.includes("Closed") ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }] : []),
     ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
     { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembersProject(item) },
@@ -778,7 +783,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
             ? <RowDisclosure label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`} triggerClassName="portfolio-stage-trigger" disabled={stageBusy !== null}
               trigger={<><span>{uiText(item.status)}</span><Icon name="chevronDown" /></>} actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))} />
             : <Badge>{item.status}</Badge>}</td>
-          <td><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
+          <td><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" guide="project.rowMenu" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
         </tr>;
       })}</tbody></table><Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, sorted.length)} total={sorted.length} onPage={setPage} /></div>
         : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Portfolio.loading"} /></div>
@@ -791,6 +796,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
     {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
     {deletingProject ? <DeleteProjectModal project={deletingProject} onClose={() => setDeletingProject(null)} onDeleted={async (number) => { setDeletingProject(null); notify(`${number} · ${uiText("CRM.projectDeleted")}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
+    {planningProject ? <EditMasterPlanModal bootstrap={bootstrap} project={planningProject} onClose={() => setPlanningProject(null)} onSaved={async (number) => { setPlanningProject(null); notify(`${number} · ${uiText("CRM.planSaved")}`); await load(); }} /> : null}
     {editingProject ? <EditProjectModal bootstrap={bootstrap} project={editingProject} onClose={() => setEditingProject(null)} onSaved={async (number) => { setEditingProject(null); notify(`${number} updated`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
   </>;
 }
@@ -904,6 +910,85 @@ type PlanNode = { id: number; kind: string; name: string; planStart: string | nu
 type PlanSnapshot = { scheduleVersion: string | null; canPlan: boolean; tasks: PlanNode[] };
 const planRowLocked = (node: PlanNode) => node.status !== "Not Started" || node.percentComplete > 0 || node.actualManDays > 0 || node.children.length > 0 || node.startMode !== "manual";
 
+/** The project's Master Plan and Team plan as editable drafts, and whether they differ from what was loaded. */
+function useProjectPlan(projectId: number) {
+  const t = useUiText();
+  const [plan, setPlan] = useState<{ snapshot: PlanSnapshot; initial: string } | null>(null);
+  const [planError, setPlanError] = useState("");
+  const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
+  const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void apiRequest<PlanSnapshot>(`/api/v1/projects/${projectId}/schedule`).then(snapshot => {
+      if (cancelled) return;
+      const phase = (name: string) => snapshot.tasks.find(node => node.kind === "phase" && node.name === name)?.children ?? [];
+      const milestones: MasterPlanDraft[] = phase("Master Plan").map(node => ({ key: `task-${node.id}`, id: node.id, locked: planRowLocked(node), name: node.name, start: node.planStart ?? "", finish: node.planFinish ?? "" }));
+      const team: TeamPlanDraft[] = phase("Team plan").map(node => ({ key: `task-${node.id}`, id: node.id, locked: planRowLocked(node), userId: node.pics[0]?.id ?? 0, task: node.name,
+        start: node.planStart ?? "", finish: node.planFinish ?? "", planManDays: node.planManDays ? String(node.planManDays) : "",
+        percent: node.percentComplete, actualManDays: node.actualManDays }));
+      setMasterPlan(milestones); setTeamPlan(team);
+      setPlan({ snapshot, initial: JSON.stringify(planPayload(milestones, team)) });
+    }).catch(failure => { if (!cancelled) setPlanError(toError(failure)); });
+    return () => { cancelled = true; };
+  }, [projectId]);
+  const planChanged = plan !== null && plan.snapshot.canPlan && JSON.stringify(planPayload(masterPlan, teamPlan)) !== plan.initial;
+  const planIssues = planChanged ? planIssuesOf(t, masterPlan, teamPlan) : [];
+  // The plan goes only when it changed, so an untouched plan never collides with Project Schedule.
+  const planBody = () => planChanged ? { ...planPayload(masterPlan, teamPlan), scheduleVersion: plan!.snapshot.scheduleVersion } : {};
+  return { plan, planError, masterPlan, setMasterPlan, teamPlan, setTeamPlan, planChanged, planIssues, planBody, span: planSpanOf(masterPlan, teamPlan) };
+}
+
+function useScheduleTemplates() {
+  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
+  useEffect(() => { let cancelled = false; void listScheduleTemplates().then(items => { if (!cancelled) setTemplates(items); }).catch(() => undefined); return () => { cancelled = true; }; }, []);
+  return templates;
+}
+
+/**
+ * The Master Plan and Team plan of a project that already exists, without the rest of Edit
+ * project. When the plan's span moves, the project's start and delivery can follow it.
+ */
+function EditMasterPlanModal({ bootstrap, project, onClose, onSaved }: {
+  bootstrap: BootstrapData;
+  project: ProjectSummary;
+  onClose: () => void;
+  onSaved: (number: string) => Promise<void>;
+}) {
+  const t = useUiText();
+  const templates = useScheduleTemplates();
+  const { plan, planError, masterPlan, setMasterPlan, teamPlan, setTeamPlan, planChanged, planIssues, planBody, span } = useProjectPlan(project.id);
+  const datesDiffer = Boolean(span && (span.start !== project.startDate || span.finish !== project.targetDelivery));
+  const [followPlan, setFollowPlan] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      const saved = await updateProject(project.id, { rowVersion: project.rowVersion, ...planBody(),
+        ...(followPlan && datesDiffer && span ? { startDate: span.start, targetDelivery: span.finish } : {}) });
+      await onSaved(saved.number);
+    } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); }
+  };
+  return <Modal title={`${t("CRM.editMasterPlan")} · ${project.number}`} subtitle={project.name} size="xl" onClose={onClose} footer={<>
+    {error ? <span className="project-create-error" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></span> : <span className="spacer" />}
+    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+    <button className="btn primary" type="button" data-guide="project.planSave" disabled={busy || !planChanged || planIssues.length > 0} onClick={() => { void submit(); }}>
+      <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("CRM.savePlan")}
+    </button>
+  </>}><div className="project-create">
+    {planIssues.length ? <p role="status">{t("CRM.missingProjectFields")}: {planIssues.join(", ")}</p> : null}
+    {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
+      : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
+      : plan.snapshot.canPlan ? <>
+        <MasterPlanSection rows={masterPlan} onChange={(change) => { setError(""); setMasterPlan(change); }} templates={templates} />
+        <TeamPlanSection rows={teamPlan} onChange={(change) => { setError(""); setTeamPlan(change); }} people={bootstrap.team} />
+        {datesDiffer && span ? <label className="info-strip" data-guide="project.planDates"><input type="checkbox" checked={followPlan} disabled={busy} onChange={(event) => setFollowPlan(event.target.checked)} />
+          <span>{t("CRM.followPlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)} ({t("CRM.currentDates")} {formatDate(project.startDate)} – {formatDate(project.targetDelivery)})</span></label> : null}
+        <p className="muted">{t("CRM.editPlanHint")}</p>
+      </> : <p className="muted">{t("CRM.planReadOnly")}</p>}
+  </div></Modal>;
+}
+
 // A project is edited in place rather than through a wizard: the lifecycle rules decide which
 // statuses the dropdown may offer, so the screen can never ask for a move the API would refuse.
 function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
@@ -943,27 +1028,8 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     contactIds: project.contactIds ?? [],
   });
   const departments = projectTeamOptions(form.department);
-  const [plan, setPlan] = useState<{ snapshot: PlanSnapshot; initial: string } | null>(null);
-  const [planError, setPlanError] = useState("");
-  const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
-  const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    void apiRequest<PlanSnapshot>(`/api/v1/projects/${project.id}/schedule`).then(snapshot => {
-      if (cancelled) return;
-      const phase = (name: string) => snapshot.tasks.find(node => node.kind === "phase" && node.name === name)?.children ?? [];
-      const milestones: MasterPlanDraft[] = phase("Master Plan").map(node => ({ key: `task-${node.id}`, id: node.id, locked: planRowLocked(node), name: node.name, start: node.planStart ?? "", finish: node.planFinish ?? "" }));
-      const team: TeamPlanDraft[] = phase("Team plan").map(node => ({ key: `task-${node.id}`, id: node.id, locked: planRowLocked(node), userId: node.pics[0]?.id ?? 0, task: node.name,
-        start: node.planStart ?? "", finish: node.planFinish ?? "", planManDays: node.planManDays ? String(node.planManDays) : "",
-        percent: node.percentComplete, actualManDays: node.actualManDays }));
-      setMasterPlan(milestones); setTeamPlan(team);
-      setPlan({ snapshot, initial: JSON.stringify(planPayload(milestones, team)) });
-    }).catch(failure => { if (!cancelled) setPlanError(toError(failure)); });
-    return () => { cancelled = true; };
-  }, [project.id]);
-  const planChanged = plan !== null && plan.snapshot.canPlan && JSON.stringify(planPayload(masterPlan, teamPlan)) !== plan.initial;
-  const planIssues = planChanged ? planIssuesOf(t, masterPlan, teamPlan) : [];
-  const span = planSpanOf(masterPlan, teamPlan);
+  const { plan, planError, masterPlan, setMasterPlan, teamPlan, setTeamPlan, planIssues, planBody, span } = useProjectPlan(project.id);
+  const templates = useScheduleTemplates();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((state) => ({ ...state, [key]: value }));
@@ -992,8 +1058,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
         department: form.department.trim() || null,
         paymentsReceived: form.paymentsReceived,
         contactIds: form.contactIds,
-        // The plan goes only when it changed, so an untouched plan never collides with Project Schedule.
-        ...(planChanged ? { ...planPayload(masterPlan, teamPlan), scheduleVersion: plan!.snapshot.scheduleVersion } : {}),
+        ...planBody(),
       });
       await onSaved(saved.number);
     } catch (requestError) {
@@ -1041,7 +1106,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
       : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
       : plan.snapshot.canPlan ? <>
-        <MasterPlanSection rows={masterPlan} onChange={setMasterPlan} />
+        <MasterPlanSection rows={masterPlan} onChange={setMasterPlan} templates={templates} />
         <TeamPlanSection rows={teamPlan} onChange={setTeamPlan} people={bootstrap.team} />
         <p className="muted">{t("CRM.editPlanHint")}</p>
       </> : <p className="muted">{t("CRM.planReadOnly")}</p>}
@@ -1222,8 +1287,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const [withoutEstimate, setWithoutEstimate] = useState(false);
   const [masterPlan, setMasterPlan] = useState<MasterPlanDraft[]>([]);
   const [teamPlan, setTeamPlan] = useState<TeamPlanDraft[]>([]);
-  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
-  useEffect(() => { let cancelled = false; void listScheduleTemplates().then(items => { if (!cancelled) setTemplates(items); }).catch(() => undefined); return () => { cancelled = true; }; }, []);
+  const templates = useScheduleTemplates();
   const departments = projectTeamOptions(form.department);
   // The team defaults to the lead engineer's team (from their department) until someone picks one.
   const departmentOf = (userId: number) => projectTeamOf(bootstrap.team.find(member => member.id === userId)?.department);
