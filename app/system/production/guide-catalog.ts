@@ -860,9 +860,9 @@ const PROJECT_PLAN: Guide = {
       target: "plan.insert", action: "next", view: "projects",
       title: { th: "แทรกงานตรงที่ต้องการด้วย +", en: "Add a row in place with +", jp: "+ でその場に行を追加" },
       body: {
-        th: "กด + ที่แถวงานหลักเพื่อเพิ่มงานย่อย หรือที่แถวงานเพื่อแทรกงานใต้แถวนั้น พิมพ์ชื่อแล้วกด Enter ช่องถัดไปจะเปิดให้พิมพ์ต่อ กด Esc เมื่อเสร็จ แล้วลากแถบเพื่อปรับวัน",
-        en: "Press + on a main row to add a sub row, or on a task to add one just below it. Type the name and press Enter; the next box opens for the next row. Press Esc when done, then drag the bars to set the dates.",
-        jp: "メイン工程の + でサブ工程を、作業行の + でその下に行を追加します。名前を入力して Enter を押すと次の行の入力欄が開きます。終わったら Esc を押し、バーをドラッグして日程を設定します。",
+        th: "กด + แล้วเลือกหัวข้อหลักหรืองานย่อย กด Tab ในช่องชื่อเพื่อสลับประเภทโดยไม่ลบชื่อ หัวข้อหลักจะเพิ่มถัดจากกลุ่มระดับบนสุดของแถวนั้น พิมพ์ชื่อแล้วกด Enter เมื่อบันทึกหัวข้อหลัก ช่องงานย่อยแรกจะเปิดทันที เมื่อบันทึกงานย่อยจะเปิดช่องถัดไป กด Esc เมื่อเสร็จ แล้วลากแถบเพื่อปรับวัน",
+        en: "Press + and choose Main heading or Sub task. Tab in the name input switches kind without clearing the name. A main heading is added after the current row's top-level group. Type the name and press Enter; saving a heading opens its first sub task, and saving a task opens the next box. Press Esc when done, then drag the bars to set the dates.",
+        jp: "+ を押し、メイン見出しかサブタスクを選びます。名前の入力欄で Tab を押すと、名前を残して種類を切り替えられます。メイン見出しは現在の行が属する最上位グループの後に追加されます。名前を入力して Enter で保存すると、見出しの場合は最初のサブタスク、タスクの場合は次の入力欄が開きます。終わったら Esc を押し、バーをドラッグして日程を設定します。",
       },
       missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้เมื่อแผนมีแถวแล้ว และไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for this project's planners once the plan has rows and no quick filter is on. Press Next.", jp: "+ はこの案件の計画担当者に、計画に行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
     },
