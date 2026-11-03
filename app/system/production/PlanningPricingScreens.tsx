@@ -1946,6 +1946,12 @@ function PicFieldsWithLoad({ bootstrap, span, taskId, value, onChange, manDays }
   </>;
 }
 
+const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind === "task"
+  && (task.parentId === null || rows.find((row) => row.id === task.parentId)?.kind === "phase")
+  && !task.children.some((child) => child.kind === "detail")
+  && (task.children.length > 0 || (task.status === "Not Started" && Number(task.percentComplete) === 0 && !task.actualStart && !task.managedByResourcePlan));
+type QuickPlanKind = "phase" | "task" | "sub";
+
 function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onConflict }: {
   bootstrap: BootstrapData;
   schedule: ProjectSchedule;
@@ -1965,8 +1971,8 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
   const [milestone, setMilestone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const phases = flattenTasks(schedule.tasks).filter((task) => task.kind === "phase");
   const allRows = flattenTasks(schedule.tasks);
+  const parents = allRows.filter((task) => task.kind === "phase" || canTakeSubTasks(task, allRows));
   const selectedParent = parentId ? Number(parentId) : null;
   const sortOrder = Math.max(0, ...allRows.filter((task) => task.parentId === selectedParent).map((task) => task.sortOrder)) + 10;
   const submit = async () => {
@@ -2033,7 +2039,7 @@ function CreateScheduleTaskModal({ bootstrap, schedule, onClose, onCreated, onCo
       <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
       <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       {kind === "task" ? <>
-        <label className="field"><span><LocalizedText text={"Parent phase"} /></span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value=""><LocalizedText text={"Top-level task"} /></option>{phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.wbs} <LocalizedText text={"·"} /> {phase.name}</option>)}</select></label>
+        <label className="field"><span><LocalizedText text={"Plan.parentRow"} /></span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value=""><LocalizedText text={"Top-level task"} /></option>{parents.map((parent) => <option key={parent.id} value={parent.id}>{"- ".repeat(parent.depth)}{parent.wbs} {parent.name}</option>)}</select></label>
         <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
         <label className="field" data-guide="plan.rowDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
@@ -2283,7 +2289,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
   const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
   // The + on a row: a name typed in place becomes a row just below it, then the next one goes below that.
-  const [quickAdd, setQuickAdd] = useState<{ afterId: number; parentId: number | null; beforeId: number | null; depth: number; start: string; visibility: string; name: string; kind: "task" | "phase" } | null>(null);
+  const [quickAdd, setQuickAdd] = useState<{ afterId: number; start: string; visibility: string; name: string; kind: QuickPlanKind } | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
   // Focused each time the box appears, including after the plan reloads around it.
   const quickInput = useCallback((node: HTMLInputElement | null) => { node?.focus(); }, []);
@@ -2383,29 +2389,39 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   /** A + is offered on every row but a member's own detail row, while nothing else is saving and no quick filter hides rows. */
   const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
     && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
-  const startQuickAdd = (task: ScheduleTask) => {
-    if (!activeSchedule) return;
-    if (task.kind === "phase") {
-      setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
-      setQuickAdd({ afterId: task.id, parentId: task.id, beforeId: task.children[0]?.id ?? null, depth: task.depth + 1, start: task.planStart ?? today, visibility: task.visibility, name: "", kind: "task" });
-      return;
-    }
-    const siblings = task.parentId === null ? activeSchedule.tasks : taskById.get(task.parentId)?.children ?? [];
-    const next = siblings[siblings.findIndex((row) => row.id === task.id) + 1] ?? null;
-    // One day, starting the working day after the row above finishes; dragging the bar sets the real dates.
-    const start = (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
-    setQuickAdd({ afterId: task.id, parentId: task.parentId, beforeId: next?.id ?? null, depth: task.depth, start, visibility: task.visibility, name: "", kind: "task" });
-  };
+  const isSubTask = (task: ScheduleTask) => task.kind === "task" && task.parentId !== null && taskById.get(task.parentId)?.kind === "task";
   const topLevelRow = (taskId: number) => {
     let task = taskById.get(taskId);
     while (task?.parentId != null) task = taskById.get(task.parentId);
     return task;
   };
-  const setQuickKind = (kind: "task" | "phase", element: HTMLElement) => {
+  const quickSubAllowed = (task: ScheduleTask) => isSubTask(task) || (canTakeSubTasks(task, rows) && !pendingTaskIds.has(task.id));
+  const quickPosition = (task: ScheduleTask, kind: QuickPlanKind) => {
+    const anchor = kind === "phase" ? topLevelRow(task.id)! : kind === "task" && isSubTask(task) ? taskById.get(task.parentId!)! : task;
+    const child = kind === "task" && task.kind === "phase" || kind === "sub" && !isSubTask(task);
+    const parentId = child ? task.id : anchor.parentId;
+    const siblings = parentId === null ? activeSchedule?.tasks ?? [] : taskById.get(parentId)?.children ?? [];
+    return { anchorId: anchor.id, parentId, depth: child ? task.depth + 1 : anchor.depth,
+      beforeId: child ? kind === "sub" ? null : task.children[0]?.id ?? null : siblings[siblings.findIndex((row) => row.id === anchor.id) + 1]?.id ?? null };
+  };
+  const startQuickAdd = (task: ScheduleTask) => {
+    if (!activeSchedule) return;
+    if (task.kind === "phase") setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
+    const start = task.kind === "phase" ? task.planStart ?? today
+      : (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
+    setQuickAdd({ afterId: task.id, start, visibility: task.visibility, name: "", kind: isSubTask(task) ? "sub" : "task" });
+  };
+  const setQuickKind = (kind: QuickPlanKind, element: HTMLElement) => {
     if (quickBusy) return;
+    const row = quickAdd ? taskById.get(quickAdd.afterId) : null;
+    if (!row || kind === "sub" && !quickSubAllowed(row)) return;
+    if (kind === "sub" || row.kind === "phase") setCollapsed((current) => { const next = new Set(current); next.delete(row.id); return next; });
     setQuickAdd((current) => current && { ...current, kind });
     element.closest(".gantt-quick-row")?.querySelector("input")?.focus();
   };
+  const quickRow = quickAdd ? taskById.get(quickAdd.afterId) : null;
+  const quickPlace = quickRow && quickAdd ? quickPosition(quickRow, quickAdd.kind) : null;
+  const quickKinds: QuickPlanKind[] = quickRow && quickSubAllowed(quickRow) ? ["phase", "task", "sub"] : ["phase", "task"];
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
     const dropped = movePending?.taskId === task.id ? movePending : null;
@@ -2484,19 +2500,18 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const saveQuickAdd = async () => {
     // Read-only rather than disabled while it saves, so the box keeps focus for the next row.
     const draft = quickAdd, name = quickAdd?.name.trim() ?? "";
-    if (!draft || !name || !activeSchedule || quickBusy) return;
+    if (!draft || !name || !activeSchedule || !quickPlace || quickBusy) return;
     setQuickBusy(true); setError("");
     try {
       const created = await apiRequest<{ id: number }>(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
-        scheduleVersion: activeSchedule.scheduleVersion, parentId: draft.kind === "phase" ? null : draft.parentId,
-        beforeId: draft.kind === "phase" ? activeSchedule.tasks[activeSchedule.tasks.findIndex((task) => task.id === topLevelRow(draft.afterId)?.id) + 1]?.id ?? null : draft.beforeId,
-        sortOrder: 0, kind: draft.kind, name,
+        scheduleVersion: activeSchedule.scheduleVersion, parentId: quickPlace.parentId, beforeId: quickPlace.beforeId,
+        sortOrder: 0, kind: draft.kind === "phase" ? "phase" : "task", name,
         isMilestone: false, visibility: draft.visibility, planStart: draft.kind === "phase" ? null : draft.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0,
         picUserIds: [], picExternal: "", planManDays: 0,
       }) });
       notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
       setQuickAdd(draft.kind === "phase"
-        ? { ...draft, afterId: created.id, parentId: created.id, beforeId: null, depth: 1, kind: "task", name: "" }
+        ? { ...draft, afterId: created.id, kind: "task", name: "" }
         : { ...draft, afterId: created.id, start: linkedStart(draft.start, 0, new Set(activeSchedule.holidays ?? [])) ?? draft.start, name: "" });
       await loadSchedule();
     } catch (failure) {
@@ -2506,24 +2521,23 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       await loadSchedule();
     } finally { setQuickBusy(false); }
   };
-  if (quickAdd && canPlan) {
-    const afterId = quickAdd.kind === "phase" ? topLevelRow(quickAdd.afterId)?.id : quickAdd.afterId;
+  if (quickAdd && quickPlace && canPlan) {
+    const afterId = quickPlace.anchorId;
     const at = visible.findIndex((task) => task.id === afterId);
     if (at >= 0) {
-      // Under a main row the box is its first sub row; under any other row it follows that row and the rows under it.
+      // A phase opens its first task; a new sub task follows the existing children.
       let end = at + 1;
-      if (quickAdd.kind === "phase" || visible[at]!.id !== quickAdd.parentId) while (end < visible.length && visible[end]!.depth > visible[at]!.depth) end++;
+      if (quickAdd.kind !== "task" || visible[at]!.id !== quickPlace.parentId) while (end < visible.length && visible[end]!.depth > visible[at]!.depth) end++;
       ganttRows.splice(end, 0, {
-        key: "quick-add", depth: quickAdd.kind === "phase" ? 0 : quickAdd.depth, kind: quickAdd.kind, selected: true, start: null, finish: null, tone: "blue",
+        key: "quick-add", depth: quickPlace.depth, kind: quickAdd.kind === "phase" ? "phase" : "task", selected: true, start: null, finish: null, tone: "blue",
         title: uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName"), placeholder: uiText("Plan.quickAddHint"),
         label: <span className="gantt-quick-row" onBlur={(event) => { if (!quickAdd.name.trim() && !event.currentTarget.contains(event.relatedTarget)) setQuickAdd(null); }}>
           <span className="gantt-quick-kind" data-guide="plan.quickKind">
-            <button type="button" aria-pressed={quickAdd.kind === "task"} disabled={quickBusy} onMouseDown={(event) => event.preventDefault()} onClick={(event) => setQuickKind("task", event.currentTarget)}>{uiText("Plan.quickKindTask")}</button>
-            <button type="button" aria-pressed={quickAdd.kind === "phase"} disabled={quickBusy} onMouseDown={(event) => event.preventDefault()} onClick={(event) => setQuickKind("phase", event.currentTarget)}>{uiText("Plan.quickKindHeading")}</button>
+            {(["phase", "task", "sub"] as const).map((kind) => <button key={kind} type="button" aria-pressed={quickAdd.kind === kind} disabled={quickBusy || !quickKinds.includes(kind)} onMouseDown={(event) => event.preventDefault()} onClick={(event) => setQuickKind(kind, event.currentTarget)}>{uiText(kind === "phase" ? "Plan.quickKindHeading" : kind === "sub" ? "Plan.quickKindSub" : "Plan.quickKindTask")}</button>)}
           </span>
           <input ref={quickInput} className="gantt-quick-input" data-guide="plan.quickName" aria-label={uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName")} placeholder={uiText(quickAdd.kind === "phase" ? "Plan.quickAddHeadingName" : "Plan.quickAddName")} maxLength={500}
           value={quickAdd.name} readOnly={quickBusy} onChange={(event) => { const name = event.target.value; setQuickAdd((current) => current && { ...current, name }); }}
-          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); void saveQuickAdd(); } else if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); } else if (event.key === "Tab" && !event.shiftKey) { event.preventDefault(); setQuickKind(quickAdd.kind === "task" ? "phase" : "task", event.currentTarget); } }} />
+          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); void saveQuickAdd(); } else if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); } else if (event.key === "Tab" && !event.shiftKey) { event.preventDefault(); setQuickKind(quickKinds[(quickKinds.indexOf(quickAdd.kind) + 1) % quickKinds.length]!, event.currentTarget); } }} />
         </span>,
       });
     }
@@ -2544,14 +2558,16 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   /**
    * Where a row dropped beside another lands: its parent and the sibling it goes before (null: last). Just after a
    * row whose children are showing, a row that may sit under it becomes its first child. Null when the row may not
-   * go there (a phase only at the top, a task at the top or in a phase, a detail under a task; never under itself;
+   * go there (a phase only at the top, at most two task levels, details under a task without sub tasks; never under itself;
    * a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
    */
   const placeFor = (drop: GanttRowDrop): { task: ScheduleTask; parentId: number | null; beforeId: number | null } | null => {
     const task = taskById.get(Number(drop.key.replace("task:", ""))), target = taskById.get(Number(drop.target.replace("task:", "")));
     if (!activeSchedule || !task || !target || task.id === target.id) return null;
     const childrenOf = (parentId: number | null) => (parentId === null ? activeSchedule.tasks : taskById.get(parentId)?.children ?? []);
-    const fits = (parent: ScheduleTask | null) => (task.kind === "phase" ? parent === null : task.kind === "task" ? parent === null || parent.kind === "phase" : parent?.kind === "task");
+    const fits = (parent: ScheduleTask | null) => task.kind === "phase" ? parent === null : task.kind === "task"
+      ? parent === null || parent.kind === "phase" || (canTakeSubTasks(parent, rows) && !task.children.some((child) => child.kind === "task"))
+      : parent?.kind === "task" && !parent.children.some((child) => child.kind === "task");
     let parentId: number | null, beforeId: number | null;
     if (drop.place === "after" && target.children.length > 0 && !collapsed.has(target.id) && fits(target)) {
       parentId = target.id; beforeId = target.children[0]!.id;
