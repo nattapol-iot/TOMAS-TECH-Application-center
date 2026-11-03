@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { openBound, parseVaultKeys, sealBound, sealSecret, openSecret } from "../src/credential-vault.js";
-import { createErpGateway, describeErpFailure, ERP_REF_PREFIX, erpRequestArguments, isFinalErpStatus, localStatusFor, newErpRef, PegasusMcp, suggestDepartment,
-  type ErpLine } from "../src/erp-purchasing.js";
+import { createErpGateway, describeErpFailure, erpLineProblem, ERP_MAX_QUANTITY, ERP_MAX_REMARK, ERP_REF_PREFIX, erpRequestArguments, isFinalErpStatus, localStatusFor,
+  newErpRef, PegasusMcp, suggestDepartment, type ErpLine } from "../src/erp-purchasing.js";
 import { tokenHasAudience } from "../src/tmt-id/token-vault.js";
 
 type Seen = { url: string; init: RequestInit };
@@ -37,6 +37,14 @@ test("ERP answers become failures the PR screen can act on", async () => {
   assert.equal(((await answer(json({ jsonrpc: "2.0", error: { code: -32601, message: "Method not found" } }))) as { kind: string }).kind, "error");
 });
 
+test("the timeout also covers reading the answer: an ERP that sends headers and then stalls is unavailable, not a hung request", async () => {
+  const stalled = (async (_url: string | URL, init?: RequestInit) => ({ status: 200,
+    json: () => new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("aborted")))) })) as unknown as typeof fetch;
+  const result = await new PegasusMcp("https://erp.test/mcp", stalled, 20).call("t", "purchase_request_get", {});
+  assert.equal((result as { kind: string }).kind, "unavailable");
+  assert.match((result as { message: string }).message, /did not finish answering in time/);
+});
+
 test("a 401 refreshes the token once and tries again; no token at all means the person must sign in", async () => {
   const tokens = ["stale", "fresh"]; let dropped = 0;
   const source = { accessToken: async () => tokens.shift() ?? null, dropAccess: () => { dropped += 1; } };
@@ -67,6 +75,14 @@ test("the ERP request carries the PR, its project and every line, shortened to t
   assert.equal(String(substitute!.item_description).length, 2000); assert.equal(String(substitute!.unit).length, 20); assert.equal(String(substitute!.brand).length, 100);
   assert.match(String(substitute!.remark), /^Substitute for PLC-01 · Module Panel/);
   assert.deepEqual([unplanned!.part_number, unplanned!.remark], [undefined, "Not in the estimate · Module Panel · for site A"]);
+  // A long remark is cut to the ERP's length; the module and what a line replaces lead it, so they survive.
+  const long = (erpRequestArguments(header, [line({ remark: "r".repeat(5000) })], "https://eng.test").lines as Array<Record<string, unknown>>)[0]!;
+  assert.equal(String(long.remark).length, ERP_MAX_REMARK); assert.match(String(long.remark), /^Module Panel · Item PLC-01 · r/);
+  // A quantity is sent as it is, never cut; one beyond the ERP's limit stops the send and names its line.
+  const big = line({ qty: ERP_MAX_QUANTITY + 1 });
+  assert.equal((erpRequestArguments(header, [big], "https://eng.test").lines as Array<Record<string, unknown>>)[0]!.quantity, ERP_MAX_QUANTITY + 1);
+  assert.equal(erpLineProblem([line(), line({ qty: ERP_MAX_QUANTITY })]), null);
+  assert.match(String(erpLineProblem([line(), big])), /^Line 2: the ERP takes at most 1,000,000 on one line/);
   // A project the ERP has not numbered yet goes without project_no.
   assert.equal("project_no" in erpRequestArguments({ ...header, project_no: "PJ000000" }, [line()], "https://eng.test"), false);
 });

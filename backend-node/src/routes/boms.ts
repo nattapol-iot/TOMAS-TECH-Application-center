@@ -51,6 +51,8 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
 
   app.get("/api/v1/boms/:id", async (request) => {
     await users.demandPermission(request, "procurement.read"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "BOM id");
+    // A draft PR being edited leaves its own lines out, so the sheet offers what it requests as well as what is still open.
+    const exceptPr = optionalPositiveLong((request.query as Record<string, unknown>).exceptPr, "Purchase requisition id");
     const scoped = await database.query<{ project_id: number | string }>(`SELECT project_id FROM dbo.boms WHERE id=@id AND deleted_at IS NULL;`, (r) => r.input("id", sql.BigInt, id));
     const projectId = scoped.recordset[0] ? Number(scoped.recordset[0].project_id) : 0; if (!projectId) throw new ApiError(404, "bom_not_found", "BOM not found.");
     await demandProjectScope(database, actor, projectId);
@@ -63,15 +65,15 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
         COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WHERE r.bom_line_id=l.id AND r.status IN(N'Active',N'Consumed')),0) allocated,
         COALESCE((SELECT SUM(r.qty) FROM dbo.reservations r WHERE r.bom_line_id=l.id AND r.status=N'Active'),0) active_reserved,
         COALESCE((SELECT SUM(prl.covered_qty) FROM dbo.mat_pr_lines prl INNER JOIN dbo.mat_prs pr ON pr.id=prl.pr_id AND pr.deleted_at IS NULL
-          AND pr.status IN(${REQUESTING_PR_STATUSES}) WHERE prl.bom_line_id=l.id),0) requested,
+          AND pr.status IN(${REQUESTING_PR_STATUSES}) AND (@except IS NULL OR pr.id<>@except) WHERE prl.bom_line_id=l.id),0) requested,
         COALESCE((SELECT SUM(ml.issued_qty-ml.returned_qty) FROM dbo.mir_lines ml INNER JOIN dbo.mirs m ON m.id=ml.mir_id
           AND m.status IN(N'Issued',N'Received') WHERE ml.bom_line_id=l.id),0) net_issued
       FROM dbo.bom_lines l LEFT JOIN dbo.mat_items i ON i.id=l.item_id LEFT JOIN dbo.v_item_balances vb ON vb.item_id=l.item_id
       LEFT JOIN dbo.cost_items ci ON ci.id=l.estimate_line_id INNER JOIN dbo.users u ON u.id=l.owner_id
       WHERE l.bom_id=@id AND l.deleted_at IS NULL AND ${MATERIAL_LINE} ORDER BY l.section_code,l.sort_order,l.id;
       SELECT l.budget_module module,SUM(l.line_total) requested FROM dbo.mat_pr_lines l
-        INNER JOIN dbo.mat_prs pr ON pr.id=l.pr_id AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) WHERE l.bom_id=@id GROUP BY l.budget_module;`, (r) => {
-      r.input("id", sql.BigInt, id); r.input("none", sql.NVarChar(200), NO_MODULE); });
+        INNER JOIN dbo.mat_prs pr ON pr.id=l.pr_id AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) AND (@except IS NULL OR pr.id<>@except) WHERE l.bom_id=@id GROUP BY l.budget_module;`, (r) => {
+      r.input("id", sql.BigInt, id); r.input("none", sql.NVarChar(200), NO_MODULE); r.input("except", sql.BigInt, exceptPr); });
     const h = result.recordsets[0]?.[0] as (Record<string, unknown> & { row_version: Buffer }) | undefined; if (!h) throw new ApiError(404, "bom_not_found", "BOM not found.");
     const lines = (result.recordsets[1] ?? []).map((raw) => { const row = raw as Record<string, unknown> & { row_version: Buffer }; const required = Number(row.qty_required);
       const customer = Number(row.customer_supplied_qty); const nonStock = Boolean(row.non_stock); const allocated = Number(row.allocated);

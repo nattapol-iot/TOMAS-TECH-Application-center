@@ -12,6 +12,8 @@ type Cell = string | number | null | undefined;
 
 /** The share of a module's budget the PM may approve over it; beyond this the Engineering Manager approves too (as on the server). */
 export const PR_MANAGEMENT_OVERRUN_PERCENT = 10;
+/** The most the Pegasus ERP takes on one PR line (ERP_MAX_QUANTITY on the server). */
+export const PR_MAX_QUANTITY = 1_000_000;
 export const PR_TEMPLATE_HEADER_ROW = 5;
 export const PR_TEMPLATE_HEADERS = ["Buy (Y/N)", "Item code", "Description", "Part No.", "Brand", "Module", "Type", "Qty", "Unit", "Unit price", "Remark",
   "BOM line", "Estimate item", "Still to request", "Estimate unit price"];
@@ -34,6 +36,19 @@ export function draftFromBom(lines: PrBomLine[]): PrDraftRow[] {
     coveredQuantity: null, unitPrice: line.estimatedUnitCost, remark: "" }));
 }
 
+/** A line of a saved PR, as GET /purchase-requisitions/:id returns it. */
+export type PrSavedLine = { id: number; lineType: PrRowKind; bomLineId: number | null; module: string; itemCode: string; partNumber: string; description: string;
+  brand: string; unit: string; quantity: number; coveredQuantity: number; unitPrice: number; remark: string | null };
+
+/** A draft reopened for editing: its own lines ticked as they were saved, then the BOM lines it does not request yet, unticked. */
+export function draftFromPr(saved: PrSavedLine[], lines: PrBomLine[]): PrDraftRow[] {
+  const own: PrDraftRow[] = saved.map((line) => ({ key: `pr-${line.id}`, selected: true, lineType: line.lineType, bomLineId: line.bomLineId, module: line.module,
+    itemCode: line.itemCode ?? "", partNumber: line.partNumber ?? "", description: line.description ?? "", brand: line.brand ?? "", unit: line.unit ?? "",
+    quantity: line.quantity, coveredQuantity: line.lineType === "Substitute" ? line.coveredQuantity : null, unitPrice: line.unitPrice, remark: line.remark ?? "" }));
+  const planned = new Set(saved.filter((line) => line.lineType === "Planned").map((line) => line.bomLineId));
+  return [...own, ...draftFromBom(lines.filter((line) => !planned.has(line.id))).map((row) => ({ ...row, selected: false }))];
+}
+
 /** A row turned into another make or model of the same BOM line: it keeps the line and replaces everything still to request. */
 export function asSubstitute(row: PrDraftRow): PrDraftRow { return { ...row, lineType: "Substitute", coveredQuantity: null }; }
 
@@ -49,6 +64,7 @@ export function draftIssues(rows: PrDraftRow[], lines: Map<number, PrBomLine>, m
   for (const row of rows) {
     if (!row.selected) continue;
     if (!(row.quantity > 0)) { issues.set(row.key, "Quantity must be more than 0"); continue; }
+    if (row.quantity > PR_MAX_QUANTITY) { issues.set(row.key, "The ERP takes at most 1,000,000 on one line"); continue; }
     if (!(row.unitPrice >= 0)) { issues.set(row.key, "Unit price cannot be negative"); continue; }
     if (row.lineType === "Unplanned") {
       if (!modules.some((module) => same(module, row.module))) issues.set(row.key, "Choose the module that pays for it");

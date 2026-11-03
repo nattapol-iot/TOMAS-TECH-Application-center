@@ -2,18 +2,18 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d5fb3d61`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `127a6f23`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/boms` | 35–50 |
-| GET | `/api/v1/boms/:id` | 52–95 |
-| POST | `/api/v1/boms` | 97–123 |
-| POST | `/api/v1/boms/:id/release` | 125–134 |
-| POST | `/api/v1/boms/:id/reservations` | 136–162 |
-| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 164–173 |
+| GET | `/api/v1/boms/:id` | 52–97 |
+| POST | `/api/v1/boms` | 99–125 |
+| POST | `/api/v1/boms/:id/release` | 127–136 |
+| POST | `/api/v1/boms/:id/reservations` | 138–164 |
+| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 166–175 |
 
 ## Named functions
 
@@ -22,7 +22,7 @@ Evidence: source snapshot `d5fb3d61`; generated, do not edit. [backend-node/src/
 | `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 19–22 |
 | `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 23–27 |
 | `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 28–32 |
-| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 34–174 |
+| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 34–176 |
 
 ## Direct local dependencies
 

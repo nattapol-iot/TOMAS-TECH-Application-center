@@ -54,13 +54,14 @@ const database = {
 
 // A stand-in for the Pegasus ERP's MCP tools: one PR per external_ref, people who are signed out, and a refusal on demand.
 type ErpCall = { subject: string; tool: string; args: Record<string, unknown> };
-const erpCalls: ErpCall[] = [], erpRequests = new Map<string, ErpRequest>(), signedOut = new Set<string>();
+const erpCalls: ErpCall[] = [], erpRequests = new Map<string, ErpRequest>(), signedOut = new Set<string>(), deletedRefs = new Set<string>();
 let refuseNextCreate = false;
 const gateway: ErpGateway = { async call<T>(subject: string, tool: string, args: Record<string, unknown>) {
   erpCalls.push({ subject, tool, args });
   const ok = (data: unknown) => ({ ok: true as const, data: data as T });
   if (!subject || signedOut.has(subject)) return { ok: false, kind: "signed_out", message: "Sign in with TMT ID again." };
   if (tool === "purchasing_options_get") return ok({ departments: [{ value: "APPENG", label: "Application Engineer" }, { value: "IOTENG", label: "IoT Engineer" }] });
+  if (deletedRefs.has(String(args.external_ref))) return { ok: false, kind: "ref_deleted", message: "This request was deleted in the ERP." };
   if (tool === "purchase_request_get") { const found = erpRequests.get(String(args.external_ref)); return found ? ok({ request: found }) : { ok: false, kind: "not_found", message: "Not found." }; }
   if (tool !== "purchase_request_create") return { ok: false, kind: "error", message: `Unexpected tool ${tool}` };
   if (refuseNextCreate) { refuseNextCreate = false; return { ok: false, kind: "validation", message: "The given data was invalid.", errors: { department: ["Unknown department."] } }; }
@@ -226,6 +227,73 @@ try {
   assert.equal(cycle.lifecycle.prCount, 3);
   assert.notEqual(cycle.lifecycle.averageCreatedToFirstPurchaseOrderHours, null);
   assert.ok(cycle.stages.some((stage: Json) => stage.stage === "Sent to ERP" && stage.completedCount === 3));
+
+  // The ERP still holds PR 3, so it is neither taken back nor cancelled here: Purchasing cancels it in the ERP.
+  const held = await call("GET", `/purchase-requisitions/${pr3.id}`, "Requester");
+  assert.match(JSON.stringify(await call("POST", `/purchase-requisitions/${pr3.id}/withdraw`, "Requester", { rowVersion: held.purchaseRequisition.rowVersion }, 409)), /pr_in_erp/);
+  assert.match(JSON.stringify(await call("POST", `/purchase-requisitions/${pr3.id}/cancel`, "Requester", { rowVersion: held.purchaseRequisition.rowVersion }, 409)), /pr_in_erp/);
+  await call("PUT", `/purchase-requisitions/${pr3.id}`, "Requester", { rowVersion: held.purchaseRequisition.rowVersion, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [{ lineType: "Unplanned", module: "Software", description: "x", unit: "set", quantity: 1, unitPrice: 1 }] }, 409);
+  // The ERP's limit is checked when a line is entered, not cut when it is sent.
+  await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Screws", unit: "pcs", quantity: 1_000_001, unitPrice: 0 }] }, 400);
+  // A draft's own lines are left out of what the BOM workspace counts as requested when it is opened for editing.
+  assert.equal((await call("GET", `/boms/${bom.id}?exceptPr=${Number(pr1.id)}`, "Requester")).lines.find((line: Json) => line.itemCode === "PLC-01").purchaseRequired, 2);
+
+  // PR 4: the ERP refuses it after approval. Its requester takes it back to Draft (the ERP is asked first and does not have it),
+  // corrects it and submits it again; the route is built from the new lines and the next send carries a new external_ref.
+  const pr4 = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Cable ties", unit: "bag", quantity: 1, unitPrice: 300 }] }, 201);
+  await call("POST", `/purchase-requisitions/${pr4.id}/submit`, "Requester", { rowVersion: pr4.rowVersion });
+  refuseNextCreate = true;
+  const approved4 = await call("POST", `/purchase-requisitions/${pr4.id}/decide`, "PM", { decision: "Approve", comment: "ties for the panel" });
+  assert.deepEqual([approved4.status, approved4.erp.sent, approved4.erp.kind], ["Approved", false, "validation"]);
+  const ref4 = String(creates().at(-1)!.args.external_ref);
+  let detail4 = await call("GET", `/purchase-requisitions/${pr4.id}`, "Requester");
+  await call("POST", `/purchase-requisitions/${pr4.id}/withdraw`, "Buyer", { rowVersion: detail4.purchaseRequisition.rowVersion }, 403);
+  const back = await call("POST", `/purchase-requisitions/${pr4.id}/withdraw`, "Requester", { rowVersion: detail4.purchaseRequisition.rowVersion, reason: "ERP refused the department" });
+  assert.equal(back.status, "Draft");
+  assert.deepEqual([erpCalls.at(-1)!.tool, erpCalls.at(-1)!.args.external_ref, erpCalls.at(-1)!.subject], ["purchase_request_get", ref4, "procurement-ci-Requester"]);
+  detail4 = await call("GET", `/purchase-requisitions/${pr4.id}`, "Requester");
+  assert.deepEqual([detail4.purchaseRequisition.status, detail4.erp.ref, detail4.erp.error, detail4.steps.length], ["Draft", null, null, 0]);
+  await call("PUT", `/purchase-requisitions/${pr4.id}`, "Requester", { rowVersion: back.rowVersion, priority: "High", requiredDate: "2099-03-02", lines: [] }, 400);
+  await call("PUT", `/purchase-requisitions/${pr4.id}`, "Requester", { rowVersion: pr4.rowVersion, priority: "High", requiredDate: "2099-03-02",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "x", unit: "bag", quantity: 1, unitPrice: 1 }] }, 409);
+  await call("PUT", `/purchase-requisitions/${pr4.id}`, "PM", { rowVersion: back.rowVersion, priority: "High", requiredDate: "2099-03-02",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "x", unit: "bag", quantity: 1, unitPrice: 1 }] }, 403);
+  const edited = await call("PUT", `/purchase-requisitions/${pr4.id}`, "Requester", { rowVersion: back.rowVersion, priority: "High", requiredDate: "2099-03-02", purpose: "Panel wiring",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Cable ties, UV resistant", unit: "bag", quantity: 2, unitPrice: 300 }] });
+  assert.deepEqual([edited.number, edited.status, edited.lineCount, edited.amount], [pr4.number, "Draft", 1, 600]);
+  detail4 = await call("GET", `/purchase-requisitions/${pr4.id}`, "Requester");
+  assert.deepEqual([detail4.purchaseRequisition.priority, detail4.purchaseRequisition.purpose, detail4.lines.map((line: Json) => [line.description, line.quantity])],
+    ["High", "Panel wiring", [["Cable ties, UV resistant", 2]]]);
+  // With the earlier PRs Panel is now 10.4% over, so the route built on the second submit adds the Engineering Manager.
+  const resubmitted = await call("POST", `/purchase-requisitions/${pr4.id}/submit`, "Requester", { rowVersion: edited.rowVersion });
+  assert.deepEqual(resubmitted.ruleFlags.map((flag: Json) => flag.level), ["management"]);
+  assert.deepEqual(await steps(pr4.id), ["Submitted by Requester", "Project Manager Approval", "Management Approval", "Sent to ERP"]);
+  await call("POST", `/purchase-requisitions/${pr4.id}/decide`, "PM", { decision: "Approve", comment: "ties for the panel" });
+  const approved4again = await call("POST", `/purchase-requisitions/${pr4.id}/decide`, "EM", { decision: "Approve", comment: "accepted" });
+  assert.equal(approved4again.erp.sent, true);
+  const ref4again = String(creates().at(-1)!.args.external_ref);
+  assert.notEqual(ref4again, ref4, "a PR taken back is sent under a new external_ref");
+  assert.equal(((creates().at(-1)!.args.lines as Array<Record<string, unknown>>)[0]!).quantity, 2);
+
+  // The ERP then deletes PR 4. Reading it says so; its requester cancels it, and its Panel spend goes back to the BOM.
+  deletedRefs.add(ref4again);
+  const deleted = await call("POST", `/purchase-requisitions/${pr4.id}/erp-sync`, "Requester", {});
+  assert.deepEqual([deleted.synced, deleted.kind], [false, "ref_deleted"]);
+  assert.match(String(deleted.erp.error), /deleted this requisition/);
+  await run(`UPDATE dbo.mat_prs SET erp_synced_at=DATEADD(hour,-1,SYSUTCDATETIME()) WHERE id=${Number(pr4.id)}`);
+  const readsBeforeList = reads();
+  await listSync();
+  assert.equal(reads(), readsBeforeList, "a PR the ERP deleted is not read again on every list open");
+  const panelWithPr4 = (await call("GET", `/boms/${bom.id}`, "Requester")).modules.find((m: Json) => m.module === "Panel").requested;
+  detail4 = await call("GET", `/purchase-requisitions/${pr4.id}`, "Requester");
+  await call("POST", `/purchase-requisitions/${pr4.id}/cancel`, "Requester", { rowVersion: detail4.purchaseRequisition.rowVersion, reason: "no longer needed" });
+  await call("GET", `/purchase-requisitions/${pr4.id}`, "Requester", undefined, 404);
+  assert.equal(panelWithPr4 - (await call("GET", `/boms/${bom.id}`, "Requester")).modules.find((m: Json) => m.module === "Panel").requested, 600);
+  // The database itself keeps the lines of a PR past Draft.
+  await assert.rejects(run(`DELETE FROM dbo.mat_pr_lines WHERE pr_id=${Number(pr3.id)}`), /Only the lines of a draft purchase requisition can be removed/);
 
   // A thousand unplanned lines are one PR in one request; cancelling the draft returns the module's budget.
   const started = Date.now();

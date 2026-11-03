@@ -848,5 +848,55 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "PM อนุมัติ · Engineering Manager เมื่อ Module เกินงบเกิน 10% · แล้วส่งเข้า ERP",
     "en": "PM approves · Engineering Manager when a module is over budget by more than 10% · then sent to the ERP",
     "jp": "PM承認・モジュール予算超過10%超はエンジニアリングマネージャー・その後ERPへ送信"
+  },
+  "บันทึก PR": {
+    "th": "บันทึก PR",
+    "en": "Save PR",
+    "jp": "PRを保存"
+  },
+  "แก้ไข PR ฉบับร่าง": {
+    "th": "แก้ไข PR ฉบับร่าง",
+    "en": "Edit the draft PR",
+    "jp": "下書きPRを編集"
+  },
+  "แก้ไข PR ฉบับร่าง กด 'บันทึก PR' แล้วกด 'ส่ง' ที่รายการ PR เพื่อขออนุมัติใหม่": {
+    "th": "แก้ไข PR ฉบับร่าง กด 'บันทึก PR' แล้วกด 'ส่ง' ที่รายการ PR เพื่อขออนุมัติใหม่",
+    "en": "Edit the draft PR, press Save PR, then Submit in the PR list to ask for approval again",
+    "jp": "下書きPRを編集して「PRを保存」を押し、PR一覧で「提出」を押して再承認を依頼します"
+  },
+  "กำลังส่ง ERP · แจ้งผู้ขอถ้าไม่สำเร็จ": {
+    "th": "กำลังส่ง ERP · แจ้งผู้ขอถ้าไม่สำเร็จ",
+    "en": "Sending to the ERP · the requester is told if it fails",
+    "jp": "ERPへ送信中・失敗時は依頼者へ通知"
+  },
+  "ถูกลบใน ERP": {
+    "th": "ถูกลบใน ERP",
+    "en": "Deleted in the ERP",
+    "jp": "ERPで削除済み"
+  },
+  "ดึงกลับไปแก้": {
+    "th": "ดึงกลับไปแก้",
+    "en": "Take back to edit",
+    "jp": "差し戻して修正"
+  },
+  "กลับเป็นฉบับร่างแล้ว": {
+    "th": "กลับเป็นฉบับร่างแล้ว",
+    "en": "back to Draft",
+    "jp": "下書きに戻しました"
+  },
+  "PR กลับเป็นฉบับร่าง แก้รายการแล้วส่งอนุมัติใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้": {
+    "th": "PR กลับเป็นฉบับร่าง แก้รายการแล้วส่งอนุมัติใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้",
+    "en": "The PR goes back to Draft so you can correct its lines and submit it again. The app first checks that the ERP does not hold it.",
+    "jp": "PRは下書きに戻り、明細を修正して再提出できます。先にERPにこのPRがないことを確認します。"
+  },
+  "PR ถูกยกเลิก และคืนรายการ BOM ให้ขอซื้อใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้": {
+    "th": "PR ถูกยกเลิก และคืนรายการ BOM ให้ขอซื้อใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้",
+    "en": "The PR is cancelled and its BOM lines can be requested again. The app first checks that the ERP does not hold it.",
+    "jp": "PRを取り消し、BOM明細を再度申請できるようにします。先にERPにこのPRがないことを確認します。"
+  },
+  "The ERP takes at most 1,000,000 on one line": {
+    "th": "ERP รับได้สูงสุด 1,000,000 ต่อรายการ",
+    "en": "The ERP takes at most 1,000,000 on one line",
+    "jp": "ERPは1明細あたり最大1,000,000まで"
   }
 };
