@@ -2380,6 +2380,22 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const visibleIds = new Set(visible.map((task) => task.id));
   const links: GanttLink[] = visible.filter((task) => task.startMode === "linked" && task.predecessorId !== null && visibleIds.has(task.predecessorId))
     .map((task) => ({ from: `task:${task.predecessorId}`, to: `task:${task.id}` }));
+  /** A + is offered on every row but a member's own detail row, while nothing else is saving and no quick filter hides rows. */
+  const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
+    && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
+  const startQuickAdd = (task: ScheduleTask) => {
+    if (!activeSchedule) return;
+    if (task.kind === "phase") {
+      setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
+      setQuickAdd({ afterId: task.id, parentId: task.id, beforeId: task.children[0]?.id ?? null, depth: task.depth + 1, start: task.planStart ?? today, visibility: task.visibility, name: "" });
+      return;
+    }
+    const siblings = task.parentId === null ? activeSchedule.tasks : taskById.get(task.parentId)?.children ?? [];
+    const next = siblings[siblings.findIndex((row) => row.id === task.id) + 1] ?? null;
+    // One day, starting the working day after the row above finishes; dragging the bar sets the real dates.
+    const start = (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
+    setQuickAdd({ afterId: task.id, parentId: task.parentId, beforeId: next?.id ?? null, depth: task.depth, start, visibility: task.visibility, name: "" });
+  };
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0;
     const dropped = movePending?.taskId === task.id ? movePending : null;
@@ -2454,22 +2470,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       await loadSchedule();
       setMovePending(null); setSaving(false);
     }
-  };
-  /** A + is offered on every row but a member's own detail row, while nothing else is saving and no quick filter hides rows. */
-  const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
-    && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
-  const startQuickAdd = (task: ScheduleTask) => {
-    if (!activeSchedule) return;
-    if (task.kind === "phase") {
-      setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
-      setQuickAdd({ afterId: task.id, parentId: task.id, beforeId: task.children[0]?.id ?? null, depth: task.depth + 1, start: task.planStart ?? today, visibility: task.visibility, name: "" });
-      return;
-    }
-    const siblings = task.parentId === null ? activeSchedule.tasks : taskById.get(task.parentId)?.children ?? [];
-    const next = siblings[siblings.findIndex((row) => row.id === task.id) + 1] ?? null;
-    // One day, starting the working day after the row above finishes; dragging the bar sets the real dates.
-    const start = (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
-    setQuickAdd({ afterId: task.id, parentId: task.parentId, beforeId: next?.id ?? null, depth: task.depth, start, visibility: task.visibility, name: "" });
   };
   const saveQuickAdd = async () => {
     // Read-only rather than disabled while it saves, so the box keeps focus for the next row.
