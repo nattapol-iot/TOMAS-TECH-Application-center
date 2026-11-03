@@ -796,7 +796,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
     {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
     {deletingProject ? <DeleteProjectModal project={deletingProject} onClose={() => setDeletingProject(null)} onDeleted={async (number) => { setDeletingProject(null); notify(`${number} · ${uiText("CRM.projectDeleted")}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
-    {planningProject ? <EditMasterPlanModal bootstrap={bootstrap} project={planningProject} onClose={() => setPlanningProject(null)} onSaved={async (number) => { setPlanningProject(null); notify(`${number} · ${uiText("CRM.planSaved")}`); await load(); }} /> : null}
+    {planningProject ? <EditMasterPlanModal bootstrap={bootstrap} project={planningProject} onClose={() => setPlanningProject(null)} {...(openProjectSchedule ? { onOpenSchedule: () => { const id = planningProject.id; setPlanningProject(null); openProjectSchedule(id); } } : {})} onSaved={async (number) => { setPlanningProject(null); notify(`${number} · ${uiText("CRM.planSaved")}`); await load(); }} /> : null}
     {editingProject ? <EditProjectModal bootstrap={bootstrap} project={editingProject} onClose={() => setEditingProject(null)} onSaved={async (number) => { setEditingProject(null); notify(`${number} updated`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
   </>;
 }
@@ -948,11 +948,39 @@ function useScheduleTemplates() {
  * The Master Plan and Team plan of a project that already exists, without the rest of Edit
  * project. When the plan's span moves, the project's start and delivery can follow it.
  */
-function EditMasterPlanModal({ bootstrap, project, onClose, onSaved }: {
+/** Every schedule row outside the two plan phases, in plan order, with its depth for indenting. */
+const otherPlanRows = (tasks: PlanNode[]) => {
+  const out: { node: PlanNode; depth: number }[] = [];
+  const walk = (nodes: PlanNode[], depth: number) => { for (const node of nodes) { out.push({ node, depth }); walk(node.children, depth + 1); } };
+  walk(tasks.filter(node => !(node.kind === "phase" && (node.name === "Master Plan" || node.name === "Team plan"))), 0);
+  return out;
+};
+
+/**
+ * The rest of the project's schedule, read-only: a plan built in Project Schedule, or before
+ * projects had a Master Plan phase, is still shown so nobody adds a milestone it already has.
+ */
+function OtherPlanRows({ tasks, onOpenSchedule }: { tasks: PlanNode[]; onOpenSchedule?: () => void }) {
+  const t = useUiText();
+  const rows = otherPlanRows(tasks);
+  if (!rows.length) return null;
+  return <section className="project-plan" aria-labelledby="project-other-plan-title" data-guide="project.planExisting">
+    <div className="project-plan-head"><div><h3 id="project-other-plan-title">{t("CRM.otherPlanRows")} ({rows.length})</h3><p className="muted">{t("CRM.otherPlanRowsHint")}</p></div>
+      {onOpenSchedule ? <div className="row-actions"><button className="btn sm" type="button" onClick={onOpenSchedule}><Icon name="calendar" />{t("CRM.openProjectSchedule")}</button></div> : null}</div>
+    <ol className="project-plan-rows">{rows.map(({ node, depth }) => <li key={node.id} className="project-plan-row" style={{ paddingInlineStart: depth * 20 }}>
+      <span>{node.kind === "phase" ? <strong>{node.name}</strong> : node.name}</span>
+      <span className="muted">{node.planStart ? formatDate(node.planStart) : "—"} – {node.planFinish ? formatDate(node.planFinish) : "—"}</span>
+      <span className="muted">{t(node.status)} · {Math.round(node.percentComplete)}%</span>
+    </li>)}</ol>
+  </section>;
+}
+
+function EditMasterPlanModal({ bootstrap, project, onClose, onSaved, onOpenSchedule }: {
   bootstrap: BootstrapData;
   project: ProjectSummary;
   onClose: () => void;
   onSaved: (number: string) => Promise<void>;
+  onOpenSchedule?: () => void;
 }) {
   const t = useUiText();
   const templates = useScheduleTemplates();
@@ -982,6 +1010,7 @@ function EditMasterPlanModal({ bootstrap, project, onClose, onSaved }: {
       : plan.snapshot.canPlan ? <>
         <MasterPlanSection rows={masterPlan} onChange={(change) => { setError(""); setMasterPlan(change); }} templates={templates} />
         <TeamPlanSection rows={teamPlan} onChange={(change) => { setError(""); setTeamPlan(change); }} people={bootstrap.team} />
+        <OtherPlanRows tasks={plan.snapshot.tasks} {...(onOpenSchedule ? { onOpenSchedule } : {})} />
         {datesDiffer && span ? <label className="info-strip" data-guide="project.planDates"><input type="checkbox" checked={followPlan} disabled={busy} onChange={(event) => setFollowPlan(event.target.checked)} />
           <span>{t("CRM.followPlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)} ({t("CRM.currentDates")} {formatDate(project.startDate)} – {formatDate(project.targetDelivery)})</span></label> : null}
         <p className="muted">{t("CRM.editPlanHint")}</p>

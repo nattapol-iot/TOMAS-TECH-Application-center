@@ -791,6 +791,16 @@ const PROJECT_MASTER_PLAN: Guide = {
       body: { th: "ใครทำอะไร ช่วงไหน แก้หรือเพิ่มได้ในที่เดียวกัน คนที่ถูกเพิ่มจะได้รับแจ้ง", en: "Who does what, and when. Change or add rows here; anyone newly assigned is told.", jp: "誰が何をいつ行うか。ここで変更・追加でき、新しく割り当てられた人に通知されます。" },
     },
     {
+      target: "project.planExisting", action: "next", view: "projects",
+      title: { th: "แผนที่มีอยู่แล้ว", en: "What the plan already has", jp: "既存の計画" },
+      body: {
+        th: "แถวที่สร้างไว้ใน Project Schedule แสดงไว้ตรงนี้ ดูก่อนว่ามีอะไรแล้ว จะได้ไม่เพิ่มซ้ำ ถ้าจะแก้แถวเหล่านี้ กด 'เปิด Project Schedule'",
+        en: "Rows made in Project Schedule are listed here, so you see what exists before adding. To change them, press Open Project Schedule.",
+        jp: "プロジェクトスケジュールで作成した行がここに表示されます。追加前に確認し、変更は「プロジェクトスケジュールを開く」から行います。",
+      },
+      missing: { th: "โปรเจกต์นี้ไม่มีแถวแผนอื่น กด 'ถัดไป'", en: "This project has no other plan rows. Press Next.", jp: "この案件に他の計画行はありません。「次へ」を押します。" },
+    },
+    {
       target: "project.planSave", action: "click", view: "projects",
       title: { th: "บันทึกแผน", en: "Save the plan", jp: "計画を保存" },
       body: {
