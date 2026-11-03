@@ -347,7 +347,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
           {row.milestone || start === finish ? dayLabel(finish) : `${dayLabel(start)} → ${dayLabel(finish)}`}</span> : null;
       const dropHere = rowDrop?.drop?.target === row.key ? ` drop-${rowDrop.drop.place}` : "";
       return <div key={row.key} data-gantt-row={row.key} className={`gantt-row ${row.kind}${row.selected ? " selected" : ""}${dropHere}${rowDrop?.key === row.key ? " row-moving" : ""}`}>
-        <div className="gantt-side" style={{ paddingLeft: 8 + Math.min(row.depth, 5) * 16 }}>
+        <div className="gantt-side" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>
           {row.movable && onMoveRow ? <button type="button" className="gantt-grip" aria-label={`${t("Gantt.moveRow")} · ${row.title}`} title={t("Gantt.moveRowHint")}
             onPointerDown={(event) => startRowDrag(event, row)} onKeyDown={(event) => moveRowByKey(event, index)}><Icon name="grip" /></button> : null}
           {row.expandable

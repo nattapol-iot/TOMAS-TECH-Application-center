@@ -276,9 +276,10 @@ export function placeInOrder(siblings: readonly { id: number; sortOrder: number 
     renumber: numbered.filter((row, at) => row.id !== movedId && order[at]!.sortOrder !== row.sortOrder),
   };
 }
-export function scheduleParentAllowed(kind: string, parent: { kind: string; parent: number | null } | null, grandparentKind?: string, childKinds: readonly string[] = []): boolean {
+export const MAX_PLAN_DEPTH = 5;
+export function scheduleParentAllowed(kind: string, parent: { kind: string } | null, depth: number, childKinds: readonly string[] = []): boolean {
   if (kind === "phase") return parent === null;
-  if (kind === "task") return parent === null || parent.kind === "phase" || (parent.kind === "task" && (parent.parent === null || grandparentKind === "phase") && !childKinds.includes("detail"));
+  if (kind === "task") return depth <= MAX_PLAN_DEPTH && (parent === null || parent.kind === "phase" || (parent.kind === "task" && !childKinds.includes("detail")));
   return kind === "detail" && parent?.kind === "task" && !childKinds.includes("task");
 }
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
@@ -294,10 +295,19 @@ export async function validateGraphAndHierarchy(transaction: TransactionType, pr
   if ([...byId.keys()].some(cycle) || datesWouldLoop(byId)) throw new ApiError(409, "schedule_cycle", "The change would create a circular schedule relationship.");
   const children = new Map<number, string[]>();
   for (const row of byId.values()) if (row.parent !== null) { const kinds = children.get(row.parent) ?? []; kinds.push(row.kind); children.set(row.parent, kinds); }
+  const depths = new Map<number, number>();
+  const depthOf = (id: number): number => {
+    if (depths.has(id)) return depths.get(id)!;
+    const parent = byId.get(id)!.parent;
+    const depth = parent === null ? 0 : depthOf(parent) + 1;
+    depths.set(id, depth); return depth;
+  };
   for (const [id, row] of byId) {
     const parent = row.parent === null ? null : byId.get(row.parent)!;
     const childKinds = row.parent === null ? [] : children.get(row.parent) ?? [];
-    if (!scheduleParentAllowed(row.kind, parent, parent?.parent == null ? undefined : byId.get(parent.parent)?.kind, childKinds)) throw new ApiError(422, id === key ? "schedule_parent_kind_invalid" : "schedule_child_kind_invalid", "Use main heading > task > sub task. A task may hold sub tasks or member detail rows, but not both; details require a task without sub tasks.");
+    const depth = depthOf(id);
+    if (row.kind !== "detail" && depth > MAX_PLAN_DEPTH) throw new ApiError(422, "schedule_parent_kind_invalid", "Plans go at most 6 levels deep (including the top-level row). Move this row and its task descendants to a shallower level.");
+    if (!scheduleParentAllowed(row.kind, parent, depth, childKinds)) throw new ApiError(422, id === key ? "schedule_parent_kind_invalid" : "schedule_child_kind_invalid", "Main headings must be top level. A task may hold sub tasks or member detail rows, but not both; details require a task without sub tasks.");
   }
   const parent = rows.find((row) => Number(row.id) === input.parentId);
   if (input.kind === "task" && parent?.kind === "task" && !rows.some((row) => Number(row.parent_id) === input.parentId && row.kind === "task")) {
