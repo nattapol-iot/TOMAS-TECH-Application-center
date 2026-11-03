@@ -2,7 +2,7 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `b4c05204`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `757a58b3`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -11,17 +11,17 @@ Evidence: source snapshot `b4c05204`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/:projectId/schedule` | 107–113 |
 | POST | `/api/v1/projects/:projectId/schedule/tasks` | 115–146 |
 | PUT | `/api/v1/schedule/tasks/:id` | 148–171 |
-| POST | `/api/v1/schedule/tasks/:id/move` | 175–211 |
-| POST | `/api/v1/schedule/tasks/:id/updates` | 213–229 |
-| POST | `/api/v1/schedule/tasks/:id/day-requests` | 231–240 |
-| POST | `/api/v1/schedule/day-requests/:id/answer` | 242–252 |
-| POST | `/api/v1/schedule/tasks/:id/details` | 254–258 |
-| DELETE | `/api/v1/schedule/tasks/:id/details` | 260–263 |
-| POST | `/api/v1/projects/:projectId/schedule/baseline` | 265–269 |
-| GET | `/api/v1/schedule/day-requests/pending` | 273–295 |
-| GET | `/api/v1/schedule/search` | 300–319 |
-| GET | `/api/v1/me/work` | 321–329 |
-| GET | `/api/v1/me/work/updates` | 331–334 |
+| POST | `/api/v1/schedule/tasks/:id/move` | 175–212 |
+| POST | `/api/v1/schedule/tasks/:id/updates` | 214–230 |
+| POST | `/api/v1/schedule/tasks/:id/day-requests` | 232–241 |
+| POST | `/api/v1/schedule/day-requests/:id/answer` | 243–253 |
+| POST | `/api/v1/schedule/tasks/:id/details` | 255–259 |
+| DELETE | `/api/v1/schedule/tasks/:id/details` | 261–264 |
+| POST | `/api/v1/projects/:projectId/schedule/baseline` | 266–270 |
+| GET | `/api/v1/schedule/day-requests/pending` | 274–296 |
+| GET | `/api/v1/schedule/search` | 301–320 |
+| GET | `/api/v1/me/work` | 322–330 |
+| GET | `/api/v1/me/work/updates` | 332–335 |
 
 ## Named functions
 
@@ -33,7 +33,7 @@ Evidence: source snapshot `b4c05204`; generated, do not edit. [backend-node/src/
 | `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 51–57 |
 | `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 59–70 |
 | `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 72–102 |
-| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 105–335 |
+| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 105–336 |
 
 ## Direct local dependencies
 

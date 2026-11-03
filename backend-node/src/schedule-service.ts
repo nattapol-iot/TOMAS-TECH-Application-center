@@ -276,19 +276,35 @@ export function placeInOrder(siblings: readonly { id: number; sortOrder: number 
     renumber: numbered.filter((row, at) => row.id !== movedId && order[at]!.sortOrder !== row.sortOrder),
   };
 }
+export function scheduleParentAllowed(kind: string, parent: { kind: string; parent: number | null } | null, grandparentKind?: string, childKinds: readonly string[] = []): boolean {
+  if (kind === "phase") return parent === null;
+  if (kind === "task") return parent === null || parent.kind === "phase" || (parent.kind === "task" && (parent.parent === null || grandparentKind === "phase") && !childKinds.includes("detail"));
+  return kind === "detail" && parent?.kind === "task" && !childKinds.includes("task");
+}
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
   if (taskId && (input.parentId === taskId || input.predecessorId === taskId)) throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const rows = (await request.query<{ id: number | string; parent_id: number | string | null; predecessor_id: number | string | null; kind: string; start_mode?: string }>(`SELECT id,parent_id,predecessor_id,kind,start_mode FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
+  const rows = (await request.query<{ id: number | string; parent_id: number | string | null; predecessor_id: number | string | null; kind: string; start_mode?: string; name: string; status: string; percent_done: number; actual_start: unknown }>(`SELECT id,parent_id,predecessor_id,kind,start_mode,name,status,percent_done,actual_start FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
   const byId = new Map(rows.map((row) => [Number(row.id), { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind, startMode: row.start_mode }]));
   for (const reference of [input.parentId, input.predecessorId].filter((id): id is number => id !== null)) if (!byId.has(reference)) throw new ApiError(422, "schedule_reference_invalid", "Parent and predecessor tasks must be active rows in the same project.");
   if (input.kind === "phase" && input.parentId) throw new ApiError(400, "validation_failed", "A phase must be a top-level schedule row.");
-  if (input.parentId) { const parentKind = byId.get(input.parentId)?.kind; if (!((input.kind === "task" && parentKind === "phase") || (input.kind === "detail" && parentKind === "task"))) throw new ApiError(422, "schedule_parent_kind_invalid", "Tasks may be top-level or belong to a phase, and detail rows must belong to a task."); }
   const key = taskId ?? -1; byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode });
   const visiting = new Set<number>(), visited = new Set<number>();
   const cycle = (id: number): boolean => { if (visited.has(id)) return false; if (visiting.has(id)) return true; visiting.add(id); const edge = byId.get(id); if (edge && ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) || (edge.predecessor !== null && byId.has(edge.predecessor) && cycle(edge.predecessor)))) return true; visiting.delete(id); visited.add(id); return false; };
   if ([...byId.keys()].some(cycle) || datesWouldLoop(byId)) throw new ApiError(409, "schedule_cycle", "The change would create a circular schedule relationship.");
-  if (taskId) { const childKinds = rows.filter((row) => Number(row.parent_id) === taskId).map((row) => row.kind); if (childKinds.some((kind) => (input.kind === "phase" && kind !== "task") || (input.kind === "task" && kind !== "detail") || input.kind === "detail")) throw new ApiError(422, "schedule_child_kind_invalid", "The row kind is incompatible with its existing child rows."); }
+  const children = new Map<number, string[]>();
+  for (const row of byId.values()) if (row.parent !== null) { const kinds = children.get(row.parent) ?? []; kinds.push(row.kind); children.set(row.parent, kinds); }
+  for (const [id, row] of byId) {
+    const parent = row.parent === null ? null : byId.get(row.parent)!;
+    const childKinds = row.parent === null ? [] : children.get(row.parent) ?? [];
+    if (!scheduleParentAllowed(row.kind, parent, parent?.parent == null ? undefined : byId.get(parent.parent)?.kind, childKinds)) throw new ApiError(422, id === key ? "schedule_parent_kind_invalid" : "schedule_child_kind_invalid", "Use main heading > task > sub task. A task may hold sub tasks or member detail rows, but not both; details require a task without sub tasks.");
+  }
+  const parent = rows.find((row) => Number(row.id) === input.parentId);
+  if (input.kind === "task" && parent?.kind === "task" && !rows.some((row) => Number(row.parent_id) === input.parentId && row.kind === "task")) {
+    const linked = new sql.Request(transaction); linked.input("parent", sql.BigInt, input.parentId);
+    const managed = Boolean((await linked.query<{ value: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@parent) THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value);
+    if (parent.status !== "Not Started" || Number(parent.percent_done) !== 0 || parent.actual_start || managed || await hasPendingRequest(transaction, Number(parent.id))) throw new ApiError(409, "schedule_row_in_use", `${parent.name} already has progress or linked work, so it cannot take sub tasks. Add the sub tasks under another task.`);
+  }
 }
 export function scheduleCalculation(tasks: TaskRow[]) {
   return tasks.map((task): ScheduleCalculationTask => ({ id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, planStart: task.planStart, planDays: task.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, percentComplete: task.percentComplete, status: task.status }));

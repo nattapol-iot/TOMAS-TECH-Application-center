@@ -8,7 +8,8 @@ import type { Database } from "../src/db.js";
 import { ApiError, dayRequestAnswerError, registerErrorHandler } from "../src/errors.js";
 import { registerResourceTaskRoutes } from "../src/routes/resource-tasks.js";
 import { registerScheduleRoutes } from "../src/routes/schedule.js";
-import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, placeInOrder } from "../src/schedule-service.js";
+import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
+import { resolveSchedule, type ScheduleCalculationTask } from "../src/schedule-calculator.js";
 import type { CurrentUserService } from "../src/users.js";
 
 const PROJECT_ID = 7;
@@ -835,7 +836,7 @@ test("PUT task: a link to the row's own phase is refused before the write; a lin
       const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
       const base = planEditAnswers(0, [30]);
       const statements = installSqlMock(sub, (statement) =>
-        statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode FROM dbo.schedule_tasks") ? { recordset: rows } : base(statement));
+        statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,") ? { recordset: rows } : base(statement));
       try {
         const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11",
           payload: { ...planEditPayload([30]), parentId: 1, startMode: "linked", predecessorId, lagDays: 0, planStart: null } });
@@ -945,4 +946,109 @@ test("POST move: a Resource Plan row moves up or down where it is, but not into 
       } finally { await app.close(); }
     });
   }
+});
+
+
+test("scheduleParentAllowed: three planning levels and exclusive member details", () => {
+  const phase = { kind: "phase", parent: null }, task = { kind: "task", parent: null };
+  assert.equal(scheduleParentAllowed("phase", null), true);
+  assert.equal(scheduleParentAllowed("phase", phase), false);
+  assert.equal(scheduleParentAllowed("task", null), true);
+  assert.equal(scheduleParentAllowed("task", phase), true);
+  assert.equal(scheduleParentAllowed("task", task), true);
+  assert.equal(scheduleParentAllowed("task", { ...task, parent: 1 }, "phase"), true);
+  assert.equal(scheduleParentAllowed("task", { ...task, parent: 2 }, "task"), false);
+  assert.equal(scheduleParentAllowed("task", { kind: "detail", parent: 2 }, "task"), false);
+  assert.equal(scheduleParentAllowed("task", task, undefined, ["detail"]), false);
+  assert.equal(scheduleParentAllowed("task", task, undefined, ["task"]), true);
+  assert.equal(scheduleParentAllowed("detail", null), false);
+  assert.equal(scheduleParentAllowed("detail", phase), false);
+  assert.equal(scheduleParentAllowed("detail", task, undefined, ["task"]), false);
+  assert.equal(scheduleParentAllowed("detail", { ...task, parent: 2 }, "task", ["detail"]), true);
+});
+
+test("hierarchy validates existing descendants when moving or changing a row", async (t) => {
+  const cases = [
+    { name: "first sub task", rows: [taskRaw({ id: 1 })], parentId: 1, taskId: null, kind: "task", code: null },
+    { name: "detail under sub task", rows: [taskRaw({ id: 1 }), taskRaw({ id: 2, parent_id: 1 })], parentId: 2, taskId: null, kind: "detail", code: null },
+    { name: "task beside detail", rows: [taskRaw({ id: 1 }), taskRaw({ id: 2, parent_id: 1, kind: "detail" })], parentId: 1, taskId: null, kind: "task", code: "schedule_child_kind_invalid" },
+    { name: "detail beside task", rows: [taskRaw({ id: 1 }), taskRaw({ id: 2, parent_id: 1 })], parentId: 1, taskId: null, kind: "detail", code: "schedule_child_kind_invalid" },
+    { name: "moving a branch too deep", rows: [taskRaw({ id: 1 }), taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 1, taskId: 11, kind: "task", code: "schedule_child_kind_invalid" },
+    { name: "changing phase with grandchildren to task", rows: [taskRaw({ id: 11, kind: "phase" }), taskRaw({ id: 12, parent_id: 11 }), taskRaw({ id: 13, parent_id: 12 })], parentId: null, taskId: 11, kind: "task", code: "schedule_child_kind_invalid" },
+    { name: "moving under a descendant", rows: [taskRaw({ id: 11 }), taskRaw({ id: 12, parent_id: 11 })], parentId: 12, taskId: 11, kind: "task", code: "schedule_cycle" },
+  ];
+  for (const item of cases) await t.test(item.name, async (sub) => {
+    installSqlMock(sub, (statement) => statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,") ? { recordset: item.rows } : undefined);
+    const run = () => validateGraphAndHierarchy({} as Transaction, PROJECT_ID, item.taskId, { ...planInput(planEditPayload([]), false), parentId: item.parentId, kind: item.kind });
+    if (item.code) await assert.rejects(run, (error: unknown) => error instanceof ApiError && error.code === item.code);
+    else await run();
+  });
+});
+
+test("create, PUT and move reject the first sub task when its parent is in use", async (t) => {
+  for (const route of ["create", "PUT", "move"] as const) for (const reason of ["status", "percent_done", "actual_start", "managed", "pending"] as const) {
+    await t.test(`${route}: ${reason}`, async (sub) => {
+      const { app, transactions } = harness({ id: MANAGER_ID, role: "Project Manager" });
+      const parent = taskRaw({ id: 1, name: "Installation", ...(reason === "status" ? { status: "In Progress" } : reason === "percent_done" ? { percent_done: 10 } : reason === "actual_start" ? { actual_start: "2027-03-01" } : {}) });
+      const base = planEditAnswers(0, []);
+      const statements = installSqlMock(sub, (statement, params) => {
+        if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: [parent, taskRaw({ id: 11 })] };
+        if (statement.includes("WHERE schedule_task_id=@parent")) return { recordset: [{ value: reason === "managed" }] };
+        if (statement.includes("field=N'request' AND request_days>0")) return { recordset: [{ value: reason === "pending" && params.task === 1 }] };
+        return base(statement);
+      });
+      try {
+        const payload = { ...planEditPayload([]), parentId: 1, beforeId: null };
+        const response = await app.inject({ method: route === "PUT" ? "PUT" : "POST", url: route === "create" ? `/api/v1/projects/${PROJECT_ID}/schedule/tasks` : `/api/v1/schedule/tasks/11${route === "move" ? "/move" : ""}`, payload });
+        assert.equal(response.statusCode, 409, response.body);
+        assert.equal(response.json().code, "schedule_row_in_use");
+        assert.equal(response.json().message, "Installation already has progress or linked work, so it cannot take sub tasks. Add the sub tasks under another task.");
+        assert.deepEqual(transactions, ["rolled-back"]);
+        assert.equal(statements.some((entry) => /INSERT INTO dbo.schedule_tasks|UPDATE dbo.schedule_tasks SET parent_id/.test(entry.statement)), false);
+      } finally { await app.close(); }
+    });
+  }
+});
+
+test("an existing sub task permits another even after progress; a detail endpoint refuses sub tasks", async (t) => {
+  await t.test("existing sub tasks", async (sub) => {
+    installSqlMock(sub, (statement) => statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,") ? { recordset: [taskRaw({ id: 1, status: "In Progress", percent_done: 50 }), taskRaw({ id: 2, parent_id: 1 })] } : undefined);
+    await validateGraphAndHierarchy({} as Transaction, PROJECT_ID, null, { ...planInput(planEditPayload([]), false), parentId: 1 });
+  });
+  await t.test("details route", async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" });
+    const base = planEditAnswers(0, [30]);
+    installSqlMock(sub, (statement) => {
+      if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
+      if (statement.includes("kind=N'task' AND deleted_at IS NULL")) return { recordset: [{ found: 1 }] };
+      return base(statement);
+    });
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/schedule/tasks/11/details", payload: { name: "Personal work", planDays: 5, rowVersion: TASK_VERSION.toString("base64"), scheduleVersion: SCHEDULE_VERSION.toString("base64") } });
+      assert.equal(response.statusCode, 422, response.body);
+      assert.equal(response.json().code, "schedule_parent_kind_invalid");
+    } finally { await app.close(); }
+  });
+});
+
+test("calculator rolls weighted sub task progress, dates and status through task and phase", () => {
+  const row = (id: number, parentId: number | null, changes: Partial<ScheduleCalculationTask> = {}): ScheduleCalculationTask => ({ id, parentId, sortOrder: id, planStart: "2027-03-01", planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, actualStart: null, actualFinish: null, forecastFinish: null, percentComplete: 0, status: "Not Started", ...changes });
+  const { byId } = resolveSchedule([
+    row(1, null), row(2, 1),
+    row(3, 2, { percentComplete: 100, status: "Done", actualStart: "2027-03-01", actualFinish: "2027-03-01" }),
+    row(4, 2, { planStart: "2027-03-02", planDays: 3, status: "Blocked", forecastFinish: "2027-03-05" }),
+    row(5, 1, { planStart: "2027-03-05", percentComplete: 50, status: "In Progress" }),
+  ], new Set());
+  assert.equal(byId.get(2)!.percentComplete, 25);
+  assert.equal(byId.get(1)!.percentComplete, 30);
+  assert.equal(byId.get(3)!.wbs, "1.1.1");
+  for (const id of [1, 2]) {
+    assert.equal(byId.get(id)!.status, "Blocked");
+    assert.equal(byId.get(id)!.planStart, "2027-03-01");
+    assert.equal(byId.get(id)!.actualStart, "2027-03-01");
+    assert.equal(byId.get(id)!.actualFinish, null);
+    assert.equal(byId.get(id)!.forecastFinish, "2027-03-05");
+  }
+  assert.equal(byId.get(2)!.planFinish, "2027-03-04");
+  assert.equal(byId.get(1)!.planFinish, "2027-03-05");
 });
