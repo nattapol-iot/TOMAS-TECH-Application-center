@@ -2,9 +2,9 @@
 param()
 
 # Migrations 074 (flexible purchase requisition lines) and 090 (Pegasus ERP link) and the PR API on a private LocalDB instance:
-# schema 73 with legacy PRs and POs -> 074 applied twice -> backfill, keys and line-kind checks -> 075..090 (090 twice) -> the PR
-# flow through the real routes (substitute, unplanned, module budget, sending to a stand-in ERP, its PO, a 1,000-line PR)
-# -> a fresh deployment through 090.
+# schema 73 with legacy PRs and POs -> 074 applied twice -> backfill, keys and line-kind checks -> 075..latest (090, 096 and 097
+# twice) -> the PR flow through the real routes (substitute, unplanned, module budget, sending to a stand-in ERP, its PO, a
+# 1,000-line PR, the department and final approver route) -> a fresh deployment through the latest migration.
 # Nothing outside the generated instance is touched.
 
 $ErrorActionPreference = 'Stop'
@@ -21,6 +21,8 @@ $fixture = Join-Path $repoRoot 'database/tests/procurement-074.sql'
 $migration = Join-Path $repoRoot 'database/migrations/074_flexible_purchase_requisition_lines.sql'
 $erpMigration = Join-Path $repoRoot 'database/migrations/090_pegasus_erp_purchase_requests.sql'
 $draftEditMigration = Join-Path $repoRoot 'database/migrations/096_draft_pr_line_edit.sql'
+$routeMigration = Join-Path $repoRoot 'database/migrations/097_pr_approval_route.sql'
+$routeFixture = Join-Path $repoRoot 'database/tests/pr-approval-route-097.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -62,6 +64,12 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.user_oidc_tokens',N'U') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'erp_ref') IS NULL OR OBJECT_ID(N'dbo.CK_mat_prs_erp_status',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=90) THROW 51999, 'Migration 090 is missing its table, columns, check or version.', 1;")
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $draftEditMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.trg_mat_pr_lines_draft_delete',N'TR') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=96) THROW 51999, 'Migration 096 is missing its trigger or version.', 1;")
+    # 097 seeds nobody here (no company accounts). Run again once the final approver has one, it seeds them and moves a PR
+    # waiting on the Engineering Manager role to them; the route is then removed so the API test starts on the earlier route.
+    Write-Output 'Checking migration 097 again after the final approver gets an account.'
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $routeFixture)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $routeMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "DECLARE @final bigint=(SELECT id FROM dbo.users WHERE email=N'nattapol.p@tomastc.com'); IF NOT EXISTS (SELECT 1 FROM dbo.pr_approval_settings WHERE id=1 AND final_approver_id=@final) OR NOT EXISTS (SELECT 1 FROM dbo.mat_pr_approval_steps s JOIN dbo.mat_prs pr ON pr.id=s.pr_id WHERE pr.pr_no=N'PR-PC-ROUTE' AND s.sequence=2 AND s.name=N'Final Approval' AND s.approver_id=@final AND s.approver_role IS NULL AND s.status=N'Current') OR EXISTS (SELECT 1 FROM dbo.pr_department_approvers) OR COL_LENGTH(N'dbo.mat_pr_approval_steps',N'final_may_decide') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=97) THROW 51999, 'Migration 097 did not seed the final approver or move the waiting step.', 1; DELETE dbo.pr_approval_settings; UPDATE dbo.mat_prs SET deleted_at=SYSUTCDATETIME() WHERE pr_no=N'PR-PC-ROUTE';")
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import type { AppConfig } from "../src/config.js";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { approvalSteps, type BomLineForRequest, MATERIAL_CATEGORY_CODES, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
+import { approvalSteps, type BomLineForRequest, DEPARTMENT_STEP, FINAL_STEP, MATERIAL_CATEGORY_CODES, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
   remainingToRequest, type RuleFlag } from "../src/procurement-rules.js";
 import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requisitions.js";
 import type { CurrentUserService } from "../src/users.js";
@@ -44,6 +44,22 @@ test("more than 10% over adds the Engineering Manager once, never a second Engin
   const own = approvalSteps(7, 7, [overByManagement]);
   assert.deepEqual(names(own), ["Submitted by Requester", "Project Manager Approval", ERP_STEP]);
   assert.equal(own[1]!.rule, overByManagement.text);
+});
+
+test("with the owner's route the department head approves, then the final approver, whatever the flags (2026-11-03)", () => {
+  const route = { finalApproverId: 1, departmentApproverId: 5, finalMayDecide: true };
+  const steps = approvalSteps(7, 3, [overByManagement], route);
+  assert.deepEqual(names(steps), ["Submitted by Requester", DEPARTMENT_STEP, FINAL_STEP, ERP_STEP]);
+  assert.deepEqual(steps[1], { name: DEPARTMENT_STEP, role: null, approver: 5, rule: overByManagement.text, status: "Current", finalMayDecide: true });
+  assert.deepEqual(steps[2], { name: FINAL_STEP, role: null, approver: 1, rule: overByManagement.text, status: "Pending" });
+  // No department head, the head raising the PR, or the head being the final approver: straight to the final approver.
+  for (const departmentApproverId of [null, 7, 1]) {
+    const direct = approvalSteps(7, 3, [], { ...route, departmentApproverId });
+    assert.deepEqual(names(direct), ["Submitted by Requester", FINAL_STEP, ERP_STEP]);
+    assert.equal(direct[1]!.status, "Current");
+  }
+  // The final approver's own PR still ends at their own step.
+  assert.deepEqual(approvalSteps(1, 3, [], route).map((step) => [step.name, step.approver]), [["Submitted by Requester", 1], [DEPARTMENT_STEP, 5], [FINAL_STEP, 1], [ERP_STEP, null]]);
 });
 
 test("the step rule fits its 100-character column", () => {
@@ -202,7 +218,11 @@ test("the Approvals badge counts what the Approvals screen lists for the user", 
     assert.match(statement, /cs\.approver_role IN\(SELECT code FROM dbo\.user_effective_roles WHERE user_id=@actor\)/);
     assert.match(statement, /code=N'procurement\.approve'/);
     assert.match(statement, /code=N'inventory\.adjust'/);
-    assert.equal((statement.match(/requested_by<>@actor/g) ?? []).length, 3);
+    // A PR (named or role step), a material issue, a stock adjustment: never one's own; a PR's final approver is the exception.
+    assert.equal((statement.match(/requested_by<>@actor/g) ?? []).length, 4);
+    assert.match(statement, /cs\.approver_id=@actor AND \(pr\.requested_by<>@actor OR cs\.name=N'Final Approval'\)/);
+    assert.match(statement, /cs\.final_may_decide=1 AND fs\.approver_id=@actor/);
+    assert.match(statement, /ns\.approver_id=@actor/);
     assert.doesNotMatch(statement, /dbo\.estimates/);
   } finally { await server.close(); }
 });

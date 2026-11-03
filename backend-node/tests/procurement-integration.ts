@@ -1,4 +1,4 @@
-// Invoked only by scripts/Test-ProcurementLocalDb.ps1 against its newly created instance (schema 90, seeded by procurement-074-seed.sql).
+// Invoked only by scripts/Test-ProcurementLocalDb.ps1 against its newly created instance (latest schema, seeded by procurement-074-seed.sql).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -14,6 +14,7 @@ import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requis
 import { registerReportRoutes } from "../src/routes/reports.js";
 import type { CurrentUser } from "../src/types.js";
 import type { ErpGateway, ErpRequest } from "../src/erp-purchasing.js";
+import type { PurchaseRequisitionApprovalEmail } from "../src/email.js";
 
 if (!/^\(localdb\)\\IoTProcCI_[a-f0-9]{16}$/.test(process.env.PROCUREMENT_TEST_SERVER ?? "")) throw Error("Private procurement LocalDB instance required");
 const bridge = spawn("pwsh", ["-NoProfile", "-File", fileURLToPath(new URL("./helpers/procurement-sql-bridge.ps1", import.meta.url))], { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
@@ -75,12 +76,16 @@ const gateway: ErpGateway = { async call<T>(subject: string, tool: string, args:
 } };
 const creates = () => erpCalls.filter((entry) => entry.tool === "purchase_request_create");
 
+// The final approver's emails, kept instead of sent.
+const mails: PurchaseRequisitionApprovalEmail[] = [];
+const email = { async sendPurchaseRequisitionApproval(message: PurchaseRequisitionApprovalEmail) { mails.push(message); return { status: "sent" as const, recipients: message.recipients.map((r) => r.email) }; } };
+
 const users = new CurrentUserService(database), config = { businessTimeZone: "Asia/Bangkok" } as AppConfig;
 const app = Fastify({ forceCloseConnections: true }); registerErrorHandler(app);
 let actors: CurrentUser[] = [];
 app.addHook("onRequest", async (request) => { const actor = actors.find((a) => a.name === request.headers["x-test-actor"]); if (actor) request.currentUser = actor; });
 app.addHook("onError", async (_request, _reply, error) => { if (!error.statusCode || error.statusCode >= 500) console.error("Procurement test route error:", error.message); });
-registerBomRoutes(app, config, database, users); registerPurchaseRequisitionRoutes(app, config, database, users, { gateway, appBaseUrl: "https://eng.test" }); registerReportRoutes(app, config, database, users);
+registerBomRoutes(app, config, database, users); registerPurchaseRequisitionRoutes(app, config, database, users, { gateway, appBaseUrl: "https://eng.test" }, email); registerReportRoutes(app, config, database, users);
 type Json = Record<string, unknown> & { [key: string]: any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 async function call(method: "GET" | "POST" | "PUT", url: string, actor: string, body?: unknown, status = 200): Promise<Json> {
   const response = await app.inject({ method, url: `/api/v1${url}`, headers: { "x-test-actor": actor }, ...(body ? { payload: body as object } : {}) });
@@ -306,6 +311,59 @@ try {
   await call("POST", `/purchase-requisitions/${big.id}/cancel`, "Requester", { rowVersion: big.rowVersion, reason: "split per site" });
   const panelAfter = (await call("GET", `/boms/${bom.id}`, "Requester")).modules.find((m: Json) => m.module === "Panel").requested;
   assert.equal(panelBefore - panelAfter, 1000);
+
+  // The owner's route (migration 097, 2026-11-03): the requester's department head, then the final approver, then the ERP. The head
+  // here is an Engineer outside the project without procurement.approve: being named on the PR is enough to open and decide it.
+  assert.equal(mails.length, 0, "the earlier route emails nobody");
+  await run(`INSERT dbo.users(entra_object_id,email,name,role_id,department) SELECT N'procurement-ci-Lead',N'procurement-ci-Lead@test.invalid',N'Lead',r.id,N'IoT Engineer Dept.' FROM dbo.roles r WHERE r.code=N'Engineer'`);
+  const leadId = Number((await run(`SELECT id FROM dbo.users WHERE email=N'procurement-ci-Lead@test.invalid'`)).recordset[0]!.id);
+  actors.push({ id: leadId, name: "Lead", email: "procurement-ci-Lead@test.invalid", department: "IoT Engineer Dept.", role: "Engineer", roles: ["Engineer"], entraObjectId: "procurement-ci-Lead", isActive: true });
+  const emId = actors.find((actor) => actor.name === "EM")!.id;
+  await run(`INSERT dbo.pr_approval_settings(id,final_approver_id) VALUES(1,${emId}); INSERT dbo.pr_department_approvers(department,approver_id,final_may_decide) VALUES(N'IoT Engineer Dept.',${leadId},1)`);
+  const raise = async (description: string) => {
+    const pr = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
+      lines: [{ lineType: "Unplanned", module: "Panel", description, unit: "pcs", quantity: 1, unitPrice: 10 }] }, 201);
+    await call("POST", `/purchase-requisitions/${pr.id}/submit`, "Requester", { rowVersion: pr.rowVersion });
+    return pr;
+  };
+  const bells = async (prId: number, userId: number) => Number((await run(`SELECT COUNT(*) n FROM dbo.notifications WHERE user_id=${userId} AND kind=N'PR_APPROVAL' AND entity_id=${prId}`)).recordset[0]!.n);
+  const queue = async (actor: string) => (await call("GET", "/purchase-requisitions?waitingForMe=true", actor)) as unknown as Json[];
+  // The PR sheet names who the requester's PR goes to.
+  assert.deepEqual((await call("GET", "/purchase-requisitions/approval-route", "Requester")).approvers,
+    [{ step: "Department Approval", name: "Lead" }, { step: "Final Approval", name: "EM" }]);
+
+  // PR 5 (IoT): the final approver may decide the head's step. Both are told at once; only the final approver gets an email.
+  const pr5 = await raise("Labels");
+  assert.deepEqual(await steps(pr5.id), ["Submitted by Requester", "Department Approval", "Final Approval", "Sent to ERP"]);
+  assert.deepEqual([await bells(pr5.id, leadId), await bells(pr5.id, emId)], [1, 1]);
+  assert.deepEqual(mails.map((mail) => [mail.prNumber, mail.recipients.map((r) => r.email), mail.stepApproverName]), [[pr5.number, ["procurement-ci-EM@test.invalid"], "Lead"]]);
+  assert.deepEqual((await queue("Lead")).map((row) => [row.id, row.canDecide]), [[pr5.id, true]]);
+  assert.equal((await call("GET", `/purchase-requisitions/${pr5.id}`, "Lead")).purchaseRequisition.id, pr5.id);
+  assert.equal((await queue("EM")).some((row) => row.id === pr5.id), true);
+  await call("POST", `/purchase-requisitions/${pr5.id}/decide`, "Requester", { decision: "Approve", comment: "mine" }, 403);
+  const decided5 = await call("POST", `/purchase-requisitions/${pr5.id}/decide`, "EM", { decision: "Approve", comment: "labels for the panel" });
+  assert.deepEqual([decided5.status, decided5.step, decided5.erp.sent], ["Approved", "Final Approval", true]);
+  const steps5 = (await call("GET", `/purchase-requisitions/${pr5.id}`, "Requester")).steps as Json[];
+  assert.deepEqual(steps5.map((step) => [step.name, step.status, step.approverId]),
+    [["Submitted by Requester", "Completed", requesterId], ["Department Approval", "Not Required", leadId], ["Final Approval", "Completed", emId], ["Sent to ERP", "Completed", null]]);
+
+  // PR 6 (Mechanical, Electrical): the head decides first; then the final approver is told, by email too.
+  await run(`UPDATE dbo.pr_department_approvers SET final_may_decide=0`);
+  const pr6 = await raise("Glands");
+  assert.deepEqual([await bells(pr6.id, leadId), await bells(pr6.id, emId), mails.length], [1, 0, 1]);
+  await call("POST", `/purchase-requisitions/${pr6.id}/decide`, "EM", { decision: "Approve", comment: "too early" }, 403);
+  assert.equal((await call("GET", "/procurement/approvals/attention", "Lead")).waiting, 1);
+  const head6 = await call("POST", `/purchase-requisitions/${pr6.id}/decide`, "Lead", { decision: "Approve", comment: "glands for the panel" });
+  assert.deepEqual([head6.status, head6.step], ["In Approval", "Department Approval"]);
+  assert.deepEqual([await bells(pr6.id, emId), mails.length, mails.at(-1)!.prNumber, mails.at(-1)!.stepApproverName], [1, 2, pr6.number, ""]);
+  assert.equal((await call("POST", `/purchase-requisitions/${pr6.id}/decide`, "EM", { decision: "Reject", comment: "use stock" })).status, "Rejected");
+
+  // PR 7: the final approver raises one. They may stand in for their head, and approve their own PR at the final step; nobody emails them about it.
+  await run(`UPDATE dbo.pr_approval_settings SET final_approver_id=${requesterId}; UPDATE dbo.pr_department_approvers SET final_may_decide=1`);
+  const pr7 = await raise("Ferrules");
+  assert.deepEqual([await bells(pr7.id, leadId), await bells(pr7.id, requesterId), mails.length], [1, 0, 2]);
+  const own7 = await call("POST", `/purchase-requisitions/${pr7.id}/decide`, "Requester", { decision: "Approve", comment: "own PR at the final step" });
+  assert.deepEqual([own7.status, own7.erp.sent], ["Approved", true]);
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close();

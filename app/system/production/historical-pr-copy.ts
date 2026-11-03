@@ -714,6 +714,11 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Over budget by more than 10% · Engineering Manager also approves",
     "jp": "予算超過10%超・エンジニアリングマネージャーも承認"
   },
+  "เกินงบ · ผู้อนุมัติต้องใส่เหตุผล": {
+    "th": "เกินงบ · ผู้อนุมัติต้องใส่เหตุผล",
+    "en": "Over budget · the approver gives a reason",
+    "jp": "予算超過・承認者が理由を記入"
+  },
   "Quantity must be more than 0": {
     "th": "จำนวนต้องมากกว่า 0",
     "en": "Quantity must be more than 0",
@@ -844,10 +849,10 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Waiting for the requester to send it to the ERP",
     "jp": "依頼者のERP送信待ち"
   },
-  "PM อนุมัติ · Engineering Manager เมื่อ Module เกินงบเกิน 10% · แล้วส่งเข้า ERP": {
-    "th": "PM อนุมัติ · Engineering Manager เมื่อ Module เกินงบเกิน 10% · แล้วส่งเข้า ERP",
-    "en": "PM approves · Engineering Manager when a module is over budget by more than 10% · then sent to the ERP",
-    "jp": "PM承認・モジュール予算超過10%超はエンジニアリングマネージャー・その後ERPへ送信"
+  "อนุมัติตามลำดับในตาราง · หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP": {
+    "th": "อนุมัติตามลำดับในตาราง · หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP",
+    "en": "Approved in the order shown · the requester's department head, then the final approver · then sent to the ERP",
+    "jp": "表の順に承認・依頼者の部門長、次に最終承認者・その後ERPへ送信"
   },
   "บันทึก PR": {
     "th": "บันทึก PR",

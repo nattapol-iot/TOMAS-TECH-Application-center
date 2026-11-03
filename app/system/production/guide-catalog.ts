@@ -1047,9 +1047,9 @@ const PR_APPROVE: Guide = {
       target: "appr.pr", action: "next", view: "approvals",
       title: { th: "ใบขอซื้อที่รอคุณ", en: "Requisitions waiting for you", jp: "承認待ちの購買申請" },
       body: {
-        th: "ระบบคำนวณว่าใบไหนต้องให้ใครอนุมัติ ถ้ายอดเกินงบของ Module มากกว่า 10% ต้องให้ Engineering Manager อนุมัติด้วย",
-        en: "The app works out who must approve each one. More than 10% over the module budget also needs the Engineering Manager.",
-        jp: "誰が承認するかはシステムが決めます。モジュール予算を10%超える場合はEngineering Managerの承認も必要です。",
+        th: "ระบบคำนวณว่าใบไหนต้องให้ใครอนุมัติ: หัวหน้าแผนกของผู้ขอก่อน แล้วผู้อนุมัติขั้นสุดท้าย ซึ่งได้อีเมลเมื่อมีใบรอ ใบที่เกินงบของ Module ต้องใส่เหตุผลตอนอนุมัติ",
+        en: "The app works out who approves each one: the requester's department head, then the final approver, who is emailed when one waits. A PR over a module budget needs a reason when approved.",
+        jp: "誰が承認するかはシステムが決めます。依頼者の部門長、次に最終承認者で、最終承認者には承認待ちがあるとメールが届きます。モジュール予算を超えるPRは承認時に理由が必要です。",
       },
     },
     {
@@ -1980,7 +1980,7 @@ export const GUIDES: readonly Guide[] = [
     area: "purchase",
     title: { th: "ขอซื้อ (PR) จาก BOM", en: "Raise a purchase requisition from a BOM", jp: "BOMから購買申請を作成" },
     summary: {
-      th: "เลือก BOM ที่เผยแพร่แล้ว เลือกรายการที่จะซื้อ ตรวจยอดกับงบของ Module แล้วสร้าง PR ให้ PM อนุมัติและส่งเข้า ERP",
+      th: "เลือก BOM ที่เผยแพร่แล้ว เลือกรายการที่จะซื้อ ตรวจยอดกับงบของ Module แล้วสร้าง PR ให้หัวหน้าแผนกและผู้อนุมัติขั้นสุดท้ายอนุมัติ แล้วส่งเข้า ERP",
       en: "Pick a released BOM, choose what to buy, check it against the module budgets, then raise the PR for approval and the ERP.",
       jp: "リリース済みBOMを選び、購入品を選んでモジュール予算と照合し、承認とERP連携のためにPRを作成します。",
     },
@@ -2043,18 +2043,27 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.summary", action: "next", view: "purchase",
         title: { th: "ตรวจยอดและผู้อนุมัติ", en: "Check the total and approvers", jp: "合計と承認者を確認" },
         body: {
-          th: "ดูยอดขอซื้อเทียบงบของ Module ถ้าเกินงบมากกว่า 10% ต้องให้ Engineering Manager อนุมัติเพิ่มจาก PM แถวที่มีข้อความสีแดงต้องแก้ก่อนส่ง",
-          en: "Compare the total with the module budgets. More than 10% over needs the Engineering Manager as well as the PM. Rows with red text must be fixed first.",
-          jp: "申請額をモジュール予算と比べます。10%超過ならPMに加えてEngineering Managerの承認が必要です。赤字の行は先に修正します。",
+          th: "ดูยอดขอซื้อเทียบงบของ Module แถวที่มีข้อความสีแดงต้องแก้ก่อนส่ง ถ้า Module เกินงบ ผู้อนุมัติต้องใส่เหตุผลตอนอนุมัติ",
+          en: "Compare the total with the module budgets. Rows with red text must be fixed first. Over a module's budget, the approver gives a reason.",
+          jp: "申請額をモジュール予算と比べます。赤字の行は先に修正します。予算超過の場合、承認者が承認時に理由を記入します。",
+        },
+      },
+      {
+        target: "pr.approvers", action: "next", view: "purchase",
+        title: { th: "ใครอนุมัติ", en: "Who approves", jp: "承認者" },
+        body: {
+          th: "ช่องผู้อนุมัติบอกว่าใบนี้ไปให้หัวหน้าแผนกของคุณก่อน แล้วไปที่ผู้อนุมัติขั้นสุดท้าย จากนั้นระบบส่งเข้า ERP เอง",
+          en: "The approvers box shows the PR goes to your department head first, then to the final approver, then to the ERP by itself.",
+          jp: "承認者欄のとおり、まず部門長、次に最終承認者が承認し、その後自動でERPに送られます。",
         },
       },
       {
         target: "pr.submit", action: "click", view: "purchase",
         title: { th: "สร้าง PR", en: "Raise the PR", jp: "PRを作成" },
         body: {
-          th: "กด 'สร้าง PR' PR จะไปให้ PM อนุมัติ แล้วส่งเข้า ERP อัตโนมัติ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
-          en: "Press the create PR button. It goes to the PM for approval, then to the ERP automatically. Only practising? Press Cancel, then Finish.",
-          jp: "PR作成ボタンを押すとPMの承認へ回り、その後自動でERPに送られます。練習だけなら「キャンセル」を押してから「完了」を押します。",
+          th: "กด 'สร้าง PR' แล้วกด 'Submit' ที่รายการ PR ใบนี้จะไปให้หัวหน้าแผนกและผู้อนุมัติขั้นสุดท้าย แล้วส่งเข้า ERP อัตโนมัติ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+          en: "Press the create PR button, then Submit in the list: it goes to your department head and the final approver, then to the ERP automatically. Only practising? Press Cancel, then Finish.",
+          jp: "PR作成ボタンを押し、一覧で「提出」を押すと部門長と最終承認者の承認へ回り、その後自動でERPに送られます。練習だけなら「キャンセル」を押してから「完了」を押します。",
         },
       },
     ],

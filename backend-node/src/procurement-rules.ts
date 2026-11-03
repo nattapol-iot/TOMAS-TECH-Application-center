@@ -7,7 +7,11 @@ export type BudgetPicture = { approvedBudget: number; actualConsumed: number; op
 /** "manager": the project's PM decides it in the PM step; "management": it adds the Engineering Manager's step. */
 export type FlagLevel = "manager" | "management";
 export type RuleFlag = { code: string; text: string; level: FlagLevel };
-export type ApprovalStepPlan = { name: string; role: string | null; approver: number | null; rule: string | null; status: "Completed" | "Current" | "Pending" };
+export type ApprovalStepPlan = { name: string; role: string | null; approver: number | null; rule: string | null; status: "Completed" | "Current" | "Pending";
+  /** A department step the final approver may decide in its place (both steps at once). */
+  finalMayDecide?: boolean };
+/** The owner's route (migration 097): the head of the requester's department, if it has one, then the final approver. */
+export type ApprovalRoute = { finalApproverId: number; departmentApproverId: number | null; finalMayDecide: boolean };
 export type ModuleBudget = { module: string; budget: number; requestedElsewhere: number; thisRequest: number };
 export type PrLineKind = "Planned" | "Substitute" | "Unplanned";
 export type PrLineInput = { lineType: PrLineKind; bomLineId: number | null; module: string | null; itemCode: string | null; partNumber: string | null;
@@ -23,6 +27,9 @@ export type PlannedPrLine = { lineType: PrLineKind; bomLineId: number | null; it
 export const MATERIAL_CATEGORY_CODES = ["01", "02", "03", "04", "05"] as const;
 /** The last step: the system sends the approved PR to the Pegasus ERP, where Purchasing collects quotes and raises the PO. */
 export const ERP_STEP = "Sent to ERP";
+/** The owner's route: the requester's department head, then the final approver on the Engineer side. */
+export const DEPARTMENT_STEP = "Department Approval";
+export const FINAL_STEP = "Final Approval";
 /** Steps of PRs routed before the ERP took purchasing over; no step is ever made Current after them. */
 export const LEGACY_PO_CREATION_STEP = "PO Creation";
 export const SYSTEM_STEPS = [ERP_STEP, LEGACY_PO_CREATION_STEP];
@@ -55,9 +62,24 @@ export function moduleBudgetFlags(modules: ModuleBudget[]): RuleFlag[] {
   });
 }
 
-/** The project's PM approves; the Engineering Manager joins only for a management-level flag, and never as a second step for the same role. Then the ERP. */
-export function approvalSteps(requesterId: number, projectManagerId: number | null, flags: RuleFlag[]): ApprovalStepPlan[] {
+/**
+ * With the owner's route: the requester's department head (left out when that is the requester or the final approver), then
+ * the final approver, whatever the flags say; each step shows them. Without it (a database with no final approver) the
+ * project's PM approves; the Engineering Manager joins only for a management-level flag, and never as a second step for the
+ * same role. Then the ERP.
+ */
+export function approvalSteps(requesterId: number, projectManagerId: number | null, flags: RuleFlag[], route: ApprovalRoute | null = null): ApprovalStepPlan[] {
   const describe = (list: RuleFlag[]) => list.length ? list.map((flag) => flag.text).join(" · ").slice(0, 100) : null;
+  if (route) {
+    const head = route.departmentApproverId;
+    const department = head !== null && head !== requesterId && head !== route.finalApproverId;
+    return [
+      { name: "Submitted by Requester", role: null, approver: requesterId, rule: null, status: "Completed" },
+      ...(department ? [{ name: DEPARTMENT_STEP, role: null, approver: head, rule: describe(flags), status: "Current" as const, finalMayDecide: route.finalMayDecide }] : []),
+      { name: FINAL_STEP, role: null, approver: route.finalApproverId, rule: describe(flags), status: department ? "Pending" : "Current" },
+      { name: ERP_STEP, role: null, approver: null, rule: null, status: "Pending" },
+    ];
+  }
   const management = flags.filter((flag) => flag.level === "management");
   // A PM raising their own PR, or a project without a PM, goes to the Engineering Manager role instead.
   const managerDecides = !projectManagerId || projectManagerId === requesterId;

@@ -27,8 +27,10 @@ const KIND_LABEL: Record<PrRowKind, string> = { Planned: "ตรงแผน", S
 const LEVEL_TONE = { ok: "green", manager: "amber", management: "red" } as const;
 const FIELD_LABEL = { itemCode: "Item code", partNumber: "Part No.", description: "Description", brand: "Brand", unit: "Unit" } as const;
 
-function budgetNote(status: PrModuleStatus): string {
+// With the department head + final approver route an overrun adds nobody; the approver gives a reason. Without it, the share decides.
+function budgetNote(status: PrModuleStatus, routed: boolean): string {
   if (status.level === "ok") return "อยู่ในงบ";
+  if (routed) return "เกินงบ · ผู้อนุมัติต้องใส่เหตุผล";
   return status.level === "manager" ? "เกินงบไม่เกิน 10% · PM อนุมัติ" : "เกินงบเกิน 10% · Engineering Manager อนุมัติเพิ่ม";
 }
 
@@ -59,6 +61,9 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
   const erpOptions = useEndpoint<ErpOptions | null>("/api/v1/erp/purchasing/options", null);
   const [erpDepartment, setErpDepartment] = useState<string | null>(editing?.erpDepartment ?? null);
   const department = erpDepartment ?? erpOptions.data?.suggestedDepartment ?? "";
+  // Who approves: the person's department head and the final approver; null on a server still on the PM / Engineering Manager route.
+  const route = useEndpoint<{ approvers: { step: string; name: string }[] | null } | null>("/api/v1/purchase-requisitions/approval-route", null);
+  const approvers = route.data?.approvers ?? null;
   const [module, setModule] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -155,7 +160,7 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
           <th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
           <tbody>{statuses.filter((status) => status.thisRequest > 0).map((status) => <tr key={status.module}><td><strong>{status.module}</strong></td><td className="num">{money(status.budget)}</td>
             <td className="num">{money(status.requested)}</td><td className="num">{money(status.thisRequest)}</td><td className="num">{money(status.budget - status.requested - status.thisRequest)}</td>
-            <td><Badge tone={LEVEL_TONE[status.level]}>{t(budgetNote(status))}{status.level !== "ok" && Number.isFinite(status.percent) ? ` (${status.percent.toFixed(1)}%)` : ""}</Badge></td></tr>)}</tbody></table></div> : null}
+            <td><Badge tone={LEVEL_TONE[status.level]}>{t(budgetNote(status, Boolean(approvers)))}{status.level !== "ok" && Number.isFinite(status.percent) ? ` (${status.percent.toFixed(1)}%)` : ""}</Badge></td></tr>)}</tbody></table></div> : null}
         {rows.length ? <div className="table-wrap tall" data-guide="pr.lines"><table className="pr-plan-table"><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"ประเภท"} /></th>
           <th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part No."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th>
           <th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"Unit price"} /></th>
@@ -193,7 +198,7 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
         <div className="pr-plan-summary" aria-label={t("Purchase plan summary")} data-guide="pr.summary">
           <div><span><LocalizedText text={"รายการที่ซื้อ"} /></span><strong>{selected.length}</strong><small>{t(KIND_LABEL.Planned)} {kinds("Planned")} · {t(KIND_LABEL.Substitute)} {kinds("Substitute")} · {t(KIND_LABEL.Unplanned)} {kinds("Unplanned")}</small></div>
           <div><span><LocalizedText text={"ต้องแก้ก่อนส่ง"} /></span><strong>{issues.size}</strong><small><LocalizedText text={"แถวที่มีข้อความสีแดง"} /></small></div>
-          <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong>{needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วส่งเข้า ERP อัตโนมัติ"} /></small></div>
+          <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong data-guide="pr.approvers">{approvers ? approvers.map((approver) => approver.name).join(" → ") : needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วส่งเข้า ERP อัตโนมัติ"} /></small></div>
           <div className="accent"><span><LocalizedText text={"ยอดขอซื้อ"} /></span><strong>{money(total)}</strong><TablePageSize value={pageSize} onChange={(size) => { setPageSize(size); setPage(1); }} /></div>
         </div>
         <Toolbar>
