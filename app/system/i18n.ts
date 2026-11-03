@@ -2460,7 +2460,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Plan.rowMoved": { en: "was moved in the plan", th: "ย้ายตำแหน่งในแผนแล้ว", jp: "の位置を変更しました" },
   "Gantt.legendLink": { en: "Starts after (link)", th: "งานต่อเนื่อง (เริ่มหลังงานก่อนหน้า)", jp: "先行タスクの後に開始" },
   "Gantt.dragHint": { en: "Drag a bar to move its dates (its right end to change its length) · drag ⋮⋮ to move a row up or down · + on a row adds one below it", th: "ลากแท่งเพื่อเลื่อนวัน (ลากขอบขวาเพื่อปรับจำนวนวัน) · ลากที่จับ ⋮⋮ เพื่อย้ายแถวขึ้นลง · กด + ที่แถวเพื่อแทรกงานใต้แถวนั้น", jp: "バーをドラッグで日程を移動（右端で期間を変更）・⋮⋮をドラッグで行を上下に移動・行の + でその下に行を追加" },
-  "Plan.addSubRow": { en: "Add a sub row here", th: "เพิ่มงานย่อยตรงนี้", jp: "ここにサブ工程を追加" },
+  "Plan.addSubRow": { en: "Add a task under this heading", th: "เพิ่มงานใต้หัวข้อนี้", jp: "この見出しの下にタスクを追加" },
   "Plan.insertRow": { en: "Add a row below this one", th: "แทรกงานใต้แถวนี้", jp: "この行の下に追加" },
   "Plan.quickKindTask": { en: "Task", th: "งาน", jp: "タスク" },
   "Plan.quickKindSub": { en: "Sub task", th: "งานย่อย", jp: "サブタスク" },

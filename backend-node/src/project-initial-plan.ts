@@ -3,7 +3,7 @@ import type { Transaction as TransactionType } from "mssql";
 import { ApiError } from "./errors.js";
 import { parseDateOnly, requiredInteger, requiredText } from "./http.js";
 import type { NewPics } from "./project-notices.js";
-import { appendUpdate, calendarDays, replacePics } from "./schedule-service.js";
+import { appendUpdate, calendarDays, readHolidays, readTasks, replacePics, resolveTasks } from "./schedule-service.js";
 import { MASTER_PLAN_PHASE } from "./schedule-phases.js";
 
 /*
@@ -246,10 +246,27 @@ async function removeRow(transaction: TransactionType, projectId: number, row: S
  * document, a report). Such a row stops the save and is named, rather than being dropped
  * or silently kept. Returns who became a row's person in charge, so they can be told.
  */
+/**
+ * The dates a kept plan row is saved with. A row with rows under it, or one that follows a
+ * predecessor, is shown with its resolved dates and the form sends those back: that is no change,
+ * and its own stored dates stay. Any other dates for it are a change this form cannot make.
+ */
+export function keptPlanRowDates(current: Pick<ScheduleRow, "planStart" | "planDays" | "children" | "startMode">, input: { start: string; finish: string },
+  shown: { planStart: string | null; planFinish: string | null } | undefined): { planStart: string | null; planDays: number; changed: boolean } {
+  if (current.children > 0 || current.startMode !== "manual") {
+    return { planStart: current.planStart, planDays: current.planDays, changed: shown?.planStart !== input.start || shown?.planFinish !== input.finish };
+  }
+  const planDays = calendarDays(input.start, input.finish);
+  return { planStart: input.start, planDays, changed: current.planStart !== input.start || current.planDays !== planDays };
+}
+
 export async function syncProjectPlan(transaction: TransactionType, projectId: number, plan: InitialPlan, actorId: number): Promise<NewPics[]> {
   const assigned: NewPics[] = [];
   await ensureMembers(transaction, projectId, plan.team.map((row) => row.userId), actorId);
   const rows = await readScheduleRows(transaction, projectId);
+  // Only rows whose dates are derived need the resolved plan; most plans have none.
+  const shown = rows.some((row) => row.children > 0 || row.startMode !== "manual")
+    ? resolveTasks(await readTasks(transaction, projectId), await readHolidays(transaction)).byId : null;
   const phases = [
     { name: MASTER_PLAN_PHASE, visibility: "Customer" as const, inputs: plan.milestones.map((row) => ({ id: row.id, name: row.name, start: row.start, finish: row.finish, planManDays: 0, userId: null as number | null })) },
     { name: TEAM_PLAN_PHASE, visibility: "Internal" as const, inputs: plan.team.map((row) => ({ id: row.id, name: row.task, start: row.start, finish: row.finish, planManDays: row.planManDays, userId: row.userId as number | null })) },
@@ -286,23 +303,23 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
         if (input.userId !== null) assigned.push({ taskId: id, userIds: await replacePics(transaction, id, [input.userId]) });
         continue;
       }
-      const datesChanged = current.planStart !== input.start || current.planDays !== planDays;
-      const changed = datesChanged || current.name !== input.name || current.planManDays !== input.planManDays || current.sortOrder !== index + 1;
+      const dates = keptPlanRowDates(current, input, shown?.get(current.id));
+      const changed = dates.changed || current.name !== input.name || current.planManDays !== input.planManDays || current.sortOrder !== index + 1;
       if (changed && current.pending) {
         throw new ApiError(409, "schedule_day_request_pending", `"${current.name}" has a pending request for more days. Answer it before changing the row.`);
       }
-      if (datesChanged && (current.children > 0 || current.startMode !== "manual")) {
-        throw new ApiError(409, "schedule_rollup_plan_derived", `"${current.name}" takes its dates from its detail rows or a predecessor. Change them in Project Schedule.`);
+      if (dates.changed && (current.children > 0 || current.startMode !== "manual")) {
+        throw new ApiError(409, "schedule_rollup_plan_derived", `"${current.name}" takes its dates from the rows under it or a predecessor. Change them in Project Schedule.`);
       }
       if (changed) {
         const update = new sql.Request(transaction);
-        update.input("id", sql.BigInt, current.id).input("name", sql.NVarChar(500), input.name).input("start", sql.Date, input.start)
-          .input("days", sql.Int, planDays).input("man_days", sql.Decimal(9, 2), input.planManDays).input("sort", sql.Int, index + 1).input("actor", sql.BigInt, actorId);
+        update.input("id", sql.BigInt, current.id).input("name", sql.NVarChar(500), input.name).input("start", sql.Date, dates.planStart)
+          .input("days", sql.Int, dates.planDays).input("man_days", sql.Decimal(9, 2), input.planManDays).input("sort", sql.Int, index + 1).input("actor", sql.BigInt, actorId);
         await update.query(`UPDATE dbo.schedule_tasks SET name=@name,plan_start=@start,plan_days=@days,plan_man_days=@man_days,sort_order=@sort,
           updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
         await appendUpdate(transaction, projectId, current.id, actorId, "plan",
           JSON.stringify({ name: current.name, planStart: current.planStart, planDays: current.planDays, planManDays: current.planManDays }),
-          JSON.stringify({ name: input.name, planStart: input.start, planDays, planManDays: input.planManDays }), "Changed in Edit project");
+          JSON.stringify({ name: input.name, planStart: dates.planStart, planDays: dates.planDays, planManDays: input.planManDays }), "Changed in Edit project");
       }
       // A row with several PICs from Project Schedule keeps them unless its person is changed here.
       if (input.userId !== null && current.pic !== input.userId) assigned.push({ taskId: current.id, userIds: await replacePics(transaction, current.id, [input.userId]) });
