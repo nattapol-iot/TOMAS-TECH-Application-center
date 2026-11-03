@@ -87,7 +87,8 @@ test("role-gated decisions read every held role", async () => {
 
   // A step addressed to a role reaches everyone holding it, additional grant included.
   assert.match(procurement, /cs\.approver_role IN\(SELECT code FROM dbo\.user_effective_roles WHERE user_id=@actor\)/);
-  assert.match(procurement, /rolesOf\(actor\)\.includes\(String\(current\.approver_role \?\? ""\)\)/);
+  // The decision reads the same rule in SQL, so an additional role counts there too.
+  assert.match(procurement, /CASE WHEN \$\{WAITING_FOR_ACTOR\} THEN 1 ELSE 0 END may_decide/);
   assert.match(signing, /r\.code IN \(SELECT code FROM dbo\.user_effective_roles WHERE user_id = @actor\)/);
 });
 

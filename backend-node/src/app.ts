@@ -258,7 +258,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerProjectDocumentRoutes(app, config, database, users);
   registerSigningRoutes(app, config, database, users);
   registerSignatureMasterRoutes(app, config, database, users);
-  registerPurchaseRequisitionRoutes(app, config, database, users, erp);
+  registerPurchaseRequisitionRoutes(app, config, database, users, erp, email);
   registerHistoricalPrRoutes(app, database, users);
   registerReportRoutes(app, config, database, users);
   registerScheduleRoutes(app, database, users, config.businessTimeZone, email);

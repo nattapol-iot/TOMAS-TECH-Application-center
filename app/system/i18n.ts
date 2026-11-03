@@ -797,6 +797,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Budget Owner Approval": { th: "เจ้าของงบอนุมัติ", jp: "予算責任者承認" },
   "Purchasing Review": { th: "จัดซื้อตรวจสอบ", jp: "購買確認" },
   "Management Approval": { th: "ผู้บริหารอนุมัติ", jp: "経営承認" },
+  "Department Approval": { th: "หัวหน้าแผนกอนุมัติ", jp: "部門長承認" },
+  "Final Approval": { th: "อนุมัติขั้นสุดท้าย", jp: "最終承認" },
   "PO Creation": { th: "ออกใบสั่งซื้อ", jp: "PO作成" },
   "Not Required": { th: "ไม่จำเป็น", jp: "不要" },
   "PR Summary": { th: "สรุป PR", jp: "PR概要" },

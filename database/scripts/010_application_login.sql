@@ -806,4 +806,9 @@ GO
 -- database/migrations/096_draft_pr_line_edit.sql
 GRANT DELETE ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
 GO
+
+-- database/migrations/097_pr_approval_route.sql
+GRANT SELECT ON OBJECT::dbo.pr_approval_settings TO [iot_team_app_role];
+GRANT SELECT ON OBJECT::dbo.pr_department_approvers TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

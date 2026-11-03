@@ -80,9 +80,22 @@ test("approvals ask for a comment only when rejecting, and show the server's ans
   assert.match(material, /<ActionError message=\{error \?\? ""\} \/>/);
 });
 
-test("the PR screen reads every held role before showing Approve", () => {
-  assert.match(material, /roles\.includes\(item\.currentApproverRole \?\? ""\)/);
+test("the PR screen shows Approve where the server's decide rule allows it, every held role included", () => {
+  assert.match(material, /const isCurrentApprover = item\.canDecide;/);
   assert.doesNotMatch(material, /item\.currentApproverRole === bootstrap\.user\.role/);
+  // One rule for the list, the Approvals badge and the decision itself.
+  assert.equal((requisitions.match(/\$\{WAITING_FOR_ACTOR\}/g) ?? []).length, 4);
+  assert.match(requisitions, /cs\.approver_role IN\(SELECT code FROM dbo\.user_effective_roles WHERE user_id=@actor\)/);
+});
+
+test("a PR goes to the requester's department head, then the final approver, who alone is emailed (owner 2026-11-03)", () => {
+  const migration = read("database/migrations/097_pr_approval_route.sql");
+  assert.match(migration, /N'Mechanical Engineer Dept\.', N'warit\.c@tomastc\.com',\s+CAST\(0 AS bit\)/);
+  assert.match(migration, /N'Electrical Engineer Dept\.', N'taweesak\.s@tomastc\.com', CAST\(0 AS bit\)/);
+  assert.match(migration, /N'IoT Engineer Dept\.',\s+N'tachapon\.m@tomastc\.com', CAST\(1 AS bit\)/);
+  assert.match(migration, /email = N'nattapol\.p@tomastc\.com'/);
+  assert.match(requisitions, /email\.sendPurchaseRequisitionApproval\(message\)/);
+  assert.match(editor, /\/api\/v1\/purchase-requisitions\/approval-route/);
 });
 
 test("the Approvals badge counts procurement approvals, not estimates in review", () => {

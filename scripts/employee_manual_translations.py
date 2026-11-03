@@ -529,7 +529,7 @@ C('procurement', 'Procurement Dashboard and BOM || 購買DashboardとBOM', 'Proc
   ], 'The quantity is reserved for the project and excluded from stock freely available to other work. || 対象Projectに引当され、他案件の自由使用可能数量から除かれます。',
     'Reservation is not physical issue. MIR and Issue are required to record material leaving stock. || 引当は実出庫ではありません。持出記録にはMIRとIssue工程が必要です。'))
 
-C('pr', 'Purchase Requisition: request, approve and send to the ERP || Purchase Requisition：購買申請・承認・ERP送信', 'Purchase Requisition || Purchase Requisition', 'Requesters (engineers) / PM / Engineering Manager || 申請者（エンジニア）・PM・Engineering Manager',
+C('pr', 'Purchase Requisition: request, approve and send to the ERP || Purchase Requisition：購買申請・承認・ERP送信', 'Purchase Requisition || Purchase Requisition', 'Requesters (engineers) / department heads / final approver || 申請者（エンジニア）・部門長・最終承認者',
   P('21.1 Create a PR from a released BOM || 21.1 Released BOMからPRを作成', [
     'Open Purchase Requisition → <b>New PR</b> and select the project’s <b>Released BOM</b>. || Purchase Requisition → <b>PRを作成</b>でProjectの<b>Released BOM</b>を選びます。',
     'Set priority, required date and purpose, then check the <b>ERP department</b> preselected from your own department; change it if it is wrong. || 優先度、必要日、目的を設定し、自分の部門から選ばれた<b>ERP部門</b>を確認します。違う場合は変更します。',
@@ -538,15 +538,15 @@ C('pr', 'Purchase Requisition: request, approve and send to the ERP || Purchase 
     'For many lines (up to 2,000 per PR), use <b>Download Excel</b>, fill in the file and <b>Import Excel</b>. The TOMAS PR form can be imported too. || 明細が多い場合（1件の申請で最大2,000行）は<b>Excelをダウンロード</b>してファイルに記入し、<b>Excel取込</b>で戻します。TOMAS PR書式も取り込めます。',
     'Check each module’s budget (Estimate budget, Earlier PRs, This PR, Left after this PR), fix every row with red text, then press <b>New PR</b>. || Module別予算（見積予算、先行の購買申請、この購買申請、この申請後の残額）を確認し、赤字の行を全て直してから<b>PRを作成</b>を押します。',
     'The new PR is a Draft. Open it from the list and press <b>Submit</b> to send it for approval. || 作成したPRはDraftです。一覧から開き<b>Submit</b>で承認へ送ります。'
-  ], 'The PR has a number and an approval route based on each module’s budget. || PR番号とModule別予算に基づく承認経路が設定されます。',
+  ], 'The PR has a number and an approval route: the requester’s department head, then the final approver. || PR番号と承認経路（依頼者の部門長、次に最終承認者）が設定されます。',
     'A Draft PR can be withdrawn with <b>Cancel PR</b>, and its module budget is released. Substitutes and unplanned items within a module’s budget need no extra approval. || Draftの申請は<b>購買申請を取消</b>で取り消せ、Module予算が戻ります。Module予算内の代替品・計画外品に追加承認は不要です。') +
-  P('21.2 Approve a PR against module budgets || 21.2 Module予算に基づいてPRを承認', [
-    'The project PM opens Purchase Requisition or Approvals and checks that the PR is at their step. || ProjectのPMがPurchase RequisitionまたはApprovalsを開き、自分の工程か確認します。',
+  P('21.2 Approve a PR: department head, then the final approver || 21.2 PRを承認：部門長、次に最終承認者', [
+    'On Submit the PR goes first to the requester’s department head, who is notified in the app. The head opens Purchase Requisition or Approvals and checks that the PR is at their step. || Submitすると、PRはまず依頼者の部門長へ回り、アプリで通知されます。部門長はPurchase RequisitionまたはApprovalsを開き、自分の工程か確認します。',
     'Review the lines, their kind (Planned / Substitute / Unplanned), the totals against each module’s budget and the requester’s reasons. || 明細、種類（計画通り・代替品・計画外）、Module別予算との比較、申請者の理由を確認します。',
-    'Choose Approve or Reject. Reject needs a reason; Approve may be left without a comment unless the system set a special condition on the PR. || ApproveまたはRejectを選びます。Rejectは理由が必須です。Approveは、システムが特別条件を付けたPR以外はコメントなしで構いません。',
-    'A module up to 10% over budget is the PM’s decision. Beyond 10%, the Engineering Manager approves next. || 予算超過が10%以内のModuleはPMが判断します。10%を超えるとEngineering Managerが続けて承認します。'
+    'Choose Approve or Reject. Reject needs a reason; Approve may be left without a comment unless a module is over its budget, which needs a reason. || ApproveまたはRejectを選びます。Rejectは理由が必須です。Approveはコメントなしで構いませんが、Module予算超過のPRは理由が必要です。',
+    'After the department head approves, the PR goes to the final approver, who gets an in-app notice and an email. For IoT PRs the final approver may approve in the department head’s place. || 部門長の承認後、PRは最終承認者へ回り、アプリ通知とメールが届きます。IoTのPRは最終承認者が部門長に代わって承認できます。'
   ], 'Once fully approved, the PR is Approved and is sent to the ERP straight away. || 承認完了でPRはApprovedになり、直ちにERPへ送信されます。',
-    'Requesters cannot approve their own PR. Follow the approval route shown on the document. || 申請者は自分のPRを承認できません。書類に表示された承認経路に従います。') +
+    'Requesters cannot approve their own PR, except the final approver at the final step of their own PR. Follow the approval route shown on the document. || 申請者は自分のPRを承認できません。ただし最終承認者は自分のPRの最終工程を承認できます。書類に表示された承認経路に従います。') +
   P('21.3 Send to the ERP and follow its status || 21.3 ERPへ送信し状態を確認', [
     'On full approval the system sends the PR to Pegasus ERP in the requester’s name. The ERP column shows the ERP PR number and status. || 承認完了時、システムが申請者名でPegasus ERPへPRを送信します。ERP列にERPのPR番号と状態が表示されます。',
     'If the ERP column shows <b>Waiting to send to ERP</b> or <b>ERP send failed</b>, the requester is notified. The requester opens the PR and presses <b>Send to ERP</b>; if it says the sign-in has ended, sign in again first. || ERP列が<b>ERP送信待ち</b>または<b>ERP送信失敗</b>の場合、申請者に通知されます。申請者がPRを開き<b>ERPへ送信</b>を押します。サインイン切れと表示されたら先にサインインし直します。',

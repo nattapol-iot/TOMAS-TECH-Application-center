@@ -158,11 +158,12 @@ GO
 :r database/migrations/094_engineer_inquiry_write.sql
 :r database/migrations/095_managers_inquiry_write.sql
 :r database/migrations/096_draft_pr_line_edit.sql
+:r database/migrations/097_pr_approval_route.sql
 
 USE [$(DatabaseName)];
 GO
 
-IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 96) <> 96
+IF (SELECT COUNT_BIG(*) FROM dbo.schema_versions WHERE version BETWEEN 1 AND 97) <> 97
     THROW 51020, 'Fresh database deployment did not apply every required migration.', 1;
 
 IF EXISTS (

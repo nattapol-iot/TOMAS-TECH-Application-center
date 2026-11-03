@@ -82,6 +82,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 94, fileName: "094_engineer_inquiry_write.sql", name: "Engineer inquiry write" },
   { version: 95, fileName: "095_managers_inquiry_write.sql", name: "Managers inquiry write" },
   { version: 96, fileName: "096_draft_pr_line_edit.sql", name: "Draft PR line edit" },
+  { version: 97, fileName: "097_pr_approval_route.sql", name: "PR approval route" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

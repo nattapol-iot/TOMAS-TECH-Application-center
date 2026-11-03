@@ -84,6 +84,19 @@ export type ProjectTaskAssignmentEmail = {
   recipients: EmailRecipient[];
 };
 
+/** A purchase requisition waiting for the final approver: at their own step, or at a department step they may decide in its place. */
+export type PurchaseRequisitionApprovalEmail = {
+  prNumber: string;
+  projectNumber: string;
+  projectName: string;
+  requesterName: string;
+  amount: number;
+  step: string;
+  /** The department head whose step it is, when the final approver may decide it in their place; "" at the final step. */
+  stepApproverName: string;
+  recipients: EmailRecipient[];
+};
+
 /** A team-board appointment or task for one person's Outlook calendar (team-calendar.ts): a request, or its cancellation. */
 export type TeamTaskCalendarEmail = {
   method: "REQUEST" | "CANCEL";
@@ -181,6 +194,22 @@ export class EmailService {
       + `<tr><td><strong>Plan</strong></td><td>${escapeHtml(message.start)} – ${escapeHtml(message.finish)}</td></tr>`
       + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
       + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}/task/${message.taskId}">เปิดงานนี้ใน Project ${escapeHtml(message.projectNumber)} / Open this task</a></p>`);
+  }
+
+  // Only the final approver is emailed (owner 2026-11-03); purchase-requisitions.ts writes the bell rows, a department head's
+  // included, in the same transaction and hands this message back to send after the commit.
+  async sendPurchaseRequisitionApproval(message: PurchaseRequisitionApprovalEmail): Promise<EmailDeliveryResult> {
+    const amount = message.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return this.sendMail(message.recipients, `[Engineering Center] PR ${message.prNumber} รออนุมัติ / waiting for approval`, (appUrl) =>
+      `<p>${message.stepApproverName
+        ? `PR นี้อยู่ที่ขั้นของ ${escapeHtml(message.stepApproverName)} คุณอนุมัติแทนได้เลย / It is at ${escapeHtml(message.stepApproverName)}'s step; you may decide it.`
+        : "PR นี้รอคุณอนุมัติขั้นสุดท้าย / It is waiting for your final approval."}</p>`
+      + `<table><tr><td><strong>PR</strong></td><td>${escapeHtml(message.prNumber)}</td></tr>`
+      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Requester</strong></td><td>${escapeHtml(message.requesterName)}</td></tr>`
+      + `<tr><td><strong>Amount</strong></td><td>${escapeHtml(amount)} THB</td></tr>`
+      + `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr></table>`
+      + `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`);
   }
 
   /**
