@@ -794,9 +794,9 @@ const PROJECT_MASTER_PLAN: Guide = {
       target: "project.planExisting", action: "next", view: "projects",
       title: { th: "แผนที่มีอยู่แล้ว", en: "What the plan already has", jp: "既存の計画" },
       body: {
-        th: "แถวที่สร้างไว้ใน Project Schedule แสดงไว้ตรงนี้ ดูก่อนว่ามีอะไรแล้ว จะได้ไม่เพิ่มซ้ำ ถ้าจะแก้แถวเหล่านี้ กด 'เปิด Project Schedule'",
-        en: "Rows made in Project Schedule are listed here, so you see what exists before adding. To change them, press Open Project Schedule.",
-        jp: "プロジェクトスケジュールで作成した行がここに表示されます。追加前に確認し、変更は「プロジェクトスケジュールを開く」から行います。",
+        th: "แถวที่สร้างไว้ใน Project Schedule แสดงตรงนี้ พิมพ์ชื่อใหม่ แก้วัน หรือกด ✕ เพื่อลบ (ลบกลุ่มงานจะลบแถวข้างใต้ด้วย กด ↻ เพื่อเอากลับ) แถวที่มีความคืบหน้าลบไม่ได้",
+        en: "Rows made in Project Schedule are here. Type a new name, change the dates, or press ✕ to remove one (removing a phase removes the rows under it; ↻ brings it back). A row with progress cannot be removed.",
+        jp: "プロジェクトスケジュールで作成した行がここにあります。名前や日程を変更し、✕ で削除します（フェーズを削除すると配下の行も削除、↻ で元に戻す）。進捗のある行は削除できません。",
       },
       missing: { th: "โปรเจกต์นี้ไม่มีแถวแผนอื่น กด 'ถัดไป'", en: "This project has no other plan rows. Press Next.", jp: "この案件に他の計画行はありません。「次へ」を押します。" },
     },

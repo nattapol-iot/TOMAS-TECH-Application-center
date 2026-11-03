@@ -11,7 +11,7 @@ import { assertEstimateTotals } from "../estimate-total-guard.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
-import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseProjectDetails, parseProjectNumber, planSpan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
+import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseOtherPlanRows, parseProjectDetails, parseProjectNumber, planSpan, syncOtherPlanRows, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
@@ -570,7 +570,9 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       throw new ApiError(400, "validation_failed", "Send both the master plan and the team plan, or neither.");
     }
     const plan = editsPlan ? parseInitialPlan(body) : null;
-    const canPlan = editsPlan && await permissionFor(database, actor.id, "schedule.plan");
+    // Rows made in Project Schedule, renamed or removed from Edit Master Plan.
+    const otherRows = parseOtherPlanRows(body.otherRows);
+    const canPlan = (editsPlan || otherRows !== null) && await permissionFor(database, actor.id, "schedule.plan");
     const saved = await database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction);
       lookup.input("id", sql.BigInt, id);
@@ -654,20 +656,21 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
 
       let scheduleVersion: string | null = null;
       let assigned: NewPics[] = [];
-      if (plan) {
+      if (plan || otherRows) {
         // The same people who may change the plan in Project Schedule.
         if (!canPlan || (Number(before.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin"))) {
           throw new ApiError(403, "schedule_plan_owner_required", "Only this project's manager, an Engineering Manager, or an Admin can change its plan.");
         }
         if (currentStatus === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
         await validateScheduleVersion(transaction, id, body.scheduleVersion === undefined || body.scheduleVersion === null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"));
-        assigned = await syncProjectPlan(transaction, id, plan, actor.id);
+        if (otherRows) await syncOtherPlanRows(transaction, id, otherRows, actor.id);
+        if (plan) assigned = await syncProjectPlan(transaction, id, plan, actor.id);
         scheduleVersion = (await currentScheduleVersion(transaction, id))?.toString("base64") ?? null;
       }
       await writeProjectDetails(transaction, id, details, actor.id);
       // Writing the team moves the row version again; hand back the one the client must send next.
       const latest = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=@id;`)).recordset[0]!;
-      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.milestones, teamPlan: plan.team } : {}) };
+      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.milestones, teamPlan: plan.team } : {}), ...(otherRows ? { otherRows } : {}) };
       await insertAudit(transaction, actor.id, "Project", id, String(before.project_no), transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, assigned);
       return {
