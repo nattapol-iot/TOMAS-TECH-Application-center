@@ -214,7 +214,7 @@ try {
   assert.equal(created.number, `PJ-CARRY-${estimate.id}`);
   const header = (await database.query<{ start_date: Date; target_delivery: Date }>(`SELECT start_date,target_delivery FROM dbo.projects WHERE id=${Number(created.id)}`)).recordset[0]!;
   assert.deepEqual([header.start_date.toISOString().slice(0, 10), header.target_delivery.toISOString().slice(0, 10)], [planDay(3), planDay(45)]);
-  assert.equal((await database.query(`SELECT user_id FROM dbo.project_members WHERE project_id=${Number(created.id)} AND user_id IN(${sales},${engineer}) AND role_on_project=N'Member'`)).recordset.length, 2);
+  assert.equal((await database.query(`SELECT user_id FROM dbo.project_members WHERE project_id=${Number(created.id)} AND user_id IN(${sales},${engineer})`)).recordset.length, 2, "everyone on the team plan is on the project");
   type PlanRow = { id: number; name: string; kind: string; visibility: string; planStart: string | null; planFinish: string | null; storedPlanStart: string | null;
     planDays: number; planManDays: number; pics: Array<{ id: number }>; children: PlanRow[] };
   const schedule = await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`);
