@@ -67,7 +67,10 @@ test("the catalog holds the guides the owner chose, in the order the work happen
   // attaching a file to an existing inquiry (2026-11-02, when engineers got inquiry.write in migration 094).
   assert.deepEqual(GUIDES.map((guide) => guide.id), [
     "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "inquiry-attach", "site-visit-request", "crm-proposal-won",
-    "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan", "team-overview-task", "bom-release",
+    "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan",
+    // Editing the Master Plan of a project that already exists (2026-11-03).
+    "project-master-plan",
+    "team-overview-task", "bom-release",
     // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
     "estimate-approve",
     "purchase-request", "pr-approve",
