@@ -38,7 +38,7 @@ export const planFromTemplate = (template: ScheduleTemplate, start: string): Mas
 });
 
 /** First start and last finish over every row, or null while any row is undated. */
-export function planSpanOf(masterPlan: MasterPlanDraft[], teamPlan: TeamPlanDraft[]) {
+export function planSpanOf(masterPlan: { start: string; finish: string }[], teamPlan: { start: string; finish: string }[]) {
   const rows = [...masterPlan, ...teamPlan];
   return rows.length && rows.every(planPeriodValid) ? { start: rows.map(row => row.start).sort()[0]!, finish: rows.map(row => row.finish).sort().at(-1)! } : null;
 }

@@ -665,7 +665,7 @@ const PROJECT_CREATE: Guide = {
     en: "Open the project from the approved estimate with its ERP number, manager, PO, plan and team.",
     jp: "承認済み見積から案件を作成し、ERP番号・PM・注文書・計画・チームを入力します。",
   },
-  minutes: 4,
+  minutes: 5,
   permissions: ["project.read", "project.write"],
   views: ["projects"],
   invite: "projects",
@@ -727,6 +727,15 @@ const PROJECT_CREATE: Guide = {
       },
     },
     {
+      target: "project.schedule", action: "next", view: "projects",
+      title: { th: "งานหลักและงานย่อย", en: "Main rows and sub rows", jp: "メイン工程とサブ工程" },
+      body: {
+        th: "กด 'เพิ่มงานหลัก' เช่น Software schedule แล้วกด + ที่แถวนั้นเพื่อเพิ่มงานย่อย งานหลักที่มีงานย่อยคิดวันและความคืบหน้าจากงานย่อย ใส่วันทีหลังได้ ใน Project Schedule จะเห็นเป็น 1, 1.1, 1.2",
+        en: "Press Add main row, for example Software schedule, then + on that row for its sub rows. A main row with sub rows takes its dates and progress from them, and dates can wait. Project Schedule shows them as 1, 1.1, 1.2.",
+        jp: "「メイン工程を追加」（例：Software schedule）を押し、その行の + でサブ工程を追加します。サブ工程のあるメイン工程は日程と進捗をサブ工程から算出し、日程は後から入力できます。プロジェクトスケジュールでは 1, 1.1, 1.2 と表示されます。",
+      },
+    },
+    {
       target: "project.team", action: "next", view: "projects",
       title: { th: "สมาชิกในทีม", en: "The team", jp: "メンバー" },
       body: { th: "ใครทำอะไร ช่วงไหน ใส่ตอนนี้หรือเพิ่มทีหลังก็ได้", en: "Who does what, and when. Add them now or later.", jp: "誰が何をいつ行うか。今でも後からでも追加できます。" },
@@ -748,9 +757,9 @@ const PROJECT_MASTER_PLAN: Guide = {
   area: "project",
   title: { th: "แก้ไข Master Plan ของโปรเจกต์ที่สร้างแล้ว", en: "Edit the Master Plan of an existing project", jp: "作成済み案件のマスタープランを編集" },
   summary: {
-    th: "เพิ่ม แก้ หรือลบไมล์สโตนและแผนทีมของโปรเจกต์ที่มีอยู่ เลือก Master Schedule ได้ถ้ายังไม่มีแผน และปรับวันเริ่ม/วันส่งมอบตามแผน",
-    en: "Add, change or remove the milestones and team plan of a project that exists, start from a Master Schedule when it has none, and move its dates to the plan.",
-    jp: "既存案件のマイルストーンとチーム計画を追加・変更・削除します。計画がなければマスタースケジュールから始め、日程を計画に合わせます。",
+    th: "เพิ่ม แก้ หรือลบไมล์สโตน แผนทีม และงานหลัก/งานย่อยของโปรเจกต์ที่มีอยู่ เลือก Master Schedule ได้ถ้ายังไม่มีแผน และปรับวันเริ่ม/วันส่งมอบตามแผน",
+    en: "Add, change or remove the milestones, team plan and main rows and sub rows of a project that exists, start from a Master Schedule when it has none, and move its dates to the plan.",
+    jp: "既存案件のマイルストーン、チーム計画、メイン工程・サブ工程を追加・変更・削除します。計画がなければマスタースケジュールから始め、日程を計画に合わせます。",
   },
   minutes: 2,
   permissions: ["project.write", "schedule.plan"],
@@ -792,13 +801,12 @@ const PROJECT_MASTER_PLAN: Guide = {
     },
     {
       target: "project.planExisting", action: "next", view: "projects",
-      title: { th: "แผนที่มีอยู่แล้ว", en: "What the plan already has", jp: "既存の計画" },
+      title: { th: "งานหลักและงานย่อย", en: "Main rows and sub rows", jp: "メイン工程とサブ工程" },
       body: {
-        th: "แถวที่สร้างไว้ใน Project Schedule แสดงตรงนี้ พิมพ์ชื่อใหม่ แก้วัน หรือกด ✕ เพื่อลบ (ลบกลุ่มงานจะลบแถวข้างใต้ด้วย กด ↻ เพื่อเอากลับ) แถวที่มีความคืบหน้าลบไม่ได้",
-        en: "Rows made in Project Schedule are here. Type a new name, change the dates, or press ✕ to remove one (removing a phase removes the rows under it; ↻ brings it back). A row with progress cannot be removed.",
-        jp: "プロジェクトスケジュールで作成した行がここにあります。名前や日程を変更し、✕ で削除します（フェーズを削除すると配下の行も削除、↻ で元に戻す）。進捗のある行は削除できません。",
+        th: "แถวที่สร้างไว้ใน Project Schedule แสดงตรงนี้ พิมพ์ชื่อใหม่ แก้วัน หรือกด ✕ เพื่อลบ (ลบงานหลักจะลบงานย่อยด้วย กด ↻ เพื่อเอากลับ) กด 'เพิ่มงานหลัก' หรือกด + ที่แถวงานหลักเพื่อเพิ่มงานย่อย แถวที่มีความคืบหน้าลบไม่ได้",
+        en: "Rows made in Project Schedule are here. Type a new name, change the dates, or press ✕ to remove one (removing a main row removes its sub rows; ↻ brings it back). Press Add main row, or + on a main row for a sub row. A row with progress cannot be removed.",
+        jp: "プロジェクトスケジュールで作成した行がここにあります。名前や日程を変更し、✕ で削除します（メイン工程を削除するとサブ工程も削除、↻ で元に戻す）。「メイン工程を追加」、またはメイン工程の + でサブ工程を追加します。進捗のある行は削除できません。",
       },
-      missing: { th: "โปรเจกต์นี้ไม่มีแถวแผนอื่น กด 'ถัดไป'", en: "This project has no other plan rows. Press Next.", jp: "この案件に他の計画行はありません。「次へ」を押します。" },
     },
     {
       target: "project.planSave", action: "click", view: "projects",

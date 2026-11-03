@@ -124,3 +124,79 @@ test("Edit Master Plan renames, re-dates and removes rows made in Project Schedu
   conflict([{ id: 7, remove: true }], "schedule_member_detail");
   conflict([{ id: 99, remove: true }], "schedule_row_missing");
 });
+
+test("main rows and sub rows are read with their own dates, or none yet, and count towards the project's span", async () => {
+  const { parseNewScheduleRows } = await import("../src/project-initial-plan.js");
+  assert.equal(parseNewScheduleRows(undefined), null);
+  const added = parseNewScheduleRows([
+    { name: " Kick-off meeting after PO ", start: "2026-12-01", finish: "2026-12-01" },
+    // A main row with sub rows takes its dates from them, so its own are dropped.
+    { name: "Software schedule", start: "2026-01-01", finish: "2026-01-02", rows: [
+      { name: "Requirements document design", start: "2026-12-02", finish: "2026-12-20" },
+      { name: "Schedule Function", start: "", finish: "" },
+    ] },
+    { name: "Installation" },
+    { parentId: 41, name: "Unit testing", start: "2027-02-01", finish: "2027-02-05" },
+  ])!;
+  assert.deepEqual(added, [
+    { parentId: null, name: "Kick-off meeting after PO", start: "2026-12-01", finish: "2026-12-01", rows: [] },
+    { parentId: null, name: "Software schedule", start: null, finish: null, rows: [
+      { name: "Requirements document design", start: "2026-12-02", finish: "2026-12-20" },
+      { name: "Schedule Function", start: null, finish: null },
+    ] },
+    { parentId: null, name: "Installation", start: null, finish: null, rows: [] },
+    { parentId: 41, name: "Unit testing", start: "2027-02-01", finish: "2027-02-05", rows: [] },
+  ]);
+  assert.deepEqual(planSpan(parseInitialPlan({}), added), { start: "2026-12-01", finish: "2027-02-05" });
+  assert.equal(planSpan(parseInitialPlan({}), parseNewScheduleRows([{ name: "Installation" }])!), null);
+
+  rejects(() => parseNewScheduleRows([{ name: "Design", start: "2026-12-02" }]), /Main schedule row 1 finish/);
+  rejects(() => parseNewScheduleRows([{ name: "Design", rows: [{ name: "" }] }]), /Main schedule row 1\.1 name is required/);
+  rejects(() => parseNewScheduleRows([{ parentId: 4, name: "Test", rows: [{ name: "FAT" }] }]), /sub row, so it cannot hold rows/);
+  rejects(() => parseNewScheduleRows(Array.from({ length: 151 }, () => ({ name: "A", rows: [{ name: "B" }] }))), /more than 300 rows/);
+});
+
+test("a new project with main rows needs schedule planning permission even before any row has dates", async () => {
+  const { response, transactions } = await post({ ...body, newRows: [{ name: "Installation" }] }, false);
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().code, "schedule_plan_required");
+  assert.equal(transactions, 0);
+  const placed = await post({ ...body, newRows: [{ parentId: 3, name: "FAT" }] }, true);
+  assert.equal(placed.response.statusCode, 400);
+  assert.match(placed.response.json().message, /cannot name an existing row/);
+});
+
+test("Edit Master Plan adds main rows at the end, keeps Team plan last, and gives a bare main row its first sub rows", async () => {
+  const { planScheduleAdditions } = await import("../src/project-initial-plan.js");
+  const row = (id: number, parentId: number | null, change: Partial<import("../src/project-initial-plan.js").ScheduleRow> = {}) => ({
+    id, parentId, kind: "task", name: `Row ${id}`, sortOrder: id, startMode: "manual", planStart: "2026-08-01", planDays: 5, planManDays: 0,
+    started: false, children: 0, pending: false, referenced: false, pic: null, picCount: 0, ...change,
+  });
+  const rows = [
+    row(1, null, { kind: "phase", name: "Master Plan", children: 1 }), row(2, 1),
+    row(3, null, { kind: "phase", name: "Software schedule", children: 2 }), row(4, 3, { sortOrder: 10 }), row(5, 3, { sortOrder: 20 }),
+    row(6, null, { name: "Installation" }),
+    row(7, null, { name: "FAT", started: true }), row(8, null, { name: "UT", picCount: 1 }), row(9, null, { name: "Go Live", referenced: true }),
+    row(10, null, { kind: "phase", name: "Team plan", children: 1 }), row(11, 10),
+  ];
+  const sub = (parentId: number, name: string) => ({ parentId, name, start: null, finish: null, rows: [] });
+  const plan = planScheduleAdditions(rows, [
+    { parentId: null, name: "Training", start: null, finish: null, rows: [] }, sub(3, "Inquiry Function"), sub(3, "Stock Inquiries"), sub(6, "Hardware installation"),
+  ]);
+  assert.deepEqual(plan.mains.map((item) => [item.row.name, item.sortOrder]), [["Training", 11]]);
+  assert.deepEqual(plan.subs.map((item) => [item.parent.id, item.row.name, item.sortOrder]), [[3, "Inquiry Function", 21], [3, "Stock Inquiries", 22], [6, "Hardware installation", 1]]);
+  assert.deepEqual(plan.convert.map((item) => item.id), [6]);
+  assert.deepEqual(plan.teamPlan && [plan.teamPlan.row.id, plan.teamPlan.sortOrder], [10, 12]);
+  // Sub rows alone leave the top level as it is.
+  assert.equal(planScheduleAdditions(rows, [sub(3, "Master Management")]).teamPlan, null);
+
+  const conflict = (added: Parameters<typeof planScheduleAdditions>[1], code: string) =>
+    assert.throws(() => planScheduleAdditions(rows, added), (error: unknown) => error instanceof ApiError && error.code === code);
+  for (const id of [7, 8, 9]) conflict([sub(id, "Under it")], "schedule_row_in_use");
+  conflict([sub(1, "Kick-off")], "validation_failed");
+  conflict([sub(10, "Design")], "validation_failed");
+  conflict([sub(4, "Too deep")], "validation_failed");
+  conflict([sub(99, "Gone")], "schedule_row_missing");
+  const waiting = rows.map((item) => item.id === 3 ? { ...item, pending: true } : item);
+  assert.throws(() => planScheduleAdditions(waiting, [sub(3, "Waiting")]), (error: unknown) => error instanceof ApiError && error.code === "schedule_day_request_pending");
+});

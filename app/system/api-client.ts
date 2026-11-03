@@ -563,6 +563,10 @@ export type CreateEstimateInput = {
 /** id names the schedule row an edit changes; a row without one is new. */
 export type ProjectMasterPlanRow = { id?: number; name: string; start: string; finish: string };
 export type ProjectTeamPlanRow = { id?: number; userId: number; task: string; start: string; finish: string; planManDays: number };
+/** A sub row; its dates are sent as a pair or left out until known. */
+export type ProjectScheduleSubRow = { name: string; start?: string; finish?: string };
+/** A main row added with its own sub rows, or (Edit Master Plan) a sub row under the existing main row parentId. */
+export type ProjectScheduleRow = ProjectScheduleSubRow & { parentId?: number; rows?: ProjectScheduleSubRow[] };
 
 export type CreateProjectInput = {
   endUserCustomerId?: number | null;
@@ -586,6 +590,8 @@ export type CreateProjectInput = {
   /** With rows, the API sets the project dates from the first start to the last finish. */
   masterPlan?: ProjectMasterPlanRow[];
   team?: ProjectTeamPlanRow[];
+  /** The project's own main rows and sub rows, as Project Schedule builds them. */
+  newRows?: ProjectScheduleRow[];
   department?: string | null;
   paymentsReceived?: PaymentMilestone[];
   contactIds?: number[];
@@ -1746,6 +1752,9 @@ export type UpdateProjectInput = {
   /** Sent together with scheduleVersion, and both lists or neither. */
   masterPlan?: ProjectMasterPlanRow[];
   team?: ProjectTeamPlanRow[];
+  /** Rows outside the two plan phases: renamed, re-dated or removed, and main rows and sub rows added. Sent with scheduleVersion. */
+  otherRows?: ({ id: number; remove: true } | { id: number; name: string; start?: string; finish?: string })[];
+  newRows?: ProjectScheduleRow[];
   scheduleVersion?: string | null;
 };
 

@@ -205,19 +205,34 @@ try {
   const planDay = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
   const created = await api("admin", "POST", "/api/v1/projects", { ...projectBody(estimate.id, main.dueDate),
     masterPlan: [{ name: "Kick-off meeting", start: planDay(3), finish: planDay(3) }, { name: "Go Live", start: planDay(40), finish: planDay(45) }],
-    team: [{ userId: actors["handover-sales"], task: "TEST ONLY commissioning support", start: planDay(2), finish: planDay(20), planManDays: 12.5 }] }, 201);
+    team: [{ userId: actors["handover-sales"], task: "TEST ONLY commissioning support", start: planDay(2), finish: planDay(20), planManDays: 12.5 }],
+    // Main rows and sub rows as in Project Schedule: a bare main row is a task, one with sub rows a phase; dates may wait.
+    newRows: [{ name: "TEST ONLY Kick-off after PO", start: planDay(1), finish: planDay(1) },
+      { name: "TEST ONLY Software schedule", rows: [{ name: "TEST ONLY Requirements", start: planDay(4), finish: planDay(8) }, { name: "TEST ONLY Inquiry Function" }] }] }, 201);
   assert.equal(created.number, `PJ-CARRY-${estimate.id}`);
   const header = (await database.query<{ start_date: Date; target_delivery: Date }>(`SELECT start_date,target_delivery FROM dbo.projects WHERE id=${Number(created.id)}`)).recordset[0]!;
-  assert.deepEqual([header.start_date.toISOString().slice(0, 10), header.target_delivery.toISOString().slice(0, 10)], [planDay(2), planDay(45)]);
+  assert.deepEqual([header.start_date.toISOString().slice(0, 10), header.target_delivery.toISOString().slice(0, 10)], [planDay(1), planDay(45)]);
   assert.ok((await database.query(`SELECT 1 FROM dbo.project_members WHERE project_id=${Number(created.id)} AND user_id=${actors["handover-sales"]} AND role_on_project=N'Member'`)).recordset[0]);
   const schedule = await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`);
-  const phases = schedule.tasks as Array<{ name: string; kind: string; visibility: string; planStart: string; planFinish: string;
-    children: Array<{ name: string; planStart: string; planFinish: string; planManDays: number; pics: Array<{ id: number }> }> }>;
+  type PlanRow = { id: number; name: string; kind: string; visibility: string; planStart: string | null; planFinish: string | null;
+    children: Array<{ name: string; planStart: string | null; planFinish: string | null; planManDays: number; pics: Array<{ id: number }> }> };
+  const phases = schedule.tasks as PlanRow[];
   assert.deepEqual(phases.map((phase) => [phase.name, phase.kind, phase.visibility, phase.planStart, phase.planFinish]),
-    [["Master Plan", "phase", "Customer", planDay(3), planDay(45)], ["Team plan", "phase", "Internal", planDay(2), planDay(20)]]);
+    [["Master Plan", "phase", "Customer", planDay(3), planDay(45)], ["TEST ONLY Kick-off after PO", "task", "Internal", planDay(1), planDay(1)],
+      ["TEST ONLY Software schedule", "phase", "Internal", planDay(4), planDay(8)], ["Team plan", "phase", "Internal", planDay(2), planDay(20)]]);
+  assert.deepEqual(phases[2]!.children.map((row) => [row.name, row.planStart, row.planFinish]), [["TEST ONLY Requirements", planDay(4), planDay(8)], ["TEST ONLY Inquiry Function", null, null]]);
   assert.deepEqual(phases[0]!.children.map((row) => [row.name, row.planStart, row.planFinish]), [["Kick-off meeting", planDay(3), planDay(3)], ["Go Live", planDay(40), planDay(45)]]);
-  assert.deepEqual(phases[1]!.children.map((row) => [row.name, row.planManDays, row.pics.map((pic) => pic.id)]), [["TEST ONLY commissioning support", 12.5, [actors["handover-sales"]]]]);
-  checks += 5;
+  assert.deepEqual(phases[3]!.children.map((row) => [row.name, row.planManDays, row.pics.map((pic) => pic.id)]), [["TEST ONLY commissioning support", 12.5, [actors["handover-sales"]]]]);
+  checks += 6;
+  // Edit Master Plan: the bare main row takes its first sub row and becomes a phase; a new main row goes before Team plan.
+  await api("manager", "PUT", `/api/v1/projects/${created.id}`, { rowVersion: created.rowVersion, scheduleVersion: schedule.scheduleVersion, otherRows: [],
+    newRows: [{ parentId: phases[1]!.id, name: "TEST ONLY Agenda", start: planDay(1), finish: planDay(2) }, { name: "TEST ONLY Training", start: planDay(46), finish: planDay(47) }] });
+  const grown = (await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`)).tasks as PlanRow[];
+  assert.deepEqual(grown.map((row) => [row.name, row.kind, row.planStart, row.planFinish]), [["Master Plan", "phase", planDay(3), planDay(45)],
+    ["TEST ONLY Kick-off after PO", "phase", planDay(1), planDay(2)], ["TEST ONLY Software schedule", "phase", planDay(4), planDay(8)],
+    ["TEST ONLY Training", "task", planDay(46), planDay(47)], ["Team plan", "phase", planDay(2), planDay(20)]]);
+  assert.deepEqual(grown[1]!.children.map((row) => row.name), ["TEST ONLY Agenda"]);
+  checks += 2;
   // The ERP number stays with its project: a second project cannot reuse it.
   const reuse = await approveEstimate(Number(unrelated.inquiry.id), unrelated.dueDate);
   const refused = await api("admin", "POST", "/api/v1/projects", { ...projectBody(reuse.id, unrelated.dueDate), projectNumber: created.number.toLowerCase() }, 409);

@@ -1262,6 +1262,14 @@ button.kpi:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); tra
 .project-plan-row { display: grid; align-items: center; gap: 6px; }
 .project-plan-row.milestone { grid-template-columns: 24px 150px 10px 150px minmax(0, 1fr) 30px; }
 .project-plan-row.team { grid-template-columns: 24px minmax(140px, 200px) 150px 10px 150px minmax(0, 1fr) 110px 30px; }
+/* Main rows and sub rows: number, dates, name, add a sub row, remove. Sub rows step in under their main row. */
+.project-plan-row.schedule { grid-template-columns: 40px 150px 10px 150px minmax(0, 1fr) 30px 30px; }
+.project-plan-row.schedule.main .project-plan-name { font-weight: 600; }
+.project-plan-row.schedule.sub .project-plan-name { margin-inline-start: 18px; width: calc(100% - 18px); }
+.project-plan-row.schedule.deep .project-plan-name { margin-inline-start: 36px; width: calc(100% - 36px); }
+.project-plan-row.schedule.removed { opacity: 0.55; }
+.project-plan-row.schedule.removed .project-plan-name { text-decoration: line-through; }
+.project-plan-row .icon-btn.add:hover { background: var(--blue-soft); color: var(--blue-text); }
 .project-plan-row input,
 .project-plan-row select {
   width: 100%; min-width: 0; min-height: 32px; padding: 6px 9px;
@@ -1315,6 +1323,12 @@ button.kpi:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); tra
   .project-plan-row.template > :nth-child(2) { grid-column: 2 / 4; grid-row: 1; }
   .project-plan-row.template > :nth-child(3) { grid-column: 2; grid-row: 2; }
   .project-plan-row.template > :nth-child(4) { grid-column: 3; grid-row: 2; }
+  .project-plan-row.schedule { grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr) 30px 30px; }
+  .project-plan-row.schedule > :nth-child(2) { grid-column: 2; grid-row: 2; }
+  .project-plan-row.schedule > :nth-child(4) { grid-column: 3; grid-row: 2; }
+  .project-plan-row.schedule > :nth-child(5) { grid-column: 2 / 4; grid-row: 1; }
+  .project-plan-row.schedule > :nth-child(6) { grid-column: 4; grid-row: 1; }
+  .project-plan-row.schedule > :nth-child(7) { grid-column: 5; grid-row: 1; }
   .project-plan-labels { display: none; }
 }
 
