@@ -115,11 +115,25 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
   app.post("/api/v1/projects/:projectId/schedule/tasks", async (request, reply) => {
     await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
     const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id"); const input = planInput(request.body, false);
+    // A row added in place (the + on a row of the plan) names the sibling it goes before, or null to go last; the server finds its sort order.
+    const beforeId = bodyObject(request.body).beforeId === undefined ? undefined : optionalId(bodyObject(request.body).beforeId, "Place before task");
     const created = await database.transaction(async (transaction) => {
       const project = await demandPlanOwner(transaction, projectId, actor); await validateScheduleVersion(transaction, projectId, input.scheduleVersion);
       await validateGraphAndHierarchy(transaction, projectId, null, input); if (input.parentId && await hasPendingRequest(transaction, input.parentId)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's child rows.");
       await validatePics(transaction, project, input.picUserIds);
-      const insert = new sql.Request(transaction); bindPlan(insert, projectId, input, actor.id);
+      let sortOrder = input.sortOrder;
+      if (beforeId !== undefined) {
+        const read = new sql.Request(transaction); read.input("project", sql.BigInt, projectId); read.input("parent", sql.BigInt, input.parentId);
+        const siblings = (await read.query<{ id: number | string; sort_order: number }>(`SELECT id,sort_order FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL AND ((@parent IS NULL AND parent_id IS NULL) OR parent_id=@parent) ORDER BY sort_order,id;`)).recordset
+          .map((row) => ({ id: Number(row.id), sortOrder: Number(row.sort_order) }));
+        const placed = placeInOrder(siblings, beforeId, 0);
+        for (const row of placed.renumber) {
+          const renumber = new sql.Request(transaction); renumber.input("id", sql.BigInt, row.id); renumber.input("sort", sql.Int, row.sortOrder);
+          await renumber.query(`UPDATE dbo.schedule_tasks SET sort_order=@sort WHERE id=@id AND deleted_at IS NULL;`);
+        }
+        sortOrder = placed.sortOrder;
+      }
+      const insert = new sql.Request(transaction); bindPlan(insert, projectId, { ...input, sortOrder }, actor.id);
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @changed TABLE(id bigint,row_version binary(8)); INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,updated_by)
         OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,N'PM',@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,@pic_external,@man_days,@actor); SELECT id,row_version FROM @changed;`)).recordset[0]!;
       const id = Number(row.id); const added = await replacePics(transaction, id, input.picUserIds); await appendUpdate(transaction, projectId, id, actor.id, "created", null, input.name, "Schedule task created");

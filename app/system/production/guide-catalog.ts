@@ -825,11 +825,11 @@ const PROJECT_PLAN: Guide = {
   area: "project",
   title: { th: "วางแผนงานโปรเจกต์บน Gantt", en: "Plan a project on the Gantt", jp: "ガントで案件を計画" },
   summary: {
-    th: "เพิ่มงานในแผน กำหนดวันและผู้รับผิดชอบโดยเห็นภาระงานของแต่ละคน และลากแถบบน Gantt เพื่อเลื่อนวัน",
-    en: "Add tasks to the plan, set dates and owners while seeing each person's load, and drag bars on the Gantt to move dates.",
-    jp: "計画に作業を追加し、各自の負荷を見ながら日付と担当者を決め、ガントのバーをドラッグして日程を動かします。",
+    th: "เพิ่มงานในแผน แทรกงานย่อยด้วย + กำหนดวันและผู้รับผิดชอบโดยเห็นภาระงานของแต่ละคน และลากแถบบน Gantt เพื่อเลื่อนวัน",
+    en: "Add tasks to the plan, add sub rows in place with +, set dates and owners while seeing each person's load, and drag bars on the Gantt to move dates.",
+    jp: "計画に作業を追加し、+ でその場にサブ工程を追加し、各自の負荷を見ながら日付と担当者を決め、ガントのバーをドラッグして日程を動かします。",
   },
-  minutes: 4,
+  minutes: 5,
   permissions: ["schedule.read", "schedule.plan"],
   views: ["projects"],
   steps: [
@@ -855,6 +855,16 @@ const PROJECT_PLAN: Guide = {
         jp: "各バーが作業です。ドラッグで日程を移動し、端をドラッグで伸縮します。間違えたら元に戻せます。バー間の線は待ち関係です。",
       },
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน เพิ่มแถวแรกในขั้นถัดไป", en: "This project has no plan yet; add the first row in the next step.", jp: "この案件にはまだ計画がありません。次の手順で最初の行を追加します。" },
+    },
+    {
+      target: "plan.insert", action: "next", view: "projects",
+      title: { th: "แทรกงานตรงที่ต้องการด้วย +", en: "Add a row in place with +", jp: "+ でその場に行を追加" },
+      body: {
+        th: "กด + ที่แถวงานหลักเพื่อเพิ่มงานย่อย หรือที่แถวงานเพื่อแทรกงานใต้แถวนั้น พิมพ์ชื่อแล้วกด Enter ช่องถัดไปจะเปิดให้พิมพ์ต่อ กด Esc เมื่อเสร็จ แล้วลากแถบเพื่อปรับวัน",
+        en: "Press + on a main row to add a sub row, or on a task to add one just below it. Type the name and press Enter; the next box opens for the next row. Press Esc when done, then drag the bars to set the dates.",
+        jp: "メイン工程の + でサブ工程を、作業行の + でその下に行を追加します。名前を入力して Enter を押すと次の行の入力欄が開きます。終わったら Esc を押し、バーをドラッグして日程を設定します。",
+      },
+      missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้เมื่อแผนมีแถวแล้ว และไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for this project's planners once the plan has rows and no quick filter is on. Press Next.", jp: "+ はこの案件の計画担当者に、計画に行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
     },
     {
       target: "plan.add", action: "click", view: "projects",

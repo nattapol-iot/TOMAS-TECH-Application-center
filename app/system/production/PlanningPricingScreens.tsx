@@ -2282,6 +2282,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   // A bar dropped on new dates: drawn there while it saves, then offered for undo until the next move.
   const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
   const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
+  // The + on a row: a name typed in place becomes a row just below it, then the next one goes below that.
+  const [quickAdd, setQuickAdd] = useState<{ afterId: number; parentId: number | null; beforeId: number | null; depth: number; start: string; visibility: string; name: string } | null>(null);
+  const [quickBusy, setQuickBusy] = useState(false);
+  // Focused each time the box appears, including after the plan reloads around it.
+  const quickInput = useCallback((node: HTMLInputElement | null) => { node?.focus(); }, []);
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
@@ -2341,7 +2346,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
     setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
-    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null);
+    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null); setQuickAdd(null);
     setLoadingSchedule(Boolean(nextId));
     setSelectedId(nextId);
     try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
@@ -2388,6 +2393,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
       ...(movable ? { movable: true } : {}),
+      ...(canQuickAdd(task) ? { insert: { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.insertRow"), onInsert: () => startQuickAdd(task) } } : {}),
       ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
       start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
@@ -2449,6 +2455,59 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       setMovePending(null); setSaving(false);
     }
   };
+  /** A + is offered on every row but a member's own detail row, while nothing else is saving and no quick filter hides rows. */
+  const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
+    && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
+  const startQuickAdd = (task: ScheduleTask) => {
+    if (!activeSchedule) return;
+    if (task.kind === "phase") {
+      setCollapsed((current) => { const next = new Set(current); next.delete(task.id); return next; });
+      setQuickAdd({ afterId: task.id, parentId: task.id, beforeId: task.children[0]?.id ?? null, depth: task.depth + 1, start: task.planStart ?? today, visibility: task.visibility, name: "" });
+      return;
+    }
+    const siblings = task.parentId === null ? activeSchedule.tasks : taskById.get(task.parentId)?.children ?? [];
+    const next = siblings[siblings.findIndex((row) => row.id === task.id) + 1] ?? null;
+    // One day, starting the working day after the row above finishes; dragging the bar sets the real dates.
+    const start = (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
+    setQuickAdd({ afterId: task.id, parentId: task.parentId, beforeId: next?.id ?? null, depth: task.depth, start, visibility: task.visibility, name: "" });
+  };
+  const saveQuickAdd = async () => {
+    // Read-only rather than disabled while it saves, so the box keeps focus for the next row.
+    const draft = quickAdd, name = quickAdd?.name.trim() ?? "";
+    if (!draft || !name || !activeSchedule || quickBusy) return;
+    setQuickBusy(true); setError("");
+    try {
+      const created = await apiRequest<{ id: number }>(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
+        scheduleVersion: activeSchedule.scheduleVersion, parentId: draft.parentId, beforeId: draft.beforeId, sortOrder: 0, kind: "task", name,
+        isMilestone: false, visibility: draft.visibility, planStart: draft.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0,
+        picUserIds: [], picExternal: "", planManDays: 0,
+      }) });
+      notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
+      setQuickAdd({ ...draft, afterId: created.id, start: linkedStart(draft.start, 0, new Set(activeSchedule.holidays ?? [])) ?? draft.start, name: "" });
+      await loadSchedule();
+    } catch (failure) {
+      // The typed name stays in the box; Enter tries again on the reloaded plan.
+      if (isConcurrencyConflict(failure)) notify(`${activeSchedule.projectNo} · ${uiText("Plan.changedReloaded")}`);
+      else setError(toError(failure));
+      await loadSchedule();
+    } finally { setQuickBusy(false); }
+  };
+  if (quickAdd && canPlan) {
+    const at = visible.findIndex((task) => task.id === quickAdd.afterId);
+    if (at >= 0) {
+      // Under a main row the box is its first sub row; under any other row it follows that row and the rows under it.
+      let end = at + 1;
+      if (visible[at]!.id !== quickAdd.parentId) while (end < visible.length && visible[end]!.depth > visible[at]!.depth) end++;
+      ganttRows.splice(end, 0, {
+        key: "quick-add", depth: quickAdd.depth, kind: "task", selected: true, start: null, finish: null, tone: "blue",
+        title: uiText("Plan.quickAddName"), placeholder: uiText("Plan.quickAddHint"),
+        label: <input ref={quickInput} className="gantt-quick-input" data-guide="plan.quickName" aria-label={uiText("Plan.quickAddName")} placeholder={uiText("Plan.quickAddName")} maxLength={500}
+          value={quickAdd.name} readOnly={quickBusy} onChange={(event) => { const name = event.target.value; setQuickAdd((current) => current && { ...current, name }); }}
+          onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); void saveQuickAdd(); } else if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); } }}
+          onBlur={() => { if (!quickAdd.name.trim()) setQuickAdd(null); }} />,
+      });
+    }
+  }
   const undoMove = async () => {
     const move = lastMove, task = move ? taskById.get(move.taskId) : null;
     if (!move || !activeSchedule) return;
