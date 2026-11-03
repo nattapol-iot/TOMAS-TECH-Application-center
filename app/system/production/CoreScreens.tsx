@@ -65,7 +65,7 @@ import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFO
   projectTeamOf, shownProjectTeam, type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
-import { ContactPicker, HealthBadge, MasterPlanSection, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
+import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
   type MasterPlanDraft, type TeamPlanDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { SearchSelect } from "./SearchSelect";
@@ -889,7 +889,7 @@ function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: 
     footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}
   >
     {canWrite ? <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Add member *"} /></span><select value={addUserId} disabled={adding} onChange={(event) => setAddUserId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select a person"} /></option>{availableToAdd.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.department}</option>)}</select></label>
+      <label className="field"><span><LocalizedText text={"Add member *"} /></span><select value={addUserId} disabled={adding} onChange={(event) => setAddUserId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select a person"} /></option><MemberOptions people={availableToAdd} /></select></label>
       <label className="field"><span><LocalizedText text={"Role on the project"} /></span><input maxLength={100} value={addRole} disabled={adding} placeholder="e.g. Support Engineer" onChange={(event) => setAddRole(event.target.value)} /></label>
       <div className="span-2"><button className="btn primary" type="button" disabled={adding || !addUserId} onClick={() => { void add(); }}><Icon name="plus" />{adding ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add to project"} />}</button></div>
     </div> : <div className="info-strip" role="status"><Icon name="shield" /><span><LocalizedText text={"บัญชีนี้ดูทีมงานได้ แต่ไม่มีสิทธิ์เพิ่ม/ลบสมาชิกโปรเจกต์"} /></span></div>}
