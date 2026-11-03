@@ -125,6 +125,19 @@ test("Edit Master Plan renames, re-dates and removes rows made in Project Schedu
   conflict([{ id: 99, remove: true }], "schedule_row_missing");
 });
 
+test("Edit project sends a plan row back with the dates it shows: a row with sub tasks or a predecessor keeps its own", async () => {
+  const { keptPlanRowDates } = await import("../src/project-initial-plan.js");
+  const row = { planStart: "2026-11-03", planDays: 1, children: 0, startMode: "manual" };
+  assert.deepEqual(keptPlanRowDates(row, { start: "2026-11-03", finish: "2026-11-03" }, undefined), { planStart: "2026-11-03", planDays: 1, changed: false });
+  assert.deepEqual(keptPlanRowDates(row, { start: "2026-11-04", finish: "2026-11-06" }, undefined), { planStart: "2026-11-04", planDays: 3, changed: true });
+  // Its sub tasks run 4-6 November; the row itself was stored as 3 November, one day.
+  const parent = { ...row, children: 3 }, shown = { planStart: "2026-11-04", planFinish: "2026-11-06" };
+  assert.deepEqual(keptPlanRowDates(parent, { start: "2026-11-04", finish: "2026-11-06" }, shown), { planStart: "2026-11-03", planDays: 1, changed: false });
+  assert.equal(keptPlanRowDates(parent, { start: "2026-11-05", finish: "2026-11-06" }, shown).changed, true);
+  const linked = { ...row, startMode: "linked", planStart: null };
+  assert.deepEqual(keptPlanRowDates(linked, { start: "2026-11-10", finish: "2026-11-10" }, { planStart: "2026-11-10", planFinish: "2026-11-10" }), { planStart: null, planDays: 1, changed: false });
+});
+
 test("main rows and sub rows are read with their own dates, or none yet, and count towards the project's span", async () => {
   const { parseNewScheduleRows } = await import("../src/project-initial-plan.js");
   assert.equal(parseNewScheduleRows(undefined), null);
