@@ -205,3 +205,44 @@ export function ganttLanes(spans: readonly { start: string; finish: string }[], 
   }
   return { lanes, count: Math.max(1, laneEnds.length) };
 }
+
+/**
+ * Where a dragged row lands: between the rows `above` and `below` (null at either end of the chart, the dragged row
+ * and the rows under it left out), `depth` levels in. The row it then sits under is the nearest row above it that is
+ * one level out (ganttDropParent).
+ */
+export type GanttDrop = { key: string; above: string | null; below: string | null; depth: number };
+
+/** The rows from `index` to the end of what sits under it: it and its subtree, which move together. */
+function subtreeEnd(rows: readonly { depth: number }[], index: number): number {
+  let end = index + 1;
+  while (end < rows.length && rows[end]!.depth > rows[index]!.depth) end++;
+  return end;
+}
+
+/**
+ * The places row `index` may land at gap `gap` (0 = above every other row; `index` itself = where it is now) among the
+ * rows left once it and its subtree are lifted out, nearest `want` levels in first. It goes no deeper than the row
+ * above plus one, and no shallower than the row below, which would otherwise end up under it.
+ */
+export function ganttDropChoices(rows: readonly { key: string; depth: number }[], index: number, gap: number, want: number): GanttDrop[] {
+  const row = rows[index];
+  if (!row) return [];
+  const others = [...rows.slice(0, index), ...rows.slice(subtreeEnd(rows, index))];
+  if (gap < 0 || gap > others.length) return [];
+  const above = others[gap - 1] ?? null, below = others[gap] ?? null;
+  const depths: number[] = [];
+  for (let depth = below ? below.depth : 0; depth <= (above ? above.depth + 1 : 0); depth++) depths.push(depth);
+  return depths.sort((a, b) => Math.abs(a - want) - Math.abs(b - want) || a - b)
+    .map((depth) => ({ key: row.key, above: above?.key ?? null, below: below?.key ?? null, depth }));
+}
+
+/** The row a drop puts the dragged row under, or null at the top level. */
+export function ganttDropParent(rows: readonly { key: string; depth: number }[], drop: GanttDrop): string | null {
+  const index = rows.findIndex((row) => row.key === drop.key), lifted = index < 0 ? index : subtreeEnd(rows, index);
+  for (let at = rows.findIndex((row) => row.key === drop.above); drop.depth > 0 && at >= 0; at--) {
+    if (at >= index && at < lifted) continue;
+    if (rows[at]!.depth === drop.depth - 1) return rows[at]!.key;
+  }
+  return null;
+}

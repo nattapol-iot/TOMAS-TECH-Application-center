@@ -424,6 +424,16 @@
 /* The last bar dragged to new dates, with its undo. */
 .plan-undo { margin: 0 14px; }
 .plan-undo > span { flex: 1; min-width: 0; }
+/* A row typed in place after a + (PlanRowDraftEditor): level, name, member and dates on one line, wrapping when narrow. */
+.plan-draft { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; }
+.plan-draft input, .plan-draft select { min-height: 30px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-xs); }
+.plan-draft input:focus, .plan-draft select:focus { border-color: var(--blue); outline: 2px solid var(--blue-line); outline-offset: 0; }
+.plan-draft-level { display: inline-flex; gap: 2px; }
+.plan-draft-name { flex: 1 1 220px; min-width: 160px; }
+.plan-draft-member { flex: 0 1 220px; min-width: 150px; }
+.plan-draft-dates { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.plan-draft-hint { flex-basis: 100%; color: var(--muted); font-size: var(--fs-3xs); }
+.plan-draft-error { flex-basis: 100%; color: var(--red-text); font-size: var(--fs-2xs); font-weight: 600; }
 
 /* The add and edit forms: a linked row's start, and the PICs' load over the row's dates (PlanPicLoad.tsx). */
 .plan-start-preview { align-self: end; margin: 0 0 8px; }
