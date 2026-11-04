@@ -74,7 +74,13 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-row:hover .gantt-insert, .gantt-insert:focus-visible { opacity: 1; }
 .gantt-insert:hover { background: var(--blue-soft); }
 .gantt-insert:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
-@media (hover: none) { .gantt-insert { opacity: 1; } }
+/* The bin that deletes the row (GanttRowSpec.remove): faint like the +, red on hover. */
+.gantt-remove { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-pill); background: none; color: var(--n-500); cursor: pointer; opacity: 0.35; }
+.gantt-remove .icon { width: 13px; height: 13px; }
+.gantt-row:hover .gantt-remove, .gantt-remove:focus-visible { opacity: 1; }
+.gantt-remove:hover { background: var(--red-soft); color: var(--red-text); }
+.gantt-remove:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
+@media (hover: none) { .gantt-insert, .gantt-remove { opacity: 1; } }
 /* The row being typed in after a + (GanttRowSpec.editor): boxes across the whole row in place of its name and bar. */
 .gantt-row.editing { display: block; background: var(--blue-soft); }
 .gantt-row.editing:hover { background: var(--blue-soft); }
